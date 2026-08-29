@@ -5218,6 +5218,99 @@
       "demotionRule": "Keep experimental or demote if retries can stop before recovery or exhaustion, continue after exhaustion, run in parallel, mutate a superseded pane, hide the Reconnect control, leak a subscription or timer, or fail to paint a new frame after manual reconnect."
     },
     {
+      "id": "mobile-browser.frame-continuity",
+      "title": "Mobile browser frames resume after authenticated transport changes",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "mobile-ui",
+      "layer": "react-native-image-decoder-and-mobile-transport-contract",
+      "surfaces": [
+        "mobile browser screencast pane",
+        "React Native double-buffered frame decoder",
+        "direct mobile RPC reconnect",
+        "relay and direct logical migration"
+      ],
+      "platforms": ["ios", "android", "macos", "linux", "windows"],
+      "providers": ["lan", "tailscale", "cloud-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["lan", "cloud-relay"],
+      "coverageNotes": "A deterministic React Native renderer harness wedges one hidden Image decoder, proves one pending-layer remount at the authenticated boundary, rejects its stale callback, preserves the visible frame, and promotes the newest frame without subscription churn. Physical-socket and stable logical client controls prove one browser-stream replacement attach and one connected notification for direct reconnect plus LAN-to-Relay and Relay-to-LAN migration. Native iOS transition evidence is blocked because the unsigned local development runtime exposes neither Relay nor a safely scoped physical-drop control; Android and live Tailscale evidence are also uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/14274",
+        "https://linear.app/stably/issue/STA-4128"
+      ],
+      "invariant": "After a physical RPC reconnect or authenticated Relay/direct migration, a mounted mobile browser pane must keep its last decoded frame visible, discard only an unresolved hidden decoder, reject callbacks from that discarded decoder, and promote the newest replacement frame without reopening the tab or duplicating the logical browser.screencast subscription. A connected notification with no pending decode must perform no React render or native mutation.",
+      "oracle": "Render one pane with native wrapper and Image identity instrumentation, paint layer zero, advance the 100 ms throttle with a second frame while withholding the hidden layer onLoad, then publish connected on the same logical client. Require the visible decoder and URI to survive, exactly the hidden decoder to remount with its pending URI, a stale callback to do nothing, a newer frame to reach that replacement, and its current callback to promote it while one logical subscription remains. Separately require a healthy connected boundary to produce zero commits and native mutations, a physical socket replacement to replay browser.screencast once and publish connected once, and each logical migration direction to attach it once and publish connected once.",
+      "commands": [
+        "pnpm vitest run --config mobile/vitest.config.ts mobile/src/browser/mobile-browser-frameless-stream.test.tsx mobile/src/transport/rpc-client-terminal-reconnect.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts"
+      ],
+      "testFiles": [
+        "mobile/src/browser/mobile-browser-frameless-stream.test.tsx",
+        "mobile/src/transport/rpc-client-terminal-reconnect.test.ts",
+        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "mobile/src/browser/mobile-browser-frameless-stream.test.tsx",
+          "assertions": [
+            "replaces only a pending decoder after reconnect and promotes the newest frame",
+            "does no rendering or native work on a healthy connected boundary"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/rpc-client-terminal-reconnect.test.ts",
+          "assertions": [
+            "replays one browser screencast and publishes one connected state after reconnect"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "assertions": [
+            "attaches one browser screencast and publishes connected for LAN to Relay migration",
+            "attaches one browser screencast and publishes connected for Relay to LAN migration"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm vitest run --config mobile/vitest.config.ts mobile/src/browser/mobile-browser-frameless-stream.test.tsx mobile/src/transport/rpc-client-terminal-reconnect.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.23,
+          "summary": "Three focused files passed 25 deterministic pane-continuity, physical reconnect, and logical migration tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused React Native renderer and mobile transport contracts"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic focused gate passes locally; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical pending-decoder oracle fails on current main because connected does not replace the hidden native Image, passes with the decoder-epoch repair, and fails at the same native-identity assertion when only that repair is disabled. The healthy-boundary and transport controls remain green throughout."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Each mounted pane adds one client state listener with exact cleanup and O(1) work per notification. Healthy connected notifications perform zero React commits, native mutations, timers, RPCs, or subscription operations; a wedged transition remounts exactly one hidden wrapper and Image while preserving the visible layer."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Run a mounted browser pane through physical socket recovery and Relay/direct migration on native iOS and Android builds.",
+        "Collect live LAN, Tailscale, and cloud-relay frame-identity evidence without subscription duplication."
+      ],
+      "knownGaps": [
+        "The unsigned local iOS development runtime cannot expose Relay or a safely scoped physical socket drop, so native transition and screenshot evidence are blocked.",
+        "Android native decoder behavior and lifecycle transitions are untested.",
+        "Tailscale, carrier, sleep/wake, and real network-partition transitions remain deterministic transport or structural coverage rather than live evidence."
+      ],
+      "demotionRule": "Keep experimental or demote if reconnect can replace the visible decoder, retain a wedged hidden decoder, accept a stale decoder callback, duplicate browser.screencast, render or mutate native state on a healthy boundary, or fail to promote the next frame."
+    },
+    {
       "id": "editor.live-log-append-stability",
       "title": "Long live session logs retain their Monaco viewport while appending",
       "maturity": "experimental",

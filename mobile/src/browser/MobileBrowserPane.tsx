@@ -43,6 +43,7 @@ import {
   computeBrowserTouchClickRadiusCss,
   mapScreenToBrowserPoint,
   readLocalTouchPoint,
+  type BrowserFrameGeometry,
   type BrowserPoint,
   type BrowserTouchLayout,
   type BrowserZoomState
@@ -94,6 +95,13 @@ type MobileBrowserPaneProps = {
   keyboardLift: number
   bottomInset: number
   onToast: (message: string, durationMs?: number) => void
+}
+
+type FrameLayerPair<T> = [T, T]
+
+type PendingFrameTransition = {
+  layer: FrameLayer
+  decoderEpoch: number
 }
 
 type PanGesture = {
@@ -167,10 +175,16 @@ export function MobileBrowserPane({
   )
   const frameUriRef = useRef<string | null>(cachedInitialFrame?.uri ?? null)
   const frameMountedRef = useRef(cachedInitialFrame !== null)
-  const browserImageRefs = useRef<[Image | null, Image | null]>([null, null])
-  const browserLayerRefs = useRef<[View | null, View | null]>([null, null])
-  const pendingFrameLayerRef = useRef<FrameLayer | null>(null)
+  const frameLayerUriRefs = useRef<FrameLayerPair<string | null>>([
+    cachedInitialFrame?.uri ?? null,
+    null
+  ])
+  const browserImageRefs = useRef<FrameLayerPair<Image | null>>([null, null])
+  const browserLayerRefs = useRef<FrameLayerPair<View | null>>([null, null])
+  const pendingFrameTransitionRef = useRef<PendingFrameTransition | null>(null)
   const visibleFrameLayerRef = useRef<FrameLayer>(0)
+  const frameDecoderEpochsRef = useRef<FrameLayerPair<number>>([0, 0])
+  const [frameDecoderEpochs, setFrameDecoderEpochs] = useState<FrameLayerPair<number>>([0, 0])
   const busyRef = useRef(false)
   const lastAppliedFrameAtRef = useRef(0)
   const pendingThrottledFrameRef = useRef<{
@@ -284,22 +298,29 @@ export function MobileBrowserPane({
     cacheBrowserFrame(frameCacheKey, { uri: nextFrameUri, metadata: frame.metadata })
     if (!frameMountedRef.current) {
       frameUriRef.current = nextFrameUri
+      frameLayerUriRefs.current[0] = nextFrameUri
       frameMountedRef.current = true
       setFrameUri(nextFrameUri)
       updateBrowserImageSource(browserImageRefs.current[0], nextFrameUri)
-    } else if (pendingFrameLayerRef.current === null) {
+    } else if (pendingFrameTransitionRef.current === null) {
       // Why: decode the next frame offscreen and keep the previous layer visible
       // until onLoad; replacing the visible Image directly flashes black.
       const nextLayer: FrameLayer = visibleFrameLayerRef.current === 0 ? 1 : 0
       frameUriRef.current = nextFrameUri
-      pendingFrameLayerRef.current = nextLayer
+      frameLayerUriRefs.current[nextLayer] = nextFrameUri
+      pendingFrameTransitionRef.current = {
+        layer: nextLayer,
+        decoderEpoch: frameDecoderEpochsRef.current[nextLayer]
+      }
       updateBrowserImageSource(browserImageRefs.current[nextLayer], nextFrameUri)
     } else {
       // Why: popovers/menus can settle in one final frame while the previous
       // offscreen frame is still decoding. Keep the hidden layer pointed at
       // the newest frame instead of dropping the final static state.
       frameUriRef.current = nextFrameUri
-      updateBrowserImageSource(browserImageRefs.current[pendingFrameLayerRef.current], nextFrameUri)
+      const pendingLayer = pendingFrameTransitionRef.current.layer
+      frameLayerUriRefs.current[pendingLayer] = nextFrameUri
+      updateBrowserImageSource(browserImageRefs.current[pendingLayer], nextFrameUri)
     }
     if (busyRef.current) {
       busyRef.current = false
@@ -388,12 +409,14 @@ export function MobileBrowserPane({
       const cachedFrame = getCachedBrowserFrame(cacheKey)
       if (cachedFrame) {
         frameUriRef.current = cachedFrame.uri
+        frameLayerUriRefs.current = [cachedFrame.uri, null]
         frameMountedRef.current = true
         frameMetadataRef.current = cachedFrame.metadata
         setFrameUri(cachedFrame.uri)
         setFrameMetadata(cachedFrame.metadata)
       } else {
         frameUriRef.current = null
+        frameLayerUriRefs.current = [null, null]
         frameMountedRef.current = false
         setFrameUri(null)
         setFrameMetadata(null)
@@ -402,7 +425,7 @@ export function MobileBrowserPane({
     } else {
       frameMountedRef.current = true
     }
-    pendingFrameLayerRef.current = null
+    pendingFrameTransitionRef.current = null
     if (!sameStream || !frameUriRef.current) {
       visibleFrameLayerRef.current = 0
     }
@@ -531,6 +554,29 @@ export function MobileBrowserPane({
     tab.browserPageId,
     worktreeId
   ])
+
+  useEffect(() => {
+    if (!client) {
+      return
+    }
+    return client.onStateChange((state) => {
+      if (state !== 'connected') {
+        return
+      }
+      const pending = pendingFrameTransitionRef.current
+      if (!pending) {
+        return
+      }
+      const nextEpochs: FrameLayerPair<number> = [...frameDecoderEpochsRef.current]
+      nextEpochs[pending.layer] += 1
+      frameDecoderEpochsRef.current = nextEpochs
+      pendingFrameTransitionRef.current = {
+        layer: pending.layer,
+        decoderEpoch: nextEpochs[pending.layer]
+      }
+      setFrameDecoderEpochs(nextEpochs)
+    })
+  }, [client])
 
   const sendBrowserRequest = useCallback(
     async (
@@ -941,9 +987,9 @@ export function MobileBrowserPane({
 
   const setBrowserImageRef = useCallback((layer: FrameLayer, image: Image | null) => {
     browserImageRefs.current[layer] = image
-    const currentFrameUri = frameUriRef.current
-    if (image && currentFrameUri) {
-      updateBrowserImageSource(image, currentFrameUri)
+    const layerFrameUri = frameLayerUriRefs.current[layer]
+    if (image && layerFrameUri) {
+      updateBrowserImageSource(image, layerFrameUri)
     }
   }, [])
   const setBrowserLayerRef = useCallback((layer: FrameLayer, view: View | null) => {
@@ -967,35 +1013,21 @@ export function MobileBrowserPane({
     [setBrowserImageRef]
   )
 
-  const handleBrowserImageLoad = useCallback((layer: FrameLayer) => {
-    if (pendingFrameLayerRef.current !== layer) {
+  const handleBrowserImageLoad = useCallback((layer: FrameLayer, decoderEpoch: number) => {
+    const pending = pendingFrameTransitionRef.current
+    if (!pending || pending.layer !== layer || pending.decoderEpoch !== decoderEpoch) {
       return
     }
-    pendingFrameLayerRef.current = null
+    pendingFrameTransitionRef.current = null
     visibleFrameLayerRef.current = layer
     updateBrowserLayerVisibility(browserLayerRefs.current, layer)
   }, [])
-  const handleBrowserImageLayer0Load = useCallback(
-    () => handleBrowserImageLoad(0),
-    [handleBrowserImageLoad]
-  )
-  const handleBrowserImageLayer1Load = useCallback(
-    () => handleBrowserImageLoad(1),
-    [handleBrowserImageLoad]
-  )
-  const handleBrowserImageError = useCallback((layer: FrameLayer) => {
-    if (pendingFrameLayerRef.current === layer) {
-      pendingFrameLayerRef.current = null
+  const handleBrowserImageError = useCallback((layer: FrameLayer, decoderEpoch: number) => {
+    const pending = pendingFrameTransitionRef.current
+    if (pending?.layer === layer && pending.decoderEpoch === decoderEpoch) {
+      pendingFrameTransitionRef.current = null
     }
   }, [])
-  const handleBrowserImageLayer0Error = useCallback(
-    () => handleBrowserImageError(0),
-    [handleBrowserImageError]
-  )
-  const handleBrowserImageLayer1Error = useCallback(
-    () => handleBrowserImageError(1),
-    [handleBrowserImageError]
-  )
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
   const goBack = useCallback(() => {
@@ -1028,8 +1060,7 @@ export function MobileBrowserPane({
     },
     [browserViewMode, resetBrowserZoomState, tab.browserPageId, worktreeId]
   )
-  const renderedFrameSource =
-    frameUriRef.current || frameUri ? { uri: frameUriRef.current ?? frameUri! } : null
+  const hasRenderedFrame = Boolean(frameUriRef.current || frameUri)
   const frameLayerStyle = useCallback((layer: FrameLayer) => {
     return [
       styles.browserImageLayer,
@@ -1044,15 +1075,32 @@ export function MobileBrowserPane({
     (layer: FrameLayer) => (layer === 0 ? setBrowserImageLayer0Ref : setBrowserImageLayer1Ref),
     [setBrowserImageLayer0Ref, setBrowserImageLayer1Ref]
   )
-  const frameLayerLoadHandler = useCallback(
-    (layer: FrameLayer) =>
-      layer === 0 ? handleBrowserImageLayer0Load : handleBrowserImageLayer1Load,
-    [handleBrowserImageLayer0Load, handleBrowserImageLayer1Load]
-  )
-  const frameLayerErrorHandler = useCallback(
-    (layer: FrameLayer) =>
-      layer === 0 ? handleBrowserImageLayer0Error : handleBrowserImageLayer1Error,
-    [handleBrowserImageLayer0Error, handleBrowserImageLayer1Error]
+  const renderBrowserFrameLayer = (layer: FrameLayer, geometry: BrowserFrameGeometry | null) => (
+    <View
+      key={`${layer}:${frameDecoderEpochs[layer]}`}
+      ref={browserLayerRef(layer)}
+      pointerEvents="none"
+      style={frameLayerStyle(layer)}
+    >
+      <Image
+        ref={frameLayerRef(layer)}
+        source={
+          frameLayerUriRefs.current[layer] ? { uri: frameLayerUriRefs.current[layer] } : undefined
+        }
+        resizeMode={geometry ? 'stretch' : 'contain'}
+        fadeDuration={0}
+        onLoad={() => handleBrowserImageLoad(layer, frameDecoderEpochs[layer])}
+        onError={() => handleBrowserImageError(layer, frameDecoderEpochs[layer])}
+        style={
+          geometry
+            ? [
+                styles.browserImage,
+                { width: geometry.renderedWidth, height: geometry.renderedHeight }
+              ]
+            : styles.browserImageFill
+        }
+      />
+    </View>
   )
 
   return (
@@ -1111,7 +1159,7 @@ export function MobileBrowserPane({
         }}
         {...panResponder.panHandlers}
       >
-        {renderedFrameSource ? (
+        {hasRenderedFrame ? (
           <View style={styles.browserImageHost}>
             {frameGeometry ? (
               <View
@@ -1135,59 +1183,19 @@ export function MobileBrowserPane({
                     }
                   ]}
                 >
-                  {([0, 1] as const).map((layer) => (
-                    <View
-                      key={layer}
-                      ref={browserLayerRef(layer)}
-                      pointerEvents="none"
-                      style={frameLayerStyle(layer)}
-                    >
-                      <Image
-                        ref={frameLayerRef(layer)}
-                        source={renderedFrameSource}
-                        resizeMode="stretch"
-                        fadeDuration={0}
-                        onLoad={frameLayerLoadHandler(layer)}
-                        onError={frameLayerErrorHandler(layer)}
-                        style={[
-                          styles.browserImage,
-                          {
-                            width: frameGeometry.renderedWidth,
-                            height: frameGeometry.renderedHeight
-                          }
-                        ]}
-                      />
-                    </View>
-                  ))}
+                  {([0, 1] as const).map((layer) => renderBrowserFrameLayer(layer, frameGeometry))}
                 </View>
               </View>
             ) : (
-              ([0, 1] as const).map((layer) => (
-                <View
-                  key={layer}
-                  ref={browserLayerRef(layer)}
-                  pointerEvents="none"
-                  style={frameLayerStyle(layer)}
-                >
-                  <Image
-                    ref={frameLayerRef(layer)}
-                    source={renderedFrameSource}
-                    resizeMode="contain"
-                    fadeDuration={0}
-                    onLoad={frameLayerLoadHandler(layer)}
-                    onError={frameLayerErrorHandler(layer)}
-                    style={styles.browserImageFill}
-                  />
-                </View>
-              ))
+              ([0, 1] as const).map((layer) => renderBrowserFrameLayer(layer, null))
             )}
           </View>
         ) : null}
-        {!renderedFrameSource || busy || error ? (
+        {!hasRenderedFrame || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
             {/* Why: a stream can report ready and then deliver no frames, so key the
                 indicator off actually having pixels or it clears into a blank pane. */}
-            {busy || (!renderedFrameSource && !error) ? (
+            {busy || (!hasRenderedFrame && !error) ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}

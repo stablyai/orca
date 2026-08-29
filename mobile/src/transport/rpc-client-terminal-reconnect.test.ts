@@ -74,10 +74,15 @@ function sentRequest(socket: MockWebSocket, method: string): { id: string } {
   throw new Error(`Request not sent: ${method}`)
 }
 
-function sentRequests(socket: MockWebSocket, method: string): Array<{ id: string }> {
+function sentRequests(socket: MockWebSocket, method: string): { id: string; params?: unknown }[] {
   return socket.sent
     .map(
-      (payload) => JSON.parse(payload.replace(/^encrypted:/, '')) as { id: string; method: string }
+      (payload) =>
+        JSON.parse(payload.replace(/^encrypted:/, '')) as {
+          id: string
+          method: string
+          params?: unknown
+        }
     )
     .filter((request) => request.method === method)
 }
@@ -108,7 +113,7 @@ function encodeTerminalOutput(streamId: number, chunk: string): Uint8Array {
   })
 }
 
-describe('rpc-client terminal reconnect streams', () => {
+describe('rpc-client reconnect streams', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSockets.length = 0
@@ -158,6 +163,31 @@ describe('rpc-client terminal reconnect streams', () => {
       streamId: 76,
       chunk: 'stale-before-reconnect'
     })
+    client.close()
+  })
+
+  it('replays one browser screencast and publishes one connected state after reconnect', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const first = mockSockets[0]!
+    authenticate(first)
+    client.subscribe('browser.screencast', { worktree: 'id:wt-1', page: 'page-1' }, () => {}, {
+      onBinaryFrame: () => {}
+    })
+    expect(sentRequests(first, 'browser.screencast')).toHaveLength(1)
+    const states: string[] = []
+    client.onStateChange((state) => states.push(state))
+
+    first.close()
+    vi.advanceTimersByTime(500)
+    expect(mockSockets).toHaveLength(2)
+    const replacement = mockSockets[1]!
+    authenticate(replacement)
+
+    expect(sentRequests(replacement, 'browser.screencast')).toEqual([
+      expect.objectContaining({ params: { worktree: 'id:wt-1', page: 'page-1' } })
+    ])
+    expect(states.filter((state) => state === 'connected')).toHaveLength(1)
+
     client.close()
   })
 })
