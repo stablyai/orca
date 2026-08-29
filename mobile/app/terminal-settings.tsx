@@ -18,6 +18,7 @@ import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
 import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
+import { useTerminalDoubleTapTabPreference } from '../src/terminal/use-terminal-double-tap-tab-preference'
 import {
   loadTerminalAutocompleteEnabled,
   loadTerminalTextScale,
@@ -176,6 +177,9 @@ export default function TerminalSettingsScreen() {
     setAutocompleteEnabled(next)
     void saveTerminalAutocompleteEnabled(next)
   }, [])
+
+  const { enabled: doubleTapTabEnabled, setEnabled: toggleDoubleTapTab } =
+    useTerminalDoubleTapTabPreference()
 
   useEffect(() => {
     let cancelled = false
@@ -343,6 +347,21 @@ export default function TerminalSettingsScreen() {
             <Switch
               value={autocompleteEnabled}
               onValueChange={toggleAutocomplete}
+              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+              thumbColor={colors.textPrimary}
+            />
+          </View>
+          <View style={styles.separator} />
+          <View style={styles.row}>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Double-tap sends Tab</Text>
+              <Text style={styles.rowSublabel}>
+                {doubleTapTabEnabled ? 'On' : 'Off'} · Empty terminal space only
+              </Text>
+            </View>
+            <Switch
+              value={doubleTapTabEnabled}
+              onValueChange={toggleDoubleTapTab}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
               thumbColor={colors.textPrimary}
             />

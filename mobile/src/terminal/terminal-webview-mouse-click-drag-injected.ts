@@ -101,6 +101,7 @@ export const TERMINAL_MOUSE_CLICK_DRAG_JS = `
     targetSurface.addEventListener('pointerdown', function(e) {
       if (e.pointerType !== 'mouse' || e.button !== 0) return;
       if (dispatcherShouldBlockSurface() || !term) return;
+      cancelTerminalPlainTap();
       // Why: a pointerup lost outside the WebView must not leave the previous
       // gesture latched (tracking press with no release) when the next one lands.
       if (mouseGesture) abandonMouseGesture();

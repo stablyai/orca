@@ -232,8 +232,14 @@ describe('TerminalWebView scroll routing', () => {
     expect(tapHandlerBlock).toContain("notify({ type: 'open-url', url: tappedUrl });")
     expect(tapHandlerBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
     expect(tapHandlerBlock).toContain(
-      'if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode()))'
+      'var mouseTrackingTap = isClickMouseTrackingMode(getMouseTrackingMode());'
     )
+    expect(tapHandlerBlock).toContain('cancelTerminalPlainTap();')
+    expect(tapHandlerBlock).toContain(
+      'if (focusKeyboard && !mouseTrackingTap && !unsupportedOscLink)'
+    )
+    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-plain-tap' });")
+    expect(tapHandlerBlock).toContain('if (focusKeyboard || !mouseTrackingTap)')
     expect(tapHandlerBlock).toContain("notify({ type: 'terminal-tap' });")
   })
 

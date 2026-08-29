@@ -53,6 +53,10 @@ export function dispatchTerminalWebViewNotification(
     }
   } else if (msg.type === 'terminal-tap') {
     handlers.onTerminalTap?.()
+  } else if (msg.type === 'terminal-plain-tap') {
+    handlers.onTerminalPlainTap?.()
+  } else if (msg.type === 'terminal-plain-tap-cancelled') {
+    handlers.onTerminalPlainTapCancelled?.()
   } else if (msg.type === 'terminal-file-tap') {
     const pathText = typeof msg.pathText === 'string' ? msg.pathText : ''
     if (pathText.length > 0) {

@@ -117,6 +117,7 @@ import {
 } from '../../../../src/terminal/terminal-accessory-layout'
 import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../../../../src/terminal/terminal-live-accessory-raw-send'
+import { useTerminalDoubleTapTab } from '../../../../src/terminal/use-terminal-double-tap-tab'
 import {
   createTerminalAccessoryRepeatController,
   createTerminalAccessoryRepeatSender
@@ -817,6 +818,11 @@ export default function SessionScreen() {
     toggleTerminalLiveInput
   } = useTerminalLiveInputModePreference({ hostId, worktreeId })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
+  const terminalInputLifecycleKey = JSON.stringify([hostId, worktreeId, connState])
+  const { cancelPendingTap, shouldSendTabForTap } = useTerminalDoubleTapTab(
+    activeHandle,
+    terminalInputLifecycleKey
+  )
   // Reactive teardown signal for the native-chat covered stream; see unsubscribeTerminal.
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
@@ -996,7 +1002,7 @@ export default function SessionScreen() {
     inputRef: liveInputRef,
     keyboardHeight,
     lifecycleIdentity: client,
-    lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
+    lifecycleKey: terminalInputLifecycleKey,
     liveInputEnabled,
     timerRef: liveInputFocusTimerRef
   })
@@ -3022,7 +3028,9 @@ export default function SessionScreen() {
       deviceToken: deviceTokenRef.current
     })
   }
-
+  // Why: the ref keeps double-tap and repeat callbacks current across terminal switches/reconnects.
+  const handleAccessoryKeyRef = useRef(handleAccessoryKey)
+  handleAccessoryKeyRef.current = handleAccessoryKey
   const sendLiveTerminalInput = useCallback(
     async (handle: string, bytes: string): Promise<boolean> => {
       const text = normalizeTerminalTextInput(bytes)
@@ -3136,6 +3144,15 @@ export default function SessionScreen() {
       liveInput: liveInputRef.current
     })
   }, [])
+
+  const handleTerminalPlainTap = useCallback(
+    (handle: string) => {
+      if (handle === activeHandleRef.current && shouldSendTabForTap(handle)) {
+        void handleAccessoryKeyRef.current({ bytes: '\t' })
+      }
+    },
+    [shouldSendTabForTap]
+  )
 
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
@@ -3412,9 +3429,6 @@ export default function SessionScreen() {
   const accessoryRepeatRef = useRef(
     createTerminalAccessoryRepeatController<ReturnType<typeof createTerminalLiveAccessoryInput>>()
   )
-  // Why: the current callback observes reconnect state while the sender pins the press to its original terminal.
-  const handleAccessoryKeyRef = useRef(handleAccessoryKey)
-  handleAccessoryKeyRef.current = handleAccessoryKey
   const stopAccessoryRepeat = useCallback(() => {
     accessoryRepeatRef.current.stop()
   }, [])
@@ -4702,6 +4716,8 @@ export default function SessionScreen() {
                     onTerminalInput={handleTerminalInput}
                     onTerminalQueryReply={handleTerminalQueryReply}
                     onTerminalTap={handleTerminalTap}
+                    onTerminalPlainTap={handleTerminalPlainTap}
+                    onTerminalPlainTapCancelled={cancelPendingTap}
                     onFileTap={handleFileTap}
                     onOpenUrl={handleTerminalOpenUrl}
                   />
