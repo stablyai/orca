@@ -23,7 +23,7 @@ function parseDesktopConfiguredAgents(): string[] {
   const match = source.match(/TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {([\s\S]*?)^}/m)
   expect(match).not.toBeNull()
   return Array.from(
-    match?.[1].matchAll(/^  (?:'([^']+)'|([a-z][a-z0-9-]*)): {/gm) ?? [],
+    match?.[1].matchAll(/^  (?:'([^']+)'|([a-z][a-z0-9-]*)):/gm) ?? [],
     (entry) => entry[1] ?? entry[2]
   )
 }
@@ -42,5 +42,13 @@ describe('mobile agent catalog', () => {
     expect(MOBILE_AGENT_CATALOG.find((agent) => agent.id === 'claude-agent-teams')).toEqual(
       expect.not.objectContaining({ faviconDomain: expect.any(String) })
     )
+  })
+
+  it('exposes MiniMax Code with its product label and icon source', () => {
+    expect(MOBILE_AGENT_CATALOG.find((agent) => agent.id === 'minimax-code')).toEqual({
+      id: 'minimax-code',
+      label: 'MiniMax Code',
+      faviconDomain: 'agent.minimax.io'
+    })
   })
 })

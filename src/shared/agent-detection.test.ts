@@ -101,6 +101,25 @@ describe('MiMo title detection', () => {
   )
 })
 
+describe('MiniMax Code title detection', () => {
+  it.each([
+    ['Minimax Code', 'idle'],
+    ['MiniMax Code ready', 'idle'],
+    ['⠋ MiniMax Code', 'working']
+  ] as const)('classifies %s', (title, expectedStatus) => {
+    expect(getAgentLabel(title)).toBe('MiniMax Code')
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it.each(['~/minimax/code', 'minimax-code-fixtures ready'])(
+    'does not classify path or hyphen false positive %s',
+    (title) => {
+      expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
+})
+
 describe('OpenCode native title detection', () => {
   // Why: `OC | …` names no agent token, so title-derived display and target surfaces
   // previously dropped OpenCode panes. Runtime sends corroborate the title separately.

@@ -1,5 +1,6 @@
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
+import { isMiniMaxCodeNonInteractiveCommand } from './minimax-code-non-interactive-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TuiAgent } from './tui-agent'
 
@@ -12,6 +13,7 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   claude: isPrintModeHeadlessOneShotCommand,
   trae: isPrintModeHeadlessOneShotCommand,
   'prime-agent': isPrimeAgentHeadlessOneShotCommand,
+  'minimax-code': isMiniMaxCodeNonInteractiveCommand,
   ante: isAnteHeadlessOneShotCommand
 }
 
