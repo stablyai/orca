@@ -102,11 +102,8 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
 }
 
 async function main(): Promise<void> {
-  // Why: the parent captures daemon startup stderr then destroys its end of the
-  // pipe once the daemon is ready. A later write here (e.g. the uncaughtException
-  // console.error below) would then hit a broken pipe and emit 'error' on
-  // process.stderr — with no listener that becomes an unhandled error that kills
-  // an otherwise healthy detached daemon. Swallow it: stderr is diagnostic only.
+  // Why: older parents destroy their stderr pipe after readiness, so diagnostic
+  // writes must not turn a broken pipe into a second fatal error.
   process.stderr.on('error', () => {})
 
   const {
@@ -127,8 +124,8 @@ async function main(): Promise<void> {
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
   void warmPwshAvailabilityCache()
 
-  // Why: detached daemons destroy stderr, so the preflight's console.warn is lost;
-  // surface a degraded TCC attribution here where it's diagnosable (F2).
+  // Why: adopted daemons can lack a stderr observer, so surface degraded TCC
+  // attribution in the durable lifecycle log (F2).
   const runMacosLoginPreflight = async (): Promise<void> => {
     const outcome = await prepareMacosTccLoginShell()
     if (outcome && !outcome.ok) {

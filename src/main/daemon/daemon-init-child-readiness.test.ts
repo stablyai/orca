@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './types'
-import { FAKE_DAEMON_ENTRY_PATH } from './daemon-init-test-harness'
+import { FAKE_DAEMON_ENTRY_PATH, FAKE_USER_DATA_PATH } from './daemon-init-test-harness'
 
 const {
   writeFileSyncMock,
@@ -93,7 +94,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(offMock).toHaveBeenCalledWith('exit', expect.any(Function))
     expect(handlers.message).toHaveLength(0)
     expect(handlers.error).toHaveLength(0)
-    expect(handlers.exit).toHaveLength(0)
+    expect(handlers.exit).toHaveLength(1)
     expect(child.disconnect).toHaveBeenCalledOnce()
     expect(child.unref).toHaveBeenCalledOnce()
     expect(writeFileSyncMock).not.toHaveBeenCalled()
@@ -156,7 +157,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     )
   })
 
-  it('destroys the daemon stderr pipe once the daemon signals ready', async () => {
+  it('keeps daemon stderr observable after readiness without retaining Electron', async () => {
     const mod = await importFresh()
     checkDaemonHealthMock.mockResolvedValue('unreachable')
     await mod.initDaemonPtyProvider()
@@ -168,16 +169,26 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const handlers: Record<string, ((arg?: unknown) => void)[]> = {
       message: [],
       error: [],
-      exit: []
+      exit: [],
+      close: []
     }
     const stderrOff = vi.fn()
     const stderrDestroy = vi.fn()
+    const stderrUnref = vi.fn()
+    const stderrDataHandlers: ((chunk: Buffer) => void)[] = []
+    const stderrEndHandlers: (() => void)[] = []
     const stderr = {
-      on() {
+      on(event: string, callback: (chunk: Buffer) => void) {
+        if (event === 'data') {
+          stderrDataHandlers.push(callback)
+        } else if (event === 'end' || event === 'close') {
+          stderrEndHandlers.push(callback as () => void)
+        }
         return this
       },
       off: stderrOff,
-      destroy: stderrDestroy
+      destroy: stderrDestroy,
+      unref: stderrUnref
     }
     const child = {
       pid: 12345,
@@ -201,10 +212,29 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     await launcher('/fake/socket', '/fake/token')
 
-    expect(stderrOff).toHaveBeenCalledWith('data', expect.any(Function))
-    expect(stderrDestroy).toHaveBeenCalledOnce()
+    expect(stderrOff).not.toHaveBeenCalledWith('data', expect.any(Function))
+    expect(stderrDestroy).not.toHaveBeenCalled()
+    expect(stderrUnref).toHaveBeenCalledOnce()
     expect(child.disconnect).toHaveBeenCalledOnce()
     expect(child.unref).toHaveBeenCalledOnce()
+
+    for (const handler of stderrDataHandlers) {
+      handler(Buffer.from('FATAL ERROR: heap limit reached'))
+    }
+    for (const handler of handlers.exit) {
+      handler(134)
+    }
+    for (const handler of stderrEndHandlers) {
+      handler()
+    }
+
+    expect(writeFileSyncMock).toHaveBeenCalledWith(
+      join(FAKE_USER_DATA_PATH, 'logs', 'daemon.log'),
+      expect.stringContaining('"event":"process-exit-observed","verdict":"exited","exitCode":134'),
+      { flag: 'a', mode: 0o600 }
+    )
+    expect(writeFileSyncMock.mock.calls.at(-1)?.[1]).toContain('"launchNonce":')
+    expect(writeFileSyncMock.mock.calls.at(-1)?.[1]).toContain('FATAL ERROR: heap limit reached')
   })
 
   it('accepts the daemon self-reported start time when the OS query returns null', async () => {

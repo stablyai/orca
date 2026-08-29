@@ -2,7 +2,7 @@
 restart, teardown); the "swap the provider atomically" invariant keeps restart + singletons co-located. */
 import { randomUUID } from 'node:crypto'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { readFileSync, unlinkSync } from 'node:fs'
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { fork, type ChildProcess } from 'node:child_process'
 import {
   DaemonSpawner,
@@ -57,6 +57,11 @@ import {
 import { parseDaemonReadyIdentity, readDaemonProcessIncarnation } from './daemon-ready-identity'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import {
+  observeDaemonChildExit,
+  type DaemonChildExitObservation
+} from './daemon-child-exit-observer'
+import {
+  daemonDiagnosticsDisabled,
   daemonLogArgs,
   getAliveDaemonSessionCount,
   getDaemonEntryPath,
@@ -65,6 +70,7 @@ import {
   probeDaemonSocket as probeSocket,
   resolvePackagedDarwinAppVersion
 } from './daemon-launch-paths'
+import { getDaemonLogFilePath } from '../observability/logs-directory'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -106,6 +112,33 @@ type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProv
 let adapter: DaemonProvider | null = null
 // Why: coalesce concurrent restartDaemon() calls so two entries can't race the 7-step sequence against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
+
+function recordDaemonChildExit(
+  identity: DaemonEndpointIdentity | null,
+  observation: DaemonChildExitObservation
+): void {
+  console.warn(
+    `[daemon] Daemon process exit observed (pid=${identity?.pid ?? 'unknown'}, code=${observation.exitCode ?? 'null'}, signal=${observation.signal ?? 'null'})${observation.stderrTail ? `\n${observation.stderrTail}` : ''}`
+  )
+  if (daemonDiagnosticsDisabled()) {
+    return
+  }
+  try {
+    writeFileSync(
+      getDaemonLogFilePath(),
+      `${JSON.stringify({
+        src: 'daemon-launcher',
+        ts: new Date().toISOString(),
+        ...identity,
+        event: 'process-exit-observed',
+        ...observation
+      })}\n`,
+      { flag: 'a', mode: 0o600 }
+    )
+  } catch {
+    // Diagnostics are fail-open.
+  }
+}
 
 function createPreservedDaemonHandle(
   runtimeDir: string,
@@ -607,7 +640,7 @@ function createOutOfProcessLauncher(
         {
           // Why: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
           cwd: userDataPath,
-          // Why: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
+          // Why: detached+unref outlives Electron; stdout is ignored, while an unrefed stderr pipe retains a bounded fatal-error tail.
           detached: true,
           stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
           // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
@@ -622,29 +655,11 @@ function createOutOfProcessLauncher(
         }
       )
 
-      // Why: keep only the startup-window stderr tail so a crash cause is visible without unbounded memory.
-      const STARTUP_STDERR_MAX_BYTES = 8192
-      let startupStderr = ''
-      let collectingStderr = true
-      const onStartupStderr = (chunk: Buffer): void => {
-        if (!collectingStderr) {
-          return
-        }
-        startupStderr += chunk.toString('utf8')
-        if (startupStderr.length > STARTUP_STDERR_MAX_BYTES) {
-          startupStderr = startupStderr.slice(-STARTUP_STDERR_MAX_BYTES)
-        }
-      }
-      child.stderr?.on('data', onStartupStderr)
-      // Why: release the detached daemon's stderr once up/failed — a live piped stream refs the parent loop and blocks Electron exit.
-      const releaseStderr = (): void => {
-        collectingStderr = false
-        child.stderr?.off('data', onStartupStderr)
-        child.stderr?.destroy()
-      }
-
       // Wait for the daemon to signal readiness via IPC
       let launchedIdentity: DaemonEndpointIdentity | null = null
+      const childExitObserver = observeDaemonChildExit(child, (observation) =>
+        recordDaemonChildExit(launchedIdentity, observation)
+      )
       let endpointUnavailableReason: string | null = null
       const startupSignal = new Promise<void>((resolve, reject) => {
         let timer: ReturnType<typeof setTimeout> | undefined
@@ -664,11 +679,11 @@ function createOutOfProcessLauncher(
           settled = true
           cleanupStartupListeners()
           // Why: attach the captured stderr tail to the thrown error and log it so a startup crash isn't just "exited with code 1".
-          const stderrTail = startupStderr.trim()
+          const stderrTail = childExitObserver.startupStderrTail()
           if (stderrTail) {
             console.warn(`[daemon] startup failed; captured stderr tail:\n${stderrTail}`)
           }
-          releaseStderr()
+          childExitObserver.stop({ destroyStderr: true })
           const startupError = stderrTail
             ? new Error(`${error.message}\nDaemon stderr (tail):\n${stderrTail}`)
             : error
@@ -717,8 +732,8 @@ function createOutOfProcessLauncher(
             settled = true
             // Why: daemon is detached after readiness; detach startup listeners so the launch promise closure isn't retained.
             cleanupStartupListeners()
-            // Why: release IPC/stderr and unref so Electron can exit without waiting; the daemon keeps running detached.
-            releaseStderr()
+            // Why: keep a bounded stderr tail while unrefing its pipe so later fatal output is observable without blocking Electron exit.
+            childExitObserver.markReady()
             child.disconnect()
             child.unref()
             resolve()

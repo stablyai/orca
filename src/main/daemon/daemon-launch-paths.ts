@@ -38,10 +38,15 @@ export function resolvePackagedDarwinAppVersion(): string | null {
   return process.platform === 'darwin' && environment.isPackaged() ? environment.getVersion() : null
 }
 
+/** Single source of truth for the ORCA_DIAGNOSTICS_DISABLED privacy switch. */
+export function daemonDiagnosticsDisabled(): boolean {
+  const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
+  return disabled === '1' || disabled === 'true'
+}
+
 // Why: pass a log-file arg so field failures are diagnosable, but honor the ORCA_DIAGNOSTICS_DISABLED privacy switch.
 export function daemonLogArgs(): string[] {
-  const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
-  return disabled === '1' || disabled === 'true' ? [] : ['--log-file', getDaemonLogFilePath()]
+  return daemonDiagnosticsDisabled() ? [] : ['--log-file', getDaemonLogFilePath()]
 }
 
 // Why: a socket that accepts a connection proves a daemon survived a previous app session and can be reused.
