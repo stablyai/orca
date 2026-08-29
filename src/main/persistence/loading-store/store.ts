@@ -9,6 +9,11 @@ import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
 import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
 import {
+  hydrateDeferredProtectedSecrets,
+  type DeferredSecretHydrationResult
+} from './deferred-secret-hydration'
+import { notifySettingsChanged, notifyUIChanged } from './profile-preferences'
+import {
   createStoreDomains,
   installStoreDomainContexts,
   STORE_DOMAIN_OPERATION_CLASSES,
@@ -85,6 +90,27 @@ export class Store {
 
   getProfileStorageDirectory(): string {
     return dirname(this.runtime.dataFile)
+  }
+
+  /**
+   * Decrypt the protected slots a `deferKeyringProbe` load left sealed, then tell listeners.
+   *
+   * Returns what changed so the caller can re-run the startup work that read the withheld
+   * values — the persisted proxy above all, which is applied from settings before any window
+   * exists and would otherwise stay unset for the whole session.
+   */
+  hydrateDeferredProtectedSecrets(): DeferredSecretHydrationResult {
+    const result = hydrateDeferredProtectedSecrets(this.runtime)
+    if (Object.keys(result.settingsUpdates).length > 0) {
+      notifySettingsChanged(this, result.settingsUpdates)
+    }
+    if (result.uiChanged) {
+      notifyUIChanged(this)
+    }
+    if (result.needsSave) {
+      scheduleSave(this.domains.scheduling)
+    }
+    return result
   }
 
   freezeWrites(): void {

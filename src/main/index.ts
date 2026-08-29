@@ -38,6 +38,8 @@ import { setSecretStore } from '../shared/secret-store'
 import { ElectronSecretStore } from './host/electron-secret-store'
 import { scheduleSecretProtectionGapReport } from './host/deferred-secret-protection-report'
 import { initSessionParseCachePersistence } from './ai-vault/session-parse-cache-persistence'
+import { deferUntilFirstWindowShown } from './window/defer-until-first-window-shown'
+import { shouldDeferKeyringProbe } from './startup/keyring-probe-deferral'
 import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
@@ -2429,9 +2431,15 @@ void app.whenReady().then(async () => {
   // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
   // read has to have happened by then or the renderer and the browser-host lease disagree.
   initializeBrowserClientHostId(activeOrcaProfile.profileDirectory)
+  // Why deferred: the load decrypts every populated protected slot, and each decrypt probes the
+  // OS keyring — on Linux a blocking D-Bus round trip that a locked keyring never answers, run
+  // here with no window on screen to explain the wait (STA-5782). Serve is excluded: it opens no
+  // window, so deferring would move the block past the point clients can already pair.
+  const deferKeyringProbe = shouldDeferKeyringProbe({ platform: process.platform, isServeMode })
   store = new Store({
     dataFile: activeOrcaProfile.dataFile,
-    storageAuthority: isServeMode ? 'runtime' : 'desktop'
+    storageAuthority: isServeMode ? 'runtime' : 'desktop',
+    deferKeyringProbe
   })
   // Why armed here and not at install time: the report remembers what it last said, and
   // that state lives beside the profile data file, which does not exist until now.
@@ -2534,6 +2542,20 @@ void app.whenReady().then(async () => {
     }
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings')
+  }
+  if (deferKeyringProbe) {
+    const deferredSecretStore = store
+    deferUntilFirstWindowShown(() => {
+      const hydration = deferredSecretStore.hydrateDeferredProtectedSecrets()
+      // Why re-apply here and not via onSettingsChanged: the proxy is applied once at startup
+      // from settings, not from a listener, so a deferred load leaves it on the environment
+      // fallback for the rest of the session.
+      if ('httpProxyUrl' in hydration.settingsUpdates) {
+        void applyElectronProxySettings(deferredSecretStore.getSettings()).catch(() => {
+          console.warn('[proxy] Failed to apply network proxy settings after secret hydration')
+        })
+      }
+    })
   }
   // Why: the preview session is protocol-scoped, so the handler must exist before any preview webview attaches.
   installDocPreviewProtocolHandler()

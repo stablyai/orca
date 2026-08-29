@@ -23,6 +23,13 @@ import type {
 export type StoreRuntimeOptions = {
   dataFile?: string
   storageAuthority?: AutomationStorageAuthority
+  /**
+   * Load without asking the OS keyring, leaving every protected slot sealed until
+   * `Store.hydrateDeferredProtectedSecrets()` runs. Only for hosts that open a window: the
+   * probe is a blocking D-Bus round trip on Linux, and the load runs before the first window
+   * exists (STA-5782).
+   */
+  deferKeyringProbe?: boolean
 }
 
 /** Mutable coordination state shared only with this Store's private collaborators. */
@@ -72,6 +79,9 @@ export class StoreRuntimeState {
   constructor(options: StoreRuntimeOptions = {}) {
     this.dataFile = options.dataFile ?? getDataFile()
     this.storageAuthority = options.storageAuthority ?? 'desktop'
+    if (options.deferKeyringProbe) {
+      this.protectedSecrets.deferKeyringProbe()
+    }
     this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
       minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
     })

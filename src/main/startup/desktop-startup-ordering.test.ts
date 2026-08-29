@@ -318,6 +318,47 @@ describe('startup ordering', () => {
     expect(signalHandlers).toBeLessThan(serveReady)
   })
 
+  it('defers the profile load keyring probe and finishes it once a window has painted', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const decision = source.indexOf('const deferKeyringProbe = shouldDeferKeyringProbe(')
+    // Why the two-space indent is part of the anchor: it is the only thing that separates the live
+    // `whenReady` body from the same block relocated into a nested helper nothing calls. A bare
+    // substring match accepts the relocated copy, and every assertion below then passes against
+    // code that never runs.
+    const arming = source.indexOf(
+      '\n  if (deferKeyringProbe) {\n    const deferredSecretStore = store\n    deferUntilFirstWindowShown('
+    )
+    // Why bound both: an unresolved indexOf is -1, and the slices below would run from the top of
+    // the file or to its end.
+    expect(decision).toBeGreaterThanOrEqual(0)
+    expect(arming).toBeGreaterThan(decision)
+
+    // Why the whole host argument: reading `isServeMode` here is the serve exclusion (STA-5765).
+    // A headless host opens no window to defer behind, so dropping it would park the probe past
+    // `printServeReady`, where a client can already pair against a stalled main thread.
+    expect(source).toContain('shouldDeferKeyringProbe({ platform: process.platform, isServeMode })')
+
+    const beforeArming = source.slice(decision, arming)
+    // Why: the decision is inert unless the load actually receives it.
+    expect(beforeArming).toContain('    deferKeyringProbe\n  })')
+    // Why: a `return` planted above the arming leaves every substring assertion intact while the
+    // deferred secrets are never hydrated at all. Nothing else returns at this indent inside
+    // `whenReady`, so any occurrence here is the regression.
+    expect(beforeArming).not.toContain('\n  return')
+
+    const armingBlock = source.slice(arming, source.indexOf('\n  }\n', arming))
+    expect(armingBlock).toContain('deferredSecretStore.hydrateDeferredProtectedSecrets()')
+    // Why the proxy re-apply belongs to this contract: the proxy is applied once from settings
+    // before any window exists, so without it a deferred load leaves the session on the
+    // environment fallback for the rest of the session.
+    expect(armingBlock).toContain("if ('httpProxyUrl' in hydration.settingsUpdates) {")
+    expect(armingBlock).toContain('applyElectronProxySettings(deferredSecretStore.getSettings())')
+
+    // Why the count: a second arming site would run the blocking probe twice, the second time
+    // while the user is already interacting with the window.
+    expect(source.split('deferUntilFirstWindowShown(')).toHaveLength(2)
+  })
+
   it('starts the automation scheduler before headless serve reports ready', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const serveStart = source.indexOf('if (serveOptions) {')

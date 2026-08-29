@@ -33,6 +33,33 @@ type ProtectedSecretEncryption = {
 export class ProtectedSecretPersistence {
   private readonly retainedBlobs = new Map<string, string>()
   private readonly sealedSlots = new Set<string>()
+  private keyringProbeDeferred = false
+
+  /**
+   * Answer "keyring unavailable" without asking the keyring, until {@link resumeKeyringProbe}.
+   *
+   * Why: on Linux `isEncryptionAvailable()` is a synchronous, blocking D-Bus round trip to
+   * `org.freedesktop.secrets`, and a keyring that is present but locked with no unlock prompter
+   * never replies. Run from the store load that precedes the first window, it holds the main
+   * thread with nothing on screen (STA-5782). Deferring reuses the existing unavailable path,
+   * which retains every ciphertext rather than clearing it.
+   */
+  deferKeyringProbe(): void {
+    this.keyringProbeDeferred = true
+  }
+
+  resumeKeyringProbe(): void {
+    this.keyringProbeDeferred = false
+  }
+
+  isKeyringProbeDeferred(): boolean {
+    return this.keyringProbeDeferred
+  }
+
+  /** The ciphertext held for a slot whose plaintext was withheld; '' when nothing is retained. */
+  retainedBlob(slot: string): string {
+    return this.retainedBlobs.get(slot) ?? ''
+  }
 
   removeRetainedBlob(slot: string): void {
     this.retainedBlobs.delete(slot)
@@ -129,6 +156,9 @@ export class ProtectedSecretPersistence {
   }
 
   private encryptionAvailable(): boolean {
+    if (this.keyringProbeDeferred) {
+      return false
+    }
     // Why getSecretStore() sits outside the try: an uninstalled store is a startup bug,
     // not a keyring failure. Swallowing it would degrade to an empty blob and report
     // 'unavailable' — the silent-wrong-state outcome the port throws to prevent. Only

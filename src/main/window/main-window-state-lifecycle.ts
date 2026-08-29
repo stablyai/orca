@@ -11,6 +11,13 @@ export type MainWindowStateLifecycle = {
   resumeBoundsPersistence: () => void
 }
 
+/**
+ * When `ready-to-show` never fires — a GPU or driver fault on Windows/Linux — the window is
+ * revealed on this timer anyway (#8421). Work deferred behind the first window must therefore
+ * land at or just after this deadline, or the app is interactive with that work still pending.
+ */
+export const INITIAL_REVEAL_FALLBACK_MS = 10_000
+
 export function installMainWindowStateLifecycle(args: {
   mainWindow: BrowserWindow
   revealOnDidFinishLoad: boolean
@@ -35,7 +42,7 @@ export function installMainWindowStateLifecycle(args: {
           // Why: GPU/driver failures on Windows/Linux can prevent ready-to-show forever, hiding the only app window (#8421).
           initialRevealFallbackTimer = null
           revealInitialWindow()
-        }, 10_000)
+        }, INITIAL_REVEAL_FALLBACK_MS)
       : null
   initialRevealFallbackTimer?.unref?.()
 

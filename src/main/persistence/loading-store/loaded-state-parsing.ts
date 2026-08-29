@@ -1,7 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { normalizeProxyUrl } from '../../../shared/network-proxy'
-import { normalizeKagiSessionLink } from '../../../shared/browser-url'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
@@ -14,13 +12,11 @@ import {
   logStartupDiagnostic
 } from '../../startup/startup-diagnostics'
 import {
-  PROTECTED_SECRET_SLOT,
-  sshPtyOwnerLeaseSecretSlot
-} from '../../protected-secret-persistence'
-import {
-  isLegacyOpenCodeSessionCookie,
-  isLegacySshPtyOwnerLease
-} from '../leasing-ssh-ptys/secret-validation'
+  decodeBrowserKagiSessionLink,
+  decodeHttpProxyUrl,
+  decodeOpencodeSessionCookie,
+  decodeSshPtyOwnerLease
+} from './protected-secret-decoding'
 import { readGithubCacheSnapshot } from './user-data-path'
 import {
   gcStaleWorktreeMeta,
@@ -94,43 +90,24 @@ export class LoadedStateParsingOperations {
         logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
+        const secrets = this.runtime.protectedSecrets
         if (parsed.settings?.opencodeSessionCookie) {
-          parsed.settings.opencodeSessionCookie = this.runtime.protectedSecrets.decrypt(
-            PROTECTED_SECRET_SLOT.opencodeSessionCookie,
-            parsed.settings.opencodeSessionCookie,
-            isLegacyOpenCodeSessionCookie
+          parsed.settings.opencodeSessionCookie = decodeOpencodeSessionCookie(
+            secrets,
+            parsed.settings.opencodeSessionCookie
           )
         }
         if (parsed.settings?.httpProxyUrl) {
-          const decryptedProxy = this.runtime.protectedSecrets.decryptWithStatus(
-            PROTECTED_SECRET_SLOT.httpProxyUrl,
-            parsed.settings.httpProxyUrl,
-            (value) => normalizeProxyUrl(value).ok
-          )
-          // Why (STA-3442): after a keychain reset decrypt returns raw ciphertext; a non-URL
-          // value must not masquerade as a configured proxy (silent DIRECT fallback) or
-          // re-persist as garbage. Plaintext URLs still pass, preserving the upgrade path.
-          if (
-            decryptedProxy.status === 'unavailable' ||
-            (decryptedProxy.status === 'failed' && !decryptedProxy.plaintext)
-          ) {
-            parsed.settings.httpProxyUrl = ''
-          } else if (normalizeProxyUrl(decryptedProxy.plaintext).ok) {
-            parsed.settings.httpProxyUrl = decryptedProxy.plaintext
-          } else {
-            console.warn(
-              '[persistence] httpProxyUrl could not be decrypted — clearing the stored proxy URL. Re-enter it in Settings > Advanced > Network.'
-            )
-            parsed.settings.httpProxyUrl = ''
-            this.runtime.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
+          const decodedProxy = decodeHttpProxyUrl(secrets, parsed.settings.httpProxyUrl)
+          parsed.settings.httpProxyUrl = decodedProxy.value
+          if (decodedProxy.cleared) {
             this.runtime.loadNeedsSave = true
           }
         }
         if (parsed.ui?.browserKagiSessionLink) {
-          parsed.ui.browserKagiSessionLink = this.runtime.protectedSecrets.decrypt(
-            PROTECTED_SECRET_SLOT.browserKagiSessionLink,
-            parsed.ui.browserKagiSessionLink,
-            (value) => normalizeKagiSessionLink(value) !== null
+          parsed.ui.browserKagiSessionLink = decodeBrowserKagiSessionLink(
+            secrets,
+            parsed.ui.browserKagiSessionLink
           )
         }
         parsed.sshPtyConsumerRecoveries = (
@@ -140,23 +117,7 @@ export class LoadedStateParsingOperations {
             normalizeSshPtyConsumerRecovery(record, ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH)
           )
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
-          .map((record) => {
-            const slot = sshPtyOwnerLeaseSecretSlot(record.targetId)
-            const decrypted = this.runtime.protectedSecrets.decryptWithStatus(
-              slot,
-              record.ownerLease,
-              isLegacySshPtyOwnerLease
-            )
-            const normalized =
-              decrypted.status === 'unavailable' ||
-              (decrypted.status === 'failed' && !decrypted.plaintext)
-                ? record
-                : normalizeSshPtyConsumerRecovery({ ...record, ownerLease: decrypted.plaintext })
-            if (!normalized) {
-              this.runtime.protectedSecrets.removeRetainedBlob(slot)
-            }
-            return normalized
-          })
+          .map((record) => decodeSshPtyOwnerLease(secrets, record))
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
 
         const terminalSettings = prepareLoadedTerminalSettings(parsed, () => {
