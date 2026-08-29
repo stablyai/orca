@@ -12,7 +12,18 @@ export function registerAgentPaneAuthorityIpcHandlers(
   ownership: AgentPaneAuthorityOwnership
 ): void {
   ipcMain.removeAllListeners('agentStatus:retirePaneAuthority')
+  ipcMain.removeAllListeners('agentStatus:restorePaneAuthority')
   ipcMain.removeAllListeners('agentStatus:transferPaneAuthority')
+  ipcMain.on('agentStatus:restorePaneAuthority', (_event, paneKey: unknown) => {
+    if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
+      return
+    }
+    try {
+      agentHookServer.restorePaneAuthority(paneKey)
+    } catch (err) {
+      console.warn('[agent-hooks] restorePaneAuthority failed:', err)
+    }
+  })
   ipcMain.on('agentStatus:retirePaneAuthority', (_event, paneKey: unknown) => {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return

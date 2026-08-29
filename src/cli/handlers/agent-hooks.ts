@@ -12,10 +12,13 @@ import {
 } from '../runtime-client'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import type { GlobalSettings, PersistedState } from '../../shared/types'
+import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { PersistedState } from '../../shared/persisted-state-types'
 import {
   applyAgentStatusHooksEnabled,
-  getManagedAgentHookStatuses
+  getManagedAgentHookStatuses,
+  prepareManagedCodexHomeBeforeShellLaunch
 } from '../../main/agent-hooks/managed-agent-hook-controls'
 
 type AgentHookCommandResult = {
@@ -25,8 +28,31 @@ type AgentHookCommandResult = {
   statuses: AgentHookInstallStatus[]
 }
 
+// Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
+const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
+
 function getDataPath(): string {
-  return join(getDefaultUserDataPath(), 'orca-data.json')
+  const userDataPath = getDefaultUserDataPath()
+  const indexPath = join(userDataPath, 'orca-profile-index.json')
+  for (const candidate of [indexPath, `${indexPath}.bak`]) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(candidate, 'utf-8'))
+      if (!isRecord(parsed) || !Array.isArray(parsed.profiles)) {
+        continue
+      }
+      const profileId = parsed.activeProfileId
+      if (
+        typeof profileId === 'string' &&
+        /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(profileId) &&
+        parsed.profiles.some((profile) => isRecord(profile) && profile.id === profileId)
+      ) {
+        return join(userDataPath, 'profiles', profileId, 'orca-data.json')
+      }
+    } catch {
+      // Try the profile-index backup, then the legacy pre-profile path.
+    }
+  }
+  return join(userDataPath, 'orca-data.json')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -70,9 +96,35 @@ function writePersistedState(dataPath: string, state: PersistedState): void {
   }
 }
 
-function readEnabledFromDisk(): boolean {
+function readHookSettingsFromDisk(): Pick<
+  GlobalSettings,
+  'agentStatusHooksEnabled' | 'disabledTuiAgents'
+> {
   const state = readPersistedState(getDataPath())
-  return state.settings?.agentStatusHooksEnabled !== false
+  return {
+    agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled !== false,
+    disabledTuiAgents: normalizeDisabledTuiAgents(state.settings?.disabledTuiAgents)
+  }
+}
+
+async function readHookSettings(
+  client: RuntimeClient
+): Promise<Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>> {
+  try {
+    const response = await client.call<{
+      settings?: Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
+    }>('settings.get', undefined, { timeoutMs: 1_000 })
+    const settings = response.result.settings
+    if (settings && typeof settings.agentStatusHooksEnabled === 'boolean') {
+      return {
+        agentStatusHooksEnabled: settings.agentStatusHooksEnabled,
+        disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+      }
+    }
+  } catch {
+    // The active profile on disk is the offline fallback.
+  }
+  return readHookSettingsFromDisk()
 }
 
 function updateEnabledOnDisk(enabled: boolean): {
@@ -157,9 +209,33 @@ async function setAgentHooksEnabled(
 }
 
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
+  'agent hooks prepare-codex': async ({ client }) => {
+    if (process.env.WSL_DISTRO_NAME?.trim()) {
+      try {
+        await client.call(
+          'agentHooks.prepareCodexForWslPane',
+          {
+            codexHome: process.env.CODEX_HOME ?? '',
+            orcaCodexHome: process.env.ORCA_CODEX_HOME ?? '',
+            wslDistro: process.env.WSL_DISTRO_NAME
+          },
+          { timeoutMs: WSL_CODEX_PREPARE_TIMEOUT_MS }
+        )
+      } catch {
+        // Best effort: old or unavailable runtimes must not block Codex launch.
+      }
+      return
+    }
+    const settings = await readHookSettings(client)
+    await prepareManagedCodexHomeBeforeShellLaunch({
+      userDataPath: getDefaultUserDataPath(),
+      hooksEnabled:
+        settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
+    })
+  },
   'agent hooks status': async ({ json }) => {
     const result: AgentHookCommandResult = {
-      enabled: readEnabledFromDisk(),
+      enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
       settingsPath: getDataPath(),
       appliedBy: 'offline',
       statuses: getManagedAgentHookStatuses()

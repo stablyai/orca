@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { WorktreeMeta } from '../../../../shared/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
   buildWorktreeMetaUpdates,
+  parseGitLabMergeRequestNumberForMetaField,
   type WorktreeMetaDraft,
   type WorktreeMetaLiveLinks,
-  type WorktreeMetaSnapshot
+  type WorktreeMetaSnapshot,
+  type WorktreeReviewProvider
 } from './worktree-meta-updates'
 
 function makeDraft(overrides: Partial<WorktreeMetaDraft> = {}): WorktreeMetaDraft {
@@ -12,7 +14,7 @@ function makeDraft(overrides: Partial<WorktreeMetaDraft> = {}): WorktreeMetaDraf
     displayNameInput: 'Workspace',
     issueInput: '',
     issueProvider: 'github',
-    prInput: '',
+    reviewInput: '',
     commentInput: '',
     ...overrides
   }
@@ -33,9 +35,15 @@ function makeSnapshot(overrides: Partial<WorktreeMetaSnapshot> = {}): WorktreeMe
 function buildUpdates(
   draft: Partial<WorktreeMetaDraft>,
   snapshot: Partial<WorktreeMetaSnapshot> = {},
-  live: WorktreeMetaLiveLinks = {}
+  live: WorktreeMetaLiveLinks = {},
+  reviewProvider: WorktreeReviewProvider = 'github'
 ): Partial<WorktreeMeta> {
-  const updates = buildWorktreeMetaUpdates(makeDraft(draft), makeSnapshot(snapshot), live)
+  const updates = buildWorktreeMetaUpdates(
+    makeDraft(draft),
+    makeSnapshot(snapshot),
+    live,
+    reviewProvider
+  )
   const undefinedKeys = Object.keys(updates).filter(
     (key) => updates[key as keyof WorktreeMeta] === undefined
   )
@@ -50,6 +58,33 @@ const LINEAR_LINK_KEYS = [
 ] as const
 
 describe('buildWorktreeMetaUpdates', () => {
+  it('writes only the GitLab MR slot in GitLab mode', () => {
+    expect(buildUpdates({ reviewInput: '!42' }, {}, {}, 'gitlab')).toEqual({
+      linkedGitLabMR: 42
+    })
+    expect(buildUpdates({ reviewInput: '' }, {}, {}, 'gitlab')).toEqual({ linkedGitLabMR: null })
+  })
+
+  it('accepts only positive MR references for the GitLab review row', () => {
+    expect(parseGitLabMergeRequestNumberForMetaField('42')).toBe(42)
+    expect(parseGitLabMergeRequestNumberForMetaField('!42')).toBe(42)
+    expect(
+      parseGitLabMergeRequestNumberForMetaField(
+        'https://gitlab.example.com/group/project/-/merge_requests/42'
+      )
+    ).toBe(42)
+    for (const invalid of [
+      '#42',
+      '0',
+      '!0',
+      '9007199254740992',
+      'https://gitlab.example.com/group/project/-/issues/42',
+      'https://gitlab.example.com/group/project/-/work_items/42',
+      'ftp://gitlab.example.com/group/project/-/merge_requests/42'
+    ]) {
+      expect(parseGitLabMergeRequestNumberForMetaField(invalid)).toBeNull()
+    }
+  })
   // The dialog opens focused on Comment, so this is the common save path; a
   // regression here silently destroys the user's existing link.
   it('emits no link keys when the issue field is untouched', () => {
@@ -317,11 +352,13 @@ describe('buildWorktreeMetaUpdates', () => {
   })
 
   it('rejects issue URLs in the PR input', () => {
-    expect(buildUpdates({ prInput: 'https://github.com/stablyai/orca/issues/6933' })).toEqual({})
+    expect(buildUpdates({ reviewInput: 'https://github.com/stablyai/orca/issues/6933' })).toEqual(
+      {}
+    )
   })
 
   it('accepts PR URLs in the PR input', () => {
-    expect(buildUpdates({ prInput: 'https://github.com/stablyai/orca/pull/6934' })).toEqual({
+    expect(buildUpdates({ reviewInput: 'https://github.com/stablyai/orca/pull/6934' })).toEqual({
       linkedPR: 6934
     })
   })

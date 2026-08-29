@@ -24,7 +24,8 @@ function editorTab(
     tabId: 'tab-1',
     entityId: 'file-1',
     groupId: 'group-1',
-    relativePath
+    relativePath,
+    occupantAgent: null
   }
 }
 

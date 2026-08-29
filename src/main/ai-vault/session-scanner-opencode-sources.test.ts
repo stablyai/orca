@@ -11,7 +11,7 @@ vi.mock('./session-scanner-opencode-sqlite-discovery', () => ({
   discoverOpenCodeSessions: discoverOpenCodeSessionsMock
 }))
 
-vi.mock('../opencode-usage/scanner', () => ({
+vi.mock('../opencode-usage/opencode-database-discovery', () => ({
   listOpenCodeDatabases: listOpenCodeDatabasesMock
 }))
 

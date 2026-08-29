@@ -3,6 +3,7 @@ import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../..
 import { importFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import {
+  areFederatedLifecycleSettlementsEqual,
   publishFederatedLifecycleSettlement,
   type FederatedLifecycleSettlement
 } from '../../orchestration/federation-lifecycle-settlement'
@@ -81,32 +82,52 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS: RpcMethod[] = [
     params: FederationAckParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
-      const settlements = (params.settlements ?? []).filter(
+      const receivedSettlements = (params.settlements ?? []).filter(
         (settlement) => settlement.sequence <= params.throughSequence
       )
+      const settlementsBySequence = new Map<number, (typeof receivedSettlements)[number]>()
+      for (const settlement of receivedSettlements) {
+        const existing = settlementsBySequence.get(settlement.sequence)
+        if (
+          existing &&
+          !areFederatedLifecycleSettlementsEqual(existing.lifecycle, settlement.lifecycle)
+        ) {
+          throw new OrchestrationError(
+            'request_mismatch',
+            `Federation acknowledgment for ${params.dispatchId} contains conflicting settlements.`
+          )
+        }
+        settlementsBySequence.set(settlement.sequence, existing ?? settlement)
+      }
+      const settlements = [...settlementsBySequence.values()]
       const terminalSettlements = settlements.filter(
         (settlement) =>
           settlement.lifecycle.action === 'completed' || settlement.lifecycle.action === 'failed'
       )
-      if (terminalSettlements.length > 1) {
+      const terminalOutcomes = new Set(
+        terminalSettlements.map((settlement) => settlement.lifecycle.action)
+      )
+      if (terminalOutcomes.size > 1) {
         throw new OrchestrationError(
           'request_mismatch',
           `Federation acknowledgment for ${params.dispatchId} contains conflicting settlements.`
         )
       }
-      const terminalSettlement = terminalSettlements[0]
       runtime.getOrchestrationDb().acknowledgeFederationRelay({
         dispatchId: params.dispatchId,
         direction: 'to_home',
         throughSequence: params.throughSequence,
-        ...(!terminalSettlement
+        ...(settlements.length === 0
           ? {}
           : {
-              settleRemoteReport: {
-                sequence: terminalSettlement.sequence,
-                outcome:
-                  terminalSettlement.lifecycle.action === 'completed' ? 'succeeded' : 'failed'
-              }
+              settleRemoteReports: settlements.map((settlement) => ({
+                sequence: settlement.sequence,
+                ...(settlement.lifecycle.action === 'completed'
+                  ? { outcome: 'succeeded' as const }
+                  : settlement.lifecycle.action === 'failed'
+                    ? { outcome: 'failed' as const }
+                    : {})
+              }))
             })
       })
       for (const settlement of settlements) {

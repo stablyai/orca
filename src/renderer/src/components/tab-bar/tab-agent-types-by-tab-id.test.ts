@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
 import {
   createTabBarAgentProjectionSelector,

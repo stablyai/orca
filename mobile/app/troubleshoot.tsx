@@ -222,7 +222,7 @@ export default function TroubleshootScreen() {
           onPress={() => router.push('/connection-log')}
         >
           <ScrollText size={16} color={colors.textPrimary} />
-          <Text style={styles.diagnosticButtonLabel}>View connection log</Text>
+          <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
         </Pressable>
 
         {checks.length > 0 && (

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import type { TerminalLayoutSnapshot } from '../../src/shared/types'
+import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import { test, expect } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
@@ -150,7 +150,7 @@ async function readMainStreamingFrame(
 
 function parseStreamingFrame(content: string | null, marker: string): number | null {
   const prefix = `${marker} frame `
-  const start = content?.indexOf(prefix) ?? -1
+  const start = content?.lastIndexOf(prefix) ?? -1
   if (!content || start < 0) {
     return null
   }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { abortSignalReason } from './abort-signal-reason'
 import { serializeRemoteRuntimeRpcRequest } from './remote-runtime-memory-limits'
 import {
   prepareRemoteRuntimeRequest,
@@ -23,11 +24,15 @@ export function requestSharedControl<TResult>(args: {
   ensureReady: () => Promise<void>
   send: (requestId: string) => void
   retireRequestId?: (requestId: string) => void
+  signal?: AbortSignal
   // Why: default off — ordinary short RPCs keep an absolute deadline. Only
   // long-polls routed through this path opt in so keepalives extend them.
   refreshTimeoutOnKeepalive?: boolean
 }): Promise<RuntimeRpcResponse<TResult>> {
   const { ensureReady, pendingRequests, send } = args
+  if (args.signal?.aborted) {
+    return Promise.reject(abortSignalReason(args.signal))
+  }
   const requestId = randomUUID()
   let preparedRequest: RemoteRuntimePreparedRequest
   try {
@@ -44,6 +49,10 @@ export function requestSharedControl<TResult>(args: {
     return Promise.reject(error)
   }
   return new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
+    const onAbort = (): void => {
+      args.retireRequestId?.(requestId)
+      rejectSharedControlPendingRequest(pendingRequests, requestId, abortSignalReason(args.signal!))
+    }
     const timeout = setTimeout(() => {
       const pending = pendingRequests.get(requestId)
       if (!pending) {
@@ -64,6 +73,25 @@ export function requestSharedControl<TResult>(args: {
       preparedRequest,
       refreshTimeoutOnKeepalive: args.refreshTimeoutOnKeepalive ?? false
     })
+    args.signal?.addEventListener('abort', onAbort, { once: true })
+    const removeAbortListener = (): void => args.signal?.removeEventListener('abort', onAbort)
+    const pending = pendingRequests.get(requestId)
+    if (pending) {
+      const resolvePending = pending.resolve
+      const rejectPending = pending.reject
+      pending.resolve = (response) => {
+        removeAbortListener()
+        resolvePending(response)
+      }
+      pending.reject = (error) => {
+        removeAbortListener()
+        rejectPending(error)
+      }
+    }
+    if (args.signal?.aborted) {
+      onAbort()
+      return
+    }
     void ensureReady().then(
       () => send(requestId),
       (error) =>

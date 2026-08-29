@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
 import type * as CrossPlatformPathModule from '../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../shared/types'
+import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 const pathOperationCounts = vi.hoisted(() => ({
   aliasComparisons: 0,

@@ -3,6 +3,8 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 import { WorktreeCardHeader } from './worktree-card-header'
 import { WorktreeCardMetaRow } from './worktree-card-meta-row'
+import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
+import { WorktreeCardPortsDetails } from './WorktreeCardPorts'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSecondaryRows } from './worktree-card-secondary-rows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
@@ -26,10 +28,91 @@ export function WorktreeCardParentContent({
     handleToggleUnreadQuick,
     statusLaneReview,
     branchIdentityDisplay,
-    showInlineAgentList
+    showInlineAgentList,
+    titleRenaming,
+    isDeleting,
+    hoverIssue,
+    hoverLinearIssue,
+    hoverJiraIssue,
+    hoverReview,
+    hoverComment,
+    metaAutomationProvenance,
+    metaCliProvenance,
+    workspacePorts,
+    detailsHoverControl,
+    handleRenameTitle,
+    handleEditIssue,
+    handleEditComment,
+    handleOpenGitHubIssueInOrca,
+    linearIssue,
+    handleOpenLinearIssueInOrca,
+    handleOpenReviewInOrca,
+    handleOpenAutomation,
+    handleOpenAutomationRun,
+    hasExplicitLinkedReview,
+    handleUnlinkReview
   } = card
-  const { titleOnlyCard, parentContentMarginLeft, showCombinedStatusSlot, showUnreadQuickAction } =
-    presentation
+  const {
+    titleOnlyCard,
+    parentContentMarginLeft,
+    showCombinedStatusSlot,
+    showUnreadQuickAction,
+    hasHoverDetails,
+    hoverBranchName,
+    hoverWorkspaceTitle
+  } = presentation
+
+  const identityContent = (
+    <div
+      className="group/worktree-card flex w-full min-w-0 flex-col gap-1.5"
+      data-worktree-card-hover-trigger=""
+    >
+      <WorktreeCardHeader card={card} presentation={presentation} />
+      {presentation.hasMetaRow && <WorktreeCardMetaRow card={card} presentation={presentation} />}
+    </div>
+  )
+  // Why: status glyphs and agent rows own their tooltips; only identity content should open the larger details card.
+  const identityContentWithHover =
+    hasHoverDetails && !titleRenaming ? (
+      <WorktreeCardDetailsHover
+        issue={hoverIssue}
+        linearIssue={hoverLinearIssue}
+        jiraIssue={hoverJiraIssue}
+        review={hoverReview}
+        comment={hoverComment}
+        automationProvenance={metaAutomationProvenance}
+        cliProvenance={metaCliProvenance}
+        branchName={hoverBranchName}
+        workspaceTitle={hoverWorkspaceTitle}
+        workspaceTitleRenameDisabled={isDeleting || affiliateListMode}
+        detailsAfter={
+          workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
+        }
+        openDelay={100}
+        hoverControl={detailsHoverControl}
+        onRenameWorkspaceTitle={affiliateListMode ? undefined : handleRenameTitle}
+        onEditIssue={affiliateListMode ? undefined : handleEditIssue}
+        onEditComment={affiliateListMode ? undefined : handleEditComment}
+        onOpenGitHubIssueInOrca={
+          hoverIssue && 'url' in hoverIssue && hoverIssue.url
+            ? handleOpenGitHubIssueInOrca
+            : undefined
+        }
+        onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
+        onOpenReviewInOrca={
+          hoverReview?.url && hoverReview.provider === 'github' ? handleOpenReviewInOrca : undefined
+        }
+        onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
+        onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
+        onUnlinkReview={
+          !affiliateListMode && hasExplicitLinkedReview ? handleUnlinkReview : undefined
+        }
+      >
+        {identityContent}
+      </WorktreeCardDetailsHover>
+    ) : (
+      identityContent
+    )
 
   return (
     <div
@@ -76,9 +159,7 @@ export function WorktreeCardParentContent({
             : 'overflow-hidden'
         )}
       >
-        {/* Header row: Title */}
-        <WorktreeCardHeader card={card} presentation={presentation} />
-        {presentation.hasMetaRow && <WorktreeCardMetaRow card={card} presentation={presentation} />}
+        {identityContentWithHover}
         <WorktreeCardSecondaryRows card={card} presentation={presentation} />
       </div>
     </div>

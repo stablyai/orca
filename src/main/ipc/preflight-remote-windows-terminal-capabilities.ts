@@ -1,4 +1,4 @@
-import { getActiveMultiplexer } from './ssh'
+import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
 
 export type RemoteWindowsTerminalCapabilities = {
   wslAvailable: boolean

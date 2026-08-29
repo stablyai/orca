@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { RpcRequest } from './core'
@@ -29,9 +30,17 @@ export class OrchestrationMutationExecutor {
     if (!requestId || !isOrchestrationMutation(request.method, params)) {
       return await invoke()
     }
-    const callerFingerprint = callerFingerprintOverride ?? authenticatedCallerFingerprint(request)
+    const callerFingerprint =
+      callerFingerprintOverride ?? this.getLocalAuthenticatedCallerFingerprint()
     const payloadHash = createHash('sha256')
-      .update(JSON.stringify(canonicalize({ method: request.method, params })))
+      .update(
+        JSON.stringify(
+          canonicalize({
+            method: request.method,
+            params: replayStableCallerParams(this.runtime, params)
+          })
+        )
+      )
       .digest('hex')
     const key = `${callerFingerprint}:${requestId}`
     const db = this.runtime.getOrchestrationDb()
@@ -109,6 +118,10 @@ export class OrchestrationMutationExecutor {
       this.inFlight.delete(key)
     }
   }
+
+  getLocalAuthenticatedCallerFingerprint(): string {
+    return this.runtime.getOrchestrationDb().getOrCreateLocalMutationCallerFingerprint()
+  }
 }
 
 const executorsByRuntime = new WeakMap<OrcaRuntimeService, OrchestrationMutationExecutor>()
@@ -125,12 +138,31 @@ export function getOrchestrationMutationExecutor(
   return executor
 }
 
-export function authenticatedCallerFingerprint(request: RpcRequest): string {
-  const callerToken =
-    request.authToken ||
-    (request as RpcRequest & { deviceToken?: string }).deviceToken ||
-    'authenticated_transport'
-  return createHash('sha256').update(callerToken).digest('hex')
+export function fingerprintAuthenticatedPairingCredential(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+function replayStableCallerParams(runtime: OrcaRuntimeService, params: unknown): unknown {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return params
+  }
+  const source = params as Record<string, unknown>
+  const result = { ...source }
+  for (const property of ['from', 'callerTerminalHandle'] as const) {
+    const handle = source[property]
+    if (typeof handle !== 'string') {
+      continue
+    }
+    const paneKey =
+      property === 'from' && typeof source.senderPaneKey === 'string'
+        ? source.senderPaneKey
+        : runtime.getTerminalPaneKey(handle)
+    if (paneKey) {
+      const leafId = parsePaneKey(paneKey)?.leafId
+      result[property] = leafId ? { paneLeafId: leafId } : { paneKey }
+    }
+  }
+  return result
 }
 
 function canonicalize(value: unknown): unknown {

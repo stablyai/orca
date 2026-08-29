@@ -3,6 +3,7 @@ import {
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
 import { gitExecFileAsync } from './runner'
+import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
 
 /**
  * The `git remote get-url` probe every forge integration runs to decide whether
@@ -91,10 +92,9 @@ export function isTransientGitProbeError(error: unknown): boolean {
 }
 
 /**
- * Throws when the remote could not be read because the probe was wedged or its
- * transport was gone, and returns normally for every answer — including a repo
- * with no remote at all. Lets a caller that treats "nothing found" as a cacheable
- * answer tell that apart from a lookup that never got to ask.
+ * Throws when the remote could not be read, and returns normally for every
+ * answer — including a repo with no remote at all. Lets a caller that treats
+ * "nothing found" as cacheable tell that apart from a lookup that never got to ask.
  */
 export async function assertRemoteUrlReadable(
   context: RemoteUrlProbeContext,
@@ -106,8 +106,9 @@ export async function assertRemoteUrlReadable(
   try {
     await readRemoteUrl(context, remoteName)
   } catch (error) {
-    if (isTransientGitProbeError(error)) {
-      throw error
+    if (isStableMissingGitRemoteError(error)) {
+      return
     }
+    throw error
   }
 }

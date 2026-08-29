@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_MAX_PIXELS,
@@ -79,6 +80,7 @@ vi.mock('node:fs/promises', () => ({
   rm: fsRmMock,
   open: fsOpenMock,
   stat: fsStatMock,
+  realpath: vi.fn(), // unused here; only satisfies filesystem-path-containment's named import
   writeFile: fsWriteFileMock,
   default: {
     writeFile: fsWriteFileMock
@@ -88,8 +90,6 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
-  isENOENT: (error: unknown): boolean =>
-    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT',
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 
@@ -192,6 +192,7 @@ function shellIdListArray(childCount: number): Buffer {
 
 describe('registerClipboardHandlers', () => {
   beforeEach(() => {
+    installFakeAppEnvironment({ getPath: () => '/tmp' })
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
     removeHandlerMock.mockReset()
     handleMock.mockReset()

@@ -2,7 +2,8 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   resolveAiVaultSessionWorktreeDisplay,
   useAiVaultSessionWorktreeMap,

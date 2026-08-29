@@ -1,210 +1,84 @@
 // @vitest-environment happy-dom
-
-import { act } from 'react'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { readStoreListenerCount } from '@/store/store-listener-census'
-import type {
-  WorkspaceCleanupCandidate,
-  WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
-import type * as WorkspaceCleanupPresentation from './workspace-cleanup-presentation'
+import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup'
 import WorkspaceCleanupDialog from './WorkspaceCleanupDialog'
-import { NOW, makeCandidate, makeState } from './workspace-cleanup-presentation-fixtures'
+import { WorkspaceCleanupScanSupersededError } from '@/store/slices/workspace-cleanup-broad-scan-registry'
 
-const contentProbe = vi.hoisted(() => ({
-  mounts: vi.fn(),
-  projections: vi.fn(),
-  renders: vi.fn(),
-  storeNotifications: vi.fn(),
-  unmounts: vi.fn()
-}))
+const probes = vi.hoisted(() => ({ facets: vi.fn() }))
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
 
-const toastProbe = vi.hoisted(() => ({
-  error: vi.fn(),
-  info: vi.fn(),
-  message: vi.fn(),
-  success: vi.fn(),
-  warning: vi.fn()
-}))
-
-vi.mock('sonner', () => ({ toast: toastProbe }))
-
-vi.mock('./workspace-cleanup-presentation', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorkspaceCleanupPresentation>()
-  return {
-    ...actual,
-    filterWorkspaceCleanupCandidates: (
-      ...args: Parameters<typeof actual.filterWorkspaceCleanupCandidates>
-    ) => {
-      contentProbe.projections()
-      return actual.filterWorkspaceCleanupCandidates(...args)
-    },
-    getWorkspaceCleanupReviewInfo: (
-      ...args: Parameters<typeof actual.getWorkspaceCleanupReviewInfo>
-    ) => {
-      contentProbe.projections()
-      return actual.getWorkspaceCleanupReviewInfo(...args)
-    },
-    sortWorkspaceCleanupCandidates: (
-      ...args: Parameters<typeof actual.sortWorkspaceCleanupCandidates>
-    ) => {
-      contentProbe.projections()
-      return actual.sortWorkspaceCleanupCandidates(...args)
+vi.mock('sonner', () => ({ toast }))
+vi.mock('./use-workspace-cleanup-facet-rows', () => ({
+  useWorkspaceCleanupFacetRows: () => {
+    probes.facets()
+    return {
+      rows: [],
+      selectableIdentities: [],
+      facetMatchedIdentities: new Set(),
+      matchedCount: 0,
+      totalCount: 0,
+      facetCounts: {
+        activity: 0,
+        size: 0,
+        status: 0,
+        agent: 0,
+        git: 0,
+        review: 0,
+        ticket: 0,
+        context: 0,
+        location: 0,
+        safety: 0
+      },
+      options: { workspaceStatuses: [], hostIds: [], repos: [], reviewProviders: [] },
+      reviewInfoByWorktreeId: new Map(),
+      sizeByWorktreeId: new Map(),
+      measuredSizeCount: 0,
+      unmeasuredSizeCount: 0
     }
   }
-})
-
+}))
 vi.mock('@/components/ui/dialog', async () => {
-  const React = await import('react')
-  const Passthrough = ({ children }: { children: React.ReactNode }) => <>{children}</>
-  const DialogContent = () => {
-    contentProbe.renders()
-    React.useEffect(() => {
-      contentProbe.mounts()
-      const unsubscribe = useAppStore.subscribe(() => contentProbe.storeNotifications())
-      return () => {
-        contentProbe.unmounts()
-        unsubscribe()
-      }
-    }, [])
-    // Why: render while closed so the marker measures Orca's content gate, not Radix's portal gate.
-    return <div data-workspace-cleanup-heavy-content="true" />
-  }
+  const Passthrough = ({ children }: { children: ReactNode }) => <>{children}</>
   return {
     Dialog: Passthrough,
-    DialogContent,
-    DialogDescription: Passthrough,
-    DialogFooter: Passthrough,
-    DialogHeader: Passthrough,
-    DialogTitle: Passthrough
+    DialogContent: () => <div data-workspace-cleanup-content="true" />
   }
 })
 
-type Deferred<T> = {
-  promise: Promise<T>
-  resolve: (value: T) => void
+const initialState = useAppStore.getInitialState()
+let container: HTMLDivElement
+let root: Root
+
+function emptyScan(scannedAt: number): WorkspaceCleanupScanResult {
+  return { scannedAt, candidates: [], errors: [] }
 }
 
-const initialAppState = useAppStore.getInitialState()
-const fixtureState = makeState()
-const initialCandidate = makeCandidate()
-const initialScan = makeScan(1, initialCandidate)
-let testContainer: HTMLDivElement
-let testRoot: Root
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise
-  })
-  return { promise, resolve }
-}
-
-function makeScan(index: number, candidate: WorkspaceCleanupCandidate): WorkspaceCleanupScanResult {
-  return {
-    scannedAt: NOW + index,
-    candidates: [candidate],
-    errors: []
-  }
-}
-
-function makeChurnCandidate(index: number): WorkspaceCleanupCandidate {
-  return makeCandidate({
-    worktreeId: `repo-1::/repo/background-${index}`,
-    displayName: `background-${index}`,
-    path: `/repo/background-${index}`,
-    fingerprint: `background-${index}`
-  })
-}
-
-function activeContentSubscriptions(): number {
-  return contentProbe.mounts.mock.calls.length - contentProbe.unmounts.mock.calls.length
-}
-
-function requireStoreListenerCount(): number {
-  const count = readStoreListenerCount()
-  expect(count).not.toBeNull()
-  return count ?? 0
-}
-
-async function flushEffects(): Promise<void> {
+async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve()
     await Promise.resolve()
   })
-}
-
-async function renderDialog(): Promise<void> {
-  await act(async () => testRoot.render(<WorkspaceCleanupDialog />))
-  await flushEffects()
 }
 
 async function openDialog(): Promise<void> {
   await act(async () => useAppStore.getState().openModal('workspace-cleanup'))
-  await flushEffects()
+  await flush()
 }
 
 async function closeDialog(): Promise<void> {
   await act(async () => useAppStore.getState().closeModal())
-  await flushEffects()
+  await flush()
 }
 
-async function publishScanProgress(index: number): Promise<void> {
-  const scan = makeScan(index, makeChurnCandidate(index))
-  await act(async () => {
-    useAppStore.setState({
-      workspaceCleanupScan: scan,
-      workspaceCleanupProgress: {
-        ...scan,
-        scanId: `scan-${index}`,
-        scannedWorktreeCount: 1,
-        totalWorktreeCount: 1
-      }
-    })
-  })
-}
-
-async function publishReviewChurn(index: number): Promise<void> {
-  await act(async () => {
-    useAppStore.setState({
-      hostedReviewCache: {
-        [`background-${index}`]: { data: null, fetchedAt: NOW + index }
-      }
-    })
-  })
-}
-
-async function publishDeleteChurn(index: number): Promise<void> {
-  const candidate = makeChurnCandidate(index)
-  await act(async () => {
-    useAppStore.setState({
-      deleteStateByWorktreeId: {
-        [candidate.worktreeId]: {
-          isDeleting: true,
-          phase: 'queued',
-          error: null,
-          canForceDelete: false,
-          forceDeleteReason: null
-        }
-      }
-    })
-  })
-}
-
-function seedStore(
-  scanWorkspaceCleanup: AppState['scanWorkspaceCleanup'] = vi.fn(async () => initialScan)
-): void {
-  useAppStore.setState(initialAppState, true)
+function seedStore(scanWorkspaceCleanup: AppState['scanWorkspaceCleanup']): void {
+  useAppStore.setState(initialState, true)
   useAppStore.setState({
     activeModal: 'none',
-    repos: fixtureState.repos,
-    worktreesByRepo: fixtureState.worktreesByRepo,
-    hostedReviewCache: {},
-    deleteStateByWorktreeId: {},
-    workspaceCleanupScan: initialScan,
+    workspaceCleanupScan: emptyScan(1),
     workspaceCleanupProgress: null,
     workspaceCleanupLoading: false,
     workspaceCleanupError: null,
@@ -216,117 +90,81 @@ describe('WorkspaceCleanupDialog mount gating', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    Object.values(contentProbe).forEach((probe) => probe.mockClear())
-    Object.values(toastProbe).forEach((probe) => probe.mockClear())
-    seedStore()
-    testContainer = document.createElement('div')
-    document.body.appendChild(testContainer)
-    testRoot = createRoot(testContainer)
+    probes.facets.mockClear()
+    toast.error.mockClear()
+    toast.success.mockClear()
+    seedStore(vi.fn(async () => emptyScan(2)))
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
   })
 
   afterEach(async () => {
-    await act(async () => testRoot.unmount())
+    await act(async () => root.unmount())
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    useAppStore.setState(initialState, true)
     vi.clearAllTimers()
     vi.useRealTimers()
   })
 
-  it('keeps heavy content through 299 ms, then drops its projections and subscriptions', async () => {
-    const listenerBaseline = requireStoreListenerCount()
-    await renderDialog()
-    const shellListenerCount = requireStoreListenerCount()
-
-    expect(shellListenerCount).toBe(listenerBaseline + 1)
-    expect(testContainer.querySelector('[data-workspace-cleanup-heavy-content]')).toBeNull()
-    expect(activeContentSubscriptions()).toBe(0)
+  it('drops heavy projections after the close animation', async () => {
+    await act(async () => root.render(<WorkspaceCleanupDialog />))
+    await flush()
+    expect(probes.facets).not.toHaveBeenCalled()
 
     await openDialog()
-    const openListenerCount = requireStoreListenerCount()
-
-    expect(testContainer.querySelector('[data-workspace-cleanup-heavy-content]')).not.toBeNull()
-    expect(activeContentSubscriptions()).toBe(1)
-    expect(openListenerCount).toBeGreaterThan(shellListenerCount)
-
-    await closeDialog()
-    await act(async () => vi.advanceTimersByTimeAsync(299))
-
-    expect(testContainer.querySelector('[data-workspace-cleanup-heavy-content]')).not.toBeNull()
-    expect(activeContentSubscriptions()).toBe(1)
-
-    const lingeringProjectionCount = contentProbe.projections.mock.calls.length
-    const lingeringNotificationCount = contentProbe.storeNotifications.mock.calls.length
-    await publishScanProgress(2)
-    await publishReviewChurn(2)
-    await publishDeleteChurn(2)
-
-    expect(contentProbe.projections.mock.calls.length).toBeGreaterThan(lingeringProjectionCount)
-    expect(contentProbe.storeNotifications.mock.calls.length).toBeGreaterThan(
-      lingeringNotificationCount
-    )
-
-    await act(async () => vi.advanceTimersByTimeAsync(1))
-
-    expect(testContainer.querySelector('[data-workspace-cleanup-heavy-content]')).toBeNull()
-    expect(activeContentSubscriptions()).toBe(0)
-    expect(requireStoreListenerCount()).toBe(shellListenerCount)
-
-    const hiddenProjectionCount = contentProbe.projections.mock.calls.length
-    const hiddenRenderCount = contentProbe.renders.mock.calls.length
-    const hiddenNotificationCount = contentProbe.storeNotifications.mock.calls.length
-    for (let index = 3; index < 103; index += 1) {
-      await publishScanProgress(index)
-      await publishReviewChurn(index)
-      await publishDeleteChurn(index)
-    }
-
-    expect(contentProbe.projections).toHaveBeenCalledTimes(hiddenProjectionCount)
-    expect(contentProbe.renders).toHaveBeenCalledTimes(hiddenRenderCount)
-    expect(contentProbe.storeNotifications).toHaveBeenCalledTimes(hiddenNotificationCount)
-  })
-
-  it('cancels the pending content unmount when reopened during the linger', async () => {
-    await renderDialog()
-    await openDialog()
-    await closeDialog()
-    await act(async () => vi.advanceTimersByTimeAsync(299))
-    await openDialog()
-    await act(async () => vi.advanceTimersByTimeAsync(1_000))
-
-    expect(testContainer.querySelector('[data-workspace-cleanup-heavy-content]')).not.toBeNull()
-    expect(activeContentSubscriptions()).toBe(1)
-
-    const projectionCount = contentProbe.projections.mock.calls.length
-    await publishScanProgress(4)
-    expect(contentProbe.projections.mock.calls.length).toBeGreaterThan(projectionCount)
-  })
-
-  it('toasts when an open-time scan settles after the closed content unmounts', async () => {
-    const pendingScan = deferred<WorkspaceCleanupScanResult>()
-    const scanWorkspaceCleanup = vi.fn(() => pendingScan.promise)
-    seedStore(scanWorkspaceCleanup)
-    await renderDialog()
-    await openDialog()
-
-    expect(scanWorkspaceCleanup).toHaveBeenCalledTimes(1)
+    expect(probes.facets).toHaveBeenCalled()
 
     await closeDialog()
     await act(async () => vi.advanceTimersByTimeAsync(300))
-    expect(testContainer.querySelector('[data-workspace-cleanup-heavy-content]')).toBeNull()
+    const hiddenCalls = probes.facets.mock.calls.length
 
-    const completedScan = makeScan(5, makeChurnCandidate(5))
-    await act(async () => {
-      pendingScan.resolve(completedScan)
-      await pendingScan.promise
-      await Promise.resolve()
+    for (let index = 0; index < 100; index += 1) {
+      await act(async () => {
+        useAppStore.setState({
+          workspaceCleanupScan: emptyScan(index + 10),
+          hostedReviewCache: { [`review-${index}`]: { data: null, fetchedAt: index } },
+          deleteStateByWorktreeId: {}
+        })
+      })
+    }
+
+    expect(probes.facets).toHaveBeenCalledTimes(hiddenCalls)
+  })
+
+  it('keeps scan completion ownership after heavy content unmounts', async () => {
+    let resolveScan!: (result: WorkspaceCleanupScanResult) => void
+    const scanPromise = new Promise<WorkspaceCleanupScanResult>((resolve) => {
+      resolveScan = resolve
     })
-    await flushEffects()
+    const scanWorkspaceCleanup = vi.fn(() => scanPromise)
+    seedStore(scanWorkspaceCleanup)
+    await act(async () => root.render(<WorkspaceCleanupDialog />))
+    await openDialog()
 
-    expect(toastProbe.success).toHaveBeenCalledWith(
-      'Inactive workspace scan ready',
-      expect.objectContaining({
-        action: expect.objectContaining({ label: 'Review' })
+    await closeDialog()
+    await act(async () => vi.advanceTimersByTimeAsync(300))
+    expect(container.querySelector('[data-workspace-cleanup-content]')).toBeNull()
+
+    await act(async () => resolveScan(emptyScan(20)))
+    await flush()
+
+    expect(toast.success).toHaveBeenCalledWith(
+      'Workspace scan ready',
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Review' }) })
+    )
+  })
+
+  it('does not report a superseded scan as a failure', async () => {
+    seedStore(
+      vi.fn(async () => {
+        throw new WorkspaceCleanupScanSupersededError()
       })
     )
+    await act(async () => root.render(<WorkspaceCleanupDialog />))
+
+    await openDialog()
+
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })

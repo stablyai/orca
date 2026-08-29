@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { Tab, TerminalTab } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,

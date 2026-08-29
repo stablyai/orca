@@ -38,11 +38,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState,
-  GlobalSettings
-} from '../../../../shared/types'
+  CodexRateLimitAccountsState
+} from '../../../../shared/managed-account-types'
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget,
@@ -96,6 +96,7 @@ import {
   selectClaudeProviderAccount,
   selectCodexProviderAccount
 } from '@/runtime/runtime-provider-accounts-client'
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   getDisplayedUsagePercentage,
@@ -1489,23 +1490,61 @@ export function CodexSwitcherMenu({
     }
   }
 
-  const handleSignInAccount = async (accountId: string): Promise<void> => {
+  const handleSignInAccount = async (
+    accountId: string,
+    target: CodexStatusRuntimeTarget
+  ): Promise<void> => {
     if (isSwitching || reauthenticatingAccountId !== null) {
       return
     }
+    const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setReauthenticatingAccountId(accountId)
     try {
-      const next = await window.api.codexAccounts.reauthenticate({ accountId })
+      const next = await window.api.codexAccounts.reauthenticate({
+        accountId,
+        // Why: signing in from a signed-out status bar should leave the account
+        // usable; the main process still refuses to steal an existing selection.
+        activateIfSelectionWasEmpty: true
+      })
       recordFeatureInteraction('codex-account-switching')
       if (mountedRef.current) {
         setAccounts(next)
       }
       await fetchSettings()
-      if (mountedRef.current && accountsExpandedRef.current) {
+      const nextActiveAccountId = getCodexStatusActiveId(next, target)
+      if (previousActiveAccountId !== nextActiveAccountId) {
+        // Why: sign-in that lands on a new active account changes pane credentials
+        // exactly like an explicit switch, so it owes the same restart prompt.
+        await markLiveCodexSessionsForRestart({
+          previousAccountLabel: resolveCodexRestartPromptAccountLabel(
+            accountState.accounts,
+            previousActiveAccountId
+          ),
+          nextAccountLabel: resolveCodexRestartPromptAccountLabel(
+            next.accounts,
+            nextActiveAccountId
+          ),
+          previousAccountId: previousActiveAccountId ?? null,
+          nextAccountId: nextActiveAccountId ?? null,
+          target
+        })
+        if (mountedRef.current) {
+          setAccountsExpanded(false)
+        }
+      } else if (mountedRef.current && accountsExpandedRef.current) {
         await fetchInactiveCodexAccountUsage()
       }
+      toast.success(
+        translate('auto.components.status.bar.StatusBar.codexSignInSuccess', 'Signed in to Codex')
+      )
     } catch (error) {
       console.error('Failed to re-authenticate Codex account from status bar:', error)
+      toast.error(
+        translate(
+          'auto.components.status.bar.StatusBar.codexSignInError',
+          'Codex sign-in failed. Please try again.'
+        )
+      )
     } finally {
       if (mountedRef.current) {
         setReauthenticatingAccountId(null)
@@ -1802,7 +1841,7 @@ export function CodexSwitcherMenu({
                             onSignIn={() => {
                               suppressNextAccountSelect()
                               if (target.id !== null) {
-                                void handleSignInAccount(target.id)
+                                void handleSignInAccount(target.id, target.runtimeTarget)
                               }
                             }}
                           />

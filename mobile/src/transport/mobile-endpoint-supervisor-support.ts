@@ -16,6 +16,16 @@ export function suspendRelayIfStillConnected(
   }
 }
 
+export function liveRelayLeaseExpiry(
+  logical: StableLogicalRpcClient,
+  stopped: boolean,
+  expiry: number | null
+): number | null {
+  return !stopped && logical.getActivePath() === 'relay' && logical.getState() === 'connected'
+    ? expiry
+    : null
+}
+
 type RelayDialResult = { ok: true } | { ok: false; error: Error }
 
 // Why: a locally-aborted dial (background/stop/missing state) proves nothing about the

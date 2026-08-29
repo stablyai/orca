@@ -31,8 +31,14 @@ export function runtimeHostConnectionState({
   if (!status) {
     return 'disconnected'
   }
-  if (remoteControl?.state === 'closed' && remoteControl.lastError) {
+  // Why no lastError requirement: a clean close (server restart, host sleep, network
+  // blip) leaves lastError null, and demanding an error string painted those hosts green.
+  if (remoteControl?.state === 'closed') {
     return 'disconnected'
+  }
+  // Why: the socket is up but ready/auth has not completed, so nothing can run there yet.
+  if (remoteControl && remoteControl.state !== 'ready') {
+    return 'checking'
   }
   // Why: reachable but graph-less — the transport is fine, so this is not a network
   // disconnect, but calling it "Connected" hides that nothing will run there.

@@ -1,11 +1,11 @@
 import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN
@@ -26,11 +26,10 @@ type WorkspaceKanbanStatusLaneProps = {
   hasQuery?: boolean
   fullWorktreeIds?: readonly string[]
   repoMap: Map<string, Repo>
-  activeWorktreeId: string | null
+  activeWorktreeIdentity: string | null
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
-  canCreateWorktree: boolean
   nativeDragEnabled?: boolean
   renderCards: boolean
   selectedWorktreeIds: ReadonlySet<string>
@@ -57,11 +56,10 @@ function WorkspaceKanbanStatusLane({
   hasQuery = false,
   fullWorktreeIds,
   repoMap,
-  activeWorktreeId,
+  activeWorktreeIdentity,
   columnWidth,
   isResizingColumn,
   isDragTarget,
-  canCreateWorktree,
   nativeDragEnabled = true,
   renderCards,
   selectedWorktreeIds,
@@ -94,9 +92,7 @@ function WorkspaceKanbanStatusLane({
       undefined
     )
   }, [fullWorktreeIds, hasQuery, items])
-  const createTooltip = canCreateWorktree
-    ? `New workspace in ${status.label}`
-    : 'Add a project to create workspaces'
+  const createTooltip = `New workspace in ${status.label}`
   const createButton = (
     <Button
       type="button"
@@ -104,7 +100,6 @@ function WorkspaceKanbanStatusLane({
       size="icon-xs"
       className="size-6 text-muted-foreground"
       aria-label={createTooltip}
-      disabled={!canCreateWorktree}
       onClick={() => onCreateWorktree(status.id)}
     >
       <Plus className="size-3.5" />
@@ -192,7 +187,7 @@ function WorkspaceKanbanStatusLane({
             <WorkspaceKanbanLaneCardList
               items={items}
               repoMap={repoMap}
-              activeWorktreeId={activeWorktreeId}
+              activeWorktreeIdentity={activeWorktreeIdentity}
               scrollRef={laneScrollRef}
               selectedWorktreeIds={selectedWorktreeIds}
               selectedWorktrees={selectedWorktrees}
@@ -224,7 +219,6 @@ function WorkspaceKanbanStatusLane({
                 'group-hover/lane:opacity-100 group-focus-within/lane:opacity-100'
               )}
               aria-label={createTooltip}
-              disabled={!canCreateWorktree}
               onClick={() => onCreateWorktree(status.id)}
             >
               <Plus className="size-3.5" />

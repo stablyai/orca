@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { resolveBaselineReleaseRef } from './release-checkout'
+import { resolveBaselineReleaseRef, selectLatestStableReleaseTag } from './release-checkout'
 import {
   JOURNEY_INPUTS,
   JOURNEY_STEPS,
@@ -92,6 +92,18 @@ function expectWireCompatible(record: JourneyRecord): void {
 }
 
 describe('cross-version remote terminal wire', () => {
+  it('ignores legacy, mobile, and prerelease tags when selecting the baseline', () => {
+    expect(
+      selectLatestStableReleaseTag([
+        'v799',
+        'mobile-v9.0.0',
+        'v1.4.177-rc.3',
+        'v1.4.175',
+        'v1.4.176'
+      ])
+    ).toBe('v1.4.176')
+  })
+
   it(
     'skews current code against a real published release',
     () => {
@@ -108,6 +120,11 @@ describe('cross-version remote terminal wire', () => {
       const record = await runTerminalSkewJourney({ hostBuild: current, clientBuild: current })
       expectJourneyActuallyRan(record)
       expectWireCompatible(record)
+      expect(record.snapshotStarts).toEqual([
+        expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
+        expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
+        expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' })
+      ])
     },
     SUITE_TIMEOUT_MS
   )
@@ -119,6 +136,11 @@ describe('cross-version remote terminal wire', () => {
       expect(record.clientRevision).toBe(baseline.revision)
       expectJourneyActuallyRan(record)
       expectWireCompatible(record)
+      expect(record.snapshotStarts).toEqual([
+        expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
+        expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
+        expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' })
+      ])
     },
     SUITE_TIMEOUT_MS
   )
@@ -130,6 +152,10 @@ describe('cross-version remote terminal wire', () => {
       expect(record.hostRevision).toBe(baseline.revision)
       expectJourneyActuallyRan(record)
       expectWireCompatible(record)
+      for (const start of record.snapshotStarts) {
+        expect(start).not.toHaveProperty('terminalOwner')
+        expect(start).not.toHaveProperty('alternateScreen')
+      }
     },
     SUITE_TIMEOUT_MS
   )

@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { ProjectGroupImportResult } from '../../../../shared/types'
+import type { ProjectGroupImportResult } from '../../../../shared/project-group-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
 import { useAddRepoNestedReviewState } from './useAddRepoNestedReviewState'

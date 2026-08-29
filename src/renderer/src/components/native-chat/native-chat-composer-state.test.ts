@@ -37,7 +37,6 @@ function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
     directoryPath: '/repo/.agents/skills/typescript',
     skillFilePath: '/repo/.agents/skills/typescript/SKILL.md',
     installed: true,
-    fileCount: 1,
     updatedAt: null,
     ...overrides
   }

@@ -3,10 +3,10 @@ import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, getActiveWorktreeId, waitForActiveWorktree } from './helpers/store'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../../src/renderer/src/components/browser-pane/browser-page-guest-recovery'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../../src/renderer/src/components/browser-pane/host-guest/browser-page-guest-recovery'
 import {
   crashGuestRenderer,
   listRegisteredBrowserPages,
@@ -679,6 +679,37 @@ test('attachment keeps recovery error until document readiness', async ({
   expect(recoveryErrorCode).toBe(BROWSER_GUEST_RECOVERY_ERROR_CODE)
 })
 
+async function occludeHeadedWindow(electronApp: ElectronApplication, page: Page): Promise<void> {
+  const host = await electronApp.browserWindow(page)
+  await host.evaluate((window) => window.minimize())
+  const deadline = Date.now() + 2_000
+  let minimized = false
+  while (!minimized && Date.now() < deadline) {
+    minimized = await host.evaluate((window) => window.isMinimized())
+    if (!minimized) {
+      await page.waitForTimeout(50)
+    }
+  }
+  if (!minimized) {
+    // Why: Xvfb has no window manager, so Electron minimize is a no-op on
+    // Linux CI (especially frameless). Hide still unpaints the guest compositor.
+    await host.evaluate((window) => window.hide())
+    await expect.poll(() => host.evaluate((window) => window.isVisible())).toBe(false)
+  }
+}
+
+async function revealHeadedWindow(electronApp: ElectronApplication, page: Page): Promise<void> {
+  const host = await electronApp.browserWindow(page)
+  await host.evaluate((window) => {
+    window.restore()
+    window.show()
+    window.focus()
+  })
+  await expect
+    .poll(() => host.evaluate((window) => window.isVisible() && !window.isMinimized()))
+    .toBe(true)
+}
+
 test('minimized browser guest stays painted and registered after restore @headful', async ({
   electronApp,
   orcaPage,
@@ -693,21 +724,8 @@ test('minimized browser guest stays painted and registered after restore @headfu
     .toMatchObject({ marker: 'painted-file-guest', url: fixtureUrl })
   const before = await readBrowserGuestState(orcaPage, browserTab.id)
 
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]?.minimize()
-  })
-  await expect
-    .poll(() =>
-      electronApp.evaluate(({ BrowserWindow }) =>
-        Boolean(BrowserWindow.getAllWindows()[0]?.isMinimized())
-      )
-    )
-    .toBe(true)
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows()[0]
-    window?.restore()
-    window?.show()
-  })
+  await occludeHeadedWindow(electronApp, orcaPage)
+  await revealHeadedWindow(electronApp, orcaPage)
 
   await expect
     .poll(() => readBrowserGuestState(orcaPage, browserTab.id))

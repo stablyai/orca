@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { sanitizeTerminalLayoutPaneTitles } from './terminal-pane-title-sanitization'
 
 const TAB: TerminalTab = {

@@ -3,7 +3,7 @@
  * schemas themselves are unchanged apart from the per-entry tolerance the
  * session schema now declares everywhere. */
 import { z } from 'zod'
-import type { BrowserWorkspace } from './types'
+import type { BrowserWorkspace } from './browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { salvagingArray } from './zod-salvage'
 
@@ -11,6 +11,17 @@ const browserLoadErrorSchema = z.object({
   code: z.number(),
   description: z.string(),
   validatedUrl: z.string()
+})
+
+/**
+ * Why persisted at all: this is the page's identity. A restored page re-reads the document off
+ * today's owners and mints a fresh grant for it, and the grant it had before the restart is
+ * deliberately not written anywhere — see `BrowserPageDocLocation`.
+ */
+const browserPageDocLocationSchema = z.object({
+  kind: z.literal('workspace-doc'),
+  worktreeId: z.string(),
+  filePath: z.string()
 })
 
 const browserViewportPresetIdSchema = z.enum([
@@ -46,7 +57,8 @@ export const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
   canGoBack: z.boolean(),
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
-  createdAt: z.number()
+  createdAt: z.number(),
+  docLocation: browserPageDocLocationSchema.nullable().optional()
 })
 
 export const browserPageSchema = z.object({
@@ -64,10 +76,18 @@ export const browserPageSchema = z.object({
   // Why: explicit null marks a browser page as client-local even when its
   // worktree is remote-owned; older sessions omit it and keep inferred runtime.
   browserRuntimeEnvironmentId: z.string().nullable().optional(),
+  // Why: the pair the relaunched client rebuilds the remote page handle from. Optional so older
+  // sessions still validate; stripping either half restores the page as a fresh server tab.
+  remoteBrowserPageId: z.string().nullable().optional(),
+  remoteBrowserPageClientHosted: z.boolean().optional(),
   // Why: optional+nullable so sessions persisted before viewport presets were
   // added still validate; without this, zod would strip the field during
   // restore and reset the user's chosen preset on every app restart.
-  viewportPresetId: browserViewportPresetIdSchema.nullable().optional()
+  viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
+  // Why listed here and not just typed: z.object strips what it does not name, so an unlisted
+  // docLocation restores a workspace document as a blank New Tab — the page keeps its blank url
+  // and loses the only field that said which document it was.
+  docLocation: browserPageDocLocationSchema.nullable().optional()
 })
 
 const browserHistoryEntrySchema = z.object({

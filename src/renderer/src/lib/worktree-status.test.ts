@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import { getWorktreeStatus, getWorktreeStatusLabel, resolveWorktreeStatus } from './worktree-status'
 
 const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
@@ -252,6 +252,41 @@ describe('resolveWorktreeStatus', () => {
     })
 
     expect(status).toBe('working')
+  })
+
+  it('reports passive monitoring below active work and permission', () => {
+    const base = {
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasLiveDone: false,
+      hasRetainedDone: false
+    }
+
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: false,
+        hasLiveWorking: false,
+        hasLiveMonitoring: true
+      })
+    ).toBe('monitoring')
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: false,
+        hasLiveWorking: true,
+        hasLiveMonitoring: true
+      })
+    ).toBe('working')
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: true,
+        hasLiveWorking: true,
+        hasLiveMonitoring: true
+      })
+    ).toBe('permission')
   })
 
   it('lets heuristic working beat hasLiveDone (newer in-progress signal wins)', () => {

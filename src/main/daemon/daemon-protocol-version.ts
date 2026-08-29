@@ -1,6 +1,9 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
-// v33 preserves selected-WSL POSIX cwd semantics; older owners remain attachable.
-export const PROTOCOL_VERSION = 33
+// v36 launches shells from content-addressed wrapper trees; older owners stay attachable.
+export const PROTOCOL_VERSION = 36
+export const CONTENT_ADDRESSED_SHELL_WRAPPER_DAEMON_PROTOCOL_VERSION = 36
+export const ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION = 35
+export const CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION = 34
 export const WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION = 33
 export const SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION = 32
 export const STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION = 31
@@ -27,7 +30,7 @@ export const CLEAN_DISCONNECT_PROTOCOL_VERSION = 24
 export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32
+  28, 29, 30, 31, 32, 33, 34, 35
 ] as const
 
 export function supportsPtyStartupIngress(protocolVersion: number): boolean {

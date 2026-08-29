@@ -1,9 +1,9 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
 // flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible
@@ -75,7 +75,7 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
   if (!ptyId) {
     return false
   }
-  if (isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+  if (isRemoteExecutionHostPtyId(ptyId)) {
     return false
   }
   // Why: separator-less ids come from the daemon-fail-open LocalPtyProvider;
@@ -92,17 +92,11 @@ export type TerminalParkRestorePolicy = {
   pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
 }
 
-export function selectPairedRuntimeParkingEnvironmentIds(
-  statuses: ReadonlyMap<string, { status: { capabilities?: readonly string[] } | null | undefined }>
-): Set<string> {
-  const capable = new Set<string>()
-  for (const [environmentId, entry] of statuses) {
-    if (entry.status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
-      capable.add(environmentId)
-    }
-  }
-  return capable
-}
+export {
+  resetPairedRuntimeParkingEnvironmentIdsCacheForTest,
+  selectPairedRuntimeParkingEnvironmentIds,
+  selectPairedRuntimeParkingEnvironmentIdsFromState
+} from './paired-runtime-parking-capabilities'
 
 // Why: SSH uses local main's model; paired PTYs are eligible only when their
 // exact host advertises authoritative bounded restore.

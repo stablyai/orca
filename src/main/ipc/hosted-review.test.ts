@@ -47,7 +47,7 @@ vi.mock('../source-control/hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: resolveRegisteredWorktreePathMock
 }))
 
@@ -312,6 +312,38 @@ describe('registerHostedReviewHandlers', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ branch: 'feature/selected', active: true })
     )
+  })
+
+  it('uses the explicit owner when duplicate repos share an id and path', async () => {
+    const localRepo = { ...repo, connectionId: undefined }
+    store.getRepos.mockReturnValue([localRepo, repo])
+    getHostedReviewForBranchMock.mockResolvedValueOnce(null)
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:forBranch'](null, {
+      repoPath,
+      repoId: repo.id,
+      repoOwnerExecutionHostId: 'ssh:ssh-1',
+      branch: 'feature/owner'
+    })
+
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-1', branch: 'feature/owner' })
+    )
+  })
+
+  it('fails closed when an explicit repo owner is missing', async () => {
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:forBranch'](null, {
+        repoPath,
+        repoId: repo.id,
+        repoOwnerExecutionHostId: 'runtime:missing',
+        branch: 'feature/owner'
+      })
+    ).rejects.toThrow('Access denied: unknown or ambiguous repository owner')
+    expect(getHostedReviewForBranchMock).not.toHaveBeenCalled()
   })
 
   it('passes SSH connectionId through create eligibility instead of blocking the worktree', async () => {

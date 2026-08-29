@@ -3,6 +3,7 @@ import {
   ORCHESTRATION_WORKER_READ_SOURCES,
   type OrchestrationWorkerReadResult
 } from '../../../../shared/orchestration-worker-output'
+import { contextOnlyAbandonWarning } from '../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, requiredString } from '../schemas'
@@ -10,7 +11,8 @@ import {
   callFederatedWorkerShow,
   exposeWorker,
   inspectWorkerTerminal,
-  resolvePinnedFederatedServer
+  resolvePinnedFederatedServer,
+  showContextOnlyWorker
 } from './orchestration-worker-observation'
 import { readArchivedWorkerOutput } from './orchestration-worker-archive-read'
 import { readLegacyFederatedTerminal } from './orchestration-worker-legacy-federated-read'
@@ -32,7 +34,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
       const db = runtime.getOrchestrationDb()
       const dispatch = db.getDispatchContextById(params.dispatch)
       let worker = db.getWorkerDispatch(params.dispatch)
-      if (!dispatch || !worker) {
+      if (!dispatch) {
         throw new OrchestrationError(
           'dispatch_not_found',
           `Worker Dispatch ${params.dispatch} was not found.`
@@ -40,6 +42,12 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
       }
       const federated = db.getFederatedDispatch(params.dispatch)
       if (federated) {
+        if (!worker) {
+          throw new OrchestrationError(
+            'dispatch_not_found',
+            `Federated Worker Dispatch ${params.dispatch} has no worker record.`
+          )
+        }
         const server = resolvePinnedFederatedServer(runtime, federated)
         runtime.ensureOrchestrationFederationRelay(dispatch.run_id)
         const remote = await callFederatedWorkerShow(runtime, federated)
@@ -99,8 +107,15 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           server: { environmentId: server.environmentId, name: server.name },
           remoteRuntimeEpoch: remote.runtimeEpoch,
           terminal: remote.terminal,
-          observation: remote.observation
+          observation: {
+            ...remote.observation,
+            // Legacy servers published `running`; normalize at the compatibility boundary.
+            status: remote.observation.status === 'running' ? 'live' : remote.observation.status
+          }
         }
+      }
+      if (!worker) {
+        return showContextOnlyWorker(runtime, db, dispatch)
       }
       if (worker.runtime_epoch && worker.runtime_epoch !== runtime.getRuntimeId()) {
         if (worker.state === 'starting') {
@@ -122,7 +137,16 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
         dispatch,
         worker: exposeWorker(worker),
         terminal: observation.exact ? observation.terminal : null,
-        observation: { status: observation.status, exactWorker: observation.exact },
+        observation: {
+          status: observation.status,
+          exactWorker: observation.exact,
+          // Why: a bare `unverifiable` is not actionable without naming what we lost.
+          ...(observation.reason ? { reason: observation.reason } : {}),
+          // Why conditional: a present null must mean "looked, nothing waiting". An
+          // unattached, missing or identity-changed worker was never looked at, and saying
+          // null there is the false negative this field exists to remove.
+          ...(observation.agentWait !== undefined ? { agentWait: observation.agentWait } : {})
+        },
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null
       }
     }
@@ -168,19 +192,27 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           })
         }
       }
+      const dispatch = db.getDispatchContextById(params.dispatch)
       const worker = db.getWorkerDispatch(params.dispatch)
-      if (!worker?.agent_terminal_handle) {
+      const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
+      if (!dispatch) {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          `Dispatch ${params.dispatch} was not found.`
+        )
+      }
+      if (!terminalHandle) {
         throw new OrchestrationError(
           'dispatch_not_found',
           `Worker Dispatch ${params.dispatch} has no agent terminal.`
         )
       }
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
-      if (resource && ['releasing', 'released'].includes(resource.release_state)) {
+      if (resource && ['releasing', 'unknown', 'released'].includes(resource.release_state)) {
         return readArchivedWorkerOutput({
           db,
           dispatchId: params.dispatch,
-          workerState: worker.state,
+          workerState: worker?.state ?? 'unsupervised',
           resource,
           source: params.source,
           cursor: params.cursor,
@@ -197,10 +229,21 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
       const output = await readExactWorkerOutput({
         runtime,
         dispatchId: params.dispatch,
-        terminalHandle: worker.agent_terminal_handle,
-        workerState: worker.state,
-        terminalStatus: observation.status === 'exited' ? 'exited' : 'running',
-        attachedAt: worker.created_at,
+        terminalHandle,
+        workerState: worker?.state ?? 'unsupervised',
+        terminalStatus:
+          observation.status === 'exited'
+            ? 'exited'
+            : observation.status === 'unverifiable'
+              ? 'unknown'
+              : 'running',
+        terminalLiveness:
+          observation.status === 'unverifiable'
+            ? 'unverifiable'
+            : observation.status === 'exited'
+              ? 'exited'
+              : 'live',
+        attachedAt: worker?.created_at ?? dispatch.dispatched_at ?? dispatch.created_at,
         source: params.source,
         cursor: params.cursor,
         limit: params.limit
@@ -253,16 +296,3 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
     }
   })
 ]
-
-function contextOnlyAbandonWarning(result: {
-  state: string
-  alreadySettled: boolean
-  releasedCurrentTask: boolean
-}): string {
-  if (result.alreadySettled) {
-    return `Dispatch was already ${result.state}; no state or process changed.`
-  }
-  return result.releasedCurrentTask
-    ? 'The assignment was abandoned; its unsupervised terminal process was retained.'
-    : 'The superseded assignment was abandoned without changing the current Task or terminal process.'
-}

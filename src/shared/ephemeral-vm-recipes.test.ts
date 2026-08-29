@@ -127,6 +127,43 @@ describe('parseEphemeralVmRecipeResult', () => {
     })
   })
 
+  it('parses the provisioned-root version handshake', () => {
+    const result = parseEphemeralVmRecipeResult(
+      JSON.stringify({
+        schemaVersion: 2,
+        checkoutMode: 'provisioned-root',
+        connection: {
+          type: 'ssh',
+          projectRoot: 'C:\\workspace\\repo',
+          target: {
+            label: 'Sandbox',
+            host: 'sandbox.example.com',
+            port: 22,
+            username: 'root'
+          }
+        }
+      })
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      result: {
+        schemaVersion: 2,
+        checkoutMode: 'provisioned-root',
+        connection: {
+          type: 'ssh',
+          projectRoot: 'C:\\workspace\\repo',
+          target: {
+            label: 'Sandbox',
+            host: 'sandbox.example.com',
+            port: 22,
+            username: 'root'
+          }
+        }
+      }
+    })
+  })
+
   it('rejects ssh results with relative project roots', () => {
     expect(
       parseEphemeralVmRecipeResult(
@@ -248,6 +285,11 @@ describe('parseEphemeralVmRecipeResult', () => {
     ).toBe(
       '{"pairingCode":"[redacted]","token":"[redacted]","identityFile":"[redacted]","proxyCommand":"[redacted]","ok":true}'
     )
+    expect(
+      redactEphemeralVmRecipeDiagnosticText(
+        'clone https://recipe-user:recipe-token@git.example.com/team/repo.git'
+      )
+    ).toBe('clone https://git.example.com/team/repo.git')
     expect(
       redactEphemeralVmRecipeResultForDiagnostics({
         schemaVersion: 1,

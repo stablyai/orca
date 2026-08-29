@@ -9,9 +9,9 @@ import {
   noteRepositoryRateLimitSpend,
   type RateLimitBucketKind
 } from '../rate-limit'
-import type { GitHubProjectViewError } from '../../../shared/github-project-types'
-import { githubProjectHost } from '../../../shared/github-project-identity'
-import { isDefaultGitHubHost } from '../../../shared/github-repository-identity-key'
+import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
+import { githubProjectHost } from '../../../shared/github/project-identity'
+import { isDefaultGitHubHost } from '../../../shared/github/repository-identity-key'
 import { isGitHubHostAuthenticatedForGlobalCli } from '../github-enterprise-repository'
 import {
   classifyProjectError,

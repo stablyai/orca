@@ -1,5 +1,5 @@
 import type { Issue, IssueSearchResult } from '@linear/sdk'
-import type { LinearIssue, LinearIssueChildSummary } from '../../shared/types'
+import type { LinearIssue, LinearIssueChildSummary } from '../../shared/linear/issue-types'
 
 type IssueWithChildren = Issue & {
   children: Issue['children']

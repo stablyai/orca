@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream'
+import { StringDecoder } from 'node:string_decoder'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
 
@@ -12,11 +13,14 @@ export async function decodeTranscriptStream(
   includeTrailingLine: boolean
 ): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
   const messages: NativeChatMessage[] = []
+  // Why: a Buffer chunk can end mid-codepoint, and decoding it standalone would
+  // both corrupt the line and shift `consumedBytes` (which seeds fallback ids).
+  const decoder = new StringDecoder('utf8')
   let pending = ''
   let consumedBytes = 0
 
   for await (const chunk of stream) {
-    pending += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
+    pending += typeof chunk === 'string' ? chunk : decoder.write(Buffer.from(chunk))
     let newlineIndex = pending.indexOf('\n')
     while (newlineIndex !== -1) {
       const segment = pending.slice(0, newlineIndex + 1)
@@ -26,6 +30,7 @@ export async function decodeTranscriptStream(
       newlineIndex = pending.indexOf('\n')
     }
   }
+  pending += decoder.end()
 
   if (includeTrailingLine && pending.length > 0) {
     decodeLine(pending, consumedBytes)

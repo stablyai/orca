@@ -4,13 +4,12 @@ import { act, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type {
-  FolderWorkspace,
-  LinearIssue,
-  Repo,
-  Worktree,
-  WorktreeMeta
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { WorktreeMetaUpdateOptions } from '@/store/slices/worktree-helpers'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 // Why: Radix tooltips need a provider the dialog does not own, and the menu's
@@ -63,7 +62,8 @@ const updateWorktreeMeta =
   vi.fn<
     (
       id: string,
-      updates: Partial<WorktreeMeta>
+      updates: Partial<WorktreeMeta>,
+      options?: WorktreeMetaUpdateOptions
     ) => Promise<{ ok: true } | { ok: false; error: string }>
   >()
 const fetchLinearIssue = vi.fn<(...args: never[]) => Promise<LinearIssue | null>>()
@@ -135,6 +135,10 @@ function openDialog(
     /** Extra owners of the same workspace ID, which the index reads as ambiguous. */
     otherRepos?: { repoId: string; worktree?: Partial<Worktree> }[]
     modalRepoId?: string
+    modalExecutionHostId?: string
+    modalReviewProvider?: 'github' | 'gitlab'
+    modalCurrentReview?: number
+    modalSuppressHostedReviewRefresh?: boolean
     linearViewerOrganizationUrlKey?: string
   } = {}
 ): void {
@@ -171,6 +175,10 @@ function openDialog(
     modalData: {
       worktreeId: options.worktreeId ?? worktree.id,
       ...(options.modalRepoId ? { repoId: options.modalRepoId } : {}),
+      ...(options.modalExecutionHostId ? { executionHostId: options.modalExecutionHostId } : {}),
+      ...(options.modalReviewProvider ? { reviewProvider: options.modalReviewProvider } : {}),
+      ...(options.modalCurrentReview ? { currentReview: options.modalCurrentReview } : {}),
+      ...(options.modalSuppressHostedReviewRefresh ? { suppressHostedReviewRefresh: true } : {}),
       currentDisplayName: worktree.displayName,
       currentComment: worktree.comment,
       focus: 'comment'
@@ -223,6 +231,28 @@ describe('WorktreeMetaDialog issue link row', () => {
 
     expect(providerChip().textContent).toContain('GitHub')
     expect(issueInput().value).toBe('42')
+  })
+
+  it('seeds and saves the GitLab MR row through the GitLab slot', async () => {
+    openDialog({
+      worktree: { linkedGitLabMR: 42 },
+      modalReviewProvider: 'gitlab',
+      modalCurrentReview: 42,
+      modalSuppressHostedReviewRefresh: true
+    })
+    const input = screen.getByPlaceholderText('MR ! or GitLab URL')
+
+    expect(screen.getByText('GitLab MR')).toBeTruthy()
+    expect((input as HTMLInputElement).value).toBe('42')
+    fireEvent.change(input, { target: { value: '!43' } })
+    await act(async () => fireEvent.click(saveButton()))
+
+    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
+    expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ linkedGitLabMR: 43 })
+    )
+    expect(updateWorktreeMeta.mock.calls[0]?.[1]).not.toHaveProperty('linkedPR')
+    expect(updateWorktreeMeta.mock.calls[0]?.[2]).toEqual({ suppressHostedReviewRefresh: true })
   })
 
   it('replaces a completed emoji shortcode in the display name', () => {
@@ -329,6 +359,27 @@ describe('WorktreeMetaDialog issue link row', () => {
     const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
     expect(updates.linkedIssue).toBe(99)
     expect(updates).not.toHaveProperty('linkedLinearIssue')
+  })
+  it('qualifies a save with the host selected by the opening row', async () => {
+    openDialog({
+      worktree: { hostId: 'ssh:build-box' },
+      modalExecutionHostId: 'ssh:build-box'
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('Notes about this worktree...'), {
+      target: { value: 'remote note' }
+    })
+    await act(async () => {
+      fireEvent.click(saveButton())
+    })
+
+    await waitFor(() =>
+      expect(updateWorktreeMeta).toHaveBeenCalledWith(
+        WORKTREE_ID,
+        expect.objectContaining({ comment: 'remote note' }),
+        { executionHostId: 'ssh:build-box' }
+      )
+    )
   })
 
   // updateWorktreeMeta stamps lastActivityAt on any comment write, which would

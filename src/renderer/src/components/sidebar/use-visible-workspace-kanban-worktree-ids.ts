@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import type { Repo, Worktree } from '../../../../shared/types'
-import { computeVisibleWorktreeIds } from './visible-worktrees'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { computeVisibleWorktrees } from './visible-worktrees'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
@@ -9,6 +10,7 @@ import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
 } from './workspace-creator-visibility'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -67,7 +69,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     // the sidebar filters exactly so hidden workspaces do not reappear here.
     const sortedIds = allWorktrees.map((worktree) => worktree.id)
     return new Set(
-      computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
+      computeVisibleWorktrees(worktreesByRepo, sortedIds, {
         filterRepoIds,
         showSleepingWorkspaces,
         tabsByWorktree,
@@ -91,7 +93,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         // Why: the board has no nested lineage presentation. Ancestor injection
         // would make filtered-out parents appear as ordinary cards.
         injectLineageAncestors: false
-      })
+      }).map(getWorktreeHostIdentity)
     )
   }, [
     allWorktrees,

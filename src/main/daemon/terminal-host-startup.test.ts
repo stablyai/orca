@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function mockSubprocess(): SubprocessHandle {
   return {
@@ -9,6 +9,7 @@ function mockSubprocess(): SubprocessHandle {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(),
     signal: vi.fn(),
     onData: () => {},

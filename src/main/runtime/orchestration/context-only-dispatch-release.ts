@@ -9,21 +9,32 @@ export type ContextOnlyDispatchReleaseResult = {
   releasedCurrentTask: boolean
 }
 
+export function contextOnlyAbandonWarning(result: {
+  state: string
+  alreadySettled: boolean
+  releasedCurrentTask: boolean
+}): string {
+  if (result.alreadySettled) {
+    return `Dispatch was already ${result.state}; no state or process changed.`
+  }
+  return result.releasedCurrentTask
+    ? 'The assignment was abandoned; its unsupervised terminal process was retained.'
+    : 'The superseded assignment was abandoned without changing the current Task or terminal process.'
+}
+
 export function releaseContextOnlyDispatch(
   db: Database.Database,
   dispatch: DispatchContextRow,
-  latestDispatchId: string | undefined,
   requestedState: 'abandoned' | 'stopped'
 ): ContextOnlyDispatchReleaseResult {
   if (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') {
     return {
       state: persistedReleaseState(dispatch),
       alreadySettled: true,
-      releasedCurrentTask: latestDispatchId === dispatch.id
+      releasedCurrentTask: false
     }
   }
 
-  const releasedCurrentTask = latestDispatchId === dispatch.id
   db.prepare(
     `UPDATE dispatch_contexts
      SET status = 'failed', last_failure = ?,
@@ -31,9 +42,18 @@ export function releaseContextOnlyDispatch(
          completed_at = COALESCE(completed_at, datetime('now'))
      WHERE id = ? AND status IN ('pending', 'dispatched')`
   ).run(requestedState, dispatch.id)
-  if (releasedCurrentTask) {
-    db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(dispatch.task_id)
-  }
+  const remaining = db
+    .prepare(
+      `SELECT 1 FROM dispatch_contexts
+       WHERE task_id = ? AND status IN ('pending', 'dispatched') LIMIT 1`
+    )
+    .get(dispatch.task_id)
+  const releasedCurrentTask = Boolean(
+    !remaining &&
+    db
+      .prepare("UPDATE tasks SET status = 'blocked' WHERE id = ? AND status = 'dispatched'")
+      .run(dispatch.task_id).changes
+  )
   return { state: requestedState, alreadySettled: false, releasedCurrentTask }
 }
 

@@ -1,5 +1,5 @@
 import { Minus, Plus } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { SettingsRow } from './SettingsFormControls'

@@ -44,7 +44,7 @@ export function UsageBreakdownSection({
         {rows.slice(0, 5).map((row) => (
           <div key={row.key} className="space-y-1">
             <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="truncate text-foreground">{row.label}</span>
+              <span className="min-w-0 break-words text-foreground">{row.label}</span>
               <span className="shrink-0 text-muted-foreground">{formatTokens(row.tokens)}</span>
             </div>
             <div className="text-xs text-muted-foreground">

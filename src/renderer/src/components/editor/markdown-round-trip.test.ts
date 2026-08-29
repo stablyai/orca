@@ -186,9 +186,74 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
-  it('preserves nested details blocks as passthrough html', () => {
+  it('reopens nested toggles as editable details blocks', () => {
+    expect(
+      roundTripMarkdown(
+        '<details><summary>Outer</summary><details><summary>Inner</summary><p>Body</p></details></details>\n'
+      )
+    ).toBe(
+      [
+        '<details class="orca-details">',
+        '<summary>Outer</summary>',
+        '',
+        '<details class="orca-details">',
+        '<summary>Inner</summary>',
+        '',
+        'Body',
+        '',
+        '</details>',
+        '',
+        '</details>'
+      ].join('\n')
+    )
+  })
+
+  it('round-trips an orca-authored nested toggle unchanged', () => {
+    const input = [
+      '<details class="orca-details" data-orca-toggle="heading-3" open>',
+      '<summary>08/26/2026</summary>',
+      '',
+      '<details class="orca-details" open>',
+      '<summary>goals</summary>',
+      '',
+      '- Read X post',
+      '  - Collab',
+      '',
+      '</details>',
+      '',
+      '- after inner',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('keeps nested toggle bodies editable rather than inert raw html', () => {
+    const markdown = markdownAfterTextReplace(
+      [
+        '<details class="orca-details" open>',
+        '<summary>Outer</summary>',
+        '',
+        '<details class="orca-details" open>',
+        '<summary>Inner</summary>',
+        '',
+        'Body',
+        '',
+        '</details>',
+        '',
+        '</details>',
+        ''
+      ].join('\n'),
+      'Body',
+      'Edited body'
+    )
+    expect(markdown).toContain('Edited body')
+  })
+
+  it('preserves a nested toggle that is not itself editable as passthrough html', () => {
     const input =
-      '<details><summary>Outer</summary><details><summary>Inner</summary><p>Body</p></details></details>\n'
+      '<details><summary>Outer</summary><details id="x"><summary>Inner</summary><p>Body</p></details></details>\n'
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
