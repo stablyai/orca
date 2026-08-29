@@ -247,7 +247,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         runtimeEnvironmentId: null,
-        pathExistsCache: new Map([['active\0/tmp/other-worktree', false]])
+        pathExistsCache: new Map([['active\0/tmp/other-worktree', { exists: false, checkedAt: Date.now() }]])
       }
     )
     await flushAsyncWork()

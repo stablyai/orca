@@ -2,6 +2,15 @@ import { expect, vi } from 'vitest'
 import type { IDisposable, ILink } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
+
+export function makeExistsCache(
+  entries: Iterable<[string, boolean]> = []
+): TerminalPathExistsCache {
+  return new Map(
+    [...entries].map(([key, exists]) => [key, { exists, checkedAt: Date.now() }])
+  )
+}
 import type {
   installFilePathLinkClickFallback,
   openFilePathLinkAtBufferPosition
@@ -63,7 +72,7 @@ export function makePane(rows: TestBufferLine[]): { id: number; terminal: unknow
 
 export function createProviderSetup(
   rows: TestBufferLine[],
-  pathExistsCache = new Map<string, boolean>([
+  pathExistsCache = makeExistsCache([
     ['/repo', true],
     ['/repo/CLAUDE.md', true],
     ['/repo/package.json', true],
