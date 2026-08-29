@@ -87,8 +87,8 @@ export type MemorySnapshot = {
   processMemoryMetric: ProcessMemoryMetric
   /**
    * Names the unit of every `privateMemory` field below. Absent when this sweep
-   * produced none — an older host, or any host whose process table cannot
-   * report committed bytes. Readers must treat absence as unknown, not zero.
+   * produced none. Individual aggregates stay absent when any process they own
+   * is unreadable; readers must treat absence as unknown, not zero.
    */
   processCommitMetric?: ProcessCommitMetric
   /** Sum of app + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
@@ -96,9 +96,9 @@ export type MemorySnapshot = {
   /** Sum of per-process samples. Shared pages may repeat, so this can exceed host.totalMemory. */
   totalMemory: number
   /**
-   * Sum of app + all tracked worktree `privateMemory`. Present exactly when
-   * `processCommitMetric` is. Committed bytes are not bounded by physical RAM,
-   * so exceeding host.totalMemory is the signal, not a bug.
+   * Sum of app + all tracked worktree `privateMemory`. Present only when every
+   * included aggregate is complete. Committed bytes are not bounded by physical
+   * RAM, so exceeding host.totalMemory is the signal, not a bug.
    */
   totalPrivateMemory?: number
   collectedAt: number

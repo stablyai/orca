@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { existsSync, readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 
@@ -22,7 +22,7 @@ const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
-  const failures = collectNativeModuleFailures()
+  const failures = await collectNativeModuleFailures()
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(`${failure.moduleName}: ${failure.message}`)
@@ -239,11 +239,11 @@ function parseCheckFailures(stderr) {
   return failures
 }
 
-function collectNativeModuleFailures() {
+async function collectNativeModuleFailures() {
   const failures = []
   for (const moduleName of NATIVE_MODULES) {
     try {
-      loadNativeModule(moduleName)
+      await loadNativeModule(moduleName)
     } catch (cause) {
       failures.push({ moduleName, message: formatError(cause), cause })
     }
@@ -251,13 +251,13 @@ function collectNativeModuleFailures() {
   return failures
 }
 
-function loadNativeModule(moduleName) {
+async function loadNativeModule(moduleName) {
   if (moduleName === '@vscode/windows-process-tree') {
-    // A bare require already loads the .node addon on win32, so it catches an
-    // ABI mismatch on its own. What it cannot catch is a snapshot that comes
-    // back empty -- the shape a blocked CreateToolhelp32Snapshot produces --
-    // so check the addon actually enumerates before calling the runtime healthy.
-    require(moduleName)
+    const addon = require('@vscode/windows-process-tree/build/Release/windows_process_tree.node')
+    const {
+      assertWindowsProcessTreeRuntime
+    } = require('./windows-process-tree-runtime-contract.cjs')
+    await assertWindowsProcessTreeRuntime(addon)
     return
   }
   if (moduleName === 'windows-native-registry') {
@@ -367,6 +367,10 @@ function getWindowsBuildNumber() {
 
 function rebuildNodeRuntimeModules(moduleNames) {
   for (const moduleName of moduleNames) {
+    if (moduleName === '@vscode/windows-process-tree') {
+      stageWindowsProcessTreeRuntime()
+      continue
+    }
     const moduleDir = dirname(require.resolve(`${moduleName}/package.json`))
     console.warn(`[native-runtime] Rebuilding ${moduleName} with node-gyp.`)
     runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
@@ -374,6 +378,31 @@ function rebuildNodeRuntimeModules(moduleNames) {
       runNodeScript([resolve(moduleDir, 'scripts', 'post-install.js')])
     }
   }
+}
+
+function stageWindowsProcessTreeRuntime() {
+  const source = resolve(
+    projectDir,
+    'config',
+    'relay-assets',
+    'windows-process-tree',
+    process.arch,
+    'windows-process-tree.node'
+  )
+  if (!existsSync(source)) {
+    throw new Error(`Windows process-table prebuild is missing: ${source}`)
+  }
+  const runtimeDir = resolve(
+    projectDir,
+    'node_modules',
+    '@vscode',
+    'windows-process-tree',
+    'build',
+    'Release'
+  )
+  mkdirSync(runtimeDir, { recursive: true })
+  copyFileSync(source, resolve(runtimeDir, 'windows_process_tree.node'))
+  console.warn(`[native-runtime] Staged Windows process-table runtime for ${process.arch}.`)
 }
 
 function runPnpm(args, { cwd = projectDir } = {}) {

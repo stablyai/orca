@@ -24,6 +24,21 @@ describe('codex process identity', () => {
     })
   })
 
+  it('records the exact host-native start identity when available', async () => {
+    await expect(
+      codexProcessIdentity({ identity: IDENTITY, spawnToken: 'spawn-a', pid: 4242 }, async () => ({
+        timeMs: 123,
+        exactId: '133444736000000001'
+      }))
+    ).resolves.toEqual({
+      hostId: 'local',
+      pid: 4242,
+      processStartTimeMs: 123,
+      processStartTimeId: '133444736000000001',
+      spawnToken: 'spawn-a'
+    })
+  })
+
   it('retries a failed start-time read before giving up', async () => {
     const readStartTime = vi
       .fn<(pid: number) => Promise<number | null>>()

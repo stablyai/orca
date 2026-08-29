@@ -17,6 +17,9 @@ const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', im
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
   new URL('./node-pty-job-ownership.cjs', import.meta.url)
 )
+const sourceWindowsProcessTreeContractPath = fileURLToPath(
+  new URL('./windows-process-tree-runtime-contract.cjs', import.meta.url)
+)
 
 describe('ensure-native-runtime', () => {
   it('rechecks Node native modules in fresh child processes after rebuilding', () => {
@@ -203,7 +206,33 @@ function mkTempProject() {
     sourceNodePtyJobOwnershipPath,
     join(projectDir, 'config', 'scripts', 'node-pty-job-ownership.cjs')
   )
+  copyFileSync(
+    sourceWindowsProcessTreeContractPath,
+    join(projectDir, 'config', 'scripts', 'windows-process-tree-runtime-contract.cjs')
+  )
+  stageWindowsProcessTreeFixtures(projectDir)
   return projectDir
+}
+
+function stageWindowsProcessTreeFixtures(projectDir) {
+  for (const arch of ['x64', 'arm64']) {
+    const source = fileURLToPath(
+      new URL(
+        `../relay-assets/windows-process-tree/${arch}/windows-process-tree.node`,
+        import.meta.url
+      )
+    )
+    const destination = join(
+      projectDir,
+      'config',
+      'relay-assets',
+      'windows-process-tree',
+      arch,
+      'windows-process-tree.node'
+    )
+    mkdirSync(join(destination, '..'), { recursive: true })
+    copyFileSync(source, destination)
+  }
 }
 
 function envWithPrependedPath(binDir, extraEnv) {
@@ -341,7 +370,8 @@ function writeFakePnpm(binDir) {
   writeFileSync(
     shimPath,
     `
-const { appendFileSync, writeFileSync } = require('node:fs')
+const { appendFileSync, mkdirSync, writeFileSync } = require('node:fs')
+const path = require('node:path')
 
 appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`pnpm \${process.argv.slice(2).join(' ')}\\n\`)
 appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`cwd=\${process.cwd()}\\n\`)
@@ -354,6 +384,14 @@ appendFileSync(
   \`cxxflags=\${process.env.CXXFLAGS || ''}\\n\`
 )
 writeFileSync(process.env.ORCA_NATIVE_TEST_MARKER, 'rebuilt')
+if (process.platform === 'win32' && path.basename(process.cwd()) === 'node-pty') {
+  const releaseDir = path.join(process.cwd(), 'build', 'Release')
+  const conptyDir = path.join(releaseDir, 'conpty')
+  mkdirSync(conptyDir, { recursive: true })
+  writeFileSync(path.join(releaseDir, 'conpty.node'), '')
+  writeFileSync(path.join(conptyDir, 'conpty.dll'), '')
+  writeFileSync(path.join(conptyDir, 'OpenConsole.exe'), '')
+}
 `
   )
 

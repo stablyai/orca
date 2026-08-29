@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
+import { performance } from 'node:perf_hooks'
 import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot'
-import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 
 /**
  * The only place Orca reads the Windows process table.
@@ -35,6 +35,17 @@ export type WindowsProcessRow = {
   memoryBytes?: number
   /** Process creation time in Unix milliseconds, when the native snapshot provides it. */
   creationTimeMs?: number
+  /** Committed private bytes, or undefined when not queryable. */
+  privateMemoryBytes?: number
+  /** Cumulative kernel + user time in 100 ns ticks. */
+  cpuTimeTicks?: string
+  /** Exact Windows process creation FILETIME, used to fence PID reuse. */
+  startTimeId?: string
+}
+
+export type WindowsProcessTableSnapshot = {
+  rows: WindowsProcessRow[]
+  capturedAtMs: number
 }
 
 type NativeProcessInfo = {
@@ -42,6 +53,9 @@ type NativeProcessInfo = {
   ppid: number
   name: string
   memory?: number
+  privateMemory?: number
+  cpuTimeTicks?: string
+  startTimeId?: string
   commandLine?: string
   creationTimeMs?: number
 }
@@ -76,6 +90,7 @@ let requireNative: (specifier: string) => unknown = requireFromMain
  * duplicate queue rather than nesting inside it.
  */
 type WindowsProcessTreeAddon = {
+  processTableContractVersion?: number
   getProcessList: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
@@ -83,14 +98,16 @@ type WindowsProcessTreeAddon = {
 }
 
 /** Mirrors the package's enum; the addon takes the raw bit field. */
-const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2 } as const
+const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 } as const
 
 /** Staged beside the relay bundle by build-relay; see RELAY_ARTIFACTS. */
 const RELAY_ADDON_FILENAME = './windows-process-tree.node'
+const PACKAGE_ADDON_SPECIFIER =
+  '@vscode/windows-process-tree/build/Release/windows_process_tree.node'
+const PROCESS_TABLE_CONTRACT_VERSION = 1
 
 let cachedModule: WindowsProcessTreeModule | null | undefined
 let moduleLoader: () => WindowsProcessTreeModule | null = loadWindowsProcessTree
-let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 
 /** Present the bare addon through the same shape as the npm package. */
 function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
@@ -100,6 +117,13 @@ function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   }
 }
 
+function hasCurrentProcessTableContract(addon: WindowsProcessTreeAddon): boolean {
+  return (
+    addon?.processTableContractVersion === PROCESS_TABLE_CONTRACT_VERSION &&
+    typeof addon.getProcessList === 'function'
+  )
+}
+
 /**
  * Resolve the native reader, or null where it cannot be used.
  *
@@ -107,11 +131,8 @@ function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
  * installs the npm package. A relay host has no node_modules of ours at all, so
  * build-relay stages the bare addon next to the bundle and we bind to that.
  *
- * Why tolerate absence: it stays optional and Windows-only, so a macOS/Linux
- * install legitimately has no binary, and a relay built before this artifact
- * existed has no file. Callers must treat null the same way they treat any
- * other unavailable evidence -- `readNativeRows` then falls back to the CIM
- * scan, which needs nothing installed.
+ * Absence is unavailable evidence. It must never reactivate the recurring
+ * PowerShell scan this native inventory exists to eliminate.
  */
 function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
   if (cachedModule !== undefined) {
@@ -122,7 +143,11 @@ function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
     return cachedModule
   }
   try {
-    cachedModule = requireNative('@vscode/windows-process-tree') as WindowsProcessTreeModule
+    const addon = requireNative(PACKAGE_ADDON_SPECIFIER) as WindowsProcessTreeAddon
+    cachedModule = hasCurrentProcessTableContract(addon) ? adaptAddon(addon) : null
+    if (!cachedModule) {
+      return cachedModule
+    }
     return cachedModule
   } catch {
     // Not an error here: the relay never has the package. Try the staged addon.
@@ -131,9 +156,10 @@ function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
     const addon = requireNative(RELAY_ADDON_FILENAME) as WindowsProcessTreeAddon
     // Why check the shape: a truncated upload or an addon built for another
     // arch can load and still not answer. Binding to it would then reject every
-    // read forever, where falling through reaches a scan that works.
-    cachedModule =
-      typeof addon?.getProcessList === 'function' ? adaptAddon(addon) : /* v8 ignore next */ null
+    // read forever, so treat it as unavailable evidence.
+    cachedModule = hasCurrentProcessTableContract(addon)
+      ? adaptAddon(addon)
+      : /* v8 ignore next */ null
   } catch {
     cachedModule = null
   }
@@ -167,17 +193,23 @@ function resetNativeReaderState(): void {
   unreturnedReads.clear()
 }
 
-function readNativeRows(): Promise<WindowsProcessRow[]> {
+const WINDOWS_TO_UNIX_EPOCH_TICKS = 116_444_736_000_000_000n
+
+function fileTimeToUnixMs(startTimeId: string | undefined): number | undefined {
+  if (!startTimeId || !/^\d+$/.test(startTimeId)) {
+    return undefined
+  }
+  const ticks = BigInt(startTimeId)
+  if (ticks < WINDOWS_TO_UNIX_EPOCH_TICKS) {
+    return undefined
+  }
+  const milliseconds = Number((ticks - WINDOWS_TO_UNIX_EPOCH_TICKS) / 10_000n)
+  return Number.isSafeInteger(milliseconds) ? milliseconds : undefined
+}
+
+function readNativeRows(): Promise<WindowsProcessTableSnapshot> {
   const native = moduleLoader()
   if (!native) {
-    if (process.platform === 'win32') {
-      // Why only when the module is absent: a binding that loads is the fast
-      // path even when a read fails or wedges, so a failing native reader must
-      // never silently start forking shells at the caller's poll rate. Absence
-      // is the one condition that can never resolve itself — see
-      // docs/reference/windows-process-enumeration.md.
-      return readCimRows()
-    }
     // Reject rather than resolve empty: an empty table is a claim that nothing
     // is running, and callers act on that by force-killing or by declaring a
     // tree dead. "Unavailable" has to stay distinguishable from "empty".
@@ -235,18 +267,26 @@ function readNativeRows(): Promise<WindowsProcessRow[]> {
           reject(new Error('windows process table is unreadable'))
           return
         }
-        resolve(
-          processes.map((row) => ({
-            pid: row.pid,
-            ppid: row.ppid,
-            name: row.name,
-            command: row.commandLine ?? '',
-            memoryBytes: row.memory,
-            ...(typeof row.creationTimeMs === 'number'
-              ? { creationTimeMs: row.creationTimeMs }
-              : {})
-          }))
-        )
+        resolve({
+          capturedAtMs: performance.now(),
+          rows: processes.map((row) => {
+            const creationTimeMs =
+              typeof row.creationTimeMs === 'number'
+                ? row.creationTimeMs
+                : fileTimeToUnixMs(row.startTimeId)
+            return {
+              pid: row.pid,
+              ppid: row.ppid,
+              name: row.name,
+              command: row.commandLine ?? '',
+              memoryBytes: row.memory,
+              ...(creationTimeMs === undefined ? {} : { creationTimeMs }),
+              privateMemoryBytes: row.privateMemory,
+              cpuTimeTicks: row.cpuTimeTicks,
+              startTimeId: row.startTimeId
+            }
+          })
+        })
       }, flags)
     } catch (error) {
       clearTimeout(deadline)
@@ -255,31 +295,21 @@ function readNativeRows(): Promise<WindowsProcessRow[]> {
   })
 }
 
-/**
- * Whole-table read for hosts with no native binding (the relay).
- *
- * Applies the same self-presence guard as the native path: a scan that omits
- * our own pid is truncated or permission-filtered, not empty, and must reject
- * so nothing downstream reads it as proof a process died.
- */
-async function readCimRows(): Promise<WindowsProcessRow[]> {
-  const rows = await cimScan()
-  if (!rows.some((row) => row.pid === process.pid)) {
-    throw new Error('windows process table is unreadable')
-  }
-  return rows
-}
-
 // Why still cache: the snapshot is cheap but not free, and a worktree delete
 // tears down PTYs 32-wide. The shared TTL + single-in-flight reader collapses
 // that burst into one scan, exactly as the PowerShell path had to.
-const snapshotReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
+const snapshotReader = createProcessTableSnapshotReader<WindowsProcessTableSnapshot>({
   runPs: readNativeRows,
   now: () => Date.now()
 })
 
 /** Cached snapshot, refreshed on the shared TTL. */
-export function readWindowsProcessTable(): Promise<WindowsProcessRow[]> {
+export async function readWindowsProcessTable(): Promise<WindowsProcessRow[]> {
+  return (await snapshotReader.getSnapshot()).rows
+}
+
+/** Cached snapshot plus the native capture time used for counter deltas. */
+export function readWindowsProcessTableSnapshot(): Promise<WindowsProcessTableSnapshot> {
   return snapshotReader.getSnapshot()
 }
 
@@ -289,8 +319,8 @@ export function readWindowsProcessTable(): Promise<WindowsProcessRow[]> {
  * Identity checks during teardown must not reuse a cached row — it can predate
  * the very process exit it is being asked about.
  */
-export function readWindowsProcessTableFresh(): Promise<WindowsProcessRow[]> {
-  return snapshotReader.getFreshSnapshot()
+export async function readWindowsProcessTableFresh(): Promise<WindowsProcessRow[]> {
+  return (await snapshotReader.getFreshSnapshot()).rows
 }
 
 /** Whether the native table can be read at all on this host. */
@@ -333,14 +363,6 @@ export function __setWindowsProcessTreeRequireForTests(
   moduleLoader = loadWindowsProcessTree
   cachedModule = undefined
   resetNativeReaderState()
-  snapshotReader.reset()
-}
-
-/** Test-only: substitute the no-binding PowerShell scan, which spawns a child. */
-export function __setWindowsProcessTableCimScanForTests(
-  scan?: () => Promise<WindowsProcessRow[]>
-): void {
-  cimScan = scan ?? readWindowsProcessRowsWithCim
   snapshotReader.reset()
 }
 

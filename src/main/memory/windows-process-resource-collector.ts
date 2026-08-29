@@ -1,51 +1,41 @@
-import { runProcess } from '../../shared/child-process/run-process'
 import os from 'node:os'
-import { performance } from 'node:perf_hooks'
-import {
-  parseTypeperfProcessOutput,
-  parseWindowsProcessSample,
-  TYPEPERF_COUNTERS,
-  type ParsedWindowsProcessSample,
-  type WindowsProcessResourceRow
+import { readWindowsProcessTableSnapshot } from '../windows/windows-process-table'
+import type {
+  ParsedWindowsProcessSample,
+  WindowsProcessResourceRow
 } from './windows-process-sample-parsing'
 
 export type { WindowsProcessResourceRow } from './windows-process-sample-parsing'
 
-const PROCESS_QUERY_TIMEOUT_MS = 5_000
-const PROCESS_QUERY_MAX_BUFFER = 10 * 1024 * 1024
 const CPU_MIN_SAMPLE_MS = 250
 const CPU_STALE_AFTER_MS = 10_000
 const HUNDRED_NS_TICKS_PER_MS = 10_000
-const CIM_RETRY_AFTER_MS = 30_000
 
 type WindowsProcessSample = ParsedWindowsProcessSample & {
   sampledAtMs: number
 }
 
-let processBackend: 'cim' | 'typeperf' = 'cim'
 let previousCpuSample: WindowsProcessSample | null = null
-let retryCimAtMs = 0
 
 export async function enumerateWindowsProcessResources(): Promise<WindowsProcessResourceRow[]> {
-  // Why: one CIM sweep supplies both resource values and process identity,
-  // avoiding a second host-wide PowerShell process on every open-popover poll.
-  if (processBackend === 'typeperf') {
-    if (performance.now() < retryCimAtMs) {
-      return enumerateWindowsWithTypeperf()
+  const { rows, capturedAtMs } = await readWindowsProcessTableSnapshot()
+  const cpuByPid = new Map<number, { cpuTicks: bigint; startTimeId: string }>()
+  const resources = rows.map((row) => {
+    const cpuTicks = parseUnsignedBigInt(row.cpuTimeTicks)
+    if (cpuTicks !== null && row.startTimeId) {
+      cpuByPid.set(row.pid, { cpuTicks, startTimeId: row.startTimeId })
     }
-    processBackend = 'cim'
-  }
-
-  const sample = await enumerateWindowsWithCim()
-  if (sample) {
-    return applyWindowsCpuSample(sample)
-  }
-  // Why: avoid repeating a blocked CIM timeout every two-second poll while
-  // still recovering CPU attribution after a transient PowerShell failure.
-  processBackend = 'typeperf'
-  retryCimAtMs = performance.now() + CIM_RETRY_AFTER_MS
-  previousCpuSample = null
-  return enumerateWindowsWithTypeperf()
+    return {
+      pid: row.pid,
+      ppid: row.ppid,
+      cpu: 0,
+      memory: nonNegativeNumber(row.memoryBytes),
+      ...(row.privateMemoryBytes === undefined
+        ? {}
+        : { privateMemory: nonNegativeNumber(row.privateMemoryBytes) })
+    }
+  })
+  return applyWindowsCpuSample({ rows: resources, cpuByPid, sampledAtMs: capturedAtMs })
 }
 
 function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessResourceRow[] {
@@ -87,59 +77,17 @@ function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessReso
   return sample.rows
 }
 
-async function enumerateWindowsWithCim(): Promise<WindowsProcessSample | null> {
-  // PageFileUsage rides along on the sweep that already runs: it is the commit
-  // charge the working set stops showing once Windows starts trimming pages.
-  const args = [
-    '-NoLogo',
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; " +
-      'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,WorkingSetSize,KernelModeTime,UserModeTime,CreationDate,PageFileUsage | ' +
-      'ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize, [string]$_.KernelModeTime, [string]$_.UserModeTime, $_.CreationDate.ToUniversalTime().Ticks, $_.PageFileUsage)) } catch {} }'
-  ]
-  try {
-    const stdout = await execFileText('powershell.exe', args)
-    const parsed = parseWindowsProcessSample(stdout)
-    return parsed.rows.length > 0 ? { ...parsed, sampledAtMs: performance.now() } : null
-  } catch (err) {
-    console.warn('[memory] PowerShell process enumeration failed; falling back to typeperf', err)
-    return null
-  }
-}
-
-async function enumerateWindowsWithTypeperf(): Promise<WindowsProcessResourceRow[]> {
-  try {
-    // Why: an immediate sample keeps the memory-only fallback inside the
-    // Resource Manager's two-second poll interval without inventing CPU rates.
-    const stdout = await execFileText('typeperf.exe', [
-      ...TYPEPERF_COUNTERS,
-      '-sc',
-      '1',
-      '-si',
-      '0'
-    ])
-    return parseTypeperfProcessOutput(stdout)
-  } catch (err) {
-    console.warn('[memory] typeperf process enumeration failed', err)
-    return []
-  }
-}
-
-async function execFileText(file: string, args: string[]): Promise<string> {
-  const result = await runProcess({
-    program: file,
-    args,
-    timeoutMs: PROCESS_QUERY_TIMEOUT_MS,
-    maxOutputBytes: PROCESS_QUERY_MAX_BUFFER
-  })
-  if (result.timedOut || result.code !== 0) {
-    throw new Error(`${file} exited ${result.code ?? 'on timeout'}`)
-  }
-  return result.stdout
-}
-
 function nonNegativeNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function parseUnsignedBigInt(value: string | undefined): bigint | null {
+  if (!value || !/^\d+$/.test(value)) {
+    return null
+  }
+  try {
+    return BigInt(value)
+  } catch {
+    return null
+  }
 }

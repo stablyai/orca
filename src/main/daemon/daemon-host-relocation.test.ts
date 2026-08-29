@@ -10,6 +10,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import os from 'node:os'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -87,6 +88,18 @@ function buildInstallFixture(root: string): void {
     mkdirSync(join(prebuildsRoot, arch), { recursive: true })
     writeFileSync(join(prebuildsRoot, arch, 'pty.node'), `${arch}-prebuild`)
   }
+  const processTreeDir = join(root, 'resources', 'node_modules', '@vscode', 'windows-process-tree')
+  mkdirSync(join(processTreeDir, 'lib'), { recursive: true })
+  mkdirSync(join(processTreeDir, 'build', 'Release'), { recursive: true })
+  mkdirSync(join(processTreeDir, 'src'), { recursive: true })
+  writeFileSync(join(processTreeDir, 'package.json'), '{"main":"lib/index.js"}')
+  writeFileSync(join(processTreeDir, 'lib', 'index.js'), 'module.exports = {}')
+  writeFileSync(
+    join(processTreeDir, 'build', 'Release', 'windows_process_tree.node'),
+    'process-tree-native'
+  )
+  writeFileSync(join(processTreeDir, 'src', 'process.cc'), 'build-only source')
+  writeFileSync(join(processTreeDir, 'build', 'Release', 'windows_process_tree.pdb'), 'symbols')
 }
 
 // The win32 prebuild dir the running host arch loads vs. the one that is pruned.
@@ -138,7 +151,9 @@ describe('buildDaemonHostManifest', () => {
       execPath: 'C:\\app\\Orca.exe',
       resourcesPath: 'C:\\app\\resources',
       entrySourcePath: 'C:\\app\\resources\\app.asar.unpacked\\out\\main\\daemon-entry.js',
-      entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js'
+      entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js',
+      windowsProcessTreeAddonPath:
+        'C:\\app\\resources\\node_modules\\@vscode\\windows-process-tree\\build\\Release\\windows_process_tree.node'
     })
     const byDest = new Map(ops.map((op) => [op.destRel, op]))
     // The host exe is renamed to a distinct image name (NOT the source basename)
@@ -162,6 +177,23 @@ describe('buildDaemonHostManifest', () => {
     expect(nodePtyOp?.filter?.('node-pty/build/Release/conpty.pdb')).toBe(false)
     expect(nodePtyOp?.filter?.(`node-pty/prebuilds/${HOST_PREBUILD}/pty.node`)).toBe(true)
     expect(nodePtyOp?.filter?.(`node-pty/prebuilds/${OTHER_PREBUILD}/pty.node`)).toBe(false)
+    const processTreeOp = byDest.get('resources/node_modules/@vscode/windows-process-tree')
+    expect(processTreeOp?.kind).toBe('dir')
+    expect(
+      processTreeOp?.filter?.(
+        'C:\\app\\resources\\node_modules\\@vscode\\windows-process-tree\\lib\\index.js'
+      )
+    ).toBe(true)
+    expect(
+      processTreeOp?.filter?.(
+        'C:\\app\\resources\\node_modules\\@vscode\\windows-process-tree\\build\\Release\\windows_process_tree.node'
+      )
+    ).toBe(true)
+    expect(
+      processTreeOp?.filter?.(
+        'C:\\app\\resources\\node_modules\\@vscode\\windows-process-tree\\src\\process.cc'
+      )
+    ).toBe(false)
   })
 })
 
@@ -185,6 +217,28 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(
       existsSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'))
     ).toBe(true)
+    const processTreeDest = join(
+      dest,
+      'resources',
+      'node_modules',
+      '@vscode',
+      'windows-process-tree'
+    )
+    expect(existsSync(join(processTreeDest, 'package.json'))).toBe(true)
+    expect(existsSync(join(processTreeDest, 'lib', 'index.js'))).toBe(true)
+    expect(existsSync(join(processTreeDest, 'build', 'Release', 'windows_process_tree.node'))).toBe(
+      true
+    )
+    expect(existsSync(join(processTreeDest, 'src', 'process.cc'))).toBe(false)
+    expect(existsSync(join(processTreeDest, 'build', 'Release', 'windows_process_tree.pdb'))).toBe(
+      false
+    )
+    const requireFromChunk = createRequire(
+      join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js')
+    )
+    expect(requireFromChunk.resolve('@vscode/windows-process-tree')).toBe(
+      join(processTreeDest, 'lib', 'index.js')
+    )
     // Trim: GPU DLLs, .pdb debug symbols, and non-host-arch prebuilds excluded;
     // the host arch's prebuild is retained so node-pty resolves its native addon.
     expect(existsSync(join(dest, 'ffmpeg.dll'))).toBe(false)
@@ -201,6 +255,7 @@ describe('materializeRelocatedDaemonHost', () => {
     const marker = JSON.parse(readFileSync(join(dest, '.materialized.json'), 'utf8'))
     expect(marker.version).toBe('9.9.9')
     expect(marker.entryRelPath).toBe('resources/app.asar.unpacked/out/main/daemon-entry.js')
+    expect(marker.windowsProcessTreeSha256).toMatch(/^[a-f0-9]{64}$/)
   })
 
   it('is idempotent: a valid marker short-circuits without recopying', () => {
@@ -212,6 +267,36 @@ describe('materializeRelocatedDaemonHost', () => {
     const result = materializeRelocatedDaemonHost()
     expect(result?.execPath).toBe(join(dest, 'orca-terminal-daemon.exe'))
     expect(existsSync(sentinel)).toBe(true)
+  })
+
+  it('rematerializes when the required process-table addon is missing or stale', () => {
+    materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    const addonRelativePath = join(
+      'resources',
+      'node_modules',
+      '@vscode',
+      'windows-process-tree',
+      'build',
+      'Release',
+      'windows_process_tree.node'
+    )
+    const relocatedAddon = join(dest, addonRelativePath)
+    const sourceAddon = join(installDir, addonRelativePath)
+
+    rmSync(relocatedAddon)
+    const missingSentinel = join(dest, 'missing-sentinel.txt')
+    writeFileSync(missingSentinel, 'remove')
+    expect(materializeRelocatedDaemonHost()).not.toBeNull()
+    expect(readFileSync(relocatedAddon, 'utf8')).toBe('process-tree-native')
+    expect(existsSync(missingSentinel)).toBe(false)
+
+    writeFileSync(sourceAddon, 'replacement-process-tree-native')
+    const staleSentinel = join(dest, 'stale-sentinel.txt')
+    writeFileSync(staleSentinel, 'remove')
+    expect(materializeRelocatedDaemonHost()).not.toBeNull()
+    expect(readFileSync(relocatedAddon, 'utf8')).toBe('replacement-process-tree-native')
+    expect(existsSync(staleSentinel)).toBe(false)
   })
 
   it('fails open on a missing required input, leaving no dest or staging dir', () => {

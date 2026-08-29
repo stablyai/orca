@@ -1,17 +1,12 @@
 diff --git a/binding.gyp b/binding.gyp
-index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e773638bf4 100644
+index 11a5e71..196e431 100644
 --- a/binding.gyp
 +++ b/binding.gyp
-@@ -3,7 +3,6 @@
-     {
-       "target_name": "windows_process_tree",
+@@ -5,3 +5,2 @@
        "dependencies": [
 -        "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
        ],
-       "conditions": [
-         ['OS=="win"', {
-@@ -15,14 +14,13 @@
-             "src/process_commandline.cc"
+@@ -16,9 +15,8 @@
            ],
 -          "include_dirs": [],
 +          "include_dirs": ["deps/node-addon-api"],
@@ -24,18 +19,135 @@ index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e7
              "VCCLCompilerTool": {
 +              "ExceptionHandling": 1,
                "AdditionalOptions": [
-                 "/guard:cf",
-                 "/sdl",
+diff --git a/src/addon.cc b/src/addon.cc
+index 5253960..0d5b4d2 100644
+--- a/src/addon.cc
++++ b/src/addon.cc
+@@ -53,2 +53,3 @@ void GetProcessCpuUsage(const Napi::CallbackInfo& args) {
+ Napi::Object Init(Napi::Env env, Napi::Object exports) {
++  exports.Set("processTableContractVersion", Napi::Number::New(env, 1));
+   exports.Set("getProcessList", Napi::Function::New(env, GetProcessList));
 diff --git a/src/process.cc b/src/process.cc
-index 3eea92077c4d1d433119361d5c432881859131e9..1998f4addd4d7e9aba946ea6f7f7a4a5d13291bc 100644
+index ad63727..3c8d40b 100644
 --- a/src/process.cc
 +++ b/src/process.cc
-@@ -37,7 +37,7 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
-         process_info.push_back(std::move(pinfo));
-         process_count++;
+@@ -23,3 +23,3 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
+       if (process_entry.th32ProcessID != 0) {
+-        ProcessInfo pinfo;
++        ProcessInfo pinfo = {};
+         pinfo.pid = process_entry.th32ProcessID;
+@@ -28,3 +28,3 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
+         if (MEMORY & process_data_flags) {
+-          GetProcessMemoryUsage(pinfo);
++          GetProcessResourceUsage(pinfo);
+         }
+@@ -39,3 +39,3 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
        }
 -    } while (process_count < 1024 && Process32Next(snapshot_handle, &process_entry));
 +    } while (Process32Next(snapshot_handle, &process_entry));
    }
- 
-   CloseHandle(snapshot_handle);
+@@ -46,15 +46,35 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
+-
++
+-void GetProcessMemoryUsage(ProcessInfo& process_info) {
+-  DWORD pid = process_info.pid;
+-  HANDLE hProcess;
+-  PROCESS_MEMORY_COUNTERS pmc;
++ULONGLONG GetFileTimeValue(const FILETIME* time) {
++  ULARGE_INTEGER value;
++  value.LowPart = time->dwLowDateTime;
++  value.HighPart = time->dwHighDateTime;
++  return value.QuadPart;
++}
+-
++
+-  hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
++void GetProcessResourceUsage(ProcessInfo& process_info) {
++  DWORD pid = process_info.pid;
++  HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
+-
++
+   if (hProcess == NULL) {
+-    return;
++    hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
++    if (hProcess == NULL) {
++      return;
++    }
++  }
++
++  PROCESS_MEMORY_COUNTERS_EX pmc = {};
++  pmc.cb = sizeof(pmc);
++  if (GetProcessMemoryInfo(hProcess,
++                           reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc),
++                           sizeof(pmc))) {
++    process_info.memory = static_cast<uint64_t>(pmc.WorkingSetSize);
++    process_info.privateMemory = static_cast<uint64_t>(pmc.PrivateUsage);
++    process_info.hasMemory = true;
+   }
+-
++
+-  if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc))) {
+-    process_info.memory = (DWORD)pmc.WorkingSetSize;
++  FILETIME creation_time, exit_time, kernel_time, user_time;
++  if (GetProcessTimes(hProcess, &creation_time, &exit_time, &kernel_time, &user_time)) {
++    process_info.cpuTimeTicks = std::to_string(
++        GetFileTimeValue(&kernel_time) + GetFileTimeValue(&user_time));
++    process_info.startTimeId = std::to_string(GetFileTimeValue(&creation_time));
+   }
+@@ -69,10 +89,3 @@ void GetProcessMemoryUsage(ProcessInfo& process_info) {
+ ULONGLONG GetTotalTime(const FILETIME* kernelTime, const FILETIME* userTime) {
+-  ULARGE_INTEGER kt, ut;
+-  kt.LowPart = (*kernelTime).dwLowDateTime;
+-  kt.HighPart = (*kernelTime).dwHighDateTime;
+-
+-  ut.LowPart = (*userTime).dwLowDateTime;
+-  ut.HighPart = (*userTime).dwHighDateTime;
+-
+-  return kt.QuadPart + ut.QuadPart;
++  return GetFileTimeValue(kernelTime) + GetFileTimeValue(userTime);
+ }
+diff --git a/src/process.h b/src/process.h
+index 3c9b852..4bc2307 100644
+--- a/src/process.h
++++ b/src/process.h
+@@ -22,3 +22,7 @@ struct ProcessInfo {
+   DWORD ppid;
+-  DWORD memory; // Reported in bytes
++  uint64_t memory; // Reported in bytes
++  uint64_t privateMemory;
++  bool hasMemory;
++  std::string cpuTimeTicks;
++  std::string startTimeId;
+   std::string commandLine;
+@@ -33,5 +37,5 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info, DWORD flags);
+ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info, DWORD flags);
+-
++
+-void GetProcessMemoryUsage(ProcessInfo& process_info);
++void GetProcessResourceUsage(ProcessInfo& process_info);
+-
++
+ void GetCpuUsage(Cpu& cpu_info, bool first_run);
+diff --git a/src/process_worker.cc b/src/process_worker.cc
+index f59559d..31830f8 100644
+--- a/src/process_worker.cc
++++ b/src/process_worker.cc
+@@ -36,4 +36,16 @@ void GetProcessesWorker::OnOK() {
+     if (MEMORY & process_data_flags_) {
+-      object.Set("memory",
+-                 Napi::Number::New(env, pinfo.memory));
++      if (pinfo.hasMemory) {
++        object.Set("memory",
++                   Napi::Number::New(env, static_cast<double>(pinfo.memory)));
++        object.Set("privateMemory",
++                   Napi::Number::New(env, static_cast<double>(pinfo.privateMemory)));
++      }
++      if (!pinfo.cpuTimeTicks.empty()) {
++        object.Set("cpuTimeTicks",
++                   Napi::String::New(env, pinfo.cpuTimeTicks));
++      }
++      if (!pinfo.startTimeId.empty()) {
++        object.Set("startTimeId",
++                   Napi::String::New(env, pinfo.startTimeId));
++      }
+     }

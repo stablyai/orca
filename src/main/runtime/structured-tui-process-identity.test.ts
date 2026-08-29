@@ -45,6 +45,38 @@ describe('structured TUI process identity', () => {
     ).rejects.toThrow('one exact Codex child process')
   })
 
+  it('records the exact Windows creation identity from the authoritative snapshot', async () => {
+    const readStartTime = vi.fn(async () => 0)
+    await expect(
+      readStructuredTuiProcessIdentity({
+        hostId: 'local',
+        rootPid: 100,
+        spawnToken: 'spawn-win',
+        agent: 'codex',
+        platform: 'win32',
+        readWindowsRows: async () => [
+          { pid: 100, ppid: 1, name: 'pwsh.exe', command: 'pwsh.exe' },
+          {
+            pid: 101,
+            ppid: 100,
+            name: 'codex.exe',
+            command: 'codex resume a',
+            creationTimeMs: 1_700_000_000_000,
+            startTimeId: '133444736000000001'
+          }
+        ],
+        readStartTime
+      })
+    ).resolves.toEqual({
+      hostId: 'local',
+      pid: 101,
+      processStartTimeMs: 1_700_000_000_000,
+      processStartTimeId: '133444736000000001',
+      spawnToken: 'spawn-win'
+    })
+    expect(readStartTime).not.toHaveBeenCalled()
+  })
+
   it('waits for a shell-delivered Codex child before binding ownership', async () => {
     let snapshots = 0
     const delays: number[] = []

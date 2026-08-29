@@ -1402,6 +1402,11 @@ jobs:
             Where-Object { $_.Extension -in '.exe', '.dll', '.node' } |
             ForEach-Object {
               $relative = [System.IO.Path]::GetRelativePath($root, $_.FullName)
+              # The relay version and remote integrity contract hash these exact bytes.
+              if ($relative -match '^resources[\\/]relay[\\/]win32-(x64|arm64)[\\/]windows-process-tree\.node$') {
+                $skipped.Add("$relative  <immutable content-hashed relay asset>")
+                return
+              }
               $signature = Get-AuthenticodeSignature -FilePath $_.FullName
               if ($signature.Status -eq 'Valid') {
                 $skipped.Add("$relative  <already signed: $($signature.SignerCertificate.Subject)>")

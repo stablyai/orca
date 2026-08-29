@@ -66,7 +66,10 @@ const NATIVE_MODULES = [
     ? ['windows-native-registry', '@vscode/windows-process-tree']
     : [])
 ]
-const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
+const WINDOWS_PROCESS_TREE_MODULE = '@vscode/windows-process-tree'
+const onlyModules = NATIVE_MODULES.filter(
+  (moduleName) => !ignoreModules.includes(moduleName) && moduleName !== WINDOWS_PROCESS_TREE_MODULE
+)
 const forceRebuild =
   process.env.ORCA_FORCE_NATIVE_REBUILD === '1' ||
   cliOptions.force ||
@@ -76,12 +79,22 @@ let modulesToRebuild = onlyModules
 
 ensureElectronPackageInstalled()
 restoreNodePtyWindowsConptyRuntime()
+stageWindowsProcessTreeRuntime()
 
 const patchedNodePtyRebuildReason = forceRebuild ? null : getPatchedNodePtyRebuildReason()
 
 if (patchedNodePtyRebuildReason) {
   console.log(`[rebuild] ${patchedNodePtyRebuildReason}`)
 } else if (!forceRebuild) {
+  const processTreeProbe =
+    rebuildPlatform === 'win32'
+      ? probeElectronNativeModules([WINDOWS_PROCESS_TREE_MODULE])
+      : { ok: true, stderr: '' }
+  if (!processTreeProbe.ok) {
+    throw new Error(
+      `The checked-in Windows process-table runtime failed validation: ${processTreeProbe.stderr}`
+    )
+  }
   // Why: independent probes avoid rebuilding healthy Windows DLLs that may already be loaded and locked.
   const probes = onlyModules.map((moduleName) => ({
     moduleName,
@@ -148,6 +161,7 @@ try {
     force: true
   })
   restoreNodePtyWindowsConptyRuntime()
+  stageWindowsProcessTreeRuntime()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
   if (isWindowsNativeLockError(err)) {
@@ -165,6 +179,34 @@ try {
     }
   }
   process.exit(1)
+}
+
+function stageWindowsProcessTreeRuntime() {
+  if (rebuildPlatform !== 'win32') {
+    return
+  }
+  const source = resolve(
+    projectDir,
+    'config',
+    'relay-assets',
+    'windows-process-tree',
+    rebuildArch,
+    'windows-process-tree.node'
+  )
+  if (!existsSync(source)) {
+    throw new Error(`Windows process-table prebuild is missing: ${source}`)
+  }
+  const runtimeDir = resolve(
+    projectDir,
+    'node_modules',
+    '@vscode',
+    'windows-process-tree',
+    'build',
+    'Release'
+  )
+  mkdirSync(runtimeDir, { recursive: true })
+  copyFileSync(source, resolve(runtimeDir, 'windows_process_tree.node'))
+  console.log(`[rebuild] Staged Windows process-table runtime for ${rebuildArch}.`)
 }
 
 function restoreNodePtyWindowsConptyRuntime() {
@@ -459,20 +501,22 @@ const moduleNames = ${JSON.stringify(moduleNames)}
 const requirePatchedNodePtySourceBuild = ${JSON.stringify(requiresPatchedNodePtySourceBuild())}
 const failures = []
 
-for (const moduleName of moduleNames) {
-  try {
-    loadNativeModule(moduleName)
-  } catch (error) {
-    failures.push(moduleName + ': ' + formatError(error))
+async function main() {
+  for (const moduleName of moduleNames) {
+    try {
+      await loadNativeModule(moduleName)
+    } catch (error) {
+      failures.push(moduleName + ': ' + formatError(error))
+    }
+  }
+
+  if (failures.length > 0) {
+    console.error(failures.join('\\n'))
+    process.exit(1)
   }
 }
 
-if (failures.length > 0) {
-  console.error(failures.join('\\n'))
-  process.exit(1)
-}
-
-function loadNativeModule(moduleName) {
+async function loadNativeModule(moduleName) {
   if (moduleName === 'windows-native-registry') {
     const registry = projectRequire(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.
@@ -496,6 +540,16 @@ function loadNativeModule(moduleName) {
           '; expected build/Release so Orca\\'s node-pty patch is active'
       )
     }
+    return
+  }
+  if (moduleName === '@vscode/windows-process-tree') {
+    const addon = projectRequire(
+      '@vscode/windows-process-tree/build/Release/windows_process_tree.node'
+    )
+    const { assertWindowsProcessTreeRuntime } = projectRequire(
+      './config/scripts/windows-process-tree-runtime-contract.cjs'
+    )
+    await assertWindowsProcessTreeRuntime(addon)
     return
   }
   projectRequire(moduleName)
@@ -537,6 +591,11 @@ function getNodePtyNativeModuleName() {
 function formatError(error) {
   return error instanceof Error ? error.message : String(error)
 }
+
+main().catch((error) => {
+  console.error(formatError(error))
+  process.exit(1)
+})
 `
 
   const result = spawnSync(electronExecutable, ['-e', probeSource], {

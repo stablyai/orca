@@ -112,7 +112,7 @@ import {
   resolvePinnedCodexRolloutProof
 } from '../codex/codex-tui-rollout-proof'
 import {
-  PROCESS_START_TIME_TOLERANCE_MS,
+  processStartIdentitiesMatch,
   probeAgentSessionProcessIdentity
 } from './agent-session-process-identity-probe'
 import { waitForStructuredTuiExitProof } from './structured-tui-exit-proof'
@@ -11498,7 +11498,7 @@ export class OrcaRuntimeService {
           !persisted ||
           persisted.hostId !== current.process.hostId ||
           persisted.pid !== current.process.pid ||
-          persisted.processStartTimeMs !== current.process.processStartTimeMs ||
+          !processStartIdentitiesMatch(persisted, current.process) ||
           persisted.spawnToken !== current.process.spawnToken
         ) {
           throw new Error('The owning terminal does not match the persisted launch identity.')
@@ -11805,9 +11805,7 @@ export class OrcaRuntimeService {
         hostId: observed.hostId === identity.hostId,
         pid: observed.pid === identity.pid,
         processStartTime:
-          observed.processStartTimeMs !== null &&
-          Math.abs(observed.processStartTimeMs - identity.processStartTimeMs) <=
-            PROCESS_START_TIME_TOLERANCE_MS
+          observed.processStartTimeMs !== null && processStartIdentitiesMatch(identity, observed)
       }
       if (!Object.values(matched).every(Boolean)) {
         console.warn('[structured-tui-recovery] claimed PTY process mismatch', {
@@ -11817,12 +11815,14 @@ export class OrcaRuntimeService {
           persisted: {
             hostId: identity.hostId,
             pid: identity.pid,
-            processStartTimeMs: identity.processStartTimeMs
+            processStartTimeMs: identity.processStartTimeMs,
+            processStartTimeId: identity.processStartTimeId
           },
           observed: {
             hostId: observed.hostId,
             pid: observed.pid,
-            processStartTimeMs: observed.processStartTimeMs
+            processStartTimeMs: observed.processStartTimeMs,
+            processStartTimeId: observed.processStartTimeId
           },
           mismatchedFields: Object.entries(matched)
             .filter(([, matches]) => !matches)

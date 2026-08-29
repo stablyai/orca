@@ -1,6 +1,4 @@
 import type { MemorySnapshot, ProcessCommitMetric } from '../../shared/process-stats-types'
-import { fallbackHostMemory } from './host-memory'
-import { getProcessMemoryMetric } from './process-memory-metric'
 
 const PROCESS_COMMIT_METRIC: ProcessCommitMetric = 'private-bytes'
 
@@ -24,26 +22,12 @@ export function optionalCommitField(
 
 /** The snapshot-level pair, which names the unit alongside the total. */
 export function snapshotCommitFields(
-  hasPrivateMemory: boolean,
+  hasAnyPrivateMemory: boolean,
+  hasCompleteTotal: boolean,
   totalPrivateMemory: number
 ): Pick<MemorySnapshot, 'processCommitMetric' | 'totalPrivateMemory'> {
-  return hasPrivateMemory
-    ? {
-        processCommitMetric: PROCESS_COMMIT_METRIC,
-        totalPrivateMemory: clampMemoryMetric(totalPrivateMemory)
-      }
-    : {}
-}
-
-export function emptyMemorySnapshot(): MemorySnapshot {
-  const zero = { cpu: 0, memory: 0 }
   return {
-    app: { ...zero, main: zero, renderer: zero, other: zero, history: [] },
-    worktrees: [],
-    host: fallbackHostMemory(),
-    processMemoryMetric: getProcessMemoryMetric(),
-    totalCpu: 0,
-    totalMemory: 0,
-    collectedAt: Date.now()
+    ...(hasAnyPrivateMemory ? { processCommitMetric: PROCESS_COMMIT_METRIC } : {}),
+    ...(hasCompleteTotal ? { totalPrivateMemory: clampMemoryMetric(totalPrivateMemory) } : {})
   }
 }

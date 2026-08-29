@@ -1,7 +1,10 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
-import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
+import {
+  readProcessStartIdentity,
+  type ProcessStartIdentity
+} from '../runtime/agent-session-process-identity-probe'
 
 // What the lease records about the child Codex just handed back: the process it
 // will later re-prove, and the provider handle link the journal binds to. Both
@@ -20,18 +23,23 @@ export async function codexProcessIdentity(
     spawnToken: string
     pid: number | undefined
   },
-  readStartTime: (pid: number) => Promise<number | null> = readProcessStartTimeMs
+  readStartTime: (
+    pid: number
+  ) => Promise<number | ProcessStartIdentity | null> = readProcessStartIdentity
 ): Promise<AgentSessionProcessIdentity> {
   if (input.pid === undefined) {
     throw new Error('codex app-server started without a pid')
   }
   let processStartTimeMs: number | null = null
+  let processStartTimeId: string | undefined
   for (
     let attempt = 0;
     attempt < START_TIME_READ_ATTEMPTS && processStartTimeMs === null;
     attempt += 1
   ) {
-    processStartTimeMs = await readStartTime(input.pid)
+    const observed = await readStartTime(input.pid)
+    processStartTimeMs = typeof observed === 'number' ? observed : (observed?.timeMs ?? null)
+    processStartTimeId = typeof observed === 'number' ? undefined : observed?.exactId
   }
   if (processStartTimeMs === null) {
     // Why: recording null makes every later owner probe indeterminate — a durable latch.
@@ -42,6 +50,7 @@ export async function codexProcessIdentity(
     hostId: input.identity.hostId,
     pid: input.pid,
     processStartTimeMs,
+    ...(processStartTimeId === undefined ? {} : { processStartTimeId }),
     spawnToken: input.spawnToken
   }
 }

@@ -6,6 +6,8 @@
 
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
+import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/relay-artifacts'
+import { windowsProcessTreeRelaySha256 } from '../../shared/windows-process-tree-relay-manifest'
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
@@ -23,6 +25,7 @@ import {
   type RemoteHostPlatform,
   type RemotePathFlavor
 } from './ssh-remote-platform'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 const INSTALL_COMPLETE_NAME = '.install-complete'
@@ -43,6 +46,23 @@ function execHostCommand(
     wrapCommand: host.commandDialect !== 'powershell',
     signal: options?.signal
   })
+}
+
+function probeWindowsProcessTreeIntegrityCommand(
+  host: RemoteHostPlatform,
+  remoteInstallDir: string
+): string {
+  const addonPath = joinRemotePath(host, remoteInstallDir, RELAY_WINDOWS_PROCESS_TREE_FILENAME)
+  const expectedSha256 = windowsProcessTreeRelaySha256(host.arch)
+  return powerShellCommand(
+    [
+      `$path = ${powerShellLiteral(addonPath)}`,
+      'try {',
+      '$actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash',
+      `if ($actual -ieq ${powerShellLiteral(expectedSha256)}) { 'OK' } else { 'MISMATCH' }`,
+      `} catch { 'MISMATCH' }`
+    ].join('; ')
+  )
 }
 
 /**
@@ -131,7 +151,19 @@ export async function isRemoteInstallComplete(
       ]),
       { signal: options?.signal }
     )
-    return probe.trim() === 'OK'
+    if (probe.trim() !== 'OK') {
+      return false
+    }
+    if (model.id !== 'relay' || !isWindowsRemoteHost(host)) {
+      return true
+    }
+    const integrityProbe = await execHostCommand(
+      conn,
+      host,
+      probeWindowsProcessTreeIntegrityCommand(host, remoteRelayDir),
+      { signal: options?.signal }
+    )
+    return integrityProbe.trim() === 'OK'
   } catch (err) {
     options?.signal?.throwIfAborted()
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {

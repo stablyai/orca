@@ -21,6 +21,9 @@ const sourceInstallScriptPath = fileURLToPath(
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
   new URL('./node-pty-job-ownership.cjs', import.meta.url)
 )
+const sourceWindowsProcessTreeContractPath = fileURLToPath(
+  new URL('./windows-process-tree-runtime-contract.cjs', import.meta.url)
+)
 
 describe('rebuild-native-deps Electron install fallback', () => {
   it('continues non-strict postinstall when Electron retry download fails', () => {
@@ -344,7 +347,33 @@ function mkTempProject() {
     sourceNodePtyJobOwnershipPath,
     join(projectDir, 'config', 'scripts', 'node-pty-job-ownership.cjs')
   )
+  copyFileSync(
+    sourceWindowsProcessTreeContractPath,
+    join(projectDir, 'config', 'scripts', 'windows-process-tree-runtime-contract.cjs')
+  )
+  stageWindowsProcessTreeFixtures(projectDir)
   return projectDir
+}
+
+function stageWindowsProcessTreeFixtures(projectDir) {
+  for (const arch of ['x64', 'arm64']) {
+    const source = fileURLToPath(
+      new URL(
+        `../relay-assets/windows-process-tree/${arch}/windows-process-tree.node`,
+        import.meta.url
+      )
+    )
+    const destination = join(
+      projectDir,
+      'config',
+      'relay-assets',
+      'windows-process-tree',
+      arch,
+      'windows-process-tree.node'
+    )
+    mkdirSync(join(destination, '..'), { recursive: true })
+    copyFileSync(source, destination)
+  }
 }
 
 function runRebuildScript(projectDir, extraEnv = {}, args = []) {

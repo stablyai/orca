@@ -11,7 +11,14 @@ import {
   readProcessStartTimeMs
 } from './agent-session-process-identity-probe'
 
-type ProcessRow = { pid: number; ppid: number; command: string; foreground: boolean }
+type ProcessRow = {
+  pid: number
+  ppid: number
+  command: string
+  foreground: boolean
+  creationTimeMs?: number
+  startTimeId?: string
+}
 
 const STRUCTURED_TUI_PROCESS_WAIT_MS = 5_000
 const STRUCTURED_TUI_PROCESS_POLL_MS = 50
@@ -67,7 +74,13 @@ function excludedProcessTreePids(
 
 async function resolveExcludedProcessTreePids(
   rows: ProcessRow[],
-  identities: readonly { pid: number; processStartTimeMs: number | null }[] | undefined,
+  identities:
+    | readonly {
+        pid: number
+        processStartTimeMs: number | null
+        processStartTimeId?: string
+      }[]
+    | undefined,
   platform: NodeJS.Platform,
   readStartTime: (pid: number, platform?: NodeJS.Platform) => Promise<number | null>
 ): Promise<ReadonlySet<number>> {
@@ -82,6 +95,13 @@ async function resolveExcludedProcessTreePids(
     // Unavailable start time cannot prove PID reuse, so retain the conservative exclusion.
     if (identity.processStartTimeMs === null) {
       roots.add(identity.pid)
+      continue
+    }
+    if (platform === 'win32' && identity.processStartTimeId) {
+      const observed = rows.find((row) => row.pid === identity.pid)?.startTimeId
+      if (observed === undefined || observed === identity.processStartTimeId) {
+        roots.add(identity.pid)
+      }
       continue
     }
     const observed = await readStartTime(identity.pid, platform)
@@ -143,6 +163,7 @@ export async function readStructuredTuiProcessIdentity(input: {
   excludedProcessTreeRootIdentities?: readonly {
     pid: number
     processStartTimeMs: number | null
+    processStartTimeId?: string
   }[]
 }): Promise<AgentSessionProcessIdentity> {
   const platform = input.platform ?? process.platform
@@ -157,7 +178,9 @@ export async function readStructuredTuiProcessIdentity(input: {
             pid: row.pid,
             ppid: row.ppid,
             command: row.command,
-            foreground: false
+            foreground: false,
+            creationTimeMs: row.creationTimeMs,
+            startTimeId: row.startTimeId
           }))
         : posixRows(await (input.readPosixRows ?? getFreshProcessTableSnapshot)())
     if (!rows.some((row) => row.pid === input.rootPid)) {
@@ -177,10 +200,18 @@ export async function readStructuredTuiProcessIdentity(input: {
       excludedPids
     )
     if (pid !== null) {
+      const row = rows.find((candidate) => candidate.pid === pid)
+      const processStartTimeMs =
+        platform === 'win32' && row?.creationTimeMs !== undefined
+          ? row.creationTimeMs
+          : await (input.readStartTime ?? readProcessStartTimeMs)(pid, platform)
       return {
         hostId: input.hostId,
         pid,
-        processStartTimeMs: await (input.readStartTime ?? readProcessStartTimeMs)(pid, platform),
+        processStartTimeMs,
+        ...(platform === 'win32' && row?.startTimeId
+          ? { processStartTimeId: row.startTimeId }
+          : {}),
         spawnToken: input.spawnToken
       }
     }

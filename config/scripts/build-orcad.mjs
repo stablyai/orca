@@ -28,6 +28,10 @@ import {
   ORCAD_VERSION_FILENAME,
   orcadArtifactFilenames
 } from '../../src/shared/orcad-artifacts.ts'
+import {
+  validateWindowsProcessTreeRelayAsset,
+  windowsProcessTreeRelayAssetPath
+} from './windows-process-tree-relay-asset.mjs'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = join(ROOT, 'out', 'orcad')
@@ -46,6 +50,7 @@ const AGENT_BROWSER_NAME = `agent-browser-${platform()}-${arch()}${process.platf
 const OUT_FILE = join(OUT_DIR, 'orcad.js')
 const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
 const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
+const WINDOWS_PROCESS_TREE_OUTPUT = join(OUT_DIR, 'windows-process-tree.node')
 
 // Native addons must exist on the host; they cannot be bundled.
 // `electron` is external so a residual import fails loudly at require() time rather
@@ -82,6 +87,9 @@ mkdirSync(OUT_DIR, { recursive: true })
 copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
 if (process.platform !== 'win32') {
   chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
+} else {
+  validateWindowsProcessTreeRelayAsset(process.arch)
+  copyFileSync(windowsProcessTreeRelayAssetPath(process.arch), WINDOWS_PROCESS_TREE_OUTPUT)
 }
 
 /** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
@@ -247,7 +255,7 @@ if (graphErrors.length > 0) {
 // bytes while reporting the new version.
 if (process.exitCode !== 1) {
   const hash = createHash('sha256')
-  for (const filename of orcadArtifactFilenames()) {
+  for (const filename of orcadArtifactFilenames(process.platform === 'win32')) {
     const artifactPath = join(OUT_DIR, filename)
     if (!existsSync(artifactPath)) {
       throw new Error(

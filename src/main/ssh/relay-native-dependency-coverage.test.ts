@@ -23,7 +23,7 @@ const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
  * the reason its absence is safe. Adding an entry is a decision, not a default:
  * anything not listed must appear in RELAY_NATIVE_DEPS.
  */
-const DEGRADES_WITHOUT_INSTALL: Record<string, string> = {
+const STAGED_NATIVE_ARTIFACTS: Record<string, string> = {
   '@vscode/windows-process-tree':
     'Windows-only, and both ways of installing it fail. A normal install rebuilds ' +
     'from source because the tarball carries a binding.gyp, and that build fails ' +
@@ -31,8 +31,8 @@ const DEGRADES_WITHOUT_INSTALL: Record<string, string> = {
     'MSVC Build Tools — our patch drops that requirement, and pnpm patches do not ' +
     'cross SSH. Skipping the build keeps the tarball binary, which predates the ' +
     'patch and still caps enumeration at 1024 processes, so a busy host gets a ' +
-    'truncated table missing its own pid. windows-process-table.ts falls back to a ' +
-    'Get-CimInstance scan when the binding is absent. See ' +
+    'truncated table missing its own pid. Windows builds instead stage the patched ' +
+    'bare addon beside relay.js; absence is unavailable evidence, never a shell fallback. See ' +
     'docs/reference/windows-process-enumeration.md.'
 }
 
@@ -85,7 +85,7 @@ describe('relay native dependency coverage', () => {
     expect(imported.length).toBeGreaterThan(0)
 
     const uncovered = imported.filter(
-      (name) => !(name in RELAY_NATIVE_DEPS) && !(name in DEGRADES_WITHOUT_INSTALL)
+      (name) => !(name in RELAY_NATIVE_DEPS) && !(name in STAGED_NATIVE_ARTIFACTS)
     )
     expect(uncovered).toEqual([])
   }, 60_000)

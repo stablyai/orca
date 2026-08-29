@@ -69,4 +69,19 @@ describe('createMemorySlice', () => {
     expect(getSnapshot).toHaveBeenCalledTimes(2)
     expect(store.getState().memorySnapshot?.collectedAt).toBe(11)
   })
+
+  it('retains the last good snapshot when collection becomes unavailable', async () => {
+    const getSnapshot = vi
+      .fn<() => Promise<MemorySnapshot>>()
+      .mockResolvedValueOnce(makeMemorySnapshot({ collectedAt: 10 }))
+      .mockRejectedValueOnce(new Error('native inventory unavailable'))
+    vi.stubGlobal('window', { api: { memory: { getSnapshot } } })
+    const store = makeStore()
+
+    await store.getState().fetchMemorySnapshot()
+    await store.getState().fetchMemorySnapshot()
+
+    expect(store.getState().memorySnapshot?.collectedAt).toBe(10)
+    expect(store.getState().memorySnapshotError).toBe('native inventory unavailable')
+  })
 })

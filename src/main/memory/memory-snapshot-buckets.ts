@@ -56,6 +56,7 @@ export type WorktreeMemoryBucket = {
   cpu: number
   memory: number
   privateMemory: number
+  privateMemoryComplete: boolean
   sessions: SessionMemory[]
 }
 
@@ -96,6 +97,7 @@ export function createEmptyWorktreeMemoryBucket(
     cpu: 0,
     memory: 0,
     privateMemory: 0,
+    privateMemoryComplete: true,
     sessions: []
   }
 }

@@ -80,10 +80,10 @@ the relay the JS queue is not there to absorb the retries, so one probe per
 window would have pinned all four default threads inside ~2 minutes — hanging
 every async `fs` and DNS call in that process, not only the process table.
 
-A wedge does **not** engage the PowerShell fallback; see the next section for
-why only absence does.
+A wedge or missing binding reports unavailable evidence. Neither condition may
+reactivate a PowerShell process-table scan.
 
-## The relay has no binding, and falls back
+## Relays receive the bare binding
 
 Relay deployment installs only `node-pty` and `@parcel/watcher` on the remote
 host (`RELAY_NATIVE_DEPS` in `src/main/ssh/ssh-relay-deploy.ts`), so a Windows
@@ -119,37 +119,32 @@ selfPid=21964 present=false
 ```
 
 Exactly 1024 rows, with the querying process itself among the missing. The
-self-presence guard rejects that, so the fallback engages anyway — but only on
-hosts busy enough to cross the cap. That is worse than no binding at all: it
-works on a quiet machine and fails silently under load, which is precisely the
-shape of bug that survives testing.
+self-presence guard rejects that rather than treating the truncated table as
+truth. That is worse than no binding at all: it works on a quiet machine and
+fails silently under load, which is precisely the shape of bug that survives
+testing.
 
 So the constraint is not that no binary exists to ship. It is that the only
-binary available to ship is the broken one, and building the good one needs a
-toolchain the remote does not have.
+binary available from npm is broken, and building the patched one needs a
+toolchain the remote does not have. Windows builds compile the patched addon
+for x64 and arm64 and stage that bare N-API binary beside `relay.js`.
 
-Instead, `windows-process-table.ts` falls back to
-`readWindowsProcessRowsWithCim` (`windows-process-table-cim-scan.ts`), the
-`Get-CimInstance` scan this module replaced. The gate is deliberately narrow:
-
-- it engages **only** when the module cannot be required, never when a loaded
-  module fails, wedges, or returns an unreadable table — a present-but-failing
-  reader must not silently start forking a shell at the caller's poll rate;
-- a fallback that also fails still rejects, so "unavailable" never degrades into
-  "nothing is running";
-- the scan applies the same self-presence guard as the native path.
+There is deliberately no CIM fallback. Every relay bundle carries checked-in
+x64 and arm64 prebuilds, including bundles packaged on macOS and Linux. The
+Windows addon is a required, hashed, remotely probed artifact: omission fails
+the local build, and loss after deployment makes the install incomplete so the
+client redeploys it.
 
 `src/main/ssh/relay-native-dependency-coverage.test.ts` asserts that every
 native addon reachable from the relay entry is either installed on relay hosts
-or listed there with the reason its absence is safe. That test exists because
+or staged as a build artifact. That test exists because
 #15749 shipped this gap: the relay tests injected a fake module through
 `__setWindowsProcessTreeLoaderForTests`, so nothing exercised the real require.
 
-## Shipping the native reader to a relay anyway
+## Building the relay reader
 
-The scan is the floor, not the destination: it costs ~1.4 s and a `powershell.exe`
-where the addon costs ~57 ms. Release builds therefore compile the addon and ship
-it as an optional relay artifact.
+The removed scan cost ~1.4 s and a `powershell.exe`, where the addon costs ~57
+ms. Release builds compile the addon and ship it as a relay artifact.
 
 `config/scripts/build-windows-process-tree-relay-addon.mjs` builds it from the
 source pnpm has already patched, on a Windows runner, and refuses to run if
@@ -162,9 +157,9 @@ arch would ship a binary the target cannot load.
 Windows arm64 cross-compiles from the x64 runner — verified on real hardware,
 producing `IMAGE_FILE_MACHINE_ARM64` (0xaa64) against x64's 0x8664. It needs the
 optional _MSVC v143 ARM64 build tools_ component; without it node-gyp fails with
-`MSB8020`, which is why the addon build runs before the long packaging step.
-`ORCA_REQUIRE_RELAY_NATIVE_ADDONS` is a per-arch list so a future arch can be
-added best-effort before it is promoted to required.
+`MSB8020`. Reviewed binaries live under
+`config/relay-assets/windows-process-tree/<arch>/`; a manifest pins their
+SHA-256 values and PE machine fields.
 
 `windows-process-table.ts` binds the bare addon directly rather than the package
 wrapper. That wrapper adds only a queue over `getProcessList`, and that queue is
@@ -172,15 +167,14 @@ the wedge described above — it latches a module-global `requestInProgress` wit
 no try/catch. This module already holds a single-flight and a deadline, so going
 straight to the addon drops the duplicate.
 
-The artifact is optional in `RELAY_ARTIFACTS`: hashed when present, so a relay
-carrying it never shares an immutable directory with one that does not, and
-never probed, because requiring a file only a Windows build machine can produce
-would make a correct relay read as MISSING and redeploy forever. A relay built
-on any other OS keeps using the scan.
+The artifact is required in `RELAY_ARTIFACTS`. `build-relay.mjs` copies the
+checked-in prebuild regardless of packaging host, includes it in the immutable
+relay hash, and the remote install model probes it beside the completion
+sentinel.
 
 ## Why the package is patched
 
-`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries three hunks.
+`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries five changes.
 
 1. **Spectre mitigation.** The upstream `binding.gyp` requires Spectre-mitigated
    libraries, which Orca's Windows build agents do not install. `node-pty` is
@@ -190,11 +184,18 @@ on any other OS keeps using the scan.
    1024 and the querying process was itself among the 27 missing. A truncated
    snapshot silently hides the descendants a teardown is trying to reap — the
    exact failure the native path exists to remove.
-3. **Absolute `node-addon-api` gyp path.** `require('node-addon-api').targets`
+3. **Staged `node-addon-api` headers.** `require('node-addon-api').targets`
    is cwd-relative. node-gyp on Windows evaluates it from the pnpm store
-   realpath, then loads the relative path from the `node_modules` symlink, so
-   `node_addon_api.gyp` resolves outside the repo and hourly Windows builds
-   die at configure. `node-pty` is patched the same way for the same reason.
+   realpath, then loads the relative path from the `node_modules` symlink.
+   Staging the three N-API headers removes that pnpm-sensitive gyp edge.
+4. **Resource and identity fields.** The same process handle now supplies
+   64-bit working set, private bytes, cumulative CPU time, and exact creation
+   `FILETIME`; fields denied by the process remain absent.
+5. **Runtime contract marker.** The addon exports
+   `processTableContractVersion = 1`. Desktop and relay loaders reject a
+   loadable stale binary before advertising exact process identity, and runtime
+   validation also requires a real self row with memory, CPU, command line, and
+   creation identity.
 
 The typings claim `commandLine` is truncated at 512 characters. Measured, it is
 not: the longest observed on a real host was 26,059.
@@ -208,25 +209,24 @@ The addon is Windows-only, so it follows the same contract as
 - an `optionalDependency`, so a macOS/Linux install tolerates its absence;
 - **not** in `pnpm.onlyBuiltDependencies` — pnpm installs optional dependencies
   on every host, and macOS/Linux must never run `node-gyp` for it;
-- listed in the win32 branch of `rebuild-native-deps.mjs` and
+- staged from the reviewed x64/arm64 prebuild by `rebuild-native-deps.mjs` and
   `ensure-native-runtime.mjs`;
 - copied into the packaged `node_modules` for win32 only.
 
-## What the snapshot does not provide
+## Resource and identity fields
 
-`CreationDate` (process start time) has no equivalent. Anything using a start
-time to prove a PID has not been recycled — daemon identity, managed-hook
-ownership, and CPU accounting in the memory collector — still reads it through
-its own query. Those callers are not migrated.
+Orca's patch widens `WorkingSetSize` to 64 bits and collects
+`PROCESS_MEMORY_COUNTERS_EX.PrivateUsage`, cumulative kernel + user time, and
+the exact creation `FILETIME` in the same native pass. The two time values cross
+the JavaScript boundary as decimal strings so counters above `Number.MAX_SAFE_INTEGER`
+remain exact. Resource Manager derives CPU deltas only when PID and creation
+time both match, preventing a recycled PID from inheriting the prior process's
+CPU.
 
-Committed private bytes have no equivalent either, and the one memory value the
-snapshot does carry is unusable for the sizes Orca now sees: `process.cc` stores
-`pmc.WorkingSetSize` into a `DWORD`, so anything above 4 GB wraps. That is the
-second reason `windows-process-resource-collector.ts` still runs its own
-`Get-CimInstance` sweep — it needs `PageFileUsage` (commit) and the CPU-time
-counters in the same pass. Migrating it to the native table would cost both.
+Protected processes can deny some fields. Missing values remain absent; Orca
+does not invent private memory or identity data.
 
-Start time is a proxy for identity, not identity. The durable answer for the
+Start time is still a proxy for identity, not identity. The durable answer for the
 process trees Orca itself spawns is an inherited handle: a job object names the
 tree Orca created, so no start-time comparison is needed. Those readers should
 be resolved that way rather than by adding a start time to this module.

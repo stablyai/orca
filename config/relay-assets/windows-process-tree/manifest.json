@@ -1,0 +1,12 @@
+{
+  "contractVersion": 1,
+  "package": "@vscode/windows-process-tree@0.8.0",
+  "binaries": {
+    "x64": {
+      "sha256": "faf30d26b01ee082e1870e487cf1d0e913a574fbb58c631fc40e04f84da1a81d"
+    },
+    "arm64": {
+      "sha256": "b081a1d85d7e8692ef43186218ed4932f318b19e8ece635ea8f9891774d95640"
+    }
+  }
+}

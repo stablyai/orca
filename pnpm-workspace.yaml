@@ -3,3 +3,32 @@
 # package graph. Without this file `pnpm -r` auto-discovers mobile/ and its
 # nested package, and the root's patchedDependencies fail as ERR_PNPM_UNUSED_PATCH.
 packages: []
+
+# pnpm 10 reads workspace settings here; package.json's legacy mirror remains
+# for older tooling that inspects the package manifest directly.
+overrides:
+  monaco-editor>dompurify: 3.4.13
+supportedArchitectures:
+  os:
+    - current
+    - darwin
+    - linux
+    - win32
+  cpu:
+    - current
+    - x64
+    - arm64
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - cpu-features
+  - esbuild
+  - node-pty
+  - sherpa-onnx
+patchedDependencies:
+  node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
+  '@xterm/addon-ligatures@0.11.0-beta.287': config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch
+  '@xterm/addon-webgl@0.20.0-beta.286': config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch
+  '@xterm/addon-serialize@0.15.0-beta.287': config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch
+  '@xterm/xterm@6.1.0-beta.287': config/patches/@xterm__xterm@6.1.0-beta.287.patch
+  lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch
+  '@vscode/windows-process-tree@0.8.0': config/patches/@vscode__windows-process-tree@0.8.0.patch

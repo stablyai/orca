@@ -13,6 +13,7 @@ export const ORCAD_VERSION = '0.1.0'
 
 export type OrcadArtifact = {
   filename: string
+  windowsOnly?: boolean
   /**
    * Absence is a degradation, not a torn install, so the remote probe must not require it.
    * The agent-browser binary is the only one: `resolveOrcadBrowserProvider` already answers
@@ -26,7 +27,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // Forked so a native @parcel/watcher fault kills the child, not the server.
   { filename: 'parcel-watcher-process-entry.js' },
   // Forked so PTYs outlive the runtime process; its absence makes every restart destructive.
-  { filename: 'daemon-entry.js' }
+  { filename: 'daemon-entry.js' },
+  { filename: 'windows-process-tree.node', windowsOnly: true }
 ]
 
 /** Written after the artifacts, so it is never an input to its own hash. */
@@ -35,8 +37,8 @@ export const ORCAD_VERSION_FILENAME = '.version'
 /** Written last by the installer; its absence means a torn install. */
 export const ORCAD_INSTALL_COMPLETE_FILENAME = '.install-complete'
 
-export function orcadArtifactFilenames(): string[] {
-  return ORCAD_ARTIFACTS.filter((artifact) => !artifact.optional).map(
-    (artifact) => artifact.filename
-  )
+export function orcadArtifactFilenames(isWindows = false): string[] {
+  return ORCAD_ARTIFACTS.filter(
+    (artifact) => !artifact.optional && (!artifact.windowsOnly || isWindows)
+  ).map((artifact) => artifact.filename)
 }

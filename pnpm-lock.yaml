@@ -9,7 +9,7 @@ overrides:
 
 patchedDependencies:
   '@vscode/windows-process-tree@0.8.0':
-    hash: 946ffb2b1026bcb554d9920681fb00f546c28fc5de6d95a877d198b49bf73988
+    hash: 459e1aec7e12f565d52764d73e03bdf4d06cb86b10803f02fed5fbaaaa47a6fc
     path: config/patches/@vscode__windows-process-tree@0.8.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.287':
     hash: 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
@@ -419,7 +419,7 @@ importers:
     optionalDependencies:
       '@vscode/windows-process-tree':
         specifier: 0.8.0
-        version: 0.8.0(patch_hash=946ffb2b1026bcb554d9920681fb00f546c28fc5de6d95a877d198b49bf73988)
+        version: 0.8.0(patch_hash=459e1aec7e12f565d52764d73e03bdf4d06cb86b10803f02fed5fbaaaa47a6fc)
       sherpa-onnx-darwin-arm64:
         specifier: 1.12.37
         version: 1.12.37
@@ -9623,7 +9623,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@vscode/windows-process-tree@0.8.0(patch_hash=946ffb2b1026bcb554d9920681fb00f546c28fc5de6d95a877d198b49bf73988)':
+  '@vscode/windows-process-tree@0.8.0(patch_hash=459e1aec7e12f565d52764d73e03bdf4d06cb86b10803f02fed5fbaaaa47a6fc)':
     dependencies:
       node-addon-api: 7.1.0
     optional: true

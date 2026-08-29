@@ -61,6 +61,8 @@ export type AgentSessionProcessIdentity = {
   hostId: string
   pid: number
   processStartTimeMs: number | null
+  /** Exact host-native creation identity when the platform exposes one. */
+  processStartTimeId?: string
   spawnToken: string
 }
 
@@ -202,6 +204,8 @@ export function isAgentSessionProcessIdentity(
     (identity.processStartTimeMs === null ||
       (Number.isSafeInteger(identity.processStartTimeMs) &&
         (identity.processStartTimeMs as number) >= 0)) &&
+    (identity.processStartTimeId === undefined ||
+      isBoundedString(identity.processStartTimeId, MAX_ID_LENGTH)) &&
     isBoundedString(identity.spawnToken, MAX_ID_LENGTH)
   )
 }

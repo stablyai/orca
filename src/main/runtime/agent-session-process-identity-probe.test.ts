@@ -115,6 +115,38 @@ describe('owner identity probe', () => {
     ).resolves.toEqual({ outcome: 'identity-mismatch', field: 'process-start-time' })
   })
 
+  it('rejects a different exact Windows creation identity inside the millisecond tolerance', async () => {
+    await expect(
+      probeAgentSessionProcessIdentity({
+        identity: { ...IDENTITY, processStartTimeId: '133444736000000001' },
+        deps: deps({
+          platform: 'win32',
+          readEchoedSpawnToken: async () => null,
+          readProcessStartIdentity: async () => ({
+            timeMs: START_TIME,
+            exactId: '133444736000000002'
+          })
+        })
+      })
+    ).resolves.toEqual({ outcome: 'identity-mismatch', field: 'process-start-time' })
+  })
+
+  it('matches the exact Windows creation identity without millisecond rounding', async () => {
+    await expect(
+      probeAgentSessionProcessIdentity({
+        identity: { ...IDENTITY, processStartTimeId: '133444736000000001' },
+        deps: deps({
+          platform: 'win32',
+          readEchoedSpawnToken: async () => null,
+          readProcessStartIdentity: async () => ({
+            timeMs: START_TIME,
+            exactId: '133444736000000001'
+          })
+        })
+      })
+    ).resolves.toEqual({ outcome: 'identity-matched', matchedOn: ['process-start-time'] })
+  })
+
   it('fails closed when an exact token and the reconstructed start time disagree', async () => {
     await expect(
       probeAgentSessionProcessIdentity({

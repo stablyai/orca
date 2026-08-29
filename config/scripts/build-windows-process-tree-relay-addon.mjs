@@ -19,16 +19,7 @@
  *   node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
  */
 import { execFileSync } from 'node:child_process'
-import {
-  closeSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  writeFileSync
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
@@ -36,12 +27,10 @@ import {
   nodeGypRebuildInvocation,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
+import { assertWindowsProcessTreePeMachine } from './windows-process-tree-relay-asset.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
 const SUPPORTED_ARCHES = ['x64', 'arm64']
-
-/** PE `IMAGE_FILE_HEADER.Machine` values, so a cross-build cannot silently emit host arch. */
-const PE_MACHINE = { x64: 0x8664, arm64: 0xaa64 }
 
 function parseArgs(argv) {
   const arch = argv.find((a) => a.startsWith('--arch='))?.slice('--arch='.length) ?? process.arch
@@ -83,9 +72,24 @@ function assertPatchApplied() {
     throw new Error('binding.gyp does not use the staged node-addon-api headers.')
   }
   const processCc = readFileSync(join(PACKAGE_DIR, 'src', 'process.cc'), 'utf8')
+  const addonCc = readFileSync(join(PACKAGE_DIR, 'src', 'addon.cc'), 'utf8')
   if (processCc.includes('process_count < 1024')) {
     throw new Error(
       'src/process.cc still caps enumeration at 1024 processes. pnpm did not apply ' +
+        'config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
+    )
+  }
+  const processHeader = readFileSync(join(PACKAGE_DIR, 'src', 'process.h'), 'utf8')
+  const processWorker = readFileSync(join(PACKAGE_DIR, 'src', 'process_worker.cc'), 'utf8')
+  if (
+    !processHeader.includes('uint64_t privateMemory') ||
+    !processHeader.includes('bool hasMemory') ||
+    !processHeader.includes('std::string startTimeId') ||
+    !processWorker.includes('pinfo.cpuTimeTicks') ||
+    !addonCc.includes('processTableContractVersion')
+  ) {
+    throw new Error(
+      'Native resource and PID-reuse fields are missing. pnpm did not apply ' +
         'config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
     )
   }
@@ -143,27 +147,12 @@ function applyWindowsProcessTreeBuildFixes() {
   }
 }
 
-/** Read the PE machine field, so an arm64 request cannot ship an x64 binary. */
-function readPeMachine(binaryPath) {
-  const fd = openSync(binaryPath, 'r')
-  try {
-    const header = Buffer.alloc(4)
-    readSync(fd, header, 0, 4, 0x3c)
-    const peOffset = header.readUInt32LE(0)
-    const machine = Buffer.alloc(2)
-    readSync(fd, machine, 0, 2, peOffset + 4)
-    return machine.readUInt16LE(0)
-  } finally {
-    closeSync(fd)
-  }
-}
-
 function main() {
   const { arch, outDir } = parseArgs(process.argv.slice(2))
   if (process.platform !== 'win32') {
     throw new Error(
-      `This addon only builds on Windows; running on ${process.platform}. ` +
-        'Relay builds elsewhere simply omit it and fall back to the CIM scan.'
+      `This addon only builds on Windows; running on ${process.platform}. Use the checked-in ` +
+        'x64 and arm64 relay prebuilds when packaging from another platform.'
     )
   }
   if (!existsSync(PACKAGE_DIR)) {
@@ -180,13 +169,7 @@ function main() {
   if (!existsSync(built)) {
     throw new Error(`node-gyp reported success but ${built} is missing.`)
   }
-  const machine = readPeMachine(built)
-  if (machine !== PE_MACHINE[arch]) {
-    throw new Error(
-      `Built binary is machine 0x${machine.toString(16)}, expected 0x${PE_MACHINE[arch].toString(16)} for ${arch}. ` +
-        'node-gyp ignored --arch; a relay would get a binary its host cannot load.'
-    )
-  }
+  assertWindowsProcessTreePeMachine(readFileSync(built), arch, built)
 
   mkdirSync(outDir, { recursive: true })
   const staged = join(outDir, RELAY_WINDOWS_PROCESS_TREE_FILENAME)

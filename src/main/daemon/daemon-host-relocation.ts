@@ -1,20 +1,23 @@
 import { randomBytes } from 'node:crypto'
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import * as fs from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { quarantineCorruptDaemonPidRecord } from './daemon-pid-record-quarantine'
 import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-process-inspection'
+import type { DaemonHostCopyOperation } from './daemon-host-copy-operation'
+import {
+  readDaemonHostMaterializationMarker,
+  relocatedWindowsProcessTreeMatches,
+  writeDaemonHostMaterializationMarker
+} from './daemon-host-materialization-integrity'
+import {
+  isRuntimeNodePtyPath,
+  isRuntimeWindowsProcessTreePath,
+  resolveDaemonHostPath,
+  toDaemonHostRelativePath
+} from './daemon-host-runtime-path-filter'
 
 /**
  * Relocate the terminal daemon's process image out of the app install dir into LOCAL userData so it
@@ -32,8 +35,6 @@ export type RelocatedDaemonHost = {
 }
 
 const HOST_SUBDIR = 'daemon-host'
-const MARKER_NAME = '.materialized.json'
-
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/daemon-host-uninstall.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
 
@@ -43,45 +44,20 @@ const DAEMON_HOST_EXE_NAME = 'orca-terminal-daemon.exe'
 // V8 snapshots + ICU data the Electron bootstrap reads even under ELECTRON_RUN_AS_NODE; siblings of Orca.exe.
 const RUNTIME_DATA_FILES = ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']
 
-type CopyOp = {
-  sourcePath: string
-  /** Destination path relative to the host root, posix-separated. */
-  destRel: string
-  kind: 'file' | 'dir'
-  /** When true, a missing source is skipped rather than failing the copy. */
-  optional?: boolean
-  /** Per-source-path predicate for dir copies: return false to skip a path. */
-  filter?: (sourcePath: string) => boolean
-}
-
 type DaemonHostSources = {
   appDir: string
   execPath: string
   resourcesPath: string
   entrySourcePath: string
   entryRelPath: string
-}
-
-type MaterializeMarker = {
-  version: string
-  completedAt: string
-  entryRelPath: string
-}
-
-// win32 path semantics so Windows paths decompose correctly off-win32 in cross-platform unit tests; production runs on win32 only.
-function toPosixRelative(fromDir: string, absPath: string): string {
-  return winPath.relative(fromDir, absPath).split(winPath.sep).join('/')
-}
-
-function destPath(root: string, destRel: string): string {
-  return join(root, ...destRel.split('/'))
+  windowsProcessTreeAddonPath: string
 }
 
 // Mirror getDaemonEntryPath()'s resolution order so the copied entry is the exact file the in-dir fork would run.
 function resolveEntrySourcePath(resourcesPath: string): string {
   const unpackedRoot = join(resourcesPath, 'app.asar.unpacked')
   const direct = join(unpackedRoot, 'daemon-entry.js')
-  if (existsSync(direct)) {
+  if (fs.existsSync(direct)) {
     return direct
   }
   return join(unpackedRoot, 'out', 'main', 'daemon-entry.js')
@@ -117,34 +93,32 @@ function collectDaemonHostSources(): DaemonHostSources | null {
   const execPath = process.execPath
   const appDir = winPath.dirname(execPath)
   const entrySourcePath = resolveEntrySourcePath(resourcesPath)
+  const windowsProcessTreeAddonPath = join(
+    resourcesPath,
+    'node_modules',
+    '@vscode',
+    'windows-process-tree',
+    'build',
+    'Release',
+    'windows_process_tree.node'
+  )
   return {
     appDir,
     execPath,
     resourcesPath,
     entrySourcePath,
-    entryRelPath: toPosixRelative(appDir, entrySourcePath)
+    entryRelPath: toDaemonHostRelativePath(appDir, entrySourcePath),
+    windowsProcessTreeAddonPath
   }
-}
-
-// Drop node-pty's .pdb symbols and non-host-arch prebuilds (its bulk); keyed on host arch so a future win32-arm64 build keeps the prebuild it needs.
-const HOST_WIN_PREBUILD_DIR = `win32-${process.arch}`.toLowerCase()
-function isRuntimeNodePtyPath(sourcePath: string): boolean {
-  const p = sourcePath.toLowerCase()
-  if (p.endsWith('.pdb')) {
-    return false
-  }
-  // Keep only the host arch's win32 prebuild; drop any other win32-<arch> dir.
-  const prebuild = p.match(/prebuilds[\\/](win32-[^\\/]+)/)
-  return !prebuild || prebuild[1] === HOST_WIN_PREBUILD_DIR
 }
 
 /**
  * The ordered copy plan. Every destRel mirrors the source's win-unpacked relative path so require()
  * and node-pty's loader resolve the mirror identically to the packaged app. Pure so tests can assert layout.
  */
-export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
+export function buildDaemonHostManifest(sources: DaemonHostSources): DaemonHostCopyOperation[] {
   const { appDir, execPath, resourcesPath, entrySourcePath, entryRelPath } = sources
-  const ops: CopyOp[] = []
+  const ops: DaemonHostCopyOperation[] = []
 
   // Host exe (renamed) + V8/ICU blobs at dest root. Top-level DLLs omitted: GPU/media libs a windowless run-as-node host never loads (~48MB saved).
   ops.push({ sourcePath: execPath, destRel: DAEMON_HOST_EXE_NAME, kind: 'file' })
@@ -157,14 +131,14 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   const chunksDir = join(winPath.dirname(entrySourcePath), 'chunks')
   ops.push({
     sourcePath: chunksDir,
-    destRel: toPosixRelative(appDir, chunksDir),
+    destRel: toDaemonHostRelativePath(appDir, chunksDir),
     kind: 'dir',
     optional: true
   })
   const pkgJson = join(resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
   ops.push({
     sourcePath: pkgJson,
-    destRel: toPosixRelative(appDir, pkgJson),
+    destRel: toDaemonHostRelativePath(appDir, pkgJson),
     kind: 'file',
     optional: true
   })
@@ -173,51 +147,46 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   const nodePtyDir = join(resourcesPath, 'node_modules', 'node-pty')
   ops.push({
     sourcePath: nodePtyDir,
-    destRel: toPosixRelative(appDir, nodePtyDir),
+    destRel: toDaemonHostRelativePath(appDir, nodePtyDir),
     kind: 'dir',
     filter: isRuntimeNodePtyPath
+  })
+
+  const windowsProcessTreeDir = join(
+    resourcesPath,
+    'node_modules',
+    '@vscode',
+    'windows-process-tree'
+  )
+  ops.push({
+    sourcePath: windowsProcessTreeDir,
+    destRel: toDaemonHostRelativePath(appDir, windowsProcessTreeDir),
+    kind: 'dir',
+    filter: (sourcePath) => isRuntimeWindowsProcessTreePath(windowsProcessTreeDir, sourcePath)
   })
 
   return ops
 }
 
-function executeManifest(ops: CopyOp[], stagingRoot: string): void {
+function executeManifest(ops: DaemonHostCopyOperation[], stagingRoot: string): void {
   for (const op of ops) {
-    if (!existsSync(op.sourcePath)) {
+    if (!fs.existsSync(op.sourcePath)) {
       if (op.optional) {
         continue
       }
       throw new Error(`daemon-host relocation: missing required input ${op.sourcePath}`)
     }
-    const dest = destPath(stagingRoot, op.destRel)
-    mkdirSync(dirname(dest), { recursive: true })
+    const dest = resolveDaemonHostPath(stagingRoot, op.destRel)
+    fs.mkdirSync(dirname(dest), { recursive: true })
     const { filter } = op
     // Dereference symlinks so the copy holds no link back into the install dir.
-    cpSync(op.sourcePath, dest, {
+    fs.cpSync(op.sourcePath, dest, {
       recursive: op.kind === 'dir',
       dereference: true,
       force: true,
       ...(filter ? { filter: (src: string) => filter(src) } : {})
     })
   }
-}
-
-function readMarker(dir: string): MaterializeMarker | null {
-  try {
-    const parsed = JSON.parse(
-      readFileSync(join(dir, MARKER_NAME), 'utf8')
-    ) as Partial<MaterializeMarker>
-    if (typeof parsed.version === 'string' && typeof parsed.entryRelPath === 'string') {
-      return {
-        version: parsed.version,
-        completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : '',
-        entryRelPath: parsed.entryRelPath
-      }
-    }
-  } catch {
-    // Missing/corrupt marker — treat as not materialized.
-  }
-  return null
 }
 
 function hostRootDir(): string {
@@ -241,13 +210,26 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   }
   const version = getAppEnvironment().getVersion()
   const dest = join(hostRootDir(), version)
-  const marker = readMarker(dest)
+  const marker = readDaemonHostMaterializationMarker(dest)
   if (!marker || marker.version !== version) {
     return null
   }
   const execPath = join(dest, DAEMON_HOST_EXE_NAME)
-  const entryPath = destPath(dest, marker.entryRelPath)
-  if (!existsSync(execPath) || !existsSync(entryPath)) {
+  const entryPath = resolveDaemonHostPath(dest, marker.entryRelPath)
+  if (!fs.existsSync(execPath) || !fs.existsSync(entryPath)) {
+    return null
+  }
+  const relocatedAddonPath = resolveDaemonHostPath(
+    dest,
+    toDaemonHostRelativePath(sources.appDir, sources.windowsProcessTreeAddonPath)
+  )
+  if (
+    !relocatedWindowsProcessTreeMatches({
+      sourcePath: sources.windowsProcessTreeAddonPath,
+      relocatedPath: relocatedAddonPath,
+      expectedSha256: marker.windowsProcessTreeSha256
+    })
+  ) {
     return null
   }
   return { execPath, entryPath }
@@ -271,22 +253,25 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   const dest = join(root, version)
   const staging = join(root, `${version}.staging-${randomBytes(6).toString('hex')}`)
   try {
-    mkdirSync(root, { recursive: true })
-    rmSync(staging, { recursive: true, force: true })
+    fs.mkdirSync(root, { recursive: true })
+    fs.rmSync(staging, { recursive: true, force: true })
     executeManifest(buildDaemonHostManifest(sources), staging)
     // Marker written LAST so an interrupted copy leaves a marker-less staging dir the next launch discards.
-    const marker: MaterializeMarker = {
-      version,
-      completedAt: new Date().toISOString(),
-      entryRelPath: sources.entryRelPath
-    }
-    writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
+    writeDaemonHostMaterializationMarker(
+      staging,
+      {
+        version,
+        completedAt: new Date().toISOString(),
+        entryRelPath: sources.entryRelPath
+      },
+      sources.windowsProcessTreeAddonPath
+    )
     // Replace any stale/partial dest, then publish the staging dir atomically.
-    rmSync(dest, { recursive: true, force: true })
-    renameSync(staging, dest)
+    fs.rmSync(dest, { recursive: true, force: true })
+    fs.renameSync(staging, dest)
   } catch {
     try {
-      rmSync(staging, { recursive: true, force: true })
+      fs.rmSync(staging, { recursive: true, force: true })
     } catch {
       // Best-effort staging cleanup.
     }
@@ -307,7 +292,7 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
   const versionLiveness = new Map<string, ProcessLivenessVerdict>()
   let entries
   try {
-    entries = readdirSync(runtimeDir, { withFileTypes: true })
+    entries = fs.readdirSync(runtimeDir, { withFileTypes: true })
   } catch {
     return { status: 'unverifiable', reason: 'the daemon runtime directory could not be read' }
   }
@@ -317,7 +302,7 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
     }
     let contents
     try {
-      contents = readFileSync(join(runtimeDir, entry.name), 'utf8')
+      contents = fs.readFileSync(join(runtimeDir, entry.name), 'utf8')
     } catch {
       // Read failures (AV lock, vanished file) are transient; the veto re-evaluates next launch.
       return {
@@ -364,7 +349,7 @@ export function reclaimUnownedDaemonHostDir(
     return
   }
   try {
-    rmSync(hostDir, { recursive: true, force: true })
+    fs.rmSync(hostDir, { recursive: true, force: true })
   } catch {
     // Still locked or already gone — retry on a future launch.
   }
@@ -386,7 +371,7 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
   const root = hostRootDir()
   let entries
   try {
-    entries = readdirSync(root, { withFileTypes: true })
+    entries = fs.readdirSync(root, { withFileTypes: true })
   } catch {
     return
   }
