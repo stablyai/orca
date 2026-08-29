@@ -194,6 +194,20 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect(rig.compositionView.style.direction).toBe('rtl')
   })
 
+  it('masks a dim Codex placeholder instead of appending it to the preedit', async () => {
+    const rig = openTerminal()
+    const placeholder = 'Ask Codex to do anything'
+    await rig.write(`\x1b[2m${placeholder}\x1b[22m\x1b[${placeholder.length}D`)
+
+    rig.compose('아')
+
+    const spans = Array.from(rig.compositionView.children) as HTMLElement[]
+    expect(spans).toHaveLength(2)
+    expect(stripMarks(spans[0]!.textContent)).toBe('아')
+    expect(spans[1]!.textContent).toBe(placeholder)
+    expect(spans[1]!.style.visibility).toBe('hidden')
+  })
+
   it('themes the overlay from options.theme instead of the stock #000/#FFF', async () => {
     const rig = openTerminal()
     await rig.write('안녕하세요\x1b[6D')

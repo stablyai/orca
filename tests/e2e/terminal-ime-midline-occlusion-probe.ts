@@ -81,8 +81,14 @@ function readMidlinePreeditOcclusion(): MidlinePreeditOcclusionSample {
   return {
     rowTailFromCursor,
     hiddenByOverlay: hiddenByOverlay.trimEnd(),
-    // The overlay wraps its text in LRM marks; strip them so assertions read as the user sees it.
-    overlayText: (view.textContent ?? '').replaceAll('‎', ''),
+    // Hidden children still contribute to textContent; omit them so this reflects visible text.
+    overlayText: Array.from(view.childNodes)
+      .filter(
+        (node) => !(node instanceof HTMLElement) || getComputedStyle(node).visibility !== 'hidden'
+      )
+      .map((node) => node.textContent ?? '')
+      .join('')
+      .replaceAll('‎', ''),
     overlayActive: view.classList.contains('active'),
     cursorColumn,
     coveredColumns: first === null ? null : [first, last],
