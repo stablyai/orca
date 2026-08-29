@@ -81,33 +81,37 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Last-week scheduled runs averaged ~24 runner-minutes per shard;
-          # shards 4 and 9 repeatedly hit the 30-minute cap. Twelve-way
-          # Playwright sharding targets ~20 minutes without changing coverage.
-          - shard: '1/12'
-            shard_name: 1-of-12
-          - shard: '2/12'
-            shard_name: 2-of-12
-          - shard: '3/12'
-            shard_name: 3-of-12
-          - shard: '4/12'
-            shard_name: 4-of-12
-          - shard: '5/12'
-            shard_name: 5-of-12
-          - shard: '6/12'
-            shard_name: 6-of-12
-          - shard: '7/12'
-            shard_name: 7-of-12
-          - shard: '8/12'
-            shard_name: 8-of-12
-          - shard: '9/12'
-            shard_name: 9-of-12
-          - shard: '10/12'
-            shard_name: 10-of-12
-          - shard: '11/12'
-            shard_name: 11-of-12
-          - shard: '12/12'
-            shard_name: 12-of-12
+          # Fourteen scheduled runs averaged 24.6 minutes per shard; shards 4
+          # and 9 repeatedly hit the 30-minute cap. A 12-way trial still left
+          # one 30-minute shard, so 14 gives the suite enough failure headroom.
+          - shard: '1/14'
+            shard_name: 1-of-14
+          - shard: '2/14'
+            shard_name: 2-of-14
+          - shard: '3/14'
+            shard_name: 3-of-14
+          - shard: '4/14'
+            shard_name: 4-of-14
+          - shard: '5/14'
+            shard_name: 5-of-14
+          - shard: '6/14'
+            shard_name: 6-of-14
+          - shard: '7/14'
+            shard_name: 7-of-14
+          - shard: '8/14'
+            shard_name: 8-of-14
+          - shard: '9/14'
+            shard_name: 9-of-14
+          - shard: '10/14'
+            shard_name: 10-of-14
+          - shard: '11/14'
+            shard_name: 11-of-14
+          - shard: '12/14'
+            shard_name: 12-of-14
+          - shard: '13/14'
+            shard_name: 13-of-14
+          - shard: '14/14'
+            shard_name: 14-of-14
 
     steps:
       - name: Checkout

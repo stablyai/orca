@@ -139,9 +139,9 @@ describe('PR E2E gate contract', () => {
     expect(e2eWorkflow.jobs['changed-e2e'].if).toBe("inputs.test_files != ''")
     expect(e2eWorkflow.jobs['changed-e2e'].strategy).toBeUndefined()
     expect(e2eWorkflow.jobs.e2e.strategy.matrix.include).toEqual(
-      Array.from({ length: 12 }, (_, index) => ({
-        shard: `${index + 1}/12`,
-        shard_name: `${index + 1}-of-12`
+      Array.from({ length: 14 }, (_, index) => ({
+        shard: `${index + 1}/14`,
+        shard_name: `${index + 1}-of-14`
       }))
     )
     const changedRun = e2eWorkflow.jobs['changed-e2e'].steps.find(
