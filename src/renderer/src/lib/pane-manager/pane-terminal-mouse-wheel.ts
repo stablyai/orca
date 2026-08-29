@@ -22,6 +22,7 @@ const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
 type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {
+  buffer: { active: Pick<Terminal['buffer']['active'], 'type'> }
   modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
 }
 
@@ -189,10 +190,12 @@ export function attachTerminalMouseWheelMultiplier(
 ): void {
   const replayState = createTerminalTuiMouseWheelReplayState()
   terminal.attachCustomWheelEventHandler((event) => {
-    if (
-      terminal.modes.mouseTrackingMode === 'none' ||
-      !shouldMultiplyTerminalMouseWheel(event, terminal.element)
-    ) {
+    if (terminal.modes.mouseTrackingMode === 'none') {
+      // Why: xterm can misclassify an inline agent buffer and synthesize arrow keys.
+      return terminal.buffer.active.type === 'alternate'
+    }
+
+    if (!shouldMultiplyTerminalMouseWheel(event, terminal.element)) {
       return true
     }
 

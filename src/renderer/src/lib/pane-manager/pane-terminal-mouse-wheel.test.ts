@@ -392,6 +392,7 @@ describe('terminal mouse wheel multiplier', () => {
         attachCustomWheelEventHandler: (handler) => {
           handlers.push(handler)
         },
+        buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
         rows: 24
@@ -419,41 +420,36 @@ describe('terminal mouse wheel multiplier', () => {
     expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, target)).toBe(false)
   })
 
-  it('does not replay with a stale active mouse-reporting class', async () => {
-    vi.stubGlobal('WheelEvent', TestWheelEvent)
+  it('blocks wheel-to-arrow synthesis for normal buffers without mouse reporting', () => {
     const handlers: ((event: WheelEvent) => boolean)[] = []
-    const target = Object.assign(new EventTarget(), {
-      classList: {
-        contains: (className: string) => className === 'enable-mouse-events'
-      }
-    }) as unknown as EventTarget & HTMLElement
-    const dispatched: WheelEvent[] = []
-    target.addEventListener('wheel', (event) => dispatched.push(event as WheelEvent))
     const terminal = {
       attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
         handlers.push(handler)
       },
-      element: target,
+      buffer: { active: { type: 'normal' as const } },
+      element: terminalElement(false),
       modes: { mouseTrackingMode: 'none' as const },
       rows: 24
     }
     attachTerminalMouseWheelMultiplier(terminal)
 
-    const event = new TestWheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaMode: DOM_DELTA_PIXEL,
-      deltaY: 12
-    }) as WheelEvent
-    Object.defineProperty(event, 'wheelDeltaY', {
-      configurable: true,
-      value: -120
-    })
+    expect(handlers[0]?.(wheelEvent())).toBe(false)
+  })
 
-    expect(handlers[0]?.(event)).toBe(true)
-    await Promise.resolve()
+  it('preserves wheel-to-arrow fallback for alternate buffers without mouse reporting', () => {
+    const handlers: ((event: WheelEvent) => boolean)[] = []
+    const terminal = {
+      attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
+        handlers.push(handler)
+      },
+      buffer: { active: { type: 'alternate' as const } },
+      element: terminalElement(false),
+      modes: { mouseTrackingMode: 'none' as const },
+      rows: 24
+    }
+    attachTerminalMouseWheelMultiplier(terminal)
 
-    expect(dispatched).toHaveLength(0)
+    expect(handlers[0]?.(wheelEvent())).toBe(true)
   })
 
   it('discards pending replay when mouse reporting turns off before drain', async () => {
@@ -470,6 +466,7 @@ describe('terminal mouse wheel multiplier', () => {
       attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
         handlers.push(handler)
       },
+      buffer: { active: { type: 'alternate' as const } },
       element: target,
       modes: { mouseTrackingMode: 'any' as 'any' | 'none' },
       rows: 24
@@ -509,6 +506,7 @@ describe('terminal mouse wheel multiplier', () => {
         attachCustomWheelEventHandler: (handler) => {
           handlers.push(handler)
         },
+        buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
         rows: 24
@@ -562,6 +560,7 @@ describe('terminal mouse wheel multiplier', () => {
         attachCustomWheelEventHandler: (handler) => {
           handlers.push(handler)
         },
+        buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
         rows: 24
@@ -597,6 +596,7 @@ describe('terminal mouse wheel multiplier', () => {
         attachCustomWheelEventHandler: (handler) => {
           handlers.push(handler)
         },
+        buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
         rows: 24
