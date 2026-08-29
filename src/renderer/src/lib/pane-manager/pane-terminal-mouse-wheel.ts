@@ -21,7 +21,10 @@ const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
-type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {
+type TerminalWheelTarget = Pick<
+  Terminal,
+  'attachCustomWheelEventHandler' | 'element' | 'rows' | 'scrollLines'
+> & {
   buffer: { active: Pick<Terminal['buffer']['active'], 'type'> }
   modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
 }
@@ -184,15 +187,27 @@ function queueTerminalTuiWheelReports(
   })
 }
 
+/** Routes wheel input to scrollback or mouse-reporting TUIs based on the active buffer. */
 export function attachTerminalMouseWheelMultiplier(
   terminal: TerminalWheelTarget,
   options: TerminalMouseWheelMultiplierOptions = {}
 ): void {
   const replayState = createTerminalTuiMouseWheelReplayState()
+  const scrollbackDistance = createTerminalTuiMouseWheelDistanceState()
   terminal.attachCustomWheelEventHandler((event) => {
     if (terminal.modes.mouseTrackingMode === 'none') {
-      // Why: xterm can misclassify an inline agent buffer and synthesize arrow keys.
-      return terminal.buffer.active.type === 'alternate'
+      if (terminal.buffer.active.type === 'alternate' || event.deltaY === 0 || event.shiftKey) {
+        return true
+      }
+
+      const lineCount = resolveTerminalTuiMouseWheelReportCount(event, 1, scrollbackDistance, {
+        cellHeight: resolveTerminalWheelCellHeight(terminal),
+        rows: terminal.rows
+      })
+      if (lineCount > 0) {
+        terminal.scrollLines(resolveTerminalWheelDirection(event) * lineCount)
+      }
+      return false
     }
 
     if (!shouldMultiplyTerminalMouseWheel(event, terminal.element)) {

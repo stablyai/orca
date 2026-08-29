@@ -395,7 +395,8 @@ describe('terminal mouse wheel multiplier', () => {
         buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
-        rows: 24
+        rows: 24,
+        scrollLines: vi.fn()
       },
       { getTuiMouseWheelMultiplier: () => 1 }
     )
@@ -422,6 +423,7 @@ describe('terminal mouse wheel multiplier', () => {
 
   it('blocks wheel-to-arrow synthesis for normal buffers without mouse reporting', () => {
     const handlers: ((event: WheelEvent) => boolean)[] = []
+    const scrollLines = vi.fn()
     const terminal = {
       attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
         handlers.push(handler)
@@ -429,11 +431,13 @@ describe('terminal mouse wheel multiplier', () => {
       buffer: { active: { type: 'normal' as const } },
       element: terminalElement(false),
       modes: { mouseTrackingMode: 'none' as const },
-      rows: 24
+      rows: 24,
+      scrollLines
     }
     attachTerminalMouseWheelMultiplier(terminal)
 
-    expect(handlers[0]?.(wheelEvent())).toBe(false)
+    expect(handlers[0]?.(wheelEvent({ deltaY: -16, deltaMode: DOM_DELTA_PIXEL }))).toBe(false)
+    expect(scrollLines).toHaveBeenCalledWith(-1)
   })
 
   it('preserves wheel-to-arrow fallback for alternate buffers without mouse reporting', () => {
@@ -445,7 +449,8 @@ describe('terminal mouse wheel multiplier', () => {
       buffer: { active: { type: 'alternate' as const } },
       element: terminalElement(false),
       modes: { mouseTrackingMode: 'none' as const },
-      rows: 24
+      rows: 24,
+      scrollLines: vi.fn()
     }
     attachTerminalMouseWheelMultiplier(terminal)
 
@@ -469,7 +474,8 @@ describe('terminal mouse wheel multiplier', () => {
       buffer: { active: { type: 'alternate' as const } },
       element: target,
       modes: { mouseTrackingMode: 'any' as 'any' | 'none' },
-      rows: 24
+      rows: 24,
+      scrollLines: vi.fn()
     }
     attachTerminalMouseWheelMultiplier(terminal)
 
@@ -509,7 +515,8 @@ describe('terminal mouse wheel multiplier', () => {
         buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
-        rows: 24
+        rows: 24,
+        scrollLines: vi.fn()
       },
       { getTuiMouseWheelMultiplier: () => 1 }
     )
@@ -563,7 +570,8 @@ describe('terminal mouse wheel multiplier', () => {
         buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
-        rows: 24
+        rows: 24,
+        scrollLines: vi.fn()
       },
       { getTuiMouseWheelMultiplier: () => 1 }
     )
@@ -599,7 +607,8 @@ describe('terminal mouse wheel multiplier', () => {
         buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
-        rows: 24
+        rows: 24,
+        scrollLines: vi.fn()
       },
       {
         getTuiMouseWheelMultiplier: () => 3
