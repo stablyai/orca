@@ -421,6 +421,7 @@ describe('terminal mouse wheel multiplier', () => {
     expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, target)).toBe(false)
   })
 
+  /** Verifies normal-buffer wheel input scrolls instead of reaching arrow-key fallback. */
   it('blocks wheel-to-arrow synthesis for normal buffers without mouse reporting', () => {
     const handlers: ((event: WheelEvent) => boolean)[] = []
     const scrollLines = vi.fn()
@@ -440,6 +441,7 @@ describe('terminal mouse wheel multiplier', () => {
     expect(scrollLines).toHaveBeenCalledWith(-1)
   })
 
+  /** Verifies alternate-buffer TUIs retain xterm's arrow-key fallback. */
   it('preserves wheel-to-arrow fallback for alternate buffers without mouse reporting', () => {
     const handlers: ((event: WheelEvent) => boolean)[] = []
     const terminal = {
