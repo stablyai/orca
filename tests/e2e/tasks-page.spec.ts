@@ -404,7 +404,7 @@ test.describe('Tasks page', () => {
     await orcaPage.waitForTimeout(800)
     await resetTaskSearchRequestProbe(orcaPage)
 
-    await input.pressSequentially('rate', { delay: 400 })
+    await input.pressSequentially('rate', { delay: 50 })
 
     expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({
       countQueries: [],
