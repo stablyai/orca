@@ -97,4 +97,19 @@ describe('buildKeybindingConflictWarnings', () => {
       ).size
     ).toBe(0)
   })
+
+  it('stays silent for an override the loader kept in the active map', () => {
+    // Why: "was ignored" is a claim about what the loader took away, so an
+    // override that survived into the active map must not be flagged.
+    const warnings = buildKeybindingConflictWarnings(
+      snapshotWith({
+        common: { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] },
+        active: { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] }
+      }),
+      'darwin',
+      []
+    )
+
+    expect(warnings.size).toBe(0)
+  })
 })

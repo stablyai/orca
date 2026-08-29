@@ -21,11 +21,16 @@ export function buildKeybindingConflictWarnings(
 ): Map<KeybindingActionId, string[]> {
   const warnings = new Map<KeybindingActionId, string[]>()
   const fileOverrides = getFileBindingOverrides(snapshot, platform)
+  const activeOverrides = snapshot?.overrides ?? {}
   for (const conflict of findKeybindingConflicts(platform, fileOverrides, { ignoredActionIds })) {
     for (const actionId of conflict.actionIds) {
-      // Why: only the custom binding is dropped. The other claimant keeps working
-      // on its own binding, so warning on its row would blame an untouched action.
-      if (!hasOwnBindingOverride(fileOverrides, actionId)) {
+      // Why: "ignored" means the file asked for this binding and the loader took
+      // it away. An action with no file override never asked, and one still in the
+      // active map kept what it asked for.
+      if (
+        !hasOwnBindingOverride(fileOverrides, actionId) ||
+        hasOwnBindingOverride(activeOverrides, actionId)
+      ) {
         continue
       }
       // Why: name only the other claimants — listing the row's own action reads

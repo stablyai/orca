@@ -220,11 +220,13 @@ describe('keybindings', () => {
 
     // Why: the terminal bucket must stay limited to actions that actually reach a
     // focused terminal, otherwise every app chord would block terminal bindings.
-    expect(getKeybindingDefinition('view.tasks')?.allowInTerminal).toBeUndefined()
+    const appOnly = getKeybindingDefinition('worktree.quickOpen')
+    expect(appOnly).not.toBeNull()
+    expect(isKeybindingAllowedInTerminal(appOnly!)).toBe(false)
+    const appOnlyBindings = getEffectiveKeybindingsForAction('worktree.quickOpen', 'darwin')
+    expect(appOnlyBindings.length).toBeGreaterThan(0)
     expect(
-      findKeybindingConflicts('darwin', {
-        'terminal.splitRight': getEffectiveKeybindingsForAction('view.tasks', 'darwin')
-      })
+      findKeybindingConflicts('darwin', { 'terminal.splitRight': appOnlyBindings })
     ).toEqual([])
   })
 
