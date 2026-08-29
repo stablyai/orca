@@ -3,6 +3,7 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useIssueSourceActions } from './issue-source-actions'
+import { resolveDraftBaseBranchNamesWorkspace } from './workspace-identity-state'
 
 type Input = Parameters<typeof useIssueSourceActions>[0]
 
@@ -85,5 +86,31 @@ describe('composer name source selection', () => {
     )
 
     expect(result.current.smartNameSelection?.kind).toBe('github-issue')
+  })
+})
+
+describe('base ref intent across a draft round trip', () => {
+  it('restores a base ref chosen in the picker as a base, not as a name source', () => {
+    expect(resolveDraftBaseBranchNamesWorkspace({ persistDraft: true, draftValue: false })).toBe(
+      false
+    )
+  })
+
+  it('restores a branch picked in the name field as a name source', () => {
+    expect(resolveDraftBaseBranchNamesWorkspace({ persistDraft: true, draftValue: true })).toBe(
+      true
+    )
+  })
+
+  it('treats a draft written before the flag existed as a name source', () => {
+    expect(
+      resolveDraftBaseBranchNamesWorkspace({ persistDraft: true, draftValue: undefined })
+    ).toBe(true)
+  })
+
+  it('ignores any stored intent when the composer does not persist drafts', () => {
+    expect(resolveDraftBaseBranchNamesWorkspace({ persistDraft: false, draftValue: false })).toBe(
+      true
+    )
   })
 })
