@@ -6,6 +6,7 @@ import {
   resolveTerminalWheelDirection
 } from './pane-terminal-tui-wheel-reports'
 import type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
+import { safeTerminalScrollCall } from './terminal-scroll-buffer-snapshot'
 
 export {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
@@ -206,7 +207,9 @@ export function attachTerminalMouseWheelMultiplier(
         rows: terminal.rows
       })
       if (lineCount > 0) {
-        terminal.scrollLines(resolveTerminalWheelDirection(event) * lineCount)
+        safeTerminalScrollCall(
+          terminal.scrollLines.bind(terminal, resolveTerminalWheelDirection(event) * lineCount)
+        )
       }
       return false
     }

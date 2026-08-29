@@ -76,6 +76,11 @@ function wheelEvent(
   } as WheelEvent
 }
 
+/** Simulates xterm scrolling after its render dimensions have been disposed. */
+function throwDisposedRenderDimensions(): never {
+  throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+}
+
 /** Verifies that normal-buffer wheel input scrolls terminal history directly. */
 function verifyNormalBufferWheelScroll(): void {
   const handlers: ((event: WheelEvent) => boolean)[] = []
@@ -96,6 +101,10 @@ function verifyNormalBufferWheelScroll(): void {
 
   expect(handlers[0]?.(wheelEvent({ deltaY: -16, deltaMode: DOM_DELTA_PIXEL }))).toBe(false)
   expect(scrollLines).toHaveBeenCalledWith(-1)
+
+  scrollLines.mockImplementation(throwDisposedRenderDimensions)
+  expect(handlers[0]?.(wheelEvent({ deltaY: -16, deltaMode: DOM_DELTA_PIXEL }))).toBe(false)
+  expect(scrollLines).toHaveBeenCalledTimes(2)
 }
 
 /** Verifies that alternate-buffer wheel input remains available to xterm's fallback. */
