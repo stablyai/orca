@@ -12,6 +12,7 @@ import {
   readPendingSendCache,
   shouldPruneLaunchPrompt,
   writePendingSendCache,
+  splitPendingMessagesAroundStreaming,
   type NativeChatPendingSend
 } from './native-chat-pending'
 import {
@@ -806,5 +807,45 @@ describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
     expect(readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude' })).toHaveLength(
       1
     )
+  })
+})
+
+describe('splitPendingMessagesAroundStreaming', () => {
+  const entry = (id: string, queuedWhileWorking?: boolean): NativeChatPendingSend => ({
+    id,
+    text: id,
+    sentAt: 1,
+    ...(queuedWhileWorking ? { queuedWhileWorking: true } : {})
+  })
+  const message = (id: string): NativeChatMessage => ({
+    id: `pending:${id}`,
+    role: 'user',
+    blocks: [{ type: 'text', text: id }],
+    timestamp: 1,
+    source: 'scrape'
+  })
+
+  it('places an idle-time echo BEFORE the streaming bubble — the reply answers it (#15608)', () => {
+    const pending = [entry('idle-send')]
+    const messages = [message('idle-send')]
+    const split = splitPendingMessagesAroundStreaming(messages, pending)
+    expect(split.beforeStreaming.map((m) => m.id)).toEqual(['pending:idle-send'])
+    expect(split.afterStreaming).toEqual([])
+  })
+
+  it('keeps a send queued behind live work AFTER the streaming bubble', () => {
+    const pending = [entry('queued-send', true)]
+    const messages = [message('queued-send')]
+    const split = splitPendingMessagesAroundStreaming(messages, pending)
+    expect(split.beforeStreaming).toEqual([])
+    expect(split.afterStreaming.map((m) => m.id)).toEqual(['pending:queued-send'])
+  })
+
+  it('splits a mixed pending list while preserving relative order on both sides', () => {
+    const pending = [entry('idle-a'), entry('queued-b', true), entry('idle-c'), entry('queued-d', true)]
+    const messages = pending.map((e) => message(e.id))
+    const split = splitPendingMessagesAroundStreaming(messages, pending)
+    expect(split.beforeStreaming.map((m) => m.id)).toEqual(['pending:idle-a', 'pending:idle-c'])
+    expect(split.afterStreaming.map((m) => m.id)).toEqual(['pending:queued-b', 'pending:queued-d'])
   })
 })

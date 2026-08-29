@@ -40,6 +40,12 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  /**
+   * True when the agent was already working when this send was issued. Such an
+   * echo is queued BEHIND the in-flight turn; an idle-time echo is the newest
+   * turn, and whatever streams after it is its reply (#15608).
+   */
+  queuedWhileWorking?: boolean
 }
 
 export type NativeChatPendingSendScope = {
@@ -265,6 +271,34 @@ export function pendingSendsAsMessages(
 /** True when a message id was minted for an optimistic pending send. */
 export function isPendingMessageId(id: string): boolean {
   return id.startsWith('pending:')
+}
+
+/**
+ * Split rendered optimistic echoes around the streaming reply bubble (#15608).
+ *
+ * An echo sent while the agent was idle is the newest turn of the conversation
+ * — the reply that streams next is its ANSWER, so the bubble belongs below it.
+ * An echo queued while the agent was already working waits behind that
+ * in-flight turn, so it stays below the bubble. The pending list order itself
+ * is preserved on both sides.
+ */
+export function splitPendingMessagesAroundStreaming(
+  pendingMessages: readonly NativeChatMessage[],
+  pending: readonly NativeChatPendingSend[]
+): { beforeStreaming: NativeChatMessage[]; afterStreaming: NativeChatMessage[] } {
+  const queuedWhileWorkingIds = new Set(
+    pending.filter((entry) => entry.queuedWhileWorking).map((entry) => `pending:${entry.id}`)
+  )
+  const beforeStreaming: NativeChatMessage[] = []
+  const afterStreaming: NativeChatMessage[] = []
+  for (const message of pendingMessages) {
+    if (queuedWhileWorkingIds.has(message.id)) {
+      afterStreaming.push(message)
+    } else {
+      beforeStreaming.push(message)
+    }
+  }
+  return { beforeStreaming, afterStreaming }
 }
 
 // Why: the seeded prompt has a synthetic id that never matches the real turn's,
