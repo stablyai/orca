@@ -850,7 +850,7 @@ async function fetchItemsPageWithRaw(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
-  query: string
+  query: string | null
   first: number
   after: string | null
   includeParent: boolean
@@ -871,11 +871,12 @@ async function fetchItemsPageWithRaw(args: {
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
+  const useSearchQuery = args.query !== null
   const query = `
-    query(${afterVar}$owner:String!, $num:Int!, $q:String!, $first:Int!) {
+    query(${afterVar}$owner:String!, $num:Int!${useSearchQuery ? ', $q:String!' : ''}, $first:Int!) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
-          items(first:$first${afterArg}, query:$q, orderBy:{ field: POSITION, direction: ASC }) {
+          items(first:$first${afterArg}${useSearchQuery ? ', query:$q' : ''}, orderBy:{ field: POSITION, direction: ASC }) {
             totalCount
             pageInfo { hasNextPage endCursor }
             nodes {
@@ -894,7 +895,9 @@ async function fetchItemsPageWithRaw(args: {
   const argsArr: string[] = ['api', 'graphql', '-f', `query=${query}`]
   argsArr.push('-f', `owner=${args.owner}`)
   argsArr.push('-F', `num=${args.projectNumber}`)
-  argsArr.push('-f', `q=${args.query}`)
+  if (useSearchQuery) {
+    argsArr.push('-f', `q=${args.query}`)
+  }
   argsArr.push('-F', `first=${args.first}`)
   if (args.after) {
     argsArr.push('-f', `after=${args.after}`)
@@ -987,7 +990,8 @@ async function fetchAllItems(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
-  query: string
+  /** null omits the GraphQL `query` argument (plain items list, no search index). */
+  query: string | null
   host?: string
 }): Promise<
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
@@ -1200,6 +1204,26 @@ async function fetchItemsCountOnly(args: {
 
 // ─── Public: getProjectViewTable ──────────────────────────────────────
 
+/** Prefer a successful no-search retry; keep the initial empty ok result if the retry fails. */
+export function preferSuccessfulIndexLagFallback<T extends { ok: boolean }>(
+  initial: T,
+  fallback: T
+): T {
+  return fallback.ok ? fallback : initial
+}
+
+async function fetchAllItemsWithoutSearchQuery(args: {
+  owner: string
+  ownerType: GitHubProjectOwnerType
+  projectNumber: number
+  host?: string
+}): Promise<
+  | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
+  | { ok: false; error: GitHubProjectViewError; totalCount?: number }
+> {
+  return fetchAllItems({ ...args, query: null })
+}
+
 export async function getProjectViewTable(
   args: GetProjectViewTableArgs
 ): Promise<GetProjectViewTableResult> {
@@ -1314,13 +1338,33 @@ export async function getProjectViewTable(
   }
 
   // Fetch items.
-  const items = await fetchAllItems({
+  let items = await fetchAllItems({
     owner: args.owner,
     ownerType: args.ownerType,
     projectNumber: args.projectNumber,
     query: effectiveQuery,
     host: args.host
   })
+  // Why: unfiltered views still pass query:"" which routes through GitHub's
+  // Projects search index. Fresh boards can lag and return totalCount:0 while
+  // plain items(first:N) still has every card (#12648). Retry once without the
+  // query argument only for the empty unfiltered case so real empty boards stay empty.
+  if (
+    items.ok &&
+    items.totalCount === 0 &&
+    effectiveQuery === '' &&
+    typeof args.queryOverride !== 'string'
+  ) {
+    // Why: keep a successful empty index response if the no-search retry fails
+    // (rate limit/network) so a genuinely empty board does not become an error (#12819 CR).
+    const fallbackItems = await fetchAllItemsWithoutSearchQuery({
+      owner: args.owner,
+      ownerType: args.ownerType,
+      projectNumber: args.projectNumber,
+      host: args.host
+    })
+    items = preferSuccessfulIndexLagFallback(items, fallbackItems)
+  }
   if (!items.ok) {
     return {
       ok: false,
