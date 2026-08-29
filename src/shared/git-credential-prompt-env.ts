@@ -79,6 +79,26 @@ export function appendGitConfigEnv(
 }
 
 /**
+ * The indexed config the guard appends, in append order. Provenance reads it to
+ * bound removal to the slots the guard itself owns.
+ */
+// Why: keep the helper so cached credentials continue to work; disable
+// only its interactive fallback.
+export const GIT_CREDENTIAL_GUARD_CONFIG_ENTRIES = [
+  ['credential.interactive', 'false'],
+  ['credential.guiPrompt', 'false']
+] as const satisfies readonly (readonly [key: string, value: string])[]
+
+/**
+ * The scalar guard variables the guard forwards into WSL. Provenance reads it so
+ * restoration removes exactly the names the guard adds to WSLENV and no others.
+ */
+export const GIT_CREDENTIAL_GUARD_WSLENV_SCALAR_KEYS = [
+  'GIT_TERMINAL_PROMPT',
+  'GCM_INTERACTIVE'
+] as const
+
+/**
  * Disable interactive Git credential UI while preserving cached credentials
  * and caller-provided askpass programs.
  */
@@ -95,12 +115,7 @@ export function gitCredentialPromptGuardEnv(
       // Why: GCM can ignore terminal/askpass guards and open its own GUI.
       GCM_INTERACTIVE: 'never'
     },
-    // Why: keep the helper so cached credentials continue to work; disable
-    // only its interactive fallback.
-    [
-      ['credential.interactive', 'false'],
-      ['credential.guiPrompt', 'false']
-    ]
+    GIT_CREDENTIAL_GUARD_CONFIG_ENTRIES
   )
   if (platform === 'win32') {
     // Why: wsl.exe imports only variables registered in WSLENV. Indexed Git
@@ -109,7 +124,7 @@ export function gitCredentialPromptGuardEnv(
       readValidGitConfigEnvCount(next) === null
         ? []
         : Object.keys(next).filter((key) => GIT_CONFIG_WSLENV_KEY_RE.test(key))
-    addWslEnvKeys(next, ['GIT_TERMINAL_PROMPT', 'GCM_INTERACTIVE', ...configKeys])
+    addWslEnvKeys(next, [...GIT_CREDENTIAL_GUARD_WSLENV_SCALAR_KEYS, ...configKeys])
   }
   return next
 }

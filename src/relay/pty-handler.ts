@@ -41,6 +41,11 @@ import {
   createShellPromptReadinessProbe,
   type ShellPromptReadinessProbe
 } from '../main/shell-prompt-readiness-probe'
+import {
+  captureGitCredentialGuardPreGuardState,
+  recordGitCredentialGuardProvenance,
+  restoreUnguardedGitCredentialEnv
+} from '../shared/git-credential-guard-provenance'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import {
   gitCredentialPromptGuardEnv,
@@ -2385,8 +2390,16 @@ export class PtyHandler {
     }
     // Why: revive lacks the original launch command, so reuse the fresh-spawn guard decision (legacy defaults to unguarded).
     const gitCredentialPromptGuarded = entry.gitCredentialPromptGuarded === true
+    // Why: the relay server inherits its own env, so a relay launched from a guarded
+    // pane leaks the guard into revived user panes unless it is undone first.
+    restoreUnguardedGitCredentialEnv(spawnEnv)
     if (gitCredentialPromptGuarded) {
+      const preGuard = captureGitCredentialGuardPreGuardState(spawnEnv)
       Object.assign(spawnEnv, gitCredentialPromptGuardEnv(spawnEnv, process.platform))
+      recordGitCredentialGuardProvenance(spawnEnv, preGuard, {
+        appendedConfig: true,
+        forwardToWsl: process.platform === 'win32'
+      })
     }
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro

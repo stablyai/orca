@@ -1,4 +1,9 @@
 import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import {
+  captureGitCredentialGuardPreGuardState,
+  recordGitCredentialGuardProvenance,
+  restoreUnguardedGitCredentialEnv
+} from './git-credential-guard-provenance'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 
 const GIT_CONFIG_PROTOCOL_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/
@@ -20,6 +25,12 @@ export function applyTerminalGitCredentialPromptGuard(
   const explicitlyGuarded = env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV] === 'guard'
   delete env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
 
+  // Why: guard variables are inherited by every child, so undo an inherited Orca
+  // guard before deciding afresh. Otherwise a terminal this call declines to guard
+  // keeps the parent's GIT_TERMINAL_PROMPT=0 and Git fails instead of prompting.
+  restoreUnguardedGitCredentialEnv(env)
+  const platform = opts.platform ?? process.platform
+
   const shouldGuard =
     opts.isUnattended === true ||
     Boolean(
@@ -29,9 +40,14 @@ export function applyTerminalGitCredentialPromptGuard(
     return false
   }
 
-  const guarded = gitCredentialPromptGuardEnv(env, opts.platform ?? process.platform)
+  const preGuard = captureGitCredentialGuardPreGuardState(env)
+  const guarded = gitCredentialPromptGuardEnv(env, platform)
   if (!opts.deferGitConfigGuardToHost) {
     Object.assign(env, guarded)
+    recordGitCredentialGuardProvenance(env, preGuard, {
+      appendedConfig: true,
+      forwardToWsl: platform === 'win32'
+    })
     return true
   }
 
@@ -50,5 +66,9 @@ export function applyTerminalGitCredentialPromptGuard(
     }
     env[key] = value
   }
+  recordGitCredentialGuardProvenance(env, preGuard, {
+    appendedConfig: false,
+    forwardToWsl: false
+  })
   return true
 }

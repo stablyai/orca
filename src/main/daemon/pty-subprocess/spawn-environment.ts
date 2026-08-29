@@ -11,6 +11,11 @@ import {
   gitCredentialPromptGuardEnv,
   mergeGitConfigEnvProtocol
 } from '../../../shared/git-credential-prompt-env'
+import {
+  captureGitCredentialGuardPreGuardState,
+  recordGitCredentialGuardProvenance,
+  restoreUnguardedGitCredentialEnv
+} from '../../../shared/git-credential-guard-provenance'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/terminal-git-credential-guard'
 import {
   expandWindowsEnvironmentVariables,
@@ -38,7 +43,12 @@ function composeGuardedDaemonGitConfigEnv(
     return
   }
   // Why: the daemon can outlive Electron, so its process.env is the authoritative inherited config; append only the guard.
+  const preGuard = captureGitCredentialGuardPreGuardState(env)
   Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
+  recordGitCredentialGuardProvenance(env, preGuard, {
+    appendedConfig: true,
+    forwardToWsl: process.platform === 'win32'
+  })
 }
 
 function deleteRequestedDaemonEnvKeys(
@@ -132,8 +142,19 @@ function removeInheritedDevAgentHookEndpoint(
 }
 
 export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<string, string> {
+  // Why: a marker only describes the environment it was stamped into. The daemon
+  // forks from Electron and can be launched from a guarded pane, and the request
+  // carries its own marker for the scalars main wrote on the wire — undo them on
+  // their own side, or the request's marker lands on top of the inherited one and
+  // the guard it was meant to explain survives the merge unexplained.
+  const inheritedEnv = stripInheritedBuildModeEnv(process.env) as Record<string, string>
+  restoreUnguardedGitCredentialEnv(inheritedEnv)
+  const requestedEnv = opts.env ? { ...opts.env } : undefined
+  if (requestedEnv) {
+    restoreUnguardedGitCredentialEnv(requestedEnv)
+  }
   const env: Record<string, string> = {
-    ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
+    ...mergeGitConfigEnvProtocol(inheritedEnv, requestedEnv),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',

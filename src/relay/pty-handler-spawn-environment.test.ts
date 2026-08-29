@@ -41,6 +41,11 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
+import {
+  restoreGitCredentialGuardEnv,
+  takeGitCredentialGuardEnv
+} from '../shared/git-credential-guard-env-test-harness'
+import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 import {
@@ -754,4 +759,37 @@ describe('PtyHandler', () => {
       rmSync(homeDir, { recursive: true, force: true })
     }
   )
+  it('strips a guard the relay inherited when the SSH pane must not be guarded', async () => {
+    // A relay server started from a guarded agent pane: build its inherited env
+    // with the real guard so every variable the guard sets is present.
+    const inherited: Record<string, string> = {
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: 'core.quotePath',
+      GIT_CONFIG_VALUE_0: 'false'
+    }
+    applyTerminalGitCredentialPromptGuard(inherited, {
+      launchCommand: 'claude',
+      platform: process.platform
+    })
+    const saved = takeGitCredentialGuardEnv(inherited)
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+
+      const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(spawnEnv.GIT_TERMINAL_PROMPT).toBeUndefined()
+      expect(spawnEnv.GCM_INTERACTIVE).toBeUndefined()
+      expect(spawnEnv.GIT_ASKPASS).toBeUndefined()
+      expect(spawnEnv.SSH_ASKPASS).toBeUndefined()
+      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('1')
+      expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('core.quotePath')
+      expect(spawnEnv.GIT_CONFIG_KEY_1).toBeUndefined()
+      expect(Object.values(spawnEnv)).not.toContain('credential.interactive')
+      expect(Object.values(spawnEnv)).not.toContain('credential.guiPrompt')
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(false)
+    } finally {
+      restoreGitCredentialGuardEnv(saved)
+    }
+  })
 })

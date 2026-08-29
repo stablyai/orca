@@ -35,6 +35,11 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
+import {
+  restoreGitCredentialGuardEnv,
+  takeGitCredentialGuardEnv
+} from '../shared/git-credential-guard-env-test-harness'
+import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { MAX_RELAY_PTY_SESSIONS, PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 import {
@@ -647,5 +652,80 @@ describe('PtyHandler', () => {
       expect(mockPtySpawn).toHaveBeenCalledTimes(2)
       expect(mockPtySpawn.mock.calls.map(([shell]) => shell)).not.toContain('nc.exe')
     })
+  })
+  it('revive strips a guard the relay inherited for an unguarded pane', async () => {
+    const cleared = takeGitCredentialGuardEnv()
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(false)
+
+      handler.dispose()
+      mockPtySpawn.mockClear()
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+
+      // The relay process was restarted from a guarded agent pane.
+      const inherited: Record<string, string> = {}
+      applyTerminalGitCredentialPromptGuard(inherited, {
+        launchCommand: 'claude',
+        platform: process.platform
+      })
+      Object.assign(process.env, inherited)
+
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+
+      const revivedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(revivedEnv.GIT_TERMINAL_PROMPT).toBeUndefined()
+      expect(revivedEnv.GCM_INTERACTIVE).toBeUndefined()
+      expect(revivedEnv.GIT_CONFIG_COUNT).toBeUndefined()
+      expect(Object.values(revivedEnv)).not.toContain('credential.interactive')
+      expect(Object.values(revivedEnv)).not.toContain('credential.guiPrompt')
+    } finally {
+      restoreGitCredentialGuardEnv(cleared)
+    }
+  })
+
+  it('gives a revived guarded pane what its children need to undo the guard', async () => {
+    const cleared = takeGitCredentialGuardEnv()
+    try {
+      await dispatcher.callRequest('pty.spawn', { command: 'claude' })
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+
+      handler.dispose()
+      mockPtySpawn.mockClear()
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        await dispatcher.callRequest('pty.revive', { state })
+      } finally {
+        killSpy.mockRestore()
+      }
+
+      const revivedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(revivedEnv.GIT_TERMINAL_PROMPT).toBe('0')
+
+      // A plain shell launched from inside that revived guarded pane.
+      const child = { ...revivedEnv }
+      expect(
+        applyTerminalGitCredentialPromptGuard(child, {
+          launchCommand: '/bin/zsh',
+          platform: process.platform
+        })
+      ).toBe(false)
+      expect(child.GIT_TERMINAL_PROMPT).toBeUndefined()
+      expect(child.GCM_INTERACTIVE).toBeUndefined()
+      expect(child.GIT_CONFIG_COUNT).toBeUndefined()
+      expect(Object.values(child)).not.toContain('credential.interactive')
+      expect(Object.values(child)).not.toContain('credential.guiPrompt')
+    } finally {
+      restoreGitCredentialGuardEnv(cleared)
+    }
   })
 })
