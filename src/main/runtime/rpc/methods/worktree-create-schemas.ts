@@ -120,7 +120,10 @@ export const WorktreeCreate = z
     // same key so the host dedupes instead of spawning a duplicate worktree.
     clientMutationId: z.string().min(1).max(128).optional(),
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional(),
-    cliProvenanceRequest: CliWorkspaceProvenanceRequest.optional()
+    cliProvenanceRequest: CliWorkspaceProvenanceRequest.optional(),
+    // Why: provisions the repo's per-workspace environment recipe and adopts its checkout,
+    // the RPC/CLI counterpart of the desktop composer's "Run on: <recipe>" target.
+    recipeId: OptionalString
   })
   .superRefine((params, ctx) => {
     assertLinkedWorkItemSourceContextMatch(params, ctx)
@@ -134,6 +137,12 @@ export const WorktreeCreate = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'
+      })
+    }
+    if (params.recipeId && params.sparseCheckout) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provisioned-root recipes do not support sparse checkout.'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {

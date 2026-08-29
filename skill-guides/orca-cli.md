@@ -69,6 +69,8 @@ ORCA worktree create --name <task-name> --no-parent --agent codex --prompt "<tas
 
 Use `--no-parent` and omit `--base-branch` for independent top-level handoffs unless the user explicitly asks for stacked work, "branch from current", or a specific base. Put any current-branch context in the prompt.
 
+Per-workspace environment handoff: add `--recipe <recipe-id>` to provision the repo's `environmentRecipes` entry from `orca.yaml` and create the workspace on it — the CLI counterpart of the composer's "Run on" target. Only provisioned-root (SSH) recipes are supported; `worktree rm` on that workspace also runs the recipe's destroy.
+
 Custom Codex model/effort handoff:
 
 `worktree create --agent codex --prompt ...` launches the known Codex agent but does not accept Codex-specific `--model` or `-c model_reasoning_effort=...` arguments. For requests such as `gpt-5.5 xhigh`, create the independent worktree, launch the requested Codex command there, wait only for TUI readiness if needed to avoid losing input, send the prompt, and stop.

@@ -14,6 +14,13 @@ import {
   session
 } from 'electron'
 import { applyMacPressAndHoldDefaultAtStartup } from './macos-press-and-hold-default'
+import {
+  cleanupRecipeRuntimesForWorkspace,
+  createProvisionedRootRecipeWorkspace
+} from './ephemeral-vm-recipe-workspace-create'
+import { getApprovedPluginVmRecipes } from './plugins/plugin-approved-vm-recipes'
+import { isCapturedRepoCurrent } from './ipc/worktrees/listing/worktree-host-ownership'
+import { notifyReposChanged } from './ipc/repos/repos-changed-notification'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -2885,7 +2892,28 @@ void app.whenReady().then(async () => {
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport,
-    skillTransactionRecovery
+    skillTransactionRecovery,
+    createProvisionedRootRecipeWorkspace: (args) =>
+      createProvisionedRootRecipeWorkspace(
+        {
+          userDataPath: app.getPath('userData'),
+          store: store!,
+          getApprovedPluginRecipes: () => getApprovedPluginVmRecipes(pluginService ?? undefined),
+          isRepoCurrent: (repo, executionHostId) =>
+            isCapturedRepoCurrent(store!, repo, executionHostId),
+          onRepoRegistered: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              notifyReposChanged(mainWindow)
+            }
+          }
+        },
+        args
+      ),
+    cleanupRecipeRuntimesForWorkspace: (workspaceId) =>
+      cleanupRecipeRuntimesForWorkspace(
+        { userDataPath: app.getPath('userData'), store: store! },
+        workspaceId
+      )
   })
   runtime = runtimeService
   runtimeService.prepareLegacyWorkerTerminalRecovery()

@@ -147,6 +147,120 @@ describe('worktree RPC methods', () => {
     })
   })
 
+  it('routes recipe creates to the recipe workspace path', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      showRepo: vi.fn().mockResolvedValue(repo),
+      createManagedWorktree: vi.fn(),
+      createManagedWorktreeOnRecipe: vi.fn().mockResolvedValue({
+        worktree: { id: 'wt-1' },
+        startupTerminal: { spawned: true, handle: 'term-1' }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'vm-task',
+        recipeId: 'devbox',
+        startupAgent: 'claude',
+        startupPrompt: 'hi'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+    expect(runtime.createManagedWorktreeOnRecipe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoSelector: 'repo-1',
+        name: 'vm-task',
+        recipeId: 'devbox',
+        startupAgent: 'claude',
+        startupPrompt: 'hi'
+      })
+    )
+  })
+
+  it('rejects recipe creates that request a sparse checkout', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      createManagedWorktree: vi.fn(),
+      createManagedWorktreeOnRecipe: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'vm-task',
+        recipeId: 'devbox',
+        sparseCheckout: { directories: ['src'] }
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(runtime.createManagedWorktreeOnRecipe).not.toHaveBeenCalled()
+  })
+
+  it('runs recipe environment cleanup after an RPC removal', async () => {
+    const cleanupRecipeRuntimesForRemovedWorkspace = vi.fn().mockResolvedValue(undefined)
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      listRepos: () => [repo],
+      removeManagedWorktree: vi.fn().mockResolvedValue({}),
+      cleanupRecipeRuntimesForRemovedWorkspace
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.rm', { worktree: 'id:repo-1::/workspace/repo/wt', hostId: 'local' })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(cleanupRecipeRuntimesForRemovedWorkspace).toHaveBeenCalledWith(
+      'repo-1::/workspace/repo/wt'
+    )
+  })
+
+  it('removes an adopted provisioned root by destroying the environment and its project', async () => {
+    const cleanupRecipeRuntimesForRemovedWorkspace = vi.fn().mockResolvedValue(undefined)
+    const removeProject = vi.fn().mockResolvedValue({ removed: true })
+    const removeManagedWorktree = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      listRepos: () => [repo],
+      showManagedWorktree: vi.fn().mockResolvedValue({
+        id: 'repo-ssh-1::/home/dev/repo',
+        repoId: 'repo-ssh-1',
+        isMainWorktree: true,
+        ephemeralVmCheckoutMode: 'provisioned-root'
+      }),
+      cleanupRecipeRuntimesForRemovedWorkspace,
+      removeProject,
+      removeManagedWorktree
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.rm', {
+        worktree: 'id:repo-ssh-1::/home/dev/repo',
+        hostId: 'ssh:runtime-ssh-1'
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { removed: true } })
+    expect(cleanupRecipeRuntimesForRemovedWorkspace).toHaveBeenCalledWith(
+      'repo-ssh-1::/home/dev/repo'
+    )
+    expect(removeProject).toHaveBeenCalledWith('id:repo-ssh-1')
+    expect(removeManagedWorktree).not.toHaveBeenCalled()
+  })
+
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-1', 'run-1')
     const runtime = {

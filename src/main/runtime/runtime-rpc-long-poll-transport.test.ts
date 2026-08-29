@@ -63,6 +63,33 @@ describe('OrcaRuntimeRpcServer', () => {
     ).toBeNull()
   })
 
+  it('keeps recipe worktree creates and removals alive past the socket idle timer', () => {
+    expect(
+      classifyRuntimeLongPoll({
+        id: 'req_recipe_create',
+        authToken: 'token',
+        method: 'worktree.create',
+        params: { repo: 'repo-1', name: 'vm-task', recipeId: 'devbox' }
+      })
+    ).toBe('wait')
+    expect(
+      classifyRuntimeLongPoll({
+        id: 'req_plain_create',
+        authToken: 'token',
+        method: 'worktree.create',
+        params: { repo: 'repo-1', name: 'task' }
+      })
+    ).toBeNull()
+    expect(
+      classifyRuntimeLongPoll({
+        id: 'req_rm',
+        authToken: 'token',
+        method: 'worktree.rm',
+        params: { worktree: 'id:repo-1::/x' }
+      })
+    ).toBe('wait')
+  })
+
   it('rejects oversized RPC frames instead of buffering them indefinitely', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

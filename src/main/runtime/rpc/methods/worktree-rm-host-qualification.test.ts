@@ -10,7 +10,8 @@ function makeRuntime(repoHostIds: (string | undefined)[] = ['local']): OrcaRunti
     listRepos: () =>
       repoHostIds.map((executionHostId) => ({ id: 'repo-1', path: '/repo', executionHostId })),
     showManagedWorktree: vi.fn().mockResolvedValue({ id: 'wt-1', hostId: 'local' }),
-    removeManagedWorktree: vi.fn().mockResolvedValue({})
+    removeManagedWorktree: vi.fn().mockResolvedValue({}),
+    cleanupRecipeRuntimesForRemovedWorkspace: vi.fn().mockResolvedValue(undefined)
   } as unknown as OrcaRuntimeService
 }
 

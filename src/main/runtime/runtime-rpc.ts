@@ -502,6 +502,15 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
     const params = request.params as { wait?: unknown } | undefined
     return params?.wait === true ? 'wait' : null
   }
+  // Why: a recipe create provisions a VM (minutes), and removing its workspace runs the
+  // recipe destroy; both outlive the 30 s socket idle timer without keepalives.
+  if (request.method === 'worktree.create') {
+    const params = request.params as { recipeId?: unknown } | undefined
+    return typeof params?.recipeId === 'string' && params.recipeId.length > 0 ? 'wait' : null
+  }
+  if (request.method === 'worktree.rm') {
+    return 'wait'
+  }
   return null
 }
 

@@ -90,20 +90,24 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         // Why: provenance tokens are reserved before creation so retries can recover,
         // but failed create attempts must release the reservation for a safe retry.
         try {
-          const result = await runtime.createManagedWorktree(
-            buildManagedWorktreeCreateArgs(
-              params,
-              {
-                automationProvenance,
-                cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
-                  startupAgent: params.startupAgent ?? params.createdWithAgent,
-                  createdAt: Date.now()
-                }),
-                creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
-              },
-              context.clientKind ? { clientKind: context.clientKind } : {}
-            )
+          const createArgs = buildManagedWorktreeCreateArgs(
+            params,
+            {
+              automationProvenance,
+              cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
+                startupAgent: params.startupAgent ?? params.createdWithAgent,
+                createdAt: Date.now()
+              }),
+              creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+            },
+            context.clientKind ? { clientKind: context.clientKind } : {}
           )
+          const result = params.recipeId
+            ? await runtime.createManagedWorktreeOnRecipe({
+                ...createArgs,
+                recipeId: params.recipeId
+              })
+            : await runtime.createManagedWorktree(createArgs)
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
           // Why: agent callers need a stable dispatch target without traversing
           // terminal-list layout duplicates after creating the worktree.
@@ -230,6 +234,29 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           }
         }
       }
+      // Resolved before removal: afterwards the selector no longer maps to a workspace, but the
+      // recipe runtime attachment is keyed by the removed workspace id.
+      let removedWorkspaceId: string | null = params.worktree.startsWith('id:')
+        ? params.worktree.slice('id:'.length)
+        : null
+      let adoptedProvisionedRootRepoId: string | null = null
+      try {
+        const shown = await runtime.showManagedWorktree(params.worktree)
+        removedWorkspaceId = shown.id
+        if (shown.ephemeralVmCheckoutMode === 'provisioned-root' && shown.isMainWorktree) {
+          adoptedProvisionedRootRepoId = shown.repoId
+        }
+      } catch {
+        // A stale id-form selector stays deletable through the standard path below.
+      }
+      if (adoptedProvisionedRootRepoId && removedWorkspaceId) {
+        // An adopted provisioned root IS the repo's primary checkout, so the standard removal
+        // would refuse it as protected. Mirror the desktop's Remove Project semantics instead:
+        // destroy the recipe environment, then unregister the recipe-created project.
+        await runtime.cleanupRecipeRuntimesForRemovedWorkspace(removedWorkspaceId)
+        await runtime.removeProject(`id:${adoptedProvisionedRootRepoId}`)
+        return { removed: true }
+      }
       const removalArgs = [
         params.worktree,
         params.force === true,
@@ -237,6 +264,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         params.allowUnverifiedPtyStop === true
       ] as const
       const result = await runtime.removeManagedWorktree(...removalArgs, resolvedHostId)
+      if (removedWorkspaceId) {
+        // Why: the renderer's delete flow runs this cleanup itself over IPC, but CLI and paired
+        // clients remove over RPC where nothing else destroys the recipe environment.
+        await runtime.cleanupRecipeRuntimesForRemovedWorkspace(removedWorkspaceId)
+      }
       return { removed: true, ...result }
     }
   }),
