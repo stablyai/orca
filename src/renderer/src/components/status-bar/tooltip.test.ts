@@ -592,3 +592,59 @@ describe('ProviderIcon', () => {
     expect(markup).toMatch(/src="[^"]+"/)
   })
 })
+
+describe('ProviderPanel pace tick', () => {
+  it('renders the window pace tick when a reset timestamp is known', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
+    const p = provider({
+      status: 'ok',
+      session: {
+        usedPercent: 20,
+        windowMinutes: 300,
+        // Halfway through the 5h window.
+        resetsAt: Date.now() + 150 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('data-pace="on-track"')
+    expect(markup).toContain('left:50%')
+  })
+
+  it('marks the tick over-pace when usage runs ahead of elapsed time', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
+    const p = provider({
+      status: 'ok',
+      session: {
+        usedPercent: 80,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 150 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('data-pace="over"')
+  })
+
+  it('renders no tick when the reset timestamp is unknown', () => {
+    const p = provider({
+      status: 'ok',
+      session: {
+        usedPercent: 20,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).not.toContain('data-pace')
+  })
+})

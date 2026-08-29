@@ -17,6 +17,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { WindowPaceMarker } from './window-pace-marker'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -203,7 +204,8 @@ function ProviderRateLimitWindowSection({
   textClass,
   mutedClass,
   emptyBarClass,
-  usagePercentageDisplay
+  usagePercentageDisplay,
+  inverted = false
 }: {
   window: RateLimitWindow | null
   label: string
@@ -211,23 +213,28 @@ function ProviderRateLimitWindowSection({
   mutedClass: string
   emptyBarClass: string
   usagePercentageDisplay: UsagePercentageDisplay
+  inverted?: boolean
 }): React.JSX.Element | null {
   if (!window) {
     return null
   }
+  const now = Date.now()
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - Date.now()) : null
+  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
 
   return (
     <div className="space-y-1">
       <div className={`font-medium ${textClass}`}>{label}</div>
-      <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
-        {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
-        <div
-          className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
-          style={{ width: `${displayedPct}%` }}
-        />
+      <div className="relative">
+        <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+          {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
+          <div
+            className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
+            style={{ width: `${displayedPct}%` }}
+          />
+        </div>
+        <WindowPaceMarker w={window} now={now} display={usagePercentageDisplay} inverted={inverted} />
       </div>
       <div className={`flex justify-between ${mutedClass}`}>
         <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
@@ -344,6 +351,7 @@ export function ProviderPanel({
           mutedClass={mutedClass}
           emptyBarClass={emptyBarClass}
           usagePercentageDisplay={usagePercentageDisplay}
+          inverted={inverted}
         />
       ))}
 

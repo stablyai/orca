@@ -15,6 +15,7 @@ import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from 
 import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
+import { WindowPaceMarker } from './window-pace-marker'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 
 type ProviderId = ProviderRateLimits['provider']
@@ -84,11 +85,13 @@ function UsageMetric({
   section,
   label,
   display,
+  now,
   showBar = true
 }: {
   section: UsageSection
   label: string
   display: UsagePercentageDisplay
+  now: number
   showBar?: boolean
 }): React.JSX.Element {
   const used = clampUsedPercent(section.window.usedPercent)
@@ -98,11 +101,14 @@ function UsageMetric({
     <span data-usage-window={section.label} className="flex shrink-0 items-center gap-1.5">
       <span className="text-[10px] text-muted-foreground">{label}</span>
       {showBar ? (
-        <span data-usage-bar className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
-          <span
-            className={`block h-full rounded-full ${barColor(used)}`}
-            style={{ width: `${shown}%` }}
-          />
+        <span className="relative flex">
+          <span data-usage-bar className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
+            <span
+              className={`block h-full rounded-full ${barColor(used)}`}
+              style={{ width: `${shown}%` }}
+            />
+          </span>
+          <WindowPaceMarker w={section.window} now={now} display={display} />
         </span>
       ) : null}
       <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>{shown}%</span>
@@ -159,6 +165,7 @@ export function UsageRow({
               section={tightest}
               label={tightest.label}
               display={display}
+              now={now}
               showBar={false}
             />
           </span>
@@ -174,6 +181,7 @@ export function UsageRow({
               section={section}
               label={shortLabel(p, section)}
               display={display}
+              now={now}
             />
           ))}
         </div>
