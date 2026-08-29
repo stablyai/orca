@@ -80,11 +80,12 @@ function wheelEvent(
 function verifyNormalBufferWheelScroll(): void {
   const handlers: ((event: WheelEvent) => boolean)[] = []
   const scrollLines = vi.fn()
+  /** Captures the normal-buffer wheel handler for direct invocation. */
+  function captureNormalBufferWheelHandler(handler: (event: WheelEvent) => boolean): void {
+    handlers.push(handler)
+  }
   const terminal = {
-    /** Captures the normal-buffer wheel handler for direct invocation. */
-    attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
-      handlers.push(handler)
-    },
+    attachCustomWheelEventHandler: captureNormalBufferWheelHandler,
     buffer: { active: { type: 'normal' as const } },
     element: terminalElement(false),
     modes: { mouseTrackingMode: 'none' as const },
@@ -100,11 +101,12 @@ function verifyNormalBufferWheelScroll(): void {
 /** Verifies that alternate-buffer wheel input remains available to xterm's fallback. */
 function verifyAlternateBufferWheelFallback(): void {
   const handlers: ((event: WheelEvent) => boolean)[] = []
+  /** Captures the alternate-buffer wheel handler for direct invocation. */
+  function captureAlternateBufferWheelHandler(handler: (event: WheelEvent) => boolean): void {
+    handlers.push(handler)
+  }
   const terminal = {
-    /** Captures the alternate-buffer wheel handler for direct invocation. */
-    attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
-      handlers.push(handler)
-    },
+    attachCustomWheelEventHandler: captureAlternateBufferWheelHandler,
     buffer: { active: { type: 'alternate' as const } },
     element: terminalElement(false),
     modes: { mouseTrackingMode: 'none' as const },
