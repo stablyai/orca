@@ -10,7 +10,8 @@ export function extractPiToolFields(
   if (
     eventName === 'tool_call' ||
     eventName === 'tool_execution_start' ||
-    eventName === 'tool_execution_end'
+    eventName === 'tool_execution_end' ||
+    eventName === 'tool_approval_requested'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
     const rawToolInput = hookPayload.tool_input

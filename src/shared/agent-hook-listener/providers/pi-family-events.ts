@@ -29,7 +29,7 @@ export function normalizePiCompatibleEvent(
       (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 
-  const stateName = isPiCompatibleAsk
+  const stateName = isPiCompatibleAsk || (agentType === 'pi' && eventName === 'tool_approval_requested')
     ? 'blocked'
     : eventName === 'before_agent_start' ||
         eventName === 'agent_start' ||
