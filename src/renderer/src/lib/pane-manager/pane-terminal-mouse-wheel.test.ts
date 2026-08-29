@@ -423,7 +423,7 @@ describe('terminal mouse wheel multiplier', () => {
     expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, target)).toBe(false)
   })
 
-  it('blocks wheel-to-arrow synthesis for normal buffers without mouse reporting', () => {
+  it('blocks wheel-to-arrow synthesis for normal buffers without mouse reporting' /** Verifies that normal-buffer wheel input scrolls terminal history directly. */, () => {
     const handlers: ((event: WheelEvent) => boolean)[] = []
     const scrollLines = vi.fn()
     const terminal = {
@@ -442,7 +442,7 @@ describe('terminal mouse wheel multiplier', () => {
     expect(scrollLines).toHaveBeenCalledWith(-1)
   })
 
-  it('preserves wheel-to-arrow fallback for alternate buffers without mouse reporting', () => {
+  it('preserves wheel-to-arrow fallback for alternate buffers without mouse reporting' /** Verifies that alternate-buffer wheel input remains available to xterm's fallback. */, () => {
     const handlers: ((event: WheelEvent) => boolean)[] = []
     const terminal = {
       attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
