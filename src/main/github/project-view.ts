@@ -1076,7 +1076,7 @@ async function fetchAllItems(args: {
   if (first.page.totalCount === undefined || first.page.totalCount === null) {
     return { ok: false, error: driftError('items.totalCount missing') }
   }
-  const totalCount = first.page.totalCount
+  let totalCount = first.page.totalCount
   if (first.page.pageInfo?.hasNextPage === undefined) {
     return { ok: false, error: driftError('items.pageInfo.hasNextPage missing'), totalCount }
   }
@@ -1112,6 +1112,39 @@ async function fetchAllItems(args: {
   const e1 = appendNodes(first.page.nodes)
   if (e1) {
     return { ok: false, error: e1, totalCount }
+  }
+
+  // Fallback: indexed queries can return 0 during GitHub Projects search-index
+  // lag after bulk-population. Retry once without the query so unfiltered items
+  // surface instead of the misleading empty state.
+  if (totalCount === 0 && args.query.length > 0) {
+    const fallback = await fetchItemsPageWithRaw({
+      owner: args.owner,
+      ownerType: args.ownerType,
+      projectNumber: args.projectNumber,
+      query: '',
+      first: ITEM_PAGE_SIZE,
+      after: null,
+      includeParent,
+      host: args.host
+    })
+    if (!fallback.ok) {
+      return { ok: false, error: fallback.error }
+    }
+    if (fallback.page.totalCount === undefined || fallback.page.totalCount === null) {
+      return { ok: false, error: driftError('items.totalCount missing'), totalCount: 0 }
+    }
+    if (fallback.page.pageInfo?.hasNextPage === undefined) {
+      return { ok: false, error: driftError('items.pageInfo.hasNextPage missing'), totalCount: 0 }
+    }
+    if (!Array.isArray(fallback.page.nodes)) {
+      return { ok: false, error: driftError('items.nodes missing'), totalCount: 0 }
+    }
+    totalCount = fallback.page.totalCount
+    appendNodes(fallback.page.nodes)
+    // Continue paginating without the query so we pull the full unfiltered
+    // result set instead of re-applying the stale indexed filter.
+    args.query = ''
   }
 
   // Paginate
