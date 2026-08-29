@@ -78,6 +78,8 @@ import {
 } from './layout-serialization'
 import { RESET_KITTY_KEYBOARD_PROTOCOL } from '../../../../shared/terminal-mode-reset-profiles'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
+import { pruneUnboundTerminalLayoutLeaves } from './terminal-layout-unbound-leaf-prune'
+import { isHostAuthoritativeLayout } from './terminal-live-layout-reconciliation'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import { applyTerminalAppearance } from './terminal-appearance'
@@ -920,6 +922,23 @@ export function useTerminalPaneLifecycle({
     if (normalizedInitialLayout.changed) {
       initialLayoutRef.current = normalizedInitialLayout.snapshot
       useAppStore.getState().setTabLayout(tabId, normalizedInitialLayout.snapshot)
+    }
+    // Why: a leaf with no PTY binding and no scrollback beside bound siblings is
+    // a dead remnant (its close/exit teardown lost the layout collapse), and a
+    // materialized binding-less pane stays blank forever — dead-session
+    // reconcile has no PTY id to prove it dead. Host-authoritative layouts may
+    // deliver leaves before their PTY ids, so they are never pruned.
+    if (
+      !isHostAuthoritativeLayout({
+        isWebClient: !!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__,
+        ptyIdsByLeafId: initialLayoutRef.current.ptyIdsByLeafId
+      })
+    ) {
+      const prunedInitialLayout = pruneUnboundTerminalLayoutLeaves(initialLayoutRef.current)
+      if (prunedInitialLayout.changed) {
+        initialLayoutRef.current = prunedInitialLayout.snapshot
+        useAppStore.getState().setTabLayout(tabId, prunedInitialLayout.snapshot)
+      }
     }
     const initialLayoutHadBuffers = Boolean(initialLayoutRef.current.buffersByLeafId)
     const hydratedInitialScrollback = hydrateTerminalScrollbackRefs(initialLayoutRef.current)
