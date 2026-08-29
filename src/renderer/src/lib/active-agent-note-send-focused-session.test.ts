@@ -131,6 +131,68 @@ describe('active agent note send', () => {
     )
   })
 
+  it.each([
+    ['codex' as const, 300],
+    [undefined, 50]
+  ])('waits the %s post-paste submit delay before Enter', async (launchAgent, expectedDelayMs) => {
+    testState.appState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', launchAgent }] }
+    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-1',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-1',
+              leafId: LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'idle' } }
+      }
+      if (method === 'terminal.wait') {
+        return {
+          wait: {
+            handle: 'term-1',
+            condition: 'tui-idle',
+            satisfied: true,
+            status: 'running',
+            exitCode: null
+          }
+        }
+      }
+      if (method === 'terminal.send') {
+        return {
+          send: {
+            handle: 'term-1',
+            accepted: true,
+            bytesWritten: typeof params.text === 'string' ? params.text.length : 1
+          }
+        }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
+    await expect(
+      sendNotesToActiveAgentSession({ worktreeId: 'wt-1', prompt: 'File: src/app.ts' })
+    ).resolves.toEqual({ status: 'sent' })
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), expectedDelayMs)
+    setTimeoutSpy.mockRestore()
+  })
+
   it('maps active-focused guarded paste permission refusal to permission', async () => {
     testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
       if (method === 'terminal.list') {

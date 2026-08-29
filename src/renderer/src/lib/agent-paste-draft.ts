@@ -35,6 +35,14 @@ export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
 export { BRACKETED_PASTE_END }
 export const POST_PASTE_SUBMIT_DELAY_MS = 50
 
+/** Per-agent override for the post-paste Enter delay; unknown agents keep the default. */
+export function resolvePostPasteSubmitDelayMs(agent?: TuiAgent): number {
+  return (
+    (agent ? TUI_AGENT_CONFIG[agent]?.postPasteSubmitDelayMs : undefined) ??
+    POST_PASTE_SUBMIT_DELAY_MS
+  )
+}
+
 // Why: "the tab has a PTY" and "the agent's composer accepts input" are separate
 // states with separate failure modes, so they get separate budgets. A PTY that
 // hasn't appeared in 8s means the launch itself failed — waiting the (longer)
@@ -178,20 +186,28 @@ export async function submitPromptToAgentPty(args: {
   tabId: string
   ptyId: string
   content: string
+  agent?: TuiAgent
 }): Promise<boolean> {
   return await sendBracketedPasteToAgent({
     settings: getSettingsForAgentTabRuntimeOwner(args.tabId),
     ptyId: args.ptyId,
     content: args.content,
-    submit: true
+    submit: true,
+    agent: args.agent
   })
 }
 
 export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
+  agent?: TuiAgent
 }): Promise<boolean> {
-  return await sendBracketedPasteToAgent({ ptyId: args.ptyId, content: args.content, submit: true })
+  return await sendBracketedPasteToAgent({
+    ptyId: args.ptyId,
+    content: args.content,
+    submit: true,
+    agent: args.agent
+  })
 }
 
 async function sendBracketedPasteToAgent(args: {
@@ -215,7 +231,9 @@ async function sendBracketedPasteToAgent(args: {
       // Why: Claude Code can leave a prompt as editable text when paste-end and
       // Enter arrive in the same PTY write. Split the submit into the next turn so
       // the TUI processes bracketed-paste termination before handling Enter.
-      await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+      await new Promise<void>((resolve) =>
+        window.setTimeout(resolve, resolvePostPasteSubmitDelayMs(agent))
+      )
       const submitted = await sendRuntimePtyInputVerified(settings, ptyId, '\r')
 
       if (submitRetryDelayMs !== undefined) {

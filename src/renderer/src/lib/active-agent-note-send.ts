@@ -1,4 +1,5 @@
 import type { RuntimeTerminalSend, RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { sanitizeTerminalPasteText } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -11,7 +12,7 @@ import {
 import {
   BRACKETED_PASTE_BEGIN,
   BRACKETED_PASTE_END,
-  POST_PASTE_SUBMIT_DELAY_MS
+  resolvePostPasteSubmitDelayMs
 } from './agent-paste-draft'
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
 import {
@@ -78,8 +79,17 @@ export async function sendNotesToActiveAgentSession({
     return { status: 'no-active-terminal' }
   }
 
+  const agent = state.tabsByWorktree[worktreeId]?.find(
+    (tab) => tab.id === noteTarget.tabId
+  )?.launchAgent
+
   if (explicitNoteTarget) {
-    return await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, trimmedPrompt)
+    return await sendPromptToExplicitAgentTarget(
+      runtimeTarget,
+      terminal.handle,
+      trimmedPrompt,
+      agent
+    )
   }
 
   const effectiveTimeoutMs = timeoutMs ?? ACTIVE_AGENT_SEND_TIMEOUT_MS
@@ -125,7 +135,8 @@ export async function sendNotesToActiveAgentSession({
 
   if (finalAgentStatus.supportsGuardedSend) {
     return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, trimmedPrompt, {
-      allowLegacyFallback: false
+      allowLegacyFallback: false,
+      agent
     })
   }
 
@@ -168,7 +179,7 @@ async function sendPromptWithGuardedPasteAndEnter(
   runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
   terminalHandle: string,
   prompt: string,
-  options: { allowLegacyFallback: boolean }
+  options: { allowLegacyFallback: boolean; agent?: TuiAgent }
 ): Promise<ActiveAgentNotesSendResult> {
   const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminalHandle, {
     allowLegacyFallback: options.allowLegacyFallback
@@ -214,7 +225,9 @@ async function sendPromptWithGuardedPasteAndEnter(
     throw error
   }
 
-  await new Promise<void>((resolve) => setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+  await new Promise<void>((resolve) =>
+    setTimeout(resolve, resolvePostPasteSubmitDelayMs(options.agent))
+  )
 
   try {
     const submitAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminalHandle, {
@@ -257,9 +270,11 @@ async function sendPromptWithGuardedPasteAndEnter(
 async function sendPromptToExplicitAgentTarget(
   runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
   terminalHandle: string,
-  prompt: string
+  prompt: string,
+  agent?: TuiAgent
 ): Promise<ActiveAgentNotesSendResult> {
   return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminalHandle, prompt, {
-    allowLegacyFallback: false
+    allowLegacyFallback: false,
+    agent
   })
 }

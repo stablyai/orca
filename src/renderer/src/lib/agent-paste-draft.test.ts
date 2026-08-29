@@ -9,6 +9,7 @@ import {
   pasteDraftToAgentPtyWhenReady,
   pasteDraftWhenAgentReady,
   POST_PASTE_SUBMIT_DELAY_MS,
+  resolvePostPasteSubmitDelayMs,
   sendAgentDraftPasteContent,
   sendBracketedPasteToRunningAgent,
   submitPromptToAgentPty
@@ -171,7 +172,9 @@ describe('pasteDraftWhenAgentReady', () => {
       'pty-1',
       PASTED_ISSUE_URL
     )
-    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+    await vi.advanceTimersByTimeAsync(
+      resolvePostPasteSubmitDelayMs('codex') + CODEX_SUBMIT_RETRY_DELAY_MS
+    )
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, {}, 'pty-1', '\r')
     expect(testState.unsubscribe).toHaveBeenCalledTimes(1)
