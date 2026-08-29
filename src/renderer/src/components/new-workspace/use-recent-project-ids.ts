@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { useAllWorktrees } from '@/store/selectors'
 import { NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX } from '@/lib/new-workspace-project-options'
 

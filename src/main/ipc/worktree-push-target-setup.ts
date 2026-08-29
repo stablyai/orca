@@ -4,7 +4,7 @@
 // remote-reuse / unique-naming / fetch behavior is unit-testable without a real
 // repo. The store-aware ownership decision stays with the caller via a predicate.
 
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { GitRemoteExec } from './worktree-push-target-cleanup'
 
@@ -81,6 +81,9 @@ export async function prepareWorktreePushTargetWithExec(
   const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   let remoteName = target.remoteName
   let remoteCreated = false
+  // Why: ownership above is inherited from sibling worktrees, so it can be true
+  // for a remote this call did not create. Only rollback needs that distinction.
+  let remoteAddedHere = false
   if (target.remoteUrl) {
     const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
     if (existingRemote) {
@@ -92,17 +95,29 @@ export async function prepareWorktreePushTargetWithExec(
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
       await execGit(['remote', 'add', remoteName, target.remoteUrl], repoPath)
       remoteCreated = true
+      remoteAddedHere = true
     }
   }
 
-  await execGit(
-    [
-      'fetch',
-      remoteName,
-      `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
-    ],
-    repoPath
-  )
+  try {
+    await execGit(
+      [
+        'fetch',
+        remoteName,
+        `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
+      ],
+      repoPath
+    )
+  } catch (error) {
+    // Why: the create this remote was added for is failing; leaving it behind
+    // orphans a pr-* remote nothing will ever clean up (cleanup runs on worktree
+    // removal, and no worktree exists). A reused remote is still in use by the
+    // sibling worktree that owns it, so removing it would break that worktree.
+    if (remoteAddedHere) {
+      await execGit(['remote', 'remove', remoteName], repoPath).catch(() => {})
+    }
+    throw error
+  }
   return {
     ...sanitizedTarget,
     remoteName,

@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react'
 
-import type { GitHubWorkItem } from '../../../../shared/types'
-import { useAppStore } from '@/store'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -42,7 +41,8 @@ export function useWorktreeCardSecondaryDetails({
   agentActivityDisplayMode,
   workspacePorts,
   openTaskPage,
-  updateWorktreeMeta
+  updateWorktreeMeta,
+  settings
 }: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'statusPrDisplay'> &
   Pick<
     Foundation,
@@ -53,6 +53,7 @@ export function useWorktreeCardSecondaryDetails({
     | 'workspacePorts'
     | 'openTaskPage'
     | 'updateWorktreeMeta'
+    | 'settings'
   > &
   Pick<LinkedDetails, 'issueDisplay' | 'linearIssue' | 'linearIssueDisplay' | 'jiraIssueDisplay'> &
   Pick<
@@ -148,27 +149,28 @@ export function useWorktreeCardSecondaryDetails({
     (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
     (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
   const handleUnlinkReview = useCallback(() => {
+    const options = { executionHostId: worktree.hostId ?? 'local' }
     switch (hoverReviewProvider) {
       case 'github':
-        void updateWorktreeMeta(worktree.id, { linkedPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedPR: null }, options)
         return
       case 'gitlab':
-        void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null })
+        void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null }, options)
         return
       case 'bitbucket':
-        void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null }, options)
         return
       case 'azure-devops':
-        void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null }, options)
         return
       case 'gitea':
-        void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null }, options)
         break
       case 'unsupported':
       case undefined:
         break
     }
-  }, [hoverReviewProvider, updateWorktreeMeta, worktree.id])
+  }, [hoverReviewProvider, updateWorktreeMeta, worktree.hostId, worktree.id])
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -190,9 +192,9 @@ export function useWorktreeCardSecondaryDetails({
   })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
-  const cacheTtlMs = useAppStore((s) =>
-    showAggregateCacheTimer ? (s.settings?.promptCacheTtlMs ?? 0) : 0
-  )
+  // Why: derived from the settings the card already subscribes to — a third store
+  // subscription for this one field costs a listener per card on every store write.
+  const cacheTtlMs = showAggregateCacheTimer ? (settings?.promptCacheTtlMs ?? 0) : 0
 
   return {
     showUnreadEmphasis,

@@ -6,6 +6,7 @@ import { TaskSourceContextSchema } from '../../../../shared/task-source-context-
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
+import { DiffCommentSchema } from '../../../../shared/diff-comment-schema'
 
 const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
 
@@ -59,7 +60,8 @@ const FolderWorkspaceUpdate = z.object({
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),
-      lastActivityAt: OptionalFiniteNumber
+      lastActivityAt: OptionalFiniteNumber,
+      diffComments: z.array(DiffCommentSchema).optional()
     })
     .superRefine(assertLinkedTaskSourceContextMatch)
 })

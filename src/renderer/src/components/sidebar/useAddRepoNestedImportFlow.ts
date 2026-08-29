@@ -10,7 +10,10 @@ import {
   type NestedRepoTelemetryRuntimeKind
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { NestedRepoScanResult, ProjectGroupImportResult } from '../../../../shared/types'
+import type {
+  NestedRepoScanResult,
+  ProjectGroupImportResult
+} from '../../../../shared/project-group-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions, type CapturedRuntimeOwner } from './add-repo-runtime-owner'

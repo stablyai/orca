@@ -1,4 +1,7 @@
-import type { CreateHostedReviewResult } from '../../../../shared/hosted-review'
+import type {
+  CreateHostedReviewResult,
+  CreateStackedHostedReviewResult
+} from '../../../../shared/hosted-review'
 import { translate } from '@/i18n/i18n'
 
 export type { LocalizedHostedReviewCopy as CreatePullRequestReviewCopy } from '@/i18n/hosted-review-localized-copy'
@@ -6,7 +9,7 @@ export type { LocalizedHostedReviewCopy as CreatePullRequestReviewCopy } from '@
 export { localizedHostedReviewCopy as reviewCopy } from '@/i18n/hosted-review-localized-copy'
 
 export function formatCreateError(
-  result: CreateHostedReviewResult,
+  result: CreateHostedReviewResult | CreateStackedHostedReviewResult,
   pushed: boolean,
   shortLabel: string
 ): string {

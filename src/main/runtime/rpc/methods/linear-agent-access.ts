@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { linearError } from '../../../linear/issue-context-errors'
-import { isLinearUuid } from '../../../../shared/linear-uuid'
+import { isLinearUuid } from '../../../../shared/linear/uuid'
 
 const LINEAR_DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const LinearDueDate = z.string().refine((value) => LINEAR_DUE_DATE_PATTERN.test(value), {

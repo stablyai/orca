@@ -1,17 +1,25 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { statMock, subscribeMock, writeFileSyncMock } = vi.hoisted(() => ({
-  statMock: vi.fn(),
-  subscribeMock: vi.fn(),
-  writeFileSyncMock: vi.fn()
-}))
+const { detectShallowWatchDeliveryMock, statMock, subscribeMock, watchMock, writeFileSyncMock } =
+  vi.hoisted(() => ({
+    detectShallowWatchDeliveryMock: vi.fn(),
+    statMock: vi.fn(),
+    subscribeMock: vi.fn(),
+    watchMock: vi.fn(),
+    writeFileSyncMock: vi.fn()
+  }))
 
 vi.mock('node:fs', () => ({
   mkdtempSync: vi.fn(() => '/tmp/orca-watcher-canary-test'),
   rmSync: vi.fn(),
+  watch: watchMock,
   writeFileSync: writeFileSyncMock
 }))
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
+vi.mock('./shallow-watch-delivery-probe', () => ({
+  detectShallowWatchDelivery: detectShallowWatchDeliveryMock
+}))
 vi.mock('@parcel/watcher', () => ({ subscribe: subscribeMock }))
 
 describe('parcel watcher process canary', () => {
@@ -25,6 +33,7 @@ describe('parcel watcher process canary', () => {
     vi.resetModules()
     subscribeMock.mockReset()
     statMock.mockReset()
+    watchMock.mockReset()
     writeFileSyncMock.mockReset()
     originalMessageListeners = process.listeners('message')
     originalExitListeners = process.listeners('exit')
@@ -51,6 +60,79 @@ describe('parcel watcher process canary', () => {
     process.send = originalSend
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('fails the shallow subscribe when the host never delivers fs.watch events', async () => {
+    // A real macOS 26.3.1 machine registers the watch and stays mute forever.
+    // Reporting failure is what lets the caller fall back to polling instead of
+    // showing indefinitely stale Git metadata.
+    detectShallowWatchDeliveryMock.mockResolvedValue(false)
+    watchMock.mockImplementation(() => {
+      const watcher = new EventEmitter() as EventEmitter & { close: () => void }
+      watcher.close = () => watcher.emit('close')
+      return watcher
+    })
+    const sendMock = vi.fn()
+    process.send = sendMock as typeof process.send
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', {
+      op: 'subscribe',
+      id: 7,
+      dir: '/repo/.git',
+      opts: { mode: 'shallow', include: ['HEAD'] }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({ op: 'subscribe-failed', id: 7 })
+    )
+    expect(watchMock).not.toHaveBeenCalledWith('/repo/.git', expect.anything(), expect.anything())
+  })
+
+  it('hosts shallow subscriptions without invoking the recursive native watcher', async () => {
+    detectShallowWatchDeliveryMock.mockResolvedValue(true)
+    const watcherCallbacks = new Map<
+      string,
+      (eventType: string, fileName: string | Buffer | null) => void
+    >()
+    watchMock.mockImplementation(
+      (
+        path: string,
+        _options: unknown,
+        callback: (eventType: string, fileName: string | Buffer | null) => void
+      ) => {
+        watcherCallbacks.set(path, callback)
+        const watcher = new EventEmitter() as EventEmitter & { close: () => void }
+        watcher.close = () => watcher.emit('close')
+        return watcher
+      }
+    )
+    const sendMock = vi.fn()
+    process.send = sendMock as typeof process.send
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', {
+      op: 'subscribe',
+      id: 1,
+      dir: '/repo/.git',
+      opts: { mode: 'shallow', include: ['HEAD'] }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(subscribeMock).toHaveBeenCalledTimes(1)
+    watcherCallbacks.get('/repo/.git')?.('change', 'HEAD')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sendMock).toHaveBeenCalledWith(
+      {
+        op: 'events',
+        id: 1,
+        events: [{ type: 'update', path: '/repo/.git/HEAD' }]
+      },
+      expect.any(Function)
+    )
   })
 
   it('does not restart while a native subscription is still crawling', async () => {

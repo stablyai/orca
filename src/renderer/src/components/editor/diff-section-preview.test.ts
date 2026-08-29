@@ -7,7 +7,8 @@ describe('canOpenDiffSectionPreviewToSide', () => {
       canOpenDiffSectionPreviewToSide({
         path: 'docs/demo.html',
         status: 'modified',
-        isCommitSurface: false
+        isCommitSurface: false,
+        canOpenWorkspaceFileBrowser: true
       })
     ).toBe(true)
   })
@@ -17,7 +18,8 @@ describe('canOpenDiffSectionPreviewToSide', () => {
       canOpenDiffSectionPreviewToSide({
         path: 'index.htm',
         status: 'added',
-        isCommitSurface: false
+        isCommitSurface: false,
+        canOpenWorkspaceFileBrowser: true
       })
     ).toBe(true)
   })
@@ -27,14 +29,16 @@ describe('canOpenDiffSectionPreviewToSide', () => {
       canOpenDiffSectionPreviewToSide({
         path: 'scratch.html',
         status: 'untracked',
-        isCommitSurface: false
+        isCommitSurface: false,
+        canOpenWorkspaceFileBrowser: true
       })
     ).toBe(true)
     expect(
       canOpenDiffSectionPreviewToSide({
         path: 'renamed.html',
         status: 'renamed',
-        isCommitSurface: false
+        isCommitSurface: false,
+        canOpenWorkspaceFileBrowser: true
       })
     ).toBe(true)
   })
@@ -44,7 +48,8 @@ describe('canOpenDiffSectionPreviewToSide', () => {
       canOpenDiffSectionPreviewToSide({
         path: 'Docs/DEMO.HTML',
         status: 'modified',
-        isCommitSurface: false
+        isCommitSurface: false,
+        canOpenWorkspaceFileBrowser: true
       })
     ).toBe(true)
   })
@@ -54,7 +59,8 @@ describe('canOpenDiffSectionPreviewToSide', () => {
       canOpenDiffSectionPreviewToSide({
         path: 'gone.html',
         status: 'deleted',
-        isCommitSurface: false
+        isCommitSurface: false,
+        canOpenWorkspaceFileBrowser: true
       })
     ).toBe(false)
   })
@@ -64,7 +70,8 @@ describe('canOpenDiffSectionPreviewToSide', () => {
       canOpenDiffSectionPreviewToSide({
         path: 'docs/demo.html',
         status: 'modified',
-        isCommitSurface: true
+        isCommitSurface: true,
+        canOpenWorkspaceFileBrowser: true
       })
     ).toBe(false)
   })
@@ -74,7 +81,19 @@ describe('canOpenDiffSectionPreviewToSide', () => {
       canOpenDiffSectionPreviewToSide({
         path: 'src/app.ts',
         status: 'modified',
-        isCommitSurface: false
+        isCommitSurface: false,
+        canOpenWorkspaceFileBrowser: true
+      })
+    ).toBe(false)
+  })
+
+  it('disables previews when the workspace browser provider is unavailable', () => {
+    expect(
+      canOpenDiffSectionPreviewToSide({
+        path: 'docs/demo.html',
+        status: 'modified',
+        isCommitSurface: false,
+        canOpenWorkspaceFileBrowser: false
       })
     ).toBe(false)
   })

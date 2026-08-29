@@ -1,3 +1,4 @@
+import { abortSignalReason } from './abort-signal-reason'
 import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from './remote-runtime-memory-limits'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
@@ -21,6 +22,9 @@ type QueuedRuntimeCall<T> = {
   run: () => Promise<T>
   resolve: (value: T) => void
   reject: (error: unknown) => void
+  started: boolean
+  signal?: AbortSignal
+  onAbort?: () => void
 }
 
 type RuntimeCallQueue = {
@@ -64,8 +68,12 @@ export class RuntimeRpcCallQueuePool {
     selector: string,
     method: string,
     run: () => Promise<T>,
-    retainedBytes = 0
+    retainedBytes = 0,
+    signal?: AbortSignal
   ): Promise<T> {
+    if (signal?.aborted) {
+      return Promise.reject(abortSignalReason(signal))
+    }
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
@@ -88,12 +96,18 @@ export class RuntimeRpcCallQueuePool {
         retainedBytes,
         run,
         resolve,
-        reject
+        reject,
+        started: false,
+        signal
       }
       const targetQueue = call.background ? queue.background : queue.foreground
       targetQueue.push(call as QueuedRuntimeCall<unknown>)
       this.queuedCallCount += 1
       this.retainedCallBytes += retainedBytes
+      if (signal) {
+        call.onAbort = () => this.cancelQueuedCall(selector, queue, call)
+        signal.addEventListener('abort', call.onAbort, { once: true })
+      }
       this.pump(selector, queue)
     })
   }
@@ -124,6 +138,11 @@ export class RuntimeRpcCallQueuePool {
         break
       }
 
+      call.started = true
+      if (call.signal && call.onAbort) {
+        call.signal.removeEventListener('abort', call.onAbort)
+      }
+
       queue.active += 1
       if (call.background) {
         queue.backgroundActive += 1
@@ -151,6 +170,31 @@ export class RuntimeRpcCallQueuePool {
         this.pump(selector, queue)
       })
     }
+  }
+
+  private cancelQueuedCall<T>(
+    selector: string,
+    queue: RuntimeCallQueue,
+    call: QueuedRuntimeCall<T>
+  ): void {
+    if (call.started || !call.signal) {
+      return
+    }
+    const targetQueue = call.background ? queue.background : queue.foreground
+    const head = call.background ? queue.backgroundHead : queue.foregroundHead
+    const index = targetQueue.indexOf(call as QueuedRuntimeCall<unknown>, head)
+    if (index === -1) {
+      return
+    }
+    targetQueue.splice(index, 1)
+    this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+    this.retainedCallBytes = Math.max(0, this.retainedCallBytes - call.retainedBytes)
+    call.reject(abortSignalReason(call.signal))
+    if (queue.active === 0 && this.isEmpty(queue)) {
+      this.queues.delete(selector)
+      return
+    }
+    this.pump(selector, queue)
   }
 
   private takeForeground(queue: RuntimeCallQueue): QueuedRuntimeCall<unknown> | undefined {

@@ -2,21 +2,24 @@ import { ipcMain } from 'electron'
 import { posix, resolve } from 'node:path'
 import type {
   CreateHostedReviewArgs,
+  CreateStackedHostedReviewArgs,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs
 } from '../../shared/hosted-review'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
   createHostedReview,
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
+import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
-import { resolveRegisteredWorktreePath } from './filesystem-auth'
+import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -32,6 +35,27 @@ function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): 
     throw new Error('Access denied: unknown repository path')
   }
   return repo
+}
+
+function assertRegisteredRepoForBranch(args: HostedReviewForBranchArgs, store: Store): Repo {
+  if (!args.repoOwnerExecutionHostId) {
+    return assertRegisteredRepo(args.repoPath, store, args.repoId)
+  }
+  const matches = store.getRepos().filter((candidate) => {
+    const samePath = candidate.connectionId
+      ? normalizeRemoteHostedReviewPath(candidate.path) ===
+        normalizeRemoteHostedReviewPath(args.repoPath)
+      : resolve(candidate.path) === resolve(args.repoPath)
+    return (
+      candidate.id === args.repoId &&
+      samePath &&
+      getRepoExecutionHostId(candidate) === args.repoOwnerExecutionHostId
+    )
+  })
+  if (matches.length !== 1) {
+    throw new Error('Access denied: unknown or ambiguous repository owner')
+  }
+  return matches[0]
 }
 
 async function resolveHostedReviewWorktreePath(
@@ -78,7 +102,7 @@ function normalizeRemoteHostedReviewPath(remotePath: string): string {
 
 export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
-    const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+    const repo = assertRegisteredRepoForBranch(args, store)
     const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
@@ -160,4 +184,44 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     }
     return result
   })
+
+  ipcMain.handle(
+    'hostedReview:createStacked',
+    async (_event, args: CreateStackedHostedReviewArgs) => {
+      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+      const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+      const sharedLinkPaths = repo.connectionId ? [] : getWorktreeSharedLinkPaths(repo)
+      const executionOptions = {
+        ...(Object.keys(localGitOptions).length > 0
+          ? { localGitExecOptions: localGitOptions }
+          : {}),
+        ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+      }
+      const input = {
+        provider: args.provider,
+        base: args.base,
+        head: args.head,
+        title: args.title,
+        body: args.body,
+        draft: args.draft,
+        ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
+      }
+      const result = await createStackedHostedReview(
+        worktreePath,
+        input,
+        repo.connectionId ?? null,
+        executionOptions
+      )
+      if (result.ok && !stats.hasCountedPR(result.url)) {
+        stats.record({
+          type: 'pr_created',
+          at: Date.now(),
+          repoId: repo.id,
+          meta: { prNumber: result.number, prUrl: result.url }
+        })
+      }
+      return result
+    }
+  )
 }

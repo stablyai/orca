@@ -74,6 +74,29 @@ describe('preassembled native-chat live sessions', () => {
     expect(out[0]).toMatchObject({ id: 'image-prompt', source: 'transcript' })
   })
 
+  it('keeps legacy parity for trailing image prompt markers', () => {
+    const transcript: NativeChatMessage[] = [
+      message('image-source', {
+        role: 'user',
+        blocks: [{ type: 'text', text: '[Image: source: /tmp/a.png]' }],
+        timestamp: 1
+      }),
+      message('image-prompt', {
+        role: 'user',
+        blocks: [{ type: 'text', text: 'describe this[Image #1]' }],
+        timestamp: 2
+      })
+    ]
+
+    const out = expectLegacyMessageParity(transcript)
+
+    expect(out).toHaveLength(1)
+    expect(out[0]?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'text', text: 'describe this' }
+    ])
+  })
+
   it('re-dedupes surfaced skill envelopes that collide across sources', () => {
     const skill = (id: string, plugin: string, source: 'transcript' | 'scrape') =>
       message(id, {

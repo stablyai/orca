@@ -1,4 +1,8 @@
-import type { Repo, WorkspaceSessionPatch, WorkspaceSessionState } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../shared/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -6,7 +10,11 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
 import {
   mergeWorkspaceSessionsFromHosts,
   splitWorkspaceSessionByHost,
@@ -72,6 +80,9 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeWorkspaceSessionKeyForOwnerMap(value: string): string {
+  if (isWorktreeHostIdentity(value)) {
+    return getWorktreeIdFromHostIdentity(value)
+  }
   const scope = parseWorkspaceKey(value)
   return scope?.type === 'worktree' ? scope.worktreeId : value
 }

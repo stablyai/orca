@@ -123,8 +123,25 @@ function normalizedToolFilePath(input: unknown): string | null {
   // target would label the row with the scan root and link to a folder. Costs the
   // link on a file-scoped search; a dead link on every other search is worse.
   const directory = isSearchToolInput(value) ? undefined : value.path
-  const path = value.file_path ?? value.filePath ?? directory ?? value.notebook_path
+  const path =
+    value.file_path ??
+    value.filePath ??
+    directory ??
+    value.notebook_path ??
+    firstPatchChangePath(value)
   return typeof path === 'string' && path.length > 0 ? path : null
+}
+
+function firstPatchChangePath(value: Record<string, unknown>): unknown {
+  if (!Array.isArray(value.changes)) {
+    return undefined
+  }
+  for (const change of value.changes) {
+    if (typeof change === 'object' && change !== null && typeof change.path === 'string') {
+      return change.path
+    }
+  }
+  return undefined
 }
 
 export function briefToolArg(input: unknown): string {
@@ -283,7 +300,7 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
   const result: Record<string, unknown> = {}
   let count = 0
   for (const key in value) {
-    if (!Object.prototype.hasOwnProperty.call(value, key)) {
+    if (!Object.hasOwn(value, key)) {
       continue
     }
     if (count >= MAX_PREVIEW_COLLECTION_ITEMS) {

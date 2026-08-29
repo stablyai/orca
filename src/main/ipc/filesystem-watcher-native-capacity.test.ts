@@ -28,7 +28,7 @@ import {
   WatcherChildCapacityError
 } from './parcel-watcher-child-registry'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 function fillWatcherChildCapacity(): (() => void)[] {
   return Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () => {

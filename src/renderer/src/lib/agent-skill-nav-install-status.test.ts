@@ -24,7 +24,6 @@ function skill(name: string): DiscoveredSkill {
     directoryPath,
     skillFilePath: path.join(directoryPath, 'SKILL.md'),
     installed: true,
-    fileCount: 1,
     updatedAt: null
   }
 }

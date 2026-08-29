@@ -1,5 +1,5 @@
-import type { GitHubWorkItem, Worktree } from '../../../shared/types'
-import { getWorktreeAttachmentLabel } from './worktree-attachment-label'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 type GitHubWorkItemType = GitHubWorkItem['type']
 
@@ -38,12 +38,4 @@ export function findGithubIssueWorkspaceAttachment(
   issueNumber: number
 ): Worktree | null {
   return findGithubWorkItemWorkspaceAttachment(worktrees, repoId, 'issue', issueNumber)
-}
-
-export function getGithubWorkItemWorkspaceAttachmentLabel(worktree: Worktree): string {
-  return getWorktreeAttachmentLabel(worktree)
-}
-
-export function getGithubPrWorkspaceAttachmentLabel(worktree: Worktree): string {
-  return getWorktreeAttachmentLabel(worktree)
 }

@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 
 export type Worktree = {
@@ -45,6 +46,7 @@ export type Worktree = {
   linkedGitLabIssue?: number | null
   comment?: string
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
+  workingMode?: AgentWorkingMode
   agents?: RuntimeWorktreeAgentRow[]
 }
 

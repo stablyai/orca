@@ -182,7 +182,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
         }
       }
       let next: StoredHostProfile[]
-      if (index >= 0) {
+      if (index !== -1) {
         updatedExistingHost = true
         // Why: an authoritative save is the safe point to collapse pre-existing duplicate rows to the preserved host id.
         next = hosts
@@ -195,7 +195,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
         next = [...hosts.filter(({ id }) => !duplicateHostIds.has(id)), stored]
       }
       if (duplicateHostIds.size > 0) {
-        if (index < 0) {
+        if (index === -1) {
           // Why: process death between the early token write and metadata publication must leave cleanup discoverable.
           await recordHostCredentialCleanupIntent(stored.id)
           cleanupIntentRecordedBeforeMetadata = true
@@ -304,7 +304,7 @@ export async function updateHostNameAndEndpoint(
 ): Promise<void> {
   await mutateStoredHosts((hosts) => {
     const index = hosts.findIndex((host) => host.id === hostId)
-    if (index < 0) {
+    if (index === -1) {
       throw new Error('Host not found')
     }
     const next = hosts.slice()
@@ -321,7 +321,7 @@ export async function updateLastConnected(hostId: string): Promise<void> {
   try {
     await mutateStoredHosts((hosts) => {
       const index = hosts.findIndex((h) => h.id === hostId)
-      if (index < 0) {
+      if (index === -1) {
         return hosts
       }
       const next = hosts.slice()

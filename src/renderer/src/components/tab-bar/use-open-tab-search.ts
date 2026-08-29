@@ -6,7 +6,8 @@ import { useAppStore } from '@/store'
 import {
   buildOpenTabSearchEntries,
   selectOpenTabSearchAgentState,
-  selectOpenTabSearchEntryState
+  selectOpenTabSearchEntryState,
+  type OpenTabSearchEntries
 } from './open-tab-search-entries'
 import { searchOpenTabs, type OpenTabSearchResult } from './open-tab-search'
 
@@ -22,6 +23,8 @@ export type OpenTabSearchSnapshot = {
   /** The query `results` describe; lags the requested query while deferred. */
   query: string
   results: OpenTabSearchResult[]
+  /** What `results` were searched from, so a caller can re-check a newer query. */
+  entries: OpenTabSearchEntries | null
 }
 
 export function useOpenTabSearch({
@@ -49,6 +52,7 @@ export function useOpenTabSearch({
   return useMemo(
     () => ({
       query: deferredQuery,
+      entries,
       results: entries ? searchOpenTabs({ ...entries, query: deferredQuery }) : EMPTY_RESULTS
     }),
     [deferredQuery, entries]

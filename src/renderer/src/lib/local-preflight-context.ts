@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
@@ -6,7 +7,8 @@ import {
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { getProviderRuntimeContextKey } from './provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
@@ -39,10 +41,12 @@ type LocalProjectRuntimeWslContext = {
   availableWslDistros?: readonly string[] | null
 }
 
+/** Extracts a WSL distribution name from supported UNC path forms. */
 export function getWslDistroFromPath(path?: string | null): string | null {
   return path ? (parseWslUncPath(path)?.distro ?? null) : null
 }
 
+/** Resolves the owning local project's Windows runtime for project-scoped targets. */
 export function getLocalProjectExecutionRuntimeContext(
   state: LocalProjectRuntimeState,
   worktreeId?: string | null,
@@ -53,6 +57,9 @@ export function getLocalProjectExecutionRuntimeContext(
     return undefined
   }
 
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return undefined
+  }
   const worktree = getLocalWorktree(state, worktreeId)
   const repo = getLocalRuntimeRepoForWorktree(state, worktree)
   if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(worktree)) {
@@ -163,6 +170,10 @@ export function getLocalAgentPreflightContext(
   wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext(),
   worktreeId?: string | null
 ): LocalPreflightContext {
+  // Why: Floating owns native host authority and must not inherit any agent runtime fallback.
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return undefined
+  }
   const projectRuntime = getLocalProjectExecutionRuntimeContext(
     state,
     worktreeId,

@@ -31,7 +31,9 @@ vi.mock('@/store', () => ({
         setRuntimeEnvironmentStatus: storeMocks.setRuntimeEnvironmentStatus,
         activeModal: 'none',
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
-        updateSettings: vi.fn()
+        updateSettings: vi.fn(),
+        projects: [],
+        repos: []
       }),
     {
       getState: () => ({
@@ -60,6 +62,10 @@ vi.mock('@/components/agent/AgentCombobox', () => ({
 vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({
   AddRemoteHostDialog: ({ mode }: { mode: 'ssh' | 'server' | null }) =>
     mode ? <div data-testid="add-remote-host-dialog" data-mode={mode} /> : null
+}))
+
+vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => ({
+  SetProjectLocationDialog: () => null
 }))
 
 vi.mock('@/components/sparse/SparseCheckoutPresetSelect', () => ({
@@ -155,7 +161,8 @@ const devboxNeedsSetupHostOption: ProjectHostSetupOption = {
   label: 'Devbox',
   detail: 'Project location not set',
   isAvailable: true,
-  attention: false
+  attention: false,
+  canSetLocation: true
 }
 
 const disconnectedDevboxNeedsSetupHostOption: ProjectHostSetupOption = {
@@ -167,6 +174,7 @@ const disconnectedDevboxNeedsSetupHostOption: ProjectHostSetupOption = {
   detail: 'Connect this host to set up projects',
   isAvailable: false,
   attention: false,
+  canSetLocation: false,
   connectAction: { kind: 'ssh', targetId: 'devbox' }
 }
 
@@ -179,6 +187,7 @@ const disconnectedBastionNeedsSetupHostOption: ProjectHostSetupOption = {
   detail: 'Connect this host to set up projects',
   isAvailable: false,
   attention: false,
+  canSetLocation: false,
   connectAction: { kind: 'ssh', targetId: 'bastion' }
 }
 
@@ -221,6 +230,8 @@ function renderCard(
         onReuseSelectedBranchChange={() => {}}
         branchNameOverride=""
         onBranchNameOverrideChange={() => {}}
+        parentWorktreeId={null}
+        onParentWorktreeIdChange={() => {}}
         forkPushWarning={null}
         detectedAgentIds={null}
         onOpenAgentSettings={() => {}}
@@ -297,6 +308,11 @@ function findRunTargetItem(label: string): HTMLElement | undefined {
 
 let current: { container: HTMLDivElement; root: Root } | null = null
 
+function unmountCurrent(): void {
+  act(() => current?.root.unmount())
+  current?.container.remove()
+}
+
 describe('NewWorkspaceComposerCard folder task source mode', () => {
   beforeEach(() => {
     ;(window as unknown as { api: unknown }).api = {
@@ -324,8 +340,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
   })
 
   afterEach(() => {
-    act(() => current?.root.unmount())
-    current?.container.remove()
+    unmountCurrent()
     current = null
     vi.clearAllMocks()
   })
@@ -386,8 +401,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     )
     expect(collapsedReuse).toBeTruthy()
 
-    act(() => current?.root.unmount())
-    current?.container.remove()
+    unmountCurrent()
 
     current = renderCard({ canReuseSelectedBranch: true, reuseSelectedBranch: true })
     const reuseLabel = [...current.container.querySelectorAll('label')].find((label) =>
@@ -421,8 +435,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     clickReuseCheckbox()
     expect(offChanges).toEqual([false])
 
-    act(() => current?.root.unmount())
-    current?.container.remove()
+    unmountCurrent()
 
     // Unchecked -> checked (opting into reuse — the action that pins the branch).
     const onChanges: boolean[] = []
@@ -449,8 +462,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       'Wait for setup to complete before starting agent'
     )
 
-    act(() => current?.root.unmount())
-    current?.container.remove()
+    unmountCurrent()
 
     current = renderCard({
       advancedOpen: true,
@@ -570,6 +582,19 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(findInputByLabel(current.container, 'Branch name')).toBeTruthy()
   })
 
+  it('places the parent workspace picker immediately after the branch name field', () => {
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true
+    })
+
+    const nextField = findInputByLabel(current.container, 'Branch name')?.closest(
+      'div.space-y-1'
+    )?.nextElementSibling
+    expect(nextField?.textContent).toMatch(/Parent worktree(?!.*Note)/)
+    expect(nextField?.nextElementSibling?.textContent).toContain('Note')
+  })
+
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {
     current = renderCard({
       eligibleRepos: [
@@ -601,7 +626,8 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     openRunTargetPicker(current.container)
 
     const devboxItem = findRunTargetItem('Devbox')
-    expect(devboxItem?.textContent).toContain('Project location not set')
+    expect(devboxItem?.textContent).not.toContain('Project location not set')
+    expect(devboxItem?.textContent).toContain('Set project location')
     // Not-connected rows stay highlightable (never `disabled`) so they hover like
     // the other rows; they're quieted visually instead.
     expect(devboxItem?.hasAttribute('data-disabled')).toBe(false)
@@ -876,8 +902,7 @@ describe('NewWorkspaceComposerCard note sizing', () => {
   // Sizing is layout-driven (field-sizing) rather than a JS measure pass, and happy-dom
   // has no layout engine, so these assert the class contract that produces the growth.
   afterEach(() => {
-    act(() => current?.root.unmount())
-    current?.container.remove()
+    unmountCurrent()
     current = null
   })
 

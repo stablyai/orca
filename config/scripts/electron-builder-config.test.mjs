@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+const REPO_ROOT = join(import.meta.dirname, '..', '..')
+const SRC_MAIN_DIR = join(REPO_ROOT, 'src', 'main')
+
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
@@ -41,12 +44,30 @@ describe('electron-builder config', () => {
         '!tests{,/**/*}',
         '!examples{,/**/*}',
         '!pr-evidence{,/**/*}',
+        '!{.claude,.grok,.agents,.codex}{,/**/*}',
         '!Casks{,/**/*}',
         '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
         '!out/**/*.test.js',
         '!resources/plugins/launch/**'
       ])
     )
+  })
+
+  it('keeps local agent tooling out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const toolingPath of [
+      '.grok/skills/review-and-submit/review-and-submit/SKILL.md',
+      '.claude/skills/review-and-submit/review-and-submit/SKILL.md',
+      '.agents/skills/electron/SKILL.md',
+      '.codex/sessions/session.json'
+    ]) {
+      expect(packs(toolingPath)).toBe(false)
+    }
+    expect(packs('out/main/index.js')).toBe(true)
   })
 
   // Why: `files` is an all-negation list, so electron-builder's default `**/*` packs
@@ -70,6 +91,25 @@ describe('electron-builder config', () => {
     }
     // The negation stays anchored at the app root, so nested `examples` segments still ship.
     expect(packs('out/main/examples/index.js')).toBe(true)
+  })
+
+  // Why: out/electron-dev holds `pnpm dev`'s cached Electron.app copies (~270MB per branch).
+  // CI never creates it, so only a local package would have hit this -- silently, as bulk.
+  it('keeps cached dev Electron bundles out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const devBundlePath of [
+      'out/electron-dev/1a2b3c4d5e6f/Orca: dev.app/Contents/MacOS/Electron',
+      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json'
+    ]) {
+      expect(packs(devBundlePath)).toBe(false)
+    }
+    // The real build outputs sit beside it under out/ and must still ship.
+    expect(packs('out/main/index.js')).toBe(true)
+    expect(packs('out/renderer/index.html')).toBe(true)
   })
 
   it('keeps runtime resources available through extraResources', () => {
@@ -152,6 +192,20 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('ships the mac keyboard-layout helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
+          to: 'MacOS/orca-keyboard-layout'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-keyboard-layout' })])
+    )
+  })
+
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining([
@@ -169,6 +223,37 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining(['out/main/parcel-watcher-process-entry.js'])
     )
+  })
+
+  it('unpacks the replaceable WSL transcript filesystem process entry', async () => {
+    const entryFilename = 'wsl-transcript-fs-process-entry.js'
+    expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
+
+    const viteConfig = await readFile(join(REPO_ROOT, 'electron.vite.config.ts'), 'utf8')
+    expect(viteConfig).toMatch(new RegExp(`'${entryFilename.replace(/\.js$/, '')}':\\s*resolve\\(`))
+  })
+
+  // Why: the scanner service is forked with ELECTRON_RUN_AS_NODE, so asar is
+  // invisible to it and a packed worker entry fails closed — dropping every
+  // OpenCode session in packaged builds while dev stays green. Three legs must
+  // agree on the filename, so all three are read rather than hardcoded.
+  it('unpacks the OpenCode SQLite worker entry the scanner service forks', async () => {
+    const spawnSource = await readFile(
+      join(SRC_MAIN_DIR, 'ai-vault', 'session-scanner-opencode-sqlite-worker-spawn.ts'),
+      'utf8'
+    )
+    const entryFilename = spawnSource.match(/WORKER_ENTRY_FILENAME = '([^']+)'/)?.[1]
+
+    expect(entryFilename).toBeDefined()
+    expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)
+
+    // Why: the emitted path comes from the rollup input key under
+    // entryFileNames '[name].js', not from the source filename — renaming the
+    // key alone would leave the other two legs agreeing on a file that no
+    // longer exists.
+    const viteConfig = await readFile(join(REPO_ROOT, 'electron.vite.config.ts'), 'utf8')
+    expect(viteConfig).toContain("entryFileNames: '[name].js'")
+    expect(viteConfig).toMatch(new RegExp(`'${entryFilename.replace(/\.js$/, '')}':\\s*resolve\\(`))
   })
 
   it('keeps the worker-thread hang watchdog inside app.asar', () => {
@@ -369,7 +454,7 @@ describe('electron-builder config', () => {
     }
   })
 
-  it('includes @parcel/watcher in the packaged runtime closure', () => {
+  it('includes external main dependencies in the packaged runtime closure', () => {
     // Why: the main process imports '@parcel/watcher' for filesystem change
     // events; if it is absent from the packaged closure the serve host silently
     // stops propagating file changes to clients (regression guard for #4851).
@@ -381,6 +466,7 @@ describe('electron-builder config', () => {
         target.startsWith(join('node_modules', '@parcel', 'watcher-'))
       )
     ).toBe(true)
+    expect(packagedTargets).toContain(join('node_modules', 'proper-lockfile'))
   })
 
   it('prunes non-target @parcel/watcher architecture subpackages', async () => {

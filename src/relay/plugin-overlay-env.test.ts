@@ -104,4 +104,31 @@ describe('plugin overlay env source resolution', () => {
       )
     ).toBe('/remote/original-prime')
   })
+
+  // Why: the session env is the only place a fish user's XDG_CONFIG_HOME shows up
+  // (config.fish exports it, so no GUI-launched process inherits it). Dropping it
+  // here would scan ~/.config and disagree with the same lookup on the main side.
+  it.skipIf(process.platform === 'win32')(
+    'reads fish config under the session XDG_CONFIG_HOME',
+    () => {
+      const configHome = join(homeDir, 'xdg')
+      mkdirSync(join(configHome, 'fish'), { recursive: true })
+      writeFileSync(
+        join(configHome, 'fish', 'config.fish'),
+        'set -gx OPENCODE_CONFIG_DIR "$HOME/company-opencode"\n'
+      )
+      mkdirSync(join(homeDir, '.config', 'fish'), { recursive: true })
+      writeFileSync(
+        join(homeDir, '.config', 'fish', 'config.fish'),
+        'set -gx OPENCODE_CONFIG_DIR /wrong-default-config-home\n'
+      )
+
+      expect(
+        resolveOpenCodeSourceConfigDir(
+          { HOME: homeDir, XDG_CONFIG_HOME: configHome },
+          '/opt/homebrew/bin/fish'
+        )
+      ).toBe(join(homeDir, 'company-opencode'))
+    }
+  )
 })

@@ -11,7 +11,7 @@ import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoratio
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
-import type { TerminalTab } from './types'
+import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
@@ -113,7 +113,13 @@ function conversationNameFromLiveTitle(
 export function getAgentRowConversationName(
   tab: ConversationNameTab,
   agentType: AgentType | null | undefined,
-  generatedTitlesEnabled: boolean
+  generatedTitlesEnabled: boolean,
+  // Why: `tab.title` carries only the FOCUSED pane's title, so in a split tab it
+  // names one pane and mislabels its siblings. Callers on a multi-pane tab pass
+  // this row's own pane title, or `null` when none resolves; `undefined` (a
+  // single-pane tab) keeps the tab title. Tab-owned names above are unaffected:
+  // the user gave those to the whole tab and they do not flip on focus.
+  paneLiveTitle?: string | null
 ): string | null {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
@@ -123,7 +129,8 @@ export function getAgentRowConversationName(
   if (quickCommandLabel) {
     return quickCommandLabel
   }
-  const liveTitle = tab.title?.trim() ?? ''
+  const liveTitle =
+    paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }

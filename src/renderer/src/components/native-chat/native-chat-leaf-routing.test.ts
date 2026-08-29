@@ -160,6 +160,33 @@ describe('resolveNativeChatLeafRoute', () => {
     ).toEqual({ chatLeafId: null, exitChat: true })
   })
 
+  it('keeps structured chat open when its ownership transfer stops the TUI', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'adopted-agent',
+        activeLeafId: 'adopted-agent',
+        chatLeafStillMounted: false,
+        activeLeafIsEligible: false,
+        chatLeafHasConfirmedAgentExit: true,
+        structuredSessionId: 'codex_thread-1'
+      })
+    ).toEqual({ chatLeafId: 'adopted-agent', exitChat: false })
+  })
+
+  it('binds tab-bar structured adoption to the active leaf after the TUI exits', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: null,
+        activeLeafId: 'adopted-agent',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: false,
+        structuredSessionId: 'codex_thread-1'
+      })
+    ).toEqual({ chatLeafId: 'adopted-agent', exitChat: false })
+  })
+
   it('moves chat to an eligible sibling after the owning agent exits', () => {
     expect(
       resolveNativeChatLeafRoute({

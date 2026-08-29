@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { WorkerTerminalListState } from '../../orchestration/worker-terminal-ownership'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
@@ -54,12 +53,36 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
         }
       }
       if (requested.disposition === 'retained') {
+        const resource = requested.resource
+        const processIncarnation = resource?.process_incarnation
+        if (
+          processIncarnation &&
+          (await runtime.inspectTerminalProcessIncarnationLiveness(
+            processIncarnation,
+            resource.host_scope
+          )) === 'exited'
+        ) {
+          const reconciled = db.settleDeadWorkerTerminalRelease({
+            requestingDispatchId: params.dispatch,
+            resourceId: resource.id,
+            processIncarnation
+          })
+          if (reconciled.disposition === 'released') {
+            runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+            return {
+              dispatchId: params.dispatch,
+              state: 'released',
+              processAction: 'none',
+              archive: archiveSummary(reconciled.resource)
+            }
+          }
+        }
         return {
           dispatchId: params.dispatch,
           state: 'retained',
           reason: requested.reason,
           processAction: 'none',
-          archive: archiveSummary(requested.resource)
+          archive: archiveSummary(resource)
         }
       }
       return completeWorkerTerminalRelease({
@@ -75,12 +98,6 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
     params: WorkerDispatchParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      if (!db.getWorkerDispatch(params.dispatch)) {
-        throw new OrchestrationError(
-          'dispatch_not_found',
-          `Worker Dispatch ${params.dispatch} was not found.`
-        )
-      }
       const retained = db.retainWorkerTerminalResource(params.dispatch)
       if (retained.disposition === 'already_released') {
         return {

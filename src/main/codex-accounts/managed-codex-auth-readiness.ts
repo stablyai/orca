@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 
 const AUTH_READY_TIMEOUT_MS = 1_500

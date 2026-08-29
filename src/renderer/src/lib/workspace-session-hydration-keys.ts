@@ -1,8 +1,9 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceKey, WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 export type WorkspaceSessionHydrationOptions = {
   additionalValidWorkspaceKeys?: readonly WorkspaceKey[]

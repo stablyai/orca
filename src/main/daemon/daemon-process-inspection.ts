@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
-import { parseLinuxBootTimeSeconds, parseLinuxProcStartTicks } from './daemon-health'
+import { parseLinuxBootTimeSeconds, parseLinuxProcStartTicks } from './daemon-process-start-time'
 import type {
   LinuxStatEvidence,
+  ProcessLivenessVerdict,
   ProcessSignalEvidence,
   WindowsProcessEvidence
 } from './daemon-incarnation-evidence-types'
@@ -29,6 +30,33 @@ export function inspectProcessSignal(pid: number): ProcessSignalEvidence {
       return 'permission_denied'
     }
     return 'unavailable'
+  }
+}
+
+export function inspectProcessLiveness(pid: number): ProcessLivenessVerdict {
+  const signal = inspectProcessSignal(pid)
+  switch (signal) {
+    case 'occupied':
+    case 'permission_denied':
+      return { status: 'live' }
+    case 'missing':
+      return { status: 'exited' }
+    case 'unavailable':
+      return { status: 'unverifiable', reason: 'the daemon process could not be queried' }
+  }
+}
+
+export function mergeProcessLivenessVerdict(
+  current: ProcessLivenessVerdict | undefined,
+  next: ProcessLivenessVerdict
+): ProcessLivenessVerdict {
+  switch (next.status) {
+    case 'live':
+      return next
+    case 'unverifiable':
+      return current?.status === 'live' ? current : next
+    case 'exited':
+      return current ?? next
   }
 }
 
@@ -117,7 +145,7 @@ export async function queryWindowsProcess(
   }
 }
 
-// Why: the sync procfs helper in daemon-health spawns getconf per call; CLK_TCK is fixed for
+// Why: the sync procfs helper in daemon-process-start-time spawns getconf per call; CLK_TCK is fixed for
 // the kernel's lifetime, so cache one async spawn and only retry after a failure. The cache is
 // keyed by runner because CLK_TCK belongs to the host that executes the command, not the module.
 const clockTicksPerSecondByRunner = new WeakMap<InspectionCommandRunner, Promise<number | null>>()
@@ -191,7 +219,13 @@ async function runInspectionCommand(
   args: string[],
   timeoutMs: number
 ): Promise<string> {
-  const { stdout } = await execFileAsync(file, args, { encoding: 'utf8', timeout: timeoutMs })
+  // powershell.exe is console-subsystem: without this it flashes a conhost and
+  // steals foreground on every inspection (#10488).
+  const { stdout } = await execFileAsync(file, args, {
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    windowsHide: true
+  })
   return stdout
 }
 

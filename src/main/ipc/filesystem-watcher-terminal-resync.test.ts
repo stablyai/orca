@@ -28,7 +28,7 @@ import {
   restoreRemoteWatcherAfterFailedRemoval
 } from './filesystem-watcher'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 type TerminalErrorHandler = (error: Error) => void
 
 const WORKTREE_PATH = '/home/me/repo'

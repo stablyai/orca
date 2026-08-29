@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../shared/workspace-ports'
 
-const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
 const { handleMock, removeHandlerMock, scanWorkspacePortsMock, processKillMock } = vi.hoisted(
   () => ({
     handleMock: vi.fn(),

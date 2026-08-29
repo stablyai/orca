@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
-import type { FSWatcher } from 'node:fs'
+import { renameSync, type FSWatcher } from 'node:fs'
 import type * as NodeFs from 'node:fs'
-import { appendFile, mkdir, mkdtemp, rename, rm, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -186,7 +186,7 @@ describe('native chat transcript watcher liveness', () => {
     const root = dirname(filePath)
     const oldRoot = `${root}.old`
     roots.push(oldRoot)
-    const snapshots = vi.fn()
+    const snapshots = vi.fn(() => renameSync(root, oldRoot))
     const replacements = vi.fn()
     const appends = vi.fn()
     const subscription = await subscribeNativeChatTranscript({
@@ -202,9 +202,8 @@ describe('native chat transcript watcher liveness', () => {
     })
     await waitFor(() => snapshots.mock.calls.length === 1)
 
-    await rename(root, oldRoot)
     await mkdir(root)
-    await writeFile(filePath, claudeLine('new-file', 'user', 'after'))
+    await writeFile(filePath, claudeLine('new-file', 'user', 'after!'))
     await waitFor(() => replacements.mock.calls.length === 1 && watchers.length === 2)
     await appendFile(filePath, claudeLine('new-followup', 'assistant', 'event-driven'))
     watchCallbacks[1]!('change', 'transcript.jsonl')

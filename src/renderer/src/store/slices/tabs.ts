@@ -1,16 +1,17 @@
 /* eslint-disable max-lines -- Why: split-tab group state updates layout, focus, and tab membership atomically in one slice to avoid split-brain. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { toVisibleTabType } from '../../../../shared/tab-types'
 import type {
   Tab,
   TabContentType,
   TabGroup,
   TabGroupLayoutNode,
-  TerminalTab,
-  TuiAgent,
-  WorkspaceSessionState,
   WorkspaceVisibleTabType
-} from '../../../../shared/types'
+} from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import {
   dedupeTabOrder,
@@ -36,6 +37,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -73,6 +75,7 @@ export type TabsSlice = {
         Tab,
         | 'id'
         | 'entityId'
+        | 'executionHostId'
         | 'label'
         | 'generatedLabel'
         | 'quickCommandLabel'
@@ -99,6 +102,7 @@ export type TabsSlice = {
         Tab,
         | 'id'
         | 'entityId'
+        | 'executionHostId'
         | 'label'
         | 'generatedLabel'
         | 'quickCommandLabel'
@@ -123,7 +127,12 @@ export type TabsSlice = {
   activateTab: (tabId: string, opts?: { preservePreview?: boolean; worktreeId?: string }) => void
   closeUnifiedTab: (
     tabId: string,
-    opts?: { recordInteraction?: boolean; terminalRetirementHandled?: boolean }
+    opts?: {
+      /** Keep the worktree selected even if this empties it — for closes the user did not ask for. */
+      preserveWorktreeSelection?: boolean
+      recordInteraction?: boolean
+      terminalRetirementHandled?: boolean
+    }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (
     groupId: string,
@@ -153,7 +162,8 @@ export type TabsSlice = {
   createEmptySplitGroup: (
     worktreeId: string,
     sourceGroupId: string,
-    direction: TabSplitDirection
+    direction: TabSplitDirection,
+    opts?: { activate?: boolean }
   ) => string | null
   moveUnifiedTabToGroup: (
     tabId: string,
@@ -413,13 +423,6 @@ function collapseGroupLayout(
       [worktreeId]: siblingId ?? fallbackGroupId ?? activeGroupIdByWorktree[worktreeId]
     }
   }
-}
-
-function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
-    return contentType
-  }
-  return 'editor'
 }
 
 function deriveActiveSurfaceForWorktree(
@@ -709,7 +712,7 @@ export function projectWorktreeTabModelReconciliation(
     if (tab.contentType === 'browser') {
       return liveBrowserIds.has(tab.entityId)
     }
-    if (tab.contentType === 'simulator') {
+    if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
       return true
     }
     return liveEditorIds.has(tab.entityId)
@@ -860,11 +863,16 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
       }
 
+      const shouldActivate = init?.activate ?? true
+      const createdAt = Date.now()
+      const executionHostId =
+        init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
       created = {
         id,
         entityId: init?.entityId ?? id,
         groupId: group.id,
         worktreeId,
+        ...(executionHostId ? { executionHostId } : {}),
         contentType,
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
@@ -875,13 +883,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         customLabel: init?.customLabel ?? null,
         color: init?.color ?? null,
         sortOrder: nextOrder.length,
-        createdAt: Date.now(),
+        createdAt,
+        // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
+        ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
         isPreview: init?.isPreview,
         isPinned: init?.isPinned
       }
 
       nextOrder = dedupeTabOrder([...nextOrder, created.id])
-      const shouldActivate = init?.activate ?? true
       const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
       const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
       // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
@@ -931,11 +940,15 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const currentLayout =
         state.layoutByWorktree[worktreeId] ??
         ({ type: 'leaf', groupId: target.sourceGroupId } as const)
+      const createdAt = Date.now()
+      const executionHostId =
+        init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
       const createdTab: Tab = {
         id,
         entityId: init?.entityId ?? id,
         groupId: newGroupId,
         worktreeId,
+        ...(executionHostId ? { executionHostId } : {}),
         contentType,
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
@@ -946,7 +959,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         customLabel: init?.customLabel ?? null,
         color: init?.color ?? null,
         sortOrder: 0,
-        createdAt: Date.now(),
+        createdAt,
+        // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
+        ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
         isPreview: init?.isPreview,
         isPinned: init?.isPinned
       }
@@ -1065,14 +1080,18 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             })()
           : state.unreadTerminalTabs
       return {
-        unifiedTabsByWorktree: opts?.preservePreview
-          ? state.unifiedTabsByWorktree
-          : {
-              ...state.unifiedTabsByWorktree,
-              [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
-                item.id === tabId ? { ...item, isPreview: false } : item
-              )
-            },
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
+            item.id === tabId
+              ? {
+                  ...item,
+                  isPreview: opts?.preservePreview ? item.isPreview : false,
+                  lastFocusedAt: Date.now()
+                }
+              : item
+          )
+        },
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).map((group) =>
@@ -1171,7 +1190,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         nextLayoutByWorktree = collapsedState.layoutByWorktree
         nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
       }
+      // Why: the landing fallback answers "the user emptied this worktree". An unwound create
+      // never added a tab, so it must leave the selection exactly as the click found it.
       const shouldDeactivateWorktree =
+        !opts?.preserveWorktreeSelection &&
         current.activeWorktreeId === worktreeId &&
         nextTabs.length === 0 &&
         (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
@@ -1632,7 +1654,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     return true
   },
 
-  createEmptySplitGroup: (worktreeId, sourceGroupId, direction) => {
+  createEmptySplitGroup: (worktreeId, sourceGroupId, direction, opts) => {
     const newGroupId = createBrowserUuid()
     const newGroup: TabGroup = {
       id: newGroupId,
@@ -1640,6 +1662,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       activeTabId: null,
       tabOrder: []
     }
+    const shouldActivate = opts?.activate !== false
     set((state) => {
       const existing = state.groupsByWorktree[worktreeId] ?? []
       const currentLayout =
@@ -1656,7 +1679,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...state.layoutByWorktree,
           [worktreeId]: replaceLeaf(currentLayout, sourceGroupId, replacement)
         },
-        activeGroupIdByWorktree: { ...state.activeGroupIdByWorktree, [worktreeId]: newGroupId }
+        ...(shouldActivate
+          ? {
+              activeGroupIdByWorktree: {
+                ...state.activeGroupIdByWorktree,
+                [worktreeId]: newGroupId
+              }
+            }
+          : {})
       }
     })
     get().recordFeatureInteraction?.('terminal-panes')
@@ -1957,6 +1987,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     const { tab, worktreeId } = foundTab
     return get().createUnifiedTab(worktreeId, tab.contentType, {
       entityId: init?.entityId ?? tab.entityId,
+      executionHostId: tab.executionHostId,
       label: init?.label ?? tab.label,
       generatedLabel: init?.generatedLabel ?? tab.generatedLabel,
       quickCommandLabel: init?.quickCommandLabel ?? tab.quickCommandLabel,

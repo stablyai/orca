@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   resolveRepoFilterHostId,
   resolveWorktreeFilterHostId,

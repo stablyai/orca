@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WatchRegistration } from './ssh-filesystem-provider-watch'

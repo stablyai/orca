@@ -1,5 +1,10 @@
-import type { WorkspaceSessionState } from '../../../shared/types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { isWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import {
   GLOBAL_WORKSPACE_SESSION_FIELDS,
   WORKSPACE_SESSION_FIELD_OWNERSHIP
@@ -44,7 +49,9 @@ export type HostIdByWorktreeId = (worktreeId: string) => ExecutionHostId
  *  - browserWorkspaceKeyed: Record keyed by browser-workspace id; follows the
  *    page record's own worktreeId.
  *  - fileKeyed: Record keyed by editor file id; follows the open file's worktree.
- *  - sleepingAgentKeyed: Record keyed by pane key; follows the record's worktreeId. */
+ *  - sleepingAgentKeyed: Record keyed by pane key; follows the record's worktreeId.
+ *  - surfaceTombstoneKeyed: Record under an opaque key whose value names its own worktreeId --
+ *    the only routing available once the tab or pane it describes is gone. */
 type SplitContext = {
   hostIdByWorktreeId: HostIdByWorktreeId
   worktreeIdByTabId: Map<string, string>
@@ -81,6 +88,33 @@ function assignWorktreeKeyed(
     const slice = ensureSlice(slices, host, template) as WorkspaceSessionRecord
     const target = (slice[field] ??= {}) as WorkspaceSessionRecord
     target[worktreeId] = entry
+  }
+}
+
+function assignVisitRecencyByHost(
+  slices: HostSessionSlices,
+  template: WorkspaceSessionState,
+  value: unknown,
+  ctx: SplitContext
+): void {
+  if (!isWorkspaceSessionRecord(value)) {
+    return
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    // Why: boot hydration reads only local + runtime:* partitions, and SSH worktree
+    // session state deliberately stays in the local partition (see buildHostIdByWorktreeId);
+    // routing ssh-qualified keys to an ssh partition would strand them across restarts.
+    const qualifiedHost = isWorktreeHostIdentity(key)
+      ? parseExecutionHostId(key.slice(0, key.indexOf('|')))
+      : null
+    const host = isWorktreeHostIdentity(key)
+      ? qualifiedHost?.kind === 'runtime'
+        ? qualifiedHost.id
+        : LOCAL_EXECUTION_HOST_ID
+      : ctx.hostIdByWorktreeId(key)
+    const slice = ensureSlice(slices, host, template) as WorkspaceSessionRecord
+    const target = (slice.lastVisitedAtByWorktreeId ??= {}) as WorkspaceSessionRecord
+    target[key] = entry
   }
 }
 
@@ -157,7 +191,11 @@ export function splitWorkspaceSessionByHost(
         // Main preserves this field while rebasing renderer writes onto host authority.
         break
       case 'worktreeKeyed':
-        assignWorktreeKeyed(slices, template, field, value, ctx)
+        if (field === 'lastVisitedAtByWorktreeId') {
+          assignVisitRecencyByHost(slices, template, value, ctx)
+        } else {
+          assignWorktreeKeyed(slices, template, field, value, ctx)
+        }
         break
       case 'worktreeArray': {
         if (!Array.isArray(value)) {

@@ -3,7 +3,7 @@ import {
   isTerminalAgentQuickCommand
 } from '../../../shared/terminal-quick-commands'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import type { TerminalQuickCommand } from '../../../shared/types'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 type RankedCommand = {
   command: TerminalQuickCommand
@@ -93,11 +93,11 @@ function scoreCandidate(query: string, rawCandidate: string, baseScore: number):
     return baseScore + 50
   }
   const wordIndex = candidate.indexOf(` ${query}`)
-  if (wordIndex >= 0) {
+  if (wordIndex !== -1) {
     return baseScore + 100 + wordIndex
   }
   const index = candidate.indexOf(query)
-  if (index >= 0) {
+  if (index !== -1) {
     return baseScore + 200 + index
   }
   return NO_MATCH

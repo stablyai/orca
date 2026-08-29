@@ -2,6 +2,7 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { getByRole } from '@testing-library/dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ActiveOption } from './tab-create-entry-active-option'
@@ -87,5 +88,67 @@ describe('EntryActionRow', () => {
   it('renders a bare filename without a directory fragment', () => {
     expect(renderRow(makeFileOption('README.md')).textContent).toContain('README.md')
     expect(container.textContent).not.toContain('/')
+  })
+
+  it('names the provider and query without retaining a built URL', () => {
+    renderRow({
+      kind: 'entry',
+      option: {
+        id: 'search:private project',
+        classification: { kind: 'search', engine: 'kagi', query: 'private project' }
+      }
+    })
+
+    expect(getByRole(container, 'option', { name: 'Search Kagi private project' })).toBeTruthy()
+    expect(container.textContent).toBe('Search Kagi·private project')
+    expect(container.textContent).not.toContain('https://')
+  })
+
+  it('uses the occupant agent icon when a terminal tab is confidently occupied', () => {
+    renderRow({
+      kind: 'tab',
+      option: {
+        executionHostId: 'local',
+        source: 'workspace',
+        id: 'open-tab:workspace:tab-1',
+        title: 'grok',
+        matchedText: null,
+        worktreeId: 'wt',
+        contentType: 'terminal',
+        tabId: 'tab-1',
+        entityId: 'term-1',
+        groupId: 'g',
+        relativePath: null,
+        occupantAgent: 'grok'
+      }
+    })
+
+    expect(container.querySelector('[data-agent-icon="grok"]')).toBeTruthy()
+    expect(container.textContent).toContain('Switch to tab')
+  })
+
+  it('keeps the generic terminal icon when occupancy is not known', () => {
+    renderRow({
+      kind: 'tab',
+      option: {
+        executionHostId: 'local',
+        source: 'workspace',
+        id: 'open-tab:workspace:tab-1',
+        title: 'grok',
+        matchedText: null,
+        worktreeId: 'wt',
+        contentType: 'terminal',
+        tabId: 'tab-1',
+        entityId: 'term-1',
+        groupId: 'g',
+        relativePath: null,
+        occupantAgent: null
+      }
+    })
+
+    expect(container.querySelector('[data-agent-icon]')).toBeNull()
+    // Guard against the row rendering no icon at all, which "no agent icon" alone would pass.
+    expect(container.querySelector('svg.lucide-square-terminal')).toBeTruthy()
+    expect(container.textContent).toContain('Switch to tab')
   })
 })

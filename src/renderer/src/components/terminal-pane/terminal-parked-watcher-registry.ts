@@ -7,7 +7,8 @@
  * mid-evaluation. Keeping the maps and pure disposal here lets the slice
  * import cycle-free, mirroring how pty-dispatcher exports its handler maps.
  */
-import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
+import { discardPreHandlerPtyState, hasPreHandlerPtyExit } from './pty-pre-handler-buffer'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type ParkedTerminalPaneCapture = {
@@ -17,6 +18,11 @@ export type ParkedTerminalPaneCapture = {
   /** Stable terminal-layout leaf UUID (paneKey attribution). */
   leafId: string
   drivesTabTitle: boolean
+  /** The unmounted pane fresh-spawned this PTY and no terminal input was ever
+   *  sent. Plain-value carry of the session facts behind the sole-newborn
+   *  guard (pty-exit-hibernate), so the parked sidecar preserves a dead
+   *  never-typed shell's tab the same way the session observer did. */
+  untouchedFreshSpawn?: boolean
 }
 
 export type CapturedTabPanes = { worktreeId: string; panes: ParkedTerminalPaneCapture[] }
@@ -58,13 +64,64 @@ export function terminalWatcherLiveWorkspaceIds(workspaceIds: Iterable<string>):
 }
 
 /**
- * Whether this tab is parked right now — the reveal remount's own mount effect
- * runs before the host effect that disposes the watcher (child effects first),
- * so a pane reading this at connect time can tell a park-reveal from an
- * in-place reattach. Empty entries are pinned-close tombstones, not live parks.
+ * Whether this tab is parked right now — the reveal remount renders before the
+ * host effect that disposes the watcher, so a pane reading this at render time
+ * can tell a park-reveal from an in-place reattach. Empty entries are
+ * pinned-close tombstones, not live parks.
  */
 export function isTerminalTabParked(tabId: string): boolean {
   return (parkedWatchersByTabId.get(tabId)?.disposersByPtyId.size ?? 0) > 0
+}
+
+/**
+ * PTYs a live parked watcher owns, and can therefore prove are still alive.
+ * The runtime graph needs this to keep publishing an unmounted pane's leaf
+ * (STA-2854: a dropped leaf invalidates the terminal handle every paired
+ * subscriber of that terminal is bound to).
+ *
+ * Built in one pass and reused for a whole publication: the caller checks it
+ * once per saved leaf across every tab of every worktree, so a per-PTY scan of
+ * the registry would be quadratic in a large workspace. Parked tabs are NOT
+ * bounded by the hot-retain limits — those bound what stays warm, not what
+ * parks — so this can legitimately hold thousands of entries.
+ *
+ * Reads `disposersByPtyId`, never `paneIdByPtyId`: exit and per-PTY disposal
+ * delete only the disposer and deliberately keep the pane-id slot so the dead
+ * leaf's runtime title can still be cleared.
+ *
+ * Excludes remote-runtime PTYs (detected through the store-free shared id
+ * module — this file must stay importable from a store slice). startParkedPtyWatcher installs no PTY-exit
+ * subscription for them, and the parked fact stream carries no exit fact, so
+ * their disposer outlives the terminal and proves nothing about liveness.
+ *
+ * Also excludes a PTY holding an unowned buffered exit. startParkedPtyWatcher
+ * refuses to register one, so this only catches an exit that raced an existing
+ * registration; keeping the check here costs one lookup per watched PTY.
+ */
+export function collectParkedTerminalWatcherPtyIds(): Set<string> {
+  const ptyIds = new Set<string>()
+  for (const entry of parkedWatchersByTabId.values()) {
+    for (const ptyId of entry.disposersByPtyId.keys()) {
+      if (parseRemoteRuntimePtyId(ptyId) === null && !hasPreHandlerPtyExit(ptyId)) {
+        ptyIds.add(ptyId)
+      }
+    }
+  }
+  return ptyIds
+}
+
+/**
+ * Pane ids the parked watchers are actually using, by PTY.
+ *
+ * Read from the watcher entry rather than the unmount capture: a parked tab
+ * whose layout gains a leaf gets a watcher from the layout-derived fallback,
+ * which the capture never learns about. The entry covers both, so a parked leaf
+ * publishes the identity main routes split/close and the paneKey fallback
+ * through, and indexes the runtime-title slot the watcher writes — instead of a
+ * fabricated ordinal that can name a pane PaneManager already retired.
+ */
+export function getParkedTerminalWatcherPaneIdsByPtyId(tabId: string): Map<string, number> {
+  return new Map(parkedWatchersByTabId.get(tabId)?.paneIdByPtyId ?? [])
 }
 
 export function disposeParkedTabWatchers(tabId: string): void {

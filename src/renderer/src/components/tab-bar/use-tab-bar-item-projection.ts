@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import type { GitFileStatus, Tab } from '../../../../shared/types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
 import {
   buildOrderedTabItems,
@@ -37,6 +38,7 @@ export function useTabBarItemProjection({
     tabs,
     editorFiles,
     browserTabs,
+    agentSessionTabs,
     tabBarOrder,
     hoveredTabInsertion,
     activeTabId,
@@ -55,6 +57,10 @@ export function useTabBarItemProjection({
     () => new Map((browserTabs ?? []).map((tab) => [tab.id, tab])),
     [browserTabs]
   )
+  const agentSessionMap = useMemo(
+    () => new Map((agentSessionTabs ?? []).map((tab) => [tab.id, tab])),
+    [agentSessionTabs]
+  )
   const terminalIds = useMemo(() => tabs.map((tab) => tab.id), [tabs])
   const editorFileIds = useMemo(
     () => editorFiles?.map((file) => file.tabId ?? file.id) ?? [],
@@ -68,6 +74,10 @@ export function useTabBarItemProjection({
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const agentSessionTabIds = useMemo(
+    () => agentSessionTabs?.map((tab) => tab.id) ?? [],
+    [agentSessionTabs]
+  )
   const orderedItems = useMemo(
     () =>
       buildOrderedTabItems({
@@ -76,9 +86,11 @@ export function useTabBarItemProjection({
         editorFileIds,
         browserTabIds,
         simulatorTabIds,
+        agentSessionTabIds,
         terminalMap,
         editorMap,
         browserMap,
+        agentSessionMap,
         unifiedTabByVisibleId
       }),
     [
@@ -87,9 +99,11 @@ export function useTabBarItemProjection({
       editorFileIds,
       browserTabIds,
       simulatorTabIds,
+      agentSessionTabIds,
       terminalMap,
       editorMap,
       browserMap,
+      agentSessionMap,
       unifiedTabByVisibleId
     ]
   )

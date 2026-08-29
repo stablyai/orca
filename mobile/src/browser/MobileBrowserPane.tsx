@@ -1,7 +1,4 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
-// Why: import from 'buffer' (the npm polyfill), not 'node:buffer' — Metro
-// can't resolve Node's builtin in a React Native bundle.
-import { Buffer } from 'buffer'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -9,9 +6,7 @@ import {
   Image,
   PanResponder,
   PixelRatio,
-  Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -25,7 +20,7 @@ import type {
   BrowserScreencastFrame,
   BrowserScreencastFrameMetadata
 } from '../transport/browser-screencast-protocol'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import {
   MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS,
   buildMobileBrowserScreencastRequest,
@@ -48,12 +43,34 @@ import {
   computeBrowserTouchClickRadiusCss,
   mapScreenToBrowserPoint,
   readLocalTouchPoint,
-  type BrowserFrameGeometry,
   type BrowserPoint,
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  assertRpcOk,
+  browserErrorMessage,
+  browserFrameMetadataEqual,
+  buttonColor,
+  cacheBrowserFrame,
+  clearCachedBrowserFramesForWorktree,
+  createBrowserFrameDataUri,
+  createPinchGesture,
+  getCachedBrowserFrame,
+  makeBrowserFrameCacheKey,
+  peekCachedBrowserFrame,
+  shouldSurfaceBrowserError,
+  updateBrowserImageSource,
+  updateBrowserLayerVisibility,
+  updatePinchZoom,
+  type FrameLayer,
+  type PinchGesture
+} from './mobile-browser-frame-state'
+import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
 
 export type MobileBrowserTab = {
@@ -79,15 +96,6 @@ type MobileBrowserPaneProps = {
   onToast: (message: string, durationMs?: number) => void
 }
 
-type FrameLayer = 0 | 1
-
-type PinchGesture = {
-  distance: number
-  scale: number
-  anchorX: number
-  anchorY: number
-}
-
 type PanGesture = {
   x: number
   y: number
@@ -105,17 +113,7 @@ const SCROLL_START_SLOP = 22
 const LONG_PRESS_MS = 550
 const WHEEL_INTERVAL_MS = 70
 const TOUCH_CLICK_RADIUS_DIP = 14
-const MIN_ZOOM = 1
-const MAX_ZOOM = 3.5
 const DEFAULT_ZOOM: BrowserZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
-const BROWSER_FRAME_CACHE_LIMIT = 4
-
-type BrowserFrameCacheEntry = {
-  uri: string
-  metadata: BrowserScreencastFrameMetadata
-}
-
-const browserFrameCache = new Map<string, BrowserFrameCacheEntry>()
 
 type BrowserPageParams = {
   worktree: string
@@ -140,7 +138,7 @@ export function MobileBrowserPane({
   onToast
 }: MobileBrowserPaneProps) {
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
-    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId)
+    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
   const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId, browserViewMode)
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
@@ -155,7 +153,6 @@ export function MobileBrowserPane({
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(
     cachedInitialFrame?.metadata ?? null
   )
-  const [ready, setReady] = useState(cachedInitialFrame !== null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<BrowserDialogState | null>(null)
@@ -174,7 +171,6 @@ export function MobileBrowserPane({
   const browserLayerRefs = useRef<[View | null, View | null]>([null, null])
   const pendingFrameLayerRef = useRef<FrameLayer | null>(null)
   const visibleFrameLayerRef = useRef<FrameLayer>(0)
-  const readyRef = useRef(cachedInitialFrame !== null)
   const busyRef = useRef(false)
   const lastAppliedFrameAtRef = useRef(0)
   const pendingThrottledFrameRef = useRef<{
@@ -265,6 +261,10 @@ export function MobileBrowserPane({
     resetBrowserZoomState()
   }, [resetBrowserZoomState, tab.browserPageId, tab.url])
 
+  useEffect(() => {
+    setBrowserViewMode(getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url))
+  }, [tab.browserPageId, tab.url, worktreeId])
+
   const pageParams = useCallback(() => {
     if (!tab.browserPageId) {
       return null
@@ -304,10 +304,6 @@ export function MobileBrowserPane({
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
-    }
-    if (!readyRef.current) {
-      readyRef.current = true
-      setReady(true)
     }
   }, [])
 
@@ -396,16 +392,12 @@ export function MobileBrowserPane({
         frameMetadataRef.current = cachedFrame.metadata
         setFrameUri(cachedFrame.uri)
         setFrameMetadata(cachedFrame.metadata)
-        readyRef.current = true
-        setReady(true)
       } else {
         frameUriRef.current = null
         frameMountedRef.current = false
         setFrameUri(null)
         setFrameMetadata(null)
         frameMetadataRef.current = null
-        readyRef.current = false
-        setReady(false)
       }
     } else {
       frameMountedRef.current = true
@@ -474,10 +466,6 @@ export function MobileBrowserPane({
         }
         if (event.type === 'ready') {
           clearStartupTimer()
-          if (!readyRef.current) {
-            readyRef.current = true
-            setReady(true)
-          }
           if (busyRef.current) {
             busyRef.current = false
             setBusy(false)
@@ -491,10 +479,6 @@ export function MobileBrowserPane({
           }
         } else if (event.type === 'end') {
           clearStartupTimer()
-          if (readyRef.current) {
-            readyRef.current = false
-            setReady(false)
-          }
           if (busyRef.current) {
             busyRef.current = false
             setBusy(false)
@@ -514,10 +498,6 @@ export function MobileBrowserPane({
           }
           const message = event.message ?? event.error?.message ?? 'Browser stream failed.'
           if (shouldSurfaceBrowserError(message)) {
-            if (readyRef.current) {
-              readyRef.current = false
-              setReady(false)
-            }
             setError(message)
           }
         }
@@ -1018,10 +998,6 @@ export function MobileBrowserPane({
   )
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
-  const addressSelection = useMemo(
-    () => (addressFocused ? undefined : { start: 0, end: 0 }),
-    [addressFocused]
-  )
   const goBack = useCallback(() => {
     if (controlsDisabled || !tab.canGoBack) {
       return
@@ -1045,8 +1021,7 @@ export function MobileBrowserPane({
       if (browserViewMode === mode) {
         return
       }
-      // Why: browser panes can remount during normal tab/workspace navigation;
-      // keep a page-scoped choice while new browser pages still default to Web.
+      // Why: preserve explicit page-scoped choices across normal browser pane remounts.
       saveMobileBrowserViewMode(worktreeId, tab.browserPageId, mode)
       setBrowserViewMode(mode)
       resetBrowserZoomState()
@@ -1104,23 +1079,14 @@ export function MobileBrowserPane({
         >
           <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
         </MobileBrowserToolbarIconButton>
-        <TextInput
-          style={styles.addressInput}
+        <MobileBrowserAddressField
           value={addressValue}
           onChangeText={setAddressValue}
           onFocus={() => setAddressFocused(true)}
           onBlur={() => setAddressFocused(false)}
-          onSubmitEditing={() => void navigateToAddress()}
-          selectTextOnFocus
-          selection={addressSelection}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
-          numberOfLines={1}
-          returnKeyType="go"
-          placeholder="URL"
-          placeholderTextColor={colors.textMuted}
-          editable={!controlsDisabled}
+          onSubmit={() => void navigateToAddress()}
+          focused={addressFocused}
+          disabled={controlsDisabled}
         />
         <MobileBrowserViewModeSwitch
           disabled={controlsDisabled}
@@ -1219,7 +1185,9 @@ export function MobileBrowserPane({
         ) : null}
         {!renderedFrameSource || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
-            {busy || (!ready && !error) ? (
+            {/* Why: a stream can report ready and then deliver no frames, so key the
+                indicator off actually having pixels or it clears into a blank pane. */}
+            {busy || (!renderedFrameSource && !error) ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -1298,365 +1266,3 @@ export function MobileBrowserPane({
     </View>
   )
 }
-
-function buttonColor(enabled: boolean): string {
-  return enabled ? colors.textSecondary : colors.textMuted
-}
-
-function createBrowserFrameDataUri(frame: BrowserScreencastFrame): string {
-  return `data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`
-}
-
-function makeBrowserFrameCacheKey(
-  worktreeId: string,
-  browserPageId: string | null,
-  viewMode: MobileBrowserViewMode
-): string | null {
-  return browserPageId ? `${worktreeId}:${browserPageId}:${viewMode}` : null
-}
-
-function clearCachedBrowserFramesForWorktree(worktreeId: string): void {
-  const prefix = `${worktreeId}:`
-  for (const key of browserFrameCache.keys()) {
-    if (key.startsWith(prefix)) {
-      browserFrameCache.delete(key)
-    }
-  }
-}
-
-function getCachedBrowserFrame(cacheKey: string | null): BrowserFrameCacheEntry | null {
-  if (!cacheKey) {
-    return null
-  }
-  const cached = browserFrameCache.get(cacheKey)
-  if (!cached) {
-    return null
-  }
-  browserFrameCache.delete(cacheKey)
-  browserFrameCache.set(cacheKey, cached)
-  return cached
-}
-
-function peekCachedBrowserFrame(cacheKey: string | null): BrowserFrameCacheEntry | null {
-  return cacheKey ? (browserFrameCache.get(cacheKey) ?? null) : null
-}
-
-function cacheBrowserFrame(cacheKey: string | null, entry: BrowserFrameCacheEntry): void {
-  if (!cacheKey) {
-    return
-  }
-  browserFrameCache.delete(cacheKey)
-  browserFrameCache.set(cacheKey, entry)
-  while (browserFrameCache.size > BROWSER_FRAME_CACHE_LIMIT) {
-    const oldestKey = browserFrameCache.keys().next().value
-    if (typeof oldestKey !== 'string') {
-      break
-    }
-    browserFrameCache.delete(oldestKey)
-  }
-}
-
-function updateBrowserLayerVisibility(
-  layers: [View | null, View | null],
-  visible: FrameLayer
-): void {
-  for (const [index, layer] of layers.entries()) {
-    layer?.setNativeProps({ style: { opacity: index === visible ? 1 : 0 } })
-  }
-}
-
-function updateBrowserImageSource(image: Image | null, uri: string): void {
-  // Why: browser frames are large strings; mutating only the native Image
-  // source avoids re-rendering the whole tab view for every streamed frame.
-  const source = [{ uri }]
-  image?.setNativeProps({ source, src: source })
-}
-
-function assertRpcOk(
-  response: RpcSuccess | RpcFailure,
-  fallbackMessage: string
-): asserts response is RpcSuccess {
-  if (!response.ok) {
-    throw new Error(response.error.message || fallbackMessage)
-  }
-}
-
-function browserFrameMetadataEqual(
-  a: BrowserScreencastFrameMetadata | null,
-  b: BrowserScreencastFrameMetadata
-): boolean {
-  return (
-    a?.deviceWidth === b.deviceWidth &&
-    a?.deviceHeight === b.deviceHeight &&
-    a?.pageScaleFactor === b.pageScaleFactor
-  )
-}
-
-function browserErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback
-}
-
-function shouldSurfaceBrowserError(message: string): boolean {
-  const normalized = message.toLowerCase()
-  // Why: selector_not_found can be emitted by in-flight page automation while
-  // the browser is still usable; replacing the frame with it feels like a crash.
-  return !normalized.includes('selector_not_found') && !normalized.includes('selector not found')
-}
-
-function touchPair(event: GestureResponderEvent): { a: BrowserPoint; b: BrowserPoint } | null {
-  const touches = event.nativeEvent.touches
-  if (!touches || touches.length < 2) {
-    return null
-  }
-  const a = readLocalTouchPoint(touches[0])
-  const b = readLocalTouchPoint(touches[1])
-  return a && b ? { a, b } : null
-}
-
-function pointDistance(a: BrowserPoint, b: BrowserPoint): number {
-  return Math.hypot(a.x - b.x, a.y - b.y)
-}
-
-function createPinchGesture(
-  event: GestureResponderEvent,
-  geometry: BrowserFrameGeometry | null,
-  zoom: BrowserZoomState
-): PinchGesture | null {
-  if (!geometry) {
-    return null
-  }
-  const pair = touchPair(event)
-  if (!pair) {
-    return null
-  }
-  const distance = pointDistance(pair.a, pair.b)
-  if (distance < 8) {
-    return null
-  }
-  const centerX = (pair.a.x + pair.b.x) / 2
-  const centerY = (pair.a.y + pair.b.y) / 2
-  const frameCenterX = geometry.offsetX + geometry.renderedWidth / 2 + zoom.offsetX
-  const frameCenterY = geometry.offsetY + geometry.renderedHeight / 2 + zoom.offsetY
-  return {
-    distance,
-    scale: zoom.scale,
-    anchorX: (centerX - frameCenterX) / zoom.scale,
-    anchorY: (centerY - frameCenterY) / zoom.scale
-  }
-}
-
-function updatePinchZoom(
-  event: GestureResponderEvent,
-  geometry: BrowserFrameGeometry | null,
-  pinch: PinchGesture
-): BrowserZoomState | null {
-  if (!geometry) {
-    return null
-  }
-  const pair = touchPair(event)
-  if (!pair) {
-    return null
-  }
-  const nextScale = Math.min(
-    MAX_ZOOM,
-    Math.max(MIN_ZOOM, (pinch.scale * pointDistance(pair.a, pair.b)) / pinch.distance)
-  )
-  const centerX = (pair.a.x + pair.b.x) / 2
-  const centerY = (pair.a.y + pair.b.y) / 2
-  const baseCenterX = geometry.offsetX + geometry.renderedWidth / 2
-  const baseCenterY = geometry.offsetY + geometry.renderedHeight / 2
-  return clampBrowserZoomState(
-    {
-      scale: nextScale,
-      offsetX: centerX - baseCenterX - pinch.anchorX * nextScale,
-      offsetY: centerY - baseCenterY - pinch.anchorY * nextScale
-    },
-    geometry,
-    MIN_ZOOM,
-    MAX_ZOOM
-  )
-}
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: colors.bgBase
-  },
-  toolbar: {
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  addressInput: {
-    flex: 1,
-    minWidth: 0,
-    height: 28,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    fontSize: 12,
-    lineHeight: 16,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    fontFamily: typography.monoFamily
-  },
-  viewport: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-    backgroundColor: colors.bgBase
-  },
-  browserImageHost: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden'
-  },
-  browserImageFill: {
-    width: '100%',
-    height: '100%'
-  },
-  browserImageLayer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  browserImageLayerHidden: {
-    opacity: 0
-  },
-  browserZoomOffset: {
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  browserFrameBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden'
-  },
-  browserImage: {
-    backgroundColor: colors.bgBase
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.sm,
-    backgroundColor: 'rgba(13, 15, 24, 0.2)'
-  },
-  errorText: {
-    color: colors.textPrimary,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 13,
-    textAlign: 'center',
-    overflow: 'hidden'
-  },
-  dialogOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    backgroundColor: 'rgba(13, 15, 24, 0.5)'
-  },
-  dialogCard: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: radii.card,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.lg
-  },
-  dialogTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  dialogMessage: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    lineHeight: 20,
-    marginTop: spacing.sm
-  },
-  dialogActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.lg
-  },
-  dialogButton: {
-    minHeight: 34,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  dialogButtonPrimary: {
-    backgroundColor: colors.textPrimary
-  },
-  dialogButtonPressed: {
-    opacity: 0.75
-  },
-  dialogButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  dialogButtonPrimaryText: {
-    color: colors.bgBase
-  },
-  keyboardDock: {
-    zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs + 2
-  },
-  keyboardInput: {
-    flex: 1,
-    height: 34,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    fontSize: 14,
-    fontFamily: typography.monoFamily,
-    marginRight: spacing.sm
-  },
-  sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
-  },
-  disabled: {
-    opacity: 0.35
-  },
-  disabledText: {
-    color: colors.textMuted
-  }
-})

@@ -77,6 +77,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
     projectGroups: [],
+    sshTargetLabels: new Map(),
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: false,
@@ -207,6 +208,12 @@ describe('useDashboardPopoutBridge', () => {
     expect(
       dashboardSnapshotInputsChanged({ ...previousState, agentStatusEpoch: 1 }, previousState)
     ).toBe(false)
+    expect(
+      dashboardSnapshotInputsChanged(
+        { ...previousState, sshTargetLabels: new Map([['target-1', 'Builder']]) },
+        previousState
+      )
+    ).toBe(true)
 
     // Why: each card's preview terminal keys against a host-input profile
     // derived from these. Not republishing leaves the pop-out encoding bytes

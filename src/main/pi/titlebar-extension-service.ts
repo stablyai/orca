@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { createHash } from 'node:crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
@@ -27,10 +27,7 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
-const MANAGED_STATUS_EXTENSION_DIR: Record<'omp' | 'prime-agent', string> = {
-  omp: 'omp-managed-status-extension',
-  'prime-agent': 'prime-agent-managed-status-extension'
-}
+const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
 
@@ -77,7 +74,7 @@ function withOrcaManagedExtensionMarker(source: string): string {
 
 export class PiTitlebarExtensionService {
   private getOverlayRoot(kind: LegacyOverlayAgentKind): string {
-    return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
+    return join(getAppEnvironment().getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
   }
 
   private getSourceOverlayDir(sourceAgentDir: string, kind: LegacyOverlayAgentKind): string {
@@ -124,11 +121,11 @@ export class PiTitlebarExtensionService {
     }
   }
 
-  private writeFallbackStatusExtension(
-    source: string,
-    kind: keyof typeof MANAGED_STATUS_EXTENSION_DIR
-  ): string | undefined {
-    const fallbackDir = join(app.getPath('userData'), MANAGED_STATUS_EXTENSION_DIR[kind])
+  private writeOmpFallbackStatusExtension(source: string): string | undefined {
+    const fallbackDir = join(
+      getAppEnvironment().getPath('userData'),
+      OMP_MANAGED_STATUS_EXTENSION_DIR
+    )
     try {
       mkdirSync(fallbackDir, { recursive: true })
     } catch {
@@ -171,7 +168,7 @@ export class PiTitlebarExtensionService {
         statusResult === 'written'
           ? statusExtensionPath
           : kind === 'omp'
-            ? this.writeFallbackStatusExtension(statusSource, 'omp')
+            ? this.writeOmpFallbackStatusExtension(statusSource)
             : undefined
     }
   }
@@ -201,7 +198,7 @@ export class PiTitlebarExtensionService {
     if (!existsSync(sourceAgentDir) && !materializeDefaultHome) {
       if (kind === 'omp') {
         const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
-        const statusExtensionPath = this.writeFallbackStatusExtension(statusSource, 'omp')
+        const statusExtensionPath = this.writeOmpFallbackStatusExtension(statusSource)
         return statusExtensionPath ? { ORCA_OMP_STATUS_EXTENSION: statusExtensionPath } : {}
       }
       return {}
@@ -224,12 +221,6 @@ export class PiTitlebarExtensionService {
       env.ORCA_PI_SOURCE_AGENT_DIR = installed.sourceAgentDir
     }
     return env
-  }
-
-  buildStatusOnlyPtyEnv(kind: 'prime-agent'): Record<string, string> {
-    const source = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
-    const statusExtensionPath = this.writeFallbackStatusExtension(source, kind)
-    return statusExtensionPath ? { ORCA_PRIME_AGENT_STATUS_EXTENSION: statusExtensionPath } : {}
   }
 
   clearPty(ptyId: string): void {

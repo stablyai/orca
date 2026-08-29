@@ -1,5 +1,9 @@
 import type { PairingOffer } from '../../shared/pairing'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import type {
+  RuntimeOrchestrationEnvelope,
+  RuntimeRpcResponse
+} from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
 import type {
@@ -25,7 +29,8 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
   const pairingKey = getPairingKey(pairing)
   let cached = requestConnections.get(environmentId)
@@ -33,11 +38,14 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
     cached?.connection.close()
     cached = {
       pairingKey,
-      connection: new RemoteRuntimeRequestConnection(pairing)
+      connection: new RemoteRuntimeRequestConnection(
+        pairing,
+        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      )
     }
     requestConnections.set(environmentId, cached)
   }
-  return cached.connection.request(method, params, timeoutMs)
+  return cached.connection.request(method, params, timeoutMs, signal)
 }
 
 export function closeRemoteRuntimeRequestConnection(environmentId: string): void {
@@ -52,9 +60,17 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
-  return getSharedControlConnection(environmentId, pairing).request(method, params, timeoutMs)
+  return getSharedControlConnection(environmentId, pairing).request(
+    method,
+    params,
+    timeoutMs,
+    envelope,
+    signal
+  )
 }
 
 export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
@@ -110,7 +126,10 @@ function getSharedControlConnection(
     cached?.connection.close()
     cached = {
       pairingKey,
-      connection: new RemoteRuntimeSharedControlConnection(pairing, { environmentId })
+      connection: new RemoteRuntimeSharedControlConnection(pairing, {
+        environmentId,
+        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      })
     }
     sharedControlConnections.set(environmentId, cached)
   }

@@ -1,4 +1,4 @@
-import type { PRInfo } from '../../../../src/shared/types'
+import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 
 // Pure presentation logic for the PR sidebar's conflicting-files section. No
 // React/native imports so it is unit-testable under the node Vitest config (KTD5).

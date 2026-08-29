@@ -4,7 +4,10 @@ import { buildEdgeWrappedHttpLogicalLineCandidates } from './edge-wrapped-termin
 import { buildHardWrappedHttpLogicalLineCandidates } from './hard-wrapped-terminal-http-links'
 import { dedupeLogicalLines } from './terminal-file-link-hit-testing'
 import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
-import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
+import {
+  installTerminalLinkPtyMouseSuppression,
+  type TerminalLinkPtyMouseSuppression
+} from './terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import { extractTerminalHttpLinks } from './terminal-http-url-extraction'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
@@ -39,6 +42,10 @@ type UrlLinkClickFallbackDeps = {
   getActionDestinations?: () => TerminalHttpLinkActionDestinations
 }
 
+export type HttpLinkClickFallbackBinding = IDisposable & {
+  ptyMouseSuppression: TerminalLinkPtyMouseSuppression
+}
+
 export type TerminalHttpLinkDestination = 'orca' | 'system'
 
 export type TerminalHttpLinkActionDestinations = {
@@ -65,7 +72,7 @@ export function handleTerminalHttpLink(
 ): boolean {
   if (isTerminalHttpLinkActivation(event)) {
     const forceDestination = event?.shiftKey
-      ? deps.actionDestinations?.alternate
+      ? (deps.actionDestinations?.alternate ?? deps.actionDestinations?.primary)
       : deps.actionDestinations?.primary
     openTerminalHttpLink(url, {
       ...deps,
@@ -154,8 +161,8 @@ export function findHttpLinkAtTerminalMouseEvent(
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
-): IDisposable {
-  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal, (event) => {
+): HttpLinkClickFallbackBinding {
+  const isLinkMouseEvent = (event: MouseEvent): boolean => {
     if (isTerminalLinkifierHoverActive(terminal)) {
       return true
     }
@@ -163,7 +170,16 @@ export function installHttpLinkClickFallback(
     return Boolean(
       position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
     )
-  })
+  }
+  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
+    terminal,
+    isLinkMouseEvent,
+    (event) => {
+      const context = deps.getLinkActionContext?.()
+      return Boolean(context?.pointerGesture.canRequestAction(event) && isLinkMouseEvent(event))
+    },
+    (event) => Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event))
+  )
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
       return
@@ -190,6 +206,7 @@ export function installHttpLinkClickFallback(
   const terminalElement = terminal.element
   terminalElement?.addEventListener('mouseup', handleMouseUp)
   return {
+    ptyMouseSuppression,
     dispose: () => {
       ptyMouseSuppression.dispose()
       terminalElement?.removeEventListener('mouseup', handleMouseUp)
@@ -256,11 +273,11 @@ function rangeContainsBufferPosition(
 }
 
 export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {
-  // Why: Orca browser tabs are local-only, so a link clicked in a runtime-hosted
-  // pane must be classified by its pane's host, not the global active runtime.
+  // Why: pane ownership beats the global active runtime for both local and remote routes.
   const sourceOwner = deps.sourceOwner ?? { kind: 'local' }
   if (deps.forceDestination) {
     openHttpLink(url, {
+      allowRuntimeInApp: true,
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
@@ -271,16 +288,20 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   if (deps.modifierHeld) {
     // Why: the modifier states a destination outright, so it also skips the
     // one-time routing prompt; openHttpLink resolves which destination it means.
-    openHttpLink(url, { worktreeId: deps.worktreeId, modifierHeld: true, sourceOwner })
+    openHttpLink(url, {
+      allowRuntimeInApp: true,
+      worktreeId: deps.worktreeId,
+      modifierHeld: true,
+      sourceOwner
+    })
     return
   }
 
-  // Why: a runtime-hosted link can only reach the system browser, so prompting
-  // would persist an in-app preference this click cannot honor.
+  // Why: remote panes use the persisted routing preference and never prompt the viewing client.
   const preferenceDecision =
     sourceOwner.kind === 'local' ? deps.requestOpenLinksInAppPreference?.(url) : null
   if (preferenceDecision === null || preferenceDecision === undefined) {
-    openHttpLink(url, { worktreeId: deps.worktreeId, sourceOwner })
+    openHttpLink(url, { allowRuntimeInApp: true, worktreeId: deps.worktreeId, sourceOwner })
     return
   }
 
@@ -290,12 +311,18 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   void Promise.resolve(preferenceDecision)
     .then((openInOrca) => {
       openHttpLink(url, {
+        allowRuntimeInApp: true,
         worktreeId: deps.worktreeId,
         forceSystemBrowser: !openInOrca,
         sourceOwner
       })
     })
     .catch(() => {
-      openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true, sourceOwner })
+      openHttpLink(url, {
+        allowRuntimeInApp: true,
+        worktreeId: deps.worktreeId,
+        forceSystemBrowser: true,
+        sourceOwner
+      })
     })
 }

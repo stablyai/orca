@@ -16,6 +16,7 @@
     "import/namespace": "warn",
     "import/no-cycle": ["warn", { "maxDepth": 3 }],
     "import/no-duplicates": "warn",
+    "import/no-empty-named-blocks": "warn",
     "import/no-self-import": "warn"
   },
   "overrides": [

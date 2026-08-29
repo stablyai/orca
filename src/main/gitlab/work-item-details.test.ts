@@ -32,7 +32,8 @@ vi.mock('./gl-utils', () => ({
   glabRepoExecOptions: glabRepoExecOptionsMock
 }))
 
-import { countDiffLines, getWorkItemDetails } from './work-item-details'
+import { countDiffLines } from './mr-file-diffs'
+import { getWorkItemDetails } from './work-item-details'
 
 describe('getWorkItemDetails', () => {
   beforeEach(() => {
