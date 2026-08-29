@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
+import type { Repo } from '../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { notifyWorktreesChanged } from './worktree-remote'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import {
+  invalidateAuthorizedRootsCache,
+  isRegisteredWorktreePath,
+  resolveRegisteredWorktreePath
+} from './registered-worktree-roots-cache'
+import { listDetectedWorktreesForCapturedRepo } from './worktrees/listing/detected-provider-listing'
 import { __getDetectedWorktreeScanCacheStatsForTests } from './worktrees/listing/detected-worktree-scan-cache'
 import { setPlatform, listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
@@ -162,6 +168,35 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).toHaveBeenCalledTimes(1)
   })
 
+  it('re-registers roots when authorization is invalidated before a cached listing', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/workspace/new-worktree',
+        head: 'feature-head',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    expect(isRegisteredWorktreePath(resolve('/workspace/new-worktree'))).toBe(true)
+    invalidateAuthorizedRootsCache()
+    expect(isRegisteredWorktreePath(resolve('/workspace/new-worktree'))).toBe(false)
+
+    await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+
+    expect(isRegisteredWorktreePath(resolve('/workspace/new-worktree'))).toBe(true)
+    expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+  })
+
   it('coalesces concurrent authoritative detected worktree scans', async () => {
     listWorktreesMock.mockImplementation(async () => {
       await Promise.resolve()
@@ -182,6 +217,48 @@ describe('registerWorktreeHandlers', () => {
       handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
     ])
 
+    expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers roots when the current caller joins a scan whose starter becomes stale', async () => {
+    let resolveScan: (worktrees: GitWorktreeInfo[]) => void = () => {}
+    listWorktreesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = resolve as (worktrees: GitWorktreeInfo[]) => void
+        })
+    )
+    const repo = (store.getRepos() as Repo[])[0]
+    let starterIsCurrent = true
+
+    const staleList = listDetectedWorktreesForCapturedRepo(
+      store as never,
+      repo,
+      () => starterIsCurrent
+    )
+    await Promise.resolve()
+    const currentList = listDetectedWorktreesForCapturedRepo(store as never, repo, () => true)
+    starterIsCurrent = false
+    resolveScan([
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/workspace/new-worktree',
+        head: 'feature-head',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await expect(staleList).resolves.toBeNull()
+    await expect(currentList).resolves.toMatchObject({ authoritative: true })
+    expect(isRegisteredWorktreePath(resolve('/workspace/new-worktree'))).toBe(true)
     expect(listWorktreesMock).toHaveBeenCalledTimes(1)
   })
 
@@ -448,6 +525,7 @@ describe('registerWorktreeHandlers', () => {
     await pendingList
 
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(isRegisteredWorktreePath(resolve('/workspace/repo'))).toBe(false)
     expect(listWorktreesMock).toHaveBeenCalledTimes(1)
   })
 

@@ -22,6 +22,7 @@ export type DetectedWorktreeScan = {
 export type DetectedWorktreeScanResult = {
   gitWorktrees: GitWorktreeInfo[]
   fresh: boolean
+  safeToAuthorize: boolean
 }
 
 export const detectedWorktreeScanCache = new Map<string, DetectedWorktreeScanCacheEntry>()
@@ -73,19 +74,26 @@ export async function listDetectedGitWorktrees(
   if (repo.connectionId || isFolderRepo(repo)) {
     return {
       gitWorktrees: await listRepoWorktrees(repo, localWorktreeGitOptions),
-      fresh: true
+      fresh: true,
+      safeToAuthorize: true
     }
   }
 
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
   const cached = detectedWorktreeScanCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
-    return { gitWorktrees: cached.worktrees, fresh: false }
+    return { gitWorktrees: cached.worktrees, fresh: false, safeToAuthorize: true }
   }
 
   const inFlight = detectedWorktreeScanInFlight.get(cacheKey)
   if (inFlight) {
-    return { gitWorktrees: await inFlight.promise, fresh: false }
+    const gitWorktrees = await inFlight.promise
+    // A current follower must register roots when the caller that started the live scan went stale.
+    return {
+      gitWorktrees,
+      fresh: !inFlight.invalidated,
+      safeToAuthorize: !inFlight.invalidated
+    }
   }
 
   const scan: DetectedWorktreeScan = {
@@ -102,7 +110,11 @@ export async function listDetectedGitWorktrees(
         expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS
       })
     }
-    return { gitWorktrees, fresh: !scan.invalidated }
+    return {
+      gitWorktrees,
+      fresh: !scan.invalidated,
+      safeToAuthorize: !scan.invalidated
+    }
   } finally {
     if (detectedWorktreeScanInFlight.get(cacheKey) === scan) {
       detectedWorktreeScanInFlight.delete(cacheKey)

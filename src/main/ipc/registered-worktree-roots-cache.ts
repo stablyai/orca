@@ -9,9 +9,11 @@ const registeredWorktreeRootsByRepo = new Map<string, Set<string>>()
 const registeredWorktreeRootRepoIds = new Set<string>()
 let registeredWorktreeRootsDirty = true
 let registeredWorktreeRootsRefresh: Promise<void> | null = null
+let registeredWorktreeRootsRevision = 0
 const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
 
 export function invalidateAuthorizedRootsCache(): void {
+  registeredWorktreeRootsRevision += 1
   registeredWorktreeRootsDirty = true
   // Why: dirty roots can't be trusted for auth short-circuits; fresh worktrees:list seeds safe per-repo roots before a full rebuild.
   registeredWorktreeRoots.clear()
@@ -20,6 +22,7 @@ export function invalidateAuthorizedRootsCache(): void {
 }
 
 export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
+  const revisionAtStart = registeredWorktreeRootsRevision
   // Why: bounded parallelism keeps the Windows speedup without one git process per repo.
   // Why no realpath here: canonicalizing every root on invalidation would trigger macOS TCC prompts; handlers still canonicalize the target before any operation.
   const repos = getLocalRepos(store)
@@ -42,6 +45,11 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
     }
   )
 
+  // Why: a newer targeted registration or invalidation must win over this older full scan.
+  if (registeredWorktreeRootsRevision !== revisionAtStart) {
+    return
+  }
+
   registeredWorktreeRoots.clear()
   registeredWorktreeRootsByRepo.clear()
   registeredWorktreeRootRepoIds.clear()
@@ -54,6 +62,7 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
     registeredWorktreeRootsByRepo.set(repoId, normalizedRoots)
     registeredWorktreeRootRepoIds.add(repoId)
   }
+  registeredWorktreeRootsRevision += 1
   registeredWorktreeRootsDirty = false
 }
 
@@ -82,6 +91,7 @@ export function registerWorktreeRootsForRepo(
   repoId: string,
   worktreeRoots: string[]
 ): void {
+  registeredWorktreeRootsRevision += 1
   const localRepoIds = new Set(getLocalRepos(store).map((repo) => repo.id))
   for (const registeredRepoId of registeredWorktreeRootsByRepo.keys()) {
     if (!localRepoIds.has(registeredRepoId)) {

@@ -48,6 +48,7 @@ export async function listDetectedWorktreesForCapturedRepo(
   try {
     let gitWorktrees: GitWorktreeInfo[]
     let freshScan = true
+    let safeToAuthorize = true
     if (isFolderRepo(repo)) {
       if (!isCurrent()) {
         return null
@@ -97,6 +98,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       const scan = await listDetectedGitWorktrees(store, repo)
       gitWorktrees = scan.gitWorktrees
       freshScan = scan.fresh
+      safeToAuthorize = scan.safeToAuthorize
     }
     const aborted = abortedResult()
     if (aborted) {
@@ -114,8 +116,10 @@ export async function listDetectedWorktreesForCapturedRepo(
         worktrees: []
       }
     }
-    if (freshScan) {
+    if (safeToAuthorize) {
       rememberLocalWorktreeRoots(store, repo, gitWorktrees)
+    }
+    if (freshScan) {
       pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
