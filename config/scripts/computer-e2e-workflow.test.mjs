@@ -12,7 +12,7 @@ describe('computer-use e2e workflow', () => {
     expect(config).toContain('fileParallelism: false')
   })
 
-  it('guards e2e source against fragile fixed waits and stale element indexes', () => {
+  it('guards e2e source against fragile waits and Windows Calculator drift', () => {
     const driver = readFileSync(join(projectDir, 'tests/e2e/helpers/computer-driver.ts'), 'utf8')
     const cliDriver = readFileSync(
       join(projectDir, 'tests/e2e/helpers/computer-cli-driver.ts'),
@@ -31,11 +31,14 @@ describe('computer-use e2e workflow', () => {
     expect(cliDriver).toContain('Could not read Orca runtime metadata')
     expect(cliDriver).toContain("'serve', '--no-pairing', '--json'")
 
-    expect(windowsStoreE2e).toMatch(
-      /for \(const buttonName of \['One', 'Plus', 'Two', 'Equals'\]\) \{[\s\S]*findRoleIndex\(state\.result\.snapshot\.treeText, `button \$\{buttonName\}`\)[\s\S]*state = parseJsonOutput/
+    expect(windowsStoreE2e).toContain("app.bundleId === 'ApplicationFrameHost'")
+    expect(windowsStoreE2e).toContain("app.bundleId === 'win32calc'")
+    expect(windowsStoreE2e).toContain('buttonIndex >= 0')
+    expect(windowsStoreE2e).toContain('pane(?:\\s|$)/m')
+    expect(windowsStoreE2e).toContain('String(clickIndex)')
+    expect(windowsStoreE2e).not.toContain(
+      "for (const buttonName of ['One', 'Plus', 'Two', 'Equals'])"
     )
-    expect(windowsStoreE2e).not.toMatch(/const one = findRoleIndex/)
-    expect(windowsStoreE2e).not.toMatch(/for \(const index of \[one, plus, two, equals\]\)/)
   })
 
   it('triggers on computer-use shared contracts, scripts, and agent skill changes', () => {
