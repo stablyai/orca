@@ -220,6 +220,37 @@ describe('worktree-palette-create-action', () => {
     ).toEqual(['worktree:shared', 'worktree:shared#dup1'])
   })
 
+  it('keeps arrow selection on open-tab rows instead of snapping back to the first worktree', () => {
+    // Regression: workspace/simulator tabs and project targets were missing from the
+    // selectable set, so ArrowDown could never cross from worktrees into Open Tabs.
+    const selectableItemIds = getWorktreePaletteSelectionItemIds([
+      { id: '__header_worktrees__', type: 'section-header' },
+      { id: 'worktree:one', type: 'worktree' },
+      { id: '__header_open_tabs__', type: 'section-header' },
+      { id: 'workspace-tab:term', type: 'workspace-tab' },
+      { id: 'simulator-tab:sim', type: 'simulator-tab' },
+      { id: 'project-target:orca', type: 'project-target' }
+    ])
+
+    expect(selectableItemIds).toEqual([
+      'worktree:one',
+      'workspace-tab:term',
+      'simulator-tab:sim',
+      'project-target:orca'
+    ])
+
+    for (const tabId of ['workspace-tab:term', 'simulator-tab:sim', 'project-target:orca']) {
+      expect(
+        getNextWorktreePaletteSelection({
+          currentSelectedItemId: tabId,
+          queryChanged: false,
+          selectableItemIds,
+          showCreateAction: false
+        })
+      ).toBe(tabId)
+    }
+  })
+
   it('falls back deterministically when the selected row disappears', () => {
     expect(
       getNextWorktreePaletteSelection({

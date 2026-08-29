@@ -327,6 +327,24 @@ type PaletteItem =
 
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 
+// Why: isSelectableWorktreePaletteEntry() excludes exactly these row types, so a new
+// plain-div row type must be excluded there too or it becomes highlightable but
+// unfocusable. Fails the build in both directions if the two sets drift apart.
+type NonSelectablePaletteEntryType = Exclude<
+  PaletteListEntry,
+  PaletteItem | CreateWorktreePaletteItem
+>['type']
+type ExcludedByPredicate = 'section-header' | 'hint'
+type _UnlistedNonSelectableType = Exclude<
+  NonSelectablePaletteEntryType,
+  ExcludedByPredicate
+>
+type _ListedSelectableType = Exclude<ExcludedByPredicate, NonSelectablePaletteEntryType>
+const _exhaustive: [_UnlistedNonSelectableType | _ListedSelectableType] extends [never]
+  ? true
+  : never = true
+void _exhaustive
+
 const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_QUICK_ACTION_ID}`
 
 // Why: outlast the CommandDialog close animation so its rows do not disappear mid-fade.
