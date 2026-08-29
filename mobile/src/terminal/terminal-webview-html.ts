@@ -4,7 +4,11 @@ import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
-import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
+import {
+  TERMINAL_NERD_FONT_CSS,
+  XTERM_ENGINE_CSS,
+  XTERM_ENGINE_JS
+} from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
 import { TERMINAL_SURFACE_SWAP_JS } from './terminal-webview-surface-swap-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
@@ -63,6 +67,7 @@ window.onerror = function(msg) {
 };
 </script>
 <style>${XTERM_ENGINE_CSS}</style>
+<style>${TERMINAL_NERD_FONT_CSS}</style>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -266,7 +271,7 @@ window.onerror = function(msg) {
   }
   // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
   // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
-  var TERMINAL_FONT_FALLBACKS = '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
+  var TERMINAL_FONT_FALLBACKS = '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", monospace';
   var terminalFontFamily = (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS;
   // Why: change the real font size, then resize the grid to fit the viewport at
   // the new cell metrics so the text shows at its true size immediately. RN's
