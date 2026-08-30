@@ -6,6 +6,11 @@ import { describe, expect, it } from 'vitest'
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const headlessLinuxGuide = readFileSync('docs/reference/headless-linux-server.md', 'utf8')
 const signalCase = readFileSync('config/docker/headless-serve-shutdown/run-signal-case.sh', 'utf8')
+const shutdownDockerRunner = readFileSync(
+  'config/scripts/run-headless-serve-shutdown-docker.mjs',
+  'utf8'
+)
+const shutdownDockerfile = readFileSync('config/docker/headless-serve-shutdown/Dockerfile', 'utf8')
 
 function readSystemdUnitBlocks(doc, unitName) {
   const escapedUnitName = unitName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -98,6 +103,23 @@ describe('headless serve shutdown PR gate', () => {
     )
     expect(signalCase).toContain('signal_target_pid=$(head -n1 <<<"$listener_before_pids")')
     expect(signalCase).toContain('outside the entrypoint process tree')
+  })
+
+  it('runs the original AppImage desktop startup oracle before extraction and signals', () => {
+    expect(shutdownDockerfile).toContain(
+      'COPY run-appimage-desktop-startup-case.sh /usr/local/bin/run-appimage-desktop-startup-case'
+    )
+    const startupCall = shutdownDockerRunner.indexOf(
+      'runDesktopStartupOracle({ image, appImage, platform })'
+    )
+    const extractionCall = shutdownDockerRunner.indexOf(
+      "'timeout --kill-after=10s 120s /input/orca.AppImage --appimage-extract"
+    )
+    const signalLoop = shutdownDockerRunner.indexOf("for (const signal of ['INT', 'TERM'])")
+    expect(startupCall).toBeGreaterThan(-1)
+    expect(extractionCall).toBeGreaterThan(startupCall)
+    expect(signalLoop).toBeGreaterThan(startupCall)
+    expect(shutdownDockerRunner).toContain("'/usr/local/bin/run-appimage-desktop-startup-case'")
   })
 
   it('keeps owned Xvfb alive during the documented systemd graceful stop', () => {

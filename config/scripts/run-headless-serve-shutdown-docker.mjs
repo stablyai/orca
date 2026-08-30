@@ -54,6 +54,7 @@ try {
     shutdownDockerDirectory
   ])
   docker(['volume', 'create', artifactVolume])
+  runDesktopStartupOracle({ image, appImage, platform })
   docker([
     'run',
     '--rm',
@@ -141,6 +142,38 @@ try {
 } finally {
   docker(['volume', 'rm', artifactVolume], { allowFailure: true })
   docker(['image', 'rm', image], { allowFailure: true })
+}
+
+function runDesktopStartupOracle({ image, appImage, platform }) {
+  console.log('Running original AppImage desktop startup oracle...')
+  docker([
+    'run',
+    '--rm',
+    '--init',
+    '--platform',
+    platform,
+    '--network',
+    'none',
+    '--read-only',
+    '--tmpfs',
+    '/tmp:rw,nosuid,nodev,exec,size=128m',
+    '--shm-size',
+    '256m',
+    '--cap-drop',
+    'ALL',
+    '--security-opt',
+    'no-new-privileges',
+    '--user',
+    'orca',
+    '--entrypoint',
+    '/usr/local/bin/run-appimage-desktop-startup-case',
+    '-e',
+    'ORCA_STARTUP_DIAGNOSTICS=1',
+    '-v',
+    `${appImage}:/input/orca.AppImage:ro`,
+    image,
+    '/input/orca.AppImage'
+  ])
 }
 
 function valueAfter(flag) {

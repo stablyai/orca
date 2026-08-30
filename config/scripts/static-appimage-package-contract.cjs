@@ -4,6 +4,14 @@ const { basename } = require('node:path')
 const ALLOWED_FILENAMES = new Set(['orca-linux.AppImage', 'orca-linux-arm64.AppImage'])
 const APPIMAGE_MAGIC = Buffer.from([0x41, 0x49, 0x02])
 const RUNTIME_SOURCE = Buffer.from('https://github.com/AppImage/type2-runtime')
+const TARGET_ARCHITECTURE_BY_ENUM = new Map([
+  [1, 'x64'],
+  [3, 'arm64']
+])
+const RUNTIME_ARCHITECTURE_BY_MACHINE = new Map([
+  [0x3e, 'x64'],
+  [0xb7, 'arm64']
+])
 const ELF_HEADER_BYTES = 64
 const PROGRAM_HEADER_BYTES = 56
 const DYNAMIC_ENTRY_BYTES = 16
@@ -11,10 +19,18 @@ const MAX_PROGRAM_HEADERS = 128
 const MAX_LOAD_BYTES = 16 * 1024 * 1024
 const MAX_DYNAMIC_BYTES = 1024 * 1024
 
-function verifyStaticAppImagePackage(filePath) {
+function verifyStaticAppImagePackage(filePath, targetArch) {
   const filename = basename(filePath)
   if (!ALLOWED_FILENAMES.has(filename)) {
     invalid(filename, `unsupported artifact name; expected ${[...ALLOWED_FILENAMES].join(' or ')}`)
+  }
+  const targetArchitecture = normalizeTargetArchitecture(targetArch, filename)
+  const filenameArchitecture = filename === 'orca-linux-arm64.AppImage' ? 'arm64' : null
+  if (filenameArchitecture && filenameArchitecture !== targetArchitecture) {
+    invalid(
+      filename,
+      `artifact filename targets ${filenameArchitecture}, but electron-builder target is ${targetArchitecture}`
+    )
   }
 
   const descriptor = openSync(filePath, 'r')
@@ -28,7 +44,14 @@ function verifyStaticAppImagePackage(filePath) {
       filename,
       'ELF header'
     )
-    verifyElfHeader(header, filename)
+    const { entry, machine } = verifyElfHeader(header, filename)
+    const runtimeArchitecture = RUNTIME_ARCHITECTURE_BY_MACHINE.get(machine)
+    if (runtimeArchitecture !== targetArchitecture) {
+      invalid(
+        filename,
+        `runtime architecture ${runtimeArchitecture ?? `machine 0x${machine.toString(16)}`} does not match electron-builder target ${targetArchitecture}`
+      )
+    }
 
     const programHeaderOffset = header.readBigUInt64LE(32)
     const programHeaderSize = header.readUInt16LE(54)
@@ -50,7 +73,7 @@ function verifyStaticAppImagePackage(filePath) {
       'ELF program-header table'
     )
     const segments = parseProgramHeaders(table, programHeaderSize)
-    verifySegments(descriptor, segments, fileSize, filename)
+    verifySegments(descriptor, segments, fileSize, filename, entry)
   } finally {
     closeSync(descriptor)
   }
@@ -70,12 +93,16 @@ function verifyElfHeader(header, filename) {
     invalid(filename, 'runtime must be an ET_DYN static PIE')
   }
   const machine = header.readUInt16LE(18)
-  if (machine !== 0x3e && machine !== 0xb7) {
+  if (!RUNTIME_ARCHITECTURE_BY_MACHINE.has(machine)) {
     invalid(filename, `unsupported ELF machine 0x${machine.toString(16)}`)
+  }
+  if (header.readUInt32LE(20) !== 1) {
+    invalid(filename, 'runtime has an unsupported ELF version')
   }
   if (header.readUInt16LE(52) !== ELF_HEADER_BYTES) {
     invalid(filename, `unexpected ELF header size ${header.readUInt16LE(52)}`)
   }
+  return { entry: header.readBigUInt64LE(24), machine }
 }
 
 function parseProgramHeaders(table, entrySize) {
@@ -83,7 +110,9 @@ function parseProgramHeaders(table, entrySize) {
   for (let offset = 0; offset < table.length; offset += entrySize) {
     segments.push({
       type: table.readUInt32LE(offset),
+      flags: table.readUInt32LE(offset + 4),
       offset: table.readBigUInt64LE(offset + 8),
+      virtualAddress: table.readBigUInt64LE(offset + 16),
       fileSize: table.readBigUInt64LE(offset + 32),
       memorySize: table.readBigUInt64LE(offset + 40)
     })
@@ -91,7 +120,7 @@ function parseProgramHeaders(table, entrySize) {
   return segments
 }
 
-function verifySegments(descriptor, segments, fileSize, filename) {
+function verifySegments(descriptor, segments, fileSize, filename, entry) {
   if (segments.some((segment) => segment.type === 3)) {
     invalid(filename, 'runtime contains PT_INTERP')
   }
@@ -100,6 +129,16 @@ function verifySegments(descriptor, segments, fileSize, filename) {
   const totalLoadBytes = loadSegments.reduce((total, segment) => total + segment.fileSize, 0n)
   if (loadSegments.length === 0 || totalLoadBytes > BigInt(MAX_LOAD_BYTES)) {
     invalid(filename, `invalid or oversized PT_LOAD data (${totalLoadBytes} bytes)`)
+  }
+  if (
+    !loadSegments.some(
+      (segment) =>
+        segment.flags & 1 &&
+        entry >= segment.virtualAddress &&
+        entry - segment.virtualAddress < segment.memorySize
+    )
+  ) {
+    invalid(filename, 'ELF entry point is outside an executable PT_LOAD segment')
   }
   let identifiesStaticRuntime = false
   for (const segment of loadSegments) {
@@ -121,6 +160,15 @@ function verifySegments(descriptor, segments, fileSize, filename) {
   for (const segment of segments.filter((entry) => entry.type === 2)) {
     verifyDynamicSegment(descriptor, segment, fileSize, filename)
   }
+}
+
+function normalizeTargetArchitecture(targetArch, filename) {
+  const architecture =
+    typeof targetArch === 'number' ? TARGET_ARCHITECTURE_BY_ENUM.get(targetArch) : targetArch
+  if (architecture !== 'x64' && architecture !== 'arm64') {
+    invalid(filename, `unsupported electron-builder target architecture ${String(targetArch)}`)
+  }
+  return architecture
 }
 
 function verifyFileBackedSegment(segment, fileSize, filename, label) {

@@ -31,5 +31,6 @@ RUN apt-get update \
 RUN useradd --create-home --shell /bin/bash orca
 
 COPY run-signal-case.sh /usr/local/bin/run-signal-case
+COPY run-appimage-desktop-startup-case.sh /usr/local/bin/run-appimage-desktop-startup-case
 
 ENTRYPOINT ["/usr/local/bin/run-signal-case"]
