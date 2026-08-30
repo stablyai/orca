@@ -66,7 +66,13 @@ const FIELD_GPU_EVENT = {
 describe('1.4.190 win32 GPU-child crash cluster', () => {
   it('does not let process_gone_suppressed gate the fallback candidate check', () => {
     // The GPU death is suppressed as recoverable churn (no user-facing report)...
-    expect(shouldRecordProcessGoneCrash({ ...FIELD_GPU_EVENT, exitCode: -2147483645 })).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        ...FIELD_GPU_EVENT,
+        platform: 'win32',
+        exitCode: -2147483645
+      })
+    ).toBe(false)
     // ...but the fallback path reads the raw child-process-gone event, so the
     // suppression cannot hide a broken driver from recovery.
     expect(
