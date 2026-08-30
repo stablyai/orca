@@ -28,7 +28,7 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import * as ptyShellUtils from './pty-shell-utils'
+import * as ptyProcessProbes from './pty-process-probes'
 import type { PtyHandler } from './pty-handler'
 import {
   IMMEDIATE_PTY_EXIT_TIMEOUT_MS,
@@ -115,7 +115,7 @@ describe('PtyHandler retires a closed pane surface', () => {
   })
 
   it('retires the surface even when the shell survives the kill request', async () => {
-    vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+    vi.spyOn(ptyProcessProbes, 'isProcessAlive').mockReturnValue(true)
     const { id } = await spawnAgentPane()
 
     await dispatcher.callRequest('pty.shutdown', { id })
@@ -131,7 +131,7 @@ describe('PtyHandler retires a closed pane surface', () => {
   })
 
   it('re-issues the force kill instead of letting a detached shell outlive its tab', async () => {
-    vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+    vi.spyOn(ptyProcessProbes, 'isProcessAlive').mockReturnValue(true)
     const { id, term } = await spawnAgentPane()
 
     await dispatcher.callRequest('pty.shutdown', { id })
@@ -149,7 +149,7 @@ describe('PtyHandler retires a closed pane surface', () => {
 
   it('never re-closes a ConPTY handle on Windows, where the first kill is already final', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+    vi.spyOn(ptyProcessProbes, 'isProcessAlive').mockReturnValue(true)
     const { id, term } = await spawnAgentPane()
 
     // The immediate path is the one that reaches ConPTY's kill without setting gracefulKillSent.
@@ -167,7 +167,7 @@ describe('PtyHandler retires a closed pane surface', () => {
   it('retires the relay session once the sweep proves the process is gone', async () => {
     const exits: { id: string; paneKey?: string }[] = []
     handler.setExitListener((event) => exits.push(event))
-    const alive = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+    const alive = vi.spyOn(ptyProcessProbes, 'isProcessAlive').mockReturnValue(true)
     const { id } = await spawnAgentPane()
 
     expect((await listProcesses())[0]?.agentSessionOwners).toHaveLength(1)
@@ -182,7 +182,7 @@ describe('PtyHandler retires a closed pane surface', () => {
   })
 
   it('stops advertising an agent session whose process died without a node-pty exit', async () => {
-    const alive = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+    const alive = vi.spyOn(ptyProcessProbes, 'isProcessAlive').mockReturnValue(true)
     await spawnAgentPane()
 
     expect((await listProcesses())[0]?.agentSessionOwners).toHaveLength(1)
@@ -206,7 +206,7 @@ describe('PtyHandler retires a closed pane surface', () => {
   })
 
   it('restores the surface when a client reattaches to a shut-down PTY that survived', async () => {
-    vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+    vi.spyOn(ptyProcessProbes, 'isProcessAlive').mockReturnValue(true)
     const { id } = await spawnAgentPane()
     await dispatcher.callRequest('pty.shutdown', { id })
     expect(handler.isPaneSurfaceRetired(PANE_KEY)).toBe(true)

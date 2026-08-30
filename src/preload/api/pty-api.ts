@@ -6,6 +6,7 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
+import type { PtyProcessInspectionEvidence } from '../../shared/pty-process-inspection-evidence'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type {
   PtyRendererDeliveryHealthReply,
@@ -113,6 +114,9 @@ export type PtyApi = {
     foregroundProcess: string | null
     hasChildProcesses: boolean
     unavailable?: true
+    /** Per-probe live/unverifiable/exited evidence; absent from older hosts,
+     *  whose legacy fields above keep the pre-evidence collapse. */
+    processEvidence?: PtyProcessInspectionEvidence
   }>
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>

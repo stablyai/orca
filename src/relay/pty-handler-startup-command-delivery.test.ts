@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../shared/setup-agent-sequencing'
-import * as ptyShellUtils from './pty-shell-utils'
+import * as ptyProcessProbes from './pty-process-probes'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -607,7 +607,7 @@ describe('PtyHandler', () => {
       }
       expect(handler.retainedStartupCommandCount).toBe(1)
 
-      const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+      const aliveSpy = vi.spyOn(ptyProcessProbes, 'isProcessAlive').mockReturnValue(false)
       try {
         await expect(dispatcher.callRequest('pty.attach', { id: 'pty-1' })).rejects.toThrow(
           'PTY "pty-1" not found'

@@ -5,6 +5,7 @@ import {
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import { readPtyProcessInspectionEvidence } from '../../../../shared/pty-process-inspection-evidence'
 import {
   NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS,
   POLL_TIER_INTERVAL_MS,
@@ -74,18 +75,47 @@ export function createAgentCompletionProcessMonitor({
       scheduleNextPoll()
       return false
     }
-    state.consecutiveInspectionErrors = 0
-    const recognized = recognizeAgentProcess(result.foregroundProcess)
-    if (recognized) {
-      handleRecognizedProcess(recognized)
-      return true
+    const evidence = readPtyProcessInspectionEvidence(result)
+    if (evidence.foreground.verdict === 'observed') {
+      const recognized = recognizeAgentProcess(evidence.foreground.processName)
+      if (recognized) {
+        state.consecutiveInspectionErrors = 0
+        handleRecognizedProcess(recognized)
+        return true
+      }
     }
+    if (
+      evidence.foreground.verdict !== 'observed' ||
+      (evidence.children.verdict !== 'live' && evidence.children.verdict !== 'exited')
+    ) {
+      // The host could not ask, or answered outside this client's verdict
+      // vocabulary (a newer host's arm); neither is exit evidence. Re-arm the
+      // two-sample confirmation like any other failed inspection.
+      state.pendingProcessExitAgent = null
+      state.consecutiveInspectionErrors += 1
+      scheduleNextPoll()
+      return false
+    }
+    state.consecutiveInspectionErrors = 0
     if (hasPendingHookDone() || hasPendingCodexAttention()) {
       scheduleNextPoll()
       return false
     }
     if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
-      if (result.hasChildProcesses) {
+      // Completion requires the positively matched 'exited' arm — "not live"
+      // is not exit evidence (the #16900/#16908 polarity rule). The legacy
+      // boolean still gets a vote in the one direction it is not lossy: only
+      // its `false` conflates "no children" with "could not ask", while every
+      // producer sets `true` from a positive observation. So a `true` beside a
+      // disagreeing 'exited' must refuse, exactly as the boolean-only gate did.
+      // The legacy foreground scalar is the same rule one axis over: only its
+      // `null` conflates "no agent" with "could not ask", so a still-recognized
+      // name beside a union reporting none must refuse too.
+      if (
+        evidence.children.verdict !== 'exited' ||
+        result.hasChildProcesses ||
+        recognizeAgentProcess(result.foregroundProcess) !== null
+      ) {
         state.pendingProcessExitAgent = null
         scheduleNextPoll()
         return false

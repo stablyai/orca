@@ -630,6 +630,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyProcessInspectionEvidence } from '../../shared/pty-process-inspection-evidence'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentResumeStartupPlan,
@@ -2110,9 +2111,12 @@ type RuntimePtyController = {
   markReversibleStops?(ptyIds: readonly string[]): () => void
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
-  inspectProcess?(
-    ptyId: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }>
+  inspectProcess?(ptyId: string): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+    unavailable?: true
+    processEvidence?: PtyProcessInspectionEvidence
+  }>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>
   hasChildProcesses?(ptyId: string): Promise<boolean>
@@ -23786,9 +23790,12 @@ export class OrcaRuntimeService {
     return { removed: true }
   }
 
-  async inspectTerminalProcess(
-    terminalSelector: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }> {
+  async inspectTerminalProcess(terminalSelector: string): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+    unavailable?: true
+    processEvidence?: PtyProcessInspectionEvidence
+  }> {
     const leaf = this.resolveLiveLeafForHandle(terminalSelector)
     if (!leaf?.ptyId || !this.ptyController) {
       throw new Error('terminal_gone')

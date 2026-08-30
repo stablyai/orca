@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import * as ptyShellUtils from './pty-shell-utils'
+import * as ptyProcessProbes from './pty-process-probes'
 import { PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
@@ -103,7 +103,8 @@ export function beginPtyHandlerTest(mocks: PtyHandlerTestMocks): {
     notifyOutput: vi.fn(),
     dispose: vi.fn()
   })
-  vi.spyOn(ptyShellUtils, 'processHasChildren').mockResolvedValue(false)
+  vi.spyOn(ptyProcessProbes, 'processHasChildren').mockResolvedValue(false)
+  vi.spyOn(ptyProcessProbes, 'probeProcessChildren').mockResolvedValue({ verdict: 'exited' })
 
   mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 

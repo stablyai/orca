@@ -11,11 +11,19 @@ import {
   resolveDefaultShell,
   resolveDefaultCwd,
   resolveProcessCwd,
-  processHasChildren,
-  getForegroundProcessName,
-  isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
+import {
+  processHasChildren,
+  probeProcessChildren,
+  getForegroundProcessName,
+  observeForegroundProcess,
+  isProcessAlive
+} from './pty-process-probes'
+import {
+  buildPtyProcessInspectionWireResult,
+  type PtyProcessInspectionWireResult
+} from '../shared/pty-process-inspection-evidence'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
 import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { addWslEnvKeys } from '../shared/wsl-env'
@@ -2215,23 +2223,20 @@ export class PtyHandler {
     return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
   }
 
-  private async inspectProcess(params: Record<string, unknown>): Promise<{
-    foregroundProcess: string | null
-    hasChildProcesses: boolean
-  }> {
+  private async inspectProcess(
+    params: Record<string, unknown>
+  ): Promise<PtyProcessInspectionWireResult> {
     const id = params.id as string
     const managed = this.ptys.get(id)
     if (!managed || managed.disposed) {
       throw new Error('terminal_gone')
     }
-    const foregroundProcess = await getForegroundProcessName(
-      managed.pty.pid,
-      managed.pty.process || null
-    )
-    return {
-      foregroundProcess,
-      hasChildProcesses: await processHasChildren(managed.pty.pid)
-    }
+    // Why evidence, not booleans: completion consumers must be able to tell
+    // "no children observed" from "the probe could not run". The builder keeps
+    // the legacy fields collapsing exactly as before for pre-evidence clients.
+    const foreground = await observeForegroundProcess(managed.pty.pid, managed.pty.process || null)
+    const children = await probeProcessChildren(managed.pty.pid)
+    return buildPtyProcessInspectionWireResult(foreground, children)
   }
 
   private async listProcesses(): Promise<PtyProcessSummary[]> {

@@ -1,0 +1,113 @@
+/**
+ * Evidence contract for PTY agent-process inspection.
+ *
+ * The completion monitor concludes "the agent finished" from two observations:
+ * the foreground process is no longer a recognized agent, and the shell has no
+ * child processes. Both probes run on the execution host, and on a relay host
+ * "could not ask" is a normal steady state — probes time out under load, and
+ * minimal hosts lack `pgrep`. Per docs/reference/ssh-execution-boundary.md the
+ * vocabulary is `live` / `unverifiable` / `exited`: a probe that failed to run
+ * is `unverifiable` and must never be read as exit evidence; only a probe that
+ * ran and positively observed absence may say `exited`.
+ *
+ * Wire compatibility (docs/reference/remote-wire-compatibility.md): the
+ * evidence rides in a NEW OPTIONAL FIELD (`processEvidence`) beside the legacy
+ * `foregroundProcess` / `hasChildProcesses` fields, whose published values keep
+ * the exact legacy collapse. An old client ignores the field and sees identical
+ * content; a new client against an old host reads the legacy fields as the only
+ * available answer.
+ */
+
+export type PtyForegroundProcessEvidence =
+  | { verdict: 'observed'; processName: string | null }
+  | { verdict: 'unverifiable'; reason: string }
+
+export type PtyChildProcessesEvidence =
+  | { verdict: 'live' }
+  | { verdict: 'exited' }
+  | { verdict: 'unverifiable'; reason: string }
+
+export type PtyProcessInspectionEvidence = {
+  foreground: PtyForegroundProcessEvidence
+  children: PtyChildProcessesEvidence
+}
+
+export type PtyProcessInspectionWireResult = {
+  foregroundProcess: string | null
+  hasChildProcesses: boolean
+  processEvidence: PtyProcessInspectionEvidence
+}
+
+/**
+ * Collapse probe evidence into the wire result. The legacy fields reproduce the
+ * pre-evidence behavior exactly (`unverifiable` collapses to `null` / `false`)
+ * so clients that predate `processEvidence` observe unchanged host content.
+ */
+export function buildPtyProcessInspectionWireResult(
+  foreground: PtyForegroundProcessEvidence,
+  children: PtyChildProcessesEvidence
+): PtyProcessInspectionWireResult {
+  return {
+    foregroundProcess: foreground.verdict === 'observed' ? foreground.processName : null,
+    hasChildProcesses: children.verdict === 'live',
+    processEvidence: { foreground, children }
+  }
+}
+
+/**
+ * Read the evidence off a wire result, tolerating peers this client cannot
+ * vouch for. A host that predates the field gets the legacy interpretation —
+ * its published values are the only answer it can give. A malformed shape from
+ * a foreign host reads as `unverifiable`, never as an observation.
+ */
+export function readPtyProcessInspectionEvidence(result: {
+  foregroundProcess: string | null
+  hasChildProcesses: boolean
+  processEvidence?: PtyProcessInspectionEvidence
+}): PtyProcessInspectionEvidence {
+  const evidence = result.processEvidence
+  if (evidence === undefined) {
+    return {
+      foreground: { verdict: 'observed', processName: result.foregroundProcess },
+      children: result.hasChildProcesses ? { verdict: 'live' } : { verdict: 'exited' }
+    }
+  }
+  return {
+    foreground: normalizeForegroundEvidence(evidence?.foreground),
+    children: normalizeChildrenEvidence(evidence?.children)
+  }
+}
+
+// Field types are validated, not just verdicts: a foreign host can put any
+// JSON in these slots, and an out-of-type payload must degrade to
+// `unverifiable` — never ride an `observed` verdict into the exit gate.
+function normalizeReason(reason: unknown): string {
+  return typeof reason === 'string' ? reason : 'unspecified'
+}
+
+function normalizeForegroundEvidence(
+  evidence: PtyForegroundProcessEvidence | undefined
+): PtyForegroundProcessEvidence {
+  if (evidence?.verdict === 'observed') {
+    const processName = evidence.processName ?? null
+    if (processName === null || typeof processName === 'string') {
+      return { verdict: 'observed', processName }
+    }
+  }
+  if (evidence?.verdict === 'unverifiable') {
+    return { verdict: 'unverifiable', reason: normalizeReason(evidence.reason) }
+  }
+  return { verdict: 'unverifiable', reason: 'malformed foreground inspection evidence' }
+}
+
+function normalizeChildrenEvidence(
+  evidence: PtyChildProcessesEvidence | undefined
+): PtyChildProcessesEvidence {
+  if (evidence?.verdict === 'live' || evidence?.verdict === 'exited') {
+    return { verdict: evidence.verdict }
+  }
+  if (evidence?.verdict === 'unverifiable') {
+    return { verdict: 'unverifiable', reason: normalizeReason(evidence.reason) }
+  }
+  return { verdict: 'unverifiable', reason: 'malformed child-process inspection evidence' }
+}

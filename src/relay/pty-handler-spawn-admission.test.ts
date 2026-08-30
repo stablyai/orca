@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import * as ptyShellUtils from './pty-shell-utils'
+import * as ptyProcessProbes from './pty-process-probes'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -368,7 +368,7 @@ describe('PtyHandler', () => {
       handler.onPtyPoolEmpty(poolEmpty)
       await spawnPty()
 
-      const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+      const aliveSpy = vi.spyOn(ptyProcessProbes, 'isProcessAlive').mockReturnValue(false)
       try {
         await expect(attachPty({ id: 'pty-1', suppressReplayNotification: true })).rejects.toThrow(
           'PTY "pty-1" not found'

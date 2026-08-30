@@ -1,9 +1,13 @@
 import type { IPtyProvider } from './types'
+import type { PtyProcessInspectionEvidence } from '../../shared/pty-process-inspection-evidence'
 
 export type PtyProcessInspection = {
   foregroundProcess: string | null
   hasChildProcesses: boolean
   unavailable?: true
+  // Why optional: hosts that predate the evidence contract omit it; readers
+  // fall back to the legacy fields (see readPtyProcessInspectionEvidence).
+  processEvidence?: PtyProcessInspectionEvidence
 }
 
 type CompletionSensitivePtyProvider = IPtyProvider & {

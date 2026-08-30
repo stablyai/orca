@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { PtyProcessInspectionEvidence } from '../../../shared/pty-process-inspection-evidence'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import { makePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
@@ -14,6 +15,9 @@ export type RuntimeTerminalProcessInspection = {
   hasChildProcesses: boolean
   // Why: callers must not treat a stale remote handle as authoritative idle evidence.
   unavailable?: true
+  // Why: relay hosts publish per-probe live/unverifiable/exited evidence so a
+  // failed host probe cannot be read as exit evidence; absent on older hosts.
+  processEvidence?: PtyProcessInspectionEvidence
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
