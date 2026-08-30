@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-23",
+  "updatedAt": "2026-08-27",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -17167,6 +17167,103 @@
         "The sentinel changes a pane title within an existing layout; concurrent split and close conflicts remain separate coverage."
       ],
       "demotionRule": "Demote if a failed push suppresses an identical retry, a successful equal write resumes redundant churn, or the routed observer journey flakes without a diagnosed cause."
+    },
+    {
+      "id": "orchestration.run-capacity-target",
+      "title": "Run capacity targets expose and enforce safe backfill slots",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "orchestration-runtime",
+      "layer": "run-home-database-and-cli",
+      "surfaces": [
+        "Run target concurrency",
+        "explicit Task capacity enrollment",
+        "local and federated worker start",
+        "settled worker terminal accounting"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Deterministic Run-home database and RPC contracts cover exact atomic admission, simultaneous settlement, dependency and decision-gate promotion, failed and blocked Tasks, empty eligible queues, retry circuit breaking, restart persistence, federated home admission, idempotent mutation replay, and retained, user-owned, reclaimable, and release-unknown terminal resources. Remote provider parity is architectural because all starts claim the capacity slot in the authoritative Run-home transaction before placement; live remote host journeys remain a gap.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-3664",
+        "https://linear.app/stably/issue/STA-4693"
+      ],
+      "invariant": "A Run with target concurrency N never admits more than N pending or dispatched attempts; only ready Tasks explicitly enrolled in that Run's capacity pool are exposed for backfill, and settlement reopens the exact slot without treating retained, user-owned, or unverifiable terminals as active lanes or automatically closing them.",
+      "oracle": "Configure a target, enroll ready and dependency-blocked Tasks, and start concurrent local and federated attempts through both composed worker-start and low-level dispatch. Require the Run-home transaction to reject attempt N+1, require simultaneous worker_done settlement and dependency promotion to expose the exact reopened slots, require restart and replay to preserve target/enrollment without duplicate Dispatches, and require settled terminal cleanup debt to report reclaimable, retained/user-takeover, and release-unknown resources without closing them.",
+      "commands": [
+        "pnpm test src/main/runtime/orchestration/run-capacity.test.ts src/main/runtime/rpc/methods/orchestration-capacity.test.ts src/cli/handlers/orchestration-capacity-cli.test.ts",
+        "pnpm tc:node && pnpm tc:cli"
+      ],
+      "testFiles": [
+        "src/main/runtime/orchestration/run-capacity.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-capacity.test.ts",
+        "src/cli/handlers/orchestration-capacity-cli.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/orchestration/run-capacity.test.ts",
+          "assertions": [
+            "capacity admission is atomic and exact across composed and low-level dispatch paths",
+            "federated starts claim the exact slot at the authoritative Run home",
+            "simultaneous settlement and dependency promotion reopen the exact launchable slots",
+            "pending decision gates suppress launchability until resolution",
+            "launchable observation is index-backed and bounded by the available slots",
+            "ready Tasks with a pre-fix active split are never offered twice",
+            "restart persistence retains the target and explicit Task enrollment",
+            "settled terminal debt distinguishes reclaimable, user takeover, and release-unknown resources without closing them"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-capacity.test.ts",
+          "assertions": ["capacity mutations stay scoped to the coordinator's authoritative Run"]
+        },
+        {
+          "file": "src/cli/handlers/orchestration-capacity-cli.test.ts",
+          "assertions": [
+            "capacity mutations carry replay identity and worker-start claims a slot only when explicitly requested"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "durationSeconds": 19.45,
+          "command": "pnpm test src/main/runtime/orchestration/run-capacity.test.ts src/main/runtime/rpc/methods/orchestration-capacity.test.ts src/cli/handlers/orchestration-capacity-cli.test.ts",
+          "summary": "Focused database, RPC, and CLI contracts passed after the original four-test oracle failed because no Run capacity contract existed."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 25,
+        "scope": "focused in-memory database, RPC, and CLI contracts"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Fresh deterministic coverage has local candidate evidence only."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The initial focused oracle failed because configureRunCapacity and the capacity CLI contract did not exist; the candidate passes the same behavior-level contracts."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Capacity observation and admission are caller-driven and event-aligned. They add no timer, polling, subprocess, provider fanout, or wire opcode; admission uses one indexed Run-home count inside the existing BEGIN IMMEDIATE transaction, the launchable query is capped at the 64-slot maximum, and pending/debt queries use indexed filters instead of full historical inventories."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive routed CI passes or 14 days without an unexplained flake.",
+        "Add live compiled-CLI Run-home and federated-server journeys on Windows, WSL, Linux, and physical SSH.",
+        "Keep exact capacity admission, dependency promotion, replay, restart, and terminal-debt assertions green."
+      ],
+      "knownGaps": [
+        "Orca does not infer Task placement, worktree conflicts, agent choice, or setup policy; a coordinator loop must select those explicitly for each reported eligible Task.",
+        "Live federated Windows, WSL, Linux, and physical SSH journeys are not recorded; provider parity is currently proven at the shared Run-home admission boundary.",
+        "Settled retained and release-unknown terminals are reported as cleanup debt and intentionally remain open until their ownership is proved."
+      ],
+      "demotionRule": "Demote if any start path exceeds the target, an unenrolled or dependency-blocked Task appears launchable, restart or replay duplicates admission, or capacity accounting closes or hides an unproven terminal resource."
     }
   ]
 }

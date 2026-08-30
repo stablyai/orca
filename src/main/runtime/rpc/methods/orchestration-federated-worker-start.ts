@@ -130,10 +130,12 @@ export async function startFederatedWorker(args: {
         ? params.setup
           ? 'explicit_request'
           : 'orchestration_default'
-        : 'existing_worktree'
+        : 'existing_worktree',
+      capacitySlot: params.capacitySlot ?? false
     },
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation,
+    capacitySlot: params.capacitySlot,
     federation: {
       environmentId: server.environmentId,
       environmentName: server.name,

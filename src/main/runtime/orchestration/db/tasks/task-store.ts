@@ -21,6 +21,7 @@ export function createTask(
     createdByProcessIncarnation?: string
     createdByRunGeneration?: number
     runId?: string
+    capacityEligible?: boolean
   }
 ): TaskRow {
   const runId = task.runId ?? LEGACY_RUN_ID
@@ -49,7 +50,7 @@ export function createTask(
       `INSERT INTO tasks (
          id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
          created_by_process_incarnation, created_by_run_generation,
-         task_title, display_name, spec, status, deps
+         task_title, display_name, spec, status, capacity_eligible, deps
        ) VALUES (
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          CASE WHEN EXISTS (
@@ -59,7 +60,7 @@ export function createTask(
            WHERE dependency.id IS NULL
               OR dependency.run_id <> ?
               OR dependency.status <> 'completed'
-         ) THEN 'pending' ELSE 'ready' END,
+         ) THEN 'pending' ELSE 'ready' END, ?,
          ?
        )`
     )
@@ -76,6 +77,7 @@ export function createTask(
       task.spec,
       depsJson,
       runId,
+      task.capacityEligible ? 1 : 0,
       depsJson
     )
   return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow

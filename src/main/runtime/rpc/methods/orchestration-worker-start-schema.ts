@@ -25,6 +25,7 @@ export const WorkerStartParams = z.object({
   model: OptionalWorkerLaunchPreference,
   effort: OptionalWorkerLaunchPreference,
   retryOf: OptionalString,
+  capacitySlot: z.boolean().optional(),
   timeoutMs: OptionalFiniteNumber,
   devMode: z.boolean().optional()
 })

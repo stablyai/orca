@@ -219,6 +219,30 @@ orca orchestration worker-start --task <task_b> --worktree current --agent claud
 
 `current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
 
+### Durable target concurrency and safe backfill
+
+A coordinator can declare a Run-wide execution ceiling and explicitly enroll independent Tasks in its capacity pool:
+
+```bash
+orca orchestration capacity-set --target 5 --json
+orca orchestration capacity-enroll --task <task_id> --json
+orca orchestration capacity-show --json
+```
+
+`capacity-show` reports the target, every active Dispatch in the Run, open slots, enrolled ready Tasks in stable creation order, enrolled pending/blocked Tasks, and settled terminal cleanup debt. Only Tasks explicitly enrolled with `capacity-enroll` appear as launchable; dependency promotion and decision-gate resolution must first make the Task `ready`. Failed, blocked, already dispatched, and circuit-broken work never appears as launchable.
+
+The runtime deliberately does not invent worker placement. For each Task returned under `launchableTasks`, the coordinator chooses the existing `worker-start` placement and claims one slot atomically:
+
+```bash
+orca orchestration worker-start --task <task_id> --capacity-slot --worktree current --agent codex --json
+```
+
+Once a target is nonzero, every new Dispatch in that Run—including low-level `dispatch` and Tasks outside the pool—must fit below it. `--capacity-slot` additionally requires explicit pool enrollment. Concurrent starts serialize at the Run home, so a stale `capacity-show` or idempotent coordinator replay can fail with `capacity_full` or `task_not_startable` but cannot exceed the target or duplicate a Task. A target of `0` disables capacity-slot launches without stopping existing work.
+
+After each accepted `worker_done`, release or reuse the settled worker as below, then call `capacity-show` again and start up to `launchableCount`. This closes the settled-lane backfill gap without a scheduler: Runs remain authoritative, placement remains explicit, and the same loop works after coordinator or runtime restart because target and enrollment are durable. Retained, user-owned, external, and `release_unknown` terminals are reported as cleanup debt; they are never auto-closed and do not masquerade as live execution lanes.
+
+Use `capacity-withdraw --task <task_id>` to remove a Task from future backfill. Enrollment changes neither Task status nor dependencies and never cancels an active Dispatch.
+
 For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
 
 ```bash

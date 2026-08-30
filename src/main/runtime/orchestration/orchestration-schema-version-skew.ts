@@ -28,8 +28,12 @@ const POST_V6_COLUMNS = [
 const VERSIONED_POST_V6_COLUMNS = [
   { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' },
   { version: 30, table: 'dispatch_contexts', column: 'depth' },
-  { version: 30, table: 'remote_dispatch_attachments', column: 'depth' }
+  { version: 30, table: 'remote_dispatch_attachments', column: 'depth' },
+  { version: 31, table: 'runs', column: 'target_concurrency' },
+  { version: 31, table: 'tasks', column: 'capacity_eligible' }
 ] as const
+
+const VERSIONED_POST_V6_INDEXES = [{ version: 31, index: 'idx_tasks_capacity_ready' }] as const
 
 const POST_V6_INDEXES = [
   'idx_messages_run_sequence',
@@ -94,6 +98,9 @@ function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): 
     VERSIONED_POST_V6_COLUMNS.every(
       ({ version, table, column }) =>
         storedVersion < version || hasOrchestrationColumn(db, table, column)
+    ) &&
+    VERSIONED_POST_V6_INDEXES.every(
+      ({ version, index }) => storedVersion < version || hasOrchestrationIndex(db, index)
     ) &&
     POST_V6_INDEXES.every((index) => hasOrchestrationIndex(db, index)) &&
     messagesAllowQuestions(db) &&

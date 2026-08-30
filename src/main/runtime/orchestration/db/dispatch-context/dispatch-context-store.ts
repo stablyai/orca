@@ -72,6 +72,7 @@ export function createDispatchContext(
           `Terminal ${assigneeHandle} already has an active dispatch (${occupied.id} for task ${occupied.task_id})`
         )
       }
+      this.assertRunCapacityAvailable(taskId)
       throw new Error(
         `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
       )

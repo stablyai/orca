@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS tasks (
       'pending', 'ready', 'dispatched',
       'completed', 'failed', 'blocked'
     )),
+  capacity_eligible INTEGER NOT NULL DEFAULT 0 CHECK(capacity_eligible IN (0, 1)),
   deps          TEXT NOT NULL DEFAULT '[]',
   result        TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),

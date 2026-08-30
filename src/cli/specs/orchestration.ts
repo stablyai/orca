@@ -43,6 +43,34 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'id']
   },
   {
+    path: ['orchestration', 'capacity-set'],
+    summary: 'Declare the target concurrent worker count for the bound Run',
+    usage:
+      'orca orchestration capacity-set --target <0-64> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'target', 'run', 'from', 'retry-request'],
+    notes: ['A target of 0 disables capacity-slot launches without changing existing workers.']
+  },
+  {
+    path: ['orchestration', 'capacity-show'],
+    summary: 'Show target, active lanes, eligible ready tasks, and settled terminal debt',
+    usage: 'orca orchestration capacity-show [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'from']
+  },
+  {
+    path: ['orchestration', 'capacity-enroll'],
+    summary: 'Explicitly enroll one Task in the Run capacity pool',
+    usage:
+      'orca orchestration capacity-enroll --task <task_id> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'run', 'from', 'retry-request']
+  },
+  {
+    path: ['orchestration', 'capacity-withdraw'],
+    summary: 'Withdraw one Task from the Run capacity pool',
+    usage:
+      'orca orchestration capacity-withdraw --task <task_id> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'run', 'from', 'retry-request']
+  },
+  {
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:

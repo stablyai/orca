@@ -21,6 +21,17 @@ SELECT ?, run_id, id, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
 FROM tasks
 WHERE id = ? AND status = 'ready'
   AND NOT EXISTS (
+    SELECT 1 FROM runs
+    WHERE runs.id = tasks.run_id
+      AND runs.legacy = 0
+      AND runs.target_concurrency > 0
+      AND (
+        SELECT COUNT(*) FROM dispatch_contexts active
+        WHERE active.run_id = tasks.run_id
+          AND active.status IN ('pending', 'dispatched')
+      ) >= runs.target_concurrency
+  )
+  AND NOT EXISTS (
     SELECT 1 FROM dispatch_contexts active
     WHERE active.assignee_handle = ?
       AND active.status IN ('pending', 'dispatched')
@@ -44,7 +55,19 @@ WHERE id = ? AND status = 'ready'
 
 const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
    id, run_id, task_id, contract_version, launch_token_hash, depth, status, dispatched_at
- ) VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`
+ )
+ SELECT ?, ?, ?, ?, ?, ?, 'pending', datetime('now')
+ WHERE NOT EXISTS (
+   SELECT 1 FROM runs
+   WHERE runs.id = ?
+     AND runs.legacy = 0
+     AND runs.target_concurrency > 0
+     AND (
+       SELECT COUNT(*) FROM dispatch_contexts active
+       WHERE active.run_id = ?
+         AND active.status IN ('pending', 'dispatched')
+     ) >= runs.target_concurrency
+ )`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
    dispatch_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
@@ -109,14 +132,21 @@ export function insertStartingDispatchContextRow(
   }
 ): void {
   assertStampedDepth(params.depth)
-  db.prepare(STARTING_DISPATCH_CONTEXT_SQL).run(
-    params.id,
-    params.runId,
-    params.taskId,
-    params.contractVersion,
-    params.launchTokenHash,
-    params.depth
-  )
+  const inserted = db
+    .prepare(STARTING_DISPATCH_CONTEXT_SQL)
+    .run(
+      params.id,
+      params.runId,
+      params.taskId,
+      params.contractVersion,
+      params.launchTokenHash,
+      params.depth,
+      params.runId,
+      params.runId
+    )
+  if (inserted.changes !== 1) {
+    throw new Error(`Run capacity changed while starting Task ${params.taskId}.`)
+  }
 }
 
 /** The worker host's record of a live worker driven by a remote Run home. */

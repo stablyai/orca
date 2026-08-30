@@ -30,6 +30,7 @@ export function createStartingWorkerDispatch(
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
+    capacitySlot?: boolean
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -85,6 +86,7 @@ export function createStartingWorkerDispatch(
         `Task ${task.id} is ${task.status}; only a ready Task can start.`
       )
     }
+    this.assertRunCapacityAvailable(task.id, params.capacitySlot === true)
 
     const id = generateId('ctx')
     if (params.mutationReceipt) {

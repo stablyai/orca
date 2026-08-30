@@ -34,6 +34,7 @@ import { resolveRunScope } from './orchestration-run-scope'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
+import { ORCHESTRATION_CAPACITY_METHODS } from './orchestration-capacity'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
@@ -441,6 +442,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   ...ORCHESTRATION_RUN_METHODS,
   ...ORCHESTRATION_WORKER_METHODS,
   ...ORCHESTRATION_FEDERATION_METHODS,
+  ...ORCHESTRATION_CAPACITY_METHODS,
   defineMethod({
     name: 'orchestration.send',
     params: SendParams,

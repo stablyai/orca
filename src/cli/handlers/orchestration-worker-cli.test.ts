@@ -8,7 +8,10 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ORCHESTRATION_RUN_CAPACITY_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 
 describe('orchestration worker-start CLI contract', () => {
   beforeEach(() => {
@@ -122,6 +125,56 @@ describe('orchestration worker-start CLI contract', () => {
         model: 'aws-bedrock-opus-5',
         effort: 'high'
       })
+    )
+  })
+
+  it('fails closed when the runtime cannot enforce a requested capacity slot', async () => {
+    callMock.mockResolvedValueOnce({ result: { capabilities: [] } })
+
+    await expect(
+      invokeWorkerStart(
+        new Map<string, string | boolean>([
+          ['task', 'task_1'],
+          ['agent', 'codex'],
+          ['capacity-slot', true],
+          ['from', 'term_coord']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('status.get')
+  })
+
+  it('forwards a capacity slot only after the runtime advertises enforcement', async () => {
+    callMock
+      .mockResolvedValueOnce({
+        result: { capabilities: [ORCHESTRATION_RUN_CAPACITY_RUNTIME_CAPABILITY] }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          runId: 'run_1',
+          taskId: 'task_1',
+          dispatchId: 'ctx_1',
+          state: 'ready',
+          effects: [],
+          residualResources: []
+        }
+      })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['capacity-slot', true],
+        ['from', 'term_coord']
+      ])
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'orchestration.workerStart',
+      expect.objectContaining({ capacitySlot: true })
     )
   })
 

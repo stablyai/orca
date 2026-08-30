@@ -37,6 +37,7 @@ import type { RunCoordinatorMailRoutingMethods } from './runs/run-coordinator-ma
 import type { RunCreateMethods } from './runs/run-create'
 import type { RunDeliveryMethods } from './runs/run-delivery'
 import type { RunLookupMethods } from './runs/run-lookup'
+import type { RunCapacityStoreMethods } from './run-capacity/run-capacity-store'
 import type { LegacyCoordinatorMailTakeoverMethods } from './runs/legacy-coordinator-mail-takeover'
 import type { AdoptLegacyRunMethods } from './schema/adopt-legacy-run'
 import type { BackfillLegacyQuestionThreadsMethods } from './schema/backfill-legacy-question-threads'
@@ -80,6 +81,7 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   RunCreateMethods &
   RunBindingMethods &
   RunLookupMethods &
+  RunCapacityStoreMethods &
   RunCoordinatorMailRoutingMethods &
   LegacyCoordinatorMailTakeoverMethods &
   RunDeliveryMethods &

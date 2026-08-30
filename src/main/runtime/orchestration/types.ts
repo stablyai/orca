@@ -48,6 +48,7 @@ export type RunRow = {
   coordinator_pane_key: string | null
   consumer_generation: number
   legacy: number
+  target_concurrency: number
   created_at: string
   updated_at: string
 }
@@ -257,6 +258,7 @@ export type TaskRow = {
   display_name: string | null
   spec: string
   status: TaskStatus
+  capacity_eligible: number
   deps: string
   result: string | null
   created_at: string

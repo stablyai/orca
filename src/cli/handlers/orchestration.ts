@@ -1,5 +1,6 @@
 import type { CommandHandler } from '../dispatch'
 import { ORCHESTRATION_CHECK_HANDLER } from './orchestration/message-check-handler'
+import { ORCHESTRATION_CAPACITY_HANDLERS } from './orchestration/capacity-handlers'
 import {
   ORCHESTRATION_DISPATCH_HANDLER,
   ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS
@@ -17,6 +18,7 @@ import { ORCHESTRATION_WORKER_TERMINAL_HANDLERS } from './orchestration/worker-t
 
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   ...ORCHESTRATION_RUN_HANDLERS,
+  ...ORCHESTRATION_CAPACITY_HANDLERS,
   ...ORCHESTRATION_SEND_HANDLER,
   ...ORCHESTRATION_CHECK_HANDLER,
   ...ORCHESTRATION_INBOX_HANDLERS,

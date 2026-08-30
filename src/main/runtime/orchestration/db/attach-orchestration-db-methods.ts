@@ -37,6 +37,7 @@ import { attachRunCoordinatorMailRouting } from './runs/run-coordinator-mail-rou
 import { attachRunCreate } from './runs/run-create'
 import { attachRunDelivery } from './runs/run-delivery'
 import { attachRunLookup } from './runs/run-lookup'
+import { attachRunCapacityStore } from './run-capacity/run-capacity-store'
 import { attachLegacyCoordinatorMailTakeover } from './runs/legacy-coordinator-mail-takeover'
 import { attachAdoptLegacyRun } from './schema/adopt-legacy-run'
 import { attachBackfillLegacyQuestionThreads } from './schema/backfill-legacy-question-threads'
@@ -81,6 +82,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachRunCreate(ctor)
   attachRunBinding(ctor)
   attachRunLookup(ctor)
+  attachRunCapacityStore(ctor)
   attachRunCoordinatorMailRouting(ctor)
   attachLegacyCoordinatorMailTakeover(ctor)
   attachRunDelivery(ctor)

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS runs (
   coordinator_pane_key  TEXT,
   consumer_generation   INTEGER NOT NULL DEFAULT 0,
   legacy                INTEGER NOT NULL DEFAULT 0,
+  target_concurrency    INTEGER NOT NULL DEFAULT 0 CHECK(target_concurrency BETWEEN 0 AND 64),
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
