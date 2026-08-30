@@ -139,17 +139,14 @@ import {
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
-import {
-  runWithWindowCloseCheckpointScope,
-  setWindowCloseRequestHandler
-} from './window-close-request-coordinator'
-import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
+import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import {
   findActivityTerminalPortal,
   useActivityTerminalPortals,
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { useWindowCloseRunningProcessPrompt } from './terminal/window-close-running-process-prompt'
 import {
   activateWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab,
@@ -522,60 +519,10 @@ function Terminal(): React.JSX.Element | null {
     closeDialogDebounceTimersRef.current.add(timer)
   }, [])
 
-  // Window close confirmation, shown for local terminals with running children (SSH terminals detach/persist via the relay).
-  const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
-
   // Why: defer confirmWindowClose() while tabs are dirty — the beforeunload guard preventDefault()s, so an immediate confirm leaves the window open with no UI.
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
 
-  const confirmNativeWindowClose = useCallback(() => {
-    // Why: capture only after every close guard has committed. A canceled child-
-    // process prompt must not consume App's synthetic/native unload guard.
-    const accepted = runWithWindowCloseCheckpointScope(() =>
-      window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
-    )
-    if (!accepted) {
-      // Why: a checkpoint-vetoed quit used to die here with no dialog and no log,
-      // leaving SIGKILL as the only exit (#15352). The dirty-file veto publishes
-      // no reason — its deferred dialog flow already gives the user a surface.
-      showShutdownCheckpointFailureToast()
-      return
-    }
-    window.api.ui.confirmWindowClose()
-  }, [])
-
-  const proceedToNativeWindowClose = useCallback(
-    (isQuitting: boolean) => {
-      if (!isQuitting) {
-        const state = useAppStore.getState()
-        const localPtyIds = Object.entries(state.tabsByWorktree).flatMap(
-          ([worktreeId, worktreeTabs]) => {
-            const connectionId = getConnectionId(worktreeId)
-            if (connectionId !== null) {
-              return []
-            }
-            return worktreeTabs
-              .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
-              .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
-          }
-        )
-        if (localPtyIds.length > 0) {
-          void Promise.all(localPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
-            (results) => {
-              if (results.some(Boolean)) {
-                setWindowCloseDialogOpen(true)
-              } else {
-                confirmNativeWindowClose()
-              }
-            }
-          )
-          return
-        }
-      }
-      confirmNativeWindowClose()
-    },
-    [confirmNativeWindowClose]
-  )
+  const { proceedToNativeWindowClose, windowCloseDialog } = useWindowCloseRunningProcessPrompt()
 
   const waitForFileClosed = useCallback((fileId: string, timeoutMs: number): Promise<boolean> => {
     if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
@@ -2818,51 +2765,7 @@ function Terminal(): React.JSX.Element | null {
         </DialogContent>
       </Dialog>
 
-      {/* Window close confirmation dialog */}
-      <Dialog
-        open={windowCloseDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setWindowCloseDialogOpen(false)
-          }
-        }}
-      >
-        <DialogContent className="max-w-sm" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {translate('auto.components.Terminal.2fa9c69ff3', 'Close Window?')}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {translate(
-                'auto.components.Terminal.7958465754',
-                'There are local terminals with running processes. Close the window anyway?'
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setWindowCloseDialogOpen(false)}
-            >
-              {translate('auto.components.Terminal.f82e9f02df', 'Cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              autoFocus
-              onClick={() => {
-                setWindowCloseDialogOpen(false)
-                confirmNativeWindowClose()
-              }}
-            >
-              {translate('auto.components.Terminal.73768427cf', 'Close')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {windowCloseDialog}
     </div>
   )
 }

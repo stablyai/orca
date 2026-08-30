@@ -40,6 +40,27 @@ const closeGuards = new Set<WindowCloseGuard>()
 // 'window:close-requested' on each attempt) so we don't stack duplicate prompts.
 let closeInFlight = false
 
+// Why a request id and not a per-consumer flag: main re-sends
+// 'window:close-requested' on every attempt (main-window-close-lifecycle.ts), so a
+// probe started for one request can still be outstanding when the next arrives, and
+// an older answer would close a window the user has since chosen to keep. It lives
+// here, above every branch, because most requests never reach the probe at all — a
+// guard can veto one, Terminal defers one behind the unsaved-changes dialog, and
+// either leaves the window open with the older probe still believing it is current.
+let windowCloseRequestSeq = 0
+
+/** The id of the window-close request currently entitled to close the window. Read
+ *  it when starting async work; compare before acting on the answer. */
+export function getWindowCloseRequestSeq(): number {
+  return windowCloseRequestSeq
+}
+
+/** Ends the current attempt without starting one. For dialogs that let the user call
+ *  a close off — the answer to a probe they have since dismissed is not their intent. */
+export function abandonWindowCloseRequest(): void {
+  windowCloseRequestSeq += 1
+}
+
 /** Terminal registers its rich handler while mounted; passing null on unmount
  *  hands the decision back to the App-root fallback. */
 export function setWindowCloseRequestHandler(handler: WindowCloseRequestHandler | null): void {
@@ -76,6 +97,9 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
   if (closeInFlight) {
     return
   }
+  // Why before the guards and not inside the handler: this is the only point every
+  // close request passes through, and a guard veto below returns with the window open.
+  windowCloseRequestSeq += 1
   closeInFlight = true
   try {
     if (!(await runWindowCloseGuards())) {

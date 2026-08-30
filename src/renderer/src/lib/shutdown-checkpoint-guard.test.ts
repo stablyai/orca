@@ -190,10 +190,13 @@ describe('createShutdownCheckpointGuard', () => {
 
   it('runs the quit checkpoint inside the window-close scope and surfaces a vetoed quit (STA-5505/#15352)', () => {
     const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
+      join(
+        process.cwd(),
+        'src/renderer/src/components/terminal/window-close-running-process-prompt.tsx'
+      ),
       'utf8'
     )
-    const closeStart = source.indexOf('const confirmNativeWindowClose = useCallback(() => {')
+    const closeStart = source.indexOf('  const confirmNativeWindowClose = useCallback(() => {')
     const closeEnd = source.indexOf('window.api.ui.confirmWindowClose()', closeStart)
     expect(closeStart).toBeGreaterThanOrEqual(0)
     expect(closeEnd).toBeGreaterThan(closeStart)
