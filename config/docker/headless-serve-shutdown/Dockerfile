@@ -22,12 +22,10 @@ RUN apt-get update \
     libxkbcommon0 \
     libxrandr2 \
     libxss1 \
-    p7zip-full \
     procps \
     util-linux \
     xauth \
     xvfb \
-    zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --shell /bin/bash orca

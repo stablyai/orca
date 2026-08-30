@@ -59,6 +59,13 @@ try {
     '--rm',
     '--platform',
     platform,
+    '--network',
+    'none',
+    '--read-only',
+    '--cap-drop',
+    'ALL',
+    '--security-opt',
+    'no-new-privileges',
     '--entrypoint',
     'bash',
     '-v',
@@ -68,11 +75,16 @@ try {
     image,
     '-lc',
     [
-      '7z x /input/orca.AppImage -o/artifacts/root -y >/dev/null',
+      'trap \'status=$?; if [ "$status" -ne 0 ]; then cat /artifacts/appimage-help.log /artifacts/appimage-extract.log 2>/dev/null || true; fi; exit "$status"\' EXIT',
+      'timeout --kill-after=5s 15s /input/orca.AppImage --appimage-help > /artifacts/appimage-help.log 2>&1',
+      'cd /artifacts',
+      'timeout --kill-after=10s 120s /input/orca.AppImage --appimage-extract > /artifacts/appimage-extract.log 2>&1',
+      'mv squashfs-root root',
       launcherExecOverlay
         ? "sed -i 's/^ELECTRON_RUN_AS_NODE=1 /export ELECTRON_RUN_AS_NODE=1\\nexec /' /artifacts/root/resources/bin/orca-ide"
         : ':',
-      'chmod -R a+rX /artifacts/root'
+      'chmod -R a+rX /artifacts/root',
+      'rm /artifacts/appimage-help.log /artifacts/appimage-extract.log'
     ].join(' && ')
   ])
 
