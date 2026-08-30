@@ -10,6 +10,7 @@ import {
 import { translate } from '@/i18n/i18n'
 
 type CliRegistrationDialogProps = {
+  actionError: string | null
   busyAction: 'install' | 'remove' | null
   commandName: string
   commandPath: string | null | undefined
@@ -22,6 +23,7 @@ type CliRegistrationDialogProps = {
 }
 
 export function CliRegistrationDialog({
+  actionError,
   busyAction,
   commandName,
   commandPath,
@@ -66,6 +68,11 @@ export function CliRegistrationDialog({
           <p className="text-xs text-muted-foreground">
             {translate('auto.components.settings.CliSection.a4aafe46e3', 'Target path:')}{' '}
             <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{commandPath}</code>
+          </p>
+        ) : null}
+        {actionError ? (
+          <p role="alert" className="text-xs text-destructive">
+            {actionError}
           </p>
         ) : null}
         <DialogFooter>
