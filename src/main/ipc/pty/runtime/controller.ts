@@ -5,10 +5,10 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
 import {
   killPtyFromRuntimeController,
-  markReversibleStopsFromRuntimeController,
   retireRejectedPtyFromRuntimeController,
   stopAndWaitPtyFromRuntimeController
 } from './kill'
+import { markReversibleStopsFromRuntimeController } from './reversible-stop-ownership'
 import {
   attachPtyFromRuntimeController,
   clearBufferFromRuntimeController,
