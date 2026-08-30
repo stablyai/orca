@@ -147,6 +147,44 @@ export function readPtyProcessInspectionEvidence(result: {
   }
 }
 
+const UNPUBLISHED_REASON = 'host published no process-inspection evidence'
+
+/**
+ * The same evidence, read by a caller that ACTS ON ABSENCE — one that closes,
+ * kills or deletes when the answer is "nothing is running".
+ *
+ * Identical to `readPtyProcessInspectionEvidence` except that a host which
+ * published no evidence is never allowed to state an absence. Its `zsh` + `false`
+ * is what `composeLegacyPtyProcessInspection` emits both when the pane really sits
+ * at an idle shell AND when the foreground read degraded to the shell title, and it
+ * has no field to tell the two apart, so it means "could not tell". Its positive
+ * survives — believing a host that reports work only ever adds caution, and a
+ * non-shell foreground is the one thing such a host can say unambiguously.
+ *
+ * This exists so the callers stay free of the special case. Both terminal close
+ * guards read only `children.verdict` off this, which is what keeps them from
+ * drifting: there is one rule here, not a matching arm in each of them.
+ */
+export function readPtyProcessInspectionEvidenceForAbsenceAction(result: {
+  foregroundProcess: string | null
+  hasChildProcesses: boolean
+  processEvidence?: PtyProcessInspectionEvidence
+}): PtyProcessInspectionEvidence {
+  const evidence = readPtyProcessInspectionEvidence(result)
+  // Why both halves move together: in the legacy encoding they are one signal, not two —
+  // `composeLegacyPtyProcessInspection` derives the boolean from the very name it publishes
+  // as the foreground. So an unpublished host is saying either its one positive thing or
+  // nothing at all, and splitting the two would let the shell title it fell back to keep
+  // riding an `observed` verdict.
+  if (hasPublishedPtyProcessInspectionEvidence(result) || evidence.children.verdict === 'live') {
+    return evidence
+  }
+  return {
+    foreground: { verdict: 'unverifiable', reason: UNPUBLISHED_REASON },
+    children: { verdict: 'unverifiable', reason: UNPUBLISHED_REASON }
+  }
+}
+
 // Field types are validated, not just verdicts: a foreign host can put any
 // JSON in these slots, and an out-of-type payload must degrade to
 // `unverifiable` — never ride an `observed` verdict into the exit gate.

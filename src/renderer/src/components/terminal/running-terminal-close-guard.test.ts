@@ -14,11 +14,30 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 }))
 
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { buildPtyProcessInspectionWireResult } from '../../../../shared/pty-process-inspection-evidence'
 import {
   guardRunningTerminalClose,
   shouldConfirmRunningTerminalClose,
   RUNNING_CLOSE_PROBE_TIMEOUT_MS
 } from './running-terminal-close-guard'
+
+// Why built and not written out: the cases below mean "the host looked and saw nothing
+// running", and only the published verdict says that. The same two legacy fields with no
+// `processEvidence` are what a host that could NOT look publishes, which now asks —
+// running-terminal-close-unpublished-evidence.test.ts owns that shape.
+function observedIdle(processName: string | null = 'zsh') {
+  return buildPtyProcessInspectionWireResult(
+    { verdict: 'observed', processName },
+    { verdict: 'exited' }
+  )
+}
+
+function observedBusy(processName: string) {
+  return buildPtyProcessInspectionWireResult(
+    { verdict: 'observed', processName },
+    { verdict: 'live' }
+  )
+}
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -138,10 +157,7 @@ describe('guardRunningTerminalClose', () => {
   })
 
   it('closes an idle terminal without a prompt', async () => {
-    inspectRuntimeTerminalProcessMock.mockResolvedValue({
-      foregroundProcess: 'zsh',
-      hasChildProcesses: false
-    })
+    inspectRuntimeTerminalProcessMock.mockResolvedValue(observedIdle())
     const onClose = vi.fn()
 
     guard(onClose)
@@ -207,7 +223,7 @@ describe('guardRunningTerminalClose', () => {
       if (ptyId === 'pty-stale') {
         throw new Error('no registered provider owns this PTY id')
       }
-      return { foregroundProcess: 'zsh', hasChildProcesses: false }
+      return observedIdle()
     })
     const onClose = vi.fn()
 
@@ -265,10 +281,9 @@ describe('guardRunningTerminalClose', () => {
       },
       agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
     })
-    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => ({
-      foregroundProcess: ptyId === 'pty-b' ? 'claude' : 'zsh',
-      hasChildProcesses: ptyId === 'pty-b'
-    }))
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) =>
+      ptyId === 'pty-b' ? observedBusy('claude') : observedIdle()
+    )
     const onClose = vi.fn()
 
     guard(onClose)
@@ -287,10 +302,9 @@ describe('guardRunningTerminalClose', () => {
       },
       agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
     })
-    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => ({
-      foregroundProcess: ptyId === 'pty-a' ? 'npm' : 'zsh',
-      hasChildProcesses: ptyId === 'pty-a'
-    }))
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) =>
+      ptyId === 'pty-a' ? observedBusy('npm') : observedIdle()
+    )
 
     guard()
     await settleProbe()

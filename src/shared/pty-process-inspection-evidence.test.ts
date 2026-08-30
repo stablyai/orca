@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildPtyProcessInspectionWireResult,
+  composeLegacyPtyProcessInspection,
   readPtyProcessInspectionEvidence,
+  readPtyProcessInspectionEvidenceForAbsenceAction,
   type PtyProcessInspectionEvidence
 } from './pty-process-inspection-evidence'
 
@@ -96,5 +99,67 @@ describe('readPtyProcessInspectionEvidence normalization', () => {
       foreground: { verdict: 'observed', processName: null },
       children: { verdict: 'exited' }
     })
+  })
+})
+
+// The one rule both terminal close guards read the verdict through. It lives here
+// rather than in either guard so there is a single implementation to drift from:
+// the guards contributed three of the last four divergences by each growing their
+// own arm for a shape like this one.
+describe('readPtyProcessInspectionEvidenceForAbsenceAction', () => {
+  it('never lets a host that published nothing state an exit', () => {
+    // The exact payload a retained pre-v27 daemon returns from `inspectProcess`.
+    const evidence = readPtyProcessInspectionEvidenceForAbsenceAction(
+      composeLegacyPtyProcessInspection('zsh')
+    )
+
+    expect(
+      readPtyProcessInspectionEvidence(composeLegacyPtyProcessInspection('zsh')).children
+    ).toEqual({ verdict: 'exited' })
+    expect(evidence.children.verdict).toBe('unverifiable')
+    expect(evidence.foreground.verdict).toBe('unverifiable')
+  })
+
+  it('degrades an unpublished null foreground rather than reading it as an observation', () => {
+    const evidence = readPtyProcessInspectionEvidenceForAbsenceAction({
+      foregroundProcess: null,
+      hasChildProcesses: false
+    })
+
+    expect(evidence).toEqual({
+      foreground: { verdict: 'unverifiable', reason: expect.any(String) },
+      children: { verdict: 'unverifiable', reason: expect.any(String) }
+    })
+  })
+
+  // The positive survives: it is the only thing such a host can say without ambiguity,
+  // and believing it only ever adds caution on the paths that act on absence.
+  it('keeps the positives an unpublished host can still state', () => {
+    expect(
+      readPtyProcessInspectionEvidenceForAbsenceAction(composeLegacyPtyProcessInspection('codex'))
+    ).toEqual({
+      foreground: { verdict: 'observed', processName: 'codex' },
+      children: { verdict: 'live' }
+    })
+  })
+
+  // A published verdict is passed through untouched in both directions — the rule
+  // above must not reach a host that DID state what it observed.
+  it('leaves every published verdict exactly as the host stated it', () => {
+    for (const children of [
+      { verdict: 'exited' } as const,
+      { verdict: 'live' } as const,
+      { verdict: 'unverifiable', reason: 'ps timed out' } as const
+    ]) {
+      const published = buildPtyProcessInspectionWireResult(
+        { verdict: 'observed', processName: 'zsh' },
+        children
+      )
+
+      expect(readPtyProcessInspectionEvidenceForAbsenceAction(published)).toEqual(
+        readPtyProcessInspectionEvidence(published)
+      )
+      expect(readPtyProcessInspectionEvidenceForAbsenceAction(published).children).toEqual(children)
+    }
   })
 })

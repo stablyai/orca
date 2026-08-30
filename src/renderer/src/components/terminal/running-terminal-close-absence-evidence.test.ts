@@ -132,7 +132,10 @@ describe('terminal-tab close on PTY absence evidence', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('asks when an in-contact child-process probe is unverifiable', async () => {
+  it('asks on a degraded in-contact probe the host could not answer', async () => {
+    // The host was reached and still could not tell. There is no `unavailable` and the
+    // legacy collapse publishes `false`, so this arrives byte-identical to an idle shell —
+    // and this close kills the pty. Only the children verdict separates the two.
     inspectRuntimeTerminalProcessMock.mockResolvedValue(
       buildPtyProcessInspectionWireResult(
         { verdict: 'unverifiable', reason: 'process table scan degraded' },
@@ -144,5 +147,25 @@ describe('terminal-tab close on PTY absence evidence', () => {
 
     expect(visibleRequest()).not.toBeNull()
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('closes when a degraded in-contact probe answers only for a layout-only leaf', async () => {
+    withStaleLayoutLeaf()
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) =>
+      ptyId === 'pty-a'
+        ? buildPtyProcessInspectionWireResult(
+            { verdict: 'observed', processName: 'zsh' },
+            { verdict: 'exited' }
+          )
+        : buildPtyProcessInspectionWireResult(
+            { verdict: 'unverifiable', reason: 'process table scan degraded' },
+            { verdict: 'unverifiable', reason: 'process table scan degraded' }
+          )
+    )
+
+    const onClose = await closeTab()
+
+    expect(visibleRequest()).toBeNull()
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
