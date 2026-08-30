@@ -121,10 +121,9 @@ function getCommandLaunchArgs(
     return cliArgs
   }
 
-  const commandNames = new Set(options.commandNames)
   const command = commandIndex === -1 ? null : args[commandIndex]
   // Keep direct serve in-process so signals reach its full child tree.
-  return command && command !== 'serve' && commandNames.has(command) ? cliArgs : null
+  return command && command !== 'serve' ? cliArgs : null
 }
 
 function buildPackagedCliEntryPath(platform: NodeJS.Platform, resourcesPath: string): string {
