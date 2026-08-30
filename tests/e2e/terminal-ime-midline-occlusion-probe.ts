@@ -21,6 +21,7 @@ export type MidlinePreeditOcclusionSample = {
   overlayText: string
   remainderText: string | null
   remainderDisplay: string | null
+  remainderVisibility: string | null
   caretRect: { left: number; right: number; width: number; height: number } | null
   preeditRect: { left: number; right: number; width: number; height: number } | null
   textareaRect: { left: number; right: number; width: number; height: number }
@@ -108,6 +109,7 @@ function readMidlinePreeditOcclusion(): MidlinePreeditOcclusionSample {
       .replaceAll('‎', ''),
     remainderText: remainder?.textContent ?? null,
     remainderDisplay: remainder ? getComputedStyle(remainder).display : null,
+    remainderVisibility: remainder ? getComputedStyle(remainder).visibility : null,
     caretRect: caretBounds
       ? {
           left: caretBounds.left,
