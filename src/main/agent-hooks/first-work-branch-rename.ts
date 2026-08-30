@@ -40,6 +40,8 @@ export type FirstWorkBranchRenameEvent = {
   isReplay: boolean | undefined
 }
 
+export type AutoRenameBranchEligibility = 'eligible' | 'transient-unknown' | 'permanent-ineligible'
+
 export type FirstWorkBranchRenameDeps = {
   getSettings: () => GlobalSettings
   getRepo: (repoId: string) => Repo | undefined
@@ -52,6 +54,11 @@ export type FirstWorkBranchRenameDeps = {
   isPendingFirstAgentMessageRename?: (worktreeId: string) => boolean
   /** True only for Orca-created worktrees whose branch Orca is allowed to rename. */
   canRenameOrcaCreatedBranch: (worktreeId: string) => boolean
+  /**
+   * Classifies Orca-created branch metadata. Missing metadata can be transient
+   * during worktree creation, so it must not permanently settle auto-rename.
+   */
+  getAutoRenameBranchEligibility?: (worktreeId: string) => AutoRenameBranchEligibility
   /** Persist a new sidebar display name for the worktree. */
   setDisplayName: (worktreeId: string, displayName: string) => void
   /** Align the on-disk folder with the new branch leaf (best-effort, local-only). */
@@ -184,7 +191,14 @@ async function runAutoRename(
   if (!currentBranch || currentBranch === 'HEAD') {
     return retry(`no checked-out branch (${currentBranch || 'empty'})`)
   }
-  if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
+
+  const eligibility =
+    deps.getAutoRenameBranchEligibility?.(worktreeId) ??
+    (deps.canRenameOrcaCreatedBranch(worktreeId) ? 'eligible' : 'permanent-ineligible')
+  if (eligibility === 'transient-unknown') {
+    return retry('worktree auto-rename eligibility is not available yet')
+  }
+  if (eligibility === 'permanent-ineligible') {
     return stop(`worktree is not eligible for auto-rename`, true)
   }
   // Only rename a branch Orca auto-named — never one the user chose.

@@ -652,6 +652,16 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         // Why: a user branch could coincidentally match a creature name; only Orca-stamped worktrees are safe to auto-rename.
         return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
       },
+      getAutoRenameBranchEligibility: (worktreeId) => {
+        const meta = currentStore.getWorktreeMeta(worktreeId)
+        if (!meta) {
+          return 'transient-unknown'
+        }
+        if (!meta.orcaCreationSource || meta.preserveBranchOnDelete === true) {
+          return 'permanent-ineligible'
+        }
+        return 'eligible'
+      },
       setDisplayName: (worktreeId, displayName) => {
         rememberBranchRenameFailureOutput(worktreeId, null)
         const scope = parseWorkspaceKey(worktreeId)

@@ -48,6 +48,7 @@ import {
   FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT,
   maybeAutoRenameBranchOnFirstWork,
   resetFirstWorkBranchRenameState,
+  type AutoRenameBranchEligibility,
   type FirstWorkBranchRenameDeps
 } from './first-work-branch-rename'
 import {
@@ -431,6 +432,22 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(generateBranchNameMock).not.toHaveBeenCalled()
     expect(onRenamed).not.toHaveBeenCalled()
+  })
+
+  it('retries when Orca-created eligibility is not available on the first working event', async () => {
+    let eligibility: AutoRenameBranchEligibility = 'transient-unknown'
+    const { deps, onRenamed } = makeDeps({
+      getAutoRenameBranchEligibility: () => eligibility
+    })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+
+    eligibility = 'eligible'
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+    expect(generateBranchNameMock).toHaveBeenCalled()
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
 
   it('suffixes the branch, display name, and folder together on collision', async () => {
