@@ -341,7 +341,7 @@ const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGfm,
   remarkBreaks,
   remarkFrontmatter,
-  remarkMath,
+  [remarkMath, { singleDollarTextMath: false }],
   remarkMarkdownDocLinks
 ]
 // Why: sanitize raw HTML before KaTeX/highlight expand it, so their generated markup needn't be whitelisted in the schema.
