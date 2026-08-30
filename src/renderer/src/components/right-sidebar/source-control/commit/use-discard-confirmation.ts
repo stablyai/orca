@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
+import { stripIpcInvokeEnvelope } from '@/lib/ipc-error'
 import { bulkUnstageRuntimeGitPaths, type RuntimeGitContext } from '@/runtime/runtime-git-client'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
@@ -90,17 +91,22 @@ export function useSourceControlDiscardConfirmation({
             console.error('[SourceControl] discard-all failure', error)
           }
         })
+        // Why: onError retains every rejection in full above; the title already names the operation,
+        // so an envelope with nothing behind it drops the description rather than printing plumbing.
+        const firstMsg =
+          errors[0] instanceof Error
+            ? (stripIpcInvokeEnvelope(errors[0].message) ?? undefined)
+            : undefined
         if (result.aborted) {
           toast.error(
             translate(
               'auto.components.right.sidebar.SourceControl.a5e5a11090',
               'Discard all failed — unable to unstage files before discard'
             ),
-            { description: errors[0] instanceof Error ? errors[0].message : undefined }
+            { description: firstMsg }
           )
         } else if (result.failed.length > 0) {
           // Why: show only the first error + a sample of failed paths to avoid a huge toast body on bulk failures.
-          const firstMsg = errors[0] instanceof Error ? errors[0].message : undefined
           const sample = result.failed.slice(0, 3).join(', ')
           const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
           toast.error(

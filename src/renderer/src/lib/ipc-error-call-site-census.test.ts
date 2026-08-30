@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 /**
  * Why an enumeration and not a count: the previous note on this reader put its population at 18
- * and said the sites depended on its fail-open behaviour. The real number is 30, and every one
+ * and said the sites depended on its fail-open behaviour. The real number is 31, and every one
  * of them renders the result to a user, so "these can keep the looser regex" was never a choice
  * anybody had made. A count is easy to be wrong about; this produces the list.
  *
@@ -65,6 +65,10 @@ const CALL_SITES: Readonly<Record<string, { calls: number; surface: string }>> =
     surface: 'dialog error'
   },
   'src/renderer/src/components/sidebar/useCreateRepo.ts': { calls: 1, surface: 'dialog error' },
+  'src/renderer/src/components/task-page/hooks/use-task-page-gitlab-fetch.ts': {
+    calls: 1,
+    surface: 'task list banner, via the errs buffer whose first entry the banner renders'
+  },
   'src/renderer/src/components/terminal-pane/ipc-pty-connect.ts': {
     calls: 1,
     surface: 'terminal error+classifier'
@@ -116,7 +120,7 @@ const ENVELOPE_MODULE = 'src/shared/ipc-invoke-envelope.ts'
  *
  * A caller that must not fall back to the wrapper text branches on null instead, so it reaches for
  * the stripper directly and never appears in CALL_SITES above. Counting only `extractIpcErrorMessage`
- * reports 30 and reads as a total; it is not one, and the last person to freeze a number here was
+ * reports 31 and reads as a total; it is not one, and the last person to freeze a number here was
  * wrong for exactly this reason. Both lists together are the set of modules that open the envelope.
  */
 const DIRECT_STRIPPER_SITES: Readonly<Record<string, { calls: number; surface: string }>> = {
@@ -125,6 +129,11 @@ const DIRECT_STRIPPER_SITES: Readonly<Record<string, { calls: number; surface: s
     surface: 'recovery card'
   },
   'src/renderer/src/components/quick-open-file-list.ts': { calls: 1, surface: 'quick-open list' },
+  'src/renderer/src/components/right-sidebar/source-control/commit/use-discard-confirmation.ts': {
+    calls: 1,
+    surface:
+      'discard-all toast description — null drops the description, the title still names the failure'
+  },
   'src/renderer/src/components/settings/VoiceSpeechModelSection.tsx': {
     calls: 1,
     surface: 'settings row'
@@ -208,15 +217,34 @@ describe('extractIpcErrorMessage call sites', () => {
    * What neither list can see, stated rather than implied: both are keyed on the stripper, so they
    * enumerate sites that already handle the envelope and can never enumerate one that does not. A
    * leak is invisible here by construction — the terminal error toast was fed a raw envelope for as
-   * long as this file has existed. Surfaces that buffer error text before display need a census
-   * keyed on the surface; `terminal-pane/terminal-error-surface-census.test.ts` is one, for one
-   * surface. Others (`use-task-page-gitlab-fetch.ts`, `use-discard-confirmation.ts`) have none.
+   * long as this file has existed.
+   *
+   * So the honest scope of this file: it is a change-detector for the sites that already strip, not
+   * evidence that the leaking population is empty. It is not. Enumerating by surface instead — every
+   * renderer expression that reads free text off a rejection and passes it to a render sink (a
+   * `toast.*` argument or a `set*` state setter whose value is rendered) — finds 239 such
+   * expressions across 162 modules, of which 118 reach a producer that can cross `ipcRenderer.invoke`
+   * and do not strip. Four sampled at random were all real leaks of this exact shape, including
+   * `source-control/commit/use-bulk-actions.ts`, which sits beside the file this PR just fixed, and
+   * `settings/SshPane.tsx`, which renders the caught message as the whole toast title.
+   *
+   * No per-call-site gate can close that, because the leaking shape *is* the ordinary idiom: the
+   * discriminator is whether the value crossed IPC, which is not visible where it is rendered. A
+   * lint rule keyed on the idiom would fire on hundreds of correct sites and need suppressions.
+   *
+   * The narrow fix is the boundary, not the call site. Every envelope in the app is created in one
+   * place — 730 `ipcRenderer.invoke(` calls live in exactly two files under `src/preload`. A preload
+   * `invoke` wrapper that rejects with the stripped reason would fix all 118 at once and make this
+   * census unnecessary, enforced by a ratchet test banning bare `ipcRenderer.invoke` outside it —
+   * the same shape as the existing `child_process` ratchet. That is a separate change; the cost to
+   * weigh first is that `TerminalPane.tsx` deliberately keeps the wrapped form in the console, so
+   * the boundary must strip for display while the log keeps the original.
    */
   // Why: this is the number the freeze note got wrong, so it is asserted rather than described.
-  it('number 30, and all of them render to a user', () => {
+  it('number 31, and all of them render to a user', () => {
     const total = Object.values(CALL_SITES).reduce((sum, { calls }) => sum + calls, 0)
 
-    expect(total).toBe(30)
+    expect(total).toBe(31)
     expect(Object.values(CALL_SITES).filter(({ surface }) => surface === '')).toEqual([])
     expect(Object.values(DIRECT_STRIPPER_SITES).filter(({ surface }) => surface === '')).toEqual([])
   })

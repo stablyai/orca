@@ -7,6 +7,8 @@ import {
 import { resolveGitLabIssuePageState } from '@/components/task-page/gitlab/gitlab-issue-pages'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/source/repo-source-context'
 import { withGitLabIpcTimeout } from '@/runtime/gitlab-ipc-timeout'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { translate } from '@/i18n/i18n'
 import type { GitLabIssueFilter, GitLabTaskFilter } from '@/components/task-page-localized-options'
 import type { GitLabTodo, GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -136,7 +138,19 @@ export function useTaskPageGitLabFetch({
         const settled: { items: readonly GitLabWorkItem[]; totalPages?: number }[] = []
         for (const r of results) {
           if (r.status !== 'fulfilled') {
-            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
+            // Why: a rejected `gl:` handler arrives wrapped in Electron's invoke envelope, and this
+            // string is rendered verbatim in the list banner. Kept in errs either way — errs.length
+            // is the pager's errorCount, so dropping an unreadable one would retreat the page.
+            console.error('[TaskPage] GitLab list request rejected', r.reason)
+            errs.push(
+              extractIpcErrorMessage(
+                r.reason,
+                translate(
+                  'auto.components.TaskPage.unreadableGitlabListError',
+                  'Could not load GitLab items, and the failure did not include a readable reason.'
+                )
+              )
+            )
             continue
           }
           settled.push(r.value)

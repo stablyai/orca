@@ -16,10 +16,15 @@ import { describe, expect, it } from 'vitest'
  * what catches the next one: `formatClipboardImagePasteError` was a real envelope leak into this
  * same surface that bypassed the accumulator entirely, and no stripper-keyed census could see it.
  *
- * What this cannot see, stated rather than implied: it is scoped to one surface. The same shape
- * exists elsewhere (`use-task-page-gitlab-fetch.ts` buffers raw rejection messages into `errs` and
- * renders `errs[0]`; `use-discard-confirmation.ts` renders `errors[0].message`), and nothing here
- * looks at those. It also reads source text, so it sees the call, not the value.
+ * What this cannot see, stated rather than implied: it is scoped to one surface, and it reads source
+ * text, so it sees the call, not the value. The two siblings it used to name — `use-task-page-gitlab-fetch.ts`
+ * and `use-discard-confirmation.ts` — are fixed and now enumerated in `lib/ipc-error-call-site-census.test.ts`.
+ *
+ * That does not make the population closed, and the note there says why: enumerating by render sink
+ * rather than by stripper finds 118 renderer modules that still hand a raw rejection to a user
+ * surface with an IPC-capable producer behind it. Per-surface censuses like this one do not scale to
+ * that, and a lint rule on the idiom would need suppressions. The proposal on the table is to strip
+ * once at the preload boundary instead.
  */
 const SURFACE_DOORS: Readonly<Record<string, string>> = {
   'setTerminalError(null)': 'clears the surface',
