@@ -76,6 +76,12 @@ function getDelegatedCliRefreshProvider(
 }
 
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
+  // Why (#15798): nothing about the provider failed — the machine that owns the
+  // numbers is unverifiable, so provider-classified copy such as "Refresh
+  // failed" would blame the wrong thing and imply a retry can fix it.
+  if (p.usageMetadata?.unverifiableUsageOwner) {
+    return translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')
+  }
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
   if (delegatedCliProvider === 'grok') {
     return translate('auto.components.status.bar.tooltip.e2c6a4f917', 'Run Grok to refresh')

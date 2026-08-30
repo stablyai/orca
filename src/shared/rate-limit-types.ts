@@ -43,6 +43,12 @@ export type UsageRateLimitMetadata = {
   lastSuccessfulSource?: UsageRateLimitSource
   /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
   retryAtMs?: number
+  /**
+   * Renderer-only: the machine that owns this usage could not be verified, so
+   * the snapshot carries a verdict rather than a failed provider fetch (#15798).
+   * Hosts never set it.
+   */
+  unverifiableUsageOwner?: boolean
 }
 
 export type ProviderRateLimits = {
