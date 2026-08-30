@@ -30,7 +30,9 @@ export async function openTerminalImePaneArena(page: Page): Promise<TerminalImeP
   // grid directly, otherwise that replay can overwrite the test row after composition starts.
   await expect
     .poll(() => getTerminalContent(page), {
-      timeout: 15_000,
+      // Matches the terminal-manager wait above: at default worker counts on a loaded runner
+      // this poll, not the assertion, is what times out first.
+      timeout: 30_000,
       message: 'Active terminal did not render its initial PTY frame'
     })
     .not.toBe('')

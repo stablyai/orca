@@ -22,8 +22,6 @@ export type TerminalComposerDraft = {
   promptGlyph: '❯' | '›' | '»'
 }
 
-type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
-
 const COMPOSER_FRAME_LINE = /^[─━-]{8,}\s*$/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[·•]\s+\S.*$/i
 
@@ -100,9 +98,9 @@ function isStockPlaceholder(
   )
 }
 
-function detectTerminalComposer(
+export function detectTerminalComposerDraft(
   context: TerminalCursorContext | null | undefined
-): TerminalComposerMatch | null {
+): TerminalComposerDraft | null {
   if (!context || context.cursorHidden || context.rows.length === 0) {
     return null
   }
@@ -110,8 +108,7 @@ function detectTerminalComposer(
   const codexFooterIndex = findCodexFooterIndex(context)
   let afterCursor = context.afterCursor || context.rawAfterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex)
-  const placeholder = isStockPlaceholder(afterCursor, continuationRows)
-  if (placeholder) {
+  if (isStockPlaceholder(afterCursor, continuationRows)) {
     afterCursor = ''
     continuationRows = []
   }
@@ -158,17 +155,14 @@ function detectTerminalComposer(
         .join('')
         .trim()
       if (!text) {
-        if (!placeholder) {
-          return null
-        }
+        return null
       }
       return {
         text,
         promptRow: context.cursorViewportRow - (cursorIndex - index),
         cursorRow: context.cursorViewportRow,
         endRow: context.cursorViewportRow + continuationRows.length,
-        promptGlyph: glyph,
-        placeholder: !text && placeholder
+        promptGlyph: glyph
       }
     }
     if (row.length > 0 && context.rowsWrapped?.[index] !== true && !/^\s/.test(row)) {
@@ -176,26 +170,4 @@ function detectTerminalComposer(
     }
   }
   return null
-}
-
-export function detectTerminalComposerDraft(
-  context: TerminalCursorContext | null | undefined
-): TerminalComposerDraft | null {
-  const match = detectTerminalComposer(context)
-  if (!match || match.placeholder) {
-    return null
-  }
-  return {
-    text: match.text,
-    promptRow: match.promptRow,
-    cursorRow: match.cursorRow,
-    endRow: match.endRow,
-    promptGlyph: match.promptGlyph
-  }
-}
-
-export function hasTerminalComposerPlaceholder(
-  context: TerminalCursorContext | null | undefined
-): boolean {
-  return detectTerminalComposer(context)?.placeholder === true
 }

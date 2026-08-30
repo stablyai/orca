@@ -1,35 +1,7 @@
-import type { TerminalCursorContext } from './terminal-composer-draft'
+import type { IBufferLine, Terminal } from '@xterm/headless'
+import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
 
-type TerminalCursorCell = {
-  getChars(): string
-  getWidth(): number
-  isBold(): boolean | number
-  isDim(): boolean | number
-  isFgDefault(): boolean | number
-}
-
-type TerminalCursorLine = {
-  readonly isWrapped: boolean
-  readonly length: number
-  getCell(column: number): TerminalCursorCell | undefined
-  translateToString(trimRight?: boolean, startColumn?: number, endColumn?: number): string
-}
-
-export type TerminalCursorContextSource = {
-  readonly rows: number
-  readonly modes: { readonly showCursor: boolean }
-  readonly buffer: {
-    readonly active: {
-      readonly baseY: number
-      readonly cursorX: number
-      readonly cursorY: number
-      readonly viewportY: number
-      getLine(row: number): TerminalCursorLine | undefined
-    }
-  }
-}
-
-function undimmedText(line: TerminalCursorLine, fromX = 0, trimRight = true): string {
+function undimmedText(line: IBufferLine, fromX = 0, trimRight = true): string {
   let text = ''
   for (let x = fromX; x < line.length; x += 1) {
     const cell = line.getCell(x)
@@ -41,7 +13,7 @@ function undimmedText(line: TerminalCursorLine, fromX = 0, trimRight = true): st
   return trimRight ? text.trimEnd() : text
 }
 
-function firstVisibleCellIsBold(line: TerminalCursorLine): boolean {
+function firstVisibleCellIsBold(line: IBufferLine): boolean {
   for (let x = 0; x < line.length; x += 1) {
     const cell = line.getCell(x)
     if (!cell || cell.getWidth() === 0 || !cell.getChars().trim()) {
@@ -52,7 +24,7 @@ function firstVisibleCellIsBold(line: TerminalCursorLine): boolean {
   return false
 }
 
-function firstVisibleCellHasCustomForeground(line: TerminalCursorLine): boolean {
+function firstVisibleCellHasCustomForeground(line: IBufferLine): boolean {
   for (let x = 0; x < line.length; x += 1) {
     const cell = line.getCell(x)
     if (!cell || cell.getWidth() === 0 || !cell.getChars().trim()) {
@@ -64,8 +36,8 @@ function firstVisibleCellHasCustomForeground(line: TerminalCursorLine): boolean 
 }
 
 export function readTerminalCursorLineContext(
-  terminal: TerminalCursorContextSource,
-  rowsAroundCursor: number
+  terminal: Terminal,
+  rowsAbove: number
 ): TerminalCursorContext | null {
   const buffer = terminal.buffer.active
   const cursorRow = buffer.baseY + buffer.cursorY
@@ -77,8 +49,7 @@ export function readTerminalCursorLineContext(
   const typedRows: string[] = []
   const promptGlyphBoldRows: boolean[] = []
   const rowsWrapped: boolean[] = []
-  const rowRadius = Math.max(0, Math.floor(rowsAroundCursor))
-  const start = Math.max(buffer.viewportY, cursorRow - rowRadius)
+  const start = Math.max(buffer.viewportY, cursorRow - Math.max(0, Math.floor(rowsAbove)))
   for (let row = start; row <= cursorRow; row += 1) {
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
@@ -91,7 +62,10 @@ export function readTerminalCursorLineContext(
   const typedRowsBelow: string[] = []
   const rowsBelowWrapped: boolean[] = []
   const rowsBelowCustomForeground: boolean[] = []
-  const end = Math.min(buffer.viewportY + terminal.rows - 1, cursorRow + rowRadius)
+  const end = Math.min(
+    buffer.viewportY + terminal.rows - 1,
+    cursorRow + Math.max(0, Math.floor(rowsAbove))
+  )
   for (let row = cursorRow + 1; row <= end; row += 1) {
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false

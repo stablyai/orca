@@ -71,6 +71,21 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
   }
 
+  // Why: xterm sizes this textarea to the preedit, and the OS reads its rect to place the
+  // candidate window. Near the right edge an over-wide preedit pushes that rect past the
+  // terminal while xterm end-aligns the visible preedit back inside, so the two disagree and
+  // the candidate list opens away from the composing text. Clamping the box into the screen
+  // puts them back on the same cell. The width is the inline value xterm wrote moments ago in
+  // the same event — a CSSOM read, so the update path still forces no layout.
+  const anchorLeft = (column: number, cells: ImeAnchorCellMetrics): number => {
+    const cursorLeft = column * cells.cellWidth
+    const width = Number.parseFloat(textarea.style.width)
+    if (!Number.isFinite(width)) {
+      return cursorLeft
+    }
+    return Math.max(0, Math.min(cursorLeft, cells.cols * cells.cellWidth - width))
+  }
+
   const applyAnchor = (
     row: number,
     column: number,
@@ -80,7 +95,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     const top = `${row * cells.cellHeight}px`
     const left = `${column * cells.cellWidth}px`
     writeStyle(textarea, 'top', top)
-    writeStyle(textarea, 'left', left)
+    writeStyle(textarea, 'left', `${anchorLeft(column, cells)}px`)
     if (isCursorAgent && compositionView) {
       const height = `${cells.cellHeight}px`
       writeStyle(compositionView, 'top', top)
@@ -129,16 +144,12 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
     const { anchor, isCursorAgent } = resolveAnchor()
     applyAnchor(anchor.row, anchor.column, cells, isCursorAgent)
-    // Why: xterm re-positions the textarea from a setTimeout(0) of its own after
-    // each compositionupdate, so the correction has to land after that timer —
-    // one pending timer per burst, re-reading the anchor when it fires.
-    if (!isCursorAgent) {
-      if (deferredApply !== null) {
-        window.clearTimeout(deferredApply)
-        deferredApply = null
-      }
-      return
-    }
+    // Why: xterm re-positions the textarea from a setTimeout(0) of its own after each
+    // compositionupdate — `updateCompositionElements` re-arms itself once — so the correction
+    // has to land after that timer or xterm's uncorrected position is what sits on the element
+    // between events, which is when the OS samples it. This runs on every composition, not just
+    // the Cursor Agent one: the right-edge clamp above is reverted by that same timer. It forces
+    // no layout, reusing the metrics measured once per composition.
     // Re-queue after xterm's latest timer while keeping only one correction pending.
     if (deferredApply !== null) {
       window.clearTimeout(deferredApply)
