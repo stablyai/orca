@@ -9,6 +9,7 @@ import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-opt
 import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
+import { buildDiffEditorAppearanceOptions } from './diff-editor-appearance-options'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 
@@ -195,6 +196,7 @@ export function DiffSectionBody({
             fontFamily: editorFontFamily || 'monospace',
             lineNumbers: 'on',
             ...buildDiffEditorWordWrapOptions(diffWordWrap),
+            ...buildDiffEditorAppearanceOptions(diffEditorFontSize),
             automaticLayout: true,
             renderOverviewRuler: false,
             scrollbar: combinedDiffSectionScrollbarOptions,
