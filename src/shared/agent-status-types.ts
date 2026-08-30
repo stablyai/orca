@@ -154,6 +154,11 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** Working directory the agent reported for itself, on the host named by `connectionId`.
+   *  This is NOT the pane's worktree: a hand-started `cd elsewhere && claude` roots the
+   *  session somewhere else, and resuming it at the worktree reopens the conversation in a
+   *  directory it was never about (STA-5804). Absent means unknown, never "the worktree". */
+  agentCwd?: string
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */

@@ -6,6 +6,7 @@ import {
 } from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { salvagingRecord } from './zod-salvage'
+import { normalizeAgentWorkingDirectory } from './agent-working-directory'
 
 const terminalTabIdSchema = z
   .string()
@@ -97,6 +98,7 @@ const sleepingAgentSessionRecordSchema = z
     lastAssistantMessage: z.string().optional(),
     interrupted: z.boolean().optional(),
     connectionId: z.string().nullable().optional(),
+    agentCwd: z.preprocess((raw) => normalizeAgentWorkingDirectory(raw), z.string().optional()),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
     automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional(),

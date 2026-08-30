@@ -153,7 +153,8 @@ export function createAgentStatusEventApplicator(args: {
         routing: {
           tabId: ownerTabId,
           worktreeId: data.worktreeId ?? owningWorktreeId,
-          ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
+          ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {}),
+          ...(data.agentCwd ? { agentCwd: data.agentCwd } : {})
         },
         metadata: data.launchToken ? { launchToken: data.launchToken } : undefined
       }
@@ -231,7 +232,8 @@ export function createAgentStatusEventApplicator(args: {
         tabId: ownerTabId,
         worktreeId: statusWorktreeId,
         terminalHandle: data.terminalHandle,
-        ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
+        ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {}),
+        ...(data.agentCwd ? { agentCwd: data.agentCwd } : {})
       },
       metadata:
         data.providerSession || data.launchToken

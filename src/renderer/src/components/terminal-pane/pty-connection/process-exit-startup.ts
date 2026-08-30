@@ -8,11 +8,13 @@ export function toProcessExitStartup(
   return startup && 'launchConfig' in startup && 'agent' in startup
     ? {
         command: startup.command,
+        cwd: startup.cwd,
         env: startup.env,
         launchConfig: startup.launchConfig,
         resumeProviderSession: startup.resumeProviderSession,
         launchToken: startup.launchToken,
         launchAgent: startup.agent,
+        agentArgsOverride: startup.agentArgsOverride,
         showSessionRestoredBanner: true
       }
     : startup

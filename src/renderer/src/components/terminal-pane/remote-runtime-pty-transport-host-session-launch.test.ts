@@ -41,7 +41,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.resume-cwd.v1']
             },
             _meta: { runtimeId: 'runtime-remote' }
           }
@@ -313,6 +313,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       command: "claude '--resume' 'provider-session'",
+      cwd: '/remote/wt/packages/api',
       env: { CLIENT_ONLY: 'must-not-cross' },
       launchAgent: 'claude',
       agentArgsOverride: '--permission-mode plan',
@@ -332,6 +333,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         agent: 'claude',
         providerSession: { key: 'session_id', id: 'provider-session' },
         agentArgs: '--permission-mode plan',
+        startupCwd: '/remote/wt/packages/api',
         placement: {
           tabId: 'tab-1',
           leafId: '11111111-1111-4111-8111-111111111111'
@@ -344,6 +346,77 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect.objectContaining({
         method: 'terminal.create',
         params: expect.objectContaining({ command: expect.any(String) })
+      })
+    )
+  })
+
+  it('uses a connect-time stripped argument override for a cold-restore resume', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: "codex 'resume' 'provider-session'",
+      launchAgent: 'codex',
+      agentArgsOverride: '--dangerously-bypass-approvals-and-sandbox --model gpt-5',
+      resumeProviderSession: { key: 'session_id', id: 'provider-session' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({
+      url: '',
+      callbacks: {},
+      command: "codex 'resume' 'provider-session'",
+      agentArgsOverride: '--model gpt-5'
+    })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.ensureAgentSession',
+        params: expect.objectContaining({ agentArgs: '--model gpt-5' })
+      })
+    )
+  })
+
+  it('uses the cwd-aware legacy launch when the host predates structured resume cwd', async () => {
+    runtimeCall.mockImplementation(async (args: { method?: string }) =>
+      args.method === 'status.get'
+        ? {
+            id: 'rpc-status',
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent-session.host-authority.v1']
+            },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+        : {
+            id: 'rpc-create',
+            ok: true,
+            result: { terminal: { handle: 'term-remote', worktreeId: 'repo1::/remote/wt' } },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: "claude '--resume' 'provider-session'",
+      cwd: '/remote/wt/packages/api',
+      launchAgent: 'claude',
+      resumeProviderSession: { key: 'session_id', id: 'provider-session' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.ensureAgentSession' })
+    )
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.create',
+        params: expect.objectContaining({ cwd: '/remote/wt/packages/api' })
       })
     )
   })

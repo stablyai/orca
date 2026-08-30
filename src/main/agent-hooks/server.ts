@@ -49,6 +49,7 @@ import {
 } from '../../shared/agent-hook-listener/listener-limits'
 import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { normalizeAgentWorkingDirectory } from '../../shared/agent-working-directory'
 import { mergeAgentHookRequestHeaders } from '../../shared/agent-hook-listener/hook-envelope'
 import {
   parseFormEncodedBody,
@@ -393,6 +394,7 @@ function sanitizeHydratedEntry(
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
     claudeLeadBoundaryChildOnly: record.claudeLeadBoundaryChildOnly === true ? true : undefined,
     providerSession,
+    agentCwd: normalizeAgentWorkingDirectory(record.agentCwd),
     providerSessionOnly: providerSessionOnly ? true : undefined,
     retainedForLiveness: retainedForLiveness ? true : undefined,
     payload,
@@ -468,6 +470,7 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
+    ...(entry.agentCwd ? { agentCwd: entry.agentCwd } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
@@ -1020,6 +1023,7 @@ export class AgentHookServer {
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
+      agentCwd: existing.agentCwd,
       payload: {
         state: 'done',
         prompt: payload.prompt,
@@ -1079,6 +1083,7 @@ export class AgentHookServer {
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
+      agentCwd: existing.agentCwd,
       payload: {
         state: restored.state,
         ...(restored.workingMode ? { workingMode: restored.workingMode } : {}),
@@ -2265,6 +2270,10 @@ export class AgentHookServer {
       (previous.payload.state !== 'done' || event.payload.state === 'done')
         ? previous.providerSession
         : undefined
+    // Why: the directory belongs to the session, and OSC carries neither — so it is no evidence
+    // the agent moved. Keep it exactly while the session is kept; a row that starts a new session
+    // gets no directory at all, because unknown is the only honest answer there (STA-5804).
+    const preservedAgentCwd = preservedProviderSession ? previous?.agentCwd : undefined
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus(
       {
@@ -2273,6 +2282,7 @@ export class AgentHookServer {
         worktreeId,
         connectionId,
         ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
+        ...(preservedAgentCwd ? { agentCwd: preservedAgentCwd } : {}),
         payload: event.payload
       },
       undefined,
@@ -2300,6 +2310,7 @@ export class AgentHookServer {
       teammateName?: string
       toolAgentType?: string
       providerSession?: unknown
+      agentCwd?: unknown
       providerSessionOnly?: unknown
       isReplay?: boolean
       /** Payload fields the relay dropped to fit an oversized frame; validated below. */
@@ -2520,6 +2531,9 @@ export class AgentHookServer {
       teammateName,
       toolAgentType,
       providerSession,
+      // Why: a remote path is meaningful only on the execution host that sent it; revalidate
+      // it at the SSH trust boundary but never resolve it against the local filesystem.
+      agentCwd: normalizeAgentWorkingDirectory(envelope.agentCwd),
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
       claudeRunningNonAgentTask:

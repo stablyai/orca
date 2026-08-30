@@ -26217,32 +26217,50 @@ describe('OrcaRuntimeService', () => {
       hookAgentType: 'codex',
       hookOffset: 0,
       rendererSessionId: null,
-      expectedSessionId: 'hook-session'
+      expectedSessionId: 'hook-session',
+      expectedAgentCwd: '/srv/project/packages/api'
     },
     {
       behavior: 'replaces a stale renderer session at the same event timestamp',
       hookAgentType: 'codex',
       hookOffset: 0,
       rendererSessionId: 'stale-renderer-session',
-      expectedSessionId: 'hook-session'
+      expectedSessionId: 'hook-session',
+      expectedAgentCwd: '/srv/project/packages/api'
     },
     {
       behavior: 'preserves a renderer session newer than the hook row',
       hookAgentType: 'codex',
       hookOffset: -1,
       rendererSessionId: 'newer-renderer-session',
-      expectedSessionId: 'newer-renderer-session'
+      expectedSessionId: 'newer-renderer-session',
+      expectedAgentCwd: null
+    },
+    {
+      behavior: 'keeps a hook directory when a newer renderer row repeats the same session',
+      hookAgentType: 'codex',
+      hookOffset: -1,
+      rendererSessionId: 'hook-session',
+      expectedSessionId: 'hook-session',
+      expectedAgentCwd: '/srv/project/packages/api'
     },
     {
       behavior: 'rejects a hook session owned by another agent',
       hookAgentType: 'claude',
       hookOffset: 1,
       rendererSessionId: null,
-      expectedSessionId: null
+      expectedSessionId: null,
+      expectedAgentCwd: null
     }
   ] as const)(
     '$behavior',
-    async ({ hookAgentType, hookOffset, rendererSessionId, expectedSessionId }) => {
+    async ({
+      hookAgentType,
+      hookOffset,
+      rendererSessionId,
+      expectedSessionId,
+      expectedAgentCwd
+    }) => {
       const leafId = '11111111-1111-4111-8111-111111111111'
       const paneKey = `codex-tab:${leafId}`
       const providerSession = {
@@ -26262,7 +26280,8 @@ describe('OrcaRuntimeService', () => {
             stateStartedAt: now + hookOffset,
             tabId: 'codex-tab',
             worktreeId: TEST_WORKTREE_ID,
-            providerSession
+            providerSession,
+            agentCwd: '/srv/project/packages/api'
           }
         ]
       })
@@ -26329,6 +26348,11 @@ describe('OrcaRuntimeService', () => {
         })
       } else {
         expect(result.tabs[0]).not.toHaveProperty('agentStatus.providerSession')
+      }
+      if (expectedAgentCwd) {
+        expect(result.tabs[0]).toHaveProperty('agentStatus.agentCwd', expectedAgentCwd)
+      } else {
+        expect(result.tabs[0]).not.toHaveProperty('agentStatus.agentCwd')
       }
     }
   )
@@ -26684,7 +26708,8 @@ describe('OrcaRuntimeService', () => {
           stateStartedAt: Date.now(),
           tabId: 'claude-tab',
           worktreeId: TEST_WORKTREE_ID,
-          providerSession
+          providerSession,
+          agentCwd: '/srv/project/packages/api'
         }
       ]
     })
@@ -26709,7 +26734,11 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs[0]).toEqual(
       expect.objectContaining({
         type: 'terminal',
-        agentStatus: expect.objectContaining({ agentType: 'claude', providerSession })
+        agentStatus: expect.objectContaining({
+          agentType: 'claude',
+          providerSession,
+          agentCwd: '/srv/project/packages/api'
+        })
       })
     )
   })

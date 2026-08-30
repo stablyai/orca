@@ -77,6 +77,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       url: '',
       cols: session.cols,
       rows: session.rows,
+      ...(effectiveStartup?.cwd ? { cwd: effectiveStartup.cwd } : {}),
       ...(startupOverride?.command ? { command: startupOverride.command } : {}),
       ...(session.connectionId &&
       startupOverride?.command &&
@@ -95,6 +96,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         : {}),
       ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
       ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
+      ...(coldRestoreOverride?.agentArgsOverride !== undefined
+        ? { agentArgsOverride: coldRestoreOverride.agentArgsOverride }
+        : {}),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
       shouldContinue: () => {
         const state = useAppStore.getState()

@@ -127,6 +127,8 @@ export type AgentStatusRouting = {
   worktreeId?: string
   terminalHandle?: string
   connectionId?: string | null
+  /** The agent's own working directory, when its hook reported one. */
+  agentCwd?: string
 }
 
 export type AgentStatusMetadata = {
@@ -152,6 +154,8 @@ export type AgentProviderSessionRouting = {
   tabId?: string
   worktreeId?: string
   connectionId?: string | null
+  /** The agent's own working directory, when its hook reported one. */
+  agentCwd?: string
 }
 
 export type AgentProviderSessionRecordMetadata = { launchToken?: string }
@@ -590,6 +594,21 @@ function normalizePaneKeySet(
   return paneKeys instanceof Set ? paneKeys : new Set(paneKeys)
 }
 
+/** Carry the agent's reported directory forward only while the pane is still running the
+ *  SAME provider session. A pane that starts a new session may have been started somewhere
+ *  else, and inheriting the old directory would be a guess wearing an observation's clothes.
+ *  This takes positive proof of continuity, not the absence of a detected change: a new
+ *  session opened in a finished pane has no comparable id to change, so "not changed" is
+ *  silence, not sameness. Returning undefined means unknown — callers must never read that
+ *  as "the worktree". */
+function carryForwardAgentCwd(args: {
+  reported: string | undefined
+  sameProviderSession: boolean
+  previous: string | undefined
+}): string | undefined {
+  return args.reported ?? (args.sameProviderSession ? args.previous : undefined)
+}
+
 function sleepingRecordFromEntry(args: {
   state: AppState
   entry: AgentStatusEntry
@@ -618,6 +637,7 @@ function sleepingRecordFromEntry(args: {
     agent,
     providerSession: args.entry.providerSession,
     ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
+    ...(args.entry.agentCwd ? { agentCwd: args.entry.agentCwd } : {}),
     prompt: args.entry.prompt,
     state: args.entry.state,
     capturedAt: args.capturedAt,
@@ -892,7 +912,11 @@ function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.terminalTitle === next.terminalTitle &&
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     existing.interrupted === next.interrupted &&
+    existing.connectionId === next.connectionId &&
+    existing.agentCwd === next.agentCwd &&
     existing.origin === next.origin &&
+    existing.automaticResumeBlockedBy === next.automaticResumeBlockedBy &&
+    existing.restoreOnTabOpenOnly === next.restoreOnTabOpenOnly &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
 }
@@ -912,6 +936,10 @@ function recoveryRecordMatches(
     existing.tabId === next.tabId &&
     existing.state === next.state &&
     existing.interrupted === next.interrupted &&
+    existing.connectionId === next.connectionId &&
+    // Why: a session that only names its directory on a later event must still reach the
+    // record. Treating that as "already matched" keeps a record whose resume has no directory.
+    existing.agentCwd === next.agentCwd &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
@@ -928,6 +956,7 @@ function recoveryRecordTargetsSameSession(
     existing.agent === next.agent &&
     existing.worktreeId === next.worktreeId &&
     existing.tabId === next.tabId &&
+    existing.connectionId === next.connectionId &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession)
   )
 }
@@ -1079,6 +1108,7 @@ function getLaunchConfigForEntry(
   const sleepingRecord = state.sleepingAgentSessionsByPaneKey[entry.paneKey]
   return sleepingRecord?.launchConfig &&
     sleepingRecord.agent === entry.agentType &&
+    sleepingRecord.connectionId === entry.connectionId &&
     entry.providerSession &&
     agentProviderSessionsEqual(
       entry.agentType,
@@ -2012,6 +2042,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         if (!worktreeId) {
           return s
         }
+        const connectionId =
+          routing?.connectionId !== undefined
+            ? routing.connectionId
+            : existingStatus?.connectionId !== undefined
+              ? existingStatus.connectionId
+              : existingRecord?.connectionId
         const registryEntry = s.agentLaunchConfigByPaneKey[paneKey]
         const registryMatches = registryEntryMatchesStatus({
           entry: registryEntry,
@@ -2026,6 +2062,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         })
         const existingRecordMatchesProviderSession =
           existingRecord?.agent === agent &&
+          existingRecord.connectionId === connectionId &&
           agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
         // Why: provider-session heartbeats can arrive after the turn is complete; preserve the
         // completed checkpoint so a late heartbeat cannot make it eligible for ghost resume.
@@ -2037,6 +2074,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const launchConfig =
           (registryMatches ? registryEntry?.launchConfig : undefined) ??
           (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
+        const existingStatusMatchesProviderSession =
+          existingStatus?.agentType === agent &&
+          existingStatus.connectionId === connectionId &&
+          agentProviderSessionsEqual(agent, existingStatus.providerSession, providerSession)
+        // Why: only carry a directory forward from state describing THIS provider session.
+        // A pane that switched sessions may have been started somewhere else entirely.
+        const agentCwd =
+          routing?.agentCwd ??
+          (existingStatusMatchesProviderSession ? existingStatus?.agentCwd : undefined) ??
+          (existingRecordMatchesProviderSession ? existingRecord.agentCwd : undefined)
         const record: SleepingAgentSessionRecord = {
           paneKey,
           ...(tabId ? { tabId } : {}),
@@ -2053,11 +2100,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : existingRecord?.terminalTitle
               ? { terminalTitle: existingRecord.terminalTitle }
               : {}),
-          ...(routing?.connectionId !== undefined
-            ? { connectionId: routing.connectionId }
-            : existingRecord?.connectionId !== undefined
-              ? { connectionId: existingRecord.connectionId }
-              : {}),
+          ...(connectionId !== undefined ? { connectionId } : {}),
+          ...(agentCwd ? { agentCwd } : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
           ...(existingRecordMatchesProviderSession &&
           existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
@@ -2260,8 +2304,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // surface keyed on the id — mobile Chat UI transcripts, the resumable recovery anchor below — loses the
         // session while the agent sits idle, which is precisely when it is read (#10630). Only a new turn
         // (done→working) still drops it, so a reused pane cannot inherit a finished session.
+        const statusConnectionId =
+          routing?.connectionId !== undefined
+            ? routing.connectionId
+            : existing?.connectionId !== undefined
+              ? existing.connectionId
+              : s.sleepingAgentSessionsByPaneKey[paneKey]?.connectionId
         const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
+          existing.connectionId === statusConnectionId &&
           (existing.state !== 'done' || payload.state === 'done')
         const providerSession =
           metadata?.providerSession ??
@@ -2307,6 +2358,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           (payload.state !== 'done' || retainsResumableRecoveryIdentity) &&
           existingSleepingRecord?.launchConfig &&
           existingSleepingRecord.agent === identity.agentType &&
+          existingSleepingRecord.connectionId === statusConnectionId &&
           providerSession &&
           agentProviderSessionsEqual(
             identity.agentType,
@@ -2322,6 +2374,31 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : undefined) ??
           matchedRegistryLaunchConfig ??
           matchedSleepingLaunchConfig
+        const matchedSleepingAgentCwd =
+          existingSleepingRecord?.agent === identity.agentType &&
+          existingSleepingRecord.connectionId === statusConnectionId &&
+          providerSession &&
+          agentProviderSessionsEqual(
+            identity.agentType,
+            existingSleepingRecord.providerSession,
+            providerSession
+          )
+            ? existingSleepingRecord.agentCwd
+            : undefined
+        // Why: `providerSessionChanged` cannot see a session swap in a completed pane — the
+        // finished session is not reusable, so there is nothing to compare the new id against.
+        // Only an id that matches the row we are carrying from proves the pane never moved.
+        const existingStatusMatchesProviderSession =
+          existing?.agentType === identity.agentType &&
+          existing.connectionId === statusConnectionId &&
+          providerSession !== undefined &&
+          agentProviderSessionsEqual(identity.agentType, providerSession, existing.providerSession)
+        const agentCwd =
+          carryForwardAgentCwd({
+            reported: routing?.agentCwd,
+            sameProviderSession: existingStatusMatchesProviderSession,
+            previous: existing?.agentCwd
+          }) ?? matchedSleepingAgentCwd
         const entry: AgentStatusEntry = {
           state: payload.state,
           workingMode: payload.workingMode,
@@ -2339,13 +2416,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             existing?.worktreeId ??
             findAgentPaneWorktreeId(s, paneKey) ??
             undefined,
-          ...(routing?.connectionId !== undefined
-            ? { connectionId: routing.connectionId }
-            : existing?.connectionId !== undefined
-              ? { connectionId: existing.connectionId }
-              : s.sleepingAgentSessionsByPaneKey[paneKey]?.connectionId !== undefined
-                ? { connectionId: s.sleepingAgentSessionsByPaneKey[paneKey].connectionId }
-                : {}),
+          ...(statusConnectionId !== undefined ? { connectionId: statusConnectionId } : {}),
+          ...(agentCwd ? { agentCwd } : {}),
           tabId: statusTabId,
           terminalTitle: effectiveTitle,
           stateHistory: history,

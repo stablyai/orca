@@ -15,6 +15,7 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from '../../../../shared/agent-session-host-authority'
+import { normalizeAgentWorkingDirectory } from '../../../../shared/agent-working-directory'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -39,6 +40,19 @@ const WorktreeSelector = StrictNonEmptyString(
 )
 
 const Presentation = z.enum(['background', 'focused'])
+
+/** An explicit resume names the directory the agent itself reported, so it must satisfy the
+ *  same absolute, control-free contract the record does — a relative request would be resolved
+ *  against the workspace root, turning an unverifiable value into a confident one. Omit the
+ *  field to say unknown; a malformed one is a protocol violation, not a weaker answer. */
+const ResumeStartupCwd = z
+  .string()
+  .min(1)
+  .max(MAX_WORKTREE_SELECTOR_LENGTH)
+  .refine(
+    (value) => normalizeAgentWorkingDirectory(value) === value,
+    'Invalid agent startup working directory'
+  )
 
 const Placement = z
   .object({
@@ -131,6 +145,7 @@ const ExplicitEnsure = z
     providerSession: ProviderSession,
     ompResumeFilePath: OmpResumeFilePath.optional(),
     agentArgs: AgentArgs.optional(),
+    startupCwd: ResumeStartupCwd.optional(),
     launchPreferences: LaunchPreferences.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional()

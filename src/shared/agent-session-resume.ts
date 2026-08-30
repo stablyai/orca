@@ -56,6 +56,11 @@ export type SleepingAgentSessionRecord = {
   lastAssistantMessage?: string
   interrupted?: boolean
   connectionId?: string | null
+  /** Working directory the agent reported for itself, on the host named by `connectionId`.
+   *  The resume relaunches there. Absent (every record written before STA-5804, and every
+   *  provider whose hook reports no directory) means unknown — see
+   *  renderer/src/lib/sleeping-agent-resume-directory.ts for what unknown costs. */
+  agentCwd?: string
   launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.

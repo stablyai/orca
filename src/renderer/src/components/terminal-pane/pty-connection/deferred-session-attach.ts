@@ -164,6 +164,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
             cols: session.cols,
             rows: session.rows,
             sessionId: pendingSessionId,
+            ...(coldRestoreStartup?.cwd ? { cwd: coldRestoreStartup.cwd } : {}),
             ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
             ...(coldRestoreStartup?.env
               ? { env: session.mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
@@ -178,6 +179,9 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
               ? { launchToken: coldRestoreStartup.launchToken }
               : {}),
             ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+            ...(coldRestoreStartup?.agentArgsOverride !== undefined
+              ? { agentArgsOverride: coldRestoreStartup.agentArgsOverride }
+              : {}),
             ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
             ...(session.directSshRetryAttempt
               ? { admitPtyId: session.claimCapturedDirectSshRetryPty }

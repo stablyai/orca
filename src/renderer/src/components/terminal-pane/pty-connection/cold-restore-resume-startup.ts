@@ -4,8 +4,12 @@ import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
 import {
   resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
+  resolveTuiAgentLaunchEnv,
+  stripYoloTuiAgentLaunchArgs,
+  stripYoloTuiAgentLaunchCommand,
+  stripYoloTuiAgentLaunchEnv
 } from '../../../../../shared/tui-agent-launch-defaults'
+import { resolveSleepingAgentResumeDirectory } from '@/lib/sleeping-agent-resume-directory'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -15,6 +19,7 @@ import {
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { resolveStartupShell } from '../../../../../shared/tui-agent-startup-shell'
 
 export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySession): void {
   session.buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
@@ -46,6 +51,11 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
           agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)))
         ? sleepingRecord.launchConfig
         : undefined
+    const resumeSource = useLiveEntry ? entry : sleepingRecord
+    if (!resumeSource) {
+      return null
+    }
+    const resumeDirectory = resolveSleepingAgentResumeDirectory(resumeSource, session.connectionId)
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
@@ -59,19 +69,44 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       terminalWindowsShell: state.settings?.terminalWindowsShell,
       tabShellOverride: session.shellOverride
     })
+    const configuredAgentArgs =
+      launchConfig !== undefined
+        ? launchConfig.agentArgs
+        : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs)
+    const configuredAgentEnv =
+      launchConfig !== undefined
+        ? launchConfig.agentEnv
+        : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv)
+    const resumeShell = resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+    const agentArgs =
+      resumeDirectory.kind === 'unknown'
+        ? stripYoloTuiAgentLaunchArgs(agent, configuredAgentArgs, resumeShell)
+        : configuredAgentArgs
+    const agentEnv =
+      resumeDirectory.kind === 'unknown'
+        ? stripYoloTuiAgentLaunchEnv(agent, configuredAgentEnv)
+        : configuredAgentEnv
+    const configuredCmdOverrides = state.settings?.agentCmdOverrides ?? {}
+    const configuredCommand = configuredCmdOverrides[agent]
+    const cmdOverrides =
+      resumeDirectory.kind === 'unknown' && configuredCommand
+        ? {
+            ...configuredCmdOverrides,
+            [agent]: stripYoloTuiAgentLaunchCommand(agent, configuredCommand, resumeShell)
+          }
+        : configuredCmdOverrides
+    const configuredAgentCommand = launchConfig?.agentCommand
+    const agentCommand =
+      resumeDirectory.kind === 'unknown' && configuredAgentCommand
+        ? stripYoloTuiAgentLaunchCommand(agent, configuredAgentCommand, resumeShell)
+        : configuredAgentCommand
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
-      cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      agentArgs:
-        launchConfig !== undefined
-          ? launchConfig.agentArgs
-          : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-      agentEnv:
-        launchConfig !== undefined
-          ? launchConfig.agentEnv
-          : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-      ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+      cmdOverrides,
+      agentArgs,
+      agentEnv,
+      ...(agentCommand ? { agentCommand } : {}),
       ...(launchConfig?.ompResumeFilePath
         ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
         : {}),
@@ -87,6 +122,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     return {
       agent,
       command: startupPlan.launchCommand,
+      ...(resumeDirectory.kind === 'agent-reported' ? { cwd: resumeDirectory.cwd } : {}),
       env: {
         ...startupPlan.env,
         ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
@@ -94,6 +130,9 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: providerSession,
       launchToken: coldRestoreLaunchToken,
+      ...(launchConfig || resumeDirectory.kind === 'unknown'
+        ? { agentArgsOverride: agentArgs }
+        : {}),
       useLiveEntry: Boolean(useLiveEntry),
       hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry

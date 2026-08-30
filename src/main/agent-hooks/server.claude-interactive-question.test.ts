@@ -12,6 +12,7 @@ function ingestClaudeStatus(
     toolName: string
     toolUseId: string
     interactivePrompt?: string
+    agentCwd?: string
   }
 ): void {
   server.ingestRemote(
@@ -21,6 +22,7 @@ function ingestClaudeStatus(
       worktreeId: 'worktree-question',
       hookEventName: event.hookEventName,
       toolUseId: event.toolUseId,
+      ...(event.agentCwd ? { agentCwd: event.agentCwd } : {}),
       payload: {
         state: event.state,
         agentType: 'claude',
@@ -202,7 +204,8 @@ describe('inferQuestionAnswered', () => {
       state: 'waiting',
       hookEventName: 'PreToolUse',
       toolName: 'AskUserQuestion',
-      toolUseId: 'tool-question'
+      toolUseId: 'tool-question',
+      agentCwd: '/repo/packages/api'
     })
 
     expect(server.inferQuestionAnswered(answeredRequestFromSnapshot(server))).toBe(true)
@@ -210,6 +213,7 @@ describe('inferQuestionAnswered', () => {
     // question card cannot linger on the working row.
     const [entry] = server.getStatusSnapshot()
     expect(entry).toMatchObject({ paneKey: PANE_KEY, state: 'working', agentType: 'claude' })
+    expect(entry.agentCwd).toBe('/repo/packages/api')
     expect(entry.toolName).toBeUndefined()
     expect(entry.interactivePrompt).toBeUndefined()
   })

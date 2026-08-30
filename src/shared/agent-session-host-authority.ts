@@ -109,6 +109,7 @@ export type RuntimeEnsureAgentSessionRequest =
       ompResumeFilePath?: string
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
+      startupCwd?: string
       launchPreferences?: AgentLaunchPreferences
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }

@@ -147,6 +147,7 @@ export type PtyTransport = {
      *  first byte and the gate + model responder own spawn-time queries.
      *  Ignored by remote-runtime transports (not gate-markable). */
     initiallyHidden?: boolean
+    cwd?: string
     command?: string
     commandDelivery?: 'renderer' | 'provider'
     env?: Record<string, string>
@@ -155,6 +156,7 @@ export type PtyTransport = {
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
+    agentArgsOverride?: string | null
     startupCommandDelivery?: StartupCommandDelivery
     /** Reject a stale restored identity before this transport can publish global PTY handlers. */
     admitPtyId?: (ptyId: string) => boolean

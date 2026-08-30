@@ -55,6 +55,7 @@ describe('agent session RPC methods', () => {
         providerSession: { key: 'session_id', id: 'provider-session-1' },
         ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
+        startupCwd: '/repo/worktree-1/packages/api',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         presentation: 'focused',
         placement: { tabId: 'tab-1', leafId: 'leaf-1' }
@@ -70,6 +71,7 @@ describe('agent session RPC methods', () => {
         providerSession: { key: 'session_id', id: 'provider-session-1' },
         ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
+        startupCwd: '/repo/worktree-1/packages/api',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         presentation: 'focused',
         placement: { tabId: 'tab-1', leafId: 'leaf-1' }
@@ -142,6 +144,66 @@ describe('agent session RPC methods', () => {
 
     expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(runtime.ensureAgentSession).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['relative', 'packages/api'],
+    ['relative dot', './packages/api'],
+    ['control character', '/repo\nnext'],
+    ['surrounding whitespace', '  /repo/worktree-1  '],
+    ['bare UNC prefix', '\\\\server'],
+    ['device namespace', '\\\\?\\C:\\repo'],
+    ['empty after trim', '   ']
+  ])(
+    'rejects an explicit resume whose startupCwd is %s before runtime mutation',
+    async (_label, startupCwd) => {
+      const runtime = runtimeStub()
+      const dispatcher = new RpcDispatcher({
+        runtime: runtime as unknown as OrcaRuntimeService,
+        methods: AGENT_SESSION_METHODS
+      })
+
+      const response = await dispatcher.dispatch(
+        request('terminal.ensureAgentSession', {
+          kind: 'explicit',
+          worktree: 'id:worktree-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-session-1' },
+          startupCwd
+        })
+      )
+
+      expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+      expect(runtime.ensureAgentSession).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    ['posix root', '/repo/worktree-1/packages/api'],
+    ['windows drive root', 'C:\\repo\\worktree-1'],
+    ['UNC share', '\\\\server\\share\\repo']
+  ])('accepts an absolute startupCwd (%s) unchanged', async (_label, startupCwd) => {
+    const runtime = runtimeStub()
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS
+    })
+
+    const response = await dispatcher.dispatch(
+      request('terminal.ensureAgentSession', {
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        startupCwd
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.ensureAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({ startupCwd }),
+      {}
+    )
   })
 
   it('rejects mismatched agent/provider identity before runtime mutation', async () => {

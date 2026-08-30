@@ -19,6 +19,7 @@ import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-term
 
 export type PtyPaneStartup = {
   command: string
+  cwd?: string
   /** Renderer-delivered startup input for callers that need xterm paste
    *  semantics before the submit Enter. */
   delivery?: 'terminal-paste'

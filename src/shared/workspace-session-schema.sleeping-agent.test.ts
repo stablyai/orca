@@ -22,6 +22,8 @@ describe('parseWorkspaceSession sleeping agents', () => {
           updatedAt: 9,
           terminalTitle: 'Codex',
           lastAssistantMessage: 'done',
+          connectionId: null,
+          agentCwd: '/repo/wt/packages/api',
           launchConfig: {
             agentArgs: '',
             agentEnv: {}
@@ -34,6 +36,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agentCwd).toBe(
+        '/repo/wt/packages/api'
+      )
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig).toEqual({
         agentArgs: '',
         agentEnv: {}

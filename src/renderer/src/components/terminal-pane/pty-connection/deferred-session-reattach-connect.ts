@@ -43,6 +43,7 @@ export function startDeferredSessionReattach(
     cols: session.cols,
     rows: session.rows,
     sessionId: deferredReattachSessionId,
+    ...(coldRestoreStartup?.cwd ? { cwd: coldRestoreStartup.cwd } : {}),
     ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
     ...(coldRestoreStartup?.env
       ? { env: session.mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
@@ -53,6 +54,9 @@ export function startDeferredSessionReattach(
       : {}),
     ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
     ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+    ...(coldRestoreStartup?.agentArgsOverride !== undefined
+      ? { agentArgsOverride: coldRestoreStartup.agentArgsOverride }
+      : {}),
     ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
     ...(session.directSshRetryAttempt
       ? { admitPtyId: session.claimCapturedDirectSshRetryPty }

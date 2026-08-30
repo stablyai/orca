@@ -99,6 +99,9 @@ export type AgentHookRelayEnvelope = {
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
+  /** Working directory the agent reported for itself, on the REMOTE host. Orca resumes
+   *  there and never resolves it locally; `ingestRemote` revalidates it. */
+  agentCwd?: string
   /** True when this envelope updates resume identity without changing turn status. */
   providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */

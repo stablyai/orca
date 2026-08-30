@@ -41,7 +41,9 @@ export async function spawnIpcPty(
   return window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
-    cwd,
+    // Why: a cold-restore agent resume names the agent's own directory on the connect options;
+    // the baseline only knows the pane's worktree (STA-5804).
+    cwd: connectOptions.cwd ?? cwd,
     ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
     env: connectOptions.env ?? env,
     ...((connectOptions.envToDelete ?? envToDelete)

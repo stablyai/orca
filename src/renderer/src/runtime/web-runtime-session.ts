@@ -19,7 +19,10 @@ import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
 } from '../../../shared/agent-session-resume'
-import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_RESUME_CWD_RUNTIME_CAPABILITY,
+  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 import { expectsBrowserClientHosting } from '../../../shared/browser-client-hosting-eligibility'
 import type {
@@ -336,6 +339,7 @@ async function createWebRuntimeSessionTerminalResult(
                         ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
                         : {}),
                       ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
+                      ...(args.cwd ? { startupCwd: args.cwd } : {}),
                       ...(args.launchPreferences
                         ? { launchPreferences: args.launchPreferences }
                         : {}),
@@ -373,7 +377,11 @@ async function createWebRuntimeSessionTerminalResult(
                 )
               )
       const resumeHostAuthorityCapability =
-        args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
+        args.agentSessionKind === 'resume'
+          ? args.cwd
+            ? AGENT_SESSION_RESUME_CWD_RUNTIME_CAPABILITY
+            : agentResumeHostAuthorityCapability(agent)
+          : undefined
       const created = await runRemoteAgentSessionLaunch<{
         terminal: CreatedAgentTerminalIdentity
       }>({

@@ -1,6 +1,7 @@
 import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import { extractAgentProviderSession } from './agent-session-resume'
+import { extractAgentWorkingDirectory } from './agent-working-directory'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -99,6 +100,7 @@ export function normalizeHookPayload(
     }
   }
 
+  const agentCwd = extractAgentWorkingDirectory(hookPayloadRecord)
   const extractedPrompt = extractPromptText(hookPayloadRecord)
   const promptText = extractedPrompt.text
   const dispatched = normalizeProviderEvent({
@@ -168,6 +170,7 @@ export function normalizeHookPayload(
       : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
+    ...(agentCwd ? { agentCwd } : {}),
     payload: transportPayload
   }
 }

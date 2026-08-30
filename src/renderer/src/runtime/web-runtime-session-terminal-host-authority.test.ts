@@ -133,7 +133,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               graphStatus: 'ready',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.resume-cwd.v1']
             }
           }
         }
@@ -169,6 +169,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           ...(sessionKind === 'resume'
             ? {
                 command: "codex resume 'session-1'",
+                cwd: '/repo/packages/api',
                 providerSession: { key: 'session_id' as const, id: 'session-1' }
               }
             : {}),
@@ -184,7 +185,10 @@ describe('createWebRuntimeSessionTerminal', () => {
       expect(authorityRequest).toMatchObject({
         selector: ENVIRONMENT_ID,
         method: authorityMethod,
-        params: { presentation: 'background' }
+        params: {
+          presentation: 'background',
+          ...(sessionKind === 'resume' ? { startupCwd: '/repo/packages/api' } : {})
+        }
       })
       expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual(
         activate ? { hostTabId, leafId: FOCUS_LEAF_ID } : null

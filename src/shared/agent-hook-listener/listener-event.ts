@@ -35,6 +35,9 @@ export type AgentHookEventPayload = {
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
+  /** Working directory the agent reported for itself, on its own execution host.
+   *  Absent means unknown — see shared/agent-working-directory.ts. */
+  agentCwd?: string
   /** Session identity update with no turn-state transition; refreshes durable resume metadata without a fake status row. */
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */

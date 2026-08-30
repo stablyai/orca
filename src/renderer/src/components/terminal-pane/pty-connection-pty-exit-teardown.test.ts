@@ -131,11 +131,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
 }
 
-function installSleepingCodexResumeState(restoredPtyId?: string) {
+function installSleepingCodexResumeState(
+  restoredPtyId?: string,
+  agentCwd: string | null = '/repo/wt-1/packages/api'
+) {
   const paneKey = makePaneKey('tab-1', LEAF_1)
   const launchConfig = {
-    agentCommand: "codex '--model' 'gpt-5'",
-    agentArgs: '--model gpt-5',
+    agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox' '--model' 'gpt-5'",
+    agentArgs: '--dangerously-bypass-approvals-and-sandbox --model gpt-5',
     agentEnv: { CODEX_PROFILE: 'captured' }
   }
   mockStoreState = {
@@ -156,6 +159,8 @@ function installSleepingCodexResumeState(restoredPtyId?: string) {
         state: 'working',
         capturedAt: 1,
         updatedAt: 1,
+        connectionId: null,
+        ...(agentCwd ? { agentCwd } : {}),
         launchConfig
       }
     }
@@ -519,6 +524,10 @@ describe('connectPanePty', () => {
 
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(20)
+    expect(transport.connect.mock.calls[0]?.[0]).toMatchObject({
+      cwd: '/repo/wt-1/packages/api',
+      agentArgsOverride: '--dangerously-bypass-approvals-and-sandbox --model gpt-5'
+    })
     callbacks[0]?.onData?.('too many consoles in use, max consoles is 128')
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
@@ -533,10 +542,93 @@ describe('connectPanePty', () => {
         launchConfig,
         resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
         launchAgent: 'codex',
+        agentArgsOverride: '--dangerously-bypass-approvals-and-sandbox --model gpt-5',
         showSessionRestoredBanner: true
       }),
       reason: 'git-bash-console-capacity'
     })
+  })
+
+  it('respawns a retained cold-restore startup in the directory it carries', async () => {
+    // The capacity restart remounts the pane with the retained startup and no override, so the
+    // spawn must read the effective startup's directory; the transport baseline only knows the
+    // pane's worktree, which is the tree STA-5804 must not resume into.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('restarted-pty')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: {}
+    }
+    const deps = createDeps({
+      cwd: '/repo/wt-1',
+      startup: {
+        command: "codex 'resume' 'codex-session-1'",
+        cwd: '/repo/wt-1/packages/api',
+        launchAgent: 'codex',
+        showSessionRestoredBanner: true
+      }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/repo/wt-1/packages/api' })
+    )
+  })
+
+  it('leaves a startup with no directory on the pane transport baseline', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('plain-pty')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: {}
+    }
+    const deps = createDeps({ cwd: '/repo/wt-1', startup: { command: 'zsh -l' } })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ cwd: expect.anything() })
+    )
+  })
+
+  it('strips the bypass from an unknown-directory cold restore and its capacity retry', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const callbacks: ConnectCallbacks[] = []
+    const transport = createMockTransport('resume-pty')
+    transport.connect.mockImplementation(async (options: { callbacks: ConnectCallbacks }) => {
+      callbacks.push(options.callbacks)
+      return 'resume-pty'
+    })
+    transportFactoryQueue.push(transport)
+    installSleepingCodexResumeState(undefined, null)
+    const deps = createDeps({ onPaneProcessDied: vi.fn() })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    expect(transport.connect.mock.calls[0]?.[0]).toMatchObject({
+      agentArgsOverride: '--model gpt-5'
+    })
+    expect(transport.connect.mock.calls[0]?.[0]?.command).not.toContain(
+      '--dangerously-bypass-approvals-and-sandbox'
+    )
+
+    callbacks[0]?.onData?.('too many consoles in use, max consoles is 128')
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as
+      | ((ptyId: string, exitCode?: number) => void)
+      | undefined
+    onPtyExit?.('resume-pty', 1)
+    expect(deps.onPaneProcessDied).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startup: expect.objectContaining({ agentArgsOverride: '--model gpt-5' })
+      })
+    )
   })
 
   it('does not carry capacity detection into a cold-restore replacement', async () => {

@@ -35,6 +35,7 @@ export type AgentStatusSetData = {
   terminalHandle?: string
   launchToken?: string
   providerSession?: { key: 'session_id'; id: string }
+  agentCwd?: string
   providerSessionOnly?: boolean
   orchestration?: {
     taskId?: string
