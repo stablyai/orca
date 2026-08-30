@@ -4,7 +4,11 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  type AiVaultListResult,
+  type AiVaultSession
+} from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import {
@@ -77,7 +81,8 @@ function HookProbe(props: {
   latest = useAiVaultSessionRefresh(
     props.scopePaths,
     props.executionHostScope ?? 'local',
-    props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT
+    props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT,
+    AI_VAULT_AGENTS
   )
   return null
 }
@@ -596,10 +601,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     if (!changed || !preview) {
       throw new Error('expected a nested preview message')
     }
-    reminted.sessions[0] = {
-      ...changed,
-      previewMessages: [{ ...preview, text: 'follow-up ask' }]
-    }
+    reminted.sessions[0] = { ...changed, previewMessages: [{ ...preview, text: 'follow-up ask' }] }
 
     listSessionsMock.mockResolvedValueOnce(reminted)
     await advance(THROTTLE_MS + 1)

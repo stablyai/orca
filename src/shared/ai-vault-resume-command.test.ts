@@ -6,6 +6,17 @@ import {
 } from './ai-vault-resume-command'
 
 describe('buildAiVaultResumeCommand', () => {
+  it('resumes MiMo Code sessions with the provider session flag', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'mimo-code',
+        sessionId: 'mimo-session-1',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && mimo --session 'mimo-session-1'")
+  })
+
   it('uses Antigravity conversation ids instead of Gemini resume flags', () => {
     expect(
       buildAiVaultResumeCommand({
@@ -214,12 +225,7 @@ describe('buildAiVaultResumeShellCommand env removal', () => {
 
   it('keeps the cmd clear ahead of the cd so a failed cd cannot launch the agent', () => {
     expect(
-      buildAiVaultResumeShellCommand({
-        ...base,
-        cwd: 'C:\\repo',
-        platform: 'win32',
-        shell: 'cmd'
-      })
+      buildAiVaultResumeShellCommand({ ...base, cwd: 'C:\\repo', platform: 'win32', shell: 'cmd' })
     ).toBe(
       'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\repo" && codex \'resume\' \'sid\''
     )

@@ -66,6 +66,7 @@ async function scanOneSshHost(
       limit: args?.limit,
       ...(args?.unlimited === true ? { unlimited: true } : {}),
       ...(args?.force === true ? { force: true } : {}),
+      ...(args?.agents === undefined ? {} : { agents: [...args.agents] }),
       scopePaths,
       ...(scopePathsTruncated ? { scopePathsTruncated: true } : {})
     }
@@ -112,6 +113,7 @@ async function scanOneSshHost(
         hostPlatform: hostInfo.hostPlatform,
         limit: args?.limit,
         unlimited: args?.unlimited,
+        agents: args?.agents,
         scopePaths,
         signal
       }),

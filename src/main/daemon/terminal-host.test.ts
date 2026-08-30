@@ -191,9 +191,11 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello')
+      expect(lastSubprocess.write).not.toHaveBeenCalledWith('\r')
+
+      await new Promise((r) => setTimeout(r, 60))
+      expect(lastSubprocess.write).toHaveBeenLastCalledWith('\r')
     })
 
     it('uses the short daemon settle path when marker and prompt arrive together', async () => {
@@ -213,15 +215,19 @@ describe('TerminalHost', () => {
         expect(lastSubprocess.write).not.toHaveBeenCalled()
 
         vi.advanceTimersByTime(1)
-        expect(lastSubprocess.write).toHaveBeenCalledWith(
-          process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-        )
+        expect(lastSubprocess.write).toHaveBeenLastCalledWith('echo hello')
+
+        vi.advanceTimersByTime(49)
+        expect(lastSubprocess.write).toHaveBeenCalledTimes(1)
+        vi.advanceTimersByTime(1)
+        expect(lastSubprocess.write).toHaveBeenLastCalledWith('\r')
       } finally {
         vi.useRealTimers()
       }
     })
 
     it('delivers startup commands immediately when the spawned shell cannot emit the ready marker', async () => {
+      vi.useFakeTimers()
       spawnFn = vi.fn(() => {
         const sub = createMockSubprocess({ shellPath: '/bin/sh' }) as ReturnType<
           typeof createMockSubprocess
@@ -232,21 +238,28 @@ describe('TerminalHost', () => {
         lastSubprocess = sub
         return sub
       })
-      await host.dispose()
-      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+      try {
+        await host.dispose()
+        host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
 
-      await host.createOrAttach({
-        sessionId: 'session-1',
-        cols: 80,
-        rows: 24,
-        command: 'echo hello',
-        shellReadySupported: true,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
+        await host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          command: 'echo hello',
+          shellReadySupported: true,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
 
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+        expect(lastSubprocess.write).toHaveBeenCalledTimes(1)
+        expect(lastSubprocess.write).toHaveBeenLastCalledWith('echo hello')
+
+        await vi.runOnlyPendingTimersAsync()
+        expect(lastSubprocess.write).toHaveBeenCalledTimes(2)
+        expect(lastSubprocess.write).toHaveBeenLastCalledWith('\r')
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('does not bracketed-paste-wrap multiline commands for a fallback shell without paste mode', async () => {

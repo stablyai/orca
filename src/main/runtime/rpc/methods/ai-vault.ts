@@ -24,10 +24,7 @@ const executionHostIdSchema = z.string().transform((value, ctx): `runtime:${stri
   if (parsed?.kind === 'runtime') {
     return parsed.id
   }
-  ctx.addIssue({
-    code: 'custom',
-    message: 'Invalid runtime execution host id'
-  })
+  ctx.addIssue({ code: 'custom', message: 'Invalid runtime execution host id' })
   return z.NEVER
 })
 
@@ -42,6 +39,7 @@ export const AiVaultListSessionsParams = z
       .optional(),
     unlimited: OptionalBoolean,
     force: OptionalBoolean,
+    agents: z.array(z.enum(AI_VAULT_AGENTS)).optional(),
     scopePaths: z
       .array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH))
       // Why: clamp instead of reject — scope paths only ever widen discovery, and
@@ -98,6 +96,7 @@ export const AI_VAULT_METHODS: RpcMethod[] = [
           limit: params.unlimited ? undefined : params.limit,
           unlimited: params.unlimited,
           force: params.force,
+          agents: params.agents,
           scopePaths: params.scopePaths
         })
       } catch (error) {

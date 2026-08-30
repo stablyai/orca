@@ -1,27 +1,20 @@
 import { getAppEnvironment } from '../../shared/app-environment'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { getOpenCodeFamilyPluginSource } from '../opencode/hook-service'
 import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
+import { resolveMimocodeDirectories, type MimocodeDirectories } from './mimocode-directories'
 
 const ORCA_MIMOCODE_PLUGIN_FILE = 'orca-mimocode-status.js'
 const MIMOCODE_HOOKS_DIR = 'mimocode-hooks'
-const MIMOCODE_SHARED_HOME = 'shared'
+// Why: keep the old overlay intact because it may contain MiMo data created before source-backed runtime directories were introduced.
+const MIMOCODE_SOURCE_HOME_PREFIX = 'source-'
 
-function defaultMimocodeConfigDir(): string {
-  return join(homedir(), '.config', 'mimocode')
-}
-
-function resolveSourceConfigDir(existingHome: string | undefined): string | undefined {
-  if (existingHome) {
-    const fromHome = join(existingHome, 'config')
-    if (existsSync(fromHome)) {
-      return fromHome
-    }
-  }
-  const xdg = defaultMimocodeConfigDir()
-  return existsSync(xdg) ? xdg : undefined
+function sourceHomeName(sourceDirectories: MimocodeDirectories): string {
+  const sourceKey = JSON.stringify(sourceDirectories)
+  const digest = createHash('sha256').update(sourceKey).digest('hex').slice(0, 16)
+  return `${MIMOCODE_SOURCE_HOME_PREFIX}${digest}`
 }
 
 function mirrorConfigDir(sourceConfigDir: string, targetConfigDir: string): void {
@@ -50,23 +43,30 @@ function mirrorConfigDir(sourceConfigDir: string, targetConfigDir: string): void
 export class MimoCodeHookService {
   clearPty(_ptyId: string): void {}
 
-  buildPtyEnv(_ptyId: string, existingMimocodeHome?: string): Record<string, string> {
-    // Why: MiMo currently uses a shared home; per-source subdirs can come
-    // later if concurrent MiMo panes need isolated runtime state.
-    const home = join(
-      getAppEnvironment().getPath('userData'),
-      MIMOCODE_HOOKS_DIR,
-      MIMOCODE_SHARED_HOME
-    )
+  buildPtyEnv(
+    _ptyId: string,
+    existingMimocodeHome?: string,
+    environment: Record<string, string> = {}
+  ): Record<string, string> {
     try {
-      for (const sub of ['config', 'data', 'cache', 'state'] as const) {
-        mkdirSync(join(home, sub), { recursive: true })
+      const sourceDirectories = resolveMimocodeDirectories(existingMimocodeHome, environment)
+      const home = join(
+        getAppEnvironment().getPath('userData'),
+        MIMOCODE_HOOKS_DIR,
+        sourceHomeName(sourceDirectories)
+      )
+      mkdirSync(home, { recursive: true })
+      for (const sub of ['data', 'cache', 'state'] as const) {
+        mkdirSync(sourceDirectories[sub], { recursive: true })
+        safeRemoveTree(join(home, sub))
+        mirrorEntry(sourceDirectories[sub], join(home, sub))
       }
       const overlayConfig = join(home, 'config')
-      const sourceConfig = resolveSourceConfigDir(existingMimocodeHome)
-      if (sourceConfig) {
-        safeRemoveTree(overlayConfig)
-        mirrorConfigDir(sourceConfig, overlayConfig)
+      safeRemoveTree(overlayConfig)
+      if (existsSync(sourceDirectories.config)) {
+        mirrorConfigDir(sourceDirectories.config, overlayConfig)
+      } else {
+        mkdirSync(overlayConfig, { recursive: true })
       }
       const pluginsDir = join(home, 'config', 'plugins')
       mkdirSync(pluginsDir, { recursive: true })
@@ -74,10 +74,10 @@ export class MimoCodeHookService {
         join(pluginsDir, ORCA_MIMOCODE_PLUGIN_FILE),
         getOpenCodeFamilyPluginSource('/hook/mimo-code', { emitSessionStart: false })
       )
+      return { MIMOCODE_HOME: home }
     } catch {
       return existingMimocodeHome ? { MIMOCODE_HOME: existingMimocodeHome } : {}
     }
-    return { MIMOCODE_HOME: home }
   }
 }
 

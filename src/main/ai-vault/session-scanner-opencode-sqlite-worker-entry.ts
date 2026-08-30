@@ -26,14 +26,16 @@ async function handleRequest(
       const candidates = await listOpenCodeSqliteSessions({
         dbPaths: request.dbPaths,
         limit: request.limit,
-        issues
+        issues,
+        agent: request.agent
       })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }
     const session = await parseOpenCodeSqliteSession({
       dbPath: request.dbPath,
       sessionId: request.sessionId,
-      platform: request.platform
+      platform: request.platform,
+      agent: request.agent
     })
     return { id: request.id, ok: true, value: session }
   } catch (err) {

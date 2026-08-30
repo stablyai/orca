@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import Database from '../sqlite/sync-database'
 import { readAiVaultFirstUserPrompt } from './session-first-user-prompt-read'
 
 const tempRoots: string[] = []
@@ -13,6 +14,59 @@ afterEach(async () => {
 })
 
 describe('readAiVaultFirstUserPrompt', () => {
+  it('reads the first user prompt from a MiMo Code SQLite session', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-mimocode-'))
+    tempRoots.push(root)
+    const dbPath = join(root, 'mimocode.db')
+    const db = new Database(dbPath)
+    db.exec(`
+      CREATE TABLE session (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        directory TEXT NOT NULL,
+        title TEXT NOT NULL,
+        version TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        time_updated INTEGER NOT NULL
+      );
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        time_updated INTEGER NOT NULL,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE part (
+        id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        time_updated INTEGER NOT NULL,
+        data TEXT NOT NULL
+      );
+    `)
+    db.prepare(
+      `INSERT INTO session VALUES ('mimo-session', 'project', 'slug', '/repo',
+        'MiMo session', '1.0.0', 1, 2)`
+    ).run()
+    db.prepare(`INSERT INTO message VALUES ('message-1', 'mimo-session', 3, 3, ?)`).run(
+      JSON.stringify({ role: 'user' })
+    )
+    db.prepare(`INSERT INTO part VALUES ('part-1', 'message-1', 'mimo-session', 3, 3, ?)`).run(
+      JSON.stringify({ type: 'text', text: 'First MiMo request' })
+    )
+    db.close()
+
+    await expect(
+      readAiVaultFirstUserPrompt({
+        agent: 'mimo-code',
+        filePath: dbPath,
+        sessionId: 'mimo-session'
+      })
+    ).resolves.toEqual({ prompt: 'First MiMo request' })
+  })
+
   it('returns the full first user prompt without preview truncation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-'))
     tempRoots.push(root)
@@ -40,10 +94,7 @@ describe('readAiVaultFirstUserPrompt', () => {
       ].join('\n')
     )
 
-    const result = await readAiVaultFirstUserPrompt({
-      agent: 'claude',
-      filePath
-    })
+    const result = await readAiVaultFirstUserPrompt({ agent: 'claude', filePath })
 
     expect(result.prompt).toBe(longPrompt)
     expect(result.prompt?.includes('\n\n')).toBe(true)
@@ -113,10 +164,7 @@ describe('readAiVaultFirstUserPrompt', () => {
       ].join('\n')
     )
 
-    const result = await readAiVaultFirstUserPrompt({
-      agent: 'claude',
-      filePath
-    })
+    const result = await readAiVaultFirstUserPrompt({ agent: 'claude', filePath })
 
     expect(result.prompt).toBe('Ship the first-prompt copy button')
   })
@@ -153,11 +201,7 @@ describe('readAiVaultFirstUserPrompt', () => {
     )
 
     await expect(
-      readAiVaultFirstUserPrompt({
-        agent: 'claude',
-        filePath,
-        executionHostId: 'ssh:build-box'
-      })
+      readAiVaultFirstUserPrompt({ agent: 'claude', filePath, executionHostId: 'ssh:build-box' })
     ).resolves.toEqual({ prompt: null })
   })
 })

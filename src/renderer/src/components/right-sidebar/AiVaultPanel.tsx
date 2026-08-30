@@ -107,11 +107,7 @@ export default function AiVaultPanel(): React.JSX.Element {
       availableExecutionHostScopes
     })
   const hostScopeOptions = useMemo(
-    () =>
-      buildAiVaultHostScopeOptions({
-        activeExecutionHostScope,
-        runtimeHostOptions
-      }),
+    () => buildAiVaultHostScopeOptions({ activeExecutionHostScope, runtimeHostOptions }),
     [activeExecutionHostScope, runtimeHostOptions]
   )
   const activeWorktreePath = activeWorktree?.path ?? null
@@ -146,7 +142,8 @@ export default function AiVaultPanel(): React.JSX.Element {
   const { error, loading, refresh, scanResult, sessions } = useAiVaultSessionRefresh(
     scopePaths,
     executionHostScope,
-    sessionLimit
+    sessionLimit,
+    agents
   )
   // Deliberately blind to the active repo/worktree: rebuilding these session
   // maps on every worktree switch is what made switching visibly slow (#10841 era).
@@ -242,11 +239,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   )
 
   const groups = useMemo(
-    () =>
-      groupAiVaultSessions(filteredSessions, group, {
-        sessionProjectById,
-        projectLabelByKey
-      }),
+    () => groupAiVaultSessions(filteredSessions, group, { sessionProjectById, projectLabelByKey }),
     [filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
 

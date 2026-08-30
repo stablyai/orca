@@ -255,9 +255,7 @@ describe('scanAiVaultSessions', () => {
     await mkdir(join(wslHome, '.claude', 'projects', 'repo'), { recursive: true })
     await mkdir(
       join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions'),
-      {
-        recursive: true
-      }
+      { recursive: true }
     )
 
     await writeFile(
@@ -357,10 +355,7 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
-    const result = await scanAiVaultSessions({
-      ...roots,
-      platform: 'darwin'
-    })
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
 
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(1)
@@ -370,7 +365,7 @@ describe('scanAiVaultSessions', () => {
     ])
   })
 
-  it('indexes every supported agent transcript format with native resume commands', async () => {
+  it('indexes every supported file-backed agent format with native resume commands', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-all-agents-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
@@ -465,10 +460,7 @@ describe('scanAiVaultSessions', () => {
     await writeFile(
       join(roots.cursorProjectsDir, 'project', 'agent-transcripts', 'cursor-session.jsonl'),
       jsonLines([
-        {
-          role: 'user',
-          message: { content: [{ type: 'text', text: 'Cursor title' }] }
-        },
+        { role: 'user', message: { content: [{ type: 'text', text: 'Cursor title' }] } },
         { role: 'assistant', message: { content: [{ type: 'text', text: 'Done' }] } }
       ])
     )
@@ -720,7 +712,7 @@ describe('scanAiVaultSessions', () => {
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
-      new Set(AI_VAULT_AGENTS)
+      new Set(AI_VAULT_AGENTS.filter((agent) => agent !== 'mimo-code'))
     )
 
     const commandByAgent = new Map(
@@ -832,11 +824,7 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
-    const result = await scanAiVaultSessions({
-      ...roots,
-      platform: 'darwin',
-      limit: 5
-    })
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 5 })
 
     expect(result.issues).toEqual([])
     expect(result.sessions[0]?.title).toContain('Grok large title')

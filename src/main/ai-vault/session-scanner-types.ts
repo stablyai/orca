@@ -22,6 +22,8 @@ export type AiVaultScanOptions = {
   // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
   // here so they don't depend on the real ~/.local/share/opencode.
   opencodeDbPaths?: readonly string[]
+  // MiMo Code uses the OpenCode-compatible SQLite schema in mimocode.db.
+  mimoCodeDbPaths?: readonly string[]
   grokSessionsDir?: string
   devinTranscriptsDir?: string
   hermesSessionsDir?: string
@@ -35,6 +37,7 @@ export type AiVaultScanOptions = {
   droidProjectsDir?: string
   clineSessionsDir?: string
   kimiSessionsDir?: string
+  agents?: readonly AiVaultAgent[]
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
@@ -70,16 +73,9 @@ export type SessionFileCandidate = {
   antigravityHistoryPath?: string
 }
 
-export type SessionFileDiscovery = {
-  agent: AiVaultAgent
-  rootDir: string
-  files: FileWithMtime[]
-}
+export type SessionFileDiscovery = { agent: AiVaultAgent; rootDir: string; files: FileWithMtime[] }
 
-export type SessionParseResult = {
-  session: AiVaultSession | null
-  issue: AiVaultScanIssue | null
-}
+export type SessionParseResult = { session: AiVaultSession | null; issue: AiVaultScanIssue | null }
 
 export type ResumableParseFinalizeOptions = {
   executionHostId?: ExecutionHostId

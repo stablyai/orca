@@ -80,9 +80,7 @@ let handlerOptions: AiVaultHandlerOptions = {}
 const listCancellations = createSenderScopedRequestCancellations()
 // Shared by the IPC registration and the test internals: a delete must drop
 // the multi-host leg cache, which this module owns the only caller of.
-const aiVaultDeleteDeps = {
-  invalidateMultiHostListCache: invalidateAiVaultHostLegCache
-}
+const aiVaultDeleteDeps = { invalidateMultiHostListCache: invalidateAiVaultHostLegCache }
 
 const resolveAiVaultSessionTitles = (
   args: AiVaultSessionTitlesArgs
@@ -94,7 +92,7 @@ async function listAiVaultSessions(
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
   const executionHostScope = requestedExecutionHostScope(args?.executionHostScope)
-  // Scope paths change the result set, so they must be part of the cache key.
+  // Scope paths and agent selection change the result set, so both belong in the cache key.
   // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
   // can share a snapshot regardless of which worktree was selected first.
   const scopePaths = args?.scopePaths ?? []
@@ -103,6 +101,7 @@ async function listAiVaultSessions(
       scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
         ? [...new Set(scopePaths)].sort()
         : scopePaths,
+    agents: args?.agents ? [...new Set(args.agents)].sort() : undefined,
     executionHostScope
   })
   const depth = requestedAiVaultSessionDepth(args)
@@ -263,6 +262,7 @@ async function scanLocalAiVaultSessions(
       limit: args?.limit,
       unlimited: args?.unlimited,
       force: args?.force,
+      agents: args?.agents,
       scopePaths: args?.scopePaths
     },
     { signal }

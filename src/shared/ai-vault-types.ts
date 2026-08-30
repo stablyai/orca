@@ -14,6 +14,7 @@ export const AI_VAULT_AGENTS = [
   'rovo',
   'copilot',
   'opencode',
+  'mimo-code',
   'grok',
   'openclaw',
   'devin',
@@ -56,6 +57,7 @@ export const AI_VAULT_AGENT_LABELS = {
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
+  'mimo-code': 'MiMo Code',
   grok: 'Grok',
   openclaw: 'OpenClaw',
   devin: 'Devin',
@@ -121,10 +123,7 @@ export type AiVaultSession = {
   resumeCommand: string
   subagent: AiVaultSessionSubagentInfo | null
   /** Present only when the negotiated client can open the native structured owner. */
-  structuredSession?: {
-    sessionId: string
-    workspaceId: string
-  }
+  structuredSession?: { sessionId: string; workspaceId: string }
 }
 
 export type AiVaultSubagentListArgs = {
@@ -135,10 +134,7 @@ export type AiVaultSubagentListArgs = {
   executionHostId?: ExecutionHostId
 }
 
-export type AiVaultSubagentListResult = {
-  sessions: AiVaultSession[]
-  issues: AiVaultScanIssue[]
-}
+export type AiVaultSubagentListResult = { sessions: AiVaultSession[]; issues: AiVaultScanIssue[] }
 
 /** On-demand full first-prompt read for Agent Session History copy/reuse. */
 export type AiVaultFirstUserPromptArgs = {
@@ -151,9 +147,7 @@ export type AiVaultFirstUserPromptArgs = {
   codexHome?: string | null
 }
 
-export type AiVaultFirstUserPromptResult = {
-  prompt: string | null
-}
+export type AiVaultFirstUserPromptResult = { prompt: string | null }
 
 // A session is only offered for normal resume when its transcript actually holds
 // conversation turns; resuming a zero-turn transcript lands in an empty session.
@@ -202,6 +196,9 @@ export type AiVaultListArgs = {
   limit?: number
   unlimited?: boolean
   force?: boolean
+  // Applied before the global recency cap so an older selected provider cannot
+  // be crowded out by newer sessions from disabled providers.
+  agents?: readonly AiVaultAgent[]
   // Active workspace/project paths. The global result is recency-capped, so these
   // guarantee a scoped view still surfaces its own (possibly older) sessions.
   scopePaths?: readonly string[]

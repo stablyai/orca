@@ -23,11 +23,7 @@ const mockState = {
   tabBarOrderByWorktree: {} as Record<string, string[]>
 }
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockState
-  }
-}))
+vi.mock('@/store', () => ({ useAppStore: { getState: () => mockState } }))
 
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: (
@@ -38,9 +34,7 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
   ) => [...terminalIds, ...editorIds, ...browserIds]
 }))
 
-vi.mock('@/lib/telemetry', () => ({
-  tuiAgentToAgentKind: (agent: string) => agent
-}))
+vi.mock('@/lib/telemetry', () => ({ tuiAgentToAgentKind: (agent: string) => agent }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: runtimeMocks.getRuntimeEnvironmentIdForWorktree
@@ -79,15 +73,13 @@ describe('launchAiVaultSessionInNewTab', () => {
       command: 'claude --resume session-1'
     })
 
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1')
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
-      command: 'claude --resume session-1',
-      telemetry: {
-        agent_kind: 'claude',
-        launch_source: 'sidebar',
-        request_kind: 'resume'
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
+      pendingStartup: {
+        command: 'claude --resume session-1',
+        telemetry: { agent_kind: 'claude', launch_source: 'sidebar', request_kind: 'resume' }
       }
     })
+    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mockSetTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(result).toEqual({ tabId: 'tab-1', groupId: 'group-1' })
@@ -110,25 +102,22 @@ describe('launchAiVaultSessionInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      startupCwd: 'C:\\Users\\alice\\repo'
-    })
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
-      command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
-      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
-      envToDelete: ['CODEX_HOME'],
-      launchConfig: {
-        agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
-        agentArgs: '--dangerously-skip-permissions --effort max',
-        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
-      },
-      launchAgent: 'claude',
-      resumeProviderSession: { key: 'session_id', id: 'session-1' },
-      telemetry: {
-        agent_kind: 'claude',
-        launch_source: 'sidebar',
-        request_kind: 'resume'
+      startupCwd: 'C:\\Users\\alice\\repo',
+      pendingStartup: {
+        command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+        env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+        envToDelete: ['CODEX_HOME'],
+        launchConfig: {
+          agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
+          agentArgs: '--dangerously-skip-permissions --effort max',
+          agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+        },
+        launchAgent: 'claude',
+        resumeProviderSession: { key: 'session_id', id: 'session-1' },
+        telemetry: { agent_kind: 'claude', launch_source: 'sidebar', request_kind: 'resume' }
       }
     })
+    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
   })
 
   it('creates a split group before launching when a split direction is provided', () => {
@@ -141,7 +130,12 @@ describe('launchAiVaultSessionInNewTab', () => {
     })
 
     expect(mockCreateEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-new')
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-new', undefined, {
+      pendingStartup: {
+        command: 'codex resume session-2',
+        telemetry: { agent_kind: 'codex', launch_source: 'sidebar', request_kind: 'resume' }
+      }
+    })
   })
 
   it('creates runtime-hosted resume terminals through the paired host', async () => {

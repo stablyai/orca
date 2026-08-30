@@ -1,5 +1,9 @@
 import { basename } from 'node:path'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import {
+  aiVaultAgentLabel,
+  type AiVaultAgent,
+  type AiVaultScanIssue
+} from '../../shared/ai-vault-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import SyncDatabase from '../sqlite/sync-database'
 import { classifySqliteReadFailure } from '../sqlite/sqlite-read-failure'
@@ -73,8 +77,13 @@ export function readOpenCodeDatabase<T>(args: {
  * @param error - The thrown value from the read.
  * @returns A kinded scan issue with actionable copy.
  */
-export function openCodeDatabaseScanIssue(dbPath: string, error: unknown): AiVaultScanIssue {
+export function openCodeDatabaseScanIssue(
+  dbPath: string,
+  error: unknown,
+  agent: AiVaultAgent = 'opencode'
+): AiVaultScanIssue {
   const name = basename(dbPath)
+  const label = aiVaultAgentLabel(agent)
   // `fileMustExist` already proved the database file is there before SQLite ran,
   // so this needs no fs probe of its own — an extra sync stat on a 9p share is
   // exactly the hang the WSL transcript gate exists to prevent.
@@ -87,19 +96,19 @@ export function openCodeDatabaseScanIssue(dbPath: string, error: unknown): AiVau
   const overWslShare = isWslUncPath(dbPath)
   const detail =
     kind === 'contended' && !overWslShare
-      ? `OpenCode is writing to ${name} right now, so its history was skipped. It is read again on the next refresh.`
+      ? `${label} is writing to ${name} right now, so its history was skipped. It is read again on the next refresh.`
       : kind === 'unreadable'
-        ? `OpenCode history in ${name} could not be read: ${errorMessage(error)}`
-        : `OpenCode history in ${name} could not be read. ${unreadableShareAdvice(dbPath)}`
-  return { agent: 'opencode', kind: 'scope', path: dbPath, message: detail }
+        ? `${label} history in ${name} could not be read: ${errorMessage(error)}`
+        : `${label} history in ${name} could not be read. ${unreadableShareAdvice(dbPath, label)}`
+  return { agent, kind: 'scope', path: dbPath, message: detail }
 }
 
-function unreadableShareAdvice(dbPath: string): string {
+function unreadableShareAdvice(dbPath: string, label: string): string {
   // Named only when the evidence supports it; a generic share gets generic copy.
   // Deliberately not "flush the write-ahead log": checkpointing changes nothing
   // here, and telling the user to try it would send them after a fix that cannot
   // work. The share itself is the blocker.
   return isWslUncPath(dbPath)
     ? 'Windows cannot open SQLite databases over the \\\\wsl.localhost share, so this history has to be read from inside the distro.'
-    : 'Its write-ahead log cannot be opened read-only on this filesystem. Exit OpenCode cleanly to flush the log.'
+    : `Its write-ahead log cannot be opened read-only on this filesystem. Exit ${label} cleanly to flush the log.`
 }

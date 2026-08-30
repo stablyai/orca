@@ -1,5 +1,10 @@
 import { homedir } from 'node:os'
-import { AI_VAULT_SCOPE_PATHS_MAX_COUNT, type AiVaultListResult } from '../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENTS,
+  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  type AiVaultAgent,
+  type AiVaultListResult
+} from '../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
@@ -89,6 +94,7 @@ export class AiVaultHandler {
         key: JSON.stringify({
           limit: params.limit,
           unlimited: params.unlimited,
+          agents: params.agents,
           scopePaths: params.scopePaths,
           scopePathsTruncated: params.scopePathsTruncated
         }),
@@ -180,6 +186,10 @@ export function normalizeSshAiVaultRelayListParams(
             path.length <= SSH_AI_VAULT_SCOPE_PATH_MAX_LENGTH
         )
     : undefined
+  const knownAgents = new Set<unknown>(AI_VAULT_AGENTS)
+  const agents = Array.isArray(params.agents)
+    ? [...new Set(params.agents.filter((agent): agent is AiVaultAgent => knownAgents.has(agent)))]
+    : undefined
   const scopePathsTruncated =
     params.scopePathsTruncated === true ||
     (Array.isArray(params.scopePaths) && params.scopePaths.length > AI_VAULT_SCOPE_PATHS_MAX_COUNT)
@@ -187,6 +197,7 @@ export function normalizeSshAiVaultRelayListParams(
     ...(unlimited ? { unlimited: true } : {}),
     ...(limit === undefined ? {} : { limit }),
     ...(params.force === true ? { force: true } : {}),
+    ...(agents === undefined ? {} : { agents }),
     ...(scopePaths === undefined ? {} : { scopePaths }),
     ...(scopePathsTruncated ? { scopePathsTruncated: true } : {})
   }

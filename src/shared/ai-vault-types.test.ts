@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AI_VAULT_AGENTS,
+  aiVaultAgentLabel,
   aiVaultSessionRecoverableSignalCount,
   isAiVaultSessionRecoverableEmpty,
   isAiVaultSessionResumableContent,
@@ -26,6 +28,13 @@ function signal(overrides: Partial<SignalFields> = {}): SignalFields {
 function preview(role: AiVaultSessionPreviewMessage['role']): AiVaultSessionPreviewMessage {
   return { role, text: 'preview text', timestamp: null }
 }
+
+describe('AI Vault agent catalog', () => {
+  it('offers MiMo Code as a session filter', () => {
+    expect(AI_VAULT_AGENTS).toContain('mimo-code')
+    expect(aiVaultAgentLabel('mimo-code')).toBe('MiMo Code')
+  })
+})
 
 describe('isAiVaultSessionResumableContent', () => {
   it('is true when the transcript holds conversation turns', () => {
@@ -73,16 +82,10 @@ describe('isAiVaultSessionRecoverableEmpty', () => {
 describe('aiVaultSessionRecoverableSignalCount', () => {
   it('sums queued messages and subagent transcripts, clamping negatives', () => {
     expect(
-      aiVaultSessionRecoverableSignalCount({
-        queuedMessageCount: 4,
-        subagentTranscriptCount: 2
-      })
+      aiVaultSessionRecoverableSignalCount({ queuedMessageCount: 4, subagentTranscriptCount: 2 })
     ).toBe(6)
     expect(
-      aiVaultSessionRecoverableSignalCount({
-        queuedMessageCount: -1,
-        subagentTranscriptCount: 3
-      })
+      aiVaultSessionRecoverableSignalCount({ queuedMessageCount: -1, subagentTranscriptCount: 3 })
     ).toBe(3)
   })
 })

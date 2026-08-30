@@ -15,11 +15,7 @@ import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 // module so both the worker entry and the main-thread worker client can import
 // it without pulling in the client's Electron dependency.
 
-type SessionRow = {
-  id: string
-  time_created: number
-  time_updated: number
-}
+type SessionRow = { id: string; time_created: number; time_updated: number }
 
 function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   return (
@@ -54,13 +50,17 @@ function readSessionRows(db: SyncDatabase, limit: number): SessionRow[] {
   return (limited ? statement.all(limit) : statement.all()) as SessionRow[]
 }
 
-function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
+function rowToCandidate(
+  row: SessionRow,
+  dbPath: string,
+  agent: AiVaultAgent
+): SessionFileCandidate {
   const mtimeMs =
     typeof row.time_updated === 'number' && row.time_updated > 0
       ? row.time_updated
       : row.time_created
   return {
-    agent: 'opencode' as AiVaultAgent,
+    agent,
     file: {
       path: buildOpenCodeSqliteCandidatePath(dbPath, row.id),
       mtimeMs,
@@ -102,20 +102,19 @@ export async function listOpenCodeSqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  agent?: AiVaultAgent
 }): Promise<SessionFileCandidate[]> {
+  const agent = args.agent ?? 'opencode'
   const candidates: SessionFileCandidate[] = []
   for (const dbPath of args.dbPaths) {
     try {
-      const rows = readOpenCodeDatabase({
-        dbPath,
-        read: (db) => readSessionRows(db, args.limit)
-      })
+      const rows = readOpenCodeDatabase({ dbPath, read: (db) => readSessionRows(db, args.limit) })
       for (const row of rows) {
-        candidates.push(rowToCandidate(row, dbPath))
+        candidates.push(rowToCandidate(row, dbPath, agent))
       }
     } catch (err) {
       // A whole DB failed, not one transcript: kinded so the panel says so.
-      args.issues.push(openCodeDatabaseScanIssue(dbPath, err))
+      args.issues.push(openCodeDatabaseScanIssue(dbPath, err, agent))
     }
   }
   return dedupeAndSortSqliteCandidates(candidates)

@@ -78,6 +78,7 @@ function resumableStateFactoryFor(
     case 'hermes':
     case 'cline':
     case 'kimi':
+    case 'mimo-code':
     case 'opencode':
     case 'rovo':
       return null
@@ -372,9 +373,5 @@ async function consumeCompleteJsonlLines(args: {
   const trailingPartialLine =
     remainderLength > 0 ? Buffer.concat(remainderParts, remainderLength).toString('utf-8') : null
 
-  return {
-    consumedThrough,
-    trailingPartialLine,
-    bytesRead
-  }
+  return { consumedThrough, trailingPartialLine, bytesRead }
 }

@@ -9,14 +9,9 @@ import {
 } from '../ai-vault/ai-vault-scan-cancellation'
 import { aiVaultScanIssueResult } from '../ai-vault/session-list-results'
 
-export type RuntimeAiVaultHostInfo = {
-  environmentId: string
-  executionHostId: `runtime:${string}`
-}
+export type RuntimeAiVaultHostInfo = { environmentId: string; executionHostId: `runtime:${string}` }
 
-export type RuntimeAiVaultScanOptions = {
-  timeoutMs?: number
-}
+export type RuntimeAiVaultScanOptions = { timeoutMs?: number }
 
 export type RuntimeAiVaultScanner = (
   environmentId: string,
@@ -76,6 +71,9 @@ function runtimeScanArgs(
   }
   if (listArgs?.force !== undefined) {
     scanArgs.force = listArgs.force
+  }
+  if (listArgs?.agents !== undefined) {
+    scanArgs.agents = listArgs.agents
   }
   if (listArgs?.scopePaths !== undefined) {
     scanArgs.scopePaths = listArgs.scopePaths

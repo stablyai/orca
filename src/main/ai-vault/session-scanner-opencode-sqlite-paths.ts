@@ -37,9 +37,9 @@ export function splitOpenCodeSqliteCandidate(
   if (!dbPath || !sessionId) {
     return null
   }
-  // Why: OpenCode DB files are named opencode*.db; reject anything else so we
-  // never misroute a real filesystem path that happens to contain '#'.
-  if (!/^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/i.test(basename(dbPath))) {
+  // Why: OpenCode and MiMo Code use this shared SQLite parser; reject anything
+  // else so a real filesystem path containing '#' is never misrouted.
+  if (!/^(?:opencode(?:-[A-Za-z0-9_.-]+)?|mimocode)\.db$/i.test(basename(dbPath))) {
     return null
   }
   return { dbPath, sessionId }

@@ -14,6 +14,7 @@ import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import { SessionInputWriter } from './session-input-writer'
 
 import type {
   SessionState,
@@ -40,6 +41,7 @@ export class Session {
   private readonly termination: SessionTerminationController
   private readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  private readonly input: SessionInputWriter
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -85,6 +87,12 @@ export class Session {
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
+    })
+    this.input = new SessionInputWriter({
+      subprocess: this.subprocess,
+      startupIngress: this.startupIngress,
+      shellReady: this.shellReady,
+      isWritable: () => this._state !== 'exited' && !this._disposed
     })
     this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => {
@@ -139,25 +147,10 @@ export class Session {
     return this.subprocess.terminateOwnedTree()
   }
 
-  write(data: string): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
+  write = (data: string): void => this.input.write(data)
 
-    // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
-    // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
-    if (this.startupIngress.answerLiveQueryReply(data)) {
-      return
-    }
-
-    // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
-    // direct write would race fresh input ahead of the buffered startup command.
-    if (this.shellReady.tryEnqueue(data)) {
-      return
-    }
-
-    this.subprocess.write(data)
-  }
+  writeStartupCommand = (command: string, bracketedPasteSafe: boolean): void =>
+    this.input.writeStartupCommand(command, bracketedPasteSafe)
 
   resize(cols: number, rows: number): void {
     if (this._state === 'exited' || this._disposed || !isValidPtySize(cols, rows)) {

@@ -41,6 +41,7 @@ function isolatedScanRoots(root: string) {
     cursorProjectsDir: join(root, 'cursor-projects'),
     opencodeStorageDir: join(root, 'opencode-storage'),
     opencodeDbPaths: [] as readonly string[],
+    mimoCodeDbPaths: [] as readonly string[],
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
@@ -50,10 +51,18 @@ function isolatedScanRoots(root: string) {
     piSessionsDir: join(root, 'pi-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
+    clineSessionsDir: join(root, 'cline-sessions'),
     kimiSessionsDir: join(root, 'kimi-sessions'),
     ompSessionsDir: join(root, 'omp-sessions'),
     primeAgentSessionsDir: join(root, 'prime-agent-sessions')
   }
+}
+
+function createTempMimoCodeDb(): { db: Database.Database; path: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-ai-vault-mimocode-sqlite-'))
+  tempDbDirs.push(dir)
+  const path = join(dir, 'mimocode.db')
+  return { db: new Database(path), path }
 }
 
 function createTempOpenCodeDb(): { db: Database.Database; path: string } {
@@ -105,6 +114,84 @@ function applyOpenCodeSchema(db: Database.Database): void {
 }
 
 describe('scanAiVaultSessions — OpenCode SQLite + legacy file coexistence', () => {
+  it('discovers MiMo Code sessions from its compatible SQLite database', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-mimocode-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const { db, path: dbPath } = createTempMimoCodeDb()
+    applyOpenCodeSchema(db)
+    db.prepare(
+      `INSERT INTO session (id, project_id, slug, directory, title, version,
+         time_created, time_updated, model, agent, cost,
+         tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write)
+       VALUES ('mimo-session', 'proj-1', 'slug', '/tmp/mimo', 'MiMo SQLite session', '1.0.0',
+         1777634010000, 1777634011000, NULL, 'build', 0,
+         8, 13, 21, 34, 0)`
+    ).run()
+    db.close()
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      mimoCodeDbPaths: [dbPath],
+      platform: 'darwin',
+      limit: 50
+    })
+
+    expect(result.sessions).toEqual([
+      expect.objectContaining({
+        agent: 'mimo-code',
+        sessionId: 'mimo-session',
+        title: 'MiMo SQLite session',
+        filePath: dbPath,
+        resumeCommand: "cd '/tmp/mimo' && mimo --session 'mimo-session'"
+      })
+    ])
+  })
+
+  it('applies the selected agent before the global candidate cap', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-mimocode-filter-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const { db: mimoDb, path: mimoDbPath } = createTempMimoCodeDb()
+    const { db: opencodeDb, path: opencodeDbPath } = createTempOpenCodeDb()
+    applyOpenCodeSchema(mimoDb)
+    applyOpenCodeSchema(opencodeDb)
+
+    mimoDb
+      .prepare(
+        `INSERT INTO session (id, project_id, slug, directory, title, version,
+         time_created, time_updated, model, agent, cost,
+         tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write)
+       VALUES ('older-mimo', 'proj-1', 'slug', '/tmp/mimo', 'Older MiMo session', '1.0.0',
+         1000, 1000, NULL, 'build', 0, 0, 0, 0, 0, 0)`
+      )
+      .run()
+    const insertOpenCodeSession = opencodeDb.prepare(
+      `INSERT INTO session (id, project_id, slug, directory, title, version,
+         time_created, time_updated, model, agent, cost,
+         tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write)
+       VALUES (?, 'proj-1', 'slug', '/tmp/opencode', ?, '1.0.0',
+         ?, ?, NULL, 'build', 0, 0, 0, 0, 0, 0)`
+    )
+    insertOpenCodeSession.run('newer-opencode-1', 'Newer OpenCode 1', 3000, 3000)
+    insertOpenCodeSession.run('newer-opencode-2', 'Newer OpenCode 2', 2000, 2000)
+    mimoDb.close()
+    opencodeDb.close()
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      mimoCodeDbPaths: [mimoDbPath],
+      opencodeDbPaths: [opencodeDbPath],
+      agents: ['mimo-code'],
+      platform: 'darwin',
+      limit: 1
+    })
+
+    expect(result.sessions).toEqual([
+      expect.objectContaining({ agent: 'mimo-code', sessionId: 'older-mimo' })
+    ])
+  })
+
   it('discovers SQLite sessions next to a custom OpenCode storage directory', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-custom-opencode-'))
     tempRoots.push(root)
