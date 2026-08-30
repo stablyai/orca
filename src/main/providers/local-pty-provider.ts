@@ -4,14 +4,18 @@ import {
   confirmLocalPtyForegroundProcess,
   confirmLocalPtyShellForeground,
   getLocalPtyForegroundProcess,
-  hasLocalPtyChildProcesses
+  hasLocalPtyChildProcesses,
+  observeLocalPtyForegroundProcess
 } from './local-pty-foreground-inspection'
+import { classifyLocalPtyChildProcesses, readLocalPtyTitle } from './local-pty-process-evidence'
+import type { PtyProcessInspection } from './pty-process-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import {
   advanceLoadGeneration,
   clearPtyState,
   pendingLocalPtySpawns,
   ptyProcesses,
+  ptyShellName,
   resetLoadGeneration,
   type DataCallback,
   type ExitCallback
@@ -127,6 +131,24 @@ export class LocalPtyProvider implements IPtyProvider {
 
   confirmShellForeground(id: string): Promise<boolean> {
     return confirmLocalPtyShellForeground(id)
+  }
+
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    const foreground = await observeLocalPtyForegroundProcess(id)
+    const proc = ptyProcesses.get(id)
+    const children = classifyLocalPtyChildProcesses({
+      procPresent: proc !== undefined,
+      titleRead: readLocalPtyTitle(proc),
+      shell: ptyShellName.get(id),
+      foreground: foreground.evidence
+    })
+    // Legacy fields keep the exact pre-evidence collapse; only the optional
+    // evidence distinguishes "observed idle" from "could not ask".
+    return {
+      foregroundProcess: foreground.processName,
+      hasChildProcesses: children.hasChildProcesses,
+      processEvidence: { foreground: foreground.evidence, children: children.evidence }
+    }
   }
 
   async serialize(_ids: string[]): Promise<string> {

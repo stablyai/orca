@@ -86,6 +86,20 @@ function timedOutProbe(): ProbeProcessResult {
 }
 
 /**
+ * A probe killed at its deadline that still reports a numeric exit status.
+ *
+ * runProcess sets `timedOut` from its own timer and then resolves from the
+ * child's `close`, so the deadline kill and a real exit race: on Windows the
+ * kill itself is the exit code (no signal), and on POSIX a probe that exited
+ * as the timer fired reports its own code. `1` is exactly the code pgrep/ps
+ * use for "ran and matched nothing", so without the timed-out check this shape
+ * would read as positive absence.
+ */
+function timedOutProbeReportingExitOne(): ProbeProcessResult {
+  return { code: 1, signal: null, timedOut: true }
+}
+
+/**
  * Feed the native Windows snapshot. A real snapshot always contains the
  * querying process, and the reader rejects a table without it.
  */
@@ -355,6 +369,12 @@ describe('probeProcessChildren', () => {
     await expect(probeProcessChildren(100)).resolves.toMatchObject({ verdict: 'unverifiable' })
   })
 
+  it('keeps a timed-out pgrep unverifiable even when it reports exit 1', async () => {
+    mockRunProcess(() => timedOutProbeReportingExitOne())
+
+    await expect(probeProcessChildren(100)).resolves.toMatchObject({ verdict: 'unverifiable' })
+  })
+
   it('keeps a pgrep fatal error (exit 3) unverifiable', async () => {
     mockRunProcess(() => ({ code: 3 }))
 
@@ -430,6 +450,24 @@ describe('observeForegroundProcess', () => {
   it('keeps a timed-out ps read unverifiable', async () => {
     mockExecFile(() => new Error('ps table unavailable'))
     mockRunProcess(() => timedOutProbe())
+
+    await expect(observeForegroundProcess(100)).resolves.toMatchObject({
+      verdict: 'unverifiable'
+    })
+  })
+
+  it('keeps a ps binary that could not be spawned unverifiable, never an observed absence', async () => {
+    mockExecFile(() => new Error('ps table unavailable'))
+    mockRunProcess(() => spawnFailure('spawn ps ENOENT', 'ENOENT'))
+
+    await expect(observeForegroundProcess(100)).resolves.toMatchObject({
+      verdict: 'unverifiable'
+    })
+  })
+
+  it('keeps a timed-out ps read unverifiable even when it reports exit 1', async () => {
+    mockExecFile(() => new Error('ps table unavailable'))
+    mockRunProcess(() => timedOutProbeReportingExitOne())
 
     await expect(observeForegroundProcess(100)).resolves.toMatchObject({
       verdict: 'unverifiable'

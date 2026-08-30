@@ -173,6 +173,12 @@ export async function resolveAgentForegroundProcessWithAvailability(
     if (options.fresh && !rows.some((row) => row.pid === shellPid)) {
       return { available: false, processName: fallbackProcess }
     }
+    // Why: a table containing neither the pane's shell nor any of its direct
+    // children observed nothing about this pane (truncated or pre-spawn
+    // snapshot); reading it as "no agent" turned scan loss into exit evidence.
+    if (!rows.some((row) => row.pid === shellPid || row.ppid === shellPid)) {
+      return { available: false, processName: fallbackProcess }
+    }
     return {
       available: true,
       processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
