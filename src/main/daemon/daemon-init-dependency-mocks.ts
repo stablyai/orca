@@ -33,7 +33,6 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     getProcessStartedAtMsMock,
     parseDaemonPidFileMock,
     replaceDaemonPidFileMock,
-    getDaemonCommandLineMock,
     unlinkOwnedDaemonPidFileMock,
     daemonClientMock,
     spawnerInstances,
@@ -174,7 +173,6 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
       healthCheckDaemon: healthCheckDaemonMock
     }),
     daemonPidIdentity: () => ({
-      getDaemonCommandLine: getDaemonCommandLineMock,
       getDaemonLaunchIdentity: getDaemonLaunchIdentityMock
     }),
     daemonTccAttribution: () => ({

@@ -122,7 +122,6 @@ export type DaemonInitMockState = {
     (...args: unknown[]) => { pid: number; startedAtMs: number | null } | null
   >
   replaceDaemonPidFileMock: Mock<(...args: unknown[]) => boolean>
-  getDaemonCommandLineMock: Mock<(pid: number) => Promise<string | null>>
   unlinkOwnedDaemonPidFileMock: Mock<(...args: unknown[]) => boolean>
   launchedStartedAtMs: { current: number }
   readLaunchedDaemonIdentity: () => LaunchedDaemonIdentity | null

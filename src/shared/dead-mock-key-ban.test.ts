@@ -3,6 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import type { parseAst as ParseAstFn } from 'vite' with { 'resolution-mode': 'import' }
 import type { AstNode, ParseProgram } from './source-scan/module-export-names'
 import { readExportedNames, resolveRelativeModule } from './source-scan/module-export-names'
+import type { MockShape } from './source-scan/mock-factory-reader'
+import { createMockReaderContext, readMockFactory } from './source-scan/mock-factory-reader'
 import { scanSourceTree } from './source-scan/source-tree-scan'
 
 // Dynamic import: vite is ESM-only and this file typechecks under tsconfig.tc.cli.json's node16/CJS.
@@ -26,40 +28,28 @@ beforeAll(async () => {
  * in seven clusters. The two largest were symbols that had been renamed or moved
  * out of the mocked module, leaving eight SSH-relay suites and 56 terminal-pane
  * suites each carrying a stub that had never once been reached.
- */
-
-type MockCall = { specifier: string; keys: string[] }
-
-/** Unwraps a factory to the object literal it yields, or null if not statically known. */
-function factoryObject(node: AstNode | undefined): AstNode | null {
-  let current: AstNode | undefined = node
-  if (current?.type === 'ArrowFunctionExpression' || current?.type === 'FunctionExpression') {
-    // A concise arrow body is one node; a block body is a statement list.
-    current = Array.isArray(current.body) ? undefined : current.body
-    if (current?.type === 'BlockStatement') {
-      const statements = Array.isArray(current.body) ? current.body : []
-      current = statements.findLast((statement) => statement.type === 'ReturnStatement')?.argument
-    }
-  }
-  const TRANSPARENT = [
-    'TSAsExpression',
-    'ParenthesizedExpression',
-    'AwaitExpression',
-    'TSSatisfiesExpression'
-  ]
-  while (current && TRANSPARENT.includes(current.type)) {
-    current = current.expression ?? current.argument
-  }
-  return current?.type === 'ObjectExpression' ? current : null
-}
-
-/**
- * Every statically readable `vi.mock`/`vi.doMock` in a file.
  *
- * A factory whose keys cannot all be read -- a computed key, or a returned
- * identifier -- is dropped whole rather than half-checked, so the guard never
- * accuses a key it did not actually see.
+ * Two things decide whether one of these is noise or a bug, and the guard reports
+ * them apart:
+ *
+ * - A **wholesale** factory replaces the module outright, so a name it does not
+ *   list resolves to `undefined` and production throws on first use. The dead key
+ *   is inert -- a comment that reads like a stub.
+ * - A **partial** factory spreads the genuine module in, so a name it does not
+ *   list still resolves to the real export. There, a dead key means the suite has
+ *   been exercising production code it believes it stubbed, and the green is
+ *   telling you nothing. That is the shape worth waking someone for.
+ *
+ * Reading the factory is the hard half. Most of the tree does not write an object
+ * literal inline: it hands back a shared mock module (`() => mocks.sshPtyProvider`,
+ * `async () => (await import('./m')).xMock(await importOriginal())`). An
+ * object-literal-only reader skips 29% of the `vi.mock` calls in the tree, and the
+ * one dead key that was hiding a real call lived in exactly that gap.
  */
+
+type MockCall = { specifier: string; factory: AstNode | undefined }
+
+/** Every `vi.mock`/`vi.doMock` in a file, paired with the factory expression it was given. */
 function readMockCalls(program: { body: AstNode[] }): MockCall[] {
   const calls: MockCall[] = []
   const stack: unknown[] = [program]
@@ -92,33 +82,26 @@ function readMockCall(call: AstNode): MockCall[] {
   const target = args[0]
   // `vi.mock(import('./x'), ...)` names its module through an import expression.
   const specifier = target?.type === 'Literal' ? target.value : target?.source?.value
-  const object = factoryObject(args[1])
-  if (typeof specifier !== 'string' || !object) {
+  if (typeof specifier !== 'string' || args.length < 2) {
     return []
   }
-  const keys: string[] = []
-  for (const property of object.properties ?? []) {
-    // A spread carries the real module's exports through; its own keys are not ours to judge.
-    if (property.type === 'SpreadElement') {
-      continue
-    }
-    const key = property.computed ? undefined : (property.key?.name ?? property.key?.value)
-    if (typeof key !== 'string') {
-      return []
-    }
-    keys.push(key)
-  }
-  return [{ specifier, keys }]
+  return [{ specifier, factory: args[1] }]
 }
 
 describe('dead vi.mock factory keys', () => {
   const repoRoot = resolve(__dirname, '..', '..')
-  const offenders: string[] = []
+  /** Dead keys in a factory that spreads the real module: the real export answers instead. */
+  const leakingOffenders: string[] = []
+  /** Dead keys in a factory that replaces the module outright: inert, but a lie in the fixture. */
+  const inertOffenders: string[] = []
   const phantomPaths: string[] = []
   const unparseable: string[] = []
   let filesScanned = 0
   let mockCallsSeen = 0
   let mockCallsChecked = 0
+  let partialMocksSeen = 0
+  let partialMocksChecked = 0
+  let factoriesUnreadable = 0
 
   beforeAll(() => {
     const scanned = scanSourceTree(resolve(repoRoot, 'src'), { includeTests: true })
@@ -130,6 +113,7 @@ describe('dead vi.mock factory keys', () => {
       parseAst(sources.get(file) ?? '', {
         lang: file.endsWith('.tsx') ? 'tsx' : 'ts'
       }) as unknown as { body: AstNode[] }
+    const readerContext = createMockReaderContext(parse)
     const exportCache = new Map<string, ReturnType<typeof readExportedNames>>()
     const exportsOf = (file: string): ReturnType<typeof readExportedNames> => {
       const cached = exportCache.get(file)
@@ -155,6 +139,15 @@ describe('dead vi.mock factory keys', () => {
       }
       for (const call of readMockCalls(program)) {
         mockCallsSeen += 1
+        const reading = readMockFactory(call.factory, file.path, readerContext)
+        if (!reading) {
+          factoriesUnreadable += 1
+          continue
+        }
+        const shape: MockShape = reading.shape
+        if (shape === 'partial') {
+          partialMocksSeen += 1
+        }
         const target = resolveRelativeModule(file.path, call.specifier)
         if (!target) {
           // A relative path that resolves to nothing is the same bug one level up:
@@ -170,8 +163,16 @@ describe('dead vi.mock factory keys', () => {
           continue
         }
         mockCallsChecked += 1
-        for (const key of call.keys.filter((name) => !names.has(name))) {
-          offenders.push(`${file.relativePath}: vi.mock('${call.specifier}') key '${key}'`)
+        if (shape === 'partial') {
+          partialMocksChecked += 1
+        }
+        const dead = reading.keys.filter((name) => !names.has(name))
+        const site = `${file.relativePath}: vi.mock('${call.specifier}')`
+        for (const key of dead) {
+          // An unresolved spread could be the real module, so `unknown` is graded
+          // with `partial`: the guard does not get to assume the safe answer.
+          const into = shape === 'wholesale' ? inertOffenders : leakingOffenders
+          into.push(`${site} key '${key}'`)
         }
       }
     }
@@ -183,6 +184,20 @@ describe('dead vi.mock factory keys', () => {
     expect(filesScanned).toBeGreaterThan(5000)
     expect(mockCallsSeen).toBeGreaterThan(2000)
     expect(mockCallsChecked).toBeGreaterThan(1000)
+  })
+
+  it('reads all but a handful of the factories it finds', () => {
+    // The reader resolves 10514 of 10556 factories today. A regression that made it
+    // give up would empty the offender lists without failing anything else, so the
+    // rate is asserted rather than assumed.
+    expect(factoriesUnreadable).toBeLessThan(mockCallsSeen / 20)
+  })
+
+  it('reaches the partial mocks, where a dead key is dangerous rather than inert', () => {
+    // The population that matters. If this floor ever collapses, the assertion below
+    // it is green because nothing was looked at, not because nothing was wrong.
+    expect(partialMocksSeen).toBeGreaterThan(800)
+    expect(partialMocksChecked).toBeGreaterThan(300)
   })
 
   it('parses every file that mocks a module', () => {
@@ -197,12 +212,22 @@ describe('dead vi.mock factory keys', () => {
     ).toEqual([])
   })
 
+  it('has no dead factory key in a mock that spreads the real module', () => {
+    expect(
+      leakingOffenders,
+      'This vi.mock spreads the real module and then names a key it does not export, so the ' +
+        'genuine export is what the code under test received. Whatever this suite believes it ' +
+        'stubbed, it did not: treat its green as unproven until the key is corrected.'
+    ).toEqual([])
+  })
+
   it('has no factory key that the mocked module does not export', () => {
     expect(
-      offenders,
-      'This vi.mock key matches no export of that module, so the mock never applies and the ' +
-        'real implementation runs. Point it at the module that actually exports the symbol, ' +
-        'fix the name, or delete the key.'
+      inertOffenders,
+      'This vi.mock key matches no export of that module. The factory replaces the module ' +
+        'outright, so nothing reads the key and no test is wrong because of it -- but it reads ' +
+        'as a stub that is doing something. Fix the name, point it at the module that exports ' +
+        'the symbol, or delete the key.'
     ).toEqual([])
   })
 })

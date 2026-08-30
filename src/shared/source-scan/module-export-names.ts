@@ -16,8 +16,13 @@ export type AstNode = {
   value?: unknown
   computed?: boolean
   declaration?: AstNode
-  declarations?: { id?: { name?: string } }[]
-  specifiers?: { exported?: { name?: string; value?: string } }[]
+  declarations?: { id?: { name?: string }; init?: AstNode }[]
+  specifiers?: {
+    type?: string
+    exported?: { name?: string; value?: string }
+    local?: { name?: string }
+    imported?: { name?: string; value?: string }
+  }[]
   exported?: { name?: string } | null
   source?: { value?: string }
   id?: { name?: string }
@@ -31,6 +36,10 @@ export type AstNode = {
   argument?: AstNode
   /** An array on a Program or BlockStatement, a single node on a concise arrow body. */
   body?: AstNode | AstNode[]
+  params?: AstNode[]
+  local?: { name?: string }
+  imported?: { name?: string; value?: string }
+  init?: AstNode
 }
 
 export type ParseProgram = (filePath: string) => { body: AstNode[] }

@@ -13,7 +13,7 @@ const DISCLOSURE_TITLE = "Google logins aren't imported"
 const DISCLOSURE_DESCRIPTION = 'Sign in to Google directly in Orca.'
 
 vi.mock('@/components/ui/dropdown-menu', () => dropdownMenuStubs())
-vi.mock('../ui/dropdown-menu', () => dropdownMenuStubs())
+vi.mock('./ui/dropdown-menu', () => dropdownMenuStubs())
 vi.mock('@/components/ui/popover', () => popoverStubs())
 vi.mock('@/store', () => ({ useAppStore: appStoreStub() }))
 vi.mock('../store', () => ({ useAppStore: appStoreStub() }))

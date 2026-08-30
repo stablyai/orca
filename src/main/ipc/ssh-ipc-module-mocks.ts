@@ -177,8 +177,6 @@ export function createSshIpcMocks(): SshIpcMocks {
       }
     },
     sshPtyProvider: {
-      isSshPtyNotFoundError: (err: unknown) =>
-        (err instanceof Error ? err.message : String(err)).includes('not found'),
       SshPtyProvider: class MockSshPtyProvider {
         constructor(_targetId: unknown, _mux: unknown, _env: unknown, providerGeneration: number) {
           mockPtyProvider.providerGeneration = providerGeneration
@@ -202,8 +200,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       setPtyOwnership: vi.fn(),
       getSshPtyProvider: vi.fn(),
       getPtyIdsForConnection: vi.fn().mockReturnValue([]),
-      isCurrentPtyExit: vi.fn().mockReturnValue(true),
-      isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
+      isCurrentPtyExit: vi.fn().mockReturnValue(true)
     },
     sshFilesystemDispatch: {
       registerSshFilesystemProvider: vi.fn(),
