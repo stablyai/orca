@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -6,6 +6,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getManagedCommand, getRemoteManagedCommand } from '../claude/hook-settings'
 import { createManagedCommandMatcher } from './installer-utils'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
+
+function posixHookTestShell(): string | null {
+  if (process.platform !== 'win32') {
+    return '/bin/sh'
+  }
+  const gitBash = join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+  return existsSync(gitBash) ? gitBash : null
+}
 
 let tmpDir: string
 
@@ -61,22 +69,28 @@ describe('wrapRuntimeHomeHookCommand POSIX install', () => {
     expect(match(command)).toBe(true)
   })
 
-  it('runs the destination HOME POSIX script when the Windows branch is omitted', () => {
-    const destinationHome = join(tmpDir, 'destination profile')
-    const scriptDir = join(destinationHome, '.orca', 'agent-hooks')
-    mkdirSync(scriptDir, { recursive: true })
-    writeFileSync(join(scriptDir, 'claude-hook.sh'), '#!/bin/sh\nexit 7\n', 'utf-8')
-    chmodSync(join(scriptDir, 'claude-hook.sh'), 0o755)
+  // Why: native Windows has no /bin/sh; Git Bash is the same interpreter installer-utils uses.
+  it.skipIf(posixHookTestShell() === null)(
+    'runs the destination HOME POSIX script when the Windows branch is omitted',
+    () => {
+      const shell = posixHookTestShell()
+      expect(shell).not.toBeNull()
+      const destinationHome = join(tmpDir, 'destination profile')
+      const scriptDir = join(destinationHome, '.orca', 'agent-hooks')
+      mkdirSync(scriptDir, { recursive: true })
+      writeFileSync(join(scriptDir, 'claude-hook.sh'), '#!/bin/sh\nexit 7\n', 'utf-8')
+      chmodSync(join(scriptDir, 'claude-hook.sh'), 0o755)
 
-    const result = spawnSync(
-      '/bin/sh',
-      ['-c', wrapRuntimeHomeHookCommand('claude-hook', { includeWindowsBranch: false })],
-      {
-        env: { ...process.env, HOME: destinationHome }
-      }
-    )
+      const result = spawnSync(
+        shell!,
+        ['-c', wrapRuntimeHomeHookCommand('claude-hook', { includeWindowsBranch: false })],
+        {
+          env: { ...process.env, HOME: destinationHome.replaceAll('\\', '/') }
+        }
+      )
 
-    expect(result.error).toBeUndefined()
-    expect(result.status, result.stderr.toString()).toBe(7)
-  })
+      expect(result.error).toBeUndefined()
+      expect(result.status, result.stderr.toString()).toBe(7)
+    }
+  )
 })
