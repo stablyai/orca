@@ -180,9 +180,11 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         this.messageHandler?.(
           message,
           (response) => {
-            if (!this.stopped && !finalized && socket.readyState === socket.OPEN) {
-              socket.send(response)
+            if (this.stopped || finalized || socket.readyState !== socket.OPEN) {
+              return false
             }
+            socket.send(response)
+            return true
           },
           socket
         )

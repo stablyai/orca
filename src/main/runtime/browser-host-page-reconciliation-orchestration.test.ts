@@ -251,6 +251,54 @@ describe('browser host page reconciliation orchestration', () => {
     expect(leases.getPlacement('page-a')).toMatchObject({ pageHostGeneration: 9 })
   })
 
+  it('starts a fresh host generation after replay admission is refused', async () => {
+    const pageInventory = [oldPage('page-a')]
+    const { leases, identity, events, host, releaseDelivery } = setup(pageInventory)
+    leases.grantExecutionHost(identity, 'native:runtime-new:1')
+    const first = leases.adoptClientPages(identity, [reclaimIntent('page-a', 8)])
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    releaseDelivery()
+    host.disconnect()
+
+    const reconnect = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-b',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageInventory,
+      pageReconciliationProtocolVersion: 1,
+      leaseReconnectProtocolVersion: 1
+    })
+    const reconnectIdentity = leaseIdentity(reconnect.lease)
+    expect(() => leases.attachCommandDelivery(reconnectIdentity, () => false)).toThrow(
+      'browser_host_command_delivery_failed'
+    )
+    await expect(first).resolves.toEqual([])
+    reconnect.disconnect()
+
+    const fresh = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-c',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageInventory,
+      pageReconciliationProtocolVersion: 1,
+      leaseReconnectProtocolVersion: 1
+    })
+    expect(fresh.lease.browserHostGeneration).toBe(2)
+    const freshIdentity = leaseIdentity(fresh.lease)
+    leases.attachCommandDelivery(freshIdentity, (event) => events.push(event))
+    leases.grantExecutionHost(freshIdentity, 'native:runtime-new:1')
+    const recovered = leases.adoptClientPages(freshIdentity, [reclaimIntent('page-a', 9, 2)])
+    await vi.waitFor(() => expect(events).toHaveLength(2))
+    settle(leases, freshIdentity, events[1]!, { status: 'completed' }, 'connection-c')
+    await expect(recovered).resolves.toEqual(['page-a'])
+  })
+
   it('abandons an in-flight attempt when its connection enters reconnect grace', async () => {
     const pageInventory = [oldPage('page-a'), oldPage('page-b')]
     const { leases, identity, events, host, releaseDelivery } = setup(pageInventory)
@@ -404,13 +452,14 @@ function oldPage(browserPageId: string): BrowserClientHostedPageInventory {
 
 function reclaimIntent(
   browserPageId: string,
-  pageHostGeneration: number
+  pageHostGeneration: number,
+  browserHostGeneration = 1
 ): BrowserHostRuntimePageIntent {
   return {
     authorityRuntimeId,
     authorityEpoch,
     browserHostClientId: 'host-a',
-    browserHostGeneration: 1,
+    browserHostGeneration,
     browserPageId,
     pageHostGeneration,
     browserProfileId: 'default',

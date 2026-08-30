@@ -216,7 +216,13 @@ export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknow
     'code' in error &&
     typeof (error as { code: unknown }).code === 'string'
   ) {
-    return errorResponse(id, meta, (error as { code: string }).code, error.message)
+    return errorResponse(
+      id,
+      meta,
+      (error as { code: string }).code,
+      error.message,
+      (error as { data?: unknown }).data
+    )
   }
   return mapRuntimeError(id, meta, error)
 }

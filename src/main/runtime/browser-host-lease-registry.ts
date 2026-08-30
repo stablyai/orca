@@ -236,7 +236,7 @@ export class BrowserHostLeaseRegistry {
 
   attachCommandDelivery(
     identity: BrowserHostLeaseIdentity,
-    delivery: (event: BrowserClientHostCommandEvent) => void
+    delivery: (event: BrowserClientHostCommandEvent) => unknown
   ): () => void {
     const ledger = this.requireLeaseState(identity).commandLedger
     if (!ledger) {

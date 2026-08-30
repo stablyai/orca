@@ -75,6 +75,53 @@ describe('BrowserHostCommandLedger', () => {
     await expect(navigate.result).resolves.toEqual({ status: 'completed' })
   })
 
+  it('fences outstanding commands when replay is refused by the new transport', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority })
+    const first = ledger.attach(vi.fn())
+    const issued = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: {
+        type: 'createPage',
+        browserProfileId: 'profile-a',
+        executionHostKey: 'native:runtime-a:1'
+      }
+    })
+    first()
+
+    expect(() => ledger.attach(() => false)).toThrow('browser_host_command_delivery_failed')
+    await expect(issued.result).rejects.toThrow('browser_host_command_outcome_unknown')
+    expect(ledger.isClosed()).toBe(true)
+  })
+
+  it('distinguishes first-send transport refusal from an admitted command', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority })
+    ledger.attach(() => false)
+
+    expect(() =>
+      ledger.issue({
+        browserPageId: 'page-a',
+        pageHostGeneration: 1,
+        command: {
+          type: 'createPage',
+          browserProfileId: 'profile-a',
+          executionHostKey: 'native:runtime-a:1'
+        }
+      })
+    ).toThrow('browser_host_command_not_dispatched')
+    expect(() =>
+      ledger.issue({
+        browserPageId: 'page-b',
+        pageHostGeneration: 2,
+        command: {
+          type: 'createPage',
+          browserProfileId: 'profile-a',
+          executionHostKey: 'native:runtime-a:1'
+        }
+      })
+    ).toThrow('browser_host_command_delivery_required')
+  })
+
   it('publishes bounded per-page sequences and settles results in order', async () => {
     const emit = vi.fn()
     const ledger = new BrowserHostCommandLedger({

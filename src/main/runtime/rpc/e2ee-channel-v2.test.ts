@@ -257,4 +257,18 @@ describe('E2EEChannel v2', () => {
     )
     expect(ctx.ws.sent[3]!.options).toEqual({ binary: true })
   })
+
+  it('refuses a text reply after the v2 socket becomes unwritable', () => {
+    const ctx = setup()
+    const { schedule } = startV2(ctx)
+    authenticate(ctx, schedule)
+    let reply: ((response: string) => boolean) | undefined
+    ctx.channel.onMessage((_request, textReply) => {
+      reply = textReply
+    })
+    ctx.channel.handleRawMessage(clientText('{"method":"status.get"}', schedule, 1n))
+    ctx.ws.readyState = 3
+
+    expect(reply?.('late')).toBe(false)
+  })
 })

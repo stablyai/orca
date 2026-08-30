@@ -139,7 +139,7 @@ export function defineMethod<TSchema extends ZodType | null>(
 export type RpcStreamingHandler<TParams> = (
   params: TParams,
   ctx: RpcContext,
-  emit: (result: unknown) => void
+  emit: (result: unknown) => boolean | void
 ) => Promise<void>
 
 // Why: the `stream` flag lets the dispatcher route these to the emit-based path instead of the one-shot Promise path.
@@ -150,7 +150,7 @@ export type RpcStreamingMethod = {
   readonly handler: (
     params: unknown,
     ctx: RpcContext,
-    emit: (result: unknown) => void
+    emit: (result: unknown) => boolean | void
   ) => Promise<void>
 }
 

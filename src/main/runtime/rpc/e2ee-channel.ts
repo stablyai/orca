@@ -60,7 +60,7 @@ export class E2EEChannel {
   private messageHandler:
     | ((
         plaintext: string,
-        encryptedReply: (response: string) => void,
+        encryptedReply: (response: string) => boolean,
         encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => boolean | void
       ) => void)
     | null = null
@@ -88,7 +88,7 @@ export class E2EEChannel {
   onMessage(
     handler: (
       plaintext: string,
-      encryptedReply: (response: string) => void,
+      encryptedReply: (response: string) => boolean,
       encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => boolean | void
     ) => void
   ): void {
@@ -146,15 +146,15 @@ export class E2EEChannel {
     }
 
     // Why: streaming emits can outlive destroy(), so late replies must not encrypt with a cleared key.
-    const encryptedReply = (response: string) => {
+    const encryptedReply = (response: string): boolean => {
       if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
-        return
+        return false
       }
       if (!isMobileE2EETextPayloadWithinLimit(response)) {
         this.closeForOutboundBudget('size')
-        return
+        return false
       }
-      this.outbound.enqueueLegacyText(
+      return this.outbound.enqueueLegacyText(
         encrypt(response, this.sharedKey),
         () => Boolean(this.sharedKey),
         () => this.closeForOutboundBudget('queue')

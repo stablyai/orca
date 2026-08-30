@@ -287,6 +287,72 @@ describe('browser.clientHost.attach RPC', () => {
     await dispatch
   })
 
+  it('rejects a command that the streaming transport does not admit', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: BROWSER_CLIENT_HOST_METHODS
+    })
+    const replies: string[] = []
+    let transportOpen = true
+    const dispatch = dispatcher.dispatchStreaming(
+      request('host-a', 1),
+      (reply) => {
+        if (!transportOpen) {
+          return false
+        }
+        replies.push(reply)
+        return true
+      },
+      {
+        connectionId: 'connection-a',
+        clientKind: 'runtime',
+        pairedDeviceId: 'device-a',
+        clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+      }
+    )
+    await vi.waitFor(() => expect(replies).toHaveLength(1))
+    const registry = getBrowserHostLeaseRegistry(hostRuntime)
+    const lease = registry.select('host-a')
+    const placement = registry.placeClientPage('page-a', 'host-a')
+    if (placement.kind !== 'client') {
+      throw new Error('expected client placement')
+    }
+    registry.grantExecutionHost(
+      {
+        authorityEpoch: lease.authorityEpoch,
+        browserHostClientId: lease.browserHostClientId,
+        browserHostGeneration: lease.browserHostGeneration,
+        pairedDeviceId: lease.pairedDeviceId
+      },
+      'host-key-a'
+    )
+    transportOpen = false
+
+    expect(() =>
+      registry.issueClientPageCommand(
+        {
+          authorityRuntimeId: lease.authorityRuntimeId,
+          authorityEpoch: lease.authorityEpoch,
+          browserPageId: 'page-a',
+          browserHostClientId: lease.browserHostClientId,
+          browserHostGeneration: lease.browserHostGeneration,
+          pageHostGeneration: placement.pageHostGeneration
+        },
+        {
+          type: 'createPage',
+          browserProfileId: 'default',
+          executionHostKey: 'host-key-a'
+        }
+      )
+    ).toThrow('browser_host_command_not_dispatched')
+    expect(replies).toHaveLength(1)
+
+    cleanups.get('browser-client-host:host-a')?.()
+    await dispatch
+  })
+
   it('publishes ready before replaying an unsettled command on exact reattach', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)

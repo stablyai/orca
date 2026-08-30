@@ -137,9 +137,12 @@ describe('CloudRelayTransport', () => {
         createSocket: () => fakeSocket as unknown as WebSocketClient,
         onConnectionClosed
       })
-      let reply: ((response: string) => void) | null = null
+      let reply: ((response: string) => unknown) | null = null
       const onMessage = vi.fn(
-        (_message: string | Uint8Array<ArrayBufferLike>, respond: (response: string) => void) => {
+        (
+          _message: string | Uint8Array<ArrayBufferLike>,
+          respond: (response: string) => unknown
+        ) => {
           reply = respond
         }
       )
@@ -183,7 +186,7 @@ describe('CloudRelayTransport', () => {
       expect(onLateMessage).not.toHaveBeenCalled()
       expect(reply).not.toBeNull()
       await transport.start()
-      reply!('late-reply')
+      expect(reply!('late-reply')).toBe(false)
       expect(fakeSocket.send).not.toHaveBeenCalled()
       expect(() => emit('error', new Error('late socket failure'))).not.toThrow()
       emit('close')

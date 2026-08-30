@@ -22,7 +22,7 @@ export type MobileSocketTransport = {
   onMessage(
     handler: (
       message: MobileSocketPayload,
-      reply: (response: string) => void,
+      reply: (response: string) => unknown,
       ws: WebSocket
     ) => void
   ): void
@@ -47,7 +47,7 @@ type MobileSocketWiringOptions = {
   onText: (
     socket: AuthenticatedMobileSocket,
     plaintext: string,
-    reply: (response: string) => void,
+    reply: (response: string) => boolean,
     sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void
   ) => void
   onBinary: (socket: AuthenticatedMobileSocket, bytes: Uint8Array<ArrayBufferLike>) => void

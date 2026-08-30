@@ -9,7 +9,8 @@
 export class BrowserError extends Error {
   constructor(
     readonly code: string,
-    message: string
+    message: string,
+    readonly data?: unknown
   ) {
     super(message)
   }

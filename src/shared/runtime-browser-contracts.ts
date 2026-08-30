@@ -55,6 +55,8 @@ export type BrowserTabInfo = {
   url: string
   title: string
   active: boolean
+  // Absent means an older host did not publish placement diagnostics.
+  clientHosted?: boolean
   loadError?: BrowserLoadError | null
   certificateFailure?: BrowserCertificateFailure | null
   worktreeId?: string | null
@@ -63,7 +65,11 @@ export type BrowserTabInfo = {
 }
 
 export type BrowserTabListResult = { tabs: BrowserTabInfo[] }
-export type BrowserTabSwitchResult = { switched: number; browserPageId: string }
+export type BrowserTabSwitchResult = {
+  switched: number
+  browserPageId: string
+  clientHosted?: boolean
+}
 
 export type BrowserTabSetProfileResult = {
   browserPageId: string
@@ -180,6 +186,8 @@ export type BrowserTabCreateResult = { browserPageId: string }
 export type BrowserErrorCode =
   | typeof BROWSER_UNAVAILABLE_ERROR_CODE
   | 'browser_command_unavailable'
+  | 'browser_host_unavailable'
+  | 'browser_command_outcome_unknown'
   | 'browser_profile_unavailable'
   | 'browser_screencast_unavailable'
   | 'browser_certificate_trust_unavailable'

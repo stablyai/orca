@@ -3,6 +3,7 @@ import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult
 } from '../../shared/browser-client-host-protocol'
+import type { BrowserError } from '../browser/browser-error'
 import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
 import { routeRuntimeBrowserClientAutomation } from './runtime-browser-client-automation'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
@@ -99,6 +100,135 @@ describe('runtime browser client automation routing', () => {
     failed.settle({ status: 'failed', errorCode: 'browser_client_page_automation_failed' })
     await expect(routing).rejects.toThrow('browser_client_page_automation_failed')
   })
+
+  it('returns actionable recovery when the host disconnects before dispatch', async () => {
+    const fixture = await createFixture()
+    fixture.disconnect()
+
+    await expect(
+      routeRuntimeBrowserClientAutomation({
+        method: 'browser.click',
+        params: { page: 'page-a', x: 10 },
+        pages: fixture.pages,
+        leases: fixture.leases,
+        resolveWorkspace: fixture.resolveWorkspace
+      })
+    ).rejects.toMatchObject({
+      code: 'browser_host_unavailable',
+      data: {
+        retryable: true,
+        browserPageId: 'page-a',
+        worktreeId: 'workspace-a',
+        lastKnownUrl: 'https://example.test/',
+        nextSteps: expect.arrayContaining([
+          expect.stringContaining('Reconnect'),
+          expect.stringContaining('server-hosted')
+        ])
+      }
+    } satisfies Partial<BrowserError>)
+    expect(fixture.command).toBeUndefined()
+    expect(fixture.pages.listPages()).toHaveLength(1)
+  })
+
+  it('allows a retry when the transport refuses the command before dispatch', async () => {
+    const fixture = await createFixture()
+    fixture.rejectDelivery()
+
+    await expect(
+      routeRuntimeBrowserClientAutomation({
+        method: 'browser.click',
+        params: { page: 'page-a', x: 10 },
+        pages: fixture.pages,
+        leases: fixture.leases,
+        resolveWorkspace: fixture.resolveWorkspace
+      })
+    ).rejects.toMatchObject({
+      code: 'browser_host_unavailable',
+      data: { retryable: true, browserPageId: 'page-a' }
+    } satisfies Partial<BrowserError>)
+    expect(fixture.command).toBeUndefined()
+  })
+
+  it('preserves the ledger for a reconnect after transport refusal', async () => {
+    const fixture = await createFixture()
+    fixture.rejectDelivery()
+    await expect(
+      routeRuntimeBrowserClientAutomation({
+        method: 'browser.click',
+        params: { page: 'page-a', x: 10 },
+        pages: fixture.pages,
+        leases: fixture.leases,
+        resolveWorkspace: fixture.resolveWorkspace
+      })
+    ).rejects.toMatchObject({ code: 'browser_host_unavailable' })
+
+    fixture.reconnect()
+    const routing = routeRuntimeBrowserClientAutomation({
+      method: 'browser.click',
+      params: { page: 'page-a', x: 10 },
+      pages: fixture.pages,
+      leases: fixture.leases,
+      resolveWorkspace: fixture.resolveWorkspace
+    })
+    await fixture.waitForCommand()
+    fixture.settle({ status: 'completed', value: { clicked: true } })
+    await expect(routing).resolves.toEqual({ handled: true, result: { clicked: true } })
+  })
+
+  it('routes a safe retry after the same desktop reconnects', async () => {
+    const fixture = await createFixture()
+    fixture.disconnect()
+    await expect(
+      routeRuntimeBrowserClientAutomation({
+        method: 'browser.click',
+        params: { page: 'page-a', x: 10 },
+        pages: fixture.pages,
+        leases: fixture.leases,
+        resolveWorkspace: fixture.resolveWorkspace
+      })
+    ).rejects.toMatchObject({ code: 'browser_host_unavailable' })
+
+    fixture.reconnect()
+    const routing = routeRuntimeBrowserClientAutomation({
+      method: 'browser.click',
+      params: { page: 'page-a', x: 10 },
+      pages: fixture.pages,
+      leases: fixture.leases,
+      resolveWorkspace: fixture.resolveWorkspace
+    })
+    await fixture.waitForCommand()
+    fixture.settle({ status: 'completed', value: { clicked: true } })
+
+    await expect(routing).resolves.toEqual({ handled: true, result: { clicked: true } })
+  })
+
+  it('does not recommend a blind retry when the host is lost after dispatch', async () => {
+    const fixture = await createFixture()
+    const routing = routeRuntimeBrowserClientAutomation({
+      method: 'browser.click',
+      params: { page: 'page-a', x: 10 },
+      pages: fixture.pages,
+      leases: fixture.leases,
+      resolveWorkspace: fixture.resolveWorkspace
+    })
+
+    await expect(fixture.waitForCommand()).resolves.toMatchObject({
+      command: { type: 'automation', method: 'browser.click' }
+    })
+    fixture.releaseHost()
+
+    await expect(routing).rejects.toMatchObject({
+      code: 'browser_command_outcome_unknown',
+      data: {
+        retryable: false,
+        browserPageId: 'page-a',
+        nextSteps: expect.arrayContaining([
+          expect.stringContaining('Inspect'),
+          expect.stringContaining('confirming')
+        ])
+      }
+    } satisfies Partial<BrowserError>)
+  })
 })
 
 async function createFixture(options: { automation?: boolean } = {}) {
@@ -106,7 +236,7 @@ async function createFixture(options: { automation?: boolean } = {}) {
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-a'
   })
-  const lease = leases.attach({
+  let host = leases.attach({
     browserHostClientId: 'host-a',
     connectionId: 'connection-a',
     pairedDeviceId: 'device-a',
@@ -114,23 +244,14 @@ async function createFixture(options: { automation?: boolean } = {}) {
     pageCommandProtocolVersion: 1,
     pageInventoryProtocolVersion: 1,
     pageInventory: [],
-    pageReconciliationProtocolVersion: 1
-  }).lease
+    pageReconciliationProtocolVersion: 1,
+    leaseReconnectProtocolVersion: 1
+  })
+  let lease = host.lease
   let command: BrowserClientHostCommandEvent | undefined
   let commandWaiter: ((event: BrowserClientHostCommandEvent) => void) | undefined
-  leases.attachCommandDelivery(
-    {
-      authorityEpoch: lease.authorityEpoch,
-      browserHostClientId: lease.browserHostClientId,
-      browserHostGeneration: lease.browserHostGeneration,
-      pairedDeviceId: lease.pairedDeviceId
-    },
-    (event) => {
-      command = event
-      commandWaiter?.(event)
-      commandWaiter = undefined
-    }
-  )
+  let deliveryAccepted = true
+  let detachDelivery = attachDelivery()
   const creation = leases.createClientPage({
     browserPageId: 'page-a',
     browserHostClientId: 'host-a',
@@ -156,6 +277,25 @@ async function createFixture(options: { automation?: boolean } = {}) {
     active: true
   })
   const resolveWorkspace = vi.fn(async () => ({ id: 'workspace-a' }))
+  function attachDelivery() {
+    return leases.attachCommandDelivery(
+      {
+        authorityEpoch: lease.authorityEpoch,
+        browserHostClientId: lease.browserHostClientId,
+        browserHostGeneration: lease.browserHostGeneration,
+        pairedDeviceId: lease.pairedDeviceId
+      },
+      (event) => {
+        if (!deliveryAccepted) {
+          return false
+        }
+        command = event
+        commandWaiter?.(event)
+        commandWaiter = undefined
+        return true
+      }
+    )
+  }
   function settleCommand(
     event: BrowserClientHostCommandEvent,
     result: BrowserClientHostCommandResult
@@ -205,6 +345,48 @@ async function createFixture(options: { automation?: boolean } = {}) {
         throw new Error('expected browser client command')
       }
       settleCommand(command, result)
+    },
+    rejectDelivery() {
+      deliveryAccepted = false
+      command = undefined
+    },
+    disconnect() {
+      detachDelivery()
+      host.disconnect()
+      command = undefined
+    },
+    reconnect() {
+      deliveryAccepted = true
+      host = leases.attach({
+        browserHostClientId: 'host-a',
+        connectionId: 'connection-b',
+        pairedDeviceId: 'device-a',
+        hostCapabilities: options.automation === false ? ['webview'] : ['webview', 'automation-v1'],
+        pageCommandProtocolVersion: 1,
+        pageInventoryProtocolVersion: 1,
+        pageInventory: [
+          {
+            authorityRuntimeId: lease.authorityRuntimeId,
+            authorityEpoch: lease.authorityEpoch,
+            browserHostClientId: lease.browserHostClientId,
+            browserHostGeneration: lease.browserHostGeneration,
+            browserPageId: 'page-a',
+            pageHostGeneration: placement.pageHostGeneration,
+            browserProfileId: 'default',
+            executionHostKey: 'native:runtime-a:7',
+            state: 'active',
+            currentUrl: 'https://example.test/',
+            workspaceId: 'workspace-a'
+          }
+        ],
+        pageReconciliationProtocolVersion: 1,
+        leaseReconnectProtocolVersion: 1
+      })
+      lease = host.lease
+      detachDelivery = attachDelivery()
+    },
+    releaseHost() {
+      host.release()
     }
   }
 }

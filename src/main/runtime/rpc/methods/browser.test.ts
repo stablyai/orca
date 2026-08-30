@@ -12,12 +12,43 @@ import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
 import { ClipboardWrite, Fill, KeyboardInsert, ProfileCreate, Type } from './browser-schemas'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('browser RPC methods', () => {
+  it('publishes optional hosting diagnostics without requiring client-host negotiation', async () => {
+    const result = {
+      tabs: [
+        {
+          browserPageId: 'page-client',
+          index: 0,
+          url: 'https://example.test/',
+          title: 'Example',
+          active: true,
+          clientHosted: true
+        }
+      ]
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserTabList: vi.fn().mockResolvedValue(result)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+
+    const incapable = await dispatcher.dispatch(makeRequest('browser.tabList', {}), {
+      clientCapabilities: []
+    })
+    const capable = await dispatcher.dispatch(makeRequest('browser.tabList', {}), {
+      clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+    })
+
+    expect(incapable).toMatchObject({ ok: true, result })
+    expect(capable).toMatchObject({ ok: true, result })
+  })
+
   it('passes authenticated caller identity to client page creation outside the payload', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

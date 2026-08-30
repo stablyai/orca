@@ -8,10 +8,10 @@ export function createDispatcherStreamingFeatureEmitter(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
   meta: RpcEnvelopeMeta,
-  reply: (response: string) => void
+  reply: (response: string) => unknown
 ) {
   const recordedFeatureInteractions = new Set<FeatureInteractionId>()
-  const emit = (result: unknown): void => {
+  const emit = (result: unknown): boolean => {
     recordRuntimeFeatureInteraction(
       runtime,
       request.method,
@@ -21,7 +21,7 @@ export function createDispatcherStreamingFeatureEmitter(
     )
     const response = successResponse(request.id, meta, result)
     response.streaming = true
-    reply(JSON.stringify(response))
+    return reply(JSON.stringify(response)) !== false
   }
   return { emit, recordedFeatureInteractions }
 }

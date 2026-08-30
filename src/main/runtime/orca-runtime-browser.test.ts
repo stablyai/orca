@@ -521,6 +521,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-target')
     expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
     expect(result.tab.browserPageId).toBe('page-target')
+    expect(result.tab.clientHosted).toBe(false)
   })
 
   it('wakes the requested page before showing page-scoped profile metadata', async () => {

@@ -163,7 +163,7 @@ export class RpcDispatcher {
   // other subscription-style methods that push data over time.
   async dispatchStreaming(
     request: RpcRequest,
-    reply: (response: string) => void,
+    reply: (response: string) => unknown,
     options?: RpcDispatchStreamingOptions
   ): Promise<void> {
     const meta = this.meta()

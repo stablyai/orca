@@ -115,6 +115,18 @@ describe('BrowserHostCommandLedger capacity and snapshots', () => {
     await issued.result
   })
 
+  it('releases fresh page capacity when first delivery is refused', () => {
+    let accept = false
+    const ledger = new BrowserHostCommandLedger({ authority, maxPages: 1 })
+    ledger.attach(() => accept)
+
+    expect(() => issueCreate(ledger, 'page-a', 1)).toThrow('browser_host_command_not_dispatched')
+    accept = true
+    ledger.attach(() => true)
+    const issued = issueCreate(ledger, 'page-b', 2)
+    ledger.settle(resultParams(issued.event, { status: 'completed' }))
+  })
+
   it('releases completed close capacity while retaining exact result replay', async () => {
     const ledger = new BrowserHostCommandLedger({ authority, maxPages: 1 })
     ledger.attach(vi.fn())

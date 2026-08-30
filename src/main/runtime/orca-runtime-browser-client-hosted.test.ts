@@ -472,16 +472,21 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
           url: 'https://client.test/',
           title: 'Client page',
           active: true,
+          clientHosted: true,
           worktreeId: 'folder:folder-1'
         }
       ]
     })
     await expect(
       commands.browserTabShow({ worktree: 'id:folder:folder-1', page: 'page-client' })
-    ).resolves.toMatchObject({ tab: { browserPageId: 'page-client' } })
+    ).resolves.toMatchObject({
+      tab: { browserPageId: 'page-client', clientHosted: true }
+    })
     await expect(
       commands.browserTabCurrent({ worktree: 'id:folder:folder-1' })
-    ).resolves.toMatchObject({ tab: { browserPageId: 'page-client' } })
+    ).resolves.toMatchObject({
+      tab: { browserPageId: 'page-client', clientHosted: true }
+    })
   })
 
   it('switches logical client pages without invoking the server bridge', async () => {
@@ -501,7 +506,7 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
 
     await expect(
       commands.browserTabSwitch({ worktree: 'id:wt-1', page: 'page-b' })
-    ).resolves.toEqual({ switched: 1, browserPageId: 'page-b' })
+    ).resolves.toEqual({ switched: 1, browserPageId: 'page-b', clientHosted: true })
     expect(registry.getPage('page-a')?.active).toBe(false)
     expect(registry.getPage('page-b')?.active).toBe(true)
     expect(notify).toHaveBeenCalledWith('wt-1')
@@ -562,7 +567,8 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
     )
 
     await expect(commands.browserTabSwitch({ page: 'page-server' })).resolves.toMatchObject({
-      browserPageId: 'page-server'
+      browserPageId: 'page-server',
+      clientHosted: false
     })
     expect(registry.listPages().every((page) => !page.active)).toBe(true)
     expect(registry.listPages('wt-1')[0]?.active).toBe(true)

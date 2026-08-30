@@ -367,14 +367,15 @@ Browser rules:
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
 - Less common workflows can use typed commands above or `orca exec --command "<agent-browser command>"` passthrough.
 - If `fill` or `type` fails on a custom input, try `orca focus --element @e1 --json` then `orca inserttext --text "text" --json`.
-- Client-hosted pages have interactive-session affinity: the page renders in the paired desktop's own browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` when it is closed, asleep, or disconnected. Server-hosted pages keep running with no desktop attached, so prefer server placement for long-running or unattended browser automation.
+- Browser commands are placement-transparent when they succeed. In JSON tab results, optional `clientHosted` is diagnostic only; if it is absent, placement is unknown because the host may be older.
 
 Common recoveries:
 
 - `browser_no_tab`: open a tab with `orca tab create --url <url> --json`.
 - `browser_stale_ref`: run `orca snapshot --json` and retry with fresh refs.
 - `browser_tab_not_found`: run `orca tab list --json` before switching or closing.
-- `browser_host_unavailable`: the desktop hosting that page is offline. Bring it back, or create the page for server placement when the work must survive without an interactive session.
+- `browser_host_unavailable`: the command was not dispatched. Reconnect the hosting desktop and retry, or use `lastKnownUrl` with `orca tab create --url <url> --json` to explicitly create a separate server-hosted page. The new page does not preserve signed-in or transient state.
+- `browser_command_outcome_unknown`: the command was dispatched before the desktop disconnected and may have completed. Reconnect, inspect the page, and retry only after confirming it did not take effect.
 
 ## Next Action
 

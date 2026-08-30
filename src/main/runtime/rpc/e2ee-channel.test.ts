@@ -428,7 +428,7 @@ describe('E2EEChannel', () => {
       const sharedKey = doHandshake(ctx)
       const sentBefore = ctx.ws.sent.length
 
-      let capturedReply: ((response: string) => void) | null = null
+      let capturedReply: ((response: string) => boolean) | null = null
       ctx.channel.onMessage((_plaintext, encryptedReply) => {
         capturedReply = encryptedReply
       })
@@ -438,8 +438,8 @@ describe('E2EEChannel', () => {
 
       ctx.channel.destroy()
 
-      const callLateEmit = () => capturedReply?.('late streaming frame')
-      expect(callLateEmit).not.toThrow()
+      const replyAfterDestroy = capturedReply as ((response: string) => boolean) | null
+      expect(replyAfterDestroy?.('late streaming frame')).toBe(false)
       expect(ctx.ws.sent.length).toBe(sentBefore)
     })
   })

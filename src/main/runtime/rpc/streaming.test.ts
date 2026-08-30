@@ -21,6 +21,30 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('RpcDispatcher streaming', () => {
+  it('reports whether the transport admitted an emitted frame', async () => {
+    const admissions: boolean[] = []
+    const dispatcher = new RpcDispatcher({
+      runtime: stubRuntime(),
+      methods: [
+        defineStreamingMethod({
+          name: 'test.admission',
+          params: null,
+          handler: async (_params, _ctx, emit) => {
+            admissions.push(emit({ sequence: 1 }) !== false, emit({ sequence: 2 }) !== false)
+          }
+        })
+      ]
+    })
+    let replies = 0
+
+    await dispatcher.dispatchStreaming(makeRequest('test.admission'), () => {
+      replies += 1
+      return replies === 1
+    })
+
+    expect(admissions).toEqual([true, false])
+  })
+
   it('passes pairing authority to streaming handlers', async () => {
     const pairing = {
       getEndpoints: vi.fn(),

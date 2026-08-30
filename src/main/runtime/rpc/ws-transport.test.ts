@@ -48,7 +48,7 @@ describe('WebSocketTransport', () => {
   })
 
   async function createTransport(
-    handler?: (msg: string, reply: (response: string) => void) => void,
+    handler?: (msg: string, reply: (response: string) => boolean) => void,
     options: { preAuthTimeoutMs?: number } = {}
   ) {
     const tls = makeTls()
@@ -93,6 +93,22 @@ describe('WebSocketTransport', () => {
 
     await transport.start()
     await transport.stop()
+  })
+
+  it('refuses a reply after the socket closes', async () => {
+    let reply: ((response: string) => boolean) | undefined
+    const { transport } = await createTransport((_message, candidate) => {
+      reply = candidate
+    })
+    await transport.start()
+    const ws = await connectWs(transport)
+    ws.send('capture-reply')
+    await vi.waitFor(() => expect(reply).toBeDefined())
+    const closed = new Promise<void>((resolve) => ws.once('close', () => resolve()))
+    ws.close()
+    await closed
+
+    expect(reply?.('late')).toBe(false)
   })
 
   it('arms heartbeat only while accepted connections exist', async () => {

@@ -57,6 +57,12 @@ export class BrowserHostLeaseReconnectController {
     ) {
       return undefined
     }
+    // A replay refusal fences the ledger because command outcomes are no longer recoverable.
+    // Keep that closed ledger attached to the old generation so attach() creates a fresh
+    // generation and inventory recovery can safely bootstrap surviving pages.
+    if (state.commandLedger?.isClosed()) {
+      return undefined
+    }
     if (state.status === 'active') {
       for (const route of state.routes) {
         this.options.fenceRoute(route, 'lease_released')

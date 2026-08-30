@@ -3,12 +3,14 @@ import type { BrowserHostCommandPageState } from './browser-host-command-state'
 
 export function replayOutstandingBrowserHostCommands(
   pages: Iterable<BrowserHostCommandPageState>,
-  delivery: (event: BrowserClientHostCommandEvent) => void
+  delivery: (event: BrowserClientHostCommandEvent) => unknown
 ): void {
   for (const page of pages) {
     for (const record of page.records.values()) {
       if (!record.settled) {
-        delivery(record.event)
+        if (delivery(record.event) === false) {
+          throw new Error('browser_host_command_replay_not_admitted')
+        }
       }
     }
   }

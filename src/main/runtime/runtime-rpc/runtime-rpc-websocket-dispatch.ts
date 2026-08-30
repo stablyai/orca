@@ -30,7 +30,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
   // Why: WebSocket dispatch is streaming (multiple responses) and auths via per-device tokens, not the shared token.
   protected async handleWebSocketMessage(
     rawMessage: string,
-    reply: (response: string) => void,
+    reply: (response: string) => unknown,
     sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void,
     wsTransport?: WebSocketTransport,
     ws?: WebSocket,
@@ -103,7 +103,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
     // Why: older pairings may lack scope metadata, so stamp the authenticated scope onto status.get.
     const replyForRequest =
       request.method === 'status.get'
-        ? (response: string): void => reply(injectDeviceScope(response, device.scope))
+        ? (response: string): boolean => reply(injectDeviceScope(response, device.scope)) !== false
         : reply
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined

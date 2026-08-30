@@ -16,7 +16,7 @@ type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
 type WebSocketMessageHandler = {
   bivarianceHack(
     msg: WebSocketMessagePayload,
-    reply: (response: string) => void,
+    reply: (response: string) => boolean,
     ws: WebSocket
   ): void
 }['bivarianceHack']
@@ -268,9 +268,11 @@ export class WebSocketTransport implements RpcTransport {
         msg,
         (response) => {
           // Why: mobile clients disconnect often; guard the write so we don't throw on a dead socket.
-          if (ws.readyState === ws.OPEN) {
-            ws.send(response)
+          if (ws.readyState !== ws.OPEN) {
+            return false
           }
+          ws.send(response)
+          return true
         },
         ws
       )

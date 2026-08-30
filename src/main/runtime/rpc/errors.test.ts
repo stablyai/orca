@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mapRuntimeError } from './errors'
+import { mapBrowserError, mapRuntimeError } from './errors'
+import { BrowserError } from '../../browser/browser-error'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
   ARTIFACT_SHARING_DISABLED_MESSAGE,
@@ -211,6 +212,31 @@ describe('mapRuntimeError', () => {
         message: 'Parent selector was not found.',
         data: {
           nextSteps: ['Run `orca worktree list`.', 'Retry with --no-parent.']
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  })
+})
+
+describe('mapBrowserError', () => {
+  it('preserves structured browser recovery data across RPC', () => {
+    const error = new BrowserError('browser_host_unavailable', 'Reconnect the desktop.', {
+      retryable: true,
+      browserPageId: 'page-a',
+      nextSteps: ['Reconnect, then retry.']
+    })
+
+    expect(mapBrowserError('req_1', { runtimeId: 'runtime-1' }, error)).toEqual({
+      id: 'req_1',
+      ok: false,
+      error: {
+        code: 'browser_host_unavailable',
+        message: 'Reconnect the desktop.',
+        data: {
+          retryable: true,
+          browserPageId: 'page-a',
+          nextSteps: ['Reconnect, then retry.']
         }
       },
       _meta: { runtimeId: 'runtime-1' }

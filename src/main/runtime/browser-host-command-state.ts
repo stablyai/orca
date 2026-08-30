@@ -46,6 +46,19 @@ export type BrowserHostCommandPageState = {
   activeCapacityReleased: boolean
 }
 
+export function createBrowserHostCommandPageState(generation: number): BrowserHostCommandPageState {
+  return {
+    generation,
+    nextIssueSequence: 1,
+    nextSettlementSequence: 1,
+    records: new Map(),
+    outstanding: 0,
+    settledSequences: [],
+    terminalCommandIssued: false,
+    activeCapacityReleased: false
+  }
+}
+
 export function assertBrowserHostCommandOrder(
   page: BrowserHostCommandPageState,
   command: BrowserClientHostCommandEvent['command'],
