@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const parseAgentSessionFileCached = vi.hoisted(() => vi.fn())
+const resolveSessionFilePath = vi.hoisted(() => vi.fn())
 
 vi.mock('./session-scanner-parse-cache', () => ({ parseAgentSessionFileCached }))
+vi.mock('../native-chat/session-file-resolver', () => ({ resolveSessionFilePath }))
 
 const { readAiVaultSessionTitlesFromFiles } = await import('./session-title-file-reader')
 const { resolveHostReadableAiVaultTitleRequests } = await import('./session-title-request-paths')
@@ -14,6 +16,7 @@ let temporaryRoots: string[] = []
 
 beforeEach(() => {
   parseAgentSessionFileCached.mockReset()
+  resolveSessionFilePath.mockReset()
 })
 
 afterEach(async () => {
@@ -91,6 +94,26 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     ).resolves.toEqual({ titles: [cached] })
     expect(parseAgentSessionFileCached).not.toHaveBeenCalled()
     expect(cache.set).not.toHaveBeenCalled()
+  })
+
+  it('discovers the exact provider transcript when the title index is cold', async () => {
+    const path = await transcriptPath()
+    resolveSessionFilePath.mockResolvedValue(path)
+    parseAgentSessionFileCached.mockResolvedValue({
+      agent: 'codex',
+      sessionId: 'session-1',
+      title: 'Cold title'
+    })
+    const cache = { get: vi.fn(() => null), set: vi.fn() }
+
+    await expect(
+      readAiVaultSessionTitlesFromFiles([{ agent: 'codex', sessionId: 'session-1' }], {
+        cache
+      })
+    ).resolves.toEqual({
+      titles: [{ agent: 'codex', sessionId: 'session-1', title: 'Cold title' }]
+    })
+    expect(resolveSessionFilePath).toHaveBeenCalledWith('codex', 'session-1', {}, undefined)
   })
 
   it('caps exact transcript reads at 64 identities', async () => {

@@ -2574,7 +2574,10 @@ void app.whenReady().then(async () => {
     for (const worktreeId of collectChangedProviderSessionWorktrees(ownedIdentities)) {
       // Why not `notifyMobileSessionTabsChanged` alone: it re-emits at the unchanged
       // `snapshotVersion`, which every client drops on its monotonic gate.
-      runtime?.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
+      runtime?.touchMobileSessionTabsForWorktree(worktreeId, {
+        immediate: true,
+        refreshStructuredProviderSessions: true
+      })
     }
   }
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {

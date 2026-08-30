@@ -5,6 +5,7 @@ import {
   applyGeneratedTabTitleUpdates,
   applyTerminalTabTitleUpdates
 } from '../slices/terminal-tab-title-batch'
+import { applyAgentSessionAiVaultTitle } from '../slices/agent-session-tab-ai-vault-title'
 import {
   adoptTerminalTabOwnerMetadataOnlyBuckets,
   getTerminalTabOwnerWorktreeId
@@ -52,7 +53,16 @@ export function createTerminalTabPresentationActions(
       set((s) => {
         const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
         if (!ownerWorktreeId) {
-          return s
+          const unifiedTabsByWorktree = applyAgentSessionAiVaultTitle(
+            s.unifiedTabsByWorktree,
+            tabId,
+            aiVaultTitle
+          )
+          if (!unifiedTabsByWorktree) {
+            return s
+          }
+          scheduleRuntimeGraphSync()
+          return { unifiedTabsByWorktree }
         }
         const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
         const current = tabs.find((tab) => tab.id === tabId)

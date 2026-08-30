@@ -167,6 +167,51 @@ describe('client-hosted row while a real tab is activated', () => {
   )
 })
 
+describe('structured agent-session titles', () => {
+  it('renders the title resolved by the existing unified-tab pipeline', () => {
+    const item: TabBarItem = {
+      type: 'agent-session',
+      id: 'structured-session-1',
+      unifiedTabId: 'structured-session-1',
+      isPinned: false,
+      data: {
+        id: 'structured-session-1',
+        entityId: 'structured-session-1',
+        groupId: 'group-1',
+        worktreeId: 'wt-1',
+        contentType: 'agent-session',
+        label: 'Codex Chat',
+        aiVaultTitle: {
+          agent: 'codex',
+          sessionId: 'provider-session-1',
+          title: 'Rewrite the parser'
+        },
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 0,
+        agentSessionAgent: 'codex'
+      }
+    }
+    const [rendered] = renderTabBarItems({
+      items: [item],
+      props: {
+        ...makeProps('agent-session'),
+        activeTabId: item.id
+      },
+      runtime: RUNTIME,
+      dropIndicatorByVisibleId: new Map(),
+      includeTopTabBorder: true,
+      activeClientHostedBrowserRowId: null,
+      togglePinned: () => {}
+    })
+
+    expect((rendered as React.ReactElement<{ tab: { title: string } }>).props.tab.title).toBe(
+      'Rewrite the parser'
+    )
+  })
+})
+
 /**
  * The fixtures above cannot cover a row kind that does not exist yet, and a new one wired straight
  * to its own active-tab selector is exactly how this regressed the first time.

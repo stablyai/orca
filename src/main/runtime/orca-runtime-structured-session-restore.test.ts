@@ -124,6 +124,7 @@ describe('structured session cold restoration', () => {
     internal.refreshMobileSessionPtyRecords = async () => new Set()
     internal.ensureStructuredAgentSessionHost = async () => undefined
     setStructuredAgentSessionHost({
+      deps: { store: { getRecord: () => null } },
       reconcileRestartLeases: async () => undefined,
       restoreReadableSessions: async () => undefined,
       listSessionTabs: () => [

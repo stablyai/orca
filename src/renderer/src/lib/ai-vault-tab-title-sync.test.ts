@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSessionTitlesResult } from '../../../shared/ai-vault-session-title'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Tab } from '../../../shared/tab-types'
 import {
   collectAiVaultTitleRequests,
   type AiVaultTitleRequest
@@ -81,6 +82,7 @@ function makeState(args: {
         }
       : {},
     tabsByWorktree: { [args.worktreeId]: [tab] },
+    unifiedTabsByWorktree: {},
     terminalLayoutsByTabId: {
       'tab-1': {
         root: { type: 'leaf', leafId: 'leaf-1' },
@@ -214,6 +216,42 @@ describe('AI Vault tab title sync', () => {
         worktreeId: 'folder:folder-1'
       })
     ])
+  })
+
+  it('uses the structured tab publishing host when the worktree is also active elsewhere', () => {
+    const store = makeState({
+      executionHostId: 'ssh:dev-box',
+      worktreeId: 'worktree-1',
+      path: '/workspace/albacore'
+    })
+    const structuredTab: Tab = {
+      id: 'structured-agent-session-1',
+      entityId: 'session-1',
+      groupId: 'group-1',
+      worktreeId: 'worktree-1',
+      executionHostId: 'runtime:server-1',
+      contentType: 'agent-session',
+      label: 'Codex Chat',
+      agentSessionAgent: 'codex',
+      agentSessionProviderSessionId: 'structured-provider-1',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    const state = {
+      ...store.getState(),
+      unifiedTabsByWorktree: { 'worktree-1': [structuredTab] }
+    }
+
+    expect(
+      collectAiVaultTitleRequests(state).find((request) => request.tabId === structuredTab.id)
+    ).toEqual(
+      expect.objectContaining({
+        executionHostId: 'runtime:server-1',
+        providerSession: { key: 'session_id', id: 'structured-provider-1' }
+      })
+    )
   })
 
   it('retains a recovered sleeping title after its lifecycle record disappears', async () => {

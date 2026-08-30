@@ -3,7 +3,10 @@ import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
-import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
+import {
+  collectAiVaultTitleRequests,
+  structuredAgentSessionTitleTabs
+} from './ai-vault-tab-title-requests'
 
 function providerSessionEqual(
   left: AgentProviderSessionMetadata | undefined,
@@ -130,6 +133,25 @@ function terminalTabsEqual(current: AppState, previous: AppState): boolean {
   return true
 }
 
+function structuredChatTabsEqual(current: AppState, previous: AppState): boolean {
+  const currentTabs = structuredAgentSessionTitleTabs(current)
+  const previousTabs = structuredAgentSessionTitleTabs(previous)
+  if (currentTabs.length !== previousTabs.length) {
+    return false
+  }
+  return currentTabs.every((tab, index) => {
+    const other = previousTabs[index]!
+    return (
+      tab.id === other.id &&
+      tab.worktreeId === other.worktreeId &&
+      tab.executionHostId === other.executionHostId &&
+      tab.agentSessionAgent === other.agentSessionAgent &&
+      tab.agentSessionProviderSessionId === other.agentSessionProviderSessionId &&
+      titleEqual(tab.aiVaultTitle, other.aiVaultTitle)
+    )
+  })
+}
+
 function activePanesEqual(current: AppState, previous: AppState): boolean {
   const currentKeys = Object.keys(current.terminalLayoutsByTabId)
   const previousKeys = Object.keys(previous.terminalLayoutsByTabId)
@@ -167,6 +189,12 @@ export function aiVaultTitleSyncInputsChanged(current: AppState, previous: AppSt
     return true
   }
   if (current.tabsByWorktree !== previous.tabsByWorktree && !terminalTabsEqual(current, previous)) {
+    return true
+  }
+  if (
+    current.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree &&
+    !structuredChatTabsEqual(current, previous)
+  ) {
     return true
   }
   if (

@@ -128,6 +128,9 @@ const tabSchema = z.object({
   // Why: a structured terminal tab must recover its durable host session after
   // restart; omitting this additive field silently routes it back through PTY.
   structuredSessionId: z.string().min(1).optional().catch(undefined),
+  // Why: the provider conversation id is what the AI Vault title pipeline keys on; without it a
+  // restored chat tab cannot refresh its own name until the host republishes.
+  agentSessionProviderSessionId: z.string().min(1).optional().catch(undefined),
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
   aiVaultTitle: z

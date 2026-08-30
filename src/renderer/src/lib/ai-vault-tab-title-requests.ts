@@ -4,6 +4,7 @@ import type { AiVaultSessionTitle } from '../../../shared/ai-vault-session-title
 import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import type { Tab } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
@@ -67,6 +68,35 @@ function registerCandidate(
   })
 }
 
+/** Structured chat tabs the host has given a provider conversation id. */
+export function structuredAgentSessionTitleTabs(state: AppState): Tab[] {
+  return Object.values(state.unifiedTabsByWorktree)
+    .flat()
+    .filter(
+      (tab) =>
+        tab.contentType === 'agent-session' &&
+        isAiVaultTitleAgent(tab.agentSessionAgent) &&
+        Boolean(tab.agentSessionProviderSessionId)
+    )
+}
+
+/**
+ * Where a tab's currently stored provider name lives, across both tab models. The sync compares
+ * against this to decide whether a request still needs a scan, so it has to see chat tabs too.
+ */
+export function aiVaultTitleByTabId(
+  state: AppState
+): Map<string, AiVaultSessionTitle | null | undefined> {
+  const titles = new Map<string, AiVaultSessionTitle | null | undefined>()
+  for (const tab of Object.values(state.tabsByWorktree).flat()) {
+    titles.set(tab.id, tab.aiVaultTitle)
+  }
+  for (const tab of structuredAgentSessionTitleTabs(state)) {
+    titles.set(tab.id, tab.aiVaultTitle)
+  }
+  return titles
+}
+
 export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleRequest[] {
   const tabsById = new Map(
     Object.values(state.tabsByWorktree)
@@ -109,5 +139,18 @@ export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleReques
     })
   }
 
-  return [...candidates.values()].map(({ priority: _priority, ...request }) => request)
+  const requests = [...candidates.values()].map(({ priority: _priority, ...request }) => request)
+  for (const tab of structuredAgentSessionTitleTabs(state)) {
+    requests.push({
+      agent: tab.agentSessionAgent as AiVaultSessionTitle['agent'],
+      executionHostId: tab.executionHostId ?? getExecutionHostIdForWorktree(state, tab.worktreeId),
+      providerSession: { key: 'session_id', id: tab.agentSessionProviderSessionId! },
+      // Why: a chat the user is holding open is live, so its provider name is re-read on the same
+      // cadence a terminal-backed session gets — that is how a later rename reaches the tab.
+      refresh: true,
+      tabId: tab.id,
+      worktreeId: tab.worktreeId
+    })
+  }
+  return requests
 }

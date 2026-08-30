@@ -242,3 +242,23 @@ predicate. It is unobservable today — the host publishes neither field for a c
 all, so a mirror has nothing to take either way. If the capability-gated publish this section
 anticipates ever lands, narrow them the same way rather than by placement kind: a mirror should
 take a failure it cannot otherwise see, and only the hosting client should refuse it.
+
+## Who names a structured chat tab
+
+`RuntimeMobileSessionAgentTab.providerSessionId` is Rule 1: an optional field naming the Codex
+thread the session currently writes to (the head of the record's provider-handle chain). An old
+host omits it and the chat keeps the generic label; an old client ignores it. The field is
+identity, not a name — the name is read from the provider by the AI Vault title pipeline on the
+host that owns the session, which is why a remote structured chat resolves against that host's
+Codex home rather than the client's.
+
+Absence is unknown, never "no thread". The host publishes the key only once the provider has
+proven a handle, and a blank string would ask the title pipeline to name a conversation that has
+no name yet. A late-proven thread reaches clients through a republished snapshot, so the tab is
+named without waiting for a restart.
+
+The name itself is client-owned, the same shape as the browser-tab carve-out above. A host
+snapshot carries no `customLabel` and no `aiVaultTitle`, so the mirror in `web-session-tabs-sync.ts`
+preserves both from the tab it is replacing. Dropping either one renames the tab back to the
+generic label on the next snapshot and takes the user's own rename with it. The cross-version
+harness does not exercise the session-tab sync channel, so nothing fails if this is forgotten.

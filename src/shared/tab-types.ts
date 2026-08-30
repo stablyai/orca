@@ -70,6 +70,9 @@ export type Tab = {
   isPinned?: boolean // pinned tabs survive "close others"
   /** Provider backing a structured agent-session tab. */
   agentSessionAgent?: AgentType
+  /** Provider conversation id behind a structured agent-session tab, so the AI Vault title
+   *  pipeline can name it exactly as it names a terminal-backed session. */
+  agentSessionProviderSessionId?: string
   /** Structured session adopted from this terminal's Codex TUI. */
   structuredSessionId?: string
   /** Why: per-tab rendering mode for coding-agent terminals. `'chat'` shows the

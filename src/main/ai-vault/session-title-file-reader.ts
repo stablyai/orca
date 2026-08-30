@@ -6,6 +6,7 @@ import {
   type AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
 import { parseAgentSessionFileCached } from './session-scanner-parse-cache'
+import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 
 const TITLE_PARSE_CONCURRENCY = 4
 
@@ -22,9 +23,21 @@ async function readOneTitle(
   if (signal?.aborted) {
     return null
   }
-  const transcriptPath = request.transcriptPath?.trim()
+  let transcriptPath = request.transcriptPath?.trim()
   if (!transcriptPath) {
-    return cache?.get(request) ?? null
+    const cached = cache?.get(request) ?? null
+    if (cached) {
+      return cached
+    }
+    try {
+      transcriptPath =
+        (await resolveSessionFilePath(request.agent, request.sessionId, {}, signal)) ?? undefined
+    } catch {
+      return null
+    }
+  }
+  if (!transcriptPath) {
+    return null
   }
   try {
     const stats = await wslGatedLstat(transcriptPath, 'scan', signal)

@@ -92,6 +92,9 @@ export type RuntimeMobileSessionAgentTab = {
   title: string
   sessionId: string
   agent: 'codex'
+  /** Provider conversation the session is bound to (Codex thread id). Absent until the provider
+   *  proves one — absence is unknown identity, never a title. */
+  providerSessionId?: string
   color?: string | null
   isPinned?: boolean
   isActive: boolean

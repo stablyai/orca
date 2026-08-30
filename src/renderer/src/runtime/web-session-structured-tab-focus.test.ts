@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
 import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
@@ -12,6 +13,7 @@ function structuredTab(sessionId: string, sortOrder: number): Tab {
     entityId: sessionId,
     groupId: GROUP_ID,
     worktreeId: WORKTREE_ID,
+    executionHostId: toRuntimeExecutionHostId('environment-1'),
     contentType: 'agent-session',
     agentSessionAgent: 'codex',
     label: 'Codex Chat',

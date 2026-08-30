@@ -197,7 +197,7 @@ export function renderTabBarItems({
         id: item.id,
         ptyId: null,
         worktreeId,
-        title: item.data.label,
+        title: getTabDragLabel(item, generatedTabTitlesEnabled),
         customTitle: item.data.customLabel,
         color: item.data.color,
         sortOrder: item.data.sortOrder,
