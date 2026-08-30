@@ -124,6 +124,11 @@ const ENVELOPE_MODULE = 'src/shared/ipc-invoke-envelope.ts'
  * wrong for exactly this reason. Both lists together are the set of modules that open the envelope.
  */
 const DIRECT_STRIPPER_SITES: Readonly<Record<string, { calls: number; surface: string }>> = {
+  // The boundary itself: not a surface but the source of every message the rest of this list reads.
+  'src/preload/ipc-invoke-boundary.ts': {
+    calls: 1,
+    surface: 'every preload binding — the rejection the renderer receives'
+  },
   'src/renderer/src/components/LinuxPackageInstallRecoveryCard.tsx': {
     calls: 1,
     surface: 'recovery card'
@@ -232,13 +237,17 @@ describe('extractIpcErrorMessage call sites', () => {
    * discriminator is whether the value crossed IPC, which is not visible where it is rendered. A
    * lint rule keyed on the idiom would fire on hundreds of correct sites and need suppressions.
    *
-   * The narrow fix is the boundary, not the call site. Every envelope in the app is created in one
-   * place — 730 `ipcRenderer.invoke(` calls live in exactly two files under `src/preload`. A preload
-   * `invoke` wrapper that rejects with the stripped reason would fix all 118 at once and make this
-   * census unnecessary, enforced by a ratchet test banning bare `ipcRenderer.invoke` outside it —
-   * the same shape as the existing `child_process` ratchet. That is a separate change; the cost to
-   * weigh first is that `TerminalPane.tsx` deliberately keeps the wrapped form in the console, so
-   * the boundary must strip for display while the log keeps the original.
+   * The narrow fix is the boundary, not the call site, and it has since been made: all 731
+   * `ipcRenderer.invoke(` calls (702 + one written across two lines in `index.ts`, 28 in
+   * `gitlab.ts`) now go through `src/preload/ipc-invoke-boundary.ts`, which rejects with the
+   * stripped reason and logs the wrapped form against the channel that produced it. The count above
+   * is what the boundary closed. `ipc-invoke-boundary-ratchet.test.ts` is what keeps the 732nd call
+   * from being written outside it.
+   *
+   * This file stays as the change-detector it always was. It does not become the proof: it is keyed
+   * on the stripper, so it still cannot see a site that does not strip — which is now the correct
+   * state for a call site rather than a leak, because the value reaching it has already been
+   * narrowed upstream.
    */
   // Why: this is the number the freeze note got wrong, so it is asserted rather than described.
   it('number 31, and all of them render to a user', () => {

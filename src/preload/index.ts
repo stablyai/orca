@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: preload is the audited renderer/Electron IPC contract; co-locating the surface eases security and type-drift review. */
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { invoke } from './ipc-invoke-boundary'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import { admitCloseActiveTabPayload } from './close-active-tab-payload-admission'
@@ -211,7 +212,10 @@ import type {
   RateLimitState
 } from '../shared/rate-limit-types'
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
-import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
+import type {
+  WorkspaceCleanupScanProgress,
+  WorkspaceCleanupScanResult
+} from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
 import type { GhAuthDiagnostic } from '../shared/github/auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -368,7 +372,7 @@ import {
 // Why: the sync checkpoint only stages; this joins its durable write so a
 // navigating path can abort instead of losing the staged session.
 async function awaitBeforeUnloadCheckpoint(): Promise<void> {
-  const result = (await ipcRenderer.invoke('app:await-before-unload-checkpoint')) as {
+  const result = (await invoke('app:await-before-unload-checkpoint')) as {
     ok?: unknown
   }
   if (result?.ok !== true) {
@@ -562,27 +566,14 @@ ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
 // Custom APIs for renderer
 const api = {
   app: {
-    getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
-    getFeatureWallAssetBaseUrl: (): Promise<string> =>
-      ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
+    getIdentity: (): Promise<AppIdentity> => invoke('app:getIdentity'),
+    getFeatureWallAssetBaseUrl: (): Promise<string> => invoke('app:getFeatureWallAssetBaseUrl'),
     relaunch: (): Promise<void> =>
-      prepareAndInvokeAppRestart(
-        window,
-        () => ipcRenderer.invoke('app:relaunch'),
-        awaitBeforeUnloadCheckpoint
-      ),
+      prepareAndInvokeAppRestart(window, () => invoke('app:relaunch'), awaitBeforeUnloadCheckpoint),
     restart: (): Promise<void> =>
-      prepareAndInvokeAppRestart(
-        window,
-        () => ipcRenderer.invoke('app:restart'),
-        awaitBeforeUnloadCheckpoint
-      ),
+      prepareAndInvokeAppRestart(window, () => invoke('app:restart'), awaitBeforeUnloadCheckpoint),
     reload: (): Promise<void> =>
-      prepareAndInvokeAppRestart(
-        window,
-        () => ipcRenderer.invoke('app:reload'),
-        awaitBeforeUnloadCheckpoint
-      ),
+      prepareAndInvokeAppRestart(window, () => invoke('app:reload'), awaitBeforeUnloadCheckpoint),
     stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
       const result = ipcRenderer.sendSync('app:stage-before-unload-sync', args) as {
         ok?: unknown
@@ -592,21 +583,20 @@ const api = {
       }
     },
     awaitFirstWindowStartupServices: (): Promise<void> =>
-      ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+      invoke('app:awaitFirstWindowStartupServices'),
     prepareTerminalStartupRestoration: (): Promise<void> =>
-      ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
+      invoke('app:prepareTerminalStartupRestoration'),
     recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
-      ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
+      invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
     startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
       startupDiagnosticsEnabled
-        ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
+        ? invoke('app:startupDiagnostic', event, details)
         : Promise.resolve(),
     // Why: macOS input mode (or layout ID) so keyboard workarounds can tell CJK/compose layouts from US QWERTY (issue #1205); null on non-Darwin or read failure.
-    getKeyboardInputSourceId: (): Promise<string | null> =>
-      ipcRenderer.invoke('app:getKeyboardInputSourceId'),
+    getKeyboardInputSourceId: (): Promise<string | null> => invoke('app:getKeyboardInputSourceId'),
     getMacCapturedDigitRowChords: (): Promise<MacCapturedDigitRowChord[]> =>
-      ipcRenderer.invoke('app:getMacCapturedDigitRowChords'),
-    getKeyboardLayoutSnapshot: () => ipcRenderer.invoke('app:getKeyboardLayoutSnapshot'),
+      invoke('app:getMacCapturedDigitRowChords'),
+    getKeyboardLayoutSnapshot: () => invoke('app:getKeyboardLayoutSnapshot'),
     onKeyboardLayoutChanged: (
       callback: (event: KeyboardLayoutChangeEvent) => void
     ): (() => void) => {
@@ -618,36 +608,35 @@ const api = {
       return () => ipcRenderer.removeListener(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
     },
     setUnreadDockBadgeCount: (count: number): Promise<void> =>
-      ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
+      invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
-      ipcRenderer.invoke('app:getFloatingTerminalCwd', args),
-    getFloatingMarkdownDirectory: (): Promise<string> =>
-      ipcRenderer.invoke('app:getFloatingMarkdownDirectory'),
+      invoke('app:getFloatingTerminalCwd', args),
+    getFloatingMarkdownDirectory: (): Promise<string> => invoke('app:getFloatingMarkdownDirectory'),
     pickFloatingMarkdownDocument: (): Promise<MarkdownDocument | null> =>
-      ipcRenderer.invoke('app:pickFloatingMarkdownDocument'),
+      invoke('app:pickFloatingMarkdownDocument'),
     pickFloatingWorkspaceDirectory: (): Promise<string | null> =>
-      ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory'),
+      invoke('app:pickFloatingWorkspaceDirectory'),
     writeTerminalRenderDesyncEvidence: (args: WriteTerminalRenderDesyncEvidenceArgs) =>
-      ipcRenderer.invoke('terminal:writeRenderDesyncEvidence', args)
+      invoke('terminal:writeRenderDesyncEvidence', args)
   },
 
   orcaProfiles: {
-    list: () => ipcRenderer.invoke('orcaProfiles:list'),
-    authStatus: () => ipcRenderer.invoke('orcaProfiles:authStatus'),
-    createLocal: (args) => ipcRenderer.invoke('orcaProfiles:createLocal', args),
-    createCloudLinked: (args) => ipcRenderer.invoke('orcaProfiles:createCloudLinked', args),
-    switchProfile: (args) => ipcRenderer.invoke('orcaProfiles:switch', args),
-    transferProject: (args) => ipcRenderer.invoke('orcaProfiles:transferProject', args),
-    findProjectProfiles: (args) => ipcRenderer.invoke('orcaProfiles:findProjectProfiles', args),
-    connectCurrent: () => ipcRenderer.invoke('orcaProfiles:connectCurrent'),
-    refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),
-    signOutCurrent: () => ipcRenderer.invoke('orcaProfiles:signOutCurrent'),
-    selectOrg: (args) => ipcRenderer.invoke('orcaProfiles:selectOrg', args),
-    orgMembersList: (args) => ipcRenderer.invoke('orcaProfiles:orgMembersList', args),
-    orgMemberInvite: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberInvite', args),
-    orgInviteRevoke: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteRevoke', args),
-    orgMemberChangeRole: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberChangeRole', args),
-    orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args)
+    list: () => invoke('orcaProfiles:list'),
+    authStatus: () => invoke('orcaProfiles:authStatus'),
+    createLocal: (args) => invoke('orcaProfiles:createLocal', args),
+    createCloudLinked: (args) => invoke('orcaProfiles:createCloudLinked', args),
+    switchProfile: (args) => invoke('orcaProfiles:switch', args),
+    transferProject: (args) => invoke('orcaProfiles:transferProject', args),
+    findProjectProfiles: (args) => invoke('orcaProfiles:findProjectProfiles', args),
+    connectCurrent: () => invoke('orcaProfiles:connectCurrent'),
+    refreshAuth: () => invoke('orcaProfiles:refreshAuth'),
+    signOutCurrent: () => invoke('orcaProfiles:signOutCurrent'),
+    selectOrg: (args) => invoke('orcaProfiles:selectOrg', args),
+    orgMembersList: (args) => invoke('orcaProfiles:orgMembersList', args),
+    orgMemberInvite: (args) => invoke('orcaProfiles:orgMemberInvite', args),
+    orgInviteRevoke: (args) => invoke('orcaProfiles:orgInviteRevoke', args),
+    orgMemberChangeRole: (args) => invoke('orcaProfiles:orgMemberChangeRole', args),
+    orgMemberRemove: (args) => invoke('orcaProfiles:orgMemberRemove', args)
   } satisfies PreloadApi['orcaProfiles'],
 
   platform: {
@@ -667,59 +656,55 @@ const api = {
   } satisfies PreloadApi['platform'],
 
   wsl: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable'),
-    listDistros: (): Promise<string[]> => ipcRenderer.invoke('wsl:listDistros')
+    isAvailable: (): Promise<boolean> => invoke('wsl:isAvailable'),
+    listDistros: (): Promise<string[]> => invoke('wsl:listDistros')
   },
 
   pwsh: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('pwsh:isAvailable')
+    isAvailable: (): Promise<boolean> => invoke('pwsh:isAvailable')
   },
 
   gitBash: {
-    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('gitBash:isAvailable')
+    isAvailable: (): Promise<boolean> => invoke('gitBash:isAvailable')
   },
 
   plugins: {
-    list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
-    listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
+    list: (): Promise<PluginHostListEntry[]> => invoke('plugins:list'),
+    listLanguagePacks: () => invoke('plugins:listLanguagePacks'),
     consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
-      ipcRenderer.invoke('plugins:consent', args),
+      invoke('plugins:consent', args),
     setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>
-      ipcRenderer.invoke('plugins:setEnabled', args),
+      invoke('plugins:setEnabled', args),
     readPanelEntry: (args: {
       pluginKey: string
       panelId: string
-    }): Promise<PluginPanelEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
+    }): Promise<PluginPanelEntry | null> => invoke('plugins:readPanelEntry', args),
     invokeCommand: (args: {
       pluginKey: string
       commandId: string
       args?: unknown
-    }): Promise<unknown> => ipcRenderer.invoke('plugins:invokeCommand', args),
+    }): Promise<unknown> => invoke('plugins:invokeCommand', args),
     panelAction: (args: {
       sessionToken: string
       action: string
       params?: unknown
-    }): Promise<PluginPanelActionOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
+    }): Promise<PluginPanelActionOutcome> => invoke('plugins:panelAction', args),
     install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
-      ipcRenderer.invoke('plugins:install', source),
-    listMarketplaces: () => ipcRenderer.invoke('plugins:listMarketplaces'),
-    addMarketplace: (source) => ipcRenderer.invoke('plugins:addMarketplace', source),
-    removeMarketplace: (args) => ipcRenderer.invoke('plugins:removeMarketplace', args),
-    refreshMarketplaces: (args = {}) => ipcRenderer.invoke('plugins:refreshMarketplaces', args),
-    listMarketplacePlugins: () => ipcRenderer.invoke('plugins:listMarketplacePlugins'),
-    previewMarketplacePlugin: (args) =>
-      ipcRenderer.invoke('plugins:previewMarketplacePlugin', args),
-    installMarketplacePlugin: (preview) =>
-      ipcRenderer.invoke('plugins:installMarketplacePlugin', preview),
-    previewMarketplaceUpdate: (args) =>
-      ipcRenderer.invoke('plugins:previewMarketplaceUpdate', args),
-    rollbackMarketplacePlugin: (args) =>
-      ipcRenderer.invoke('plugins:rollbackMarketplacePlugin', args),
+      invoke('plugins:install', source),
+    listMarketplaces: () => invoke('plugins:listMarketplaces'),
+    addMarketplace: (source) => invoke('plugins:addMarketplace', source),
+    removeMarketplace: (args) => invoke('plugins:removeMarketplace', args),
+    refreshMarketplaces: (args = {}) => invoke('plugins:refreshMarketplaces', args),
+    listMarketplacePlugins: () => invoke('plugins:listMarketplacePlugins'),
+    previewMarketplacePlugin: (args) => invoke('plugins:previewMarketplacePlugin', args),
+    installMarketplacePlugin: (preview) => invoke('plugins:installMarketplacePlugin', preview),
+    previewMarketplaceUpdate: (args) => invoke('plugins:previewMarketplaceUpdate', args),
+    rollbackMarketplacePlugin: (args) => invoke('plugins:rollbackMarketplacePlugin', args),
     remove: (args: { pluginKey: string }): Promise<PluginHostListEntry[]> =>
-      ipcRenderer.invoke('plugins:remove', args),
+      invoke('plugins:remove', args),
     getLogs: (args: { pluginKey: string }): Promise<PluginHostLogLine[]> =>
-      ipcRenderer.invoke('plugins:getLogs', args),
-    refresh: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:refresh'),
+      invoke('plugins:getLogs', args),
+    refresh: (): Promise<PluginHostListEntry[]> => invoke('plugins:refresh'),
     onChanged: (callback): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, change: PluginChangeEvent): void =>
         callback(change)
@@ -731,45 +716,45 @@ const api = {
   } satisfies PreloadApi['plugins'],
 
   repos: {
-    list: () => ipcRenderer.invoke('repos:list'),
+    list: () => invoke('repos:list'),
 
     listForExecutionHost: (args: ListReposForExecutionHostArgs): Promise<HostRepoCatalogSnapshot> =>
-      ipcRenderer.invoke('repos:listForExecutionHost', args),
+      invoke('repos:listForExecutionHost', args),
 
-    add: (args) => ipcRenderer.invoke('repos:add', args),
+    add: (args) => invoke('repos:add', args),
 
-    addRemote: (args) => ipcRenderer.invoke('repos:addRemote', args),
+    addRemote: (args) => invoke('repos:addRemote', args),
 
-    create: (args) => ipcRenderer.invoke('repos:create', args),
+    create: (args) => invoke('repos:create', args),
 
-    isGitAvailable: (): Promise<boolean> => ipcRenderer.invoke('repos:isGitAvailable'),
+    isGitAvailable: (): Promise<boolean> => invoke('repos:isGitAvailable'),
 
     getDefaultCreateProjectParent: (): Promise<string> =>
-      ipcRenderer.invoke('repos:getDefaultCreateProjectParent'),
+      invoke('repos:getDefaultCreateProjectParent'),
 
-    remove: (args) => ipcRenderer.invoke('repos:remove', args),
+    remove: (args) => invoke('repos:remove', args),
 
-    removeForHost: (args) => ipcRenderer.invoke('repos:removeForHost', args),
+    removeForHost: (args) => invoke('repos:removeForHost', args),
 
-    reorder: (args) => ipcRenderer.invoke('repos:reorder', args),
+    reorder: (args) => invoke('repos:reorder', args),
 
-    reorderForHost: (args) => ipcRenderer.invoke('repos:reorderForHost', args),
+    reorderForHost: (args) => invoke('repos:reorderForHost', args),
 
-    update: (args) => ipcRenderer.invoke('repos:update', args),
+    update: (args) => invoke('repos:update', args),
 
-    pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
+    pickFolder: () => invoke('repos:pickFolder'),
 
-    pickFolders: () => ipcRenderer.invoke('repos:pickFolders'),
+    pickFolders: () => invoke('repos:pickFolders'),
 
-    pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
+    pickDirectory: () => invoke('repos:pickDirectory'),
 
-    clone: (args) => ipcRenderer.invoke('repos:clone', args),
+    clone: (args) => invoke('repos:clone', args),
 
-    cloneRemote: (args) => ipcRenderer.invoke('repos:cloneRemote', args),
+    cloneRemote: (args) => invoke('repos:cloneRemote', args),
 
-    createRemote: (args) => ipcRenderer.invoke('repos:createRemote', args),
+    createRemote: (args) => invoke('repos:createRemote', args),
 
-    cloneAbort: () => ipcRenderer.invoke('repos:cloneAbort'),
+    cloneAbort: () => invoke('repos:cloneAbort'),
 
     onCloneProgress: (
       callback: (data: { phase: string; percent: number }) => void
@@ -783,26 +768,26 @@ const api = {
     },
 
     getGitUsername: (args: { repoId: string }): Promise<string> =>
-      ipcRenderer.invoke('repos:getGitUsername', args),
+      invoke('repos:getGitUsername', args),
 
     getBaseRefDefault: (args: {
       repoId: string
       hostId?: ExecutionHostId
-    }): Promise<BaseRefDefaultResult> => ipcRenderer.invoke('repos:getBaseRefDefault', args),
+    }): Promise<BaseRefDefaultResult> => invoke('repos:getBaseRefDefault', args),
 
     searchBaseRefs: (args: {
       repoId: string
       query: string
       limit?: number
       hostId?: ExecutionHostId
-    }): Promise<string[]> => ipcRenderer.invoke('repos:searchBaseRefs', args),
+    }): Promise<string[]> => invoke('repos:searchBaseRefs', args),
 
     searchBaseRefDetails: (args: {
       repoId: string
       query: string
       limit?: number
       hostId?: ExecutionHostId
-    }): Promise<BaseRefSearchResult[]> => ipcRenderer.invoke('repos:searchBaseRefDetails', args),
+    }): Promise<BaseRefSearchResult[]> => invoke('repos:searchBaseRefDetails', args),
 
     onChanged: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
@@ -812,24 +797,23 @@ const api = {
   } satisfies PreloadApi['repos'],
 
   projects: {
-    list: () => ipcRenderer.invoke('projects:list'),
-    update: (args) => ipcRenderer.invoke('projects:update', args),
-    listHostSetups: () => ipcRenderer.invoke('projectHostSetups:list'),
-    createHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:create', args),
-    setupExistingFolder: (args) =>
-      ipcRenderer.invoke('projectHostSetups:setupExistingFolder', args),
-    updateHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:update', args),
-    deleteHostSetup: (args) => ipcRenderer.invoke('projectHostSetups:delete', args)
+    list: () => invoke('projects:list'),
+    update: (args) => invoke('projects:update', args),
+    listHostSetups: () => invoke('projectHostSetups:list'),
+    createHostSetup: (args) => invoke('projectHostSetups:create', args),
+    setupExistingFolder: (args) => invoke('projectHostSetups:setupExistingFolder', args),
+    updateHostSetup: (args) => invoke('projectHostSetups:update', args),
+    deleteHostSetup: (args) => invoke('projectHostSetups:delete', args)
   } satisfies PreloadApi['projects'],
 
   projectGroups: {
-    list: () => ipcRenderer.invoke('projectGroups:list'),
-    create: (args) => ipcRenderer.invoke('projectGroups:create', args),
-    update: (args) => ipcRenderer.invoke('projectGroups:update', args),
-    delete: (args) => ipcRenderer.invoke('projectGroups:delete', args),
-    moveProject: (args) => ipcRenderer.invoke('projectGroups:moveProject', args),
-    scanNested: (args) => ipcRenderer.invoke('projectGroups:scanNested', args),
-    cancelNestedScan: (args) => ipcRenderer.invoke('projectGroups:cancelNestedScan', args),
+    list: () => invoke('projectGroups:list'),
+    create: (args) => invoke('projectGroups:create', args),
+    update: (args) => invoke('projectGroups:update', args),
+    delete: (args) => invoke('projectGroups:delete', args),
+    moveProject: (args) => invoke('projectGroups:moveProject', args),
+    scanNested: (args) => invoke('projectGroups:scanNested', args),
+    cancelNestedScan: (args) => invoke('projectGroups:cancelNestedScan', args),
     onNestedScanProgress: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
@@ -838,23 +822,23 @@ const api = {
       ipcRenderer.on('projectGroups:scanNestedProgress', listener)
       return () => ipcRenderer.removeListener('projectGroups:scanNestedProgress', listener)
     },
-    importNested: (args) => ipcRenderer.invoke('projectGroups:importNested', args)
+    importNested: (args) => invoke('projectGroups:importNested', args)
   } satisfies PreloadApi['projectGroups'],
 
   folderWorkspaces: {
-    list: () => ipcRenderer.invoke('folderWorkspaces:list'),
-    getPathStatus: (args) => ipcRenderer.invoke('folderWorkspaces:getPathStatus', args),
-    create: (args) => ipcRenderer.invoke('folderWorkspaces:create', args),
-    update: (args) => ipcRenderer.invoke('folderWorkspaces:update', args),
-    delete: (args) => ipcRenderer.invoke('folderWorkspaces:delete', args)
+    list: () => invoke('folderWorkspaces:list'),
+    getPathStatus: (args) => invoke('folderWorkspaces:getPathStatus', args),
+    create: (args) => invoke('folderWorkspaces:create', args),
+    update: (args) => invoke('folderWorkspaces:update', args),
+    delete: (args) => invoke('folderWorkspaces:delete', args)
   } satisfies PreloadApi['folderWorkspaces'],
 
   sparsePresets: {
-    list: (args) => ipcRenderer.invoke('sparsePresets:list', args),
+    list: (args) => invoke('sparsePresets:list', args),
 
-    save: (args) => ipcRenderer.invoke('sparsePresets:save', args),
+    save: (args) => invoke('sparsePresets:save', args),
 
-    remove: (args) => ipcRenderer.invoke('sparsePresets:remove', args),
+    remove: (args) => invoke('sparsePresets:remove', args),
 
     onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
@@ -865,24 +849,26 @@ const api = {
   } satisfies PreloadApi['sparsePresets'],
 
   worktrees: {
-    list: (args) => ipcRenderer.invoke('worktrees:list', args),
-    listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
+    list: (args) => invoke('worktrees:list', args),
+    listRetiredNames: (args) => invoke('worktrees:listRetiredNames', args),
 
-    listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
+    // Why the cast: `listDetected` is declared as an overload pair, and no single result type
+    // satisfies both signatures — the channel is one call either way.
+    listDetected: ((args) =>
+      invoke('worktrees:listDetected', args)) as PreloadApi['worktrees']['listDetected'],
 
-    listKnownForExecutionHost: (args) =>
-      ipcRenderer.invoke('worktrees:listKnownForExecutionHost', args),
+    listKnownForExecutionHost: (args) => invoke('worktrees:listKnownForExecutionHost', args),
 
     forgetRemovedForExecutionHost: (args) =>
-      ipcRenderer.invoke('worktrees:forgetRemovedForExecutionHost', args),
+      invoke('worktrees:forgetRemovedForExecutionHost', args),
 
-    cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
+    cancelListDetected: (args) => invoke('worktrees:cancelListDetected', args),
 
-    listAll: () => ipcRenderer.invoke('worktrees:listAll'),
+    listAll: () => invoke('worktrees:listAll'),
 
-    create: (args) => ipcRenderer.invoke('worktrees:create', args),
+    create: (args) => invoke('worktrees:create', args),
 
-    adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
+    adoptProvisionedRoot: (args) => invoke('worktrees:adoptProvisionedRoot', args),
 
     onCreateProgress: (
       callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
@@ -895,32 +881,30 @@ const api = {
       return () => ipcRenderer.removeListener('createWorktree:progress', listener)
     },
 
-    prefetchCreateBase: (args) => ipcRenderer.invoke('worktrees:prefetchCreateBase', args),
+    prefetchCreateBase: (args) => invoke('worktrees:prefetchCreateBase', args),
 
-    resolvePrBase: (args) => ipcRenderer.invoke('worktrees:resolvePrBase', args),
+    resolvePrBase: (args) => invoke('worktrees:resolvePrBase', args),
 
-    resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
+    resolveMrBase: (args) => invoke('worktrees:resolveMrBase', args),
 
-    remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
+    remove: (args) => invoke('worktrees:remove', args),
 
-    forgetLocal: (args) => ipcRenderer.invoke('worktrees:forgetLocal', args),
+    forgetLocal: (args) => invoke('worktrees:forgetLocal', args),
 
-    forceDeletePreservedBranch: (args) =>
-      ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', args),
+    forceDeletePreservedBranch: (args) => invoke('worktrees:forceDeletePreservedBranch', args),
 
-    updateMeta: (args) => ipcRenderer.invoke('worktrees:updateMeta', args),
+    updateMeta: (args) => invoke('worktrees:updateMeta', args),
 
-    listLineage: () => ipcRenderer.invoke('worktrees:listLineage'),
+    listLineage: () => invoke('worktrees:listLineage'),
 
     listLineageForHost: (args: ListDesktopLineageForHostArgs): Promise<HostLineageSnapshot> =>
-      ipcRenderer.invoke('worktrees:listLineageForHost', args),
+      invoke('worktrees:listLineageForHost', args),
 
-    updateLineage: (args) => ipcRenderer.invoke('worktrees:updateLineage', args),
+    updateLineage: (args) => invoke('worktrees:updateLineage', args),
 
-    persistSortOrder: (args) => ipcRenderer.invoke('worktrees:persistSortOrder', args),
+    persistSortOrder: (args) => invoke('worktrees:persistSortOrder', args),
 
-    getBranchRenameFailureOutput: (args) =>
-      ipcRenderer.invoke('worktrees:getBranchRenameFailureOutput', args),
+    getBranchRenameFailureOutput: (args) => invoke('worktrees:getBranchRenameFailureOutput', args),
 
     onChanged: (
       callback: (data: {
@@ -976,7 +960,7 @@ const api = {
   workspaceCleanup: {
     scan: (args, onProgress) => {
       if (!onProgress) {
-        return ipcRenderer.invoke('workspaceCleanup:scan', args)
+        return invoke<WorkspaceCleanupScanResult>('workspaceCleanup:scan', args)
       }
       const scanId = args?.scanId ?? crypto.randomUUID()
       const listener = (
@@ -988,28 +972,28 @@ const api = {
         }
       }
       ipcRenderer.on('workspaceCleanup:scanProgress', listener)
-      return ipcRenderer
-        .invoke('workspaceCleanup:scan', { ...args, scanId })
-        .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
+      return invoke<WorkspaceCleanupScanResult>('workspaceCleanup:scan', {
+        ...args,
+        scanId
+      }).finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
     },
-    cancelScan: (scanId) => ipcRenderer.invoke('workspaceCleanup:cancelScan', scanId),
-    getCachedScan: () => ipcRenderer.invoke('workspaceCleanup:getCachedScan'),
-    dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
-    clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
-    hasKillableLocalProcesses: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:hasKillableLocalProcesses', args),
+    cancelScan: (scanId) => invoke('workspaceCleanup:cancelScan', scanId),
+    getCachedScan: () => invoke('workspaceCleanup:getCachedScan'),
+    dismiss: (args) => invoke('workspaceCleanup:dismiss', args),
+    clearDismissals: () => invoke('workspaceCleanup:clearDismissals'),
+    hasKillableLocalProcesses: (args) => invoke('workspaceCleanup:hasKillableLocalProcesses', args),
     beginRemovalSnapshotPruneBatch: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:beginRemovalSnapshotPruneBatch', args),
+      invoke('workspaceCleanup:beginRemovalSnapshotPruneBatch', args),
     recordRemovalSnapshotPrune: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
+      invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
     finishRemovalSnapshotPruneBatch: (args) =>
-      ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
+      invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
   } satisfies PreloadApi['workspaceCleanup'],
 
   workspaceSpace: {
-    analyze: () => ipcRenderer.invoke('workspaceSpace:analyze'),
-    getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
-    cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
+    analyze: () => invoke('workspaceSpace:analyze'),
+    getCachedAnalysis: () => invoke('workspaceSpace:getCachedAnalysis'),
+    cancel: () => invoke('workspaceSpace:cancel'),
     onProgress: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
@@ -1021,8 +1005,8 @@ const api = {
   } satisfies PreloadApi['workspaceSpace'],
 
   workspacePorts: {
-    scan: (args) => ipcRenderer.invoke('workspacePorts:scan', args),
-    kill: (args) => ipcRenderer.invoke('workspacePorts:kill', args),
+    scan: (args) => invoke('workspacePorts:scan', args),
+    kill: (args) => invoke('workspacePorts:kill', args),
     onAdvertisedUrlChanged: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
@@ -1082,13 +1066,13 @@ const api = {
       coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
       agentResumeUnavailable?: true
-    }> => ipcRenderer.invoke('pty:spawn', opts),
+    }> => invoke('pty:spawn', opts),
 
     write: (id: string, data: string): void => {
       ipcRenderer.send('pty:write', { id, data })
     },
     writeAccepted: (id: string, data: string): Promise<boolean> =>
-      ipcRenderer.invoke('pty:writeAccepted', { id, data }),
+      invoke('pty:writeAccepted', { id, data }),
     onWriteUnavailable: (
       callback: (payload: {
         id: string
@@ -1152,8 +1136,7 @@ const api = {
     /** Renderer-initiated delivery health/heal lane — rides invoke because the field wedge (v1.4.121-rc.0) kills main→renderer push while invoke stays alive. */
     reportRendererDeliveryState: (
       report: PtyRendererDeliveryStateReport
-    ): Promise<PtyRendererDeliveryHealthReply> =>
-      ipcRenderer.invoke('pty:reportRendererDeliveryState', report),
+    ): Promise<PtyRendererDeliveryHealthReply> => invoke('pty:reportRendererDeliveryState', report),
     /** Live pty:data listener count — the watchdog's "listener detached" vs "channel dead" discriminator. */
     getPtyDataListenerCount: (): number => ipcRenderer.listenerCount('pty:data'),
     rendererDispatcherReady: (): void => {
@@ -1179,14 +1162,14 @@ const api = {
     },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
-      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+      invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
-    listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
+    listSessions: (): Promise<PtyListedSession[]> => invoke('pty:listSessions'),
     getAuthoritativeBufferSnapshotCapabilities: (
       ids: string[]
     ): Promise<{ id: string; authoritative: boolean | null }[]> =>
-      ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
-    hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
+      invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
+    hasPty: (id: string): Promise<boolean | null> => invoke('pty:hasPty', { id }),
 
     getMainBufferSnapshot: (
       id: string,
@@ -1205,7 +1188,7 @@ const api = {
       pendingEscapeTailAnsi?: string
       kittyKeyboardFlags?: number
       terminalOwner?: 'shell'
-    } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
+    } | null> => invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
       pendingPtyCount: number
@@ -1233,34 +1216,32 @@ const api = {
       lastLifecycleResetClearedChars: number
       rendererPtyDispatcherReady: boolean
       rendererDispatcherReadyForcedCount: number
-    }> => ipcRenderer.invoke('pty:getRendererDeliveryDebugSnapshot'),
+    }> => invoke('pty:getRendererDeliveryDebugSnapshot'),
 
-    resetRendererDeliveryDebug: (): Promise<void> =>
-      ipcRenderer.invoke('pty:resetRendererDeliveryDebug'),
+    resetRendererDeliveryDebug: (): Promise<void> => invoke('pty:resetRendererDeliveryDebug'),
 
     /** True if the PTY's shell has child processes (a running command); false at an idle prompt. */
-    hasChildProcesses: (id: string): Promise<boolean> =>
-      ipcRenderer.invoke('pty:hasChildProcesses', { id }),
+    hasChildProcesses: (id: string): Promise<boolean> => invoke('pty:hasChildProcesses', { id }),
 
     /** Return the PTY foreground process basename when available (e.g. "codex"). */
     getForegroundProcess: (id: string): Promise<string | null> =>
-      ipcRenderer.invoke('pty:getForegroundProcess', { id }),
+      invoke('pty:getForegroundProcess', { id }),
     inspectProcess: (
       id: string
     ): Promise<{
       foregroundProcess: string | null
       hasChildProcesses: boolean
       unavailable?: true
-    }> => ipcRenderer.invoke('pty:inspectProcess', { id }),
+    }> => invoke('pty:inspectProcess', { id }),
     confirmForegroundProcess: (id: string): Promise<string | null> =>
-      ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
+      invoke('pty:confirmForegroundProcess', { id }),
 
     /** Resolve a PTY's live cwd via `/proc` (Linux) or `lsof` (macOS); `''` when unknown or unresolvable. */
-    getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
+    getCwd: (id: string): Promise<string> => invoke('pty:getCwd', { id }),
 
     /** The PTY's last APPLIED size (real winsize), or null if unknown — lets the renderer detect drift after a dropped resize and re-assert. */
     getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
-      ipcRenderer.invoke('pty:getSize', { id }),
+      invoke('pty:getSize', { id }),
 
     onData: (
       callback: (data: {
@@ -1316,7 +1297,7 @@ const api = {
 
     /** Title-only replay snapshot on (re)attach — attention facts (bells/completions) never replay. */
     getSideEffectSnapshot: (id: string): Promise<TerminalSideEffectBatch | null> =>
-      ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
+      invoke('pty:sideEffectSnapshot', { id }),
 
     onExit: (
       callback: (data: {
@@ -1388,23 +1369,23 @@ const api = {
 
     // Claim serializer ownership before spawn; echo the generation token on settle/clear to prevent pane-key reuse races.
     declarePendingPaneSerializer: (paneKey: string): Promise<number> =>
-      ipcRenderer.invoke('pty:declarePendingPaneSerializer', { paneKey }),
+      invoke('pty:declarePendingPaneSerializer', { paneKey }),
 
     settlePaneSerializer: (paneKey: string, gen: number): Promise<void> =>
-      ipcRenderer.invoke('pty:settlePaneSerializer', { paneKey, gen }),
+      invoke('pty:settlePaneSerializer', { paneKey, gen }),
 
     clearPendingPaneSerializer: (paneKey: string, gen: number): Promise<void> =>
-      ipcRenderer.invoke('pty:clearPendingPaneSerializer', { paneKey, gen }),
+      invoke('pty:clearPendingPaneSerializer', { paneKey, gen }),
 
     reportRendererSerializerReady: (ptyId: string): Promise<void> =>
-      ipcRenderer.invoke('pty:reportRendererSerializerReady', { ptyId }),
+      invoke('pty:reportRendererSerializerReady', { ptyId }),
 
     management: {
-      listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
-      killAll: () => ipcRenderer.invoke('pty:management:killAll'),
-      killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
-      restart: () => ipcRenderer.invoke('pty:management:restart'),
-      macTccAttribution: () => ipcRenderer.invoke('pty:management:macTccAttribution')
+      listSessions: () => invoke('pty:management:listSessions'),
+      killAll: () => invoke('pty:management:killAll'),
+      killOne: (args: { sessionId: string }) => invoke('pty:management:killOne', args),
+      restart: () => invoke('pty:management:restart'),
+      macTccAttribution: () => invoke('pty:management:macTccAttribution')
     }
   },
 
@@ -1417,23 +1398,22 @@ const api = {
       images?: { contentType: string; data: Uint8Array }[]
     }): Promise<
       { ok: true; imagesDelivered?: boolean } | { ok: false; status: number | null; error: string }
-    > => ipcRenderer.invoke('feedback:submit', args)
+    > => invoke('feedback:submit', args)
   },
 
   crashReports: {
-    getLatestPending: () => ipcRenderer.invoke('crashReports:getLatestPending'),
-    getLatestReport: () => ipcRenderer.invoke('crashReports:getLatestReport'),
-    dismiss: (args: { reportId: string }) => ipcRenderer.invoke('crashReports:dismiss', args),
+    getLatestPending: () => invoke('crashReports:getLatestPending'),
+    getLatestReport: () => invoke('crashReports:getLatestReport'),
+    dismiss: (args: { reportId: string }) => invoke('crashReports:dismiss', args),
     recordRendererError: (
       args: ReactErrorBoundaryReportArgs
-    ): Promise<ReactErrorBoundaryReportResult> =>
-      ipcRenderer.invoke('crashReports:recordRendererError', args),
+    ): Promise<ReactErrorBoundaryReportResult> => invoke('crashReports:recordRendererError', args),
     recordBreadcrumb: (args: { name: string; data?: CrashReportBreadcrumbData }): void =>
       ipcRenderer.send('crashReports:recordBreadcrumb', args),
     submit: (args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> =>
-      ipcRenderer.invoke('crashReports:submit', args),
+      invoke('crashReports:submit', args),
     copyLatestDiagnostics: (args?: CrashReportCopyDiagnosticsArgs) =>
-      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
+      invoke('crashReports:copyLatestDiagnostics', args),
     readHeapStatistics: (): RendererHeapStatistics | null => readRendererHeapStatistics(),
     readProcessMemory: (): Promise<RendererProcessMemory | null> => readRendererProcessMemory()
   },
@@ -1444,17 +1424,17 @@ const api = {
       title: string
     }): Promise<
       { success: true; filePath: string } | { success: false; cancelled?: boolean; error?: string }
-    > => ipcRenderer.invoke('export:html-to-pdf', args)
+    > => invoke('export:html-to-pdf', args)
   },
 
   gh: {
-    viewer: (): Promise<unknown> => ipcRenderer.invoke('gh:viewer'),
+    viewer: (): Promise<unknown> => invoke('gh:viewer'),
 
     repoSlug: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:repoSlug', args),
+      invoke('gh:repoSlug', args),
 
     repoUpstream: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:repoUpstream', args),
+      invoke('gh:repoUpstream', args),
 
     prForBranch: (args: {
       repoPath: string
@@ -1464,21 +1444,21 @@ const api = {
       fallbackPRNumber?: number | null
       acceptMergedFallbackPR?: boolean
       currentHeadOid?: string | null
-    }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
+    }): Promise<unknown> => invoke('gh:prForBranch', args),
 
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:refreshPRNow', args),
+      invoke('gh:refreshPRNow', args),
 
     enqueuePRRefresh: (args: {
       candidate: GitHubPRRefreshCandidate
       reason: GitHubPRRefreshReason
       priority?: number
-    }): Promise<unknown> => ipcRenderer.invoke('gh:enqueuePRRefresh', args),
+    }): Promise<unknown> => invoke('gh:enqueuePRRefresh', args),
 
     reportVisiblePRRefreshCandidates: (args: {
       candidates: GitHubPRRefreshCandidate[]
       generation: number
-    }): Promise<unknown> => ipcRenderer.invoke('gh:reportVisiblePRRefreshCandidates', args),
+    }): Promise<unknown> => invoke('gh:reportVisiblePRRefreshCandidates', args),
 
     onPRRefreshEvent: (callback: (event: GitHubPRRefreshEvent) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, event: GitHubPRRefreshEvent): void =>
@@ -1492,7 +1472,7 @@ const api = {
       repoId?: string
       sourceContext?: TaskSourceContext | null
       number: number
-    }): Promise<unknown> => ipcRenderer.invoke('gh:issue', args),
+    }): Promise<unknown> => invoke('gh:issue', args),
 
     workItem: (args: {
       repoPath: string
@@ -1500,7 +1480,7 @@ const api = {
       sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
-    }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
+    }): Promise<unknown> => invoke('gh:workItem', args),
 
     workItemByOwnerRepo: (args: {
       repoPath: string
@@ -1510,7 +1490,7 @@ const api = {
       host?: string
       number: number
       type: 'issue' | 'pr'
-    }): Promise<unknown> => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
+    }): Promise<unknown> => invoke('gh:workItemByOwnerRepo', args),
 
     workItemDetails: (args: {
       repoPath: string
@@ -1518,14 +1498,14 @@ const api = {
       sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
-    }): Promise<unknown> => ipcRenderer.invoke('gh:workItemDetails', args),
+    }): Promise<unknown> => invoke('gh:workItemDetails', args),
 
     notifyWorkItemMutated: (args: {
       repoPath: string
       repoId?: string
       type: 'issue' | 'pr'
       number: number
-    }): Promise<boolean> => ipcRenderer.invoke('gh:notifyWorkItemMutated', args),
+    }): Promise<boolean> => invoke('gh:notifyWorkItemMutated', args),
 
     prFileContents: (args: {
       repoPath: string
@@ -1538,10 +1518,10 @@ const api = {
       status: string
       headSha: string
       baseSha: string
-    }): Promise<unknown> => ipcRenderer.invoke('gh:prFileContents', args),
+    }): Promise<unknown> => invoke('gh:prFileContents', args),
 
     listIssues: (args: { repoPath: string; repoId?: string; limit?: number }): Promise<unknown[]> =>
-      ipcRenderer.invoke('gh:listIssues', args),
+      invoke('gh:listIssues', args),
 
     createIssue: (args: {
       repoPath: string
@@ -1551,13 +1531,13 @@ const api = {
       body: string
       labels?: string[]
       assignees?: string[]
-    }): Promise<GitHubCreateIssueResult> => ipcRenderer.invoke('gh:createIssue', args),
+    }): Promise<GitHubCreateIssueResult> => invoke('gh:createIssue', args),
 
     countWorkItems: (args: {
       repoPath: string
       repoId?: string
       query?: string
-    }): Promise<number> => ipcRenderer.invoke('gh:countWorkItems', args),
+    }): Promise<number> => invoke('gh:countWorkItems', args),
 
     listWorkItems: (args: {
       repoPath: string
@@ -1567,7 +1547,7 @@ const api = {
       page?: number
       noCache?: boolean
     }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
-      ipcRenderer.invoke('gh:listWorkItems', args),
+      invoke('gh:listWorkItems', args),
 
     prChecks: (args: {
       repoPath: string
@@ -1577,7 +1557,7 @@ const api = {
       headSha?: string
       prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
-    }): Promise<unknown[]> => ipcRenderer.invoke('gh:prChecks', args),
+    }): Promise<unknown[]> => invoke('gh:prChecks', args),
 
     prCheckDetails: (args: {
       repoPath: string
@@ -1588,7 +1568,7 @@ const api = {
       checkName?: string
       url?: string | null
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<unknown> => ipcRenderer.invoke('gh:prCheckDetails', args),
+    }): Promise<unknown> => invoke('gh:prCheckDetails', args),
 
     rerunPRChecks: (args: {
       repoPath: string
@@ -1599,7 +1579,7 @@ const api = {
       failedOnly?: boolean
       prRepo?: GitHubOwnerRepo | null
     }): Promise<{ ok: true; count: number } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:rerunPRChecks', args),
+      invoke('gh:rerunPRChecks', args),
 
     prComments: (args: {
       repoPath: string
@@ -1608,7 +1588,7 @@ const api = {
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
-    }): Promise<unknown[]> => ipcRenderer.invoke('gh:prComments', args),
+    }): Promise<unknown[]> => invoke('gh:prComments', args),
 
     setPRCommentReaction: (args: {
       repoPath: string
@@ -1618,7 +1598,7 @@ const api = {
       content: GitHubReactionContent
       reacted: boolean
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<boolean> => ipcRenderer.invoke('gh:setPRCommentReaction', args),
+    }): Promise<boolean> => invoke('gh:setPRCommentReaction', args),
 
     resolveReviewThread: (args: {
       repoPath: string
@@ -1627,7 +1607,7 @@ const api = {
       threadId: string
       resolve: boolean
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
+    }): Promise<boolean> => invoke('gh:resolveReviewThread', args),
 
     setPRFileViewed: (args: {
       repoPath: string
@@ -1638,7 +1618,7 @@ const api = {
       pullRequestId: string
       path: string
       viewed: boolean
-    }): Promise<boolean> => ipcRenderer.invoke('gh:setPRFileViewed', args),
+    }): Promise<boolean> => invoke('gh:setPRFileViewed', args),
 
     updatePRTitle: (args: {
       repoPath: string
@@ -1646,7 +1626,7 @@ const api = {
       prNumber: number
       title: string
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<boolean> => ipcRenderer.invoke('gh:updatePRTitle', args),
+    }): Promise<boolean> => invoke('gh:updatePRTitle', args),
 
     mergePR: (args: {
       repoPath: string
@@ -1655,8 +1635,7 @@ const api = {
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:mergePR', args),
+    }): Promise<{ ok: true } | { ok: false; error: string }> => invoke('gh:mergePR', args),
 
     setPRAutoMerge: (args: {
       repoPath: string
@@ -1666,8 +1645,7 @@ const api = {
       enabled: boolean
       method?: 'merge' | 'squash' | 'rebase'
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:setPRAutoMerge', args),
+    }): Promise<{ ok: true } | { ok: false; error: string }> => invoke('gh:setPRAutoMerge', args),
 
     updatePRState: (args: {
       repoPath: string
@@ -1676,8 +1654,7 @@ const api = {
       prNumber: number
       updates: { state: 'open' | 'closed' }
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:updatePRState', args),
+    }): Promise<{ ok: true } | { ok: false; error: string }> => invoke('gh:updatePRState', args),
 
     markPRReadyForReview: (args: {
       repoPath: string
@@ -1686,7 +1663,7 @@ const api = {
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:markPRReadyForReview', args),
+      invoke('gh:markPRReadyForReview', args),
 
     requestPRReviewers: (args: {
       repoPath: string
@@ -1696,7 +1673,7 @@ const api = {
       reviewers: string[]
       prRepo?: GitHubOwnerRepo | null
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:requestPRReviewers', args),
+      invoke('gh:requestPRReviewers', args),
 
     removePRReviewers: (args: {
       repoPath: string
@@ -1706,7 +1683,7 @@ const api = {
       reviewers: string[]
       prRepo?: GitHubOwnerRepo | null
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:removePRReviewers', args),
+      invoke('gh:removePRReviewers', args),
 
     updateIssue: (args: {
       repoPath: string
@@ -1714,8 +1691,7 @@ const api = {
       sourceContext?: TaskSourceContext | null
       number: number
       updates: unknown
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:updateIssue', args),
+    }): Promise<{ ok: true } | { ok: false; error: string }> => invoke('gh:updateIssue', args),
 
     addIssueComment: (args: {
       repoPath: string
@@ -1725,7 +1701,7 @@ const api = {
       body: string
       type?: 'issue' | 'pr'
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
+    }): Promise<GitHubCommentResult> => invoke('gh:addIssueComment', args),
 
     addPRReviewCommentReply: (args: {
       repoPath: string
@@ -1738,7 +1714,7 @@ const api = {
       path?: string
       line?: number
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
+    }): Promise<GitHubCommentResult> => invoke('gh:addPRReviewCommentReply', args),
 
     addPRReviewComment: (args: {
       repoPath: string
@@ -1751,19 +1727,19 @@ const api = {
       line: number
       startLine?: number
       body: string
-    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
+    }): Promise<GitHubCommentResult> => invoke('gh:addPRReviewComment', args),
 
     listLabels: (args: {
       repoPath: string
       repoId?: string
       sourceContext?: TaskSourceContext | null
-    }): Promise<string[]> => ipcRenderer.invoke('gh:listLabels', args),
+    }): Promise<string[]> => invoke('gh:listLabels', args),
 
     listAssignableUsers: (args: {
       repoPath: string
       repoId?: string
       sourceContext?: TaskSourceContext | null
-    }): Promise<GitHubAssignableUser[]> => ipcRenderer.invoke('gh:listAssignableUsers', args),
+    }): Promise<GitHubAssignableUser[]> => invoke('gh:listAssignableUsers', args),
 
     // Why: renderer owns the work-item cache; main fires this for non-origin mutations only (origin callers updated optimistically). See src/main/ipc/github.ts.
     onWorkItemMutated: (
@@ -1782,78 +1758,69 @@ const api = {
       return () => ipcRenderer.removeListener('gh:workItemMutated', listener)
     },
 
-    checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-    starOrca: (source: AppStarSource): Promise<boolean> =>
-      ipcRenderer.invoke('gh:starOrca', source),
+    checkOrcaStarred: (): Promise<boolean | null> => invoke('gh:checkOrcaStarred'),
+    starOrca: (source: AppStarSource): Promise<boolean> => invoke('gh:starOrca', source),
 
     // Why: rate_limit is exempt from rate-limit accounting; `force` still busts the 30s in-process cache after an expensive op.
     rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
-      ipcRenderer.invoke('gh:rateLimit', args),
+      invoke('gh:rateLimit', args),
 
     diagnoseAuth: (args?: { host?: string }): Promise<GhAuthDiagnostic> =>
-      ipcRenderer.invoke('gh:diagnoseAuth', args),
+      invoke('gh:diagnoseAuth', args),
 
     // ── ProjectV2 (GitHub Projects) ───────────────────────────────────
     listAccessibleProjects: (
       args?: ListAccessibleProjectsArgs
-    ): Promise<ListAccessibleProjectsResult> =>
-      ipcRenderer.invoke('gh:listAccessibleProjects', args),
+    ): Promise<ListAccessibleProjectsResult> => invoke('gh:listAccessibleProjects', args),
     resolveProjectRef: (args: ResolveProjectRefArgs): Promise<ResolveProjectRefResult> =>
-      ipcRenderer.invoke('gh:resolveProjectRef', args),
+      invoke('gh:resolveProjectRef', args),
     listProjectViews: (args: ListProjectViewsArgs): Promise<ListProjectViewsResult> =>
-      ipcRenderer.invoke('gh:listProjectViews', args),
+      invoke('gh:listProjectViews', args),
     getProjectViewTable: (args: GetProjectViewTableArgs): Promise<GetProjectViewTableResult> =>
-      ipcRenderer.invoke('gh:getProjectViewTable', args),
+      invoke('gh:getProjectViewTable', args),
     projectWorkItemDetailsBySlug: (
       args: ProjectWorkItemDetailsBySlugArgs
     ): Promise<ProjectWorkItemDetailsBySlugResult> =>
-      ipcRenderer.invoke('gh:projectWorkItemDetailsBySlug', args),
+      invoke('gh:projectWorkItemDetailsBySlug', args),
     updateProjectItemField: (
       args: UpdateProjectItemFieldArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updateProjectItemField', args),
+    ): Promise<GitHubProjectMutationResult> => invoke('gh:updateProjectItemField', args),
     clearProjectItemField: (
       args: ClearProjectItemFieldArgs
-    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:clearProjectItemField', args),
+    ): Promise<GitHubProjectMutationResult> => invoke('gh:clearProjectItemField', args),
     updateIssueBySlug: (args: UpdateIssueBySlugArgs): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updateIssueBySlug', args),
+      invoke('gh:updateIssueBySlug', args),
     updatePullRequestBySlug: (
       args: UpdatePullRequestBySlugArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updatePullRequestBySlug', args),
+    ): Promise<GitHubProjectMutationResult> => invoke('gh:updatePullRequestBySlug', args),
     addIssueCommentBySlug: (
       args: AddIssueCommentBySlugArgs
-    ): Promise<GitHubProjectCommentMutationResult> =>
-      ipcRenderer.invoke('gh:addIssueCommentBySlug', args),
+    ): Promise<GitHubProjectCommentMutationResult> => invoke('gh:addIssueCommentBySlug', args),
     updateIssueCommentBySlug: (
       args: UpdateIssueCommentBySlugArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:updateIssueCommentBySlug', args),
+    ): Promise<GitHubProjectMutationResult> => invoke('gh:updateIssueCommentBySlug', args),
     deleteIssueCommentBySlug: (
       args: DeleteIssueCommentBySlugArgs
-    ): Promise<GitHubProjectMutationResult> =>
-      ipcRenderer.invoke('gh:deleteIssueCommentBySlug', args),
+    ): Promise<GitHubProjectMutationResult> => invoke('gh:deleteIssueCommentBySlug', args),
     listLabelsBySlug: (args: ListLabelsBySlugArgs): Promise<ListLabelsBySlugResult> =>
-      ipcRenderer.invoke('gh:listLabelsBySlug', args),
+      invoke('gh:listLabelsBySlug', args),
     listAssignableUsersBySlug: (
       args: ListAssignableUsersBySlugArgs
-    ): Promise<ListAssignableUsersBySlugResult> =>
-      ipcRenderer.invoke('gh:listAssignableUsersBySlug', args),
+    ): Promise<ListAssignableUsersBySlugResult> => invoke('gh:listAssignableUsersBySlug', args),
     listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs): Promise<ListIssueTypesBySlugResult> =>
-      ipcRenderer.invoke('gh:listIssueTypesBySlug', args),
+      invoke('gh:listIssueTypesBySlug', args),
     updateIssueTypeBySlug: (
       args: UpdateIssueTypeBySlugArgs
-    ): Promise<GitHubProjectMutationResult> => ipcRenderer.invoke('gh:updateIssueTypeBySlug', args)
+    ): Promise<GitHubProjectMutationResult> => invoke('gh:updateIssueTypeBySlug', args)
   },
 
   hostedReview: {
     forBranch: (args: HostedReviewForBranchArgs): Promise<unknown> =>
-      ipcRenderer.invoke('hostedReview:forBranch', args),
+      invoke('hostedReview:forBranch', args),
     getCreationEligibility: (args: unknown): Promise<unknown> =>
-      ipcRenderer.invoke('hostedReview:getCreationEligibility', args),
-    create: (args: unknown): Promise<unknown> => ipcRenderer.invoke('hostedReview:create', args),
-    createStacked: (args: unknown): Promise<unknown> =>
-      ipcRenderer.invoke('hostedReview:createStacked', args)
+      invoke('hostedReview:getCreationEligibility', args),
+    create: (args: unknown): Promise<unknown> => invoke('hostedReview:create', args),
+    createStacked: (args: unknown): Promise<unknown> => invoke('hostedReview:createStacked', args)
   },
 
   // Why: GitLab bindings live in `./gitlab` so `gl.*` changes don't conflict on every upstream sync of this central file.
@@ -1867,44 +1834,44 @@ const api = {
       apiToken?: string | null
       baseUrl?: string | null
     }): Promise<{ ok: true; account: string | null } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('bitbucket:connect', args),
+      invoke('bitbucket:connect', args),
 
-    disconnect: (): Promise<void> => ipcRenderer.invoke('bitbucket:disconnect'),
+    disconnect: (): Promise<void> => invoke('bitbucket:disconnect'),
 
-    status: (): Promise<unknown> => ipcRenderer.invoke('bitbucket:status')
+    status: (): Promise<unknown> => invoke('bitbucket:status')
   },
 
   linear: {
     connect: (args: {
       apiKey: string
     }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('linear:connect', args),
+      invoke('linear:connect', args),
 
     disconnect: (args?: { workspaceId?: string }): Promise<void> =>
-      ipcRenderer.invoke('linear:disconnect', args),
+      invoke('linear:disconnect', args),
 
     selectWorkspace: (args: { workspaceId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('linear:selectWorkspace', args),
+      invoke('linear:selectWorkspace', args),
 
-    status: (): Promise<unknown> => ipcRenderer.invoke('linear:status'),
+    status: (): Promise<unknown> => invoke('linear:status'),
 
     testConnection: (args?: {
       workspaceId?: string
     }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('linear:testConnection', args),
+      invoke('linear:testConnection', args),
 
     searchIssues: (args: {
       query: string
       limit?: number
       workspaceId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('linear:searchIssues', args),
+    }): Promise<unknown[]> => invoke('linear:searchIssues', args),
 
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
       workspaceId?: string
       attributeFilter?: unknown
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listIssues', args),
+    }): Promise<unknown> => invoke('linear:listIssues', args),
 
     createIssue: (args: {
       teamId: string
@@ -1920,37 +1887,36 @@ const api = {
     }): Promise<
       | { ok: true; id: string; identifier: string; title: string; url: string }
       | { ok: false; error: string }
-    > => ipcRenderer.invoke('linear:createIssue', args),
+    > => invoke('linear:createIssue', args),
 
     getIssue: (args: { id: string; workspaceId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('linear:getIssue', args),
+      invoke('linear:getIssue', args),
 
     updateIssue: (args: {
       id: string
       updates: unknown
       workspaceId?: string
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('linear:updateIssue', args),
+    }): Promise<{ ok: true } | { ok: false; error: string }> => invoke('linear:updateIssue', args),
 
     addIssueComment: (args: {
       issueId: string
       body: string
       workspaceId?: string
     }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('linear:addIssueComment', args),
+      invoke('linear:addIssueComment', args),
 
     issueComments: (args: { issueId: string; workspaceId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('linear:issueComments', args),
+      invoke('linear:issueComments', args),
 
     listTeams: (args?: { workspaceId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('linear:listTeams', args),
+      invoke('linear:listTeams', args),
 
     listProjects: (args?: {
       query?: string
       limit?: number
       workspaceId?: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listProjects', args),
+    }): Promise<unknown> => invoke('linear:listProjects', args),
 
     createProject: (args: {
       name: string
@@ -1965,54 +1931,54 @@ const api = {
       startDate?: string
       targetDate?: string
     }): Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('linear:createProject', args),
+      invoke('linear:createProject', args),
 
     getProject: (args: { id: string; workspaceId: string; force?: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('linear:getProject', args),
+      invoke('linear:getProject', args),
 
     listProjectIssues: (args: {
       projectId: string
       limit?: number
       workspaceId: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listProjectIssues', args),
+    }): Promise<unknown> => invoke('linear:listProjectIssues', args),
 
     listCustomViews: (args: {
       model: string
       limit?: number
       workspaceId?: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViews', args),
+    }): Promise<unknown> => invoke('linear:listCustomViews', args),
 
     getCustomView: (args: {
       viewId: string
       model: string
       workspaceId: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:getCustomView', args),
+    }): Promise<unknown> => invoke('linear:getCustomView', args),
 
     listCustomViewIssues: (args: {
       viewId: string
       limit?: number
       workspaceId: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewIssues', args),
+    }): Promise<unknown> => invoke('linear:listCustomViewIssues', args),
 
     listCustomViewProjects: (args: {
       viewId: string
       limit?: number
       workspaceId: string
       force?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewProjects', args),
+    }): Promise<unknown> => invoke('linear:listCustomViewProjects', args),
 
     teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('linear:teamStates', args),
+      invoke('linear:teamStates', args),
 
     teamLabels: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('linear:teamLabels', args),
+      invoke('linear:teamLabels', args),
 
     teamMembers: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('linear:teamMembers', args)
+      invoke('linear:teamMembers', args)
   },
 
   jira: {
@@ -2022,48 +1988,46 @@ const api = {
       apiToken: string
       authType?: 'cloud' | 'server'
     }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('jira:connect', args),
+      invoke('jira:connect', args),
 
-    disconnect: (args?: { siteId?: string }): Promise<void> =>
-      ipcRenderer.invoke('jira:disconnect', args),
+    disconnect: (args?: { siteId?: string }): Promise<void> => invoke('jira:disconnect', args),
 
-    selectSite: (args: { siteId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('jira:selectSite', args),
+    selectSite: (args: { siteId: string }): Promise<unknown> => invoke('jira:selectSite', args),
 
-    status: (): Promise<unknown> => ipcRenderer.invoke('jira:status'),
+    status: (): Promise<unknown> => invoke('jira:status'),
 
-    readStatus: (): Promise<unknown> => ipcRenderer.invoke('jira:readStatus'),
+    readStatus: (): Promise<unknown> => invoke('jira:readStatus'),
 
     testConnection: (args?: {
       siteId?: string
     }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('jira:testConnection', args),
+      invoke('jira:testConnection', args),
 
     searchIssues: (args: {
       jql: string
       limit?: number
       siteId?: string
       requestId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:searchIssues', args),
+    }): Promise<unknown[]> => invoke('jira:searchIssues', args),
     cancelSearchIssues: (args: { requestId: string }): Promise<void> =>
-      ipcRenderer.invoke('jira:cancelSearchIssues', args),
+      invoke('jira:cancelSearchIssues', args),
 
     listIssues: (args?: {
       filter?: 'assigned' | 'reported' | 'all' | 'done'
       limit?: number
       siteId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listIssues', args),
+    }): Promise<unknown[]> => invoke('jira:listIssues', args),
 
     getIssue: (args: { key: string; siteId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('jira:getIssue', args),
+      invoke('jira:getIssue', args),
 
     lookupIssueSummary: (args: {
       key: string
       siteId: string
       requestId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('jira:lookupIssueSummary', args),
+    }): Promise<unknown> => invoke('jira:lookupIssueSummary', args),
     cancelIssueSummary: (args: { requestId: string }): Promise<void> =>
-      ipcRenderer.invoke('jira:cancelIssueSummary', args),
+      invoke('jira:cancelIssueSummary', args),
 
     createIssue: (args: {
       siteId?: string
@@ -2074,52 +2038,51 @@ const api = {
       customFields?: Record<string, unknown>
     }): Promise<
       { ok: true; id: string; key: string; url: string } | { ok: false; error: string }
-    > => ipcRenderer.invoke('jira:createIssue', args),
+    > => invoke('jira:createIssue', args),
 
     updateIssue: (args: {
       key: string
       updates: unknown
       siteId?: string
-    }): Promise<{ ok: true } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('jira:updateIssue', args),
+    }): Promise<{ ok: true } | { ok: false; error: string }> => invoke('jira:updateIssue', args),
 
     addIssueComment: (args: {
       key: string
       body: string
       siteId?: string
     }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('jira:addIssueComment', args),
+      invoke('jira:addIssueComment', args),
 
     issueComments: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:issueComments', args),
+      invoke('jira:issueComments', args),
 
     listProjects: (args?: { siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:listProjects', args),
+      invoke('jira:listProjects', args),
 
     listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:listIssueTypes', args),
+      invoke('jira:listIssueTypes', args),
 
     listCreateFields: (args: {
       projectIdOrKey: string
       issueTypeId: string
       siteId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listCreateFields', args),
+    }): Promise<unknown[]> => invoke('jira:listCreateFields', args),
 
     listPriorities: (args?: { siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:listPriorities', args),
+      invoke('jira:listPriorities', args),
 
     listAssignableUsers: (args: {
       key: string
       query?: string
       siteId?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsers', args),
+    }): Promise<unknown[]> => invoke('jira:listAssignableUsers', args),
 
     listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:listTransitions', args),
+      invoke('jira:listTransitions', args),
     getProjectStatusOrder: (args: {
       projectKey: string
       siteId?: string
-    }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
+    }): Promise<JiraProjectStatusOrder> => invoke('jira:getProjectStatusOrder', args)
   },
 
   starNag: {
@@ -2138,69 +2101,64 @@ const api = {
       ipcRenderer.on('star-nag:hide', listener)
       return () => ipcRenderer.removeListener('star-nag:hide', listener)
     },
-    dismiss: (): Promise<void> => ipcRenderer.invoke('star-nag:dismiss'),
-    later: (): Promise<void> => ipcRenderer.invoke('star-nag:later'),
-    complete: (): Promise<void> => ipcRenderer.invoke('star-nag:complete'),
-    disable: (): Promise<void> => ipcRenderer.invoke('star-nag:disable'),
-    openWeb: (): Promise<void> => ipcRenderer.invoke('star-nag:openWeb'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('star-nag:starOrca'),
-    forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow'),
+    dismiss: (): Promise<void> => invoke('star-nag:dismiss'),
+    later: (): Promise<void> => invoke('star-nag:later'),
+    complete: (): Promise<void> => invoke('star-nag:complete'),
+    disable: (): Promise<void> => invoke('star-nag:disable'),
+    openWeb: (): Promise<void> => invoke('star-nag:openWeb'),
+    starOrca: (): Promise<boolean> => invoke('star-nag:starOrca'),
+    forceShow: (): Promise<void> => invoke('star-nag:forceShow'),
     agentValueMoment: (): Promise<
       { status: 'ready'; mode: 'gh' | 'web' } | { status: 'skipped' }
-    > => ipcRenderer.invoke('star-nag:agentValueMoment'),
-    showAgentValueMoment: (): Promise<void> => ipcRenderer.invoke('star-nag:showAgentValueMoment'),
-    onboardingCompleted: (): Promise<void> => ipcRenderer.invoke('star-nag:onboardingCompleted')
+    > => invoke('star-nag:agentValueMoment'),
+    showAgentValueMoment: (): Promise<void> => invoke('star-nag:showAgentValueMoment'),
+    onboardingCompleted: (): Promise<void> => invoke('star-nag:onboardingCompleted')
   },
 
   // Why: main validates telemetry; renderer call sites use typed wrappers.
   telemetryTrack: (name: string, props: Record<string, unknown>): Promise<void> =>
-    ipcRenderer.invoke('telemetry:track', name, props),
-  telemetrySetOptIn: (optedIn: boolean): Promise<void> =>
-    ipcRenderer.invoke('telemetry:setOptIn', optedIn),
-  telemetryAcknowledgeBanner: (): Promise<void> =>
-    ipcRenderer.invoke('telemetry:acknowledgeBanner'),
+    invoke('telemetry:track', name, props),
+  telemetrySetOptIn: (optedIn: boolean): Promise<void> => invoke('telemetry:setOptIn', optedIn),
+  telemetryAcknowledgeBanner: (): Promise<void> => invoke('telemetry:acknowledgeBanner'),
   telemetryGetConsentState: (): Promise<TelemetryConsentState> =>
-    ipcRenderer.invoke('telemetry:getConsentState'),
+    invoke('telemetry:getConsentState'),
 
   // Why: bridges are deliberately loose — main type-narrows this untrusted renderer input (see telemetry-error-tracking.md).
   diagnostics: {
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke('diagnostics:getStatus'),
+    getStatus: (): Promise<unknown> => invoke('diagnostics:getStatus'),
     collectBundle: (lookbackMinutes?: number): Promise<unknown> =>
-      ipcRenderer.invoke('diagnostics:collectBundle', lookbackMinutes),
+      invoke('diagnostics:collectBundle', lookbackMinutes),
     openBundlePreview: (bundleSubmissionId: string): Promise<void> =>
-      ipcRenderer.invoke('diagnostics:openBundlePreview', bundleSubmissionId),
+      invoke('diagnostics:openBundlePreview', bundleSubmissionId),
     discardBundlePreview: (bundleSubmissionId: string): Promise<void> =>
-      ipcRenderer.invoke('diagnostics:discardBundlePreview', bundleSubmissionId),
+      invoke('diagnostics:discardBundlePreview', bundleSubmissionId),
     uploadBundle: (bundleSubmissionId: string): Promise<unknown> =>
-      ipcRenderer.invoke('diagnostics:uploadBundle', bundleSubmissionId),
-    deleteBundle: (ticketId: string): Promise<void> =>
-      ipcRenderer.invoke('diagnostics:deleteBundle', ticketId)
+      invoke('diagnostics:uploadBundle', bundleSubmissionId),
+    deleteBundle: (ticketId: string): Promise<void> => invoke('diagnostics:deleteBundle', ticketId)
   },
 
   settings: {
-    get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
+    get: (): Promise<unknown> => invoke('settings:get'),
 
     // Why: blocking read for the few startup decisions (terminal side-effect authority) that can't wait for async hydration. Call sparingly.
     getSync: (): unknown => ipcRenderer.sendSync('settings:get-sync'),
 
-    set: (args: Record<string, unknown>): Promise<unknown> =>
-      ipcRenderer.invoke('settings:set', args),
+    set: (args: Record<string, unknown>): Promise<unknown> => invoke('settings:set', args),
 
     setActiveRuntimeEnvironmentPreference: (args: {
       environmentId: string | null
-    }): Promise<unknown> =>
-      ipcRenderer.invoke('settings:set-active-runtime-environment-preference', args),
+    }): Promise<unknown> => invoke('settings:set-active-runtime-environment-preference', args),
 
     updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('settings:update-pr-bot-author-override', args),
+      invoke('settings:update-pr-bot-author-override', args),
 
-    listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
+    listFonts: (): Promise<string[]> => invoke('settings:listFonts'),
 
     previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
-      ipcRenderer.invoke('settings:previewGhosttyImport'),
+      invoke('settings:previewGhosttyImport'),
 
     previewWarpThemeImport: (source: WarpThemeImportSource): Promise<WarpThemeImportPreview> =>
-      ipcRenderer.invoke('settings:previewWarpThemeImport', source),
+      invoke('settings:previewWarpThemeImport', source),
 
     onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
       const listener = (
@@ -2213,7 +2171,7 @@ const api = {
   },
 
   agentAwake: {
-    getStatus: (): Promise<ComputerAwakeStatus> => ipcRenderer.invoke('agentAwake:getStatus'),
+    getStatus: (): Promise<ComputerAwakeStatus> => invoke('agentAwake:getStatus'),
     onChanged: (callback: (status: ComputerAwakeStatus) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: ComputerAwakeStatus): void =>
         callback(status)
@@ -2224,19 +2182,19 @@ const api = {
 
   localhostWorktreeLabels: {
     register: (args: LocalhostWorktreeLabelRoute): Promise<LocalhostWorktreeLabelResult> =>
-      ipcRenderer.invoke('localhostWorktreeLabels:register', args)
+      invoke('localhostWorktreeLabels:register', args)
   } satisfies PreloadApi['localhostWorktreeLabels'],
 
   keybindings: {
-    get: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:get'),
-    ensureFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:ensureFile'),
+    get: (): Promise<KeybindingFileSnapshot> => invoke('keybindings:get'),
+    ensureFile: (): Promise<KeybindingFileSnapshot> => invoke('keybindings:ensureFile'),
     setAction: (args: {
       actionId: KeybindingActionId
       bindings: string[] | null
-    }): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:setAction', args),
-    reload: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:reload'),
-    openFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:openFile'),
-    revealFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:revealFile'),
+    }): Promise<KeybindingFileSnapshot> => invoke('keybindings:setAction', args),
+    reload: (): Promise<KeybindingFileSnapshot> => invoke('keybindings:reload'),
+    openFile: (): Promise<KeybindingFileSnapshot> => invoke('keybindings:openFile'),
+    revealFile: (): Promise<KeybindingFileSnapshot> => invoke('keybindings:revealFile'),
     onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
@@ -2248,20 +2206,19 @@ const api = {
   },
 
   codexAccounts: {
-    list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
+    list: (): Promise<unknown> => invoke('codexAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
-      ipcRenderer.invoke('codexAccounts:add', args),
+      invoke('codexAccounts:add', args),
     reauthenticate: (args: {
       accountId: string
       activateIfSelectionWasEmpty?: boolean
-    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:reauthenticate', args),
-    remove: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexAccounts:remove', args),
+    }): Promise<unknown> => invoke('codexAccounts:reauthenticate', args),
+    remove: (args: { accountId: string }): Promise<unknown> => invoke('codexAccounts:remove', args),
     select: (args: {
       accountId: string | null
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
-    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:select', args),
+    }): Promise<unknown> => invoke('codexAccounts:select', args),
     listStalePanes: (args: {
       ptyIds: string[]
     }): Promise<
@@ -2271,71 +2228,61 @@ const api = {
         activeAccountId: string | null
         reason?: 'account-change' | 'home-route-change'
       }[]
-    > => ipcRenderer.invoke('codexAccounts:listStalePanes', args),
+    > => invoke('codexAccounts:listStalePanes', args),
     listRecordedPaneLanes: (args: { ptyIds: string[] }): Promise<Record<string, string>> =>
-      ipcRenderer.invoke('codexAccounts:listRecordedPaneLanes', args),
+      invoke('codexAccounts:listRecordedPaneLanes', args),
     forgetStalePanes: (args: { ptyIds: string[] }): Promise<void> =>
-      ipcRenderer.invoke('codexAccounts:forgetStalePanes', args)
+      invoke('codexAccounts:forgetStalePanes', args)
   },
 
   claudeAccounts: {
-    list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
+    list: (): Promise<unknown> => invoke('claudeAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:add', args),
-    cancelPendingLogin: (): Promise<boolean> =>
-      ipcRenderer.invoke('claudeAccounts:cancelPendingLogin'),
+      invoke('claudeAccounts:add', args),
+    cancelPendingLogin: (): Promise<boolean> => invoke('claudeAccounts:cancelPendingLogin'),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
+      invoke('claudeAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:remove', args),
+      invoke('claudeAccounts:remove', args),
     select: (args: {
       accountId: string | null
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
-    }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:select', args)
+    }): Promise<unknown> => invoke('claudeAccounts:select', args)
   },
 
   cli: {
-    getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
-    install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
-    remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove'),
+    getInstallStatus: (): Promise<CliInstallStatus> => invoke('cli:getInstallStatus'),
+    install: (): Promise<CliInstallStatus> => invoke('cli:install'),
+    remove: (): Promise<CliInstallStatus> => invoke('cli:remove'),
     getWslInstallStatus: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
-      ipcRenderer.invoke('cli:getWslInstallStatus', args),
+      invoke('cli:getWslInstallStatus', args),
     installWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
-      ipcRenderer.invoke('cli:installWsl', args),
+      invoke('cli:installWsl', args),
     removeWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
-      ipcRenderer.invoke('cli:removeWsl', args)
+      invoke('cli:removeWsl', args)
   },
 
   codexConfigSync: {
-    status: (): Promise<CodexConfigSyncStatus> => ipcRenderer.invoke('codexConfigSync:status')
+    status: (): Promise<CodexConfigSyncStatus> => invoke('codexConfigSync:status')
   },
   agentHooks: {
-    claudeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:claudeStatus'),
-    openClaudeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:openClaudeStatus'),
-    codexStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:codexStatus'),
-    geminiStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:geminiStatus'),
+    claudeStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:claudeStatus'),
+    openClaudeStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:openClaudeStatus'),
+    codexStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:codexStatus'),
+    geminiStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:geminiStatus'),
     antigravityStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:antigravityStatus'),
-    ampStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:ampStatus'),
-    cursorStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:cursorStatus'),
-    droidStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:droidStatus'),
+      invoke('agentHooks:antigravityStatus'),
+    ampStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:ampStatus'),
+    cursorStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:cursorStatus'),
+    droidStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:droidStatus'),
     commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:commandCodeStatus'),
-    grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
-    devinStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:devinStatus'),
-    copilotStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:copilotStatus'),
-    hermesStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:hermesStatus'),
-    kimiStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:kimiStatus')
+      invoke('agentHooks:commandCodeStatus'),
+    grokStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:grokStatus'),
+    devinStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:devinStatus'),
+    copilotStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:copilotStatus'),
+    hermesStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:hermesStatus'),
+    kimiStatus: (): Promise<AgentHookInstallStatus> => invoke('agentHooks:kimiStatus')
   },
 
   agentTrust: {
@@ -2343,7 +2290,7 @@ const api = {
       preset: 'cursor' | 'copilot' | 'codex'
       workspacePath: string
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)
+    }): Promise<void> => invoke('agentTrust:markTrusted', args)
   },
 
   preflight: {
@@ -2369,13 +2316,13 @@ const api = {
         tokenConfigured: boolean
       }
       linear: { connected: boolean }
-    }> => ipcRenderer.invoke('preflight:check', args),
+    }> => invoke('preflight:check', args),
     detectAgents: (args?: PreflightRuntimeContext): Promise<string[]> =>
-      ipcRenderer.invoke('preflight:detectAgents', args),
+      invoke('preflight:detectAgents', args),
     refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
-      ipcRenderer.invoke('preflight:refreshAgents', args),
+      invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
-      ipcRenderer.invoke('preflight:detectRemoteAgents', args),
+      invoke('preflight:detectRemoteAgents', args),
     detectRemoteWindowsTerminalCapabilities: (args: {
       connectionId: string
     }): Promise<{
@@ -2384,19 +2331,19 @@ const api = {
       pwshAvailable: boolean
       gitBashAvailable: boolean
       hostPlatform: NodeJS.Platform | null
-    }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
+    }> => invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
   },
 
   notifications: {
     dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
-      ipcRenderer.invoke('notifications:dispatch', args),
+      invoke('notifications:dispatch', args),
     dismiss: (ids: string[]): Promise<NotificationDismissResult> =>
-      ipcRenderer.invoke('notifications:dismiss', ids),
-    openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
+      invoke('notifications:dismiss', ids),
+    openSystemSettings: (): Promise<void> => invoke('notifications:openSystemSettings'),
     getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
-      ipcRenderer.invoke('notifications:getPermissionStatus'),
+      invoke('notifications:getPermissionStatus'),
     probeDelivery: (args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> =>
-      ipcRenderer.invoke('notifications:probeDelivery', args),
+      invoke('notifications:probeDelivery', args),
     playSound: async (options?: {
       force?: boolean
       volume?: number
@@ -2407,7 +2354,7 @@ const api = {
           return { played: false, reason: 'deduped' }
         }
 
-        const resolved = (await ipcRenderer.invoke(
+        const resolved = (await invoke(
           'notifications:resolveSoundPath'
         )) as NotificationSoundPathResult
         if (!resolved.ok) {
@@ -2419,9 +2366,7 @@ const api = {
 
         let entry = cachedNotificationSound
         if (!entry || entry.path !== resolved.path) {
-          const sound = (await ipcRenderer.invoke(
-            'notifications:loadSound'
-          )) as NotificationSoundDataResult
+          const sound = (await invoke('notifications:loadSound')) as NotificationSoundDataResult
           if (!sound.ok) {
             disposeCachedNotificationSound()
             return { played: false, reason: sound.reason }
@@ -2472,23 +2417,22 @@ const api = {
   },
 
   onboarding: {
-    get: (): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:get'),
+    get: (): Promise<OnboardingState> => invoke('onboarding:get'),
     update: (
       updates: Partial<Omit<OnboardingState, 'checklist'>> & {
         checklist?: Partial<OnboardingState['checklist']>
       }
-    ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates)
+    ): Promise<OnboardingState> => invoke('onboarding:update', updates)
   },
 
   dashboard: {
     // Open the pop-out dashboard window, or focus it if already open.
-    openPopout: (view?: 'board' | 'map'): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:open', view),
+    openPopout: (view?: 'board' | 'map'): Promise<void> => invoke('dashboardPopout:open', view),
 
     // ── Producer side (main window) ──────────────────────────────────────
     publishSnapshot: (snapshot: DashboardSnapshot): Promise<void> =>
-      ipcRenderer.invoke('dashboard:publishSnapshot', snapshot),
-    getPopoutOpen: (): Promise<boolean> => ipcRenderer.invoke('dashboard:getPopoutOpen'),
+      invoke('dashboard:publishSnapshot', snapshot),
+    getPopoutOpen: (): Promise<boolean> => invoke('dashboard:getPopoutOpen'),
     onPopoutOpenChanged: (callback: (open: boolean) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, open: boolean): void => callback(open)
       ipcRenderer.on('dashboard:popoutOpenChanged', listener)
@@ -2527,7 +2471,7 @@ const api = {
     },
 
     // ── Consumer side (pop-out window) ───────────────────────────────────
-    requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
+    requestSnapshot: (): Promise<void> => invoke('dashboard:requestSnapshot'),
     onSnapshot: (callback: (snapshot: DashboardSnapshot) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, snapshot: DashboardSnapshot): void =>
         callback(snapshot)
@@ -2541,33 +2485,30 @@ const api = {
       return () => ipcRenderer.removeListener('dashboard:viewRequested', listener)
     },
     revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:revealAgent', args),
-    ackAgent: (paneKey: string): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey }),
+      invoke('dashboardPopout:revealAgent', args),
+    ackAgent: (paneKey: string): Promise<void> => invoke('dashboardPopout:ackAgent', { paneKey }),
     spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
+      invoke('dashboardPopout:spawnAgent', args),
     sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
+      invoke('dashboardPopout:sleepWorkspace', args)
   },
 
   terminalPreview: {
     connect: (
       ptyId: string,
       opts?: { scrollbackRows?: number }
-    ): Promise<TerminalPreviewConnectResult> =>
-      ipcRenderer.invoke('terminalPreview:connect', { ptyId, opts }),
+    ): Promise<TerminalPreviewConnectResult> => invoke('terminalPreview:connect', { ptyId, opts }),
     input: (ptyId: string, data: string): Promise<boolean> =>
-      ipcRenderer.invoke('terminalPreview:input', { ptyId, data }),
+      invoke('terminalPreview:input', { ptyId, data }),
     fit: (
       ptyId: string,
       cols: number,
       rows: number
     ): Promise<{ cols: number; rows: number } | null> =>
-      ipcRenderer.invoke('terminalPreview:fit', { ptyId, cols, rows }),
+      invoke('terminalPreview:fit', { ptyId, cols, rows }),
     ack: (ptyId: string, bytes: number): Promise<void> =>
-      ipcRenderer.invoke('terminalPreview:ack', { ptyId, bytes }),
-    unsubscribe: (ptyId: string): Promise<void> =>
-      ipcRenderer.invoke('terminalPreview:unsubscribe', { ptyId }),
+      invoke('terminalPreview:ack', { ptyId, bytes }),
+    unsubscribe: (ptyId: string): Promise<void> => invoke('terminalPreview:unsubscribe', { ptyId }),
     onData: (callback: (payload: TerminalPreviewDataPayload) => void): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
@@ -2586,138 +2527,131 @@ const api = {
       return () => ipcRenderer.removeListener('macosTccPrompts:threshold', listener)
     },
     consumePending: (): Promise<{ claimId: number; promptCount: number } | null> =>
-      ipcRenderer.invoke('macosTccPrompts:consumePending'),
+      invoke('macosTccPrompts:consumePending'),
     acknowledgePending: (claimId: number): Promise<void> =>
-      ipcRenderer.invoke('macosTccPrompts:acknowledgePending', claimId),
+      invoke('macosTccPrompts:acknowledgePending', claimId),
     releasePending: (claimId: number): Promise<void> =>
-      ipcRenderer.invoke('macosTccPrompts:releasePending', claimId),
-    dismiss: (): Promise<void> => ipcRenderer.invoke('macosTccPrompts:dismiss')
+      invoke('macosTccPrompts:releasePending', claimId),
+    dismiss: (): Promise<void> => invoke('macosTccPrompts:dismiss')
   },
 
   developerPermissions: {
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke('developerPermissions:getStatus'),
+    getStatus: (): Promise<unknown> => invoke('developerPermissions:getStatus'),
     request: (args: { id: string }): Promise<unknown> =>
-      ipcRenderer.invoke('developerPermissions:request', args),
+      invoke('developerPermissions:request', args),
     openSettings: (args: { id: string }): Promise<void> =>
-      ipcRenderer.invoke('developerPermissions:openSettings', args),
+      invoke('developerPermissions:openSettings', args),
     testLocalNetworkConnection: (args: { host: string; port: number }): Promise<unknown> =>
-      ipcRenderer.invoke('developerPermissions:testLocalNetworkConnection', args)
+      invoke('developerPermissions:testLocalNetworkConnection', args)
   },
 
   computerUsePermissions: {
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:getStatus'),
+    getStatus: (): Promise<unknown> => invoke('computerUsePermissions:getStatus'),
     openSetup: (args?: { id?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('computerUsePermissions:openSetup', args),
-    reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
+      invoke('computerUsePermissions:openSetup', args),
+    reset: (): Promise<unknown> => invoke('computerUsePermissions:reset')
   },
 
   shell: {
-    openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
+    openPath: (path: string): Promise<void> => invoke('shell:openPath', path),
 
     openInFileManager: (path: string): Promise<ShellOpenLocalPathResult> =>
-      ipcRenderer.invoke('shell:openInFileManager', path),
+      invoke('shell:openInFileManager', path),
 
     openInExternalEditor: (
       request: ShellOpenExternalEditorRequest
-    ): Promise<ShellOpenExternalEditorResult> =>
-      ipcRenderer.invoke('shell:openInExternalEditor', request),
+    ): Promise<ShellOpenExternalEditorResult> => invoke('shell:openInExternalEditor', request),
 
-    openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
+    openUrl: (url: string): Promise<void> => invoke('shell:openUrl', url),
 
-    openFilePath: (path: string): Promise<boolean> =>
-      ipcRenderer.invoke('shell:openFilePath', path),
+    openFilePath: (path: string): Promise<boolean> => invoke('shell:openFilePath', path),
 
-    openFileUri: (uri: string): Promise<void> => ipcRenderer.invoke('shell:openFileUri', uri),
+    openFileUri: (uri: string): Promise<void> => invoke('shell:openFileUri', uri),
 
-    pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path),
+    pathExists: (path: string): Promise<boolean> => invoke('shell:pathExists', path),
 
-    pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
+    pickAttachment: (): Promise<string | null> => invoke('shell:pickAttachment'),
 
-    pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
+    pickImage: (): Promise<string | null> => invoke('shell:pickImage'),
 
     pickRepoIconImage: (): Promise<{ dataUrl: string; fileName: string } | null> =>
-      ipcRenderer.invoke('shell:pickRepoIconImage'),
+      invoke('shell:pickRepoIconImage'),
 
-    pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
+    pickAudio: (): Promise<string | null> => invoke('shell:pickAudio'),
 
     pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
-      ipcRenderer.invoke('shell:pickDirectory', args),
+      invoke('shell:pickDirectory', args),
 
     copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
-      ipcRenderer.invoke('shell:copyFile', args)
+      invoke('shell:copyFile', args)
   },
 
   skills: {
     discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
-      ipcRenderer.invoke('skills:discover', target),
-    freshnessInventory: (): Promise<SkillFreshnessInventory> =>
-      ipcRenderer.invoke('skills:freshnessInventory'),
+      invoke('skills:discover', target),
+    freshnessInventory: (): Promise<SkillFreshnessInventory> => invoke('skills:freshnessInventory'),
     startUpdateRun: (names: string[]): Promise<SkillUpdateStartResult> =>
-      ipcRenderer.invoke('skills:startUpdateRun', names),
-    cancelUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:cancelUpdateRun'),
-    acknowledgeUpdateRun: (): Promise<void> => ipcRenderer.invoke('skills:acknowledgeUpdateRun'),
-    getUpdateRun: (): Promise<SkillUpdateRun> => ipcRenderer.invoke('skills:getUpdateRun'),
+      invoke('skills:startUpdateRun', names),
+    cancelUpdateRun: (): Promise<void> => invoke('skills:cancelUpdateRun'),
+    acknowledgeUpdateRun: (): Promise<void> => invoke('skills:acknowledgeUpdateRun'),
+    getUpdateRun: (): Promise<SkillUpdateRun> => invoke('skills:getUpdateRun'),
     prepareShare: (input: {
       skillIds: string[]
       bundleName: string
       target?: SkillDiscoveryTarget
       packageId?: string
-    }): Promise<SkillSharePreview> => ipcRenderer.invoke('skills:prepareShare', input),
+    }): Promise<SkillSharePreview> => invoke('skills:prepareShare', input),
     publishShare: (input: SkillSharePublishInput): Promise<SkillSharePublishOperation> =>
-      ipcRenderer.invoke('skills:publishShare', input),
+      invoke('skills:publishShare', input),
     cancelShare: (preparationId: string): Promise<void> =>
-      ipcRenderer.invoke('skills:cancelShare', preparationId),
+      invoke('skills:cancelShare', preparationId),
     releaseShare: (preparationId: string): Promise<void> =>
-      ipcRenderer.invoke('skills:releaseShare', preparationId),
+      invoke('skills:releaseShare', preparationId),
     resolveShare: (shareId: string): Promise<SkillShareResolvedOperation> =>
-      ipcRenderer.invoke('skills:resolveShare', shareId),
+      invoke('skills:resolveShare', shareId),
     installShare: (input: SkillShareInstallInput): Promise<SkillShareInstallOperation> =>
-      ipcRenderer.invoke('skills:installShare', input),
+      invoke('skills:installShare', input),
     installBundleShare: (
       input: SkillBundleShareInstallInput
-    ): Promise<SkillBundleShareInstallOperation> =>
-      ipcRenderer.invoke('skills:installBundleShare', input),
+    ): Promise<SkillBundleShareInstallOperation> => invoke('skills:installBundleShare', input),
     installBundlePackageVersion: (
       input: SkillBundlePackageVersionInstallInput
     ): Promise<SkillBundleShareInstallOperation> =>
-      ipcRenderer.invoke('skills:installBundlePackageVersion', input),
+      invoke('skills:installBundlePackageVersion', input),
     installPackageVersion: (
       input: SkillPackageVersionInstallInput
-    ): Promise<SkillShareInstallOperation> =>
-      ipcRenderer.invoke('skills:installPackageVersion', input),
+    ): Promise<SkillShareInstallOperation> => invoke('skills:installPackageVersion', input),
     cancelInstall: (input: SkillInstallCancelInput): Promise<{ cancelled: boolean }> =>
-      ipcRenderer.invoke('skills:cancelInstall', input),
+      invoke('skills:cancelInstall', input),
     previewInstall: (input: SkillInstallPreviewInput): Promise<SkillInstallPreviewOperation> =>
-      ipcRenderer.invoke('skills:previewInstall', input),
+      invoke('skills:previewInstall', input),
     previewBundleInstall: (
       input: SkillBundleInstallPreviewInput
-    ): Promise<SkillBundleInstallPreviewOperation> =>
-      ipcRenderer.invoke('skills:previewBundleInstall', input),
+    ): Promise<SkillBundleInstallPreviewOperation> => invoke('skills:previewBundleInstall', input),
     removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
-      ipcRenderer.invoke('skills:removeInstall', input),
+      invoke('skills:removeInstall', input),
     // Desktop always registers the delete IPC handlers in its own main process.
     deleteSupported: (): Promise<boolean> => Promise.resolve(true),
     previewDelete: (request: SkillDeleteRequest): Promise<SkillDeletePlan> =>
-      ipcRenderer.invoke('skills:previewDelete', request),
+      invoke('skills:previewDelete', request),
     delete: (request: SkillDeleteRequest): Promise<SkillDeleteResult> =>
-      ipcRenderer.invoke('skills:delete', request),
+      invoke('skills:delete', request),
     listManagedInstalls: (environmentId?: string): Promise<ManagedSkillInstallListOperation> =>
-      ipcRenderer.invoke('skills:listManagedInstalls', environmentId),
+      invoke('skills:listManagedInstalls', environmentId),
     getPackage: (packageId: string): Promise<SkillCloudOperation<SkillCloudPackageDetails>> =>
-      ipcRenderer.invoke('skills:getPackage', packageId),
+      invoke('skills:getPackage', packageId),
     listOwnedShares: (): Promise<SkillCloudOperation<SkillCloudOwnedShare[]>> =>
-      ipcRenderer.invoke('skills:listOwnedShares'),
+      invoke('skills:listOwnedShares'),
     revokeShare: (shareId: string): Promise<SkillCloudOperation<void>> =>
-      ipcRenderer.invoke('skills:revokeShare', shareId),
+      invoke('skills:revokeShare', shareId),
     deletePackageVersion: (input: {
       packageId: string
       versionId: string
-    }): Promise<SkillCloudOperation<void>> =>
-      ipcRenderer.invoke('skills:deletePackageVersion', input),
+    }): Promise<SkillCloudOperation<void>> => invoke('skills:deletePackageVersion', input),
     deletePackage: (packageId: string): Promise<SkillCloudOperation<void>> =>
-      ipcRenderer.invoke('skills:deletePackage', packageId),
+      invoke('skills:deletePackage', packageId),
     listWslDistros: (environmentId?: string): Promise<string[]> =>
-      ipcRenderer.invoke('skills:listWslDistros', environmentId),
+      invoke('skills:listWslDistros', environmentId),
     onInstallProgress: (callback: (progress: SkillInstallProgress) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, progress: SkillInstallProgress): void =>
         callback(progress)
@@ -2739,12 +2673,12 @@ const api = {
   },
 
   pet: {
-    import: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:import'),
-    importPetBundle: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:importPetBundle'),
+    import: (): Promise<CustomPet | null> => invoke('pet:import'),
+    importPetBundle: (): Promise<CustomPet | null> => invoke('pet:importPetBundle'),
     read: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<ArrayBuffer | null> =>
-      ipcRenderer.invoke('pet:read', id, fileName, kind),
+      invoke('pet:read', id, fileName, kind),
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>
-      ipcRenderer.invoke('pet:delete', id, fileName, kind)
+      invoke('pet:delete', id, fileName, kind)
   },
 
   browser: {
@@ -2756,10 +2690,10 @@ const api = {
       worktreeId: string
       sessionProfileId?: string | null
       webContentsId: number
-    }): Promise<boolean> => ipcRenderer.invoke('browser:registerGuest', args),
+    }): Promise<boolean> => invoke('browser:registerGuest', args),
 
     isGuestRegistered: (args: { browserPageId: string; webContentsId: number }): Promise<boolean> =>
-      ipcRenderer.invoke('browser:isGuestRegistered', args),
+      invoke('browser:isGuestRegistered', args),
 
     repairGuestRegistration: (args: {
       browserPageId: string
@@ -2767,10 +2701,10 @@ const api = {
       worktreeId: string
       sessionProfileId?: string | null
       webContentsId: number
-    }): Promise<boolean> => ipcRenderer.invoke('browser:repairGuestRegistration', args),
+    }): Promise<boolean> => invoke('browser:repairGuestRegistration', args),
 
     unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
-      ipcRenderer.invoke('browser:unregisterGuest', args),
+      invoke('browser:unregisterGuest', args),
 
     onWebAuthnAccountRequest: (
       callback: (request: BrowserWebAuthnAccountRequest) => void
@@ -2793,21 +2727,20 @@ const api = {
     },
 
     respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
-      ipcRenderer.invoke('browser:respondWebAuthnAccount', response),
+      invoke('browser:respondWebAuthnAccount', response),
 
     openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('browser:openDevTools', args),
+      invoke('browser:openDevTools', args),
 
     setViewportOverride: (args: {
       browserPageId: string
       override: BrowserViewportOverride | null
-    }): Promise<boolean> => ipcRenderer.invoke('browser:setViewportOverride', args),
+    }): Promise<boolean> => invoke('browser:setViewportOverride', args),
 
     setAnnotationViewportBridge: (args): Promise<boolean> =>
-      ipcRenderer.invoke('browser:setAnnotationViewportBridge', args),
+      invoke('browser:setAnnotationViewportBridge', args),
 
-    publishClientPageMetadata: (args) =>
-      ipcRenderer.invoke('browser:publishClientPageMetadata', args),
+    publishClientPageMetadata: (args) => invoke('browser:publishClientPageMetadata', args),
 
     onGuestLoadFailed: (
       callback: (args: {
@@ -2835,7 +2768,7 @@ const api = {
       return () => ipcRenderer.removeListener('browser:certificate-failure-changed', listener)
     },
 
-    proceedCertificate: (args) => ipcRenderer.invoke('browser:proceedCertificate', args),
+    proceedCertificate: (args) => invoke('browser:proceedCertificate', args),
 
     onPermissionDenied: (
       callback: (event: { browserPageId: string; permission: string; origin: string }) => void
@@ -3031,30 +2964,30 @@ const api = {
     },
 
     cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('browser:cancelDownload', args),
+      invoke('browser:cancelDownload', args),
 
     setGrabMode: (args: {
       browserPageId: string
       enabled: boolean
     }): Promise<{ ok: true } | { ok: false; reason: string }> =>
-      ipcRenderer.invoke('browser:setGrabMode', args),
+      invoke('browser:setGrabMode', args),
 
     awaitGrabSelection: (args: { browserPageId: string; opId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('browser:awaitGrabSelection', args),
+      invoke('browser:awaitGrabSelection', args),
 
     cancelGrab: (args: { browserPageId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('browser:cancelGrab', args),
+      invoke('browser:cancelGrab', args),
 
     captureSelectionScreenshot: (args: {
       browserPageId: string
       rect: { x: number; y: number; width: number; height: number }
     }): Promise<{ ok: true; screenshot: unknown } | { ok: false; reason: string }> =>
-      ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
+      invoke('browser:captureSelectionScreenshot', args),
 
     extractHoverPayload: (args: {
       browserPageId: string
     }): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> =>
-      ipcRenderer.invoke('browser:extractHoverPayload', args),
+      invoke('browser:extractHoverPayload', args),
 
     onGrabModeToggle: (callback: (browserPageId: string) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, browserPageId: string) =>
@@ -3074,48 +3007,44 @@ const api = {
       return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
     },
 
-    sessionListProfiles: (): Promise<unknown[]> =>
-      ipcRenderer.invoke('browser:session:listProfiles'),
+    sessionListProfiles: (): Promise<unknown[]> => invoke('browser:session:listProfiles'),
 
     prepareSshWorkspacePartition: (args: {
       targetId: string
       browserProfileId?: string
       skipProbe?: boolean
-    }): Promise<{ partition: string }> =>
-      ipcRenderer.invoke('browser:prepareSshWorkspacePartition', args),
+    }): Promise<{ partition: string }> => invoke('browser:prepareSshWorkspacePartition', args),
 
     sessionCreateProfile: (args: {
       scope: 'default' | 'isolated' | 'imported'
       label: string
       userAgentMode?: 'clean' | 'native'
-    }): Promise<unknown> => ipcRenderer.invoke('browser:session:createProfile', args),
+    }): Promise<unknown> => invoke('browser:session:createProfile', args),
 
     sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('browser:session:deleteProfile', args),
+      invoke('browser:session:deleteProfile', args),
 
     sessionImportCookies: (args: {
       profileId: string
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }
-    > => ipcRenderer.invoke('browser:session:importCookies', args),
+    > => invoke('browser:session:importCookies', args),
 
     sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
-      ipcRenderer.invoke('browser:session:resolvePartition', args),
+      invoke('browser:session:resolvePartition', args),
 
-    sessionDetectBrowsers: (): Promise<unknown[]> =>
-      ipcRenderer.invoke('browser:session:detectBrowsers'),
+    sessionDetectBrowsers: (): Promise<unknown[]> => invoke('browser:session:detectBrowsers'),
 
     sessionDetectBrowsersForClientHost: (args: {
       environmentId: string
-    }): Promise<unknown[] | null> =>
-      ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
+    }): Promise<unknown[] | null> => invoke('browser:session:detectBrowsersForClientHost', args),
 
     sessionImportFromBrowser: (args: {
       profileId: string
       browserFamily: string
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }
-    > => ipcRenderer.invoke('browser:session:importFromBrowser', args),
+    > => invoke('browser:session:importFromBrowser', args),
 
     sessionImportFromBrowserForClientHost: (args: {
       environmentId: string
@@ -3124,18 +3053,18 @@ const api = {
       browserProfile?: string
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string } | null
-    > => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
+    > => invoke('browser:session:importFromBrowserForClientHost', args),
 
     sessionClientRouteImportSources: (args: {
       environmentId: string
     }): Promise<Record<string, unknown>> =>
-      ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
+      invoke('browser:session:clientRouteImportSources', args),
 
     sessionClearDefaultCookies: (): Promise<boolean> =>
-      ipcRenderer.invoke('browser:session:clearDefaultCookies'),
+      invoke('browser:session:clearDefaultCookies'),
 
     notifyActiveTabChanged: (args: { browserPageId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('browser:activeTabChanged', args)
+      invoke('browser:activeTabChanged', args)
   },
 
   emulator: {
@@ -3144,9 +3073,9 @@ const api = {
       streamKey?: string
     }): Promise<{
       streamId: string
-    }> => ipcRenderer.invoke('emulator:frameStreamStart', args),
+    }> => invoke('emulator:frameStreamStart', args),
     stopFrameStream: (args: { streamId: string }): Promise<void> =>
-      ipcRenderer.invoke('emulator:frameStreamStop', args),
+      invoke('emulator:frameStreamStop', args),
     onFrameStreamFrame: (
       callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
     ): (() => void) => {
@@ -3170,9 +3099,9 @@ const api = {
     startVideoStream: (args: {
       deviceId: string
       streamId: string
-    }): Promise<{ streamId: string }> => ipcRenderer.invoke('emulator:videoStreamStart', args),
+    }): Promise<{ streamId: string }> => invoke('emulator:videoStreamStart', args),
     stopVideoStream: (args: { streamId: string }): Promise<void> =>
-      ipcRenderer.invoke('emulator:videoStreamStop', args),
+      invoke('emulator:videoStreamStop', args),
     onVideoStreamMeta: (
       callback: (data: {
         streamId: string
@@ -3246,18 +3175,18 @@ const api = {
       hasHooks: boolean
       hooks: unknown
       mayNeedUpdate: boolean
-    }> => ipcRenderer.invoke('hooks:check', args),
+    }> => invoke('hooks:check', args),
 
     inspectSetupScriptImports: (args: {
       repoId: string
       hostId?: ExecutionHostId
-    }): Promise<unknown[]> => ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
+    }): Promise<unknown[]> => invoke('hooks:inspectSetupScriptImports', args),
 
     createIssueCommandRunner: (args: {
       repoId: string
       worktreePath: string
       command: string
-    }): Promise<WorktreeSetupLaunch> => ipcRenderer.invoke('hooks:createIssueCommandRunner', args),
+    }): Promise<WorktreeSetupLaunch> => invoke('hooks:createIssueCommandRunner', args),
 
     readIssueCommand: (args: {
       repoId: string
@@ -3269,21 +3198,21 @@ const api = {
       effectiveContent: string | null
       localFilePath: string
       source: 'local' | 'shared' | 'none'
-    }> => ipcRenderer.invoke('hooks:readIssueCommand', args),
+    }> => invoke('hooks:readIssueCommand', args),
 
     writeIssueCommand: (args: {
       repoId: string
       content: string
       hostId?: ExecutionHostId
-    }): Promise<void> => ipcRenderer.invoke('hooks:writeIssueCommand', args)
+    }): Promise<void> => invoke('hooks:writeIssueCommand', args)
   },
 
   ephemeralVm: {
-    listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),
-    listRecipeCatalog: () => ipcRenderer.invoke('ephemeralVm:listRecipeCatalog'),
-    doctor: (args) => ipcRenderer.invoke('ephemeralVm:doctor', args),
-    provision: (args) => ipcRenderer.invoke('ephemeralVm:provision', args),
-    cancelProvision: (args) => ipcRenderer.invoke('ephemeralVm:cancelProvision', args),
+    listRecipes: (args) => invoke('ephemeralVm:listRecipes', args),
+    listRecipeCatalog: () => invoke('ephemeralVm:listRecipeCatalog'),
+    doctor: (args) => invoke('ephemeralVm:doctor', args),
+    provision: (args) => invoke('ephemeralVm:provision', args),
+    cancelProvision: (args) => invoke('ephemeralVm:cancelProvision', args),
     onProvisionEvent: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
@@ -3292,26 +3221,26 @@ const api = {
       ipcRenderer.on('ephemeralVm:provisionEvent', listener)
       return () => ipcRenderer.removeListener('ephemeralVm:provisionEvent', listener)
     },
-    listRuntimes: () => ipcRenderer.invoke('ephemeralVm:listRuntimes'),
-    attachWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:attachWorkspace', args),
-    suspendWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:suspendWorkspace', args),
-    resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),
-    cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
-    stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),
-    getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
+    listRuntimes: () => invoke('ephemeralVm:listRuntimes'),
+    attachWorkspace: (args) => invoke('ephemeralVm:attachWorkspace', args),
+    suspendWorkspace: (args) => invoke('ephemeralVm:suspendWorkspace', args),
+    resumeWorkspace: (args) => invoke('ephemeralVm:resumeWorkspace', args),
+    cleanup: (args) => invoke('ephemeralVm:cleanup', args),
+    stopCleanup: (args) => invoke('ephemeralVm:stopCleanup', args),
+    getCleanupCommand: (args) => invoke('ephemeralVm:getCleanupCommand', args)
   } satisfies PreloadApi['ephemeralVm'],
 
   cache: {
-    getGitHub: () => ipcRenderer.invoke('cache:getGitHub'),
-    setGitHub: (args) => ipcRenderer.invoke('cache:setGitHub', args)
+    getGitHub: () => invoke('cache:getGitHub'),
+    setGitHub: (args) => invoke('cache:setGitHub', args)
   } satisfies PreloadApi['cache'],
 
   session: {
     // hostId is optional; main defaults it to 'local' so existing omitting call sites keep the local session partition.
-    get: (hostId) => ipcRenderer.invoke('session:get', hostId),
-    set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),
-    patch: (args, hostId) => ipcRenderer.invoke('session:patch', args, hostId),
-    flush: () => ipcRenderer.invoke('session:flush'),
+    get: (hostId) => invoke('session:get', hostId),
+    set: (args, hostId) => invoke('session:set', args, hostId),
+    patch: (args, hostId) => invoke('session:patch', args, hostId),
+    flush: () => invoke('session:flush'),
     readTerminalScrollback: (args) =>
       ipcRenderer.sendSync('session:read-terminal-scrollback-sync', args),
     /** Synchronous session save for beforeunload — blocks until flushed to disk. */
@@ -3321,14 +3250,11 @@ const api = {
   } satisfies PreloadApi['session'],
 
   remoteWorkspace: {
-    get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
-    setForConnectedTargets: (args) =>
-      ipcRenderer.invoke('remoteWorkspace:setForConnectedTargets', args),
-    listEnabledConnectedTargets: () =>
-      ipcRenderer.invoke('remoteWorkspace:listEnabledConnectedTargets'),
-    listConnectedClients: (args) =>
-      ipcRenderer.invoke('remoteWorkspace:listConnectedClients', args),
-    clientId: () => ipcRenderer.invoke('remoteWorkspace:clientId'),
+    get: (args) => invoke('remoteWorkspace:get', args),
+    setForConnectedTargets: (args) => invoke('remoteWorkspace:setForConnectedTargets', args),
+    listEnabledConnectedTargets: () => invoke('remoteWorkspace:listEnabledConnectedTargets'),
+    listConnectedClients: (args) => invoke('remoteWorkspace:listConnectedClients', args),
+    clientId: () => invoke('remoteWorkspace:clientId'),
     onChanged: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, data: RemoteWorkspaceChangedEvent) =>
         callback(data)
@@ -3338,21 +3264,20 @@ const api = {
   } satisfies PreloadApi['remoteWorkspace'],
 
   updater: {
-    getStatus: () => ipcRenderer.invoke('updater:getStatus'),
-    getVersion: () => ipcRenderer.invoke('updater:getVersion'),
-    check: (options) => ipcRenderer.invoke('updater:check', options),
-    download: () => ipcRenderer.invoke('updater:download'),
-    dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
-    dismissAvailableUpdate: () => ipcRenderer.invoke('updater:dismissAvailableUpdate'),
-    getLinuxPackageInstallInstructions: () =>
-      ipcRenderer.invoke('updater:getLinuxPackageInstallInstructions'),
-    showLinuxPackage: () => ipcRenderer.invoke('updater:showLinuxPackage'),
-    listBuilds: (channel) => ipcRenderer.invoke('updater:listBuilds', channel),
+    getStatus: () => invoke('updater:getStatus'),
+    getVersion: () => invoke('updater:getVersion'),
+    check: (options) => invoke('updater:check', options),
+    download: () => invoke('updater:download'),
+    dismissNudge: () => invoke('updater:dismissNudge'),
+    dismissAvailableUpdate: () => invoke('updater:dismissAvailableUpdate'),
+    getLinuxPackageInstallInstructions: () => invoke('updater:getLinuxPackageInstallInstructions'),
+    showLinuxPackage: () => invoke('updater:showLinuxPackage'),
+    listBuilds: (channel) => invoke('updater:listBuilds', channel),
     quitAndInstall: (): Promise<void> =>
       prepareAndInvokeUpdaterInstall(
         window,
         updaterQuitAbortRelay,
-        () => ipcRenderer.invoke('updater:quitAndInstall'),
+        () => invoke('updater:quitAndInstall'),
         awaitBeforeUnloadCheckpoint
       ),
 
@@ -3370,11 +3295,11 @@ const api = {
 
   docPreview: {
     mintGrant: (request: DocPreviewGrantRequest): Promise<{ grantId: string; url: string }> =>
-      ipcRenderer.invoke(DOC_PREVIEW_MINT_GRANT_CHANNEL, request),
+      invoke(DOC_PREVIEW_MINT_GRANT_CHANNEL, request),
     revokeGrant: (grantId: string): Promise<boolean> =>
-      ipcRenderer.invoke(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, grantId),
+      invoke(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, grantId),
     authorizeDirectory: (grantId: string, relativePath: string): Promise<boolean> =>
-      ipcRenderer.invoke(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL, grantId, relativePath),
+      invoke(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL, grantId, relativePath),
     onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: { url: string }): void =>
         callback(payload)
@@ -3396,7 +3321,7 @@ const api = {
       preamble?: string
       connectionId?: string | null
     }): Promise<{ stdout: string; stderr: string; exitCode: number | null; error?: string }> =>
-      ipcRenderer.invoke('notebook:runPythonCell', args)
+      invoke('notebook:runPythonCell', args)
   },
 
   fs: {
@@ -3404,7 +3329,7 @@ const api = {
       dirPath: string
       connectionId?: string
     }): Promise<{ name: string; isDirectory: boolean; isSymlink: boolean }[]> =>
-      ipcRenderer.invoke('fs:readDir', args),
+      invoke('fs:readDir', args),
     readFile: (args: {
       filePath: string
       connectionId?: string
@@ -3415,13 +3340,13 @@ const api = {
       isImage?: boolean
       mimeType?: string
       fileIdentity?: string
-    }> => ipcRenderer.invoke('fs:readFile', args),
+    }> => invoke('fs:readFile', args),
     readLocalLogTail: (args: LocalLogTailReadArgs): Promise<LocalLogTailReadResult> =>
-      ipcRenderer.invoke('fs:readLocalLogTail', args),
+      invoke('fs:readLocalLogTail', args),
     startLocalLogTail: (args: LocalLogTailWatchArgs): Promise<void> =>
-      ipcRenderer.invoke('fs:startLocalLogTail', args),
+      invoke('fs:startLocalLogTail', args),
     stopLocalLogTail: (args: { subscriptionId: string }): Promise<void> =>
-      ipcRenderer.invoke('fs:stopLocalLogTail', args),
+      invoke('fs:stopLocalLogTail', args),
     onLocalLogTailChanged: (
       callback: (payload: LocalLogTailChangedPayload) => void
     ): (() => void) => {
@@ -3436,77 +3361,76 @@ const api = {
       filePath: string
       connectionId: string
     }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
-      ipcRenderer.invoke('fs:downloadFile', args),
+      invoke('fs:downloadFile', args),
     downloadFolder: (args: {
       dirPath: string
       connectionId: string
     }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
-      ipcRenderer.invoke('fs:downloadFolder', args),
+      invoke('fs:downloadFolder', args),
     saveDownloadedFile: (args: {
       suggestedName: string
       content: string
       encoding: 'utf8' | 'base64'
     }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
-      ipcRenderer.invoke('fs:saveDownloadedFile', args),
+      invoke('fs:saveDownloadedFile', args),
     startDownloadedFile: (args: {
       suggestedName: string
     }): Promise<
       { canceled: true } | { canceled: false; transferId: string; destinationPath: string }
-    > => ipcRenderer.invoke('fs:startDownloadedFile', args),
+    > => invoke('fs:startDownloadedFile', args),
     appendDownloadedFileChunk: (args: {
       transferId: string
       contentBase64: string
-    }): Promise<{ ok: true }> => ipcRenderer.invoke('fs:appendDownloadedFileChunk', args),
+    }): Promise<{ ok: true }> => invoke('fs:appendDownloadedFileChunk', args),
     finishDownloadedFile: (args: {
       transferId: string
     }): Promise<{ canceled: false; destinationPath: string }> =>
-      ipcRenderer.invoke('fs:finishDownloadedFile', args),
+      invoke('fs:finishDownloadedFile', args),
     cancelDownloadedFile: (args: { transferId: string }): Promise<{ ok: true }> =>
-      ipcRenderer.invoke('fs:cancelDownloadedFile', args),
+      invoke('fs:cancelDownloadedFile', args),
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
     }): Promise<{ filePath: string; relativePath: string; basename: string; name: string }[]> =>
-      ipcRenderer.invoke('fs:listMarkdownDocuments', args),
+      invoke('fs:listMarkdownDocuments', args),
     writeFile: (
       args: {
         filePath: string
         content: string
         connectionId?: string
       } & SshMutationExpectation
-    ): Promise<void> => ipcRenderer.invoke('fs:writeFile', args),
+    ): Promise<void> => invoke('fs:writeFile', args),
     createFile: (
       args: { filePath: string; connectionId?: string } & SshMutationExpectation
-    ): Promise<void> => ipcRenderer.invoke('fs:createFile', args),
+    ): Promise<void> => invoke('fs:createFile', args),
     createDir: (
       args: { dirPath: string; connectionId?: string } & SshMutationExpectation
-    ): Promise<void> => ipcRenderer.invoke('fs:createDir', args),
+    ): Promise<void> => invoke('fs:createDir', args),
     rename: (
       args: { oldPath: string; newPath: string; connectionId?: string } & SshMutationExpectation
-    ): Promise<void> => ipcRenderer.invoke('fs:rename', args),
+    ): Promise<void> => invoke('fs:rename', args),
     copy: (
       args: {
         sourcePath: string
         destinationPath: string
         connectionId?: string
       } & SshMutationExpectation
-    ): Promise<void> => ipcRenderer.invoke('fs:copy', args),
+    ): Promise<void> => invoke('fs:copy', args),
     deletePath: (
       args: {
         targetPath: string
         connectionId?: string
         recursive?: boolean
       } & SshMutationExpectation
-    ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
+    ): Promise<void> => invoke('fs:deletePath', args),
     authorizeExternalPath: (args: { targetPath: string }): Promise<void> =>
-      ipcRenderer.invoke('fs:authorizeExternalPath', args),
+      invoke('fs:authorizeExternalPath', args),
     stat: (args: {
       filePath: string
       connectionId?: string
-    }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
-      ipcRenderer.invoke('fs:stat', args),
+    }): Promise<{ size: number; isDirectory: boolean; mtime: number }> => invoke('fs:stat', args),
     pathExists: (args: { filePath: string; connectionId?: string }): Promise<boolean> =>
-      ipcRenderer.invoke('fs:pathExists', args),
+      invoke('fs:pathExists', args),
     listFiles: (args: {
       rootPath: string
       connectionId?: string
@@ -3514,9 +3438,9 @@ const api = {
       requestToken?: string
       maxResults?: number
       searchQuery?: string
-    }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
+    }): Promise<string[]> => invoke('fs:listFiles', args),
     cancelListFiles: (args: { requestToken: string }): Promise<void> =>
-      ipcRenderer.invoke('fs:cancelListFiles', args),
+      invoke('fs:cancelListFiles', args),
     search: (args: {
       query: string
       rootPath: string
@@ -3527,7 +3451,7 @@ const api = {
       excludePattern?: string
       maxResults?: number
       connectionId?: string
-    }): Promise<SearchResult> => ipcRenderer.invoke('fs:search', args),
+    }): Promise<SearchResult> => invoke('fs:search', args),
     importExternalPaths: (
       args: {
         sourcePaths: string[]
@@ -3555,7 +3479,7 @@ const api = {
             reason: string
           }
       )[]
-    }> => ipcRenderer.invoke('fs:importExternalPaths', args),
+    }> => invoke('fs:importExternalPaths', args),
     stageExternalPathsForRuntimeUpload: (args: {
       sourcePaths: string[]
     }): Promise<{
@@ -3581,7 +3505,7 @@ const api = {
             reason: string
           }
       )[]
-    }> => ipcRenderer.invoke('fs:stageExternalPathsForRuntimeUpload', args),
+    }> => invoke('fs:stageExternalPathsForRuntimeUpload', args),
     resolveDroppedPathsForAgent: (
       args: {
         paths: string[]
@@ -3595,11 +3519,11 @@ const api = {
         reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
       }[]
       failed: { sourcePath: string; reason: string }[]
-    }> => ipcRenderer.invoke('fs:resolveDroppedPathsForAgent', args),
+    }> => invoke('fs:resolveDroppedPathsForAgent', args),
     watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-      ipcRenderer.invoke('fs:watchWorktree', args),
+      invoke('fs:watchWorktree', args),
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-      ipcRenderer.invoke('fs:unwatchWorktree', args),
+      invoke('fs:unwatchWorktree', args),
     onFsChanged: (callback: (payload: FsChangedPayload) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: FsChangedPayload) =>
         callback(payload)
@@ -3617,9 +3541,9 @@ const api = {
       reuseLineStats?: boolean
       branchLineTotalMergeBase?: string
       requestToken?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
+    }): Promise<unknown> => invoke('git:status', args),
     cancelStatus: (args: { requestToken: string }): Promise<void> =>
-      ipcRenderer.invoke('git:cancelStatus', args),
+      invoke('git:cancelStatus', args),
     setStatusUpstreamRefWatch: (args: {
       worktreeId: string
       worktreePath: string
@@ -3627,92 +3551,92 @@ const api = {
       connectionId?: string
       branch?: string
       upstreamName?: string
-    }): Promise<void> => ipcRenderer.invoke('git:setStatusUpstreamRefWatch', args),
+    }): Promise<void> => invoke('git:setStatusUpstreamRefWatch', args),
     submoduleStatus: (args: {
       worktreePath: string
       submodulePath: string
       connectionId?: string
       area?: GitStagingArea
-    }): Promise<unknown> => ipcRenderer.invoke('git:submoduleStatus', args),
+    }): Promise<unknown> => invoke('git:submoduleStatus', args),
     checkIgnored: (args: {
       worktreePath: string
       paths: string[]
       connectionId?: string
-    }): Promise<string[]> => ipcRenderer.invoke('git:checkIgnored', args),
+    }): Promise<string[]> => invoke('git:checkIgnored', args),
     findHugeFoldersToIgnore: (args: { worktreePath: string }): Promise<string[]> =>
-      ipcRenderer.invoke('git:findHugeFoldersToIgnore', args),
+      invoke('git:findHugeFoldersToIgnore', args),
     appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>
-      ipcRenderer.invoke('git:appendGitignore', args),
+      invoke('git:appendGitignore', args),
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
-    ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
+    ): Promise<GitHistoryResult> => invoke('git:history', args),
     conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('git:conflictOperation', args),
+      invoke('git:conflictOperation', args),
     abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-      ipcRenderer.invoke('git:abortMerge', args),
+      invoke('git:abortMerge', args),
     abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-      ipcRenderer.invoke('git:abortRebase', args),
+      invoke('git:abortRebase', args),
     diff: (args: {
       worktreePath: string
       filePath: string
       staged: boolean
       compareAgainstHead?: boolean
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:diff', args),
+    }): Promise<unknown> => invoke('git:diff', args),
     branchCompare: (args: {
       worktreePath: string
       baseRef: string
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
+    }): Promise<unknown> => invoke('git:branchCompare', args),
     commitCompare: (args: {
       worktreePath: string
       commitId: string
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:commitCompare', args),
+    }): Promise<unknown> => invoke('git:commitCompare', args),
     upstreamStatus: (args: {
       worktreePath: string
       connectionId?: string
       pushTarget?: GitPushTarget
-    }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
+    }): Promise<GitUpstreamStatus> => invoke('git:upstreamStatus', args),
     fetch: (args: {
       worktreePath: string
       connectionId?: string
       pushTarget?: GitPushTarget
-    }): Promise<void> => ipcRenderer.invoke('git:fetch', args),
+    }): Promise<void> => invoke('git:fetch', args),
     syncFork: (args: {
       worktreePath: string
       connectionId?: string
       expectedUpstream: GitForkSyncExpectedUpstream
-    }): Promise<GitForkSyncResult> => ipcRenderer.invoke('git:syncFork', args),
+    }): Promise<GitForkSyncResult> => invoke('git:syncFork', args),
     push: (args: {
       worktreePath: string
       publish?: boolean
       forceWithLease?: boolean
       connectionId?: string
       pushTarget?: unknown
-    }): Promise<void> => ipcRenderer.invoke('git:push', args),
+    }): Promise<void> => invoke('git:push', args),
     pull: (args: {
       worktreePath: string
       connectionId?: string
       pushTarget?: GitPushTarget
-    }): Promise<void> => ipcRenderer.invoke('git:pull', args),
+    }): Promise<void> => invoke('git:pull', args),
     fastForward: (args: {
       worktreePath: string
       connectionId?: string
       pushTarget?: GitPushTarget
-    }): Promise<void> => ipcRenderer.invoke('git:fastForward', args),
+    }): Promise<void> => invoke('git:fastForward', args),
     rebaseFromBase: (args: {
       worktreePath: string
       baseRef: string
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:rebaseFromBase', args),
+    }): Promise<void> => invoke('git:rebaseFromBase', args),
     branchDiff: (args: {
       worktreePath: string
       compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
       filePath: string
       oldPath?: string
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:branchDiff', args),
+    }): Promise<unknown> => invoke('git:branchDiff', args),
     commitDiff: (args: {
       worktreePath: string
       commitOid: string
@@ -3720,12 +3644,12 @@ const api = {
       filePath: string
       oldPath?: string
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:commitDiff', args),
+    }): Promise<unknown> => invoke('git:commitDiff', args),
     commit: (args: {
       worktreePath: string
       message: string
       connectionId?: string
-    }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+    }): Promise<{ success: boolean; error?: string }> => invoke('git:commit', args),
     generateCommitMessage: (args: {
       worktreePath: string
       worktreeId?: string
@@ -3734,16 +3658,16 @@ const api = {
       sourceControlAiResolvedParams?: unknown
       sourceControlAi?: unknown
       agentCmdOverrides?: Record<string, string>
-    }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
+    }): Promise<unknown> => invoke('git:generateCommitMessage', args),
     discoverCommitMessageModels: (args: {
       agentId: string
       worktreePath?: string
       connectionId?: string
-    }): Promise<unknown> => ipcRenderer.invoke('git:discoverCommitMessageModels', args),
+    }): Promise<unknown> => invoke('git:discoverCommitMessageModels', args),
     cancelGenerateCommitMessage: (args: {
       worktreePath: string
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:cancelGenerateCommitMessage', args),
+    }): Promise<void> => invoke('git:cancelGenerateCommitMessage', args),
     generatePullRequestFields: (args: {
       worktreePath: string
       worktreeId?: string
@@ -3758,60 +3682,60 @@ const api = {
       sourceControlAiResolvedParams?: unknown
       sourceControlAi?: unknown
       agentCmdOverrides?: Record<string, string>
-    }): Promise<unknown> => ipcRenderer.invoke('git:generatePullRequestFields', args),
+    }): Promise<unknown> => invoke('git:generatePullRequestFields', args),
     cancelGeneratePullRequestFields: (args: {
       worktreePath: string
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:cancelGeneratePullRequestFields', args),
+    }): Promise<void> => invoke('git:cancelGeneratePullRequestFields', args),
     stage: (args: {
       worktreePath: string
       filePath: string
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:stage', args),
+    }): Promise<void> => invoke('git:stage', args),
     bulkStage: (args: {
       worktreePath: string
       filePaths: string[]
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:bulkStage', args),
+    }): Promise<void> => invoke('git:bulkStage', args),
     unstage: (args: {
       worktreePath: string
       filePath: string
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:unstage', args),
+    }): Promise<void> => invoke('git:unstage', args),
     bulkUnstage: (args: {
       worktreePath: string
       filePaths: string[]
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:bulkUnstage', args),
+    }): Promise<void> => invoke('git:bulkUnstage', args),
     discard: (args: {
       worktreePath: string
       filePath: string
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:discard', args),
+    }): Promise<void> => invoke('git:discard', args),
     bulkDiscard: (args: {
       worktreePath: string
       filePaths: string[]
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:bulkDiscard', args),
+    }): Promise<void> => invoke('git:bulkDiscard', args),
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string
       line: number
       connectionId?: string
-    }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args),
+    }): Promise<string | null> => invoke('git:remoteFileUrl', args),
     remoteCommitUrl: (args: {
       worktreePath: string
       sha: string
       connectionId?: string
-    }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args)
+    }): Promise<string | null> => invoke('git:remoteCommitUrl', args)
   },
 
   ui: {
-    get: () => ipcRenderer.invoke('ui:get'),
-    set: (args) => ipcRenderer.invoke('ui:set', args),
+    get: () => invoke('ui:get'),
+    set: (args) => invoke('ui:set', args),
     // Same channel: the local invoke already rejects when main fails to apply.
-    setWithAck: (args) => ipcRenderer.invoke('ui:set', args),
-    recordFeatureInteraction: (id) => ipcRenderer.invoke('ui:recordFeatureInteraction', id),
+    setWithAck: (args) => invoke('ui:set', args),
+    recordFeatureInteraction: (id) => invoke('ui:recordFeatureInteraction', id),
     onStateChanged: (callback: (ui: PersistedUIState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, ui: PersistedUIState): void =>
         callback(ui)
@@ -3823,16 +3747,14 @@ const api = {
       ipcRenderer.on('ui:openSettings', listener)
       return () => ipcRenderer.removeListener('ui:openSettings', listener)
     },
-    consumePendingOpenSettings: (): Promise<boolean> =>
-      ipcRenderer.invoke('ui:consumePendingOpenSettings'),
+    consumePendingOpenSettings: (): Promise<boolean> => invoke('ui:consumePendingOpenSettings'),
     onOpenSkillShare: (callback: (shareId: string) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, shareId: string): void =>
         callback(shareId)
       ipcRenderer.on('ui:openSkillShare', listener)
       return () => ipcRenderer.removeListener('ui:openSkillShare', listener)
     },
-    consumePendingSkillShare: (): Promise<string | null> =>
-      ipcRenderer.invoke('ui:consumePendingSkillShare'),
+    consumePendingSkillShare: (): Promise<string | null> => invoke('ui:consumePendingSkillShare'),
     onOpenSetupGuide: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSetupGuide', listener)
@@ -4432,21 +4354,20 @@ const api = {
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
     readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
-      ipcRenderer.invoke('clipboard:readText', options),
+      invoke('clipboard:readText', options),
     readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
-      ipcRenderer.invoke('clipboard:readSelectionText', options),
+      invoke('clipboard:readSelectionText', options),
     saveClipboardImageAsTempFile: (args?: {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null
-    }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
-    writeClipboardText: (text: string): Promise<void> =>
-      ipcRenderer.invoke('clipboard:writeText', text),
+    }): Promise<string | null> => invoke('clipboard:saveImageAsTempFile', args),
+    writeClipboardText: (text: string): Promise<void> => invoke('clipboard:writeText', text),
     writeTerminalClipboardText: (text: string): Promise<void> =>
-      ipcRenderer.invoke('clipboard:writeTerminalText', text),
+      invoke('clipboard:writeTerminalText', text),
     writeSelectionClipboardText: (text: string): Promise<void> =>
-      ipcRenderer.invoke('clipboard:writeSelectionText', text),
+      invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
-      ipcRenderer.invoke('clipboard:writeImage', dataUrl),
+      invoke('clipboard:writeImage', dataUrl),
     performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }): void => {
       ipcRenderer.send('ui:performNativePaste', {
         mode: options?.mode === 'paste-and-match-style' ? 'paste-and-match-style' : 'paste'
@@ -4462,7 +4383,7 @@ const api = {
             connectionId?: string | null
           }
         | string
-    ): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke('clipboard:writeFile', args),
+    ): Promise<{ ok: boolean; reason?: string }> => invoke('clipboard:writeFile', args),
     onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>
       subscribeNativeFileDrop(callback),
     getZoomLevel: (): number => webFrame.getZoomLevel(),
@@ -4517,7 +4438,7 @@ const api = {
       ipcRenderer.send('window:maximize')
     },
     /** Desktop custom titlebar only: read initial maximize state on mount — maximize-changed only fires on transitions. */
-    isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
+    isMaximized: (): Promise<boolean> => invoke('window:isMaximized'),
     /** Desktop custom titlebar only: subscribe to maximize-state changes so the maximize button shows the right icon. */
     onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>
@@ -4564,11 +4485,11 @@ const api = {
       totalPRsCreated: number
       totalAgentTimeMs: number
       firstEventAt: number | null
-    }> => ipcRenderer.invoke('stats:summary')
+    }> => invoke('stats:summary')
   },
 
   memory: {
-    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
+    getSnapshot: (): Promise<MemorySnapshot> => invoke('memory:getSnapshot')
   },
 
   claudeUsage: createUsageProviderApi(ipcRenderer, 'claudeUsage'),
@@ -4577,19 +4498,19 @@ const api = {
 
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:listSessions', args),
+      invoke('aiVault:listSessions', args),
     resolveSessionTitles: (args: AiVaultSessionTitlesArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:resolveSessionTitles', args),
+      invoke('aiVault:resolveSessionTitles', args),
     cancelListSessions: (args: { requestToken: string }): Promise<void> =>
-      ipcRenderer.invoke('aiVault:cancelListSessions', args),
+      invoke('aiVault:cancelListSessions', args),
     prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:prepareSessionResume', args),
+      invoke('aiVault:prepareSessionResume', args),
     listSubagentSessions: (args: AiVaultSubagentListArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:listSubagentSessions', args),
+      invoke('aiVault:listSubagentSessions', args),
     getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:getFirstUserPrompt', args),
+      invoke('aiVault:getFirstUserPrompt', args),
     deleteSession: (args: AiVaultDeleteSessionArgs): Promise<AiVaultDeleteSessionResult> =>
-      ipcRenderer.invoke('aiVault:deleteSession', args),
+      invoke('aiVault:deleteSession', args),
     onWindowFocused: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('aiVault:windowFocused', listener)
@@ -4604,7 +4525,7 @@ const api = {
       limit?: number,
       transcriptPath?: string
     ): Promise<NativeChatReadSessionResult> =>
-      ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
+      invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
     /** Start live tailing; onAppended fires with only newly-appended messages. Returns an unsubscribe fn that closes the watcher. */
     subscribe: (
       args: {
@@ -4633,11 +4554,10 @@ const api = {
   runtime: {
     syncWindowGraph: (
       graph: RuntimeRendererSyncWindowGraph
-    ): Promise<RuntimeSyncWindowGraphResult> =>
-      ipcRenderer.invoke('runtime:syncWindowGraph', graph),
-    getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
+    ): Promise<RuntimeSyncWindowGraphResult> => invoke('runtime:syncWindowGraph', graph),
+    getStatus: (): Promise<RuntimeStatus> => invoke('runtime:getStatus'),
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
-      ipcRenderer.invoke('runtime:call', args),
+      invoke('runtime:call', args),
     subscribe: async (
       args: { method: string; params?: unknown },
       callback: (response: RuntimeRpcResponse<unknown>) => void
@@ -4648,7 +4568,7 @@ const api = {
         callback(response)
       ipcRenderer.on(channel, listener)
       try {
-        await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
+        await invoke('runtime:subscribe', { subscriptionId, ...args })
       } catch (error) {
         ipcRenderer.removeListener(channel, listener)
         throw error
@@ -4665,27 +4585,27 @@ const api = {
     },
     getTerminalFitOverrides: (): Promise<
       { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
-    > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
+    > => invoke('runtime:getTerminalFitOverrides'),
     getTerminalDrivers: (): Promise<
       {
         ptyId: string
         driver: RuntimeTerminalDriverState
       }[]
-    > => ipcRenderer.invoke('runtime:getTerminalDrivers'),
+    > => invoke('runtime:getTerminalDrivers'),
     getBrowserDrivers: (): Promise<
       {
         browserPageId: string
         driver: RuntimeBrowserDriverState
       }[]
-    > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
+    > => invoke('runtime:getBrowserDrivers'),
     getBrowserRemoteViewerPages: (): Promise<string[]> =>
-      ipcRenderer.invoke('runtime:getBrowserRemoteViewerPages'),
+      invoke('runtime:getBrowserRemoteViewerPages'),
     getClientHostedBrowserRows: (): Promise<ClientHostedBrowserRowsEvent[]> =>
-      ipcRenderer.invoke('runtime:getClientHostedBrowserRows'),
+      invoke('runtime:getClientHostedBrowserRows'),
     restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
-      ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
+      invoke('runtime:restoreTerminalFit', { ptyId }),
     reclaimBrowserForDesktop: (browserPageId: string): Promise<{ reclaimed: boolean }> =>
-      ipcRenderer.invoke('runtime:reclaimBrowserForDesktop', { browserPageId }),
+      invoke('runtime:reclaimBrowserForDesktop', { browserPageId }),
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
@@ -4766,49 +4686,44 @@ const api = {
   },
 
   runtimeEnvironments: {
-    list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
-      ipcRenderer.invoke('runtimeEnvironments:list'),
+    list: (): Promise<PublicKnownRuntimeEnvironment[]> => invoke('runtimeEnvironments:list'),
     addFromPairingCode: (args: {
       name: string
       pairingCode: string
     }): Promise<{ environment: PublicKnownRuntimeEnvironment }> =>
-      ipcRenderer.invoke('runtimeEnvironments:addFromPairingCode', args),
+      invoke('runtimeEnvironments:addFromPairingCode', args),
     verifyAndAddFromPairingCode: (args: {
       name: string
       pairingCode: string
       allowLoopback?: boolean
     }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
-      ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
+      invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
     resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
-      ipcRenderer.invoke('runtimeEnvironments:resolve', args),
+      invoke('runtimeEnvironments:resolve', args),
     remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>
-      ipcRenderer.invoke('runtimeEnvironments:remove', args),
+      invoke('runtimeEnvironments:remove', args),
     disconnect: (args: {
       selector: string
     }): Promise<{ disconnected: PublicKnownRuntimeEnvironment }> =>
-      ipcRenderer.invoke('runtimeEnvironments:disconnect', args),
+      invoke('runtimeEnvironments:disconnect', args),
     connect: (args: {
       selector: string
       timeoutMs?: number
-    }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
-      ipcRenderer.invoke('runtimeEnvironments:connect', args),
+    }): Promise<RuntimeRpcResponse<RuntimeStatus>> => invoke('runtimeEnvironments:connect', args),
     getStatus: (args: {
       selector: string
       timeoutMs?: number
-    }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
-      ipcRenderer.invoke('runtimeEnvironments:getStatus', args),
+    }): Promise<RuntimeRpcResponse<RuntimeStatus>> => invoke('runtimeEnvironments:getStatus', args),
     prepareBrowserClientHostPlacement: (args) =>
-      ipcRenderer.invoke('runtimeEnvironments:prepareBrowserClientHostPlacement', args),
-    retryConnectionsNow: (): Promise<void> =>
-      ipcRenderer.invoke('runtimeEnvironments:retryConnectionsNow'),
+      invoke('runtimeEnvironments:prepareBrowserClientHostPlacement', args),
+    retryConnectionsNow: (): Promise<void> => invoke('runtimeEnvironments:retryConnectionsNow'),
     call: (args: {
       selector: string
       method: string
       params?: unknown
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
-    }): Promise<RuntimeRpcResponse<unknown>> =>
-      ipcRenderer.invoke('runtimeEnvironments:call', args),
+    }): Promise<RuntimeRpcResponse<unknown>> => invoke('runtimeEnvironments:call', args),
     subscribe: async (
       args: {
         selector: string
@@ -4828,22 +4743,21 @@ const api = {
   },
 
   rateLimits: {
-    get: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:get'),
-    refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
+    get: (): Promise<RateLimitState> => invoke('rateLimits:get'),
+    refresh: (): Promise<RateLimitState> => invoke('rateLimits:refresh'),
     refreshCodexForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
-      ipcRenderer.invoke('rateLimits:refreshCodexForTarget', target),
+      invoke('rateLimits:refreshCodexForTarget', target),
     consumeCodexResetCredit: (): Promise<CodexRateLimitResetResult> =>
-      ipcRenderer.invoke('rateLimits:consumeCodexResetCredit'),
+      invoke('rateLimits:consumeCodexResetCredit'),
     refreshClaudeForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
-      ipcRenderer.invoke('rateLimits:refreshClaudeForTarget', target),
-    setPollingInterval: (ms: number): Promise<void> =>
-      ipcRenderer.invoke('rateLimits:setPollingInterval', ms),
+      invoke('rateLimits:refreshClaudeForTarget', target),
+    setPollingInterval: (ms: number): Promise<void> => invoke('rateLimits:setPollingInterval', ms),
     fetchInactiveClaudeAccounts: (): Promise<void> =>
-      ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
+      invoke('rateLimits:fetchInactiveClaudeAccounts'),
     fetchInactiveCodexAccounts: (): Promise<void> =>
-      ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
-    refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
-    refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
+      invoke('rateLimits:fetchInactiveCodexAccounts'),
+    refreshMiniMax: (): Promise<RateLimitState> => invoke('rateLimits:refreshMiniMax'),
+    refreshGrok: (): Promise<RateLimitState> => invoke('rateLimits:refreshGrok'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)
@@ -4852,69 +4766,66 @@ const api = {
   },
 
   minimaxCredentials: {
-    getStatus: (): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('minimaxCredentials:getStatus'),
+    getStatus: (): Promise<{ configured: boolean }> => invoke('minimaxCredentials:getStatus'),
     saveCookie: (cookie: string): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
-    clearCookie: (): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('minimaxCredentials:clearCookie')
+      invoke('minimaxCredentials:saveCookie', cookie),
+    clearCookie: (): Promise<{ configured: boolean }> => invoke('minimaxCredentials:clearCookie')
   },
 
   grokAccounts: {
-    getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
+    getStatus: (): Promise<GrokAccountStatus> => invoke('grokAccounts:getStatus')
   },
 
   ssh: {
-    listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
+    listTargets: (): Promise<SshTarget[]> => invoke('ssh:listTargets'),
 
     listRemovedTargetLabels: (): Promise<Record<string, string>> =>
-      ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
+      invoke('ssh:listRemovedTargetLabels'),
 
     addTarget: (args: { target: SshTargetCreateInput }): Promise<SshTargetAddResult> =>
-      ipcRenderer.invoke('ssh:addTarget', args),
+      invoke('ssh:addTarget', args),
 
     updateTarget: (args: { id: string; updates: SshTargetUpdateInput }): Promise<SshTarget> =>
-      ipcRenderer.invoke('ssh:updateTarget', args),
+      invoke('ssh:updateTarget', args),
 
-    removeTarget: (args: { id: string }): Promise<void> =>
-      ipcRenderer.invoke('ssh:removeTarget', args),
+    removeTarget: (args: { id: string }): Promise<void> => invoke('ssh:removeTarget', args),
 
     importConfig: (args?: { reAdopt?: boolean }): Promise<SshConfigImportResult> =>
-      ipcRenderer.invoke('ssh:importConfig', args),
+      invoke('ssh:importConfig', args),
 
     listConfigHosts: (args?: SshConfigHostListArgs): Promise<SshConfigHostListResult> =>
-      ipcRenderer.invoke('ssh:listConfigHosts', args),
+      invoke('ssh:listConfigHosts', args),
 
     resolveConfigHost: (args: { alias: string }): Promise<SshConfigHostResolution | null> =>
-      ipcRenderer.invoke('ssh:resolveConfigHost', args),
+      invoke('ssh:resolveConfigHost', args),
 
     connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
-      const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
+      const state: unknown = await invoke('ssh:connect', args)
       return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
     },
 
-    disconnect: (args: { targetId: string }): Promise<void> =>
-      ipcRenderer.invoke('ssh:disconnect', args),
+    disconnect: (args: { targetId: string }): Promise<void> => invoke('ssh:disconnect', args),
 
     terminateSessions: (args: { targetId: string }): Promise<void> =>
-      ipcRenderer.invoke('ssh:terminateSessions', args),
+      invoke('ssh:terminateSessions', args),
 
-    resetRelay: (args: { targetId: string }): Promise<void> =>
-      ipcRenderer.invoke('ssh:resetRelay', args),
+    resetRelay: (args: { targetId: string }): Promise<void> => invoke('ssh:resetRelay', args),
 
     getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
-      const state: unknown = await ipcRenderer.invoke('ssh:getState', args)
+      const state: unknown = await invoke('ssh:getState', args)
       return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
     },
 
     needsPassphrasePrompt: (args: { targetId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('ssh:needsPassphrasePrompt', args),
+      invoke('ssh:needsPassphrasePrompt', args),
 
     testConnection: async (args: {
       targetId: string
     }): Promise<{ success: boolean; error?: string; state?: SshConnectionState }> => {
-      const result: { success: boolean; error?: string; state?: unknown } =
-        await ipcRenderer.invoke('ssh:testConnection', args)
+      const result: { success: boolean; error?: string; state?: unknown } = await invoke(
+        'ssh:testConnection',
+        args
+      )
       const state = result.state
         ? admitSshConnectionStateForAuthorityReconciliation(result.state, args.targetId)
         : null
@@ -4943,7 +4854,7 @@ const api = {
       remoteHost: string
       remotePort: number
       label?: string
-    }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:addPortForward', args),
+    }): Promise<PortForwardEntry> => invoke('ssh:addPortForward', args),
 
     updatePortForward: (args: {
       id: string
@@ -4952,16 +4863,16 @@ const api = {
       remoteHost: string
       remotePort: number
       label?: string
-    }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:updatePortForward', args),
+    }): Promise<PortForwardEntry> => invoke('ssh:updatePortForward', args),
 
     removePortForward: (args: { id: string }): Promise<PortForwardEntry | null> =>
-      ipcRenderer.invoke('ssh:removePortForward', args),
+      invoke('ssh:removePortForward', args),
 
     listPortForwards: (args?: { targetId?: string }): Promise<PortForwardEntry[]> =>
-      ipcRenderer.invoke('ssh:listPortForwards', args),
+      invoke('ssh:listPortForwards', args),
 
     listDetectedPorts: async (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
-      admitSshDetectedPorts(await ipcRenderer.invoke('ssh:listDetectedPorts', args)),
+      admitSshDetectedPorts(await invoke('ssh:listDetectedPorts', args)),
 
     onPortForwardsChanged: (
       callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
@@ -4992,7 +4903,7 @@ const api = {
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string
       pathFlavor: FilesystemPathFlavor
-    }> => ipcRenderer.invoke('ssh:browseDir', args),
+    }> => invoke('ssh:browseDir', args),
 
     onCredentialRequest: (
       callback: (data: {
@@ -5023,7 +4934,7 @@ const api = {
     },
 
     submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>
-      ipcRenderer.invoke('ssh:submitCredential', args)
+      invoke('ssh:submitCredential', args)
   },
 
   // Orca automation CRUD rides the local runtime RPC surface (`runtime:call`),
@@ -5032,29 +4943,28 @@ const api = {
     listExternalManagerForOwner: (
       request: ScopedExternalManagerListRequest
     ): Promise<ExternalAutomationManagerResult> =>
-      ipcRenderer.invoke('automations:listExternalManagerForOwner', request),
+      invoke('automations:listExternalManagerForOwner', request),
     listExternalRunsForOwner: (
       request: ScopedExternalManagerRunsRequest
     ): Promise<ExternalAutomationRunsPage> =>
-      ipcRenderer.invoke('automations:listExternalRunsForOwner', request),
+      invoke('automations:listExternalRunsForOwner', request),
     createExternalForOwner: (request: ScopedExternalManagerCreateRequest): Promise<void> =>
-      ipcRenderer.invoke('automations:createExternalForOwner', request),
+      invoke('automations:createExternalForOwner', request),
     updateExternalForOwner: (request: ScopedExternalManagerUpdateRequest): Promise<void> =>
-      ipcRenderer.invoke('automations:updateExternalForOwner', request),
+      invoke('automations:updateExternalForOwner', request),
     runExternalActionForOwner: (request: ScopedExternalManagerActionRequest): Promise<void> =>
-      ipcRenderer.invoke('automations:runExternalActionForOwner', request),
+      invoke('automations:runExternalActionForOwner', request),
     retainExternalScopes: (request: { owners: readonly AutomationOwnerRef[] }): Promise<void> =>
-      ipcRenderer.invoke('automations:retainExternalScopes', request),
+      invoke('automations:retainExternalScopes', request),
     runPrecheck: (args: {
       automationId: string
       runId: string
-    }): Promise<AutomationPrecheckResult | null> =>
-      ipcRenderer.invoke('automations:runPrecheck', args),
+    }): Promise<AutomationPrecheckResult | null> => invoke('automations:runPrecheck', args),
     markDispatchResult: (result: AutomationDispatchResult): Promise<AutomationRun> =>
-      ipcRenderer.invoke('automations:markDispatchResult', result),
+      invoke('automations:markDispatchResult', result),
     snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }): Promise<number> =>
-      ipcRenderer.invoke('automations:snapshotWorkspaceName', args),
-    rendererReady: (): Promise<void> => ipcRenderer.invoke('automations:rendererReady'),
+      invoke('automations:snapshotWorkspaceName', args),
+    rendererReady: (): Promise<void> => invoke('automations:rendererReady'),
     onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>
         callback(request)
@@ -5076,7 +4986,7 @@ const api = {
   mobile: {
     listNetworkInterfaces: (): Promise<{
       interfaces: { name: string; address: string; hasDefaultRoute?: boolean }[]
-    }> => ipcRenderer.invoke('mobile:listNetworkInterfaces'),
+    }> => invoke('mobile:listNetworkInterfaces'),
 
     getPairingQR: (args?: {
       address?: string
@@ -5101,14 +5011,14 @@ const api = {
           deviceId: string
           connectionMode: MobilePairingConnectionMode
         }
-    > => ipcRenderer.invoke('mobile:getPairingQR', args),
+    > => invoke('mobile:getPairingQR', args),
 
     getWindowsFirewallStatus: (args?: { address?: string }) =>
-      ipcRenderer.invoke('mobile:getWindowsFirewallStatus', args),
+      invoke('mobile:getWindowsFirewallStatus', args),
 
-    repairWindowsFirewall: () => ipcRenderer.invoke('mobile:repairWindowsFirewall'),
+    repairWindowsFirewall: () => invoke('mobile:repairWindowsFirewall'),
 
-    openWindowsNetworkSettings: () => ipcRenderer.invoke('mobile:openWindowsNetworkSettings'),
+    openWindowsNetworkSettings: () => invoke('mobile:openWindowsNetworkSettings'),
 
     getRuntimePairingUrl: (args?: {
       address?: string
@@ -5125,25 +5035,24 @@ const api = {
           endpoint: string
           deviceId: string
         }
-    > => ipcRenderer.invoke('mobile:getRuntimePairingUrl', args),
+    > => invoke('mobile:getRuntimePairingUrl', args),
 
     listDevices: (): Promise<{
       devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
-    }> => ipcRenderer.invoke('mobile:listDevices'),
+    }> => invoke('mobile:listDevices'),
 
     revokeDevice: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
-      ipcRenderer.invoke('mobile:revokeDevice', args),
+      invoke('mobile:revokeDevice', args),
 
-    listRuntimeAccessGrants: () => ipcRenderer.invoke('mobile:listRuntimeAccessGrants'),
+    listRuntimeAccessGrants: () => invoke('mobile:listRuntimeAccessGrants'),
 
     revokeRuntimeAccess: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
-      ipcRenderer.invoke('mobile:revokeRuntimeAccess', args),
+      invoke('mobile:revokeRuntimeAccess', args),
 
     isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
-      ipcRenderer.invoke('mobile:isWebSocketReady'),
+      invoke('mobile:isWebSocketReady'),
 
-    getRelayStatus: (): Promise<{ status: MobileRelayStatus }> =>
-      ipcRenderer.invoke('mobile:getRelayStatus'),
+    getRelayStatus: (): Promise<{ status: MobileRelayStatus }> => invoke('mobile:getRelayStatus'),
 
     onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: MobileRelayStatus) =>
@@ -5153,7 +5062,7 @@ const api = {
     },
 
     consumePendingUnpairedDeviceAuthFailure: (): Promise<boolean> =>
-      ipcRenderer.invoke('mobile:consumePendingUnpairedDeviceAuthFailure'),
+      invoke('mobile:consumePendingUnpairedDeviceAuthFailure'),
 
     /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
     onUnpairedDeviceAuthFailure: (callback: () => void): (() => void) => {
@@ -5178,12 +5087,11 @@ const api = {
       return () => ipcRenderer.removeListener('agentStatus:clear', listener)
     },
     /** Pull cached hook statuses after renderer hydration, so startup replays aren't lost before tabs exist. */
-    getSnapshot: (): Promise<AgentStatusIpcPayload[]> =>
-      ipcRenderer.invoke('agentStatus:getSnapshot'),
+    getSnapshot: (): Promise<AgentStatusIpcPayload[]> => invoke('agentStatus:getSnapshot'),
     inferInterrupt: (request: AgentInterruptInferenceRequest): Promise<boolean> =>
-      ipcRenderer.invoke('agentStatus:inferInterrupt', request),
+      invoke('agentStatus:inferInterrupt', request),
     inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest): Promise<boolean> =>
-      ipcRenderer.invoke('agentStatus:inferQuestionAnswered', request),
+      invoke('agentStatus:inferQuestionAnswered', request),
     onMigrationUnsupported: (
       callback: (entry: MigrationUnsupportedPtyEntry) => void
     ): (() => void) => {
@@ -5217,7 +5125,7 @@ const api = {
       return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalRecovery', listener)
     },
     getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
-      ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),
+      invoke('agentStatus:getMigrationUnsupportedSnapshot'),
     /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
@@ -5245,35 +5153,31 @@ const api = {
   },
 
   speech: {
-    getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
-    getModelStates: (): Promise<SpeechModelState[]> => ipcRenderer.invoke('speech:getModelStates'),
+    getCatalog: (): Promise<SpeechModelManifest[]> => invoke('speech:getCatalog'),
+    getModelStates: (): Promise<SpeechModelState[]> => invoke('speech:getModelStates'),
     getOpenAiApiKeyStatus: (): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('speech:getOpenAiApiKeyStatus'),
+      invoke('speech:getOpenAiApiKeyStatus'),
     saveOpenAiApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
-    clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('speech:clearOpenAiApiKey'),
-    downloadModel: (modelId: string): Promise<void> =>
-      ipcRenderer.invoke('speech:downloadModel', modelId),
-    cancelDownload: (modelId: string): Promise<void> =>
-      ipcRenderer.invoke('speech:cancelDownload', modelId),
-    deleteModel: (modelId: string): Promise<void> =>
-      ipcRenderer.invoke('speech:deleteModel', modelId),
+      invoke('speech:saveOpenAiApiKey', apiKey),
+    clearOpenAiApiKey: (): Promise<{ configured: boolean }> => invoke('speech:clearOpenAiApiKey'),
+    downloadModel: (modelId: string): Promise<void> => invoke('speech:downloadModel', modelId),
+    cancelDownload: (modelId: string): Promise<void> => invoke('speech:cancelDownload', modelId),
+    deleteModel: (modelId: string): Promise<void> => invoke('speech:deleteModel', modelId),
     startDictation: (
       modelId: string,
       hotwords: string[] | undefined,
       sessionId: string
-    ): Promise<void> => ipcRenderer.invoke('speech:startDictation', modelId, hotwords, sessionId),
+    ): Promise<void> => invoke('speech:startDictation', modelId, hotwords, sessionId),
     feedAudio: (samples: Float32Array, sampleRate: number, sessionId = 'desktop'): Promise<void> =>
       // Why: Float32Array is zeroed crossing the contextBridge/IPC boundary; wrap in a Buffer to preserve bytes.
-      ipcRenderer.invoke(
+      invoke(
         'speech:feedAudio',
         Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength),
         sampleRate,
         sessionId
       ),
     stopDictation: (sessionId = 'desktop'): Promise<void> =>
-      ipcRenderer.invoke('speech:stopDictation', sessionId),
+      invoke('speech:stopDictation', sessionId),
 
     onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>

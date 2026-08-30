@@ -86,7 +86,8 @@ describe('GitHub IPC channel parity', () => {
     github.registerGitHubHandlers(harness.store as never, harness.stats as never)
 
     const preloadSource = readFileSync(new URL('../../preload/index.ts', import.meta.url), 'utf8')
-    const exposedChannels = [...preloadSource.matchAll(/ipcRenderer\.invoke\('(gh:[^']+)'/g)].map(
+    // Channels go through the preload boundary wrapper, so match the call rather than the receiver.
+    const exposedChannels = [...preloadSource.matchAll(/(?<![\w.])invoke\('(gh:[^']+)'/g)].map(
       (match) => match[1]
     )
     const registeredChannels = mocks.electron.ipcMain.handle.mock.calls.map(

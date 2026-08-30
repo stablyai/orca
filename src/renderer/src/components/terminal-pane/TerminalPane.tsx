@@ -492,8 +492,9 @@ function TerminalPane(
       setSessionStateSaveFailureOpen(true)
       return
     }
-    // Why: the surface renders the reason without Electron's IPC envelope, so the wrapped form —
-    // which names the channel that failed — has to reach the log from here instead.
+    // Why still here: the preload boundary strips rejections, but a pane error can also arrive over
+    // an event channel, which never passes through it. This is the wrapped form's only log on that
+    // path, so it narrowed rather than became dead.
     if (stripIpcInvokeEnvelope(message) !== message) {
       console.warn('[terminal] pane error reached the error surface IPC-wrapped; raw:', message)
     }
