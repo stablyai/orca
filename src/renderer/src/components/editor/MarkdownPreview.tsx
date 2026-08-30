@@ -59,6 +59,7 @@ import {
   remarkMarkdownDocLinks,
   resolveMarkdownDocLink
 } from './markdown-doc-links'
+import { remarkCalloutAlerts } from './markdown-callout-alerts'
 import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-internal-links'
 import { useLocalImageSrc } from './useLocalImageSrc'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
@@ -310,7 +311,13 @@ const markdownPreviewSanitizeSchema = {
       ...(defaultSchema.attributes?.code ?? []),
       ['className', /^language-[\w-]+$/, 'math-inline', 'math-display']
     ],
-    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^language-[\w-]+$/], 'align'],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      ['className', /^language-[\w-]+$/, /^md-alert(?:-[a-z]+)?$/],
+      ['role', 'note'],
+      'align'
+    ],
+    p: [...(defaultSchema.attributes?.p ?? []), ['className', 'md-alert-title']],
     details: [
       ...(defaultSchema.attributes?.details ?? []),
       'open',
@@ -340,6 +347,8 @@ type MarkdownPluginList = NonNullable<ReactMarkdownOptions['remarkPlugins']>
 const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGfm,
   remarkBreaks,
+  // Order-independent: splits callout body on a break node or a raw newline.
+  remarkCalloutAlerts,
   remarkFrontmatter,
   remarkMath,
   remarkMarkdownDocLinks
