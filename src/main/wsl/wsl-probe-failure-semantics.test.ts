@@ -37,9 +37,13 @@ const SWALLOW_ALLOWLIST: readonly string[] = readFileSync(
  */
 const SCANNED_ROOTS = ['main/wsl', 'main/preflight', 'main/ipc/preflight']
 
-/** `catch { return <indistinguishable-from-a-real-negative> }`. */
+/** `catch { return <indistinguishable-from-a-real-negative> }`.
+ *
+ *  Comments are tolerated on BOTH sides of the return: the doc asks authors to
+ *  write down why a swallow is safe, and the natural place for that sentence is
+ *  trailing the `return` — which must not be a way to slip past the guard. */
 const SWALLOW_PATTERN =
-  /catch\s*(?:\([^)]*\))?\s*\{\s*(?:\/\/[^\n]*\n\s*)*return\s+(?:false|\[\]|null|undefined|new Set\(\)|new Map\(\))\s*;?\s*\}/
+  /catch\s*(?:\([^)]*\))?\s*\{\s*(?:\/\/[^\n]*\n\s*|\/\*[\s\S]*?\*\/\s*)*return\s+(?:false|\[\]|null|undefined|new Set\(\)|new Map\(\))\s*;?\s*(?:\/\/[^\n]*\n?\s*|\/\*[\s\S]*?\*\/\s*)*\}/
 
 const SRC_ROOT = resolve(__dirname, '..', '..')
 
