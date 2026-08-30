@@ -36,6 +36,7 @@ export function getLatestUnreadDirectMessageSequenceForRun(
 }
 
 // Why: change mailbox ownership without changing unread or acknowledgment state.
+// The push stamp is owner-scoped, so it resets: the new owner was never pointed at this mail.
 export function routeDirectMessagePage(
   this: OrchestrationDb,
   mailboxHandle: string,
@@ -76,7 +77,7 @@ export function routeDirectMessagePage(
     const placeholders = page.map(() => '?').join(',')
     const result = this.db
       .prepare(
-        `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?
+        `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?, delivered_at = NULL
          WHERE run_id = ? AND to_handle = ? AND read = 0
            AND delivery_contract = 'current_delivery' AND id IN (${placeholders})`
       )
@@ -143,7 +144,7 @@ export function routeUnreadDispatchMailboxToRunMailbox(
     const placeholders = page.map(() => '?').join(',')
     const result = this.db
       .prepare(
-        `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?
+        `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?, delivered_at = NULL
          WHERE run_id = ? AND to_handle = ? AND read = 0
            AND delivery_contract = 'current_delivery'
            AND id IN (${placeholders})`

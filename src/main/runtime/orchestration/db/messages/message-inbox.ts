@@ -9,7 +9,8 @@ const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 function runBatchedMessageMutation(
   db: OrchestrationDb,
   ids: string[],
-  sqlForPlaceholders: (placeholders: string) => string
+  sqlForPlaceholders: (placeholders: string) => string,
+  leadingParams: string[] = []
 ): void {
   if (ids.length === 0) {
     return
@@ -19,7 +20,7 @@ function runBatchedMessageMutation(
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
       const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
       const placeholders = batch.map(() => '?').join(',')
-      db.db.prepare(sqlForPlaceholders(placeholders)).run(...batch)
+      db.db.prepare(sqlForPlaceholders(placeholders)).run(...leadingParams, ...batch)
     }
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
   } catch (error) {
@@ -168,13 +169,20 @@ export function markAsDelivered(this: OrchestrationDb, ids: string[]): void {
   )
 }
 
-export function markAsUndelivered(this: OrchestrationDb, ids: string[]): void {
+// Why: the push stamp is owner-scoped, so an abandoned flight may only release the
+// mailbox it staged — the mail may since have moved on and been pointed at by its new owner.
+export function markAsUndelivered(
+  this: OrchestrationDb,
+  ids: string[],
+  mailboxHandle: string
+): void {
   runBatchedMessageMutation(
     this,
     ids,
     (placeholders) =>
       `UPDATE messages SET delivered_at = NULL
-       WHERE read = 0 AND id IN (${placeholders})`
+       WHERE read = 0 AND to_handle = ? AND id IN (${placeholders})`,
+    [mailboxHandle]
   )
 }
 

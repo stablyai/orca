@@ -3,6 +3,7 @@ import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 export type OrchestrationMailboxDeliveryFlight = {
   enterTimer: ReturnType<typeof setTimeout> | null
   stagedMessageIds: string[]
+  stagedMailboxHandle: string | null
 }
 
 export type ParkedOrchestrationMailboxDelivery = {
@@ -28,7 +29,7 @@ export class OrchestrationMailboxPointerState {
   }
 
   beginFlight(ptyId: string): OrchestrationMailboxDeliveryFlight {
-    const flight = { enterTimer: null, stagedMessageIds: [] }
+    const flight = { enterTimer: null, stagedMessageIds: [], stagedMailboxHandle: null }
     this.flightsByPtyId.set(ptyId, flight)
     return flight
   }

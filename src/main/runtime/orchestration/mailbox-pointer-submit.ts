@@ -76,7 +76,10 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       let released = false
       if (finalizeReservation) {
         if (clearAndRedrive) {
-          deps.getDb()?.markAsUndelivered(input.messages.map((message) => message.id))
+          deps.getDb()?.markAsUndelivered(
+            input.messages.map((message) => message.id),
+            input.mailboxHandle
+          )
         }
         released =
           submitted || clearAndRedrive || releaseWithoutRedrive

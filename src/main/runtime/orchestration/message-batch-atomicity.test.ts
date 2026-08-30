@@ -2,12 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 
-type MessageMutation =
-  | 'markAsRead'
-  | 'markAsDelivered'
-  | 'markAsUndelivered'
-  | 'markAsReadAndDelivered'
-
 const messageIds = Array.from(
   { length: 501 },
   (_, index) => `m${index.toString().padStart(3, '0')}`
@@ -40,26 +34,34 @@ describe('message batch atomicity', () => {
   afterEach(() => db?.close())
 
   it.each<{
-    method: MessageMutation
+    method: string
     setup?: string
     changedCountSql: string
+    mutate: (db: OrchestrationDb) => void
   }>([
-    { method: 'markAsRead', changedCountSql: 'SELECT COUNT(*) count FROM messages WHERE read = 1' },
+    {
+      method: 'markAsRead',
+      changedCountSql: 'SELECT COUNT(*) count FROM messages WHERE read = 1',
+      mutate: (db) => db.markAsRead(messageIds)
+    },
     {
       method: 'markAsDelivered',
-      changedCountSql: 'SELECT COUNT(*) count FROM messages WHERE delivered_at IS NOT NULL'
+      changedCountSql: 'SELECT COUNT(*) count FROM messages WHERE delivered_at IS NOT NULL',
+      mutate: (db) => db.markAsDelivered(messageIds)
     },
     {
       method: 'markAsUndelivered',
       setup: "UPDATE messages SET delivered_at = datetime('now')",
-      changedCountSql: 'SELECT COUNT(*) count FROM messages WHERE delivered_at IS NULL'
+      changedCountSql: 'SELECT COUNT(*) count FROM messages WHERE delivered_at IS NULL',
+      mutate: (db) => db.markAsUndelivered(messageIds, 'recipient')
     },
     {
       method: 'markAsReadAndDelivered',
       changedCountSql:
-        'SELECT COUNT(*) count FROM messages WHERE read = 1 OR delivered_at IS NOT NULL'
+        'SELECT COUNT(*) count FROM messages WHERE read = 1 OR delivered_at IS NOT NULL',
+      mutate: (db) => db.markAsReadAndDelivered(messageIds)
     }
-  ])('rolls back $method when a later batch fails', ({ method, setup, changedCountSql }) => {
+  ])('rolls back $method when a later batch fails', ({ setup, changedCountSql, mutate }) => {
     db = new OrchestrationDb(':memory:')
     const sqlite = (db as unknown as { db: Database.Database }).db
     seedMessages(sqlite)
@@ -68,7 +70,7 @@ describe('message batch atomicity', () => {
     }
     rejectLastMessageUpdate(sqlite)
 
-    expect(() => db?.[method](messageIds)).toThrow('blocked')
+    expect(() => mutate(db!)).toThrow('blocked')
 
     const changed = sqlite.prepare(changedCountSql).get() as { count: number }
     expect(changed.count).toBe(0)

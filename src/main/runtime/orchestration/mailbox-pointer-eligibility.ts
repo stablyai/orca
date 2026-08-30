@@ -1,4 +1,16 @@
 import type { OrchestrationDb } from './db'
+import { isOrchestrationMailboxAddress, RUN_MAILBOX_PREFIX } from './mailbox-address'
+
+/** A pointable mailbox is a Run/Dispatch address whose prior delivery is settled. */
+export function canPointAtMailbox(db: OrchestrationDb, mailboxHandle: string): boolean {
+  if (!isOrchestrationMailboxAddress(mailboxHandle)) {
+    return false
+  }
+  return !(
+    mailboxHandle.startsWith(RUN_MAILBOX_PREFIX) &&
+    db.hasOutstandingRunDelivery?.(mailboxHandle.slice(RUN_MAILBOX_PREFIX.length))
+  )
+}
 
 export type OrchestrationMessageWaiter = { typeFilter: string[] | undefined }
 

@@ -3,6 +3,7 @@ import { ORCHESTRATION_DELIVERY_BATCH_LIMIT, type OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
 import type { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
 import {
+  canPointAtMailbox,
   hasUnfilteredOrchestrationWaiter,
   messageTypeHasOrchestrationWaiter,
   shouldReleaseOrchestrationPointer,
@@ -65,13 +66,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   ): void {
     const db = this.deps.getDb()
     const mailboxHandle = options.mailboxHandle
-    if (!db || !mailboxHandle.startsWith('run:')) {
+    if (!db || !canPointAtMailbox(db, mailboxHandle)) {
       return
     }
     if (!this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))) {
-      return
-    }
-    if (db.hasOutstandingRunDelivery?.(mailboxHandle.slice('run:'.length))) {
       return
     }
     if (leaf.ptyId && this.state.hasFlight(leaf.ptyId)) {
@@ -144,8 +142,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (flight?.enterTimer != null) {
       clearTimeout(flight.enterTimer)
     }
-    if (flight?.stagedMessageIds.length) {
-      this.deps.getDb()?.markAsUndelivered(flight.stagedMessageIds)
+    if (flight?.stagedMessageIds.length && flight.stagedMailboxHandle) {
+      this.deps.getDb()?.markAsUndelivered(flight.stagedMessageIds, flight.stagedMailboxHandle)
     }
     for (const mailboxHandle of releasedMailboxes) {
       this.redrive(mailboxHandle, true)
@@ -239,6 +237,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         return
       }
       flight.stagedMessageIds = unread.map((message) => message.id)
+      flight.stagedMailboxHandle = mailboxHandle
       db.markAsDelivered(flight.stagedMessageIds)
       this.state.setWatermark(mailboxHandle, newestSequence, ptyId, this.leafKey(leaf))
       if (
