@@ -30145,6 +30145,96 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('prunes renderer-origin mobile-created pending tabs when desktop republishes fewer tabs', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const rendererTab = (tabId: string, leafId: string, title: string, isActive = false) => ({
+      type: 'terminal' as const,
+      id: `${tabId}::${leafId}`,
+      parentTabId: tabId,
+      leafId,
+      title,
+      isActive
+    })
+    const desktopTabs = [
+      rendererTab('desktop-tab-1', '11111111-1111-4111-8111-111111111111', 'Agent'),
+      rendererTab('desktop-tab-2', '22222222-2222-4222-8222-222222222222', 'Shell'),
+      rendererTab('desktop-tab-3', '33333333-3333-4333-8333-333333333333', 'Logs', true)
+    ]
+
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:issue-5910',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: desktopTabs[2]!.id,
+          activeTabType: 'terminal',
+          tabGroups: [
+            {
+              id: 'group-1',
+              activeTabId: 'desktop-tab-3',
+              tabOrder: [
+                'desktop-tab-1',
+                'desktop-tab-2',
+                'desktop-tab-3',
+                'mobile-created-ghost-1',
+                'mobile-created-ghost-2'
+              ]
+            }
+          ],
+          tabs: [
+            ...desktopTabs,
+            rendererTab(
+              'mobile-created-ghost-1',
+              '44444444-4444-4444-8444-444444444444',
+              'Starting agent'
+            ),
+            rendererTab(
+              'mobile-created-ghost-2',
+              '55555555-5555-4555-8555-555555555555',
+              'Starting agent'
+            )
+          ]
+        }
+      ]
+    })
+
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:issue-5910',
+          snapshotVersion: 2,
+          activeGroupId: 'group-1',
+          activeTabId: desktopTabs[2]!.id,
+          activeTabType: 'terminal',
+          tabGroups: [
+            {
+              id: 'group-1',
+              activeTabId: 'desktop-tab-3',
+              tabOrder: ['desktop-tab-1', 'desktop-tab-2', 'desktop-tab-3']
+            }
+          ],
+          tabs: desktopTabs
+        }
+      ]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs.map((tab) => tab.id)).toEqual(desktopTabs.map((tab) => tab.id))
+    expect(listed.tabGroups?.[0]?.tabOrder).toEqual([
+      'desktop-tab-1',
+      'desktop-tab-2',
+      'desktop-tab-3'
+    ])
+  })
+
   it('publishes laptop-created remote runtime split terminals to phone session tabs', async () => {
     const spawn = vi
       .fn()
