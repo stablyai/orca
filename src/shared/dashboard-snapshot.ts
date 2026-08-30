@@ -1,4 +1,5 @@
 import type { AgentType, AgentWorkingMode } from './agent-status-types'
+import type { CheckStatus } from './github/pull-request-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
@@ -50,6 +51,17 @@ export function dashboardCardDisplayState(
 export type DashboardCardReview = {
   number: number
   state: 'open' | 'closed' | 'merged' | 'draft'
+  /** CI rollup for the review's head. Additive — older pop-outs ignore it. */
+  checksStatus?: CheckStatus
+  /** Absent when the cache entry carries no URL; the badge then stays inert. */
+  url?: string
+}
+
+/** The Linear issue a workspace is linked to, for the card's ticket badge. */
+export type DashboardCardLinearIssue = {
+  identifier: string
+  /** Absent until the workspace knows its Linear org key — badge stays inert. */
+  url?: string
 }
 
 export type DashboardCardSubagent = {
@@ -121,6 +133,7 @@ export type DashboardCard = {
   /** True when the workspace links a review whose live state is not cached yet. */
   hasReview?: boolean
   review?: DashboardCardReview
+  linearIssue?: DashboardCardLinearIssue
   subagents?: DashboardCardSubagent[]
   /** "Started … ago" display. */
   startedAt: number

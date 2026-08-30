@@ -1,12 +1,6 @@
 import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  ChevronRight,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  GitPullRequestDraft
-} from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
@@ -21,6 +15,7 @@ import {
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { DashboardHostBadge } from './DashboardHostBadge'
+import { AgentKanbanCardBadges } from './AgentKanbanCardBadges'
 
 /** Compact "started N ago" (the card is glanceable — coarse units are fine). */
 function formatStartedAgo(startedAt: number, now: number): string {
@@ -103,6 +98,10 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.hasReview === b.hasReview &&
     a.review?.number === b.review?.number &&
     a.review?.state === b.review?.state &&
+    a.review?.checksStatus === b.review?.checksStatus &&
+    a.review?.url === b.review?.url &&
+    a.linearIssue?.identifier === b.linearIssue?.identifier &&
+    a.linearIssue?.url === b.linearIssue?.url &&
     sameSubagents(a.subagents, b.subagents) &&
     a.startedAt === b.startedAt &&
     a.finishedAt === b.finishedAt &&
@@ -110,57 +109,6 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.unseen === b.unseen &&
     a.askSummary === b.askSummary &&
     a.conversationName === b.conversationName
-  )
-}
-
-const REVIEW_PRESENTATION = {
-  open: {
-    icon: GitPullRequest,
-    className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-  },
-  draft: {
-    icon: GitPullRequestDraft,
-    className: 'border-border bg-muted/60 text-muted-foreground'
-  },
-  merged: {
-    icon: GitMerge,
-    className: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300'
-  },
-  closed: {
-    icon: GitPullRequestClosed,
-    className: 'border-destructive/30 bg-destructive/10 text-destructive'
-  }
-} as const
-
-function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null {
-  if (!card.review) {
-    return null
-  }
-  const presentation = REVIEW_PRESENTATION[card.review.state]
-  const Icon = presentation.icon
-  const title = (() => {
-    switch (card.review.state) {
-      case 'open':
-        return translate('dashboardPopout.card.review.open', 'Open review')
-      case 'draft':
-        return translate('dashboardPopout.card.review.draft', 'Draft review')
-      case 'merged':
-        return translate('dashboardPopout.card.review.merged', 'Merged review')
-      case 'closed':
-        return translate('dashboardPopout.card.review.closed', 'Closed review')
-    }
-  })()
-  return (
-    <span
-      role="img"
-      aria-label={`${title} #${card.review.number}`}
-      className={cn(
-        'inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1 py-px text-[10px] leading-none tabular-nums',
-        presentation.className
-      )}
-    >
-      <Icon className="size-2.5" aria-hidden />#{card.review.number}
-    </span>
   )
 }
 
@@ -214,6 +162,7 @@ export const AgentKanbanCard = memo(
     // the best heading left — and then the footer drops it rather than say it
     // twice.
     const heading = card.conversationName ?? card.worktreeName
+    const hasCornerBadges = Boolean(card.review || card.linearIssue)
     const worktreeInFooter = card.conversationName !== undefined
 
     return (
@@ -223,7 +172,7 @@ export const AgentKanbanCard = memo(
         // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
-          'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
+          'group relative flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
           needsYou
             ? 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
             : isDone
@@ -231,16 +180,28 @@ export const AgentKanbanCard = memo(
               : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
         )}
       >
+        {/* Why: the corner sits above the open-terminal button because the
+            review and ticket are their own links — a button cannot nest in a
+            button — and the heading reserves room so it truncates, not overlaps. */}
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+          <AgentKanbanCardBadges card={card} />
+          {card.askSummary ? null : <AgentStateDot state={displayState} />}
+        </div>
+
         <button
           type="button"
           onClick={() => onOpenTerminal(card)}
           className="flex w-full flex-col gap-1.5 text-left focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          <div className="flex w-full items-center gap-1.5">
-            {/* Why: a bare <svg> flex item shrinks with the row. */}
-            <span className="inline-flex shrink-0">
-              <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
-            </span>
+          <div
+            className={cn(
+              'flex w-full items-center gap-1.5',
+              // Why: the corner overlay (review badge + capped-width ticket
+              // badge + gaps + state dot) can reach ~185px at its widest —
+              // pe-28 (112px) let it render under the heading text.
+              hasCornerBadges ? 'pe-48' : 'pe-4'
+            )}
+          >
             <span
               className={cn(
                 'truncate text-[12.5px]',
@@ -249,7 +210,6 @@ export const AgentKanbanCard = memo(
             >
               {heading}
             </span>
-            {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
           </div>
 
           {card.lastUserMessage || card.lastAgentMessage ? (
@@ -317,15 +277,22 @@ export const AgentKanbanCard = memo(
         <button
           type="button"
           onClick={() => onOpenTerminal(card)}
-          className="flex w-full items-center gap-2 rounded-md text-left text-[11px] text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="flex w-full items-center gap-1.5 rounded-md text-left text-[11px] text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
+          <span className="inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+            {/* Why: a bare <svg> flex item shrinks with the row. */}
+            <span className="inline-flex shrink-0">
+              <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={11} />
+            </span>
+            {formatAgentTypeLabel(card.agentType)}
+          </span>
           <Tooltip>
             <TooltipTrigger asChild>
               <span
-                className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-muted-foreground/10 text-muted-foreground transition-colors group-hover:text-foreground"
+                className="inline-flex size-[16px] shrink-0 items-center justify-center rounded-[4px] bg-muted-foreground/10 text-muted-foreground transition-colors group-hover:text-foreground"
                 aria-label={card.repoName}
               >
-                <RepoIconGlyph repoIcon={repoIcon} className="size-3" iconClassName="size-3" />
+                <RepoIconGlyph repoIcon={repoIcon} className="size-2.5" iconClassName="size-2.5" />
               </span>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
@@ -336,10 +303,9 @@ export const AgentKanbanCard = memo(
             hostKind={card.hostKind}
             executionHostId={card.executionHostId}
             hostLabel={card.hostLabel}
-            className="size-[18px] rounded-[5px] bg-muted-foreground/10 transition-colors group-hover:text-foreground"
+            className="size-[16px] rounded-[4px] bg-muted-foreground/10 transition-colors group-hover:text-foreground"
           />
           {worktreeInFooter ? <span className="truncate">{card.worktreeName}</span> : null}
-          <ReviewPill card={card} />
           {displayTimestamp(card) > 0 ? (
             <span className="ml-auto shrink-0 pl-1 tabular-nums">
               {formatStartedAgo(displayTimestamp(card), now)}

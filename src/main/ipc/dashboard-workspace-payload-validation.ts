@@ -4,11 +4,11 @@ import {
   type DashboardWorkspace
 } from '../../shared/dashboard-snapshot'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
+import { MAX_ID_LENGTH } from './dashboard-payload-primitives'
+import { isDashboardReview } from './dashboard-review-payload-validation'
 
-const MAX_ID_LENGTH = 4_096
 const HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])
 const WORKSPACE_KINDS = new Set(['worktree', 'folder'])
-const REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
 
 function isString(value: unknown, maxLength: number, allowEmpty = false): value is string {
   return typeof value === 'string' && value.length <= maxLength && (allowEmpty || value.length > 0)
@@ -16,23 +16,6 @@ function isString(value: unknown, maxLength: number, allowEmpty = false): value 
 
 function isOptionalString(value: unknown, maxLength: number): boolean {
   return value === undefined || isString(value, maxLength, true)
-}
-
-function isReview(value: unknown): boolean {
-  if (value === undefined) {
-    return true
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  const review = value as Record<string, unknown>
-  return (
-    typeof review.number === 'number' &&
-    Number.isFinite(review.number) &&
-    review.number > 0 &&
-    typeof review.state === 'string' &&
-    REVIEW_STATES.has(review.state)
-  )
 }
 
 export function isDashboardWorkspace(value: unknown): value is DashboardWorkspace {
@@ -57,7 +40,7 @@ export function isDashboardWorkspace(value: unknown): value is DashboardWorkspac
     isOptionalString(workspace.workspaceStatusLabel, DASHBOARD_MAX_LABEL_LENGTH) &&
     isOptionalString(workspace.workspaceStatusColor, MAX_ID_LENGTH) &&
     (workspace.hasReview === undefined || typeof workspace.hasReview === 'boolean') &&
-    isReview(workspace.review)
+    isDashboardReview(workspace.review)
   )
 }
 

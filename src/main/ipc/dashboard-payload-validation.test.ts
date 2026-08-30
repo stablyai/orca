@@ -579,3 +579,45 @@ describe('dashboard payload validation', () => {
     ).toBe(false)
   })
 })
+
+describe('review and linked-ticket card fields', () => {
+  function withCard(fields: Record<string, unknown>): unknown {
+    return { ...SNAPSHOT, cards: [{ ...SNAPSHOT.cards[0], ...fields }] }
+  }
+
+  it('accepts a review carrying its CI rollup and web URL', () => {
+    expect(
+      isDashboardSnapshot(
+        withCard({
+          review: {
+            number: 42,
+            state: 'open',
+            checksStatus: 'failure',
+            url: 'https://github.test/o/r/pull/42'
+          },
+          linearIssue: { identifier: 'STA-335', url: 'https://linear.app/acme/issue/STA-335' }
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('rejects a link the pop-out would hand to the OS opener', () => {
+    // The badges call shell.openUrl directly, so anything but http(s) is a hole.
+    expect(
+      isDashboardSnapshot(
+        withCard({ review: { number: 42, state: 'open', url: 'javascript:alert(1)' } })
+      )
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot(
+        withCard({ linearIssue: { identifier: 'STA-335', url: 'file:///etc/passwd' } })
+      )
+    ).toBe(false)
+  })
+
+  it('rejects an unknown CI rollup', () => {
+    expect(
+      isDashboardSnapshot(withCard({ review: { number: 42, state: 'open', checksStatus: 'oops' } }))
+    ).toBe(false)
+  })
+})

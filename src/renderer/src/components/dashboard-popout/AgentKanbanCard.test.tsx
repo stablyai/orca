@@ -158,7 +158,7 @@ describe('AgentKanbanCard', () => {
       onOpenTerminal
     })
 
-    fireEvent.click(screen.getByText('#11042'))
+    fireEvent.click(screen.getByText('dashboard-review'))
     expect(onOpenTerminal).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByRole('button', { name: '1 subagent' }))

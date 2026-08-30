@@ -82,7 +82,13 @@ describe('resolveDashboardCardContext', () => {
         repo,
         worktree(link)
       ).review
-    ).toEqual({ number: 77, state: 'open' })
+      // The card's CI dot and its click target both ride along with the review.
+    ).toEqual({
+      number: 77,
+      state: 'open',
+      checksStatus: 'success',
+      url: 'https://example.test/review/77'
+    })
   })
 
   it('keeps validated GitHub PR cache metadata as a fallback', () => {
@@ -107,7 +113,12 @@ describe('resolveDashboardCardContext', () => {
         repo,
         worktree({ linkedPR: 42 })
       ).review
-    ).toEqual({ number: 42, state: 'draft' })
+    ).toEqual({
+      number: 42,
+      state: 'draft',
+      checksStatus: 'pending',
+      url: 'https://example.test/pull/42'
+    })
   })
 
   it('rejects cached review metadata from the previous linked review', () => {
@@ -128,5 +139,30 @@ describe('resolveDashboardCardContext', () => {
         worktree()
       ).review
     ).toBeUndefined()
+  })
+})
+
+describe('resolveDashboardCardContext linked ticket', () => {
+  it('links the ticket badge to Linear when the org key is known', () => {
+    expect(
+      resolveDashboardCardContext(
+        {},
+        repo,
+        worktree({
+          linkedLinearIssue: 'STA-335',
+          linkedLinearIssueOrganizationUrlKey: 'acme'
+        })
+      ).linearIssue
+    ).toEqual({ identifier: 'STA-335', url: 'https://linear.app/acme/issue/STA-335' })
+  })
+
+  it('still names the ticket when no org key is known, so the badge stays inert', () => {
+    expect(
+      resolveDashboardCardContext({}, repo, worktree({ linkedLinearIssue: 'STA-335' })).linearIssue
+    ).toEqual({ identifier: 'STA-335' })
+  })
+
+  it('has no ticket when the workspace links none', () => {
+    expect(resolveDashboardCardContext({}, repo, worktree()).linearIssue).toBeUndefined()
   })
 })

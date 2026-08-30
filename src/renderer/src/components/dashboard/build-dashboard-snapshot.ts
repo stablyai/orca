@@ -275,6 +275,7 @@ export function buildDashboardSnapshot(
         workspaceStatusColor: context?.workspaceStatus.color,
         hasReview: context ? context.hasReview || context.review !== undefined : undefined,
         review: context?.review,
+        linearIssue: context?.linearIssue,
         subagents: subagentsByParentPaneKey?.get(row.paneKey),
         lastUserMessage: isTitleDerived ? undefined : nonEmpty(row.entry.prompt),
         lastAgentMessage: isTitleDerived ? undefined : nonEmpty(row.entry.lastAssistantMessage),

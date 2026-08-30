@@ -17028,6 +17028,12 @@
         "merged": "Merged review",
         "closed": "Closed review"
       },
+      "checks": {
+        "pending": "CI running",
+        "success": "CI passing",
+        "failure": "CI failing",
+        "neutral": "CI neutral"
+      },
       "subagents_one": "{{count}} subagent",
       "subagents_other": "{{count}} subagents"
     },

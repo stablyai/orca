@@ -1,8 +1,7 @@
-import {
-  DASHBOARD_MAX_LABEL_LENGTH,
-  type DashboardRevealAgentArgs,
-  type DashboardSleepWorkspaceArgs,
-  type DashboardSnapshot
+import type {
+  DashboardRevealAgentArgs,
+  DashboardSleepWorkspaceArgs,
+  DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
 import { BoundedMap } from '../../shared/bounded-map'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
@@ -19,6 +18,14 @@ import {
   isDashboardWorkspaceList
 } from './dashboard-workspace-payload-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
+import {
+  isBoundedString,
+  isFiniteNumber,
+  isOptionalBoundedString,
+  MAX_ID_LENGTH,
+  MAX_LABEL_LENGTH
+} from './dashboard-payload-primitives'
+import { isDashboardLinearIssue, isDashboardReview } from './dashboard-review-payload-validation'
 export { isDashboardSpawnAgentArgs } from './dashboard-agent-launch-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
@@ -32,13 +39,10 @@ const imageIconValidity = new BoundedMap<string, boolean>({
   maxBytes: MAX_CACHED_ICON_SRC_BYTES,
   sizeOf: (_valid, key) => key.length * 2
 })
-const MAX_ID_LENGTH = 4_096
-const MAX_LABEL_LENGTH = DASHBOARD_MAX_LABEL_LENGTH
 const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'done', 'idle'])
 const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
 const DASHBOARD_HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])
 const DASHBOARD_WORKSPACE_KINDS = new Set(['worktree', 'folder'])
-const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
 const DASHBOARD_HOST_PLATFORMS = new Set([
   'aix',
   'android',
@@ -54,18 +58,6 @@ const DASHBOARD_HOST_PLATFORMS = new Set([
 ])
 const WINDOWS_SHIFT_ENTER_ENCODINGS = new Set(['alt-enter', 'csi-u'])
 const WINDOWS_INPUT_RECORD_PASTE_NEWLINES = new Set(['alt-enter', 'csi-u'])
-
-function isBoundedString(value: unknown, maxLength: number, allowEmpty = false): value is string {
-  return typeof value === 'string' && value.length <= maxLength && (allowEmpty || value.length > 0)
-}
-
-function isOptionalBoundedString(value: unknown, maxLength: number): boolean {
-  return value === undefined || isBoundedString(value, maxLength, true)
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
 
 export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRevealAgentArgs {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -174,22 +166,6 @@ function isDashboardRepoIcons(value: unknown): boolean {
   )
 }
 
-function isDashboardReview(value: unknown): boolean {
-  if (value === undefined) {
-    return true
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  const review = value as Record<string, unknown>
-  return (
-    isFiniteNumber(review.number) &&
-    review.number > 0 &&
-    typeof review.state === 'string' &&
-    DASHBOARD_REVIEW_STATES.has(review.state)
-  )
-}
-
 function isDashboardSubagents(value: unknown): boolean {
   if (value === undefined) {
     return true
@@ -284,6 +260,7 @@ function isDashboardCard(value: unknown): boolean {
     isOptionalBoundedString(card.workspaceStatusColor, MAX_ID_LENGTH) &&
     (card.hasReview === undefined || typeof card.hasReview === 'boolean') &&
     isDashboardReview(card.review) &&
+    isDashboardLinearIssue(card.linearIssue) &&
     isDashboardSubagents(card.subagents) &&
     isFiniteNumber(card.startedAt) &&
     (card.finishedAt === null || isFiniteNumber(card.finishedAt)) &&
