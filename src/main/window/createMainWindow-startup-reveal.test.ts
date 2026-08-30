@@ -49,6 +49,7 @@ describe('createMainWindow', () => {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
+      removeListener: vi.fn(),
       isDestroyed: vi.fn(() => false),
       isMaximized: vi.fn(() => false),
       isFullScreen: vi.fn(() => false),

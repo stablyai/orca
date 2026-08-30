@@ -127,6 +127,24 @@ describe('focusExistingMainWindow', () => {
     expect(timer.scheduledMs()).toEqual([])
   })
 
+  it('recovers window placement before revealing it', () => {
+    const window = makeFakeWindow()
+    const ensureWindowReachable = vi.fn()
+
+    focusExistingMainWindow({
+      app: makeFakeApp(),
+      ensureWindowReachable,
+      getWindow: () => window,
+      openWindow: vi.fn(),
+      platform: 'darwin'
+    })
+
+    expect(ensureWindowReachable).toHaveBeenCalledWith(window)
+    expect(ensureWindowReachable.mock.invocationCallOrder[0]).toBeLessThan(
+      window.calls.show.mock.invocationCallOrder[0]
+    )
+  })
+
   it('waits for normal startup when no window exists before app readiness', () => {
     const openWindow = vi.fn()
 

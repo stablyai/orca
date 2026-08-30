@@ -21,6 +21,7 @@ import {
   retireBrowserClientPageRenderer
 } from '../browser/browser-client-page-renderer-runtime'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
+import { recoverMainWindowBounds } from './main-window-reachability'
 
 export type MainWindowFocusLifecycle = {
   dispose: () => void
@@ -197,6 +198,7 @@ export function installMainWindowFocusLifecycle(args: {
       // Why: a transient renderer/Network Service loss can blank Chromium; reload the app document once to recover.
       // Why: mark this in-place reload so the did-finish-load orphan sweep spares live PTYs until session restore (#5787).
       opts?.onBeforeRecoveryReload?.(mainWindow.webContents.id)
+      recoverMainWindowBounds(mainWindow)
       reloadMainWindow()
     }, 250)
   }

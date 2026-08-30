@@ -262,6 +262,10 @@ import {
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
+import {
+  deferMainWindowBoundsRecovery,
+  isMainWindowReachable
+} from './window/main-window-reachability'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import { markCodexProjectTrusted } from './agent-trust-presets'
@@ -774,6 +778,7 @@ startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.sta
 function focusExistingWindow(): void {
   focusExistingMainWindow({
     app,
+    ensureWindowReachable: deferMainWindowBoundsRecovery,
     getWindow: () => mainWindow,
     openWindow: openMainWindow,
     warn: console.warn
@@ -803,6 +808,7 @@ skillShareDeepLinks.capture(process.argv)
 
 const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => mainWindow,
+  isWindowReachable: isMainWindowReachable,
   requestActivation: requestDesktopActivation
 })
 
@@ -1390,11 +1396,7 @@ async function prepareCodexSessionResumeForLaunch(args: {
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
 function showMainWindowFromTray(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) {
-      mainWindow.restore()
-    }
-    mainWindow.show()
-    mainWindow.focus()
+    focusExistingWindow()
     return
   }
   if (!isQuittingForUpdate()) {

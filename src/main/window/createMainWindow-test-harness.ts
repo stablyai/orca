@@ -53,8 +53,17 @@ export type ElectronModuleMock = {
   nativeTheme: { shouldUseDarkColors: boolean }
   powerMonitor: { on: MainWindowSpy; removeListener: MainWindowSpy }
   screen: {
-    getPrimaryDisplay: () => { workAreaSize: { width: number; height: number } }
-    getDisplayMatching: () => { scaleFactor: number }
+    getPrimaryDisplay: () => {
+      workArea: { x: number; y: number; width: number; height: number }
+      workAreaSize: { width: number; height: number }
+    }
+    getAllDisplays: () => { workArea: { x: number; y: number; width: number; height: number } }[]
+    getDisplayMatching: () => {
+      scaleFactor: number
+      workArea: { x: number; y: number; width: number; height: number }
+    }
+    on: MainWindowSpy
+    removeListener: MainWindowSpy
   }
   shell: { openExternal: MainWindowSpy }
 }
@@ -78,8 +87,17 @@ export function electronModuleMock(): ElectronModuleMock {
     nativeTheme: { shouldUseDarkColors: false },
     powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
     screen: {
-      getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } }),
-      getDisplayMatching: () => ({ scaleFactor: 2 })
+      getPrimaryDisplay: () => ({
+        workArea: { x: 0, y: 0, width: 1440, height: 900 },
+        workAreaSize: { width: 1440, height: 900 }
+      }),
+      getAllDisplays: () => [{ workArea: { x: 0, y: 0, width: 1440, height: 900 } }],
+      getDisplayMatching: () => ({
+        scaleFactor: 2,
+        workArea: { x: 0, y: 0, width: 1440, height: 900 }
+      }),
+      on: vi.fn(),
+      removeListener: vi.fn()
     },
     shell: { openExternal: openExternalMock }
   }

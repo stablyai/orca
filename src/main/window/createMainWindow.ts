@@ -16,6 +16,10 @@ import {
 } from './main-window-close-lifecycle'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
+import {
+  installMainWindowReachabilityLifecycle,
+  mainWindowBoundsHaveReachableTitlebar
+} from './main-window-reachability'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
 import {
@@ -28,7 +32,6 @@ import {
   TRAFFIC_LIGHT_X
 } from './main-window-visual-lifecycle'
 import { installMainWindowWebviewSecurity } from './main-window-webview-security'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
@@ -46,12 +49,12 @@ export function createMainWindow(
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
   const rawSavedBounds = store?.getUI().windowBounds
-  // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
+  // Why: reject undersized or unreachable bounds while preserving intentionally parked windows.
   const savedBounds =
     rawSavedBounds &&
     rawSavedBounds.width > MIN_WIDTH &&
     rawSavedBounds.height > MIN_HEIGHT &&
-    rectHasVisibleAreaOnAnyDisplay(rawSavedBounds, MIN_WIDTH / 2, MIN_HEIGHT / 2)
+    mainWindowBoundsHaveReachableTitlebar(rawSavedBounds)
       ? rawSavedBounds
       : undefined
   if (rawSavedBounds && !savedBounds) {
@@ -167,6 +170,7 @@ export function createMainWindow(
     savedMaximized,
     store
   })
+  const disposeReachability = installMainWindowReachabilityLifecycle(mainWindow)
   installMainWindowWebviewSecurity(mainWindow)
   const focus = installMainWindowFocusLifecycle({
     isWindowClosing: state.isWindowClosing,
@@ -192,6 +196,7 @@ export function createMainWindow(
     focus.dispose()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)
+    disposeReachability()
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)
     state.dispose()
   })

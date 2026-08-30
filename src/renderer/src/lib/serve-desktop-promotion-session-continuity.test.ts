@@ -57,6 +57,7 @@ afterEach(() => {
 function createFakeWindow(): BrowserWindow {
   return {
     isDestroyed: () => false,
+    isVisible: () => true,
     isMinimized: () => false,
     isAlwaysOnTop: () => false,
     restore: vi.fn(),
@@ -130,6 +131,7 @@ function bootHeadlessServeOwner(): {
     },
     dockActivate: createMacAppActivationHandler({
       getWindow: () => mainWindow,
+      isWindowReachable: () => true,
       requestActivation: () => requestDesktopActivation(DESKTOP_RELAUNCH_ARGV)
     }),
     settle: (options) => settleServeDesktopActivation(gate, options)

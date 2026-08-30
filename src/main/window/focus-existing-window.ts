@@ -6,6 +6,7 @@ export type FocusExistingMainWindowResult = 'focused' | 'opened' | 'pending'
 
 export type FocusExistingMainWindowOptions = {
   app: Pick<App, 'focus' | 'isReady'>
+  ensureWindowReachable?: (window: BrowserWindow) => void
   getWindow: () => BrowserWindow | null
   openWindow: () => BrowserWindow
   platform?: NodeJS.Platform
@@ -70,8 +71,10 @@ function activateWindow(
   window: BrowserWindow,
   app: Pick<App, 'focus'>,
   platform: NodeJS.Platform,
-  setTimer: FocusTimer
+  setTimer: FocusTimer,
+  ensureWindowReachable?: (window: BrowserWindow) => void
 ): void {
+  ensureWindowReachable?.(window)
   safelyFocusApp(app)
   safelyRevealWindow(window)
   if (platform === 'win32') {
@@ -93,7 +96,10 @@ const REOPEN_MAX_ATTEMPTS = 3
 const REOPEN_RETRY_DELAY_MS = 300
 
 function openWindowWithRetry(
-  opts: Pick<FocusExistingMainWindowOptions, 'app' | 'getWindow' | 'openWindow' | 'warn'>,
+  opts: Pick<
+    FocusExistingMainWindowOptions,
+    'app' | 'ensureWindowReachable' | 'getWindow' | 'openWindow' | 'warn'
+  >,
   platform: NodeJS.Platform,
   setTimer: FocusTimer,
   attempt: number
@@ -117,7 +123,7 @@ function openWindowWithRetry(
           ? existing
           : openWindowWithRetry(opts, platform, setTimer, attempt + 1)
       if (window) {
-        activateWindow(window, opts.app, platform, setTimer)
+        activateWindow(window, opts.app, platform, setTimer, opts.ensureWindowReachable)
       }
     }, REOPEN_RETRY_DELAY_MS)
     return null
@@ -143,6 +149,6 @@ export function focusExistingMainWindow(
     openedWindow = true
   }
 
-  activateWindow(window, opts.app, platform, setTimer)
+  activateWindow(window, opts.app, platform, setTimer, opts.ensureWindowReachable)
   return openedWindow ? 'opened' : 'focused'
 }

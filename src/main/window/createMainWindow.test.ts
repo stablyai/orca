@@ -473,7 +473,9 @@ describe('createMainWindow', () => {
       isDestroyed: vi.fn(() => false),
       isMaximized: vi.fn(() => false),
       isFullScreen: vi.fn(() => false),
+      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 800 })),
       getSize: vi.fn(() => windowSize),
+      setBounds: vi.fn(),
       setSize: vi.fn((width: number, height: number) => {
         windowSize = [width, height]
       }),
@@ -490,12 +492,16 @@ describe('createMainWindow', () => {
 
     expect(webContents.setBackgroundThrottling).toHaveBeenCalledWith(true)
     expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
-    expect(windowHandlers.get('restore')).toHaveLength(1)
-    expect(windowHandlers.get('show')).toHaveLength(1)
+    expect(windowHandlers.get('restore')?.length).toBeGreaterThanOrEqual(1)
+    expect(windowHandlers.get('show')?.length).toBeGreaterThanOrEqual(1)
     expect(windowHandlers.get('focus')).toHaveLength(1)
 
-    windowHandlers.get('show')?.[0]?.()
-    windowHandlers.get('restore')?.[0]?.()
+    for (const handler of windowHandlers.get('show') ?? []) {
+      handler()
+    }
+    for (const handler of windowHandlers.get('restore') ?? []) {
+      handler()
+    }
 
     expect(webContents.invalidate).toHaveBeenCalledTimes(2)
     // Why: the size nudge must never run inside the show/restore dispatch itself.
