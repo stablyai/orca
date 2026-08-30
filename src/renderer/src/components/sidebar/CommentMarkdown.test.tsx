@@ -272,4 +272,22 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('[overflow-wrap:anywhere]')
     expect(markup).toContain('overflow-x-auto')
   })
+
+  it('renders inline latex math equations via katex', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content="Equation: $E = mc^2$" />
+    )
+
+    expect(markup).toContain('class="katex"')
+    expect(markup).toContain('class="katex-html"')
+  })
+
+  it('renders display latex math blocks via katex', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'$$\n\\int_{a}^{b} f(x) dx\n$$'} />
+    )
+
+    expect(markup).toContain('class="katex-display"')
+    expect(markup).toContain('class="katex"')
+  })
 })
