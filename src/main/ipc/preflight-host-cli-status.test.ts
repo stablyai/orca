@@ -315,6 +315,100 @@ describe('preflight', () => {
     )
   })
 
+  describe('WSL preflight caching', () => {
+    // Why win32 + these stubs: a WSL target probes git/gh/glab through the
+    // runner, so every case below counts runner spawns rather than execFile.
+    function stubWslProbes(): void {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      execFileAsyncMock.mockImplementation(async () => {
+        throw Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' })
+      })
+      runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => ({
+        environmentResolved: true,
+        code: 0,
+        stdout: script.includes('auth status')
+          ? 'github.com\n  - Active account: true\n'
+          : 'version 2.0.0\n',
+        stderr: '',
+        timedOut: false
+      }))
+    }
+
+    it('reuses the cached result instead of re-spawning wsl.exe probes', async () => {
+      stubWslProbes()
+
+      const first = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      const spawnsAfterFirst = runWslProcessMock.mock.calls.length
+      const second = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+
+      expect(spawnsAfterFirst).toBeGreaterThan(0)
+      expect(runWslProcessMock.mock.calls.length).toBe(spawnsAfterFirst)
+      expect(second).toEqual(first)
+    })
+
+    it('keeps each distro on its own cache entry', async () => {
+      stubWslProbes()
+
+      await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      const spawnsAfterUbuntu = runWslProcessMock.mock.calls.length
+      await runPreflightCheck(false, { wslDistro: 'Debian' })
+
+      expect(runWslProcessMock.mock.calls.length).toBeGreaterThan(spawnsAfterUbuntu)
+      expect(runWslProcessMock).toHaveBeenCalledWith(expect.objectContaining({ distro: 'Debian' }))
+    })
+
+    it('re-probes when the caller forces a refresh', async () => {
+      stubWslProbes()
+
+      await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      const spawnsAfterFirst = runWslProcessMock.mock.calls.length
+      await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
+
+      expect(runWslProcessMock.mock.calls.length).toBeGreaterThan(spawnsAfterFirst)
+    })
+
+    it('collapses concurrent callers onto one probe set', async () => {
+      stubWslProbes()
+
+      const [first, second] = await Promise.all([
+        runPreflightCheck(false, { wslDistro: 'Ubuntu' }),
+        runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      ])
+      const singleRunSpawns = runWslProcessMock.mock.calls.length
+
+      runWslProcessMock.mockClear()
+      await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
+
+      expect(first).toEqual(second)
+      // One shared run, not two: a second full set would double the spawn count.
+      expect(singleRunSpawns).toBe(runWslProcessMock.mock.calls.length)
+    })
+
+    // Why this matters: an unreachable distro reports the same `installed:
+    // false` as a distro with no tooling, so a session-lifetime cache would pin
+    // "git not installed" until relaunch. The TTL must let it recover.
+    it('re-probes after the cache entry expires so a transient failure self-heals', async () => {
+      vi.useFakeTimers()
+      try {
+        stubWslProbes()
+        runWslProcessMock.mockRejectedValue(new Error('distro not running'))
+
+        const failed = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+        expect(failed.git).toEqual({ installed: false })
+
+        stubWslProbes()
+        runWslProcessMock.mockClear()
+        vi.advanceTimersByTime(30_000 + 1)
+        const recovered = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+
+        expect(runWslProcessMock.mock.calls.length).toBeGreaterThan(0)
+        expect(recovered.git).toEqual({ installed: true })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
   it('uses the persisted Windows Path when probing host CLIs', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,

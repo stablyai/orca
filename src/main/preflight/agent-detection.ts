@@ -77,10 +77,33 @@ export type { RemoteWindowsTerminalCapabilities }
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
 let cached: PreflightStatus | null = null
+// Why keyed by distro rather than one slot: each distro carries its own
+// toolchain, so distro A's result must never answer for distro B. Previously a
+// WSL target skipped the cache entirely and re-spawned five wsl.exe probes —
+// two of them login shells — on every caller, waking an idle VM each time.
+//
+// Why a TTL here when the local cache lasts the session: `isCommandAvailable`
+// collapses every failure into `installed: false`, so an unreachable distro is
+// indistinguishable from one with no tooling. Pinning that for the session
+// would report "git not installed" until relaunch; expiring lets it self-heal
+// while still collapsing the burst of calls that made this expensive.
+const WSL_PREFLIGHT_CACHE_TTL_MS = 30_000
+const cachedByWslDistro = new Map<string, { result: PreflightStatus; expiresAt: number }>()
+// Collapses concurrent callers (several panes mounting at once) onto one probe
+// set instead of one full set each before the first result lands.
+const preflightInFlight = new Map<string, Promise<PreflightStatus>>()
+
+const LOCAL_PREFLIGHT_CACHE_KEY = 'local'
+
+function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
+  return wslTarget ? `wsl:${wslTarget.distro ?? ''}` : LOCAL_PREFLIGHT_CACHE_KEY
+}
 
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  cachedByWslDistro.clear()
+  preflightInFlight.clear()
 }
 
 function uniqueAgentIds(ids: Iterable<string>): string[] {
@@ -254,11 +277,50 @@ export async function runPreflightCheck(
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
   const wslTarget = getPreflightWslTarget(context)
-  const cacheable = !wslTarget
-  if (cacheable && cached && !force) {
-    return cached
+  const cacheKey = preflightCacheKey(wslTarget)
+
+  if (!force) {
+    if (wslTarget) {
+      const entry = cachedByWslDistro.get(cacheKey)
+      if (entry && entry.expiresAt > Date.now()) {
+        return entry.result
+      }
+    } else if (cached) {
+      return cached
+    }
+    const inFlight = preflightInFlight.get(cacheKey)
+    if (inFlight) {
+      return inFlight
+    }
   }
 
+  const run = executePreflightCheck(force, context, wslTarget)
+  preflightInFlight.set(cacheKey, run)
+  try {
+    const result = await run
+    if (wslTarget) {
+      cachedByWslDistro.set(cacheKey, {
+        result,
+        expiresAt: Date.now() + WSL_PREFLIGHT_CACHE_TTL_MS
+      })
+    } else {
+      cached = result
+    }
+    return result
+  } finally {
+    // Why the identity check: a concurrent force run replaces this entry, and
+    // that newer run must stay joinable after this one settles.
+    if (preflightInFlight.get(cacheKey) === run) {
+      preflightInFlight.delete(cacheKey)
+    }
+  }
+}
+
+async function executePreflightCheck(
+  force: boolean,
+  context: PreflightRuntimeContext | undefined,
+  wslTarget: WslPreflightTarget | null
+): Promise<PreflightStatus> {
   if (process.platform === 'win32' && !wslTarget) {
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
   }
@@ -294,10 +356,6 @@ export async function runPreflightCheck(
     bitbucket,
     azureDevOps,
     gitea
-  }
-
-  if (cacheable) {
-    cached = result
   }
 
   return result
