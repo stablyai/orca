@@ -3,7 +3,7 @@ import { createAgentCompletionCoordinator } from './agent-completion-coordinator
 import {
   flushAsyncTicks,
   HOOK_DONE_QUIET_MS,
-  processResult,
+  observedProcessResult,
   useAgentCompletionCoordinatorLifecycle
 } from './agent-completion-coordinator-test-harness'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
@@ -12,7 +12,7 @@ describe('agent completion coordinator', () => {
   useAgentCompletionCoordinatorLifecycle()
 
   it('does not schedule cadence process inspections for hidden idle panes', () => {
-    const inspectProcess = vi.fn(async () => processResult(null))
+    const inspectProcess = vi.fn(async () => observedProcessResult(null))
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -31,7 +31,7 @@ describe('agent completion coordinator', () => {
   })
 
   it('keeps the process-exit backstop after hidden panes gain agent evidence', async () => {
-    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const inspectProcess = vi.fn(async () => observedProcessResult('codex'))
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -61,7 +61,7 @@ describe('agent completion coordinator', () => {
   // counted ~78 inspections over 60s; post-fix ~20. The assertion fails on the
   // pre-fix code (>25) and passes after, so it locks in the reduction.
   it('throttles a hidden agent pane to the 3s backstop cadence over a 60s window', async () => {
-    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const inspectProcess = vi.fn(async () => observedProcessResult('codex'))
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -83,7 +83,7 @@ describe('agent completion coordinator', () => {
   })
 
   it('keeps a visible agent pane at full 750ms cadence over a 60s window', async () => {
-    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const inspectProcess = vi.fn(async () => observedProcessResult('codex'))
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -104,7 +104,7 @@ describe('agent completion coordinator', () => {
 
   it('re-arms full cadence immediately when a throttled hidden pane becomes visible', async () => {
     let visible = false
-    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const inspectProcess = vi.fn(async () => observedProcessResult('codex'))
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -142,7 +142,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      inspectProcess: vi.fn(async () => observedProcessResult(foregroundProcess)),
       dispatchCompletion,
       isLive: () => true,
       shouldPollProcessCadence: () => false
@@ -175,7 +175,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      inspectProcess: vi.fn(async () => observedProcessResult(foregroundProcess)),
       dispatchCompletion,
       isLive: () => true
     })
@@ -202,7 +202,7 @@ describe('agent completion coordinator', () => {
   })
 
   it('does not dispatch process-exit while an agent terminal still has child processes', async () => {
-    let result = processResult('codex')
+    let result = observedProcessResult('codex')
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
@@ -217,13 +217,13 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(2_000)
     await flushAsyncTicks()
 
-    result = processResult('zsh', true)
+    result = observedProcessResult('zsh', true)
     vi.advanceTimersByTime(750)
     await flushAsyncTicks()
 
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
-    result = processResult('zsh', false)
+    result = observedProcessResult('zsh', false)
     vi.advanceTimersByTime(750)
     await flushAsyncTicks()
 
@@ -289,7 +289,7 @@ describe('agent completion coordinator', () => {
   })
 
   it('resets exit confirmation across an unavailable inspection', async () => {
-    let result: RuntimeTerminalProcessInspection = processResult('codex')
+    let result: RuntimeTerminalProcessInspection = observedProcessResult('codex')
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
@@ -302,11 +302,11 @@ describe('agent completion coordinator', () => {
 
     coordinator.startProcessTracking()
     await vi.advanceTimersByTimeAsync(2_000)
-    result = processResult(null, false)
+    result = observedProcessResult(null, false)
     await vi.advanceTimersByTimeAsync(750)
     result = { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
     await vi.advanceTimersByTimeAsync(750)
-    result = processResult(null, false)
+    result = observedProcessResult(null, false)
     await vi.advanceTimersByTimeAsync(1_500)
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
@@ -321,7 +321,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      inspectProcess: vi.fn(async () => observedProcessResult(foregroundProcess)),
       dispatchCompletion,
       isLive: () => true
     })
@@ -346,7 +346,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      inspectProcess: vi.fn(async () => observedProcessResult(foregroundProcess)),
       dispatchCompletion,
       shouldSuppressProcessReplacementCompletion: () => true,
       isLive: () => true
@@ -373,7 +373,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      inspectProcess: vi.fn(async () => observedProcessResult(foregroundProcess)),
       dispatchCompletion,
       shouldSuppressConfirmedProcessExitCompletion,
       isLive: () => true
@@ -400,7 +400,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      inspectProcess: vi.fn(async () => observedProcessResult(foregroundProcess)),
       dispatchCompletion,
       isLive: () => true
     })

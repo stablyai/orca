@@ -462,8 +462,8 @@ const JA_AUDIT_OVERRIDES = {
   'Terminal Panes': 'ターミナルペイン',
   'Option composes special characters for your keyboard layout.':
     'Option キーで、キーボードレイアウトに応じた特殊文字を入力します。',
-  'There are local terminals with running processes. Close the window anyway?':
-    'プロセスが実行中のローカルターミナルがあります。このままウィンドウを閉じますか?',
+  'There are terminals with running processes. Close the window anyway?':
+    'プロセスが実行中のターミナルがあります。このままウィンドウを閉じますか?',
   'Auto-generates a new name when you leave this text box empty.':
     'このテキストボックスを空のままにすると、名前が自動生成されます。',
   'Auto-name workspace from first agent message':

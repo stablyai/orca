@@ -15,11 +15,20 @@ import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspec
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 
-function processResult(
+// A host that states its verdicts; the cadence under test is the same either
+// way, but only a stated exit can authorise the completion asserted below.
+function observedProcessResult(
   foregroundProcess: string | null,
   hasChildProcesses = foregroundProcess !== null
 ): RuntimeTerminalProcessInspection {
-  return { foregroundProcess, hasChildProcesses }
+  return {
+    foregroundProcess,
+    hasChildProcesses,
+    processEvidence: {
+      foreground: { verdict: 'observed', processName: foregroundProcess },
+      children: hasChildProcesses ? { verdict: 'live' } : { verdict: 'exited' }
+    }
+  }
 }
 
 function createCoordinator(
@@ -57,7 +66,7 @@ describe('agent completion no-evidence inspection cadence', () => {
   })
 
   it('bounds a visible idle pane with no agent evidence to the 15s cadence on a costly host', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const inspectProcess = vi.fn(async () => observedProcessResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess)
 
     coordinator.startProcessTracking()
@@ -68,7 +77,7 @@ describe('agent completion no-evidence inspection cadence', () => {
   })
 
   it('keeps the full 2s idle cadence on hosts where inspection is cheap', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const inspectProcess = vi.fn(async () => observedProcessResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess, {
       isProcessInspectionCostly: () => false
     })
@@ -81,7 +90,7 @@ describe('agent completion no-evidence inspection cadence', () => {
   })
 
   it('keeps the full cadence when the coordinator has no cost source', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const inspectProcess = vi.fn(async () => observedProcessResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess, {
       isProcessInspectionCostly: undefined
     })
@@ -93,7 +102,7 @@ describe('agent completion no-evidence inspection cadence', () => {
   })
 
   it('escalates to the hot cadence when PTY output appears mid-interval', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const inspectProcess = vi.fn(async () => observedProcessResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess)
 
     coordinator.startProcessTracking()
@@ -109,7 +118,7 @@ describe('agent completion no-evidence inspection cadence', () => {
   })
 
   it('escalates to the hot cadence when a title change appears mid-interval', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const inspectProcess = vi.fn(async () => observedProcessResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess)
 
     coordinator.startProcessTracking()
@@ -123,7 +132,7 @@ describe('agent completion no-evidence inspection cadence', () => {
   })
 
   it('decays back to the 15s cadence when activity stops without agent evidence', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const inspectProcess = vi.fn(async () => observedProcessResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess)
 
     coordinator.startProcessTracking()
@@ -144,7 +153,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     // whose null inspections cleared workingStatusObserved ~2s later, silently
     // bypassing the designed done quiet window. The gate makes hook-only
     // coordinators purely push-driven: no polls, quiet window preserved.
-    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const inspectProcess = vi.fn(async () => observedProcessResult(null, false))
     const { coordinator, dispatchCompletion } = createCoordinator(inspectProcess)
 
     coordinator.observeHookStatus({ state: 'working', prompt: '', agentType: 'codex' })
@@ -172,7 +181,7 @@ describe('agent completion no-evidence inspection cadence', () => {
   })
 
   it('keeps a recognized agent on the full active cadence on a costly host', async () => {
-    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const inspectProcess = vi.fn(async () => observedProcessResult('codex'))
     const { coordinator } = createCoordinator(inspectProcess)
 
     coordinator.startProcessTracking()
@@ -185,7 +194,7 @@ describe('agent completion no-evidence inspection cadence', () => {
 
   it('still detects an unannounced agent exit promptly after escalating from the relaxed tier', async () => {
     let foregroundProcess: string | null = null
-    const inspectProcess = vi.fn(async () => processResult(foregroundProcess))
+    const inspectProcess = vi.fn(async () => observedProcessResult(foregroundProcess))
     const { coordinator, dispatchCompletion } = createCoordinator(inspectProcess)
 
     coordinator.startProcessTracking()

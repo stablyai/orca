@@ -4,7 +4,7 @@ import {
   createDeferred,
   flushAsyncTicks,
   HOOK_DONE_QUIET_MS,
-  processResult,
+  observedProcessResult,
   useAgentCompletionCoordinatorLifecycle
 } from './agent-completion-coordinator-test-harness'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
@@ -79,7 +79,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult('codex')),
+      inspectProcess: vi.fn(async () => observedProcessResult('codex')),
       dispatchCompletion,
       isLive: () => true
     })
@@ -105,7 +105,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      inspectProcess: vi.fn(async () => observedProcessResult(foregroundProcess)),
       dispatchCompletion,
       isLive: () => true
     })
@@ -133,7 +133,7 @@ describe('agent completion coordinator', () => {
       paneKey,
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(async () => processResult(null)),
+      inspectProcess: vi.fn(async () => observedProcessResult(null)),
       dispatchCompletion,
       isLive: () => true
     })
@@ -153,7 +153,7 @@ describe('agent completion coordinator', () => {
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
-    let result = processResult('codex')
+    let result = observedProcessResult('codex')
     const processCoordinator = createAgentCompletionCoordinator({
       paneKey,
       getPtyId: () => 'pty-1',
@@ -167,7 +167,7 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(2_000)
     await flushAsyncTicks()
 
-    result = processResult('zsh', false)
+    result = observedProcessResult('zsh', false)
     vi.advanceTimersByTime(750)
     await flushAsyncTicks()
     vi.advanceTimersByTime(750)
@@ -175,10 +175,10 @@ describe('agent completion coordinator', () => {
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
-    result = processResult('codex')
+    result = observedProcessResult('codex')
     vi.advanceTimersByTime(2_000)
     await flushAsyncTicks()
-    result = processResult('zsh', false)
+    result = observedProcessResult('zsh', false)
     vi.advanceTimersByTime(750)
     await flushAsyncTicks()
     vi.advanceTimersByTime(750)
@@ -207,7 +207,7 @@ describe('agent completion coordinator', () => {
       prompt: '',
       agentType: 'codex'
     })
-    inspection.resolve(processResult('codex'))
+    inspection.resolve(observedProcessResult('codex'))
     await flushAsyncTicks()
     coordinator.observeHookStatus({
       state: 'done',
@@ -273,7 +273,7 @@ describe('agent completion coordinator', () => {
     coordinator.startProcessTracking()
     vi.advanceTimersByTime(2_000)
     coordinator.resetCompletionState({ requireFreshWorking: true })
-    inspection.resolve(processResult('codex'))
+    inspection.resolve(observedProcessResult('codex'))
     await flushAsyncTicks()
     coordinator.observeTitle('⠋ experimental-agent-observability')
     coordinator.observeTitle('experimental-agent-observability')
@@ -304,11 +304,11 @@ describe('agent completion coordinator', () => {
     coordinator.resetCompletionState({ requireFreshWorking: true })
     coordinator.observeTitle('⠋ experimental-agent-observability')
     coordinator.observeTitle('experimental-agent-observability')
-    firstInspection.resolve(processResult('codex'))
+    firstInspection.resolve(observedProcessResult('codex'))
     await flushAsyncTicks()
     vi.advanceTimersByTime(2_000)
     await flushAsyncTicks()
-    secondInspection.resolve(processResult('codex'))
+    secondInspection.resolve(observedProcessResult('codex'))
     await flushAsyncTicks()
 
     expect(inspectProcess).toHaveBeenCalledTimes(2)

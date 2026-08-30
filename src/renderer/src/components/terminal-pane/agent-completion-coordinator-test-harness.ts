@@ -11,11 +11,32 @@ export async function flushAsyncTicks(count = 4): Promise<void> {
   }
 }
 
+/** The pre-evidence collapse a host that predates `processEvidence` emits. It
+ *  cannot state an absence: `zsh` + `false` is what it publishes for an idle
+ *  pane AND for a foreground read that fell back to the shell title. */
 export function processResult(
   foregroundProcess: string | null,
   hasChildProcesses = foregroundProcess !== null
 ): RuntimeTerminalProcessInspection {
   return { foregroundProcess, hasChildProcesses }
+}
+
+/** The same pane, answered by a host that PUBLISHES its verdicts — the shape a
+ *  current daemon, local provider or relay emits. Use this whenever a test means
+ *  "the host observed this", so an exit fixture states the exit instead of
+ *  leaning on the legacy collapse. */
+export function observedProcessResult(
+  foregroundProcess: string | null,
+  hasChildProcesses = foregroundProcess !== null
+): RuntimeTerminalProcessInspection {
+  return {
+    foregroundProcess,
+    hasChildProcesses,
+    processEvidence: {
+      foreground: { verdict: 'observed', processName: foregroundProcess },
+      children: hasChildProcesses ? { verdict: 'live' } : { verdict: 'exited' }
+    }
+  }
 }
 
 export function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

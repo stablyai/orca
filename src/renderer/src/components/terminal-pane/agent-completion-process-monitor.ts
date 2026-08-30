@@ -5,7 +5,10 @@ import {
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
-import { readPtyProcessInspectionEvidence } from '../../../../shared/pty-process-inspection-evidence'
+import {
+  readPtyProcessInspectionEvidence,
+  readPtyProcessInspectionEvidenceForAbsenceAction
+} from '../../../../shared/pty-process-inspection-evidence'
 import {
   NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS,
   POLL_TIER_INTERVAL_MS,
@@ -111,8 +114,16 @@ export function createAgentCompletionProcessMonitor({
       // The legacy foreground scalar is the same rule one axis over: only its
       // `null` conflates "no agent" with "could not ask", so a still-recognized
       // name beside a union reporting none must refuse too.
+      // Why a second read and not the one above: concluding the agent finished IS an
+      // action on absence — the user's answer to it is to walk away, not to dismiss a
+      // prompt — so only the absence-action rule may authorise it. A host that publishes
+      // no evidence emits the same `zsh` + `false` for a genuinely idle pane and for a
+      // foreground read that fell back to the shell title, and the plain reader restates
+      // that collapse as `exited`. The reads stay separate on purpose: the host above
+      // ANSWERED, so it must not be charged as a failed inspection and walked up the
+      // error backoff, and its one positive must still be recognized and tracked.
       if (
-        evidence.children.verdict !== 'exited' ||
+        readPtyProcessInspectionEvidenceForAbsenceAction(result).children.verdict !== 'exited' ||
         result.hasChildProcesses ||
         recognizeAgentProcess(result.foregroundProcess) !== null
       ) {

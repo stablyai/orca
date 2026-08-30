@@ -193,10 +193,23 @@ describe('remote agent completion authority', () => {
   })
 })
 
+// A relay host that STATES its verdicts. The `unavailable` response and the
+// thrown-transport cases below are the "could not ask" paths and stay
+// evidence-less on purpose; this one is the host answering, and only a stated
+// `exited` may authorise the process-exit completion these tests assert.
 function remoteInspection(foregroundProcess: string | null, hasChildProcesses = true) {
   return {
     ok: true,
-    result: { process: { foregroundProcess, hasChildProcesses } },
+    result: {
+      process: {
+        foregroundProcess,
+        hasChildProcesses,
+        processEvidence: {
+          foreground: { verdict: 'observed', processName: foregroundProcess },
+          children: hasChildProcesses ? { verdict: 'live' } : { verdict: 'exited' }
+        }
+      }
+    },
     _meta: { runtimeId: 'remote-host' }
   }
 }

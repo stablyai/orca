@@ -86,7 +86,18 @@ export function installTerminalTestGlobals(): void {
   vi.mocked(window.api.pty.inspectProcess).mockImplementation(async (id) => {
     const foregroundProcess = await window.api.pty.getForegroundProcess(id)
     const hasChildProcesses = await window.api.pty.hasChildProcesses(id)
-    return { foregroundProcess, hasChildProcesses }
+    // Why the evidence and not just the pair: this stands in for a current host,
+    // and only a host that states its verdicts can authorise a process-exit
+    // completion. Emitting the bare pair would make every pane here a legacy
+    // host that cannot tell an idle shell from a degraded read.
+    return {
+      foregroundProcess,
+      hasChildProcesses,
+      processEvidence: {
+        foreground: { verdict: 'observed' as const, processName: foregroundProcess },
+        children: hasChildProcesses ? { verdict: 'live' as const } : { verdict: 'exited' as const }
+      }
+    }
   })
   globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
     callback(0)

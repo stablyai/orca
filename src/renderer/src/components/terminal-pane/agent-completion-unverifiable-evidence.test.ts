@@ -269,22 +269,18 @@ describe('agent completion with inspection evidence', () => {
     expect(inspectedAt.at(-1)! - inspectedAt.at(-2)!).toBeGreaterThanOrEqual(10_000)
   })
 
-  it('still completes from legacy fields when the host predates evidence', async () => {
-    // An old host publishes no processEvidence; its legacy answer remains the
-    // only available reading and completion detection must keep working.
-    let result: RuntimeTerminalProcessInspection = processResult('codex')
-    const { dispatchCompletion } = startCoordinator(() => result)
+  it('still reads the legacy fields of a host that predates evidence', async () => {
+    // An old host publishes no processEvidence, and its legacy answer remains
+    // the only available reading — so it is still read, and its one positive
+    // (a non-shell foreground) still starts and keeps the tracking. What it
+    // cannot do is state an ABSENCE: the pair it emits for an idle pane is the
+    // pair it emits when its foreground read fell back to the shell title, and
+    // it has no field to separate them. See
+    // agent-completion-legacy-host-absence.test.ts for that half.
+    const { dispatchCompletion } = startCoordinator(() => processResult('codex'))
 
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(4_000)
 
-    result = processResult(null, false)
-    await vi.advanceTimersByTimeAsync(2_000)
-
-    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
-      source: 'process-exit',
-      quietedHookDone: false,
-      terminalIdleConfirmed: true
-    })
+    expect(dispatchCompletion).not.toHaveBeenCalled()
   })
 })
