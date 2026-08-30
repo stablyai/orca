@@ -162,7 +162,7 @@ const commentMarkdownSanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
-    code: [['className', /^language-[\w-]+$/, 'math-inline', 'math-display']],
+    code: [['className', /^language-./, 'math-inline', 'math-display']],
     details: [...(defaultSchema.attributes?.details ?? []), 'open'],
     img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
     input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
