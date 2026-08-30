@@ -59,21 +59,45 @@ describe('summarizeWorktreeNesting', () => {
   })
 
   it('normalizes windows separators, case, and trailing slashes', () => {
-    expect(summarizeWorktreeNesting(worktreesAtPaths('C:\\Repo\\', 'c:/repo/Nested'))).toEqual({
+    expect(
+      summarizeWorktreeNesting(worktreesAtPaths('C:\\Repo\\', 'c:/repo/Nested'), 'win32')
+    ).toEqual({
       maxDepth: 1,
       nestedWorktrees: 1
     })
   })
 
-  it('preserves case-distinct POSIX and SSH worktree paths', () => {
+  it('preserves case-distinct remote POSIX worktree paths', () => {
     expect(
       summarizeWorktreeNesting(
         worktreesAtPaths('/srv/Repo', '/srv/repo/nested').map((worktree) => ({
           ...worktree,
           hostId: 'ssh:openclaw'
-        }))
+        })),
+        'darwin'
       )
     ).toEqual({ maxDepth: 0, nestedWorktrees: 0 })
+  })
+
+  it('folds case-only local POSIX twins on macOS but not on Linux', () => {
+    const worktrees = worktreesAtPaths('/Users/ada/Repo', '/Users/ada/repo/nested')
+    expect(summarizeWorktreeNesting(worktrees, 'darwin')).toEqual({
+      maxDepth: 1,
+      nestedWorktrees: 1
+    })
+    expect(summarizeWorktreeNesting(worktrees, 'linux')).toEqual({
+      maxDepth: 0,
+      nestedWorktrees: 0
+    })
+  })
+
+  it('treats an absent hostId as the local host', () => {
+    expect(
+      summarizeWorktreeNesting(
+        [{ path: '/srv/repo' }, { path: '/srv/repo/nested', hostId: 'local' }],
+        'linux'
+      )
+    ).toEqual({ maxDepth: 1, nestedWorktrees: 1 })
   })
 
   it('does not infer nesting across execution hosts', () => {

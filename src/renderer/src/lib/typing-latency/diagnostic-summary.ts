@@ -6,7 +6,12 @@
  * Kept separate from the DOM/store wiring in diagnostic.ts so
  * the arithmetic is unit-testable without an xterm or a live store.
  */
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import {
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getRendererAppPlatform } from '../renderer-app-platform'
 
 export type LatencyPercentiles = {
   count: number
@@ -55,17 +60,39 @@ export type WorktreeNestingCensus = {
 
 type WorktreeLike = { path?: string | null; hostId?: string | null }
 
+/**
+ * Case-only path twins are one directory on a case-insensitive filesystem, so the
+ * census must fold them or the nesting they form goes uncounted. Windows drive/UNC
+ * keys are already folded by `normalizeRuntimePathForComparison`; a POSIX key folds
+ * only for the local host, where the client platform really does report the
+ * filesystem (default macOS APFS is case-insensitive). Remote POSIX paths stay
+ * byte-exact — the execution host owns that fact and we cannot see it from here.
+ */
+function worktreeNestingKey(rawPath: string, foldPosixCase: boolean): string {
+  const normalized = normalizeRuntimePathForComparison(rawPath)
+  return foldPosixCase && !isWindowsAbsolutePathLike(rawPath.normalize('NFC'))
+    ? normalized.toLowerCase()
+    : normalized
+}
+
 export function summarizeWorktreeNesting(
-  worktrees: readonly WorktreeLike[]
+  worktrees: readonly WorktreeLike[],
+  localPlatform: NodeJS.Platform = getRendererAppPlatform()
 ): WorktreeNestingCensus {
-  const pathsByHost = new Map<string | null, Set<string>>()
+  const pathsByHost = new Map<string, Set<string>>()
   for (const worktree of worktrees) {
     if (typeof worktree.path !== 'string' || worktree.path.length === 0) {
       continue
     }
-    const hostId = worktree.hostId ?? null
+    // An absent hostId means the local host, so it must not partition away from 'local'.
+    const hostId = worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
     const paths = pathsByHost.get(hostId) ?? new Set<string>()
-    paths.add(normalizeRuntimePathForComparison(worktree.path))
+    paths.add(
+      worktreeNestingKey(
+        worktree.path,
+        hostId === LOCAL_EXECUTION_HOST_ID && localPlatform === 'darwin'
+      )
+    )
     pathsByHost.set(hostId, paths)
   }
   let maxDepth = 0
@@ -211,6 +238,7 @@ export function summarizeTypingScaleCensus(input: {
   mountedAgentRowCount: number | null
   storeListenerCount: number | null
   focusedPane: FocusedPaneCensus | null
+  localPlatform?: NodeJS.Platform
 }): TypingScaleCensus {
   const state = input.state
   const settings = state?.settings ?? null
@@ -221,7 +249,7 @@ export function summarizeTypingScaleCensus(input: {
     appVersion: input.appVersion,
     repos: state?.worktreesByRepo ? Object.keys(state.worktreesByRepo).length : 0,
     worktrees: worktrees.length,
-    worktreeNesting: summarizeWorktreeNesting(worktrees),
+    worktreeNesting: summarizeWorktreeNesting(worktrees, input.localPlatform),
     tabs: {
       terminal: sumArrayLengths(state?.tabsByWorktree),
       unified: sumArrayLengths(state?.unifiedTabsByWorktree)
