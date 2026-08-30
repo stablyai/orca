@@ -92,7 +92,7 @@ export async function spawnLocalPty(
   if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
     plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
   }
-  if (args.command && plan.getFallbackShellReadyConfig) {
+  if (plan.getFallbackShellReadyConfig) {
     plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
   }
 

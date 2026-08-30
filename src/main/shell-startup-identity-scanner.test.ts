@@ -18,6 +18,28 @@ describe('shell startup identity scanner', () => {
     })
   })
 
+  it('strips a v2 marker and returns start time plus decoded tty', () => {
+    const state = createShellStartupIdentityScanState()
+    const tty = Buffer.from('/dev/ttys048').toString('base64')
+    expect(
+      scanForShellStartupIdentity(
+        state,
+        `before\x1b]777;orca-shell-start;v2;12345;987654;${tty}\x07after`
+      )
+    ).toEqual({
+      output: 'beforeafter',
+      shellPid: 12345,
+      shellStartTime: '987654',
+      tty: '/dev/ttys048'
+    })
+  })
+
+  it('forwards malformed v2 markers unchanged', () => {
+    const state = createShellStartupIdentityScanState()
+    const input = '\x1b]777;orca-shell-start;v2;123;bad;%%%\x07'
+    expect(scanForShellStartupIdentity(state, input)).toEqual({ output: input, shellPid: null })
+  })
+
   it('forwards lookalikes unchanged', () => {
     const state = createShellStartupIdentityScanState()
     const input = 'a\x1b]777;orca-shell-start:nope\x07b'

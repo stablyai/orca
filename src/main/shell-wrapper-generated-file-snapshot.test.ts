@@ -28,7 +28,8 @@ const STARTUP_COMMAND_FEATURES = selectShellStartupFeatures({
   env: {},
   hasStartupCommand: true,
   waitsForShellReady: true,
-  emitsStartupIdentity: true
+  emitsStartupIdentity: true,
+  injectsCommandMarkers: true
 })
 
 // Why one zsh file: the wrapper hands ZDOTDIR back on its first lines, so zsh
@@ -129,7 +130,9 @@ describePosix('generated shell wrapper files', () => {
 
   it('daemon wrappers', async () => {
     process.env.ORCA_USER_DATA_PATH = root
-    getDaemonShellLaunchConfig('/bin/zsh', STARTUP_COMMAND_FEATURES)
+    getDaemonShellLaunchConfig('/bin/zsh', STARTUP_COMMAND_FEATURES, {
+      commandNonce: 'test-nonce'
+    })
     await expectWrapperFiles('daemon', getDaemonShellReadyWrapperRoot())
   })
 
@@ -149,7 +152,9 @@ describePosix('generated shell wrapper files', () => {
       'daemon',
       (): void => {
         process.env.ORCA_USER_DATA_PATH = root
-        getDaemonShellLaunchConfig('/bin/zsh', STARTUP_COMMAND_FEATURES)
+        getDaemonShellLaunchConfig('/bin/zsh', STARTUP_COMMAND_FEATURES, {
+          commandNonce: 'test-nonce'
+        })
       },
       (): string => getDaemonShellReadyWrapperRoot()
     ],
@@ -165,8 +170,12 @@ describePosix('generated shell wrapper files', () => {
 
   it('fish shell-ready init commands', async () => {
     process.env.ORCA_USER_DATA_PATH = root
-    const local = getLocalShellLaunchConfig('/usr/bin/fish', STARTUP_COMMAND_FEATURES)
-    const daemon = getDaemonShellLaunchConfig('/usr/bin/fish', STARTUP_COMMAND_FEATURES)
+    const local = getLocalShellLaunchConfig('/usr/bin/fish', STARTUP_COMMAND_FEATURES, {
+      commandNonce: 'test-nonce'
+    })
+    const daemon = getDaemonShellLaunchConfig('/usr/bin/fish', STARTUP_COMMAND_FEATURES, {
+      commandNonce: 'test-nonce'
+    })
     await expect(local.args?.[2]).toMatchFileSnapshot(snapshotPath('local', 'fish-init'))
     await expect(daemon.args?.[2]).toMatchFileSnapshot(snapshotPath('daemon', 'fish-init'))
   })

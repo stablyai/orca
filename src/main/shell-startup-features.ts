@@ -11,6 +11,8 @@
  * unsets it before the user's own config (or anything it spawns) can see it.
  */
 
+import { isPowerShellExecutableName } from './powershell-osc133-bootstrap'
+
 export const SHELL_STARTUP_FEATURE_ENV = 'ORCA_SHELL_FEATURES'
 
 export const SHELL_STARTUP_FEATURES = [
@@ -44,6 +46,8 @@ export type ShellStartupFeatureInput = {
   waitsForShellReady: boolean
   /** True when Orca needs the shell to announce its PID at startup. */
   emitsStartupIdentity: boolean
+  /** True only when the owning provider can consume private command markers. */
+  injectsCommandMarkers?: boolean
 }
 
 function shellName(shellPath: string): string {
@@ -57,6 +61,12 @@ function shellName(shellPath: string): string {
  */
 export function selectShellStartupFeatures(input: ShellStartupFeatureInput): ShellStartupFeature[] {
   const overlay = OVERLAY_ENV_KEYS.some((key) => Boolean(input.env[key]))
+  // Why PowerShell too: its bootstrap carries the same nonce-gated orca-cmd
+  // emitter, and it is wrapped unconditionally, so selecting markers here changes
+  // no startup-file chain -- it only supplies the nonce that emitter needs.
+  const supportedCommandMarkerShell =
+    ['bash', 'zsh', 'fish'].includes(shellName(input.shellPath)) ||
+    isPowerShellExecutableName(shellName(input.shellPath))
   // Exactly the panes Orca wrapped before history widened wrapping.
   const wrappedBefore = overlay || input.hasStartupCommand
   const ready = input.waitsForShellReady
@@ -76,9 +86,7 @@ export function selectShellStartupFeatures(input: ShellStartupFeatureInput): She
   if (history) {
     features.push('history')
   }
-  // Why gated on wrappedBefore: a pane wrapped only for history must stay
-  // observably identical to the unwrapped pane it was before this change.
-  if (wrappedBefore) {
+  if (wrappedBefore || (input.injectsCommandMarkers === true && supportedCommandMarkerShell)) {
     features.push('markers')
   }
   if (ready) {

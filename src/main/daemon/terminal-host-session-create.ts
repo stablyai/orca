@@ -13,6 +13,7 @@ import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
+import type { DaemonTransientFact } from './daemon-stream-events'
 
 type TerminalHostSessionCreateDependencies = {
   sessions: Map<string, Session>
@@ -22,6 +23,7 @@ type TerminalHostSessionCreateDependencies = {
   onDeadSessionRemoved: (sessionId: string) => void
   onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
   onSessionExit: (sessionId: string, generation: string | undefined) => void
+  onSessionPrivateTerminalFact: (sessionId: string, fact: DaemonTransientFact) => void
   reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
 }
 
@@ -117,6 +119,7 @@ async function spawnAndPublishSession(
     terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
     launchAgent: opts.launchAgent,
     subprocess,
+    onPrivateTerminalFact: (fact) => deps.onSessionPrivateTerminalFact(opts.sessionId, fact),
     ownerBackend: resolvePtyOwnerBackend({
       platform: process.platform,
       shellPath: subprocess.shellPath,

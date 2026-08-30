@@ -80,6 +80,19 @@ function twoPaneLayout(): TerminalLayoutSnapshot {
 }
 
 describe('resolveTabAgentFromSignals', () => {
+  it('ranks a live sibling above a conflicting completed sibling', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'Terminal 1',
+        hookAgent: null,
+        siblingHookAgent: 'claude',
+        siblingCompletedHookAgent: 'codex'
+      })
+    ).toBe('claude')
+  })
+
   it('keeps launch intent during the pre-start shell window', () => {
     expect(
       resolveTabAgentFromSignals({

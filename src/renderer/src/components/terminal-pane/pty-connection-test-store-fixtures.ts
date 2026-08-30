@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneCommandIdentityEntry } from '@/store/slices/pane-command-identity'
 import { LEAF_1 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 
@@ -48,6 +49,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
     paneForegroundAgentByPaneKey: {},
+    paneCommandIdentityByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     suppressedPtyExitIds: {},
     agentLaunchConfigByPaneKey: {},
@@ -97,6 +99,22 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     }),
     clearPaneForegroundAgent: vi.fn((paneKey: string) => {
       delete getState().paneForegroundAgentByPaneKey[paneKey]
+    }),
+    // Why: mirrors createPaneCommandIdentitySlice's stale-epoch and ptyId guards so
+    // this double cannot accept a write the real store would drop.
+    setPaneCommandIdentity: vi.fn((paneKey: string, entry: PaneCommandIdentityEntry) => {
+      const current = getState().paneCommandIdentityByPaneKey[paneKey]
+      if (current?.ptyId === entry.ptyId && current.commandEpoch >= entry.commandEpoch) {
+        return
+      }
+      getState().paneCommandIdentityByPaneKey[paneKey] = entry
+    }),
+    clearPaneCommandIdentity: vi.fn((paneKey: string, ptyId?: string) => {
+      const current = getState().paneCommandIdentityByPaneKey[paneKey]
+      if (!current || (ptyId !== undefined && current.ptyId !== ptyId)) {
+        return
+      }
+      delete getState().paneCommandIdentityByPaneKey[paneKey]
     }),
     markTerminalTabUnread: vi.fn(),
     markTerminalPaneUnread: vi.fn(),

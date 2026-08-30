@@ -9,6 +9,11 @@ import {
 import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
+  getFishCommandMarkerInitCommand,
+  shellCommandMarkerEnv
+} from '../shell-command-marker-template'
+import { isShellCommandMarkerInjectionEnabled } from '../shell-integration-injection-policy'
+import {
   encodeShellStartupFeatures,
   SHELL_STARTUP_FEATURE_ENV,
   type ShellStartupFeature
@@ -113,15 +118,25 @@ export function supportsPtyStartupBarrier(env: Record<string, string>): boolean 
 }
 
 export type ShellLaunchConfig = {
+  mode: 'wrapped' | 'unwrapped'
   args: string[] | null
   env: Record<string, string>
   supportsReadyMarker: boolean
+  supportsCommandMarkers: boolean
+  failureReason?:
+    | 'host-class-disabled'
+    | 'marker-injection-unavailable'
+    | 'unsupported-shell'
+    | 'wrapper-tree-unavailable'
 }
 
 const UNWRAPPED: ShellLaunchConfig = {
+  mode: 'unwrapped',
   args: null,
   env: {},
-  supportsReadyMarker: false
+  supportsReadyMarker: false,
+  supportsCommandMarkers: false,
+  failureReason: 'unsupported-shell'
 }
 
 /**
@@ -130,67 +145,97 @@ const UNWRAPPED: ShellLaunchConfig = {
  */
 export function getShellLaunchConfig(
   shellPath: string,
-  features: readonly ShellStartupFeature[]
+  features: readonly ShellStartupFeature[],
+  options: { commandNonce?: string } = {}
 ): ShellLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+  const commandMarkersRequested = features.includes('markers')
+  const commandMarkerPolicyEnabled = isShellCommandMarkerInjectionEnabled('daemon-native')
+  const commandMarkersEnabled =
+    commandMarkersRequested && commandMarkerPolicyEnabled && Boolean(options.commandNonce)
+  const effectiveFeatures = commandMarkersEnabled
+    ? features
+    : features.filter((feature) => feature !== 'markers')
+  const markerEnv =
+    commandMarkersEnabled && options.commandNonce ? shellCommandMarkerEnv(options.commandNonce) : {}
+  if (commandMarkersRequested && effectiveFeatures.length === 0) {
+    return {
+      ...UNWRAPPED,
+      failureReason: commandMarkerPolicyEnabled
+        ? 'marker-injection-unavailable'
+        : 'host-class-disabled'
+    }
+  }
 
   if (shellName === 'zsh') {
-    if (features.length === 0) {
+    if (effectiveFeatures.length === 0) {
       return UNWRAPPED
     }
     if (!ensureShellReadyWrappers()) {
       // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
       // zsh skip the user's whole config. Losing Orca's features is recoverable.
-      return { args: ['-l'], env: {}, supportsReadyMarker: false }
+      return { ...UNWRAPPED, args: ['-l'], failureReason: 'wrapper-tree-unavailable' }
     }
     return {
+      mode: 'wrapped',
       args: ['-l'],
       env: {
         ...inheritedZdotdirEnv(resolveInheritedZdotdir(process.env)),
         ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh'),
-        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
+        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(effectiveFeatures),
+        ...markerEnv
       },
-      supportsReadyMarker: features.includes('ready')
+      supportsReadyMarker: effectiveFeatures.includes('ready'),
+      supportsCommandMarkers: commandMarkersEnabled
     }
   }
 
   if (shellName === 'bash') {
-    if (features.length === 0 || !ensureShellReadyWrappers()) {
+    if (effectiveFeatures.length === 0 || !ensureShellReadyWrappers()) {
       return UNWRAPPED
     }
     return {
+      mode: 'wrapped',
       args: ['--rcfile', join(getShellReadyWrapperRoot(), 'bash', 'rcfile')],
       env: {
-        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
+        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(effectiveFeatures),
+        ...markerEnv
       },
-      supportsReadyMarker: features.includes('ready')
+      supportsReadyMarker: effectiveFeatures.includes('ready'),
+      supportsCommandMarkers: commandMarkersEnabled
     }
   }
 
   if (isPowerShellExecutableName(shellName)) {
     return {
+      mode: 'wrapped',
       args: [
         '-NoLogo',
         '-NoExit',
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],
-      env: {},
-      supportsReadyMarker: false
+      env: markerEnv,
+      supportsReadyMarker: false,
+      supportsCommandMarkers: commandMarkersEnabled
     }
   }
 
   // Why: mirrors local-pty-shell-ready.ts; markerless fish stays unwrapped. The
   // selection is baked into the init command, so fish needs no feature env var.
-  if (shellName === 'fish' && features.includes('ready')) {
+  if (shellName === 'fish' && (effectiveFeatures.includes('ready') || commandMarkersEnabled)) {
+    const initCommands = [
+      commandMarkersEnabled ? getFishCommandMarkerInitCommand() : null,
+      effectiveFeatures.includes('ready')
+        ? `${getFishShellReadyInitCommand(SHELL_READY_MARKER)}\n${getFishCodexShellLaunchPreflight()}`
+        : null
+    ].filter((command): command is string => command !== null)
     return {
-      args: [
-        '-l',
-        '-C',
-        `${getFishShellReadyInitCommand(SHELL_READY_MARKER)}\n${getFishCodexShellLaunchPreflight()}`
-      ],
-      env: {},
-      supportsReadyMarker: true
+      mode: 'wrapped',
+      args: ['-l', '-C', initCommands.join('\n')],
+      env: markerEnv,
+      supportsReadyMarker: effectiveFeatures.includes('ready'),
+      supportsCommandMarkers: commandMarkersEnabled
     }
   }
 

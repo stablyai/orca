@@ -109,6 +109,14 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     reportsChildExitStatus: spawned.reportsChildExitStatus,
     requestedCwd: opts.cwd,
     sessionId: opts.sessionId,
-    startupAgentRecognition: launch.startupAgentRecognition
+    startupAgentRecognition: launch.startupAgentRecognition,
+    shellCommandMarkersEnabled:
+      launch.shellCommandNonce !== null ||
+      ((spawned.shellPath.toLowerCase().endsWith('powershell.exe') ||
+        spawned.shellPath.toLowerCase().endsWith('pwsh.exe')) &&
+        env.ORCA_SHELL_INTEGRATION_CONTEXT !== undefined),
+    ...(launch.shellCommandNonce && !/(?:^|[\\/])cmd\.exe$/i.test(spawned.shellPath)
+      ? { shellCommandNonce: launch.shellCommandNonce }
+      : {})
   })
 }

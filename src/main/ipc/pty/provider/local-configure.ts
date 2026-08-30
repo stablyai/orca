@@ -110,6 +110,7 @@ export function configureLocalPtyProvider(args: {
       })
     },
     onData: (id, data, timestamp, sequenceChars, transformed) =>
-      runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
+      runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed),
+    onPrivateTerminalFact: (id, fact) => runtime?.emitPrivateTerminalFact(id, fact)
   })
 }

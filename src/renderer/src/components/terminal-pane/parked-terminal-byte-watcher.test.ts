@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearPaneIdentity, setPaneIdentity } from './pane-command-identity-test-double'
 import type { TerminalSideEffectFact } from '../../../../shared/terminal-side-effect-facts'
 import type { ParkedTerminalByteWatcherOptions } from './parked-terminal-byte-watcher'
 import type * as ParkedTerminalCommandStatus from './parked-terminal-command-status'
+import type { PaneCommandIdentityEntry } from '@/store/slices/pane-command-identity'
 
 const PTY_ID = 'pty-parked-1'
 const TAB_ID = 'tab-1'
@@ -36,6 +38,9 @@ type MockStoreState = {
   setCacheTimerStartedAt: ReturnType<typeof vi.fn>
   observeTerminalGitHubPullRequestLink: ReturnType<typeof vi.fn>
   agentStatusByPaneKey: Record<string, { state: string; prompt: string; agentType?: string }>
+  paneCommandIdentityByPaneKey: Record<string, PaneCommandIdentityEntry>
+  setPaneCommandIdentity: ReturnType<typeof vi.fn>
+  clearPaneCommandIdentity: ReturnType<typeof vi.fn>
 }
 
 const dispatchTerminalNotification = vi.fn()
@@ -89,7 +94,14 @@ function createMockStoreState(): MockStoreState {
     markTerminalPaneUnread: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
-    agentStatusByPaneKey: {}
+    agentStatusByPaneKey: {},
+    paneCommandIdentityByPaneKey: {},
+    setPaneCommandIdentity: vi.fn((paneKey: string, entry: PaneCommandIdentityEntry) =>
+      setPaneIdentity(mockStoreState.paneCommandIdentityByPaneKey, paneKey, entry)
+    ),
+    clearPaneCommandIdentity: vi.fn((paneKey: string, ptyId?: string) =>
+      clearPaneIdentity(mockStoreState.paneCommandIdentityByPaneKey, paneKey, ptyId)
+    )
   }
 }
 

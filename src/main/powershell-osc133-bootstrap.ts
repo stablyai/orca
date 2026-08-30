@@ -1,5 +1,11 @@
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { getPowerShellCodexShellLaunchPreflight } from './pty/codex-shell-launch-preflight'
+import {
+  SHELL_COMMAND_MAX_CHARS,
+  SHELL_COMMAND_NONCE_ENV,
+  SHELL_INTEGRATION_CONTEXT_ENV,
+  SHELL_INTEGRATION_DIRECT_CONTEXT
+} from './shell-command-marker-template'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
 const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerShell.
@@ -8,6 +14,10 @@ const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerS
 if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
 if ($env:ORCA_MIMOCODE_HOME) { $env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME }
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
+$__orcaCommandNonce = [Environment]::GetEnvironmentVariable('${SHELL_COMMAND_NONCE_ENV}')
+$__orcaIntegrationContext = [Environment]::GetEnvironmentVariable('${SHELL_INTEGRATION_CONTEXT_ENV}')
+[Environment]::SetEnvironmentVariable('${SHELL_COMMAND_NONCE_ENV}', $null)
+[Environment]::SetEnvironmentVariable('${SHELL_INTEGRATION_CONTEXT_ENV}', $null)
 
 if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
     ((-not (Test-Path variable:global:__OrcaOsc133State)) -or
@@ -32,6 +42,14 @@ ${getPowerShellCodexShellLaunchPreflight()}
         HasPSReadLine = $null -ne (Get-Module -Name PSReadLine)
         Esc = [char]27
         Bel = [char]7
+        CommandNonce = $__orcaCommandNonce
+        # Why the context test gates both arms: it is the same signal the PTY
+        # authority uses to install its scanner. Without it a pane whose markers
+        # Orca disabled would still paint raw orca-cmd rows. The nonce cannot be
+        # the gate here — Windows 10 emits untrusted rows with no nonce.
+        CommandMarkersAllowed = -not [string]::IsNullOrEmpty($__orcaIntegrationContext) -and
+            ($__orcaIntegrationContext -eq '${SHELL_INTEGRATION_DIRECT_CONTEXT}' -or
+            (-not $env:TMUX -and -not $env:STY -and $env:TERM -notmatch '^(tmux|screen)'))
     }
 
     function Global:prompt {
@@ -59,11 +77,20 @@ ${getPowerShellCodexShellLaunchPreflight()}
         $null -ne $Global:__OrcaOsc133State.OriginalReadLine) {
         function Global:PSConsoleHostReadLine {
             $commandLine = $Global:__OrcaOsc133State.OriginalReadLine.Invoke()
+            if ($Global:__OrcaOsc133State.CommandMarkersAllowed) {
+                $boundedCommandLine = [string]$commandLine
+                if ($boundedCommandLine.Length -gt ${SHELL_COMMAND_MAX_CHARS}) {
+                    $boundedCommandLine = $boundedCommandLine.Substring(0, ${SHELL_COMMAND_MAX_CHARS})
+                }
+                $encodedCommandLine = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($boundedCommandLine))
+                [Console]::Write("$($Global:__OrcaOsc133State.Esc)]777;orca-cmd;$($Global:__OrcaOsc133State.CommandNonce);$encodedCommandLine$($Global:__OrcaOsc133State.Bel)")
+            }
             [Console]::Write("$($Global:__OrcaOsc133State.Esc)]133;C$($Global:__OrcaOsc133State.Bel)")
             return $commandLine
         }
     }
 }
+Remove-Variable __orcaCommandNonce, __orcaIntegrationContext -ErrorAction SilentlyContinue
 `
 
 export function getPowerShellOsc133Bootstrap(): string {

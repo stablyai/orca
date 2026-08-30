@@ -38,6 +38,8 @@ function createMockSubprocess() {
       return resumeCalls
     },
     foregroundProcess: null as string | null,
+    shellCommandNonce: undefined as string | undefined,
+    shellCommandMarkersEnabled: false,
     getForegroundProcess(): string | null {
       return this.foregroundProcess
     },
@@ -223,6 +225,30 @@ describe('Session', () => {
 
       subprocess.simulateData('hello')
       expect(received).toEqual(['hello'])
+    })
+
+    it('drops a truncated private marker when the subprocess exits', () => {
+      subprocess.shellCommandNonce = 'private-nonce'
+      subprocess.shellCommandMarkersEnabled = true
+      createSession()
+      const onData = vi.fn()
+      session.attachClient({ onData, onExit: () => {} })
+      const truncated = '\x1b]777;orca-cmd;private-nonce;Y29k'
+
+      subprocess.simulateData(`before${truncated}`)
+      subprocess.simulateExit(0)
+
+      expect(onData.mock.calls).toEqual([
+        ['before'],
+        ['', truncated.length, true, 'before'.length + truncated.length]
+      ])
+      expect(session.takePendingOutput(false)?.records).toEqual([
+        { kind: 'output', data: 'before' }
+      ])
+      expect(session.getSnapshot()).toMatchObject({
+        outputSequence: 'before'.length + truncated.length
+      })
+      expect(session.getSnapshot()?.snapshotAnsi).not.toContain('private-nonce')
     })
 
     it('does not deliver data to detached clients', () => {

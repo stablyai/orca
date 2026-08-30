@@ -3,6 +3,7 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneCommandIdentityEntry } from '@/store/slices/pane-command-identity'
 
 export type StoreState = {
   activeWorktreeId: string | null
@@ -100,6 +101,7 @@ export type StoreState = {
   agentStatusByPaneKey: Record<string, unknown>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
+  paneCommandIdentityByPaneKey: Record<string, PaneCommandIdentityEntry>
   sleepingAgentSessionsByPaneKey: Record<string, unknown>
   suppressedPtyExitIds: Record<string, true>
   agentLaunchConfigByPaneKey: Record<
@@ -121,6 +123,8 @@ export type StoreState = {
   restoreAgentPaneAuthority: ReturnType<typeof vi.fn>
   setPaneForegroundAgent: ReturnType<typeof vi.fn>
   clearPaneForegroundAgent: ReturnType<typeof vi.fn>
+  setPaneCommandIdentity: ReturnType<typeof vi.fn>
+  clearPaneCommandIdentity: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
   markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>

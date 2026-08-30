@@ -2,6 +2,7 @@
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 export type DataEvent = {
   type: 'event'
@@ -73,6 +74,12 @@ export type DataGapEvent = {
  *  snapshot-restores-title-state) and fuse with main-fabricated synthetic
  *  frames the daemon never sees. */
 export type DaemonTransientFact =
+  | {
+      kind: 'command-started'
+      agent: TuiAgent | null
+      trusted: boolean
+      commandEpoch: number
+    }
   | { kind: 'bell' }
   | { kind: 'command-finished'; exitCode: number | null }
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }

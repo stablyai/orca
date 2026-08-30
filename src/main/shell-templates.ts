@@ -40,6 +40,22 @@ __orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }`
 // same name and semantics in the zsh and bash channel blocks above.
 export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `__orca_has_feature identity && printf "\\033]777;orca-shell-start:%s\\007" "$$"`
 
+export const SHELL_STARTUP_IDENTITY_V2_MARKER_BLOCK = `if __orca_has_feature identity; then
+  _orca_shell_start_ticks=""
+  if [[ -r "/proc/$$/stat" ]]; then
+    builtin read -r _orca_proc_stat < "/proc/$$/stat" || _orca_proc_stat=""
+    _orca_proc_suffix="\${_orca_proc_stat##*) }"
+    _orca_shell_start_ticks="$(printf %s "$_orca_proc_suffix" | command awk '{print $20}' 2>/dev/null || true)"
+  fi
+  _orca_shell_tty="$(command tty 2>/dev/null || true)"
+  _orca_shell_tty_b64=""
+  if command -v base64 >/dev/null 2>&1; then
+    _orca_shell_tty_b64="$(printf %s "$_orca_shell_tty" | command base64 | command tr -d '\\r\\n')"
+  fi
+  printf "\\033]777;orca-shell-start;v2;%s;%s;%s\\007" "$$" "$_orca_shell_start_ticks" "$_orca_shell_tty_b64"
+  unset _orca_proc_stat _orca_proc_suffix _orca_shell_start_ticks _orca_shell_tty _orca_shell_tty_b64
+fi`
+
 /**
  * The first executable lines of the wrapper: give ZDOTDIR back to the user.
  *

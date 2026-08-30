@@ -30,7 +30,31 @@ builtin unset ORCA_SHELL_FEATURES
 builtin typeset -g _orca_histfile="${ORCA_HISTFILE:-}"
 builtin unset ORCA_HISTFILE
 __orca_has_feature() { (( ${_orca_shell_features[(Ie)$1]} )) }
-__orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
+builtin typeset -g _orca_shell_command_nonce="${ORCA_SHELL_COMMAND_NONCE:-}"
+builtin typeset -g _orca_shell_integration_context="${ORCA_SHELL_INTEGRATION_CONTEXT:-}"
+builtin unset ORCA_SHELL_COMMAND_NONCE ORCA_SHELL_INTEGRATION_CONTEXT
+__orca_command_markers_allowed() {
+  [[ -n "$_orca_shell_command_nonce" ]] || return 1
+  [[ "$_orca_shell_integration_context" == "direct" ]] && return 0
+  [[ -z "${TMUX:-}${STY:-}" ]] || return 1
+  case "${TERM:-}" in tmux*|screen*) return 1 ;; esac
+  return 0
+}
+if __orca_has_feature identity; then
+  _orca_shell_start_ticks=""
+  if [[ -r "/proc/$$/stat" ]]; then
+    builtin read -r _orca_proc_stat < "/proc/$$/stat" || _orca_proc_stat=""
+    _orca_proc_suffix="${_orca_proc_stat##*) }"
+    _orca_shell_start_ticks="$(printf %s "$_orca_proc_suffix" | command awk '{print $20}' 2>/dev/null || true)"
+  fi
+  _orca_shell_tty="$(command tty 2>/dev/null || true)"
+  _orca_shell_tty_b64=""
+  if command -v base64 >/dev/null 2>&1; then
+    _orca_shell_tty_b64="$(printf %s "$_orca_shell_tty" | command base64 | command tr -d '\r\n')"
+  fi
+  printf "\033]777;orca-shell-start;v2;%s;%s;%s\007" "$$" "$_orca_shell_start_ticks" "$_orca_shell_tty_b64"
+  unset _orca_proc_stat _orca_proc_suffix _orca_shell_start_ticks _orca_shell_tty _orca_shell_tty_b64
+fi
 __orca_osc133_precmd() {
   local exit_code=$?
   if [[ -n "${__orca_in_command:-}" ]]; then
@@ -40,6 +64,15 @@ __orca_osc133_precmd() {
   builtin printf "\033]133;A\007"
 }
 __orca_osc133_preexec() {
+  # Why emulate: under KSH_ARRAYS the unbraced +commands[base64] test parses as
+  # arithmetic and the capture range turns 0-based, so the guard errors on every
+  # command and the captured text loses its first character.
+  builtin emulate -L zsh
+  if __orca_command_markers_allowed && (( $+commands[base64] )); then
+    local _orca_command_text="${1[1,4096]}"
+    local _orca_command_b64="$(builtin printf %s "$_orca_command_text" | command base64 | command tr -d '\r\n')"
+    builtin printf "\033]777;orca-cmd;%s;%s\007" "$_orca_shell_command_nonce" "$_orca_command_b64"
+  fi
   builtin printf "\033]133;C\007"
   # Why typeset -g: a plain assignment here creates a global inside a function,
   # which prints a warning above every command under warn_create_global.

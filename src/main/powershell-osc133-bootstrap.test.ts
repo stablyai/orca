@@ -28,6 +28,15 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(script).toContain(')]133;A$(')
     expect(script).toContain(')]133;B$(')
     expect(script).toContain(')]133;C$(')
+    expect(script).toContain(']777;orca-cmd;')
+    expect(script.indexOf(']777;orca-cmd;')).toBeLessThan(script.indexOf(')]133;C$('))
+    expect(script).toContain("SetEnvironmentVariable('ORCA_SHELL_COMMAND_NONCE', $null)")
+    // Why: the PTY authority only installs its marker scanner when it set
+    // ORCA_SHELL_INTEGRATION_CONTEXT, so emission must require the same signal
+    // or a markers-disabled pane paints raw orca-cmd rows.
+    expect(script).toContain(
+      'CommandMarkersAllowed = -not [string]::IsNullOrEmpty($__orcaIntegrationContext) -and'
+    )
     expect(script).not.toContain('`e]133')
     expect(script).not.toContain('$PROFILE')
     expect(script).not.toContain('ExecutionPolicy')

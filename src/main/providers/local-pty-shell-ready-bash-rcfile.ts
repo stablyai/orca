@@ -7,13 +7,21 @@
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
-import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
+import {
+  BASH_FEATURE_CHANNEL_BLOCK,
+  SHELL_STARTUP_IDENTITY_V2_MARKER_BLOCK
+} from '../shell-templates'
+import {
+  BASH_COMMAND_MARKER_CAPTURE_BLOCK,
+  BASH_COMMAND_MARKER_EMIT_BLOCK
+} from '../shell-command-marker-template'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
 ${BASH_FEATURE_CHANNEL_BLOCK}
-${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
+${BASH_COMMAND_MARKER_CAPTURE_BLOCK}
+${SHELL_STARTUP_IDENTITY_V2_MARKER_BLOCK}
 # Why a plain variable: the channel is consumed and destroyed in these first
 # lines, so nothing this shell later spawns can see or inherit the selection.
 __orca_ready_marker=""
@@ -106,6 +114,7 @@ __orca_osc133_preexec() {
   [[ -z "\${__orca_in_command:-}" ]] || return 0
   # Why: bash DEBUG fires for every simple command, including PROMPT_COMMAND
   # bodies and chained traps can call us repeatedly for one command.
+  ${BASH_COMMAND_MARKER_EMIT_BLOCK}
   printf "\\033]133;C\\007"
   __orca_in_command=1
 }

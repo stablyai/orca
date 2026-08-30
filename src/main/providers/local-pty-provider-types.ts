@@ -1,4 +1,5 @@
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
 import type { PtySpawnOptions } from './types'
 
 export type LocalPtyProviderOptions = {
@@ -34,4 +35,5 @@ export type LocalPtyProviderOptions = {
     sequenceChars?: number,
     transformed?: boolean
   ) => void
+  onPrivateTerminalFact?: (id: string, fact: TerminalSideEffectFact) => void
 }

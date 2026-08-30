@@ -1,8 +1,12 @@
+import { win32 as pathWin32 } from 'node:path'
 import type * as pty from 'node-pty'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { resolveProcessExitCause } from '../../shared/terminal-exit-cause'
+import { isWindowsGitBashShellPath } from '../git-bash'
+import { ShellCommandMarkerScanner } from '../shell-command-marker-scanner'
+import { SHELL_INTEGRATION_CONTEXT_ENV } from '../shell-command-marker-template'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { getSpawnedShellName } from './local-pty-launch-helpers'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
@@ -72,25 +76,64 @@ export function activateLocalPtySession(args: {
   ptyIncarnations.set(id, incarnationId)
   getOptions().onSpawned?.(id, incarnationId)
 
-  const emitIngressData = (emission: PtyIngressEmission): void => {
-    const sequenceChars = emission.rawEndSeq - emission.rawStartSeq
-    if (emission.transformed || sequenceChars !== emission.data.length) {
-      getOptions().onData?.(id, emission.data, Date.now(), sequenceChars, true)
+  const commandMarkersActive =
+    plan.shellReadyLaunch?.supportsCommandMarkers === true ||
+    (process.platform === 'win32' &&
+      (['wsl.exe', 'pwsh.exe', 'powershell.exe'].includes(
+        pathWin32.basename(plan.shellPath).toLowerCase()
+      ) ||
+        isWindowsGitBashShellPath(plan.shellPath)) &&
+      env[SHELL_INTEGRATION_CONTEXT_ENV] !== undefined)
+  const commandMarkerScanner = commandMarkersActive
+    ? new ShellCommandMarkerScanner(plan.expectedCommandNonce)
+    : null
+  let commandEpoch = 0
+  const emitProviderData = (
+    data: string,
+    sequenceChars: number,
+    transformed: boolean,
+    seq?: number
+  ): void => {
+    if (transformed || sequenceChars !== data.length) {
+      getOptions().onData?.(id, data, Date.now(), sequenceChars, true)
     } else {
-      getOptions().onData?.(id, emission.data, Date.now())
+      getOptions().onData?.(id, data, Date.now())
     }
     for (const cb of dataListeners) {
       cb(
-        emission.transformed || sequenceChars !== emission.data.length
-          ? {
-              id,
-              data: emission.data,
-              sequenceChars,
-              seq: emission.rawEndSeq,
-              transformed: true
-            }
-          : { id, data: emission.data }
+        transformed || sequenceChars !== data.length
+          ? { id, data, sequenceChars, ...(seq === undefined ? {} : { seq }), transformed: true }
+          : { id, data }
       )
+    }
+  }
+  const emitIngressData = (emission: PtyIngressEmission): void => {
+    const sequenceChars = emission.rawEndSeq - emission.rawStartSeq
+    if (!commandMarkerScanner || emission.transformed) {
+      emitProviderData(
+        emission.data,
+        sequenceChars,
+        emission.transformed || sequenceChars !== emission.data.length,
+        emission.rawEndSeq
+      )
+      return
+    }
+    let rawCursor = emission.rawStartSeq
+    for (const item of commandMarkerScanner.accept(emission.data)) {
+      if (item.kind === 'data') {
+        rawCursor += item.data.length
+        emitProviderData(item.data, item.data.length, false)
+        continue
+      }
+      rawCursor += item.rawLength
+      emitProviderData('', item.rawLength, true, rawCursor)
+      commandEpoch += 1
+      getOptions().onPrivateTerminalFact?.(id, {
+        kind: 'command-started',
+        agent: item.event.agent,
+        trusted: item.event.trusted,
+        commandEpoch
+      })
     }
   }
   const startupIngress = new PtyStartupIngress({
@@ -123,6 +166,15 @@ export function activateLocalPtySession(args: {
   }
 
   const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
+    const drainedCommandMarker = commandMarkerScanner?.drain()
+    if (drainedCommandMarker && drainedCommandMarker.rawLength > 0) {
+      emitProviderData(
+        drainedCommandMarker.data,
+        drainedCommandMarker.rawLength,
+        drainedCommandMarker.transformed,
+        startupIngress.acceptedRawSequence
+      )
+    }
     // Why: node-pty reports a signalled death as {exitCode: 0, signal: N}; the
     // cause is built here, where the signal and the spawn's trustworthiness
     // are both still in hand.

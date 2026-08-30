@@ -122,6 +122,7 @@ function expectBashOsc133Lifecycle(output: string): void {
   )
 
   expect(firstPromptMarker).toBeGreaterThanOrEqual(0)
+  expect(output).not.toContain('\x1b]777;orca-cmd;')
   expect(output.slice(0, firstPromptMarker)).not.toContain(oscC)
   expect(output.slice(0, firstPromptMarker)).not.toContain(oscD)
   expect(output.match(lifecyclePattern)).toEqual([
@@ -165,9 +166,12 @@ describePosix('local PTY shell-ready launch config', () => {
     const config = getShellReadyLaunchConfig('/opt/homebrew/bin/fish')
 
     expect(config.supportsReadyMarker).toBe(true)
-    // Why empty: fish's selection is baked into the init command text, so it
-    // needs no exported feature variable at all.
-    expect(config.env).toEqual({})
+    // Fish's feature selection is baked into the init command; only the private
+    // marker nonce crosses through env and the wrapper consumes it immediately.
+    expect(config.env).toEqual({
+      ORCA_SHELL_COMMAND_NONCE: 'test-nonce',
+      ORCA_SHELL_INTEGRATION_CONTEXT: 'direct'
+    })
     expect(config.args?.slice(0, 2)).toEqual(['-l', '-C'])
     const init = config.args?.[2] ?? ''
     expect(init).toContain('--on-event fish_prompt')
@@ -176,12 +180,15 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps markerless fish spawns unwrapped', async () => {
+  it('wraps fish spawns for command markers', async () => {
     const { getMarkerlessShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
     const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
-    expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
+    expect(config.mode).toBe('wrapped')
+    expect(config.supportsCommandMarkers).toBe(true)
+    expect(config.args?.slice(0, 2)).toEqual(['-l', '-C'])
+    expect(config.args?.[2]).toContain('fish_preexec')
   })
 
   it('falls back to HOME for ORCA_ORIG_ZDOTDIR when inherited ZDOTDIR points at a wrapper dir', async () => {
@@ -276,7 +283,7 @@ describePosix('local PTY shell-ready launch config', () => {
 
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     expect(zshenv).toContain('builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"')
-    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-start;v2;%s;%s;%s\\007"')
     // The handback is what makes a nested Orca unable to inherit this dir, and
     // what stops /etc/zshrc deriving HISTFILE from it.
     expect(zshenv).toContain('builtin unset ORCA_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR')

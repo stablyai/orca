@@ -8,11 +8,8 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import {
-  resolveLaunchedAgentExitEvidence,
-  resolveTabAgentFromSignals,
-  useTabAgent
-} from './use-tab-agent'
+import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
+import { resolveLaunchedAgentExitEvidence } from './tab-agent-exit-evidence'
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

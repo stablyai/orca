@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
@@ -24,6 +25,7 @@ import type { PtySpawnOptions } from './types'
 type WslLaunchContext = { distro: string; treatPosixCwdAsWsl: true }
 type LocalPtyLaunchSeed = {
   args: PtySpawnOptions
+  commandNonce: string
   startupAgentRecognition: ReturnType<typeof recognizeAgentProcessFromCommandLine>
   defaultCwd: string
   cwd: string
@@ -34,6 +36,8 @@ type LocalPtyLaunchSeed = {
 }
 
 export type LocalPtyLaunchPlan = {
+  commandNonce: string
+  expectedCommandNonce: string | null
   startupAgentRecognition: ReturnType<typeof recognizeAgentProcessFromCommandLine>
   defaultCwd: string
   cwd: string
@@ -83,6 +87,8 @@ function finalizeLocalPtyLaunchPlan(
   const isWslShell =
     Boolean(seed.wslInfo) || pathWin32.basename(shell.shellPath).toLowerCase() === 'wsl.exe'
   return {
+    commandNonce: seed.commandNonce,
+    expectedCommandNonce: seed.commandNonce,
     startupAgentRecognition: seed.startupAgentRecognition,
     defaultCwd: seed.defaultCwd,
     cwd: seed.cwd,
@@ -213,6 +219,7 @@ export function createLocalPtyLaunchPlan(
       : undefined
   const seed: LocalPtyLaunchSeed = {
     args,
+    commandNonce: randomUUID(),
     startupAgentRecognition,
     defaultCwd,
     cwd,

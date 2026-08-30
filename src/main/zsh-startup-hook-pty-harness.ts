@@ -25,7 +25,7 @@ export const ZSH_PATH = hasZsh
 
 /** OSC sequences the wrapper emits, as the terminal would receive them. */
 export const MARKERS = {
-  identity: /\]777;orca-shell-start:\d+/,
+  identity: /\]777;orca-shell-start;v2;\d+;\d*;[A-Za-z0-9+/=]*/,
   ready: ']777;orca-shell-ready',
   promptStart: ']133;A',
   commandStart: ']133;C',

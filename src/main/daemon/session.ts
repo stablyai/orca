@@ -13,7 +13,10 @@ import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import type { SessionCommandMarkerIntake } from './session-command-marker-intake'
+import type { SessionSnapshotAccess } from './session-snapshot-access'
+import { createSessionIngressPipeline } from './session-ingress-pipeline'
 
 import type {
   SessionState,
@@ -29,8 +32,8 @@ export class Session {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
+  exitCode: number | null = null
   private _state: SessionState = 'running'
-  private _exitCode: number | null = null
   private _disposed = false
   private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
@@ -40,6 +43,8 @@ export class Session {
   private readonly termination: SessionTerminationController
   private readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  private readonly commandMarkerIntake: SessionCommandMarkerIntake
+  private readonly snapshotAccess: SessionSnapshotAccess
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -80,12 +85,16 @@ export class Session {
       acceptStartupIngress: (data) => this.startupIngress.accept(data)
     })
 
-    this.startupIngress = new PtyStartupIngress({
-      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
-      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
-      write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.recoveryBarrier.accept(emission)
+    const ingress = createSessionIngressPipeline({
+      options: opts,
+      subprocess: this.subprocess,
+      output: this.output,
+      shellReady: this.shellReady,
+      recoveryBarrier: this.recoveryBarrier
     })
+    this.commandMarkerIntake = ingress.commandMarkerIntake
+    this.startupIngress = ingress.startupIngress
+    this.snapshotAccess = ingress.snapshotAccess
     this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => {
       if (!this._disposed) {
@@ -105,10 +114,6 @@ export class Session {
 
   get historySeeded(): boolean | undefined {
     return this.output.historySeeded
-  }
-
-  get exitCode(): number | null {
-    return this._exitCode
   }
 
   get isAlive(): boolean {
@@ -222,8 +227,7 @@ export class Session {
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
-    this.startupIngress.snapshotBarrier()
-    return this.output.getSnapshot(opts)
+    return this.snapshotAccess.getSnapshot(opts)
   }
 
   getPartialEscapeTailAnsi(): string {
@@ -241,11 +245,7 @@ export class Session {
     if (this._disposed) {
       return null
     }
-    const releasedHeldBytes =
-      includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
-    return this.output.takePendingOutput(includeSnapshot, releasedHeldBytes, () =>
-      this.getSnapshot()
-    )
+    return this.snapshotAccess.takePendingOutput(includeSnapshot, opts)
   }
 
   getCwd(): string | null {
@@ -275,12 +275,7 @@ export class Session {
   }
 
   prepareForFinalSnapshot(): string {
-    const held = this.shellReady.releaseHeldBytes()
-    this.startupIngress.snapshotBarrier()
-    // Why last: snapshotBarrier can emit held spans into the barrier, and a
-    // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
-    this.recoveryBarrier.flushPending()
-    return held
+    return this.snapshotAccess.prepareForFinalSnapshot()
   }
 
   dispose(): void {
@@ -305,7 +300,7 @@ export class Session {
       } catch {
         /* child may already be gone */
       }
-      this._exitCode = -1
+      this.exitCode = -1
       this.termination.clearTerminating()
     }
 
@@ -364,12 +359,13 @@ export class Session {
     this.shellReady.disposePromptReadinessProbe()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
+    this.commandMarkerIntake.drain()
     // Why after drainAndClose: drained ingress bytes re-enter the barrier and can
     // open a fresh episode; flushing here delivers them too. A shell exiting
     // mid-proof must not strand the queued post-133;D prompt — those bytes belong
     // to clients, records, and history before broadcastExit below.
     this.recoveryBarrier.flushPending()
-    this._exitCode = code
+    this.exitCode = code
     this._state = 'exited'
     this.termination.clearTerminating()
     // Why resume:false — the child is reaped (nothing to unblock); only the failsafe timer must not outlive the session.

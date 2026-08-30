@@ -67,8 +67,10 @@ export async function shellScriptTest(
         env: {},
         hasStartupCommand: true,
         waitsForShellReady: true,
-        emitsStartupIdentity: true
-      })
+        emitsStartupIdentity: true,
+        injectsCommandMarkers: true
+      }),
+      { commandNonce: 'test-nonce' }
     )
 
     const env: Record<string, string> = {

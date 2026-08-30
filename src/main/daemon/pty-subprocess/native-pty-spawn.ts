@@ -61,6 +61,11 @@ export function spawnNativeDaemonPty(args: {
     }
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
       try {
+        if (/(?:^|[\\/])cmd\.exe$/i.test(attempt.shellPath)) {
+          delete args.env.ORCA_SHELL_COMMAND_NONCE
+          delete args.env.ORCA_SHELL_INTEGRATION_CONTEXT
+          delete args.env.ORCA_SHELL_FEATURES
+        }
         const process = spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
         const message = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
         console.warn(

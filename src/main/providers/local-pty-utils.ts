@@ -1,4 +1,4 @@
-import { basename, isAbsolute, join } from 'node:path'
+import { basename, isAbsolute, join, win32 as pathWin32 } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
 import {
@@ -182,6 +182,11 @@ function spawnWindowsFallbackChain(
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
     try {
+      if (pathWin32.basename(attempt.shellPath).toLowerCase() === 'cmd.exe') {
+        for (const key of params.launchEnvKeys ?? []) {
+          delete env[key]
+        }
+      }
       const proc = ptySpawn(attempt.shellPath, attempt.shellArgs, {
         name: termName,
         cols,

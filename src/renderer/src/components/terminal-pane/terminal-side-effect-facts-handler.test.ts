@@ -216,6 +216,31 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     ])
   })
 
+  it('routes command-started facts with their batch sequence and never replays them', () => {
+    const events: unknown[][] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onCommandStarted: (fact) =>
+          events.push(['started', fact.agent, fact.trusted, fact.commandEpoch, fact.seq])
+      }
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'command-started', agent: 'codex', trusted: true, commandEpoch: 3 }], {
+        seq: 41
+      })
+    )
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'command-started', agent: 'claude', trusted: false, commandEpoch: 4 }], {
+        replay: true,
+        seq: 42
+      })
+    )
+
+    expect(events).toEqual([['started', 'codex', true, 3, 41]])
+  })
+
   it('routes command-code scrape facts to the registered consumer', () => {
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({

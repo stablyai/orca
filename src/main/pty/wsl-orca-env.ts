@@ -76,6 +76,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     // Why /p: the guest reads the content-addressed wrapper tree through /mnt/c,
     // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.
     'ORCA_SHELL_READY_ROOT/p',
+    'ORCA_SHELL_FEATURES/u',
+    'ORCA_SHELL_COMMAND_NONCE/u',
+    'ORCA_SHELL_INTEGRATION_CONTEXT/u',
     'ORCA_CLI_COMMAND/u',
     'ORCA_CODEX_LAUNCH_PREFLIGHT/p',
     'ORCA_PANE_KEY/u',

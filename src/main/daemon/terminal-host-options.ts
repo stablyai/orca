@@ -2,6 +2,7 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
+import type { DaemonTransientFact } from './daemon-stream-events'
 
 export type TerminalHostOptions = {
   spawnSubprocess: (opts: {
@@ -23,6 +24,7 @@ export type TerminalHostOptions = {
   }) => SubprocessHandle | Promise<SubprocessHandle>
   // Why: login-session death detection (#7936) needs subprocess exits even when no client is attached.
   onSessionReaped?: (sessionId: string) => void
+  onSessionPrivateTerminalFact?: (sessionId: string, fact: DaemonTransientFact) => void
   /** Reports a shell-readiness outcome worth diagnosing. Why threaded rather
    *  than console: the detached daemon runs with stdio 'ignore', so the only
    *  durable sink is its NDJSON file log. */

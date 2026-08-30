@@ -124,12 +124,31 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     session.unregisterSideEffectFactConsumer = registerTerminalSideEffectFactConsumer({
       ptyId,
       callbacks: {
+        onCommandStarted: (fact) => {
+          if (fact.agent === null) {
+            useAppStore.getState().clearPaneCommandIdentity(session.cacheKey, ptyId)
+            return
+          }
+          useAppStore.getState().setPaneCommandIdentity(session.cacheKey, {
+            ptyId,
+            commandEpoch: fact.commandEpoch,
+            startSeq: fact.seq,
+            agent: fact.agent,
+            trusted: fact.trusted
+          })
+        },
         onTitleChange: session.onTitleChange,
         onBell: session.onBell,
         onAgentBecameIdle: session.onAgentBecameIdle,
         onAgentBecameWorking: session.onAgentBecameWorking,
         onAgentExited: session.onAgentExited,
-        onCommandFinished: session.handleCommandFinished,
+        onCommandFinished: (exitCode, seq) => {
+          const entry = useAppStore.getState().paneCommandIdentityByPaneKey[session.cacheKey]
+          if (entry?.ptyId === ptyId && (seq === undefined || seq >= entry.startSeq)) {
+            useAppStore.getState().clearPaneCommandIdentity(session.cacheKey, ptyId)
+          }
+          session.handleCommandFinished(exitCode)
+        },
         onPrLink: (link) =>
           useAppStore
             .getState()
@@ -155,6 +174,11 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     })
   }
   session.dropSideEffectFactConsumer = (): void => {
+    if (session.activePanePtyBinding) {
+      useAppStore
+        .getState()
+        .clearPaneCommandIdentity(session.cacheKey, session.activePanePtyBinding.ptyId)
+    }
     session.unregisterSideEffectFactConsumer?.()
     session.unregisterSideEffectFactConsumer = null
     session.remoteOutputFactConsumerPtyId = null

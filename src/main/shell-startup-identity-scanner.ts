@@ -1,4 +1,5 @@
 export const SHELL_STARTUP_IDENTITY_PREFIX = '\x1b]777;orca-shell-start:'
+export const SHELL_STARTUP_IDENTITY_V2_PREFIX = '\x1b]777;orca-shell-start;v2;'
 const POSSIBLE_PID_SUFFIX = /^\d{0,20}$/
 
 export type ShellStartupIdentityScanState = {
@@ -8,6 +9,8 @@ export type ShellStartupIdentityScanState = {
 export type ShellStartupIdentityScanResult = {
   output: string
   shellPid: number | null
+  shellStartTime?: string
+  tty?: string
 }
 
 export function createShellStartupIdentityScanState(): ShellStartupIdentityScanState {
@@ -21,14 +24,48 @@ export function drainShellStartupIdentityHeldBytes(state: ShellStartupIdentitySc
 }
 
 function isPossibleMarker(candidate: string): boolean {
-  if (candidate.length <= SHELL_STARTUP_IDENTITY_PREFIX.length) {
-    return SHELL_STARTUP_IDENTITY_PREFIX.startsWith(candidate)
+  if (
+    SHELL_STARTUP_IDENTITY_PREFIX.startsWith(candidate) ||
+    SHELL_STARTUP_IDENTITY_V2_PREFIX.startsWith(candidate)
+  ) {
+    return true
   }
-  if (!candidate.startsWith(SHELL_STARTUP_IDENTITY_PREFIX)) {
-    return false
+  if (candidate.startsWith(SHELL_STARTUP_IDENTITY_PREFIX)) {
+    return POSSIBLE_PID_SUFFIX.test(candidate.slice(SHELL_STARTUP_IDENTITY_PREFIX.length))
   }
-  const suffix = candidate.slice(SHELL_STARTUP_IDENTITY_PREFIX.length)
-  return POSSIBLE_PID_SUFFIX.test(suffix)
+  return (
+    candidate.startsWith(SHELL_STARTUP_IDENTITY_V2_PREFIX) &&
+    !candidate.includes('\x07') &&
+    candidate.length < 512
+  )
+}
+
+function parseV2(payload: string): Omit<ShellStartupIdentityScanResult, 'output'> | null {
+  const [pidText, shellStartTime, ttyBase64, ...extra] = payload.split(';')
+  const shellPid = Number(pidText)
+  if (
+    extra.length > 0 ||
+    !/^\d+$/.test(pidText ?? '') ||
+    !Number.isSafeInteger(shellPid) ||
+    shellPid <= 0 ||
+    !/^\d*$/.test(shellStartTime ?? '') ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(ttyBase64 ?? '')
+  ) {
+    return null
+  }
+  try {
+    return {
+      shellPid,
+      ...(shellStartTime ? { shellStartTime } : {}),
+      ...(ttyBase64
+        ? {
+            tty: new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(ttyBase64, 'base64'))
+          }
+        : {})
+    }
+  } catch {
+    return null
+  }
 }
 
 export function scanForShellStartupIdentity(
@@ -51,7 +88,15 @@ export function scanForShellStartupIdentity(
       state.heldBytes = candidate
       break
     }
-    if (candidate.startsWith(SHELL_STARTUP_IDENTITY_PREFIX)) {
+    if (candidate.startsWith(SHELL_STARTUP_IDENTITY_V2_PREFIX)) {
+      const suffix = candidate.slice(SHELL_STARTUP_IDENTITY_V2_PREFIX.length)
+      const terminator = suffix.indexOf('\x07')
+      const parsed = terminator === -1 ? null : parseV2(suffix.slice(0, terminator))
+      if (parsed) {
+        const markerLength = SHELL_STARTUP_IDENTITY_V2_PREFIX.length + terminator + 1
+        return { output: output + candidate.slice(markerLength), ...parsed }
+      }
+    } else if (candidate.startsWith(SHELL_STARTUP_IDENTITY_PREFIX)) {
       const suffix = candidate.slice(SHELL_STARTUP_IDENTITY_PREFIX.length)
       const terminator = suffix.indexOf('\x07')
       const pidText = terminator === -1 ? '' : suffix.slice(0, terminator)

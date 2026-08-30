@@ -12,7 +12,8 @@ export const STARTUP_COMMAND_FEATURES = selectShellStartupFeatures({
   env: {},
   hasStartupCommand: true,
   waitsForShellReady: true,
-  emitsStartupIdentity: true
+  emitsStartupIdentity: true,
+  injectsCommandMarkers: true
 })
 
 /** A pane carrying an Orca overlay but no startup command. */
@@ -21,5 +22,6 @@ export const OVERLAY_ONLY_FEATURES = selectShellStartupFeatures({
   env: { ORCA_CODEX_HOME: '/tmp/orca-codex-home' },
   hasStartupCommand: false,
   waitsForShellReady: false,
-  emitsStartupIdentity: false
+  emitsStartupIdentity: false,
+  injectsCommandMarkers: true
 })

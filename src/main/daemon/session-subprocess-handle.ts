@@ -18,6 +18,9 @@ export type SubprocessHandle = {
   shellPath?: string
   shellCwd?: string
   shellPathEnv?: string
+  /** Authority-only nonce; never serialized into daemon session metadata. */
+  shellCommandNonce?: string
+  shellCommandMarkersEnabled?: boolean
   /** Slave device path, so the shell-readiness probe can read the line discipline.
    *  Absent on handles with no POSIX slave to read (ConPTY, tests). */
   slavePath?: string

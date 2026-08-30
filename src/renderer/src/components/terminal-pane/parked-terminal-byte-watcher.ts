@@ -242,7 +242,26 @@ export function startParkedTerminalByteWatcher(
         // Why: ordinary park already has a pane-owned title; the flag below requests a snapshot only when no pane did.
         callbacks: {
           ...sideEffectCallbacks,
-          onCommandFinished: commandStatusPolicy.onCommandFinished,
+          onCommandStarted: (fact) => {
+            if (fact.agent === null) {
+              useAppStore.getState().clearPaneCommandIdentity(paneKey, ptyId)
+              return
+            }
+            useAppStore.getState().setPaneCommandIdentity(paneKey, {
+              ptyId,
+              commandEpoch: fact.commandEpoch,
+              startSeq: fact.seq,
+              agent: fact.agent,
+              trusted: fact.trusted
+            })
+          },
+          onCommandFinished: (exitCode, seq) => {
+            const entry = useAppStore.getState().paneCommandIdentityByPaneKey[paneKey]
+            if (entry?.ptyId === ptyId && (seq === undefined || seq >= entry.startSeq)) {
+              useAppStore.getState().clearPaneCommandIdentity(paneKey, ptyId)
+            }
+            commandStatusPolicy.onCommandFinished(exitCode)
+          },
           onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
           onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
           onPrLink: (link) =>

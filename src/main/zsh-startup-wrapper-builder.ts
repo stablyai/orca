@@ -31,10 +31,15 @@ import { getPosixCodexShellLaunchPreflight } from './pty/codex-shell-launch-pref
 import {
   getZshShellReadyMarkerRegistrationBlock,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
+  SHELL_STARTUP_IDENTITY_V2_MARKER_BLOCK,
   ZSH_FEATURE_CHANNEL_BLOCK,
   ZSH_USER_ZSHENV_SOURCE_BLOCK,
   ZSH_ZDOTDIR_HANDBACK_BLOCK
 } from './shell-templates'
+import {
+  ZSH_COMMAND_MARKER_CAPTURE_BLOCK,
+  ZSH_COMMAND_MARKER_EMIT_BLOCK
+} from './shell-command-marker-template'
 
 /** Runtime values the hook re-exports after the user's own startup files ran. */
 export type ZshWrapperRestoreSpec = {
@@ -54,6 +59,8 @@ export type ZshStartupHookSpec = {
   readyMarkerEscaped: string
   /** OSC 133 command-lifecycle hooks (behind the `markers` feature). */
   osc133CommandMarkers: boolean
+  /** Private typed-command marker support. Relay specs deliberately omit it. */
+  commandIdentityMarkers?: boolean
   /** Comment heading the overlay restores inside the hook. */
   overlayRestoreComment: string
   restores: ZshWrapperRestoreSpec
@@ -78,7 +85,8 @@ const CODEX_HOME_RESTORE = `# Why: Codex must keep using Orca's runtime CODEX_HO
  * The OSC 133 hooks, defined at top level so their bodies are parsed before the
  * user's `.zshenv` can change the parsing mode.
  */
-const ZSH_OSC133_FUNCTION_BLOCK = `__orca_osc133_precmd() {
+function getZshOsc133FunctionBlock(commandIdentityMarkers: boolean): string {
+  return `__orca_osc133_precmd() {
   local exit_code=$?
   if [[ -n "\${__orca_in_command:-}" ]]; then
     builtin printf "\\033]133;D;%s\\007" "$exit_code"
@@ -87,11 +95,17 @@ const ZSH_OSC133_FUNCTION_BLOCK = `__orca_osc133_precmd() {
   builtin printf "\\033]133;A\\007"
 }
 __orca_osc133_preexec() {
+  # Why emulate: under KSH_ARRAYS the unbraced +commands[base64] test parses as
+  # arithmetic and the capture range turns 0-based, so the guard errors on every
+  # command and the captured text loses its first character.
+  builtin emulate -L zsh
+  ${commandIdentityMarkers ? ZSH_COMMAND_MARKER_EMIT_BLOCK : ''}
   builtin printf "\\033]133;C\\007"
   # Why typeset -g: a plain assignment here creates a global inside a function,
   # which prints a warning above every command under warn_create_global.
   builtin typeset -g __orca_in_command=1
 }`
+}
 
 function joinBlocks(blocks: (string | null)[]): string {
   return blocks.filter((block): block is string => block !== null).join('\n')
@@ -185,8 +199,13 @@ export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
     `# ${spec.headerLabel}`,
     ZSH_ZDOTDIR_HANDBACK_BLOCK,
     ZSH_FEATURE_CHANNEL_BLOCK,
-    SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
-    spec.osc133CommandMarkers ? ZSH_OSC133_FUNCTION_BLOCK : null,
+    spec.commandIdentityMarkers ? ZSH_COMMAND_MARKER_CAPTURE_BLOCK : null,
+    spec.commandIdentityMarkers
+      ? SHELL_STARTUP_IDENTITY_V2_MARKER_BLOCK
+      : SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
+    spec.osc133CommandMarkers
+      ? getZshOsc133FunctionBlock(spec.commandIdentityMarkers === true)
+      : null,
     buildDeferredInit(spec),
     ZSH_USER_ZSHENV_SOURCE_BLOCK
   ])}\n`

@@ -7,12 +7,14 @@
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
+import type { TuiAgent } from './tui-agent'
 
 /** Why tagged: stale-clear facts come from main's unthrottled 3s timer, not
  *  observed bytes. Renderer policy clears title/cache state from them but
  *  must not schedule task-complete notifications or unread attention — a
  *  merely-paused agent (>3s silent mid-task) is not a completion. */
 export type TerminalSideEffectFact =
+  | { kind: 'command-started'; agent: TuiAgent | null; trusted: boolean; commandEpoch: number }
   | { kind: 'agent-status'; payload: ParsedAgentStatusPayload }
   | { kind: 'title'; normalizedTitle: string; rawTitle: string; staleWorkingTitleClear?: boolean }
   | { kind: 'bell' }

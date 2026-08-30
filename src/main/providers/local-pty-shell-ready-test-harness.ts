@@ -29,9 +29,9 @@ export async function importFreshLocalPtyShellReady() {
   return {
     ...module,
     getShellReadyLaunchConfig: (shell: string) =>
-      module.getShellLaunchConfig(shell, STARTUP_COMMAND_FEATURES),
+      module.getShellLaunchConfig(shell, STARTUP_COMMAND_FEATURES, { commandNonce: 'test-nonce' }),
     getMarkerlessShellLaunchConfig: (shell: string) =>
-      module.getShellLaunchConfig(shell, OVERLAY_ONLY_FEATURES)
+      module.getShellLaunchConfig(shell, OVERLAY_ONLY_FEATURES, { commandNonce: 'test-nonce' })
   }
 }
 

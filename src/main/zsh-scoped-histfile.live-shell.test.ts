@@ -74,9 +74,10 @@ function launchPane(
     hasStartupCommand: false,
     waitsForShellReady: false,
     emitsStartupIdentity: false,
+    injectsCommandMarkers: true,
     ...overrides
   })
-  const launch = getShellLaunchConfig(ZSH_PATH, features)
+  const launch = getShellLaunchConfig(ZSH_PATH, features, { commandNonce: 'test-nonce' })
   return {
     features,
     launch,
@@ -114,9 +115,9 @@ describe.skipIf(process.platform === 'win32')(
 
         // The whole reason wrapping widened: this pane has no overlay env and no
         // startup command, so before #15258 nothing pointed it at a wrapper.
-        expect(features).toEqual(['history'])
+        expect(features).toEqual(['history', 'markers'])
         expect(launch.env.ZDOTDIR).toBeTruthy()
-        expect(launch.env.ORCA_SHELL_FEATURES).toBe('history')
+        expect(launch.env.ORCA_SHELL_FEATURES).toBe('history,markers')
       })
     )
 
@@ -200,9 +201,10 @@ describe.skipIf(process.platform === 'win32')(
           env: { HOME: home, ...overlayEnv },
           hasStartupCommand: false,
           waitsForShellReady: false,
-          emitsStartupIdentity: false
+          emitsStartupIdentity: false,
+          injectsCommandMarkers: true
         })
-        const launch = getShellLaunchConfig(ZSH_PATH, features)
+        const launch = getShellLaunchConfig(ZSH_PATH, features, { commandNonce: 'test-nonce' })
 
         const wrapped = await runZshPty({
           env: {
@@ -269,9 +271,10 @@ describe.skipIf(process.platform === 'win32')('the deferred hook delivers every 
           env: { HOME: home, ...overlayEnv },
           hasStartupCommand: false,
           waitsForShellReady: false,
-          emitsStartupIdentity: false
+          emitsStartupIdentity: false,
+          injectsCommandMarkers: true
         })
-        const launch = getShellLaunchConfig(ZSH_PATH, features)
+        const launch = getShellLaunchConfig(ZSH_PATH, features, { commandNonce: 'test-nonce' })
 
         const { values } = await runZshPty({
           env: {

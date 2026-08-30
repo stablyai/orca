@@ -19,6 +19,7 @@ import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
 } from '../../../../shared/terminal-side-effect-facts'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 // Why: cached once per session — the blocking read should only ever run on
 // the pre-hydration startup path, never per pane bind.
@@ -64,6 +65,12 @@ export function isMainTerminalSideEffectAuthorityForPty(args: {
 }
 
 export type TerminalSideEffectFactConsumerCallbacks = {
+  onCommandStarted?: (fact: {
+    agent: TuiAgent | null
+    trusted: boolean
+    commandEpoch: number
+    seq: number
+  }) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
   /** `meta.staleWorkingTitleClear` marks facts derived from main's 3s
    *  stale-title timer — policy must clear title/cache state without
@@ -79,7 +86,7 @@ export type TerminalSideEffectFactConsumerCallbacks = {
   onAgentExited?: () => void
   /** OSC 133;D — same policy hook the byte-mode commandLifecycle drove
    *  (stale agent-status row drop + interrupt-inference coordination). */
-  onCommandFinished?: (bestEffortExitCode: number | null) => void
+  onCommandFinished?: (bestEffortExitCode: number | null, seq?: number) => void
   onPrLink?: (link: TerminalGitHubPRLink) => void
   /** Command Code output scrape (no hooks): working seeds the status row;
    *  done is settle-checked by the pane policy before completing the turn. */
@@ -106,6 +113,14 @@ let channelUnsubscribe: (() => void) | null = null
 
 function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: number): void {
   switch (fact.kind) {
+    case 'command-started':
+      entry.callbacks.onCommandStarted?.({
+        agent: fact.agent,
+        trusted: fact.trusted,
+        commandEpoch: fact.commandEpoch,
+        seq
+      })
+      return
     case 'agent-status':
       entry.callbacks.onAgentStatus?.(fact.payload)
       return
@@ -133,7 +148,7 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       entry.callbacks.onAgentExited?.()
       return
     case 'command-finished':
-      entry.callbacks.onCommandFinished?.(fact.exitCode)
+      entry.callbacks.onCommandFinished?.(fact.exitCode, seq)
       return
     case 'pr-link':
       entry.callbacks.onPrLink?.(fact.link)

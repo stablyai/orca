@@ -1,4 +1,5 @@
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 export type PtyDataEvent = {
   id: string
@@ -11,6 +12,12 @@ export type PtyDataEvent = {
 /** Notification-bearing fact a thinning transport detected while it held
  *  scan authority for a backgrounded PTY (see onBackgroundStreamEvent). */
 export type PtyTransientFact =
+  | {
+      kind: 'command-started'
+      agent: TuiAgent | null
+      trusted: boolean
+      commandEpoch: number
+    }
   | { kind: 'bell' }
   | { kind: 'command-finished'; exitCode: number | null }
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }

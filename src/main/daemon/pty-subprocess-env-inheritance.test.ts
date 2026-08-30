@@ -287,8 +287,9 @@ describe('createPtySubprocess', () => {
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ORCA_HISTFILE).toBe(expected)
     // The wrapping consequence: no inherited value may point a pane at Orca's
-    // ZDOTDIR that the client scoped no history for.
-    expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
+    // ZDOTDIR that the client scoped no history for. `markers` rides along on
+    // every startup-command pane regardless of history scoping.
+    expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? 'markers' : 'history,markers')
   })
 
   it('does not inherit ELECTRON_RUN_AS_NODE from the daemon process env', async () => {

@@ -246,6 +246,37 @@ describe('connectPanePty', () => {
       )
     })
 
+    it('keeps command facts display-only instead of granting foreground authority', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-command-identity')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-command-identity',
+        seq: 17,
+        facts: [{ kind: 'command-started', agent: 'codex', trusted: true, commandEpoch: 1 }]
+      })
+
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      expect(mockStoreState.paneCommandIdentityByPaneKey[paneKey]).toEqual({
+        ptyId: 'pty-fact-command-identity',
+        commandEpoch: 1,
+        startSeq: 17,
+        agent: 'codex',
+        trusted: true
+      })
+      // Command identity is a tab-icon/display hint only. It must never become
+      // the process-backed source used by input routing or stop/kill actions.
+      expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalled()
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
+    })
+
     it('stops consuming facts after the pane binding is disposed', async () => {
       enableMainAuthority()
       const { connectPanePty } = await import('./pty-connection')

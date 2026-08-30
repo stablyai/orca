@@ -50,6 +50,17 @@ export class DaemonServer {
     this.log = options.log ?? createNoopDaemonFileLog()
     this.host = new TerminalHost({
       spawnSubprocess: options.spawnSubprocess,
+      onSessionPrivateTerminalFact: (sessionId, fact) => {
+        const clientId = this.attachments?.clientIdForSession(sessionId)
+        if (clientId) {
+          this.streamDataBatcher?.enqueueControlEvent(clientId, sessionId, {
+            type: 'event',
+            event: 'transientFact',
+            sessionId,
+            payload: fact
+          })
+        }
+      },
       reportReadinessEvent: (event, details) => this.log.log(event, details),
       onSessionReaped: (sessionId) => {
         this.attachments.release(sessionId)

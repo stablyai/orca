@@ -246,9 +246,10 @@ function wrappedEnv(home: string): Record<string, string> {
     env: { HOME: home, ORCA_HISTFILE: join(home, 'scoped_history') },
     hasStartupCommand: false,
     waitsForShellReady: false,
-    emitsStartupIdentity: false
+    emitsStartupIdentity: false,
+    injectsCommandMarkers: true
   })
-  const launch = getShellLaunchConfig(ZSH_PATH, features)
+  const launch = getShellLaunchConfig(ZSH_PATH, features, { commandNonce: 'test-nonce' })
   // Why ORCA_ORIG_ZDOTDIR is dropped rather than pinned to the sandbox home:
   // these cases are about a user who has no inherited ZDOTDIR, so the pane must
   // resolve purely from HOME — and Orca must not invent a ZDOTDIR for it. The

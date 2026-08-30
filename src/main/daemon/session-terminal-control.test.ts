@@ -13,6 +13,8 @@ function createRecordingSubprocess() {
 
   return {
     pid: 12345,
+    shellCommandNonce: undefined as string | undefined,
+    shellCommandMarkersEnabled: false,
     foregroundProcess: null as string | null,
     written,
     get killed() {
@@ -81,15 +83,47 @@ describe('Session terminal control', () => {
     vi.useRealTimers()
   })
 
-  function createSession(options: { shellReadySupported?: boolean } = {}): void {
+  function createSession(
+    options: {
+      shellReadySupported?: boolean
+      onPrivateTerminalFact?: NonNullable<
+        ConstructorParameters<typeof Session>[0]['onPrivateTerminalFact']
+      >
+    } = {}
+  ): void {
     session = new Session({
       sessionId: 'test-session',
       cols: 80,
       rows: 24,
       subprocess,
-      shellReadySupported: options.shellReadySupported ?? false
+      shellReadySupported: options.shellReadySupported ?? false,
+      ...(options.onPrivateTerminalFact
+        ? { onPrivateTerminalFact: options.onPrivateTerminalFact }
+        : {})
     })
   }
+
+  it('strips a command marker before buffering and emits one trusted fact', () => {
+    const onPrivateTerminalFact = vi.fn()
+    subprocess.shellCommandNonce = 'nonce'
+    subprocess.shellCommandMarkersEnabled = true
+    createSession({ onPrivateTerminalFact })
+    const row = `\x1b]777;orca-cmd;nonce;${Buffer.from('claude').toString('base64')}\x07`
+
+    subprocess.simulateData(`A${row}B`)
+
+    const pending = session!.takePendingOutput(false)
+    expect(pending).not.toBeNull()
+    expect(pending?.records).toEqual([{ kind: 'output', data: 'AB' }])
+    expect(pending?.snapshot?.outputSequence).toBeUndefined()
+    expect(session!.getSnapshot()!.outputSequence).toBe(row.length + 2)
+    expect(onPrivateTerminalFact).toHaveBeenCalledWith({
+      kind: 'command-started',
+      agent: 'claude',
+      trusted: true,
+      commandEpoch: 1
+    })
+  })
 
   function withPlatform(platform: NodeJS.Platform, run: () => void): void {
     const original = process.platform

@@ -1,3 +1,35 @@
+set -g __orca_shell_command_nonce "$ORCA_SHELL_COMMAND_NONCE"
+set -g __orca_shell_integration_context "$ORCA_SHELL_INTEGRATION_CONTEXT"
+set -e ORCA_SHELL_COMMAND_NONCE ORCA_SHELL_INTEGRATION_CONTEXT
+function __orca_command_markers_allowed --no-scope-shadowing
+  test -n "$__orca_shell_command_nonce"; or return 1
+  if test "$__orca_shell_integration_context" = "direct"
+    return 0
+  end
+  if set -q TMUX; or set -q STY
+    return 1
+  end
+  string match -qr '^(tmux|screen)' -- "$TERM"; and return 1
+  return 0
+end
+function __orca_command_marker --on-event fish_preexec --no-scope-shadowing
+  __orca_command_markers_allowed; or return
+  type -q base64; or return
+  set -l __orca_command_text (string sub -l 4096 -- "$argv[1]")
+  set -l __orca_command_b64 (builtin printf %s "$__orca_command_text" | command base64 | command tr -d '\r\n')
+  builtin printf '\e]777;orca-cmd;%s;%s\a' "$__orca_shell_command_nonce" "$__orca_command_b64"
+  builtin printf '\e]133;C\a'
+end
+function __orca_command_finished --on-event fish_postexec --no-scope-shadowing
+  # Why captured first: every later command overwrites $status before it is read.
+  set -l __orca_exit_status $status
+  __orca_command_markers_allowed; or return
+  # Why the same base64 gate as fish_preexec, which the exit status does not need:
+  # it is the only condition that can stop preexec emitting 133;C, and a D with no
+  # C retires a pane's live identity with nothing left to invalidate it.
+  type -q base64; or return
+  builtin printf '\e]133;D;%s\a' "$__orca_exit_status"
+end
 function __orca_shell_ready_marker --on-event fish_prompt
   builtin printf "\033]777;orca-shell-ready\007"
   functions -e __orca_shell_ready_marker

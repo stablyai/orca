@@ -1,14 +1,27 @@
+import { release as osRelease } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { expandWindowsPathEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { dropInheritedOrcaFishHistory } from '../fish-history-session'
+import { isWindowsGitBashShellPath } from '../git-bash'
 import { dropIncoherentCondaActivationEnv } from '../pty/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
 import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
 } from '../pty/powerlevel10k-wizard-env'
+import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
+import {
+  shellCommandMarkerEnv,
+  SHELL_COMMAND_NONCE_ENV,
+  SHELL_INTEGRATION_CONTEXT_ENV
+} from '../shell-command-marker-template'
+import {
+  isShellCommandMarkerInjectionEnabled,
+  resolvePowerShellCommandMarkerTrust,
+  scrubShellCommandMarkerPolicyEnv
+} from '../shell-integration-injection-policy'
 import { selectShellStartupFeatures } from '../shell-startup-features'
 import {
   injectHistoryEnv,
@@ -100,6 +113,8 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     // Why delete: ORCA_SHELL_FEATURES is Orca-owned, and only the launch
     // config below may name features for this shell.
     delete env.ORCA_SHELL_FEATURES
+    delete env[SHELL_COMMAND_NONCE_ENV]
+    delete env[SHELL_INTEGRATION_CONTEXT_ENV]
     plan.getFallbackShellReadyConfig = (shell) =>
       getShellLaunchConfig(
         shell,
@@ -110,14 +125,44 @@ export function finalizeLocalPtySpawnEnvironment(args: {
           waitsForShellReady,
           // Why identical: the identity marker exists so the readiness
           // handshake can bind output to the right shell PID.
-          emitsStartupIdentity: waitsForShellReady
-        })
+          emitsStartupIdentity: waitsForShellReady,
+          injectsCommandMarkers: true
+        }),
+        { commandNonce: plan.commandNonce, hostClass: 'local-native' }
       )
     const shellLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
     Object.assign(env, shellLaunch.env)
     plan.shellArgs = shellLaunch.args ?? plan.shellArgs
-    plan.shellReadyLaunch = spawn.command ? shellLaunch : null
+    plan.shellReadyLaunch = shellLaunch
     plan.primaryLaunchEnvKeys = Object.keys(shellLaunch.env)
   }
+
+  if (process.platform === 'win32') {
+    delete env[SHELL_COMMAND_NONCE_ENV]
+    delete env[SHELL_INTEGRATION_CONTEXT_ENV]
+    const shellBasename = pathWin32.basename(plan.shellPath).toLowerCase()
+    if (shellBasename === 'wsl.exe' && isShellCommandMarkerInjectionEnabled('local-wsl')) {
+      const waitsForShellReady = Boolean(spawn.command)
+      env.ORCA_SHELL_FEATURES = waitsForShellReady ? 'markers,ready,identity' : 'markers'
+      Object.assign(env, shellCommandMarkerEnv(plan.commandNonce))
+      addOrcaWslInteropEnv(env)
+    } else if (
+      (shellBasename === 'pwsh.exe' || shellBasename === 'powershell.exe') &&
+      isShellCommandMarkerInjectionEnabled('local-native')
+    ) {
+      plan.expectedCommandNonce = resolvePowerShellCommandMarkerTrust(process.platform, osRelease())
+        ? plan.commandNonce
+        : null
+      Object.assign(env, shellCommandMarkerEnv(plan.expectedCommandNonce))
+      plan.primaryLaunchEnvKeys.push(SHELL_COMMAND_NONCE_ENV, SHELL_INTEGRATION_CONTEXT_ENV)
+    } else if (
+      isWindowsGitBashShellPath(plan.shellPath) &&
+      isShellCommandMarkerInjectionEnabled('local-native')
+    ) {
+      env.ORCA_SHELL_FEATURES = 'markers'
+      Object.assign(env, shellCommandMarkerEnv(plan.commandNonce))
+    }
+  }
+  scrubShellCommandMarkerPolicyEnv(env)
   return historyResult
 }

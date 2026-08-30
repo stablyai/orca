@@ -39,6 +39,18 @@ import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
 import type { PtySubprocessOptions } from '../pty-subprocess'
+import { randomUUID } from 'node:crypto'
+import {
+  shellCommandMarkerEnv,
+  SHELL_COMMAND_NONCE_ENV,
+  SHELL_INTEGRATION_CONTEXT_ENV
+} from '../../shell-command-marker-template'
+import {
+  isShellCommandMarkerInjectionEnabled,
+  resolvePowerShellCommandMarkerTrust,
+  scrubShellCommandMarkerPolicyEnv
+} from '../../shell-integration-injection-policy'
+import { release as osRelease } from 'node:os'
 
 export type PtyShellLaunchPlan = {
   shellPath: string
@@ -48,6 +60,7 @@ export type PtyShellLaunchPlan = {
   startupCommandDeliveredInShellArgs: boolean
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   startupAgentRecognition: RecognizedAgentProcess | null
+  shellCommandNonce: string | null
 }
 
 export function createPtyShellLaunchPlan(
@@ -60,6 +73,8 @@ export function createPtyShellLaunchPlan(
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
+  const commandNonce = randomUUID()
+  let shellCommandNonce: string | null = null
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
   if (opts.command && startupAgentRecognition) {
@@ -198,6 +213,8 @@ export function createPtyShellLaunchPlan(
           startupCommandDelivery: opts.startupCommandDelivery
         }))
     delete env.ORCA_SHELL_FEATURES
+    delete env[SHELL_COMMAND_NONCE_ENV]
+    delete env[SHELL_INTEGRATION_CONTEXT_ENV]
     const shellLaunch = getShellLaunchConfig(
       shellPath,
       selectShellStartupFeatures({
@@ -205,12 +222,45 @@ export function createPtyShellLaunchPlan(
         env,
         hasStartupCommand: Boolean(opts.command),
         waitsForShellReady,
-        emitsStartupIdentity: waitsForShellReady
-      })
+        emitsStartupIdentity: waitsForShellReady,
+        injectsCommandMarkers: true
+      }),
+      { commandNonce }
     )
     Object.assign(env, shellLaunch.env)
+    if (shellLaunch.supportsCommandMarkers) {
+      shellCommandNonce = commandNonce
+    }
     shellArgs = shellLaunch.args ?? ['-l']
   }
+
+  if (process.platform === 'win32') {
+    delete env[SHELL_COMMAND_NONCE_ENV]
+    delete env[SHELL_INTEGRATION_CONTEXT_ENV]
+    const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+    if (shellBasename === 'wsl.exe' && isShellCommandMarkerInjectionEnabled('daemon-wsl')) {
+      env.ORCA_SHELL_FEATURES = opts.command ? 'markers,ready,identity' : 'markers'
+      Object.assign(env, shellCommandMarkerEnv(commandNonce))
+      addOrcaWslInteropEnv(env)
+      shellCommandNonce = commandNonce
+    } else if (
+      (shellBasename === 'pwsh.exe' || shellBasename === 'powershell.exe') &&
+      isShellCommandMarkerInjectionEnabled('daemon-native')
+    ) {
+      shellCommandNonce = resolvePowerShellCommandMarkerTrust(process.platform, osRelease())
+        ? commandNonce
+        : null
+      Object.assign(env, shellCommandMarkerEnv(shellCommandNonce))
+    } else if (
+      isWindowsGitBashShellPath(shellPath) &&
+      isShellCommandMarkerInjectionEnabled('daemon-native')
+    ) {
+      env.ORCA_SHELL_FEATURES = 'markers'
+      Object.assign(env, shellCommandMarkerEnv(commandNonce))
+      shellCommandNonce = commandNonce
+    }
+  }
+  scrubShellCommandMarkerPolicyEnv(env)
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })
   if (
@@ -229,6 +279,7 @@ export function createPtyShellLaunchPlan(
     validationCwd,
     startupCommandDeliveredInShellArgs,
     windowsFallbackAttempts,
-    startupAgentRecognition
+    startupAgentRecognition,
+    shellCommandNonce
   }
 }

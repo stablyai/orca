@@ -22,6 +22,8 @@ export function createDaemonPtySubprocessHandle(args: {
   requestedCwd?: string
   sessionId: string
   startupAgentRecognition: RecognizedAgentProcess | null
+  shellCommandNonce?: string
+  shellCommandMarkersEnabled?: boolean
 }): SubprocessHandle {
   const proc = args.process
   // node-pty exposes destroy at runtime but omits it from IPty.
@@ -65,6 +67,8 @@ export function createDaemonPtySubprocessHandle(args: {
     shellPath: args.shellPath,
     shellCwd: args.spawnCwd,
     shellPathEnv: args.env.PATH,
+    ...(args.shellCommandNonce ? { shellCommandNonce: args.shellCommandNonce } : {}),
+    ...(args.shellCommandMarkersEnabled ? { shellCommandMarkersEnabled: true } : {}),
     ...(slavePath ? { slavePath } : {}),
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }

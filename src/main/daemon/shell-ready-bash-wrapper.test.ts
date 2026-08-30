@@ -21,9 +21,9 @@ async function importFreshShellReady() {
   return {
     ...module,
     getShellReadyLaunchConfig: (shell: string) =>
-      module.getShellLaunchConfig(shell, STARTUP_COMMAND_FEATURES),
+      module.getShellLaunchConfig(shell, STARTUP_COMMAND_FEATURES, { commandNonce: 'test-nonce' }),
     getMarkerlessShellLaunchConfig: (shell: string) =>
-      module.getShellLaunchConfig(shell, OVERLAY_ONLY_FEATURES)
+      module.getShellLaunchConfig(shell, OVERLAY_ONLY_FEATURES, { commandNonce: 'test-nonce' })
   }
 }
 
@@ -69,7 +69,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     const bashRc = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
-    expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+    expect(bashRc).toContain('printf "\\033]777;orca-shell-start;v2;%s;%s;%s\\007"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
     expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
     expect(bashRc).toContain('__orca_append_prompt_command "__orca_osc133_epilogue"')

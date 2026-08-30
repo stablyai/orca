@@ -2,6 +2,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
+import type { DaemonTransientFact } from './daemon-stream-events'
 
 export type SessionOptions = {
   sessionId: string
@@ -23,4 +24,5 @@ export type SessionOptions = {
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
   ownerBackend?: PtyOwnerBackend
+  onPrivateTerminalFact?: (fact: DaemonTransientFact) => void
 }

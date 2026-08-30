@@ -220,7 +220,7 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/main/runtime/orca-runtime.ts', 3],
       ['src/renderer/src/components/sidebar/worktree-agent-rows.ts', 2],
       ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
-      ['src/renderer/src/lib/use-tab-agent.ts', 2]
+      ['src/renderer/src/lib/tab-agent-signal-identity.ts', 2]
     ]
   },
   {

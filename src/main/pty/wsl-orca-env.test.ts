@@ -8,6 +8,24 @@ import {
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from './wsl-orca-env'
 
 describe('addOrcaWslInteropEnv', () => {
+  it('imports shell command marker values without putting their values in WSLENV', () => {
+    const env: Record<string, string> = {
+      ORCA_SHELL_FEATURES: 'markers',
+      ORCA_SHELL_COMMAND_NONCE: 'private-nonce',
+      ORCA_SHELL_INTEGRATION_CONTEXT: 'direct'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV?.split(':')).toEqual(
+      expect.arrayContaining([
+        'ORCA_SHELL_FEATURES/u',
+        'ORCA_SHELL_COMMAND_NONCE/u',
+        'ORCA_SHELL_INTEGRATION_CONTEXT/u'
+      ])
+    )
+    expect(env.WSLENV).not.toContain('private-nonce')
+  })
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
     const env: Record<string, string> = { ORCA_TERMINAL_HANDLE: 'term_wsl' }
 
