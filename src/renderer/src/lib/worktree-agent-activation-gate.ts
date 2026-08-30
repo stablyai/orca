@@ -8,29 +8,31 @@ import {
   type ResumeSleepingAgentSessionsOptions
 } from './resume-sleeping-agent-session'
 import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
-import { bindLivePtyToExactSurface } from './worktree-agent-live-surface-adoption'
+import {
+  adoptLiveWorkspacePtySurfaces,
+  bindLivePtyToExactSurface,
+  type LiveSurfaceAdoptionStore
+} from './worktree-agent-live-surface-adoption'
+import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
+import { readWorktreeLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface-owners'
 import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   readWorktreeStructuredActivationInventory,
   type StructuredActivationInventory
 } from './worktree-agent-structured-inventory'
 
-type ActivationStore = Pick<
-  ReturnType<typeof useAppStore.getState>,
-  | 'createTab'
-  | 'ptyIdsByTabId'
-  | 'sleepingAgentSessionsByPaneKey'
-  | 'tabsByWorktree'
-  | 'terminalLayoutsByTabId'
-  | 'unifiedTabsByWorktree'
-  | 'updateTabPtyId'
-  | 'replaceTerminalLayoutPanePtyId'
->
+type ActivationStore = LiveSurfaceAdoptionStore &
+  Pick<
+    ReturnType<typeof useAppStore.getState>,
+    'sleepingAgentSessionsByPaneKey' | 'unifiedTabsByWorktree'
+  >
 
 type ActivationGateDeps = {
   getState: () => ActivationStore
   awaitReady?: () => Promise<boolean>
   listSessions: () => Promise<PtyListedSession[]>
+  /** Host-recorded PTY→surface ownership; null when the host could not answer. */
+  listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
   hasStructuredSession?: (worktreeId: string) => Promise<boolean | StructuredActivationInventory>
   resume: (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
 }
@@ -85,10 +87,6 @@ function hasStructuredSession(store: ActivationStore, worktreeId: string): boole
   return (store.unifiedTabsByWorktree[worktreeId] ?? []).some(
     (tab) => tab.contentType === 'agent-session'
   )
-}
-
-function ptyIsAlreadyBound(store: ActivationStore, ptyId: string): boolean {
-  return Object.values(store.ptyIdsByTabId).some((ids) => ids.includes(ptyId))
 }
 
 function sessionBelongsToWorkspace(sessionId: string, worktreeId: string): boolean {
@@ -212,17 +210,12 @@ export async function runWorktreeAgentActivationGate(
     }
   }
   if (liveWorkspaceSessions.length > 0) {
-    for (const session of liveWorkspaceSessions) {
-      const store = deps.getState()
-      if (ptyIsAlreadyBound(store, session.id)) {
-        continue
-      }
-      store.createTab(worktreeId, undefined, undefined, {
-        initialPtyId: session.id,
-        activate: false,
-        recordInteraction: false
-      })
-    }
+    await adoptLiveWorkspacePtySurfaces(
+      deps.getState,
+      worktreeId,
+      [...liveWorkspacePtyIds],
+      deps.listSurfaceOwners
+    )
     if (!workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
       return 'adopted'
     }
@@ -260,6 +253,7 @@ export function gateWorktreeAgentActivation(
     awaitReady: waitForWorkspaceSessionReady,
     listSessions: () =>
       typeof window === 'undefined' ? Promise.resolve([]) : window.api.pty.listSessions(),
+    listSurfaceOwners: readWorktreeLiveTerminalSurfaceOwners,
     hasStructuredSession: readWorktreeStructuredActivationInventory,
     resume: resumeSleepingAgentSessionsForWorktree
   }).finally(() => {

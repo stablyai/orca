@@ -598,7 +598,8 @@ import {
   getRepoIdFromWorktreeId,
   splitWorktreeId,
   splitWorktreeIdForFilesystem,
-  worktreeIdComparisonKey
+  worktreeIdComparisonKey,
+  worktreeIdsEqual
 } from '../../shared/worktree/id'
 import { getProjectIdForProviderIdentity } from '../../shared/project-host-setup-projection'
 import {
@@ -4767,7 +4768,7 @@ export class OrcaRuntimeService {
         const record = state.next.sleepingAgentSessionsByPaneKey?.[blocked.paneKey]
         if (
           !record ||
-          !runtimeWorktreeIdsEqual(record.worktreeId, blocked.worktreeId) ||
+          !worktreeIdsEqual(record.worktreeId, blocked.worktreeId) ||
           record.automaticResumeBlockedBy === 'legacy-orchestration-worker'
         ) {
           continue
@@ -4861,7 +4862,7 @@ export class OrcaRuntimeService {
       pty.incarnationId !== expected.incarnationId ||
       pty.tabId !== expected.tabId ||
       pty.paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
-      !runtimeWorktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
+      !worktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
       this.handleByPtyId.get(expected.ptyId) !== expected.terminalHandle
     ) {
       return false
@@ -4870,11 +4871,11 @@ export class OrcaRuntimeService {
     const leaf = this.leaves.get(this.getLeafKey(expected.tabId, expected.leafId))
     const ptyLeaves = this.getLeavesForPty(expected.ptyId)
     return (
-      Boolean(tab && runtimeWorktreeIdsEqual(tab.worktreeId, expected.worktreeId)) &&
+      Boolean(tab && worktreeIdsEqual(tab.worktreeId, expected.worktreeId)) &&
       Boolean(
         leaf &&
         leaf.ptyId === expected.ptyId &&
-        runtimeWorktreeIdsEqual(leaf.worktreeId, expected.worktreeId)
+        worktreeIdsEqual(leaf.worktreeId, expected.worktreeId)
       ) &&
       ptyLeaves.length === 1 &&
       ptyLeaves[0]?.tabId === expected.tabId &&
@@ -4941,7 +4942,7 @@ export class OrcaRuntimeService {
               })
             : session
         const record = next.sleepingAgentSessionsByPaneKey?.[candidate.paneKey]
-        if (record && runtimeWorktreeIdsEqual(record.worktreeId, candidate.worktreeId)) {
+        if (record && worktreeIdsEqual(record.worktreeId, candidate.worktreeId)) {
           const sleepingAgentSessionsByPaneKey = { ...next.sleepingAgentSessionsByPaneKey }
           delete sleepingAgentSessionsByPaneKey[candidate.paneKey]
           next = { ...next, sleepingAgentSessionsByPaneKey }
@@ -5019,7 +5020,7 @@ export class OrcaRuntimeService {
     const pty = this.ptysById.get(candidate.ptyId)
     if (
       leaf?.ptyId === candidate.ptyId &&
-      runtimeWorktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
+      worktreeIdsEqual(leaf.worktreeId, candidate.worktreeId)
     ) {
       this.leaves.delete(leafKey)
       const surfaceHandle = this.handleByLeafKey.get(leafKey)
@@ -5308,7 +5309,7 @@ export class OrcaRuntimeService {
               const identity = reveal?.identity
               if (
                 !identity ||
-                !runtimeWorktreeIdsEqual(identity.worktreeId, candidate.worktreeId) ||
+                !worktreeIdsEqual(identity.worktreeId, candidate.worktreeId) ||
                 identity.tabId !== candidate.tabId ||
                 identity.leafId !== candidate.leafId ||
                 identity.ptyId !== candidate.ptyId
@@ -6851,7 +6852,7 @@ export class OrcaRuntimeService {
     resolution: NativeChatLaunchDraftResolutionTombstone
   ): void {
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      if (!runtimeWorktreeIdsEqual(worktreeId, resolution.worktreeId)) {
+      if (!worktreeIdsEqual(worktreeId, resolution.worktreeId)) {
         continue
       }
       const next = this.applyNativeChatLaunchDraftResolutionFence(snapshot)
@@ -6878,7 +6879,7 @@ export class OrcaRuntimeService {
       const resolution = this.nativeChatLaunchDraftResolutionByTabId.get(tab.parentTabId)
       if (
         !resolution ||
-        !runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId) ||
+        !worktreeIdsEqual(snapshot.worktree, resolution.worktreeId) ||
         tab.launchDraft !== resolution.text ||
         tab.launchDraftCreatedAt !== resolution.createdAt
       ) {
@@ -6897,7 +6898,7 @@ export class OrcaRuntimeService {
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): void {
     for (const [tabId, resolution] of this.nativeChatLaunchDraftResolutionByTabId) {
-      if (!runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId)) {
+      if (!worktreeIdsEqual(snapshot.worktree, resolution.worktreeId)) {
         continue
       }
       const surfaces = snapshot.tabs.filter(
@@ -9760,9 +9761,7 @@ export class OrcaRuntimeService {
     // Why: 'live'/'quit' captures describe a pane that was still running, so a reconnect
     // must still mint its replacement PTY (#11542). Only a worktree-owned capture records
     // a deliberate takedown the user did not ask to undo.
-    return (
-      record?.origin === 'worktree-sleep' && runtimeWorktreeIdsEqual(record.worktreeId, worktreeId)
-    )
+    return record?.origin === 'worktree-sleep' && worktreeIdsEqual(record.worktreeId, worktreeId)
   }
 
   private shouldMaterializeHeadlessMobileSessionTab(
@@ -11602,10 +11601,7 @@ export class OrcaRuntimeService {
             `id:${record.location.workspaceId}`
           )
           const baseNamespace = this.getAgentSessionExecutionNamespace(workspace, provider)
-          if (
-            !baseNamespace ||
-            !runtimeWorktreeIdsEqual(workspace.id, record.location.workspaceId)
-          ) {
+          if (!baseNamespace || !worktreeIdsEqual(workspace.id, record.location.workspaceId)) {
             throw new Error('agent_session_identity_required')
           }
           const claim = this.agentSessionClaimSigner.createClaim({
@@ -11654,7 +11650,7 @@ export class OrcaRuntimeService {
                   },
                   persisted
                 },
-                runtimeWorktreeIdsEqual
+                worktreeIdsEqual
               )
               return { pty, owner, persisted, evaluation }
             })
@@ -19556,7 +19552,7 @@ export class OrcaRuntimeService {
         throw new Error('terminal_orphan_stale')
       }
       if (
-        !runtimeWorktreeIdsEqual(pty.worktreeId, workspace.id) ||
+        !worktreeIdsEqual(pty.worktreeId, workspace.id) ||
         !terminalOrphanExecutionOwnersEqual(
           { connectionId: worktreeConnectionId, wslDistro: worktreeWslDistro },
           {
@@ -19575,7 +19571,7 @@ export class OrcaRuntimeService {
       if (
         visualOwners.some(
           (owner) =>
-            !runtimeWorktreeIdsEqual(owner.worktreeId, workspace.id) ||
+            !worktreeIdsEqual(owner.worktreeId, workspace.id) ||
             owner.tabId !== claim.tabId ||
             owner.leafId !== claim.leafId
         )
@@ -19624,7 +19620,7 @@ export class OrcaRuntimeService {
       const binding = persistedBinding(claim.ptyId)
       return (
         binding !== null &&
-        runtimeWorktreeIdsEqual(binding.worktreeId, workspace.id) &&
+        worktreeIdsEqual(binding.worktreeId, workspace.id) &&
         binding.paneKey === paneKey &&
         session.terminalPtyIncarnationsByPaneKey?.[paneKey] === claim.incarnationId
       )
@@ -19717,7 +19713,7 @@ export class OrcaRuntimeService {
       const existingBinding = persistedBinding(claim.ptyId)
       if (
         existingBinding &&
-        (!runtimeWorktreeIdsEqual(existingBinding.worktreeId, workspace.id) ||
+        (!worktreeIdsEqual(existingBinding.worktreeId, workspace.id) ||
           existingBinding.paneKey !== paneKey)
       ) {
         throw new Error('terminal_orphan_competing_owner')
@@ -19730,15 +19726,14 @@ export class OrcaRuntimeService {
       const graphOwner = this.leaves.get(this.getLeafKey(claim.tabId, claim.leafId))
       if (
         graphOwner &&
-        (graphOwner.ptyId !== claim.ptyId ||
-          !runtimeWorktreeIdsEqual(graphOwner.worktreeId, workspace.id))
+        (graphOwner.ptyId !== claim.ptyId || !worktreeIdsEqual(graphOwner.worktreeId, workspace.id))
       ) {
         throw new Error('terminal_orphan_surface_occupied')
       }
       if (
         Object.entries(session.tabsByWorktree).some(
           ([ownerWorktreeId, tabs]) =>
-            !runtimeWorktreeIdsEqual(ownerWorktreeId, workspace.id) &&
+            !worktreeIdsEqual(ownerWorktreeId, workspace.id) &&
             tabs.some((tab) => tab.id === claim.tabId)
         )
       ) {
@@ -22376,7 +22371,7 @@ export class OrcaRuntimeService {
       if (
         freshPtyLiveness !== null &&
         freshPtyOwner?.connected &&
-        !runtimeWorktreeIdsEqual(freshPtyOwner.worktreeId, leaf.worktreeId)
+        !worktreeIdsEqual(freshPtyOwner.worktreeId, leaf.worktreeId)
       ) {
         // Why: provider/persisted ownership is fresher than a renderer leaf left behind by graph migration or another client.
         continue
@@ -31658,7 +31653,7 @@ export class OrcaRuntimeService {
       if (
         !pty?.connected ||
         !pty.tabId ||
-        (worktreeId !== null && !runtimeWorktreeIdsEqual(pty.worktreeId, worktreeId))
+        (worktreeId !== null && !worktreeIdsEqual(pty.worktreeId, worktreeId))
       ) {
         continue
       }
@@ -32559,7 +32554,7 @@ export class OrcaRuntimeService {
     const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
     const persistedTab = sessionWorktreeId
       ? session?.tabsByWorktree[sessionWorktreeId]?.find(
-          (tab) => tab.id === tabId && runtimeWorktreeIdsEqual(tab.worktreeId, worktreeId)
+          (tab) => tab.id === tabId && worktreeIdsEqual(tab.worktreeId, worktreeId)
         )
       : undefined
     const persistedLayout = session?.terminalLayoutsByTabId?.[tabId]
@@ -32583,8 +32578,8 @@ export class OrcaRuntimeService {
     const rendererMounted = Boolean(
       rendererTab &&
       rendererLeaf &&
-      runtimeWorktreeIdsEqual(rendererTab.worktreeId, worktreeId) &&
-      runtimeWorktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
+      worktreeIdsEqual(rendererTab.worktreeId, worktreeId) &&
+      worktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
       rendererLeaf.ptyId === ptyId
     )
     if (persisted && persistedLayout) {
@@ -32599,7 +32594,7 @@ export class OrcaRuntimeService {
     // Why: renderer adoption can precede graph sync; this path still requires reveal success before commit.
     const projected = [...this.mobileSessionTabsByWorktree.entries()].some(
       ([candidateWorktreeId, snapshot]) =>
-        runtimeWorktreeIdsEqual(candidateWorktreeId, worktreeId) &&
+        worktreeIdsEqual(candidateWorktreeId, worktreeId) &&
         snapshot.tabs.some(
           (tab) =>
             tab.type === 'terminal' &&
@@ -32733,7 +32728,7 @@ export class OrcaRuntimeService {
     // Preserve folder-instance suffixes while normalizing cross-platform path spelling.
     const ownsWorktree = options.resolvedWorktreeId
       ? (candidate: string | undefined): boolean =>
-          candidate ? runtimeWorktreeIdsEqual(candidate, worktree.id) : false
+          candidate ? worktreeIdsEqual(candidate, worktree.id) : false
       : (candidate: string | undefined): boolean => candidate === worktree.id
     const ownsHost = (ptyId: string, connectionId?: string | null): boolean => {
       if (options.resolvedRuntimeEnvironmentId !== undefined) {
@@ -33252,7 +33247,7 @@ export class OrcaRuntimeService {
     const ptyIds = new Set<string>()
     for (const leaf of this.leaves.values()) {
       if (
-        runtimeWorktreeIdsEqual(leaf.worktreeId, worktreeId) &&
+        worktreeIdsEqual(leaf.worktreeId, worktreeId) &&
         leaf.connected &&
         leaf.ptyId &&
         (!freshPtyIds || freshPtyIds.has(leaf.ptyId))
@@ -33262,7 +33257,7 @@ export class OrcaRuntimeService {
     }
     for (const pty of this.ptysById.values()) {
       if (
-        runtimeWorktreeIdsEqual(pty.worktreeId, worktreeId) &&
+        worktreeIdsEqual(pty.worktreeId, worktreeId) &&
         pty.connected &&
         (!freshPtyIds || freshPtyIds.has(pty.ptyId))
       ) {
@@ -35138,7 +35133,7 @@ export class OrcaRuntimeService {
         !providerWorktree &&
         Boolean(persistedWorktree) &&
         Boolean(inferredWorktreeId) &&
-        runtimeWorktreeIdsEqual(session.worktreeId as string, inferredWorktreeId as string)
+        worktreeIdsEqual(session.worktreeId as string, inferredWorktreeId as string)
       // Why: an unresolved explicit provider owner remains authoritative unless the session id proves it was frozen before a persisted rename migration.
       const worktreeId = providerWorktree
         ? providerWorktree.id
@@ -35154,25 +35149,19 @@ export class OrcaRuntimeService {
         session.incarnationId &&
         persistedSurface.incarnationId === session.incarnationId &&
         Boolean(worktreeId) &&
-        runtimeWorktreeIdsEqual(persistedSurface.worktreeId, worktreeId as string)
+        worktreeIdsEqual(persistedSurface.worktreeId, worktreeId as string)
       this.adoptControllerTerminalHandle(
         session.id,
         controllerIdentity?.handle ?? session.terminalHandle,
         controllerIdentity?.incarnationId ?? session.incarnationId,
         { exactRestoredSurface: Boolean(restoresExactSurface && controllerIdentity) }
       )
-      if (
-        !targetWorktreeId ||
-        (worktreeId && runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
+      if (!targetWorktreeId || (worktreeId && worktreeIdsEqual(worktreeId, targetWorktreeId))) {
         selectedLivePtyIds.add(session.id)
       }
-      if (
-        targetWorktreeId &&
-        (!worktreeId || !runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
+      if (targetWorktreeId && (!worktreeId || !worktreeIdsEqual(worktreeId, targetWorktreeId))) {
         const receipt = this.restoredOrchestrationAuthorityByPtyId.get(session.id)
-        if (receipt && runtimeWorktreeIdsEqual(receipt.worktreeId, targetWorktreeId)) {
+        if (receipt && worktreeIdsEqual(receipt.worktreeId, targetWorktreeId)) {
           this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
         }
         continue
@@ -35226,7 +35215,7 @@ export class OrcaRuntimeService {
           allLivePtyIds.add(pty.ptyId)
           if (
             !targetWorktreeId ||
-            (pty.worktreeId && runtimeWorktreeIdsEqual(pty.worktreeId, targetWorktreeId))
+            (pty.worktreeId && worktreeIdsEqual(pty.worktreeId, targetWorktreeId))
           ) {
             selectedLivePtyIds.add(pty.ptyId)
           }
@@ -37087,7 +37076,7 @@ export class OrcaRuntimeService {
       legacyActiveRun &&
       handleWorktreeId &&
       legacyCoordinatorWorktreeId &&
-      runtimeWorktreeIdsEqual(legacyCoordinatorWorktreeId, handleWorktreeId)
+      worktreeIdsEqual(legacyCoordinatorWorktreeId, handleWorktreeId)
         ? legacyActiveRun
         : undefined
     const coordinatorHandle = runCoordinatorHandle ?? scopedLegacyActiveRun?.coordinator_handle
@@ -43184,18 +43173,6 @@ function runtimePathsEqual(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
 }
 
-/**
- * Why: runtime identity is per *workspace*, not per checkout dir. Folder projects back
- * several independent workspaces with one directory, separated only by the
- * `::workspace:<uuid>` suffix that filesystem callers must strip; stripping it here
- * instead lets one session steal a sibling's PTYs. Normalize only path spelling, so
- * Windows/WSL/SSH ids still match themselves across hosts.
- */
-function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
-  const leftKey = worktreeIdComparisonKey(left)
-  return leftKey === null ? left === right : leftKey === worktreeIdComparisonKey(right)
-}
-
 function runtimeWorktreeIdentityKey(worktreeId: string): string {
   // Same suffix rule: this keys PTY refresh, sleep, and mutation-queue state per session.
   const parsed = splitWorktreeId(worktreeId)
@@ -43252,7 +43229,7 @@ function resolveTerminalSessionWorktreeId(
     ...Object.keys(session.activeGroupIdByWorktree ?? {})
   ])
   const matches = [...keyedWorktreeIds].filter((worktreeId) =>
-    runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId)
+    worktreeIdsEqual(worktreeId, targetWorktreeId)
   )
   return matches.length > 1 ? null : (matches[0] ?? targetWorktreeId)
 }

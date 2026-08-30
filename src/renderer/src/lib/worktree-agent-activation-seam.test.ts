@@ -2,7 +2,10 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeTerminalSummary
+} from '../../../shared/runtime-types'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent-test-state'
@@ -76,6 +79,27 @@ function structuredSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult 
   }
 }
 
+function orphanTerminalRow(
+  worktree: ReturnType<typeof makeWorktree>,
+  ptyId: string
+): RuntimeTerminalSummary {
+  return {
+    handle: 'orphan-1',
+    ptyId,
+    orphaned: true,
+    worktreeId: worktree.id,
+    worktreePath: worktree.path,
+    branch: worktree.branch ?? 'main',
+    tabId: `pty:${ptyId}`,
+    leafId: `pty:${ptyId}`,
+    title: 'Codex',
+    connected: true,
+    writable: true,
+    lastOutputAt: null,
+    preview: ''
+  }
+}
+
 function stubInventory(args?: { structured?: boolean; livePtyId?: string }): {
   runtimeCall: ReturnType<typeof vi.fn>
   listSessions: ReturnType<typeof vi.fn>
@@ -90,6 +114,17 @@ function stubInventory(args?: { structured?: boolean; livePtyId?: string }): {
     }
     if (method === 'agentSession.handoffStatus') {
       return { ok: true, result: { owner: 'native' } }
+    }
+    if (method === 'terminal.list') {
+      // The host knows this PTY but binds it to no surface, so adoption may mint one.
+      return {
+        ok: true,
+        result: {
+          terminals: args?.livePtyId ? [orphanTerminalRow(worktree, args.livePtyId)] : [],
+          truncated: false,
+          hostScope: { hostIds: ['local'], omittedHostIds: [] }
+        }
+      }
     }
     throw new Error(`Unexpected runtime method: ${method}`)
   })
