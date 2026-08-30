@@ -1,0 +1,17 @@
+{
+  "title": "Working with Agents",
+  "defaultOpen": true,
+  "pages": [
+    "supported",
+    "claude-code",
+    "glm-agent",
+    "codex",
+    "cursor-cli",
+    "custom-cli",
+    "codex-hot-swap",
+    "session-history",
+    "hibernation",
+    "usage-tracking",
+    "hooks-memory"
+  ]
+}

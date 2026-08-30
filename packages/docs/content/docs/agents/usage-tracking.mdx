@@ -1,0 +1,19 @@
+---
+title: Usage & rate-limit tracking
+---
+
+Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, and MiniMax and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
+
+## What's shown
+
+- Current usage against the active account's plan.
+- Time to reset for 5-hour, daily, weekly, and Claude Fable weekly windows (where applicable).
+- A warning chip when you cross 80% of a limit.
+
+## How it works
+
+Orca reads the local usage state each agent maintains on disk (under `~/.claude`, `~/.codex`, and the Gemini/OpenCode equivalents). No API calls, no extra auth. This means the readout is only as fresh as the agent's own bookkeeping — numbers update when the agent writes, not in real time.
+
+## Multi-account accounting
+
+The status bar always reflects the *active* account. Other configured accounts are visible in the account switcher with their own usage.

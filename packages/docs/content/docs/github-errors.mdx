@@ -1,0 +1,166 @@
+---
+title: Troubleshooting GitHub errors
+description: Diagnose rate limits, auth failures, and other GitHub CLI errors in Orca PR checks, Tasks, and Source Control.
+---
+
+Orca talks to GitHub through the **GitHub CLI (`gh`)** on your machine (or remote Orca host). When PR status, checks, issues, or Tasks fail to refresh, the cause is almost always GitHub auth, permissions, or API rate limits — not a broken PR panel by itself.
+
+This page covers the errors you’ll see most often and how to fix them.
+
+## Quick triage
+
+| What you see | Likely cause | First thing to try |
+| --- | --- | --- |
+| “GitHub is rate-limiting requests” / “rate limit exceeded (core)” | GitHub REST (core) quota exhausted for your user | Wait for reset; stop extra `gh` / agent / Orca usage; check [Settings → Git → GitHub API Budget](/docs/settings) |
+| “GitHub authentication is unavailable” / `gh auth` prompts | `gh` not logged in, expired token, or bad `GITHUB_TOKEN` | `gh auth status`, then `gh auth login` |
+| “GitHub did not allow access” / HTTP 403 (not rate limit) | Missing scopes or no access to the repo | Re-auth with `repo` (and needed org SSO); confirm you can open the PR in the browser |
+| “repository is unavailable” / HTTP 404 | Wrong remote, private repo without access, or renamed repo | Check `git remote -v` and browser access |
+| “GitHub is unreachable” / timeouts | Network, proxy, VPN, or GitHub outage | Check [githubstatus.com](https://www.githubstatus.com/); retry off VPN |
+| “GitHub CLI is unavailable” | `gh` missing from PATH Orca uses | Install `gh` and restart Orca |
+
+## Rate limits (most common)
+
+GitHub gives each **authenticated user** a shared hourly budget. **Every tool on that account shares it**: Orca, `gh` in terminals, Claude/Codex/Grok agents that call `gh`, CI scripts, browser extensions, and other apps.
+
+### Buckets Orca cares about
+
+| Bucket | What it covers | Typical limit (authenticated) |
+| --- | --- | --- |
+| **REST (core)** | Most PR/issue/API calls (`gh pr view`, checks metadata, many REST endpoints) | 5,000 / hour |
+| **GraphQL** | Project/Tasks and some richer PR queries | 5,000 points / hour |
+| **Search** | Search-driven lists | 30 / minute |
+
+When a primary bucket is exhausted, GitHub returns HTTP **403** with a message like `API rate limit exceeded`. Orca classifies that as rate-limited, keeps the last known PR status when it can, and **stops spawning more `gh` calls** for a short window so a single limit doesn’t turn into a storm of failures.
+
+### Why Settings can look “OK” while the PR panel is blocked
+
+**Settings → Git → GitHub API Budget** reads GitHub’s special `rate_limit` endpoint. That probe is **exempt** from rate-limit accounting and sometimes still reports remaining quota while real REST calls for the same user already return `remaining: 0`.
+
+Trust this order when they disagree:
+
+1. The **error on the PR / Checks panel** (live request failed)
+2. A real CLI check (below)
+3. The Settings budget numbers (useful, but probe-only)
+
+Also don’t confuse **GitHub API Budget** with **Claude / Codex / Grok usage** under Accounts — those are AI provider limits, not GitHub’s REST quota.
+
+### Confirm a rate limit from a terminal
+
+```bash
+# Probe (does not consume quota; can look healthier than reality)
+gh api rate_limit --jq '.resources | {core, graphql, search}'
+
+# Real REST call — this is what PR refresh depends on
+gh api user -i 2>&1 | head -40
+```
+
+If `gh api user` returns **403** with `API rate limit exceeded` and `X-Ratelimit-Remaining: 0`, the account is blocked for REST until `X-Ratelimit-Reset` (Unix epoch seconds).
+
+### What usually burns the quota
+
+- Many Orca windows or electron-dev builds open at once (each may refresh PRs / Tasks)
+- Agents automating `gh` (assign PRs/issues, poll checks, bulk GraphQL)
+- Heavy Tasks / multi-repo fan-out while also refreshing PR panels
+- Other apps using the same GitHub user token
+
+### What to do
+
+1. **Wait** for the hourly reset shown in the error or in `X-Ratelimit-Reset`.
+2. **Reduce concurrent GitHub clients** — quit extra Orca instances and pause bulk `gh` automations.
+3. Avoid hammering refresh on the PR panel while limited; Orca is already backing off.
+4. Prefer batching GraphQL in scripts; don’t loop REST one-PR-at-a-time across large sets on a personal account.
+5. After reset, if PR refresh still fails, re-check auth (next section).
+
+## Authentication problems
+
+Orca inherits whatever `gh` uses on that host.
+
+### Check status
+
+```bash
+gh auth status -h github.com
+gh api user --jq '{login, id}'
+```
+
+Healthy output: logged in, token valid, `gh api user` returns your login.
+
+### Common footguns
+
+**`GITHUB_TOKEN` / `GH_TOKEN` in your shell profile**  
+If these are exported (for example `export GITHUB_TOKEN=$(gh auth token)` in `~/.bash_profile` or `~/.zshrc`), `gh` prefers them over the keyring. A stale or wrong env token produces confusing auth or rate-limit behavior. Unset them and re-login:
+
+```bash
+unset GITHUB_TOKEN GH_TOKEN
+gh auth logout -h github.com
+gh auth login -h github.com
+```
+
+**Expired or revoked token**  
+`gh auth status` may show the token as invalid. Run `gh auth login` (or `gh auth refresh`) and restart Orca so it picks up the new credentials.
+
+**Org SAML SSO**  
+Private org repos may need SSO authorization for the token. Open the org’s SSO authorize link from the GitHub token settings, then retry.
+
+**Remote / SSH worktrees**  
+GitHub auth is **per host**. Logging in on your laptop does not log in `gh` on a remote machine. SSH into the host and run `gh auth login` there, or use Orca’s remote-server GitHub budget view for that environment.
+
+## Permission and repository errors
+
+| Symptom | Meaning |
+| --- | --- |
+| HTTP 403 without “rate limit” | Token lacks scope or you’re not allowed to see the resource |
+| HTTP 404 / “could not resolve to a Repository” | Repo missing, renamed, or invisible to this token |
+| “resource not accessible by integration” | App/token type can’t perform that action |
+
+Fixes:
+
+- Confirm the PR/repo opens in the browser while logged in as the same user as `gh api user`
+- Re-auth with classic scopes that include `repo` (and `read:org` / `project` if you use those features)
+- For GitHub Enterprise, ensure `gh` is authenticated to that hostname (`gh auth login --hostname …`)
+
+## Network and GitHub outages
+
+Messages about timeouts, “could not resolve host”, or “GitHub is unreachable” are connectivity issues:
+
+- Check [GitHub Status](https://www.githubstatus.com/)
+- Try without VPN / corporate proxy
+- On remote hosts, confirm outbound HTTPS to `api.github.com` works
+
+## GitHub CLI missing
+
+If Orca reports the GitHub CLI is unavailable:
+
+1. Install [`gh`](https://cli.github.com/)
+2. Confirm `which gh` works in a normal terminal
+3. Fully quit and reopen Orca (so PATH matches)
+4. On Windows, install for the same environment Orca launches (WSL vs native)
+
+## How Orca behaves when GitHub fails
+
+- **Rate limit / outage**: PR and Checks panels prefer **last known status** plus a short banner instead of wiping the UI.
+- **Hard auth / permission failures**: You’ll get clear empty-state or banner copy telling you to fix login or access.
+- **Circuit breaker**: After a primary rate-limit 403, Orca briefly refuses new `gh` spawns for that bucket (`core`, `search`, or `graphql`) so the app stays responsive and doesn’t dig a deeper hole.
+
+## Check GitHub API Budget in Orca
+
+Open **[Settings → Git](/docs/settings)** and find **GitHub API Budget**:
+
+- **REST / Search / GraphQL** remaining counts from GitHub’s probe
+- Refresh after waiting out a limit
+- On remote Orca servers, use the remote advanced budget view for the **server-owned** `gh` identity (local Settings only shows the desktop client)
+
+## Still stuck?
+
+1. Reproduce once in a terminal with `gh pr view` or `gh api user` from the same machine/user Orca uses.
+2. Collect logs: **Help → Open Logs**.
+3. File an issue with the classified error text (not secrets), `gh auth status` redacted output, and whether terminal `gh` fails the same way.
+
+- [GitHub Issues](https://github.com/stablyai/orca/issues)
+- [Discord](https://discord.gg/fzjDKHxv8Q)
+
+## Related
+
+- [Hosted reviews, issues & Actions](/docs/review/github) — PR and Checks features that depend on GitHub
+- [Settings reference](/docs/settings) — Integrations and Git panes
+- [Usage & rate-limit tracking](/docs/agents/usage-tracking) — AI provider limits (Claude/Codex), not GitHub API
+- [Troubleshooting & FAQ](/docs/troubleshooting) — general Orca issues

@@ -1,0 +1,40 @@
+---
+title: Tabs, panes & split layouts
+description: Drag-to-split panes, tab groups, and pinned boundaries.
+---
+
+import { ImagePlaceholder } from '@/components/docs/prose';
+
+Orca's pane system is designed for watching multiple agents work without losing context. Tabs group into panes; panes split into layouts.
+
+<ImagePlaceholder src="/whats-new/tab-split.gif" caption="Drag a tab to a pane edge to split — terminals, diffs, and browser tabs side by side" />
+
+## Tabs
+
+Each tab holds one thing: a terminal, an editor buffer, a browser, a diff, a PR. Tabs live inside a **tab group**.
+
+- Drag a tab up-down within a group to reorder.
+- Drag a tab onto another group to move it.
+- Close every editor file tab in the active worktree with `Cmd+Option+W` on macOS or `Ctrl+Alt+W` on Windows / Linux.
+- An active-tab color bar marks which pane is focused.
+
+## Split panes
+
+Drag a tab to the edge of a pane to create a split:
+
+- **Right edge** — splits left/right (horizontal split).
+- **Bottom edge** — splits top/bottom (vertical split).
+
+Splits nest. You can have an agent terminal on the left, a diff view on the top-right, and a browser tab on the bottom-right — all at once.
+
+<ImagePlaceholder src="/whats-new/split-anything.webp" caption="Any tab type can split with any other — agent terminal, diff, browser, editor, PR view all coexist in one pane tree." />
+
+Terminal tabs can also split inside the tab. Use the terminal tab menu for **Split terminal right** or **Split terminal down**, or use the split button in the active terminal pane header for a right split.
+
+## Pinned boundaries
+
+Pane boundaries stay where you put them. Resizing the window doesn't shuffle your layout; boundary positions are saved per worktree.
+
+## Tab groups across worktrees
+
+Each worktree owns its own tab layout. Switching worktrees swaps the entire pane tree — your browser tab, terminal, and diff reappear exactly as you left them.

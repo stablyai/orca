@@ -1,0 +1,40 @@
+---
+title: Jira items drawer
+description: Browse, edit, and link Jira Cloud issues to worktrees the same way you link Linear or GitHub items.
+---
+
+import { Callout } from '@/components/docs/prose';
+
+Jira sits next to GitHub and Linear in the task drawer. Browse Jira Cloud issues, update them, and create a worktree from any issue without leaving Orca.
+
+## Connect a Jira site
+
+1. Open the **Tasks** sidebar entry and pick **Jira** from the source picker — Jira sits next to GitHub and Linear by default, even before any credentials are saved.
+2. Click **Connect Jira**. The **Connect Jira site** dialog appears.
+3. Fill in the three fields:
+    - **Jira Cloud site URL** — e.g. `https://example.atlassian.net`.
+    - **Atlassian email** — the address on your Atlassian account.
+    - **Atlassian API token** — create one at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
+4. Click **Connect**. Orca verifies the credentials and loads your sites.
+
+You can connect more than one Atlassian site. The Tasks header has a site picker once a site is connected; choose **All sites** to combine issues across them.
+
+If you don't use Jira at all, hide it from the source picker via [Settings → Tasks](/docs/settings).
+
+## Using Jira
+
+- The task drawer shows GitHub, Linear, and Jira issues in a unified list once each source is enabled.
+- Open an issue to see the full description, comments, and metadata in a side drawer. Edit status (via available transitions), priority, assignee, and custom fields inline.
+- Add a comment from the drawer's comment composer.
+- Creating a worktree from a Jira issue pre-fills the task name and links the worktree to the issue, so the review and the issue stay tied together.
+- Orca remembers your last-used task source per repo, so a Jira-driven repo defaults to Jira on next open.
+
+<Callout title="Where the token lives">
+Your Atlassian API token is encrypted via the OS keychain and stored locally — it's only used to call your configured Jira site. Revoke it from Atlassian account settings if you stop using Orca.
+</Callout>
+
+## Next steps
+
+- [Linear items drawer](/docs/review/linear) — same flow against Linear.
+- [Hosted reviews, issues & Actions](/docs/review/github) — hand off the worktree to a hosted review once the Jira issue is in progress.
+- [Commit & push from Orca](/docs/review/commit-push) — ship the branch without leaving Orca.

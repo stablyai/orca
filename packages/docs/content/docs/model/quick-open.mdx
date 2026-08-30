@@ -1,0 +1,32 @@
+---
+title: Quick Open & Jump Palette
+description: Cmd-J scoped jump across worktrees, recents, and tabs.
+---
+
+import { Callout } from '@/components/docs/prose';
+
+Once you have more than a handful of worktrees, navigation becomes the bottleneck. Orca ships two keyboard-first navigation tools.
+
+## Quick Open (Cmd-P)
+
+File search scoped to the current worktree. Type a fragment; Orca ranks by recency plus match score and opens the file in a new editor tab. Gitignored files are included in results — they're surfaced as a second pass after tracked matches, so the files you frequently quick-open (build outputs, env files) stay reachable without polluting the top of the list.
+
+## Worktree Jump Palette (Cmd-J)
+
+Jump across every worktree and every tab in one search. The placeholder in the empty input reads *repo/worktree* — type either half and Orca filters accordingly. Once you start typing, search includes non-archived worktrees even if they are hidden by the sidebar's current filters.
+
+Results include:
+
+- **Recent Worktrees** — the top section with an empty query, ordered by last focus, capped so the list stays scannable.
+- Projects and repo groups, so you can jump to a sidebar section by name.
+- Every worktree grouped by repo once you start typing.
+- Worktrees matched by cached GitHub PR title or number (`#123`) and cached GitLab merge request title or number (`!123`) when that review metadata is already available.
+- Every open tab, scoped first by current worktree, then globally.
+
+Shift-Enter on a worktree opens it in a new split instead of swapping the current pane.
+
+When the query does not match an existing worktree, the palette offers a **Create worktree** row using the typed text as the name. Existing matches stay selected first, so pressing Enter still jumps when a real result is available.
+
+<Callout>
+Shortcut bindings are remappable under [Settings → Shortcuts](/docs/settings).
+</Callout>

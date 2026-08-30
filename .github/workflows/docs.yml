@@ -1,0 +1,136 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/docs/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'packages/docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to Vercel after build'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+  pull-requests: write
+  deployments: write
+
+env:
+  CI: true
+  NODE_VERSION: '22.17.1'
+
+jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/docs
+    steps:
+      - uses: actions/checkout@v5
+
+      # Read packageManager from packages/docs/package.json (do not also pass version).
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: packages/docs/package.json
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: packages/docs/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Assert build output
+        run: |
+          test -d .next
+          test "$(find .next -type f | wc -l)" -gt 10
+          echo "docs build ok: $(find .next -type f | wc -l) files under .next"
+
+  deploy:
+    name: Deploy docs (Vercel)
+    needs: build
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy == 'true')
+    defaults:
+      run:
+        working-directory: packages/docs
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: packages/docs/package.json
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: packages/docs/pnpm-lock.yaml
+
+      - name: Check Vercel secrets
+        id: secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Vercel secrets missing — skip deploy (configure VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID for packages/docs)."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.secrets.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Extract vercel CLI version
+        if: steps.secrets.outputs.skip != 'true'
+        id: vercel_version
+        run: echo "version=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Vercel build (prebuilt)
+        if: steps.secrets.outputs.skip != 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx "vercel@${{ steps.vercel_version.outputs.version }}" build --prod --yes --token="$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel
+        if: steps.secrets.outputs.skip != 'true'
+        uses: amondnet/vercel-action@v41.1.4
+        with:
+          vercel-version: ${{ steps.vercel_version.outputs.version }}
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+          working-directory: packages/docs
+          vercel-args: '--prod --prebuilt --archive=tgz'

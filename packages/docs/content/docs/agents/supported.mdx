@@ -1,0 +1,52 @@
+---
+title: Supported agents
+description: Every agent Orca ships with out of the box, plus how to add your own.
+---
+
+Orca works with **any CLI agent** — the agent combobox just launches a process in a terminal. The following ship preconfigured in the built-in agent picker with one-click launch/setup; deeper hooks, status, usage tracking, and account switching are noted where supported.
+
+## Permissions default
+
+Orca pre-fills each supported CLI's permission-bypass flag for new launches — `--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex, `--yolo` for Gemini / Cursor / Crush / Kimi / Rovo Dev / Hermes / GitHub Copilot / Command Code, plus the equivalent flag for every other agent that exposes one. The reasoning is that worktrees are disposable: an agent running in its own checkout can experiment without you re-confirming every shell command, and you can still cherry-pick or discard the diff before merging.
+
+Use **Settings → Agents → Agent Permissions** when you want to switch all uncustomized agents between **Yolo** and **Manual** launches. If you already overrode a specific agent's launch arguments or environment, Orca leaves that agent alone so the global switch doesn't erase your custom command.
+
+To restore prompts for one agent only, edit that agent's default arguments or environment in Settings. Orca treats a non-empty custom value as an explicit override and opts that agent out of future permission-mode migrations.
+
+| Agent | Notes | Docs |
+| --- | --- | --- |
+| Claude Code | Deep integration: usage, hot-swap, hooks | [Anthropic](https://docs.anthropic.com/claude/docs/claude-code) |
+| Claude Agent Teams | Disabled by default — enable under Settings → Agents to launch via `orca claude-teams` with native panes for each teammate | [Anthropic](https://code.claude.com/docs/agent-teams) |
+| Codex | Deep integration: usage, hot-swap | [OpenAI](https://github.com/openai/codex) |
+| Grok | Auto-setup | [xAI](https://x.ai/cli) |
+| GitHub Copilot CLI | Auto-setup | [GitHub](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli) |
+| OpenCode | Auto-setup, status | [OpenCode](https://opencode.ai/docs/cli/) |
+| Pi | Auto-setup, hooks, status | [Pi](https://pi.dev) |
+| OMP | Auto-setup, hooks, status | [OMP](https://omp.sh) |
+| Gemini | Auto-setup | [Google](https://github.com/google-gemini/gemini-cli) |
+| Antigravity | Auto-setup, hooks, status | [Google](https://antigravity.google/docs/cli-overview) |
+| Ante | Auto-setup, status | [Ante](https://github.com/AntigmaLabs/ante-preview) |
+| Aider | Auto-setup | [Aider](https://aider.chat/docs/) |
+| Goose | Auto-setup | [Block](https://block.github.io/goose/docs/quickstart/) |
+| Amp | Auto-setup | [Amp](https://ampcode.com/manual#install) |
+| Kilocode | Auto-setup | [Kilo](https://kilo.ai/docs/cli) |
+| Kiro | Auto-setup | [Kiro](https://kiro.dev/docs/cli/) |
+| Charm Crush | Auto-setup | [Charm](https://github.com/charmbracelet/crush) |
+| Auggie | Auto-setup | [Augment](https://docs.augmentcode.com/cli/overview) |
+| Autohand | Auto-setup | [Autohand](https://github.com/autohandai/code-cli) |
+| Cline | Auto-setup | [Cline](https://docs.cline.bot/cline-cli/overview) |
+| Codebuff | Auto-setup | [Codebuff](https://www.codebuff.com/docs/help/quick-start) |
+| Command Code | Auto-setup, status | [Command Code](https://commandcode.ai/docs/quickstart) |
+| Continue | Auto-setup | [Continue](https://docs.continue.dev/guides/cli) |
+| Cursor CLI | Deep integration | [Cursor](https://cursor.com/cli) |
+| Devin | Auto-setup | [Devin](https://devin.ai/cli) |
+| Droid (Factory) | Auto-setup, hooks, status | [Factory](https://docs.factory.ai/cli/getting-started/quickstart) |
+| Kimi | Auto-setup | [Moonshot](https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html) |
+| Mistral Vibe | Auto-setup | [Mistral](https://github.com/mistralai/mistral-vibe) |
+| MiniMax | Auto-setup, usage tracking, rate-limit tracking | [MiniMax](https://www.minimax.chat) |
+| Qwen Code | Auto-setup via the installed `qwen` executable | [Qwen](https://github.com/QwenLM/qwen-code) |
+| Rovo Dev | Auto-setup | [Atlassian](https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/) |
+| Hermes | Auto-setup | [Nous](https://hermes-agent.nousresearch.com/docs/) |
+| OpenClaw | Auto-setup | [OpenClaw](https://github.com/openclaw/openclaw) |
+
+See [Add a custom CLI agent](/docs/agents/custom-cli) for anything not on this list.

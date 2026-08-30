@@ -1,0 +1,252 @@
+---
+title: Orchestration
+description: Coordinate multiple Orca agent terminals with messages, tasks, dispatches, and decision gates.
+---
+
+import { Callout } from '@/components/docs/prose';
+
+Orchestration is Orca's structured coordination layer for multi-agent work. It gives agents a shared inbox, task records, dispatch state, worker completion messages, and decision gates so a coordinator can fan work out and know what finished.
+
+Use orchestration when coordination state matters. For one-off terminal input, use `orca terminal send`. For tracked work with ownership, dependencies, or worker completion, use `orca orchestration`.
+
+<Callout title="Experimental">
+Enable orchestration under Settings -> Experimental before using these commands. The CLI talks to the running Orca runtime, so `orca status --json` should succeed first.
+</Callout>
+
+## Core model
+
+- **Message**: a persistent terminal-to-terminal note with a type such as `status`, `dispatch`, `worker_done`, `escalation`, `decision_gate`, or `heartbeat`.
+- **Task**: a work item with a spec, dependencies, and status: `pending`, `ready`, `dispatched`, `completed`, `failed`, or `blocked`.
+- **Dispatch**: an assignment of a task to a terminal. A task can be retried with a fresh dispatch context.
+- **Decision gate**: a coordinator-owned question that blocks a task until it is resolved.
+
+Completion authority comes from the active dispatch context. Worker completion and heartbeat messages should include both `taskId` and `dispatchId`.
+
+Task IDs printed in terminals, such as `task_...`, are clickable links. Clicking one asks the Orca runtime for the task's current dispatch and focuses the assigned terminal, including when the task lives in a remote or SSH runtime.
+
+## See who can work
+
+```bash
+orca status --json
+orca worktree ps --json
+orca terminal list --json
+orca orchestration task-list --json
+orca orchestration inbox --limit 20 --json
+```
+
+Terminal handles are the addresses for direct orchestration messages. Group addresses are also supported:
+
+```bash
+orca orchestration send --to @all --subject "Heads up" --body "Pausing dispatches for a review." --json
+orca orchestration send --to @idle --subject "Anyone free?" --json
+orca orchestration send --to @codex --subject "Codex agents only" --json
+orca orchestration send --to @cursor --subject "Cursor agents only" --json
+orca orchestration send --to @grok --subject "Grok agents only" --json
+orca orchestration send --to @droid --subject "Droid agents only" --json
+orca orchestration send --to @worktree:<worktreeId> --subject "Worktree update" --json
+```
+
+On PowerShell, quote group addresses such as `--to "@all"`.
+
+## Send and read messages
+
+```bash
+orca orchestration send \
+  --to <terminalHandle> \
+  --subject "Please review API shape" \
+  --body "Focus on backwards compatibility." \
+  --type status \
+  --json
+
+orca orchestration check --terminal <terminalHandle> --unread --json
+orca orchestration check --terminal <terminalHandle> --all --types worker_done,escalation --json
+orca orchestration reply --id <messageId> --body "Approved. Keep going." --json
+orca orchestration inbox --limit 50 --full --json
+```
+
+`check --unread` is the default and marks matching messages read. `check --all` returns messages without marking them read.
+
+For long waits, block on the message types that matter:
+
+```bash
+orca orchestration check \
+  --wait \
+  --types worker_done,escalation,decision_gate \
+  --timeout-ms 900000 \
+  --json
+```
+
+While a wait is active, the CLI emits small JSON heartbeat lines to stderr every 15 seconds. Stdout remains the final command result.
+
+## Manual dispatch flow
+
+Create a task:
+
+```bash
+orca orchestration task-create \
+  --task-title "Billing mobile audit" \
+  --display-name "Billing audit worker" \
+  --spec "Audit the billing settings page for mobile layout bugs. Report files changed and screenshots." \
+  --json
+```
+
+Use `--task-title` for the concise work item Orca shows in task lists. Use `--display-name` when the dispatched worker row needs a shorter label than the full prompt.
+
+Create or choose a worker terminal:
+
+```bash
+orca worktree create --name billing-mobile-audit --agent codex --json
+orca terminal list --worktree id:<newWorktreeId> --json
+orca terminal wait --terminal <workerHandle> --for tui-idle --timeout-ms 60000 --json
+```
+
+Dispatch the task and inject the worker preamble:
+
+```bash
+orca orchestration dispatch \
+  --task <taskId> \
+  --to <workerHandle> \
+  --inject \
+  --json
+```
+
+Then wait for completion, escalation, or a decision request:
+
+```bash
+orca orchestration check \
+  --wait \
+  --types worker_done,escalation,decision_gate \
+  --timeout-ms 900000 \
+  --json
+```
+
+Treat a timeout as a checkpoint, not as failure. Inspect task and terminal state, then continue waiting if the worker is still active:
+
+```bash
+orca orchestration task-list --json
+orca terminal read --terminal <workerHandle> --json
+```
+
+## Worker contract
+
+Dispatched workers receive a preamble that tells them how to communicate with the coordinator. The important rules are:
+
+- Send `worker_done` exactly once, even on failure.
+- Include a short `--body` summary: what was done, what was found, and what remains.
+- Include both task and dispatch IDs so stale retries cannot complete the wrong dispatch.
+- Send `heartbeat` messages during long active work.
+- Use `orca orchestration ask` for blocking questions instead of local TUI prompts.
+
+PowerShell and shell quoting are easier with structured payload flags:
+
+```bash
+orca orchestration send \
+  --to <coordinatorHandle> \
+  --type worker_done \
+  --subject "Completed mobile audit" \
+  --body "Checked the billing settings page at narrow widths. Fixed the footer overlap in src/app/settings/Billing.tsx. No follow-up remains." \
+  --task-id <taskId> \
+  --dispatch-id <dispatchId> \
+  --files-modified "src/app/settings/Billing.tsx" \
+  --report-path "artifacts/billing-mobile-audit.md" \
+  --json
+```
+
+Heartbeat:
+
+```bash
+orca orchestration send \
+  --to <coordinatorHandle> \
+  --type heartbeat \
+  --subject "alive" \
+  --task-id <taskId> \
+  --dispatch-id <dispatchId> \
+  --phase "implementing" \
+  --json
+```
+
+Blocking question:
+
+```bash
+orca orchestration ask \
+  --to <coordinatorHandle> \
+  --question "Should I update the shared component or only this page?" \
+  --options "shared,page-only" \
+  --timeout-ms 600000 \
+  --json
+```
+
+With `--json`, `ask` prints a single JSON object directly so workers can pipe it to `jq -r .answer`.
+
+## Coordinator loop
+
+For a larger decomposition, let Orca run the coordinator loop:
+
+```bash
+orca orchestration run \
+  --spec "Split the checkout QA work across available agents, collect results, and summarize blockers." \
+  --max-concurrent 3 \
+  --worktree active \
+  --json
+```
+
+Check progress with:
+
+```bash
+orca orchestration task-list --json
+orca orchestration task-list --ready --json
+orca orchestration gate-list --status pending --json
+```
+
+Stop the active run:
+
+```bash
+orca orchestration run-stop --json
+```
+
+## Decision gates
+
+Use `ask` for worker-to-coordinator questions. Use explicit gates when the coordinator has created a task DAG and wants to block a task until a decision is recorded:
+
+```bash
+orca orchestration gate-create \
+  --task <taskId> \
+  --question "Merge the shared button change into the task branch?" \
+  --options '["yes","no"]' \
+  --json
+
+orca orchestration gate-resolve --id <gateId> --resolution "yes" --json
+```
+
+## Recovery
+
+Preview dispatch context:
+
+```bash
+orca orchestration dispatch-show --task <taskId> --json
+orca orchestration dispatch-show --task <taskId> --preamble --json
+```
+
+Update a task manually:
+
+```bash
+orca orchestration task-update --id <taskId> --status blocked --result '{"reason":"waiting on credentials"}' --json
+```
+
+Reset only when you are intentionally abandoning orchestration state:
+
+```bash
+orca orchestration reset --tasks --json
+orca orchestration reset --messages --json
+orca orchestration reset --all --json
+```
+
+`reset` affects runtime-global orchestration state. Do not run it while another coordinator is active unless that is the intended cleanup.
+
+## Choosing the right command
+
+Use `orca terminal send` for a lightweight prompt to an agent you are watching.
+
+Use `orca orchestration dispatch --inject` when a worker must report `worker_done`, ask questions through the coordinator, and be tracked by task ID.
+
+Use `orca orchestration run` when you want Orca to manage the coordinator loop and dispatch ready tasks across available worker terminals.

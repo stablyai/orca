@@ -1,0 +1,19 @@
+---
+title: Browser-use profiles
+---
+
+Browser-use profiles let you run the Orca browser with a specific identity — a logged-in user, a particular cookie jar, a custom user-agent. Useful when an agent needs to log in, reproduce a session-specific bug, or emulate multiple users.
+
+## Create a profile
+
+1. Open [Settings → Browser → Profiles](/docs/settings).
+1. Click **Add profile**, give it a name.
+1. Optionally seed it with cookies, a user-agent, and a viewport size.
+
+## Use a profile
+
+Pick the profile from the browser toolbar. All tabs in that pane use it until you switch. Agent-driven browser commands inherit the active profile.
+
+## Isolation
+
+Each profile has its own storage partition — cookies, local storage, cache. Profiles don't leak into each other.

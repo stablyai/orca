@@ -1,0 +1,31 @@
+---
+title: Linear items drawer
+---
+
+import { Callout } from '@/components/docs/prose';
+
+Linear sits next to hosted review providers in the task drawer. Browse, create, update, and link Linear issues to worktrees the same way you link GitHub issues.
+
+## Setup
+
+1. Open [Settings → Integrations → Linear](/docs/settings).
+1. Paste a personal API token from [Linear → Settings → API](https://linear.app/settings/api).
+1. Pick the team(s) you want to see.
+
+## Using Linear
+
+- The task drawer shows GitHub and Linear issues in one combined view.
+- Creating a worktree from a Linear issue pre-fills the name and attaches the issue ID.
+- Open an issue detail view to update fields such as status, assignee, priority, labels, and estimate. Priority renders with Linear's own priority icons so the drawer matches what you see in Linear itself.
+- When you launch an agent from a Linear issue, Orca includes any inline images and media embedded in the issue's description, comments, and sub-issues in the prompt context, so the agent can see the mock-up or bug repro without you having to paste screenshots by hand.
+- Long lists paginate with a **Load more** action — useful when a project has more issues than fit in the initial drawer.
+- Orca remembers your last-used task source (GitHub, Linear, or Jira) per repo.
+
+<Callout>
+Linear status sync (moving an issue to "In Progress" when a worktree is created) is opt-in per team.
+</Callout>
+
+## Next steps
+
+- [Hosted reviews, issues & Actions](/docs/review/github) — connect code review state to the worktree after the task is in progress.
+- [Commit & push from Orca](/docs/review/commit-push) — ship the branch without leaving Orca.

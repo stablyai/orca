@@ -1,0 +1,31 @@
+---
+title: Add a custom CLI agent
+---
+
+import { Callout, ImagePlaceholder } from '@/components/docs/prose';
+
+Orca treats any CLI agent as a first-class citizen. Add one in seconds.
+
+<ImagePlaceholder src="/whats-new/any-cli-agent.gif" caption="Add any CLI agent — point Orca at a binary and it shows up in the combobox" />
+
+## Add an agent
+
+1. Open [Settings → Agents](/docs/settings).
+1. Click **Add custom agent**.
+1. Fill in name, binary path or command, and any default arguments.
+1. Optionally attach a startup hook — a shell command Orca runs before launching the agent (e.g. `source .envrc`).
+
+## What you get
+
+- The agent shows up in the combobox on every terminal.
+- Working directory is always the current worktree.
+- Restart chip on exit.
+- State dots *if* the CLI emits OSC titles (see below).
+
+## Making state dots work
+
+Orca detects working / idle state by watching OSC title updates. If your agent emits titles like `working` or `idle`, Orca picks it up automatically. If not, the tab is still a fully functional terminal, just without a live state dot.
+
+<Callout>
+Orca is happy running plain `bash` or `zsh` through the agent combobox — this is useful when you want a scoped shell with all the worktree context but no agent.
+</Callout>

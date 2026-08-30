@@ -1,0 +1,58 @@
+---
+title: Install
+description: Download Orca for macOS, Windows, or Linux, and opt into RC builds.
+---
+
+import { Callout } from '@/components/docs/prose';
+
+## Download
+
+- **macOS:** [Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg)
+- **Windows:** [installer](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe)
+- **Linux:** [AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [.deb](https://github.com/stablyai/orca/releases)
+- Older versions: [GitHub Releases](https://github.com/stablyai/orca/releases).
+
+### Homebrew (macOS)
+
+Orca is also published as a Homebrew cask, auto-bumped on every stable release:
+
+```
+brew install --cask stablyai/orca/orca
+```
+
+`brew upgrade --cask orca` picks up new stable builds. The cask tracks the stable channel — for RC builds, use the GitHub Releases links above or the in-app **Check for Updates** flow described under [Updates](#updates).
+
+## First launch
+
+On first launch Orca will:
+
+- Ask for access to your home directory so it can add repos.
+- Offer to import `~/.claude`, `~/.codex`, and Ghostty terminal settings if present.
+- Drop you on an empty landing screen where you add your first repo.
+
+## Updates
+
+Orca auto-updates by default, tracking the **stable** channel. Stable releases are vetted; **RC (release candidate)** builds ship new features first, often daily.
+
+There is no in-app opt-in for the RC channel. To pull an RC build, either:
+
+- Hold <kbd>Shift</kbd> while clicking **Check for Updates** ([Settings → General → Updates](/docs/settings), or the app / Help menu). That single check will include prereleases.
+- Or download any build directly from the [GitHub Releases page](https://github.com/stablyai/orca/releases).
+
+<Callout title="Don't like the current update">
+Older versions are always available on the [GitHub Releases page](https://github.com/stablyai/orca/releases). Orca will not force-downgrade your worktree data if you go back.
+</Callout>
+
+## Platform notes
+
+### macOS
+
+Signed and notarized. On first launch, macOS may still ask you to confirm — that's normal for Electron-based apps.
+
+### Windows
+
+The default shell can be set to PowerShell or CMD under [Settings → Terminal](/docs/settings). Most users want PowerShell.
+
+### Linux
+
+AppImage and `.deb` builds are available. See the Releases page for details.

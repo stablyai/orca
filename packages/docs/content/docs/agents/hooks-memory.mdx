@@ -1,0 +1,27 @@
+---
+title: Agent hooks & memory
+---
+
+import { Callout } from '@/components/docs/prose';
+
+Orca plays nicely with the agent hook and memory conventions Claude Code and Codex already use — it reads them, respects them, and gives you a UI for the ones that make sense in an IDE context.
+
+## Per-repo hooks
+
+Orca reads each repo's `.claude/` and `.codex/` configuration. Hooks you already have will run when Orca launches the agent in a worktree of that repo.
+
+## Worktree setup hooks
+
+Configure commands to run automatically after a worktree is created — e.g. `pnpm install`, `direnv allow`, or a script that restores `.env` files. Set them under [Settings → Repository → Hooks](/docs/settings).
+
+## Memory files
+
+Claude's `CLAUDE.md` and Codex's `AGENTS.md` (at repo root or nested) are left alone — they belong to the agent. Orca surfaces them in the file explorer like any other file so you can edit them inline.
+
+## Surviving a restart
+
+Hook endpoints are written to disk (`{userData}/agent-hooks/endpoint.env` on POSIX, `endpoint.cmd` on Windows) and re-sourced on every hook invocation, so long-lived agent sessions keep reaching the live Orca server even after an app restart — no more dead-port POSTs from a PTY that outlived the previous session.
+
+<Callout>
+The Orca CLI exposes a commented worktree status field agents can update themselves. See [Worktree checkpoints](/docs/cli/worktree-checkpoints).
+</Callout>

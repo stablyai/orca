@@ -1,0 +1,31 @@
+---
+title: Hot-swap Codex accounts
+---
+
+import { ImagePlaceholder } from '@/components/docs/prose';
+
+Running multiple Codex accounts to maximize tokens is common. Orca lets you hot-swap the active account in one click, with no re-login and no config editing. The same flow works for Claude Code accounts.
+
+<ImagePlaceholder src="/docs/codex-account-switcher.gif" caption="Codex account switcher dropdown in the status bar" />
+
+## Add accounts
+
+1. Log into each Codex account from a terminal at least once, so the auth sits under `~/.codex`.
+1. Open [Settings → Agents → Codex Accounts](/docs/settings).
+1. Orca lists all detected accounts with their usage and current limit.
+1. Give each one a friendly label — "personal", "work", etc.
+
+## Swap accounts
+
+Click the Codex chip in the status bar to open the account switcher. Pick an account; any new Codex session launched after that uses it. Sessions already running keep their original account until restarted.
+
+## Rules & gotchas
+
+- Swapping is instant — Orca rewrites the active credential pointer, it does not re-authenticate.
+- Existing Codex processes keep their current account until restart.
+- Usage readouts in the status bar follow the currently-active account.
+- The restart chip preserves the active account at the time of restart.
+
+## Claude Code accounts
+
+The Claude account switcher works identically — different data directory (`~/.claude`), same UX.

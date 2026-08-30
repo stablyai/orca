@@ -1,0 +1,27 @@
+---
+title: File explorer & external drag-drop
+---
+
+The file explorer lives on the left side of each worktree. It tracks your on-disk files in real time — create, rename, delete, and move all map to filesystem operations, so external changes (say, from the agent) show up instantly.
+
+## External drag-drop
+
+- Drop files from Finder/Explorer into the file tree to copy them in.
+- Drop an image into a markdown editor to insert it at the cursor.
+- Drop files onto an agent terminal to paste their paths at the prompt.
+- For [SSH worktrees](/docs/ssh), drag-drop also works — Orca uploads the file to the remote host before completing the drop, so the agent sees the file as a real on-disk path.
+
+## Git status
+
+Files are colored by git status — untracked, modified, staged, ignored. Right-click for the usual actions: discard, stage, rename.
+
+Right-click a single file and choose **Copy** to place the file itself on the OS clipboard. For SSH worktrees, Orca first stages the remote file locally, then writes that staged file reference to the clipboard; remote folders are excluded.
+
+## Search a folder
+
+Right-click a folder and choose **Find in Folder** to open Search with that folder already scoped. You can also select a folder in the file explorer and press `Cmd-Shift-F` on macOS or `Ctrl-Shift-F` on Windows and Linux.
+
+## Next steps
+
+- [Monaco editor & autosave](/docs/editing/monaco) — edit files after you find the match you need.
+- [Diff viewer](/docs/review/diff-viewer) — review the changes your agent or editor made.

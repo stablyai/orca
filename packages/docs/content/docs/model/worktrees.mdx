@@ -1,0 +1,72 @@
+---
+title: Worktrees
+description: How Orca turns every feature or bug into its own git worktree.
+---
+
+import { Callout } from '@/components/docs/prose';
+
+Orca is worktree-native. Instead of branching and stashing on one checkout, every task gets its own on-disk copy of the repo via `git worktree`. This is what makes parallel agents safe — they never step on each other's files.
+
+## The model
+
+- Each repo has a **base ref** (usually `origin/main`).
+- Each worktree has a **start-from ref** — what it branches off.
+- Each worktree has its own branch, its own files on disk, and its own agent terminals.
+- Deleting a worktree removes both the directory and the branch (with confirmation).
+
+## Per-feature lifecycle
+
+1. **Create** — task name, start-from picker, optional Linear/GitHub issue link.
+1. **Work** — agent terminals, editor tabs, browser tabs, terminal panes all scoped to this worktree.
+1. **Review** — diff view against the start-from ref, Annotate AI Diff, Attribution.
+1. **Ship** — commit, push, open PR, wait on checks — all inline.
+1. **Archive or delete** — one click removes the worktree and branch.
+
+## Creation runs in the background
+
+Submitting the Create Worktree dialog closes it immediately — the `git fetch` and `git worktree add` work continues in the background while you keep using Orca. The new worktree appears in the sidebar with a progress row, and the worktree's tab shows live setup status until the checkout finishes and swaps to the terminal. You can switch to other worktrees while a create is in flight, watch the progress, or cancel it from the in-tab panel. If creation fails, the panel surfaces the error with a Retry.
+
+## Start-from picker
+
+When creating a worktree you pick what to branch from. This can be:
+
+- The repo's base ref (the fast path).
+- Another local branch — useful for stacking work on top of a PR in review.
+- A specific commit SHA.
+- An existing remote branch — Orca will fetch and check it out.
+
+## Naming the branch
+
+By default Orca derives the new worktree's branch name from the workspace name you type, or from the linked GitHub PR, Linear/Jira issue, or GitLab MR when the workspace is created from one of those. To set an explicit branch name instead, expand the **Advanced** drawer in the Create Worktree dialog and type into the **Branch name** field (placeholder `feature/my-branch`).
+
+The Branch name field is only offered when you're creating from a typed workspace name or a base branch. When the workspace is tied to a tracked work item, the branch is derived from that item — a linked GitHub PR even re-resolves the branch at submit — so Orca hides the field to avoid a silently-ignored override.
+
+## Sidebar layout
+
+The sidebar groups worktrees by **project** by default — top-level rows are projects (one project = one git repo or a related cluster), expanded into the worktrees you're actively working on. The header has its own filter input (separate from the global search) so you can narrow the list without leaving the sidebar.
+
+When you add a parent folder that contains multiple Git repos, Orca can import the selected repos separately or group them under one project group.
+
+A **Search** button at the top of the sidebar opens [Worktree Jump Palette](/docs/model/quick-open) (`Cmd-J`) — same surface, click-driven for users who don't lean on the keyboard for navigation. The status bar shows agent activity inline; unread worktrees are bolded rather than badged.
+
+You can pin a worktree to the top of its project to keep long-running work in view, and right-clicking a worktree exposes archive / sleep / delete actions. Hold `Cmd` (`Ctrl` on Linux/Windows) while clicking to add worktrees to a multi-selection, or hold `Shift` to select a contiguous range — right-clicking any selected worktree applies the action to every worktree in the selection. Repo rows themselves can be reordered by drag.
+
+Double-click a worktree title in the sidebar to rename it inline. Double-clicking elsewhere on the card still opens the full edit dialog.
+
+## Multi-repo project groups & folder workspaces
+
+When you import a parent folder that contains several Git repos, Orca can group those repos under a single **project group** in the sidebar. Each project group exposes a **folder workspace** flow — a worktree-like entry that lives at the parent-folder level and binds its task source to one of the repos underneath, so one feature's GitHub/GitLab/Linear/Jira task surface stays attached to the right repo even though the workspace itself is grouped with its siblings in the sidebar.
+
+To create one, hover the project group's header row in the sidebar and click the **+** action (tooltip: "Create workspace for *group*"). The composer dialog ("Create Folder Workspace") asks you to pick the source project for the workspace's task source, name the workspace, and optionally attach a linked issue or PR. Submit, and the folder workspace appears under the project group alongside the regular repo-scoped worktrees.
+
+When deleting a project group, Orca also offers a checkbox to remove the group's contained projects (the underlying repo registrations) in the same action — so cleanup of a no-longer-used cluster is one confirmation, not several.
+
+## Using plain git
+
+Every Orca worktree is a real git worktree. You can open a terminal in it and use `git status`, `git rebase`, `git cherry-pick`, and anything else — Orca picks up the changes next render.
+
+Worktrees you create yourself with `git worktree add` stay external until you import them. If the repo hides external worktrees, Orca surfaces newly detected ones in the **New externally-created worktrees** inbox so you can import them or leave them hidden.
+
+<Callout>
+If you `git worktree remove` from the CLI, Orca will notice and clean up its own state the next time it refreshes that repo.
+</Callout>

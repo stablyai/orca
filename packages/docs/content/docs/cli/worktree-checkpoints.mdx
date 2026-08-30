@@ -1,0 +1,38 @@
+---
+title: Worktree checkpoints
+---
+
+Every Orca worktree carries a lightweight, free-text **comment** field visible in the UI — a status snapshot of what the worktree is doing right now. Agents can update it from the CLI, and it's the pattern we recommend for keeping human collaborators in the loop without forcing chat.
+
+## The pattern
+
+```
+orca worktree set --worktree active --comment "reproduced auth failure; testing credential-chain fix" --json
+```
+
+## Good checkpoint moments
+
+- Finished a meaningful slice of implementation.
+- Confirmed or refuted a hypothesis.
+- Completed a code review.
+- Hit a blocker (waiting on external input, upstream bug, missing access).
+- Transitioning from investigation to fix, or fix to verify.
+
+## Format
+
+First line is the action: what just happened, where, and the status or next step.
+
+```
+orca worktree set --worktree active --comment "added debounce to SearchBar onChange (src/components/SearchBar.tsx); ready for review
+goal: reduce redundant API calls per #298" --json
+```
+
+## Reading before writing
+
+If the comment might have user-written context, read it first so you don't clobber goals or constraints:
+
+```
+orca worktree current --json
+```
+
+Preserve what's still valid, drop what's stale, and weave in your update.

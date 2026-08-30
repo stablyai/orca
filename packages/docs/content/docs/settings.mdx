@@ -1,0 +1,107 @@
+---
+title: Settings reference
+---
+
+Settings are grouped into panes. Everything here is searchable with `Cmd-,` then typing a keyword. Feature pages in these docs link directly to the relevant pane.
+
+## General
+
+- **Orca CLI** — register the bundled command-line tool for shells and agents.
+- **Updates** — check for and install updates. Shift-click **Check for Updates** to include the latest RC build, or Cmd-click (macOS) / Ctrl-click (Windows and Linux) to check for the latest perf-tagged prerelease.
+- **UI zoom** — per-install UI scale.
+- **Default new-worktree name** — custom prefix or marine creatures.
+
+## Appearance
+
+- Theme, accent color, density.
+- Font family for UI and editor (independent settings — pick any installed font for either).
+- Editor minimap toggle.
+- Status bar toggles.
+- App Icon — cycle between Classic, Watercolor, and Blue for the icon shown in the Dock and window switcher.
+- Language — switch the Orca interface between System (follows the OS), English, 中文（简体）, 한국어, 日本語, or Español.
+
+## Git
+
+- Default base ref resolver.
+- Commit signing options.
+- Editor for external git tools.
+- Auto-Rename Branch From Work — rename Orca-generated creature branches after an agent starts work.
+- **GitHub API Budget** — remaining REST (core), Search, and GraphQL quota from the local `gh` CLI. Useful when PR checks or Tasks stop refreshing; see [Troubleshooting GitHub errors](/docs/github-errors) if the numbers look fine but GitHub still rate-limits live calls.
+
+## Terminal
+
+- Font, theme, cursor style, padding.
+- Ghostty import.
+- Warp theme import — bring in your Warp YAML themes with **Import themes from Warp** (auto-discovers Warp's themes folder per OS) or **Import from YAML** for any folder of Warp-format theme files.
+- JIS Yen (¥) to Backslash (\\) for macOS Japanese keyboards.
+- Windows default shell (PowerShell or CMD).
+
+## Quick Commands
+
+- Saved terminal commands, scoped globally or to a project.
+- Scope filters for reviewing and editing the command list.
+
+## Agents
+
+- Installed agents — detected and custom.
+- Enable or disable detected agents so launch menus only show the CLIs you want to use.
+- Agent Permissions — choose **Yolo** for fewer CLI permission prompts, or **Manual** to keep each agent's own approval flow for agents you haven't customized.
+- Claude and Codex account lists.
+- Startup hooks per agent.
+
+## Browser
+
+- Profiles (see [Browser-use profiles](/docs/browser/profiles)).
+- Default Zoom — zoom level applied to newly opened browser tabs (per-tab adjustments via Cmd-wheel are remembered separately).
+- Design Mode defaults.
+- Devtools opt-in.
+
+## Integrations
+
+- GitHub OAuth.
+- Linear API token.
+- Jira — Atlassian site URL, email, and API token (see [Jira items drawer](/docs/review/jira)).
+- MiniMax — paste a MiniMax session cookie (from `platform.minimax.io/console/usage`) to enable local usage and rate-limit tracking for the MiniMax CLI. Optional group ID and usage models fields override the defaults picked from the cookie.
+- MCP servers.
+
+## Notifications
+
+- Agent-finished: system, sound, chip.
+- Custom desktop notification sound per category.
+- PR check failures.
+- Update available.
+
+## Voice
+
+- Cloud speech-to-text models — paste an OpenAI API key under **OpenAI Transcription** to enable cloud STT for dictation. The key is stored locally and only used to call OpenAI's transcription API.
+
+## SSH
+
+- SSH worktrees, targets, passphrases, default identity file.
+
+## Remote Orca Servers
+
+- Pair and connect to remote Orca runtimes.
+- Advertise this desktop app as a server and create revocable access links.
+- Advanced default runtime selection for server-routed projects, terminals, and provider checks.
+
+## Shortcuts
+
+- Full keymap — every binding remappable.
+- Toggle Sleeping Workspaces ships unbound; assign it here if you want a direct shortcut for the sidebar sleeping-worktree filter.
+- Close all editor tabs defaults to `Cmd+Option+W` on macOS and `Ctrl+Alt+W` on Windows / Linux.
+
+## Repository
+
+- Per-repo base ref and hooks.
+- Auto-run commands on worktree create.
+- Repo icons for the sidebar: choose an icon, emoji, uploaded image, website favicon, or GitHub avatar, then pick a preset or custom hex badge color.
+- Source Control AI overrides for commit messages, pull request details, and branch names.
+
+## Experimental
+
+- [Activity Page](/docs/activity) — Slack-style worktree feed for agent events.
+- Compact worktree cards — hide redundant second lines in the sidebar while the layout is still experimental.
+- [Agent hibernation](/docs/agents/hibernation) — pause idle background agents and auto-resume them on reopen.
+- **Per-Workspace Environments** — show setup controls and workspace **Run on** targets for repo-owned, on-demand environments (cloud sandboxes, VMs, or local Docker). See [Ways to run Orca](/docs/ways-to-run#4-per-workspace-environments-ephemeral-vms).
+- Features not yet stable — behavior may change.

@@ -1,0 +1,86 @@
+---
+title: Orca skills registry & MCP
+description: Install Orca agent skills with npx skills add, including orca-cli, orchestration, computer-use, orca-linear, and orca-emulator.
+keywords:
+  - Orca skills
+  - npx skills add
+  - orca-cli skill
+  - orchestration skill
+  - computer-use skill
+  - orca-linear skill
+  - orca-emulator skill
+---
+
+Orca CLI commands are distributed as **skills** — versioned packages an agent can install into its own skill directory.
+
+## Installable Orca skills
+
+Use `npx skills add` with the public Orca repo and the skill name. The default agent setup uses `orca-cli`, `computer-use`, and `orchestration`; install `orca-linear` when agents need Linear ticket context and `orca-emulator` when they need to drive a local iOS Simulator from Orca.
+
+| Skill | Install | Use it for |
+| --- | --- | --- |
+| [`orca-cli`](#orca-cli) | `npx skills add https://github.com/stablyai/orca --skill orca-cli` | Orca-managed worktrees, terminals, files, automations, and the built-in browser. |
+| [`orchestration`](#orchestration) | `npx skills add https://github.com/stablyai/orca --skill orchestration` | Structured multi-agent coordination with messages, tasks, dispatches, and decision gates. |
+| [`computer-use`](#computer-use) | `npx skills add https://github.com/stablyai/orca --skill computer-use` | Desktop app control through accessibility trees, screenshots, clicks, typing, and safe UI actions. |
+| [`orca-linear`](#orca-linear) | `npx skills add https://github.com/stablyai/orca --skill orca-linear` | Linear ticket context for agents working from linked Linear issues. |
+| [`orca-emulator`](#orca-emulator) | `npx skills add https://github.com/stablyai/orca --skill orca-emulator` | iOS Simulator control from Orca with taps, gestures, typing, permissions, camera injection, and accessibility. |
+
+## orca-cli
+
+```
+npx skills add https://github.com/stablyai/orca --skill orca-cli
+```
+
+After install, your agent has a `SKILL.md` describing every Orca CLI command — worktree, terminal, and browser.
+
+## Read the guides from the Orca CLI
+
+When the Orca CLI is available, use the bundled guide commands to read the skill text that matches that Orca version:
+
+```bash
+orca skills list
+orca skills get orca-cli
+orca skills get orchestration --full
+```
+
+Add `--json` to either command when an agent needs deterministic output for automation. `skills show` is accepted as an alias for `skills get`.
+
+## orchestration
+
+```
+npx skills add https://github.com/stablyai/orca --skill orchestration
+```
+
+Use this when an agent should coordinate other agents through `orca orchestration` messages, tasks, dispatches, and worker completion tracking. See [Orchestration](/docs/cli/orchestration) for the workflow.
+
+## computer-use
+
+```
+npx skills add https://github.com/stablyai/orca --skill computer-use
+```
+
+Use this when an agent needs to inspect and operate local desktop app windows through Orca's computer-use surface. See [Computer use](/docs/cli/computer-use) for the workflow.
+
+## orca-linear
+
+```
+npx skills add https://github.com/stablyai/orca --skill orca-linear
+```
+
+Use this when an agent needs Linear ticket context from Orca. Existing `linear-tickets` installs continue to work, and Orca routes update actions to whichever Linear skill is installed.
+
+## orca-emulator
+
+```
+npx skills add https://github.com/stablyai/orca --skill orca-emulator
+```
+
+Use this when an agent should control an iOS Simulator from inside Orca through `orca emulator` commands.
+
+## Add your own skills
+
+Any repo with a `skills/<name>/SKILL.md` file can be installed via `npx skills add`. Point your agent at internal repos to give it company-specific powers.
+
+## MCP servers
+
+Model Context Protocol (MCP) servers expose external tools to compatible agents. Register MCP endpoints under [Settings → Integrations → MCP](/docs/settings); those tools appear inside agent CLIs that support MCP.

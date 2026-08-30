@@ -1,0 +1,31 @@
+---
+title: Codex in Orca
+---
+
+Codex is OpenAI's agentic CLI. Orca's Codex integration is one of the deepest in the app — usage, hot-swap, and restart all preserve account identity.
+
+## Setup
+
+1. Install Codex per OpenAI's docs.
+1. Log in from any terminal.
+1. Orca reads `~/.codex` for accounts and credentials.
+
+## Launching
+
+Pick **Codex** from the agent combobox. Orca launches `codex` with the worktree as `cwd` and routes auth through the currently selected account.
+
+## Account hot-swap
+
+Many Codex users run multiple accounts to stretch rate limits. Orca's account switcher swaps the active account without re-login or config edits. See [Hot-swap Codex accounts](/docs/agents/codex-hot-swap).
+
+## Restart chip
+
+When Codex exits, the restart chip relaunches the agent with the same account. If you swapped accounts mid-session and want to restart with the new one, use the account switcher first, then restart.
+
+## Usage & rate limits
+
+Orca reads local Codex usage state for the active account and surfaces it in the status bar. See [Usage & rate-limit tracking](/docs/agents/usage-tracking).
+
+## Codex on Windows (WSL)
+
+On Windows, Orca can run Codex either from your host install or from a WSL distro. Add a WSL-hosted Codex account from the account switcher — Orca creates an isolated account home inside the distro (under `~/.local/share/orca/codex-accounts/<id>/home`), maps it back to the host as a `\\wsl.localhost\<distro>\...` path for auth reads, and routes launches, hot-swap, and rate-limit fetches through the selected distro. If Codex isn't installed in the target distro, the **Add account** dialog fails with an actionable message telling you which distro is missing the binary.

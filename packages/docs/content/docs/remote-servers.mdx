@@ -1,0 +1,252 @@
+---
+title: Remote Orca Servers
+description: Run Orca on another machine and connect to it from your desktop or browser client.
+---
+
+import { Callout } from '@/components/docs/prose';
+
+Remote Orca Servers let one machine run the Orca runtime while another Orca client connects to it. Use this when a dev box, GPU host, or always-on server should own the projects, worktrees, terminals, tabs, provider checks, and agent sessions.
+
+<Callout title="Beta">
+Remote Orca Servers are beta. The server and client need to be able to reach each other over a network path you control, such as LAN, Tailscale, SSH forwarding, or a tunnel.
+</Callout>
+
+## Mental model
+
+A Remote Orca Server setup has two roles:
+
+- **Server machine**: runs `orca serve`, owns the repos, worktrees, terminals, and agent processes.
+- **Client machine**: runs the Orca UI and connects to the server machine.
+
+For example:
+
+```text
+Server B
+  Runs orca serve
+  Runs Codex, Claude Code, OpenCode, or other agent CLIs
+  Stores the worktrees and terminal sessions
+
+Laptop
+  Runs the Orca desktop app
+  Connects to Server B from Settings -> Remote Orca Servers
+  Starts, views, and manages sessions through the UI
+
+Optional backend
+  Authenticates users or receives product actions
+  Asks Server B to create a terminal/worktree when automation is needed
+```
+
+If you only want to start sessions manually, you can do that from the Orca UI after pairing. CLI examples are mostly for automation.
+
+## Install Orca on the server
+
+Install Orca on the machine that should do the work.
+
+On Arch Linux, install the packaged build from AUR:
+
+```bash
+yay -S stably-orca-bin
+```
+
+Or use the source build package:
+
+```bash
+yay -S stably-orca-git
+```
+
+On other Linux distributions, download the Linux AppImage from the latest release:
+
+```bash
+https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage
+```
+
+Then make it executable and run it once:
+
+```bash
+chmod +x orca-linux.AppImage
+./orca-linux.AppImage
+```
+
+Install the agent CLIs you want to use on this same server, such as Codex, Claude Code, OpenCode, or any other terminal agent. The agent process runs on the server, so its CLI and credentials need to be available there.
+
+If the `orca` command is not on `PATH`, open Orca on the server once and install the bundled CLI from **Settings -> General -> Orca CLI**. On some Linux installs, the registered command may be `orca-ide`; use whichever command is installed on your machine.
+
+## Start a headless server
+
+From the server machine, run:
+
+```bash
+orca serve --pairing-address <server-ip-or-tailscale-hostname>
+```
+
+`orca serve` starts an Orca runtime server without opening a desktop window. It runs in the foreground, prints the runtime endpoint plus a pairing URL, and stops when you press `Ctrl-C`.
+
+Use `--pairing-address` for the address clients should use to reach the server. This should be an address your laptop or backend can actually connect to, such as a LAN IP, Tailscale hostname, SSH-forwarded host, or tunnel hostname. Do not use `127.0.0.1` unless the client is running on the same machine.
+
+If you need a fixed port, pass it explicitly:
+
+```bash
+orca serve --port 6768 --pairing-address devbox.tailnet-name.ts.net
+```
+
+Clients must be able to reach that host and port. For browser clients, `orca serve` also prints a browser URL with the pairing data embedded when the web client bundle is available. For mobile pairing, add `--mobile-pairing`.
+
+## Pair with mobile
+
+Use `--mobile-pairing` when the client is the Orca mobile app. The flag prints a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.
+
+From the server machine, choose an address your phone can reach. A Tailscale IP or hostname is usually the easiest option:
+
+```bash
+orca serve --pairing-address 100.64.1.20 --mobile-pairing
+```
+
+Then pair from your phone:
+
+1. Keep `orca serve` running on the server.
+1. Open the Orca mobile app and choose **Pair**.
+1. Scan the **Mobile pairing QR** shown in the terminal, or paste the printed pairing URL.
+1. Leave the server reachable on that same address and port whenever you want mobile to reconnect.
+
+If the phone cannot connect after pairing, verify that the phone can reach the `--pairing-address` and port from its current network. For Tailscale, the phone needs to be connected to the same tailnet and allowed by any ACLs.
+
+<Callout title="Keep the pairing URL private">
+The pairing URL grants access to the server runtime. Treat it like a secret. Prefer private networking such as Tailscale, WireGuard, LAN, SSH forwarding, or an authenticated tunnel instead of exposing the port directly to the public internet.
+</Callout>
+
+## Share a running desktop app as a server
+
+If the server machine already has the headed Orca app open, use the in-app sharing flow instead:
+
+1. Open **Settings -> Remote Orca Servers**.
+1. Under **Advertise this app as a server**, click **New Link**.
+1. Copy the generated access link.
+
+This advertises the running desktop app as the server, so you do not need a separate `orca serve` process.
+
+## Connect from your laptop
+
+On the client machine:
+
+1. Open **Settings -> Remote Orca Servers**.
+1. Click **Add Server**.
+1. Give the server a name.
+1. Paste the pairing URL printed by `orca serve` or the access link generated by **New Link**.
+1. Click **Add Server**, then connect to the server from the same pane.
+
+After pairing, Orca lists the server in **Remote Orca Servers** with its connection state. Use **Advanced -> Default runtime** only when you want new server-routed projects, terminals, and provider checks to default to that remote server.
+
+## Start sessions from the UI
+
+After connecting, use Orca normally from your laptop. Select the remote server or one of its worktrees, then create terminals or launch agents from the UI.
+
+The important part is that the session runs on the server:
+
+- the terminal PTY is on the server,
+- the agent CLI process is on the server,
+- the worktree files are on the server,
+- the laptop is the UI for viewing and controlling that state.
+
+Switch to the remote server, then open or create a project from that server context. The server machine now owns the project's terminals, agent sessions, provider checks, and runtime state; the client is the UI you use to control it.
+
+## Start sessions from automation
+
+If a backend or web app needs to start sessions programmatically, use Orca's remote CLI/API or run a small authenticated service on the server that calls the Orca CLI locally.
+
+First save the server pairing on the machine that will call the CLI:
+
+```bash
+orca environment add --name server-b --pairing-code '<orca://pair?...>'
+```
+
+Then target that server with `--environment`:
+
+```bash
+orca terminal create \
+  --environment server-b \
+  --worktree path:/srv/my-app \
+  --command "codex"
+```
+
+For a fresh worktree plus an agent prompt:
+
+```bash
+orca worktree create \
+  --environment server-b \
+  --repo id:<repo-id> \
+  --name task-123 \
+  --agent codex \
+  --prompt "Implement this change"
+```
+
+When using `--environment`, pass explicit server-side selectors. Good selectors include `path:/absolute/path/on/server`, `id:<id>`, `name:<display-name>`, `branch:<branch>`, or `issue:<number>`. Avoid `active` or `current` from another machine because those refer to the caller's local filesystem, not the server's filesystem.
+
+For multi-user products, the safest shape is usually:
+
+```text
+Web app or backend
+  Authenticates the user
+  Checks permissions
+  Calls an authenticated service on Server B
+
+Server B service
+  Validates the request
+  Runs orca terminal create or orca worktree create locally
+  Returns the created worktree or terminal metadata
+```
+
+That keeps the pairing URL and host credentials on the server side instead of handing them to every caller.
+
+## When to use SSH instead
+
+For the full menu of local / SSH / server / ephemeral-VM options, see [Ways to run Orca](/docs/ways-to-run).
+
+The difference is where the Orca runtime and state live.
+
+With [SSH worktrees](/docs/ssh), Orca on your laptop owns the runtime and connects to a remote machine over SSH to run individual terminals or worktrees. The remote machine is mainly an execution target.
+
+With Remote Orca Servers, the remote machine runs its own Orca runtime. The remote machine owns the worktrees, terminals, tabs, and agent sessions, and your laptop connects to that shared runtime.
+
+Use SSH worktrees when only your laptop Orca needs to launch and manage work on the remote machine. Use Remote Orca Servers when the remote machine should host shared Orca-managed sessions that your laptop, browser client, mobile client, or backend automation can all interact with.
+
+If a backend SSHes into the server and runs `codex` directly, Orca will not necessarily know about that as an Orca-managed session. If the backend SSHes into the server and runs `orca terminal create`, then the server needs an Orca runtime anyway, which is the Remote Orca Server model.
+
+## Troubleshooting
+
+### The client cannot connect
+
+Check that the server address and port are reachable from the client machine:
+
+```bash
+nc -vz <server-address> 6768
+```
+
+If you used a custom port, check that port instead. Also verify that firewalls, VPN ACLs, and tunnel rules allow the connection.
+
+### The pairing address is wrong
+
+Run `orca serve` again with the address clients should use:
+
+```bash
+orca serve --port 6768 --pairing-address <reachable-address>
+```
+
+For Tailscale, use the server's Tailscale hostname or Tailscale IP. For SSH forwarding, use the forwarded host and port that the client will connect to.
+
+### The server cannot find `orca`
+
+Install the bundled CLI from **Settings -> General -> Orca CLI**, or use the command name registered by your package. On some Linux installs this may be `orca-ide`.
+
+### The server cannot find `codex`, `claude`, or another agent
+
+Install and authenticate the agent CLI on the server machine. Remote agent sessions use the server's `PATH`, home directory, and credentials, not the laptop's.
+
+### The CLI cannot target `active` or `current`
+
+When a CLI command targets a remote environment, the caller's current directory is not the server's current directory. Use an explicit server-side selector such as `path:/srv/my-app` or `id:<worktree-id>`.
+
+## Next steps
+
+- Read the overview of all run modes: [Ways to run Orca](/docs/ways-to-run).
+- Read the [Orca CLI reference](/docs/cli/reference) for the runtime command examples.
+- Use [SSH worktrees](/docs/ssh) for SSH worktrees that stay attached to your local desktop runtime.

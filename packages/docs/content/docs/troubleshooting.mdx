@@ -1,0 +1,53 @@
+---
+title: Troubleshooting & FAQ
+---
+
+## Agent won't start
+
+- Open the terminal and run the agent's CLI manually. If it fails there, it's an auth or install problem in the CLI itself — not Orca.
+- Make sure the CLI is on the `PATH` Orca sees (check [Settings → Agents](/docs/settings)).
+- Try the **Restart** chip on the tab.
+
+## Diff view looks wrong / stuck
+
+- Click the refresh icon on the diff toolbar — Orca re-reads the worktree.
+- External `git` operations (rebase, reset) can land between refreshes.
+
+## Worktree creation fails
+
+- The start-from ref may not be fetched. Open a terminal in the repo and run `git fetch origin`.
+- The target directory may already have a worktree for that branch — delete it or pick a new branch name.
+
+## Orca CLI says "command not found"
+
+Register the CLI under [Settings → Experimental → CLI](/docs/settings). On macOS it installs a shim into `~/.local/bin`; make sure that's on your shell's `PATH`.
+
+## Browser says `browser_no_tab`
+
+No tab is open in the current worktree. Open one with `orca tab create --url ...` or open the browser pane manually and navigate.
+
+## Performance & memory
+
+- Close worktrees you're not actively using. Each worktree keeps file watchers alive.
+- Split layouts with many browser tabs are the biggest RAM users — close browsers you don't need.
+
+## GitHub PR panel / checks / Tasks errors
+
+Rate limits, bad `gh` auth, missing scopes, and repo access issues all show up in Source Control and the PR Checks panel. See **[Troubleshooting GitHub errors](/docs/github-errors)** for the full matrix (including why **GitHub API Budget** in Settings can look fine while REST is still blocked).
+
+Quick checks:
+
+```bash
+gh auth status -h github.com
+gh api user
+gh api rate_limit --jq '.resources.core'
+```
+
+## Logs
+
+**Help → Open Logs** opens the directory with Orca's logs. Attach these when filing a bug.
+
+## Reporting issues
+
+- [GitHub Issues](https://github.com/stablyai/orca/issues) — bugs and feature requests.
+- [Discord](https://discord.gg/fzjDKHxv8Q) — real-time help.
