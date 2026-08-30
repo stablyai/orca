@@ -40,6 +40,9 @@ export function killPtyFromRuntimeController(
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
   connectionId ??= parsedSshId?.connectionId
+  // Read before any await: a replacement that took the id over could have marked its own stop
+  // reversible, and that mark would silently discard this incarnation's replayable order.
+  const addressedStopIsReversible = reversibleStopOwnersByPtyId.has(ptyId)
   /**
    * Records a replayable SSH stop order. Defaulted so it aims at the incarnation this call
    * addressed, never at one that took the id over while the stop was in flight.
@@ -49,7 +52,7 @@ export function killPtyFromRuntimeController(
       store,
       ptyId,
       connectionId,
-      reversible: reversibleStopOwnersByPtyId.has(ptyId),
+      reversible: addressedStopIsReversible,
       incarnationId
     })
   }
@@ -269,6 +272,8 @@ export async function stopAndWaitPtyFromRuntimeController(
     return false
   }
   let providerExitObserved = false
+  // Why: every failure return below publishes a liveness verdict for `ptyId`, and the awaits can
+  // hand that id to a replacement; fence each one so it cannot inherit this stop's outcome.
   try {
     providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
       immediate: true,
@@ -277,7 +282,7 @@ export async function stopAndWaitPtyFromRuntimeController(
     })
   } catch (err) {
     if (!isPtyAlreadyGoneError(err)) {
-      if (connectionId) {
+      if (connectionId && ptyIncarnationStillExpected(ptyId, expectedIncarnationId)) {
         runtime?.markPtyLivenessUnverifiable?.(
           ptyId,
           err instanceof Error ? err.message : String(err)
@@ -291,11 +296,13 @@ export async function stopAndWaitPtyFromRuntimeController(
   }
   try {
     if (!(await verifyPtyStopped(provider, ptyId, opts))) {
-      runtime?.markPtyLivenessLive?.(ptyId)
+      if (ptyIncarnationStillExpected(ptyId, expectedIncarnationId)) {
+        runtime?.markPtyLivenessLive?.(ptyId)
+      }
       return false
     }
   } catch (err) {
-    if (connectionId) {
+    if (connectionId && ptyIncarnationStillExpected(ptyId, expectedIncarnationId)) {
       runtime?.markPtyLivenessUnverifiable?.(
         ptyId,
         err instanceof Error ? err.message : String(err)

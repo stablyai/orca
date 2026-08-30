@@ -64,15 +64,15 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
     }
     if (!close.ptyKilled) {
       if (exactProcessWasAlreadyExited) {
-        return (
-          settleExitedWorkerTerminalRelease({
-            runtime,
-            db,
-            dispatchId,
-            resource,
-            processAction: 'closed_exited_terminal'
-          }) ?? retainWorkerTerminalRelease(db, dispatchId, resource)
-        )
+        // No second lease proof: the one above ran in this same synchronous turn. Keep it that way —
+        // an await introduced between them would need its own proof, as the catch path below has.
+        return settleExitedWorkerTerminalRelease({
+          runtime,
+          db,
+          dispatchId,
+          resource,
+          processAction: 'closed_exited_terminal'
+        })
       }
       const reason = describeUnconfirmedAgentStop(close)
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
@@ -94,15 +94,16 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
       reason === 'tab_not_found' &&
       (await recheckProcessLiveness(runtime, resource)) === 'exited'
     ) {
-      return (
-        settleExitedWorkerTerminalRelease({
-          runtime,
-          db,
-          dispatchId,
-          resource,
-          processAction: 'none'
-        }) ?? retainWorkerTerminalRelease(db, dispatchId, resource)
-      )
+      // The recheck yielded, so re-prove the lease before a replacement inherits this death proof.
+      return workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, true)
+        ? settleExitedWorkerTerminalRelease({
+            runtime,
+            db,
+            dispatchId,
+            resource,
+            processAction: 'none'
+          })
+        : retainWorkerTerminalRelease(db, dispatchId, resource)
     }
     if (/disposed|not connected|unavailable/i.test(reason)) {
       return {
@@ -143,12 +144,8 @@ function settleExitedWorkerTerminalRelease(args: {
   dispatchId: string
   resource: WorkerTerminalResourceRow
   processAction: 'closed_exited_terminal' | 'none'
-}): WorkerReleaseReceipt | null {
+}): WorkerReleaseReceipt {
   const { runtime, db, dispatchId, resource, processAction } = args
-  // Re-prove the lease after close so a replacement process cannot inherit the old death proof.
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, true)) {
-    return null
-  }
   const released = db.settleWorkerTerminalRelease(resource.id)
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
   return {

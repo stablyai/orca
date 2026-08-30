@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PtyProcessInfo } from '../providers/pty-process-info'
 import { OrcaRuntimeService } from './orca-runtime'
 
@@ -72,6 +72,44 @@ describe('terminal process incarnation liveness', () => {
       runtime.inspectTerminalProcessIncarnationLiveness(PROCESS_INCARNATION, '{"kind":"ssh"}')
     ).resolves.toBe('unverifiable')
     expect(listProcesses).not.toHaveBeenCalled()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // Absence from the listing is a death certificate only because every way of *losing contact* with
+  // the execution host is converted to `unverifiable` before the classifier is reached. These pin
+  // the two conversions that no other test covers.
+  it('keeps a stalled inventory unverifiable rather than reading absence as death', async () => {
+    vi.useFakeTimers()
+    const runtime = runtimeWithInventory(() => new Promise(() => {}))
+
+    const verdict = runtime.inspectTerminalProcessIncarnationLiveness(
+      PROCESS_INCARNATION,
+      SSH_SCOPE
+    )
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expect(verdict).resolves.toBe('unverifiable')
+  })
+
+  it('does not judge liveness without a controller that can list processes', async () => {
+    const runtime = new OrcaRuntimeService()
+
+    await expect(
+      runtime.inspectTerminalProcessIncarnationLiveness(PROCESS_INCARNATION, SSH_SCOPE)
+    ).resolves.toBe('unverifiable')
+
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    } as never)
+
+    await expect(
+      runtime.inspectTerminalProcessIncarnationLiveness(PROCESS_INCARNATION, SSH_SCOPE)
+    ).resolves.toBe('unverifiable')
   })
 
   it.each([
