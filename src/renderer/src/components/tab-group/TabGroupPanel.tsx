@@ -248,7 +248,7 @@ export default function TabGroupPanel({
       <div
         className="h-[32px] shrink-0 border-b border-border bg-card"
         data-tab-group-strip-id={groupId}
-        data-terminal-focus-release-surface="true"
+        data-window-drag-strip="true"
         data-worktree-id={worktreeId}
       >
         <div className="flex h-full items-stretch pr-1.5">
