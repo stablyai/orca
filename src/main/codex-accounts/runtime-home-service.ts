@@ -40,6 +40,7 @@ import {
   writeFileAtomically,
   writeFileAtomicallyIfUnchanged
 } from './fs-utils'
+import { ensureWslRuntimeHomeDirectory } from './wsl-runtime-home-directory'
 import {
   getOrcaManagedCodexHomePath,
   getOrcaUserDataPath,
@@ -1094,7 +1095,7 @@ export class CodexRuntimeHomeService {
     }
     this.wslRuntimeHomePathByDistro.set(distro, runtimeHomePath)
 
-    mkdirSync(runtimeHomePath, { recursive: true })
+    ensureWslRuntimeHomeDirectory(runtimeHomePath)
     this.safeMigrateLegacyWslActiveHomePointer(distro, runtimeHomePath)
     this.seedWslRuntimeHome(runtimeHomePath, activeAccount, distro)
 
