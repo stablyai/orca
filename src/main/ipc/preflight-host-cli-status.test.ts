@@ -88,7 +88,7 @@ vi.mock('../gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
-import { registerPreflightHandlers, runPreflightCheck } from './preflight'
+import { _resetPreflightCache, registerPreflightHandlers, runPreflightCheck } from './preflight'
 import {
   defaultAzureDevOpsStatus,
   defaultBitbucketStatus,
@@ -387,6 +387,81 @@ describe('preflight', () => {
     // Why this matters: an unreachable distro reports the same `installed:
     // false` as a distro with no tooling, so a session-lifetime cache would pin
     // "git not installed" until relaunch. The TTL must let it recover.
+    // Why these two: a slower run settling last must not overwrite a newer
+    // answer, or a forced refresh silently returns to the status it replaced.
+    it('does not let a superseded probe overwrite a newer forced refresh', async () => {
+      stubWslProbes()
+      // Why gate on phase captured at call time: the stale run's three
+      // --version probes all start before the refresh, and all report nothing
+      // installed, so it never issues auth calls. The two runs are then
+      // trivially distinguishable in the cached result.
+      let phase: 'stale' | 'fresh' = 'stale'
+      let releaseStale!: () => void
+      const staleGate = new Promise<void>((resolve) => {
+        releaseStale = resolve
+      })
+      runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
+        const isStale = phase === 'stale'
+        if (isStale) {
+          await staleGate
+        }
+        return {
+          environmentResolved: true,
+          code: isStale ? 1 : 0,
+          stdout: isStale
+            ? ''
+            : script.includes('auth status')
+              ? 'github.com\n  - Active account: true\n'
+              : 'version 2.0.0\n',
+          stderr: '',
+          timedOut: false
+        }
+      })
+
+      const stalePending = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      phase = 'fresh'
+      const fresh = await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
+      expect(fresh.git).toEqual({ installed: true })
+
+      releaseStale()
+      const staleResult = await stalePending
+      expect(staleResult.git).toEqual({ installed: false })
+
+      // The superseded run still returns its own answer to its own caller, but
+      // must not have become the cached one.
+      const cachedNow = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      expect(cachedNow.git).toEqual({ installed: true })
+    })
+
+    it('does not repopulate a cache that was reset while a probe was in flight', async () => {
+      stubWslProbes()
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
+        await gate
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: script.includes('auth status')
+            ? 'github.com\n  - Active account: true\n'
+            : 'version 2.0.0\n',
+          stderr: '',
+          timedOut: false
+        }
+      })
+
+      const inFlight = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      _resetPreflightCache()
+      release()
+      await inFlight
+
+      runWslProcessMock.mockClear()
+      await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      expect(runWslProcessMock.mock.calls.length).toBeGreaterThan(0)
+    })
+
     it('re-probes after the cache entry expires so a transient failure self-heals', async () => {
       vi.useFakeTimers()
       try {

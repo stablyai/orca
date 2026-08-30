@@ -93,6 +93,16 @@ const cachedByWslDistro = new Map<string, { result: PreflightStatus; expiresAt: 
 // set instead of one full set each before the first result lands.
 const preflightInFlight = new Map<string, Promise<PreflightStatus>>()
 
+// Why a generation per key: two runs for the same target can overlap (a forced
+// refresh started while a slower probe is still out). Without this the slower
+// one settles last and writes its older result over the newer one, so the next
+// caller reads staler status than the refresh it asked for. The epoch does the
+// same for `_resetPreflightCache`, which integrations call on credential
+// changes: a probe already in flight must not repopulate the cache it cleared.
+const latestPreflightRun = new Map<string, number>()
+let preflightRunCounter = 0
+let preflightCacheEpoch = 0
+
 const LOCAL_PREFLIGHT_CACHE_KEY = 'local'
 
 function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
@@ -104,6 +114,10 @@ export function _resetPreflightCache(): void {
   cached = null
   cachedByWslDistro.clear()
   preflightInFlight.clear()
+  latestPreflightRun.clear()
+  // Why bump rather than just clear: a probe already in flight would otherwise
+  // settle after this and repopulate the cache an integration just invalidated.
+  preflightCacheEpoch += 1
 }
 
 function uniqueAgentIds(ids: Iterable<string>): string[] {
@@ -294,17 +308,27 @@ export async function runPreflightCheck(
     }
   }
 
+  const runId = ++preflightRunCounter
+  const epochAtStart = preflightCacheEpoch
+  latestPreflightRun.set(cacheKey, runId)
+
   const run = executePreflightCheck(force, context, wslTarget)
   preflightInFlight.set(cacheKey, run)
   try {
     const result = await run
-    if (wslTarget) {
-      cachedByWslDistro.set(cacheKey, {
-        result,
-        expiresAt: Date.now() + WSL_PREFLIGHT_CACHE_TTL_MS
-      })
-    } else {
-      cached = result
+    // Superseded by a newer run, or the cache was reset while this was out:
+    // return what we probed, but do not let it become the cached answer.
+    const isCurrent =
+      latestPreflightRun.get(cacheKey) === runId && epochAtStart === preflightCacheEpoch
+    if (isCurrent) {
+      if (wslTarget) {
+        cachedByWslDistro.set(cacheKey, {
+          result,
+          expiresAt: Date.now() + WSL_PREFLIGHT_CACHE_TTL_MS
+        })
+      } else {
+        cached = result
+      }
     }
     return result
   } finally {
