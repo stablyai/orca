@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { buildExcludePathPrefixes } from '../../../shared/quick-open-filter'
 import {
+  cleanRuntimeFileListError,
   getRuntimeFileListTarget,
   getNestedWorktreeExcludePaths,
   getNestedWorktreeExcludeRequest,
@@ -68,5 +69,42 @@ describe('quick-open nested worktree excludes', () => {
       excludeRequest: { paths: [], key: '[]' },
       worktreePath: '/Users/jenkei/test'
     })
+  })
+})
+
+describe('cleanRuntimeFileListError', () => {
+  it('shows only the reason behind the IPC envelope', () => {
+    expect(
+      cleanRuntimeFileListError(
+        new Error("Error invoking remote method 'fs:listFiles': Error: Permission denied")
+      )
+    ).toBe('Permission denied')
+  })
+
+  // Why: this envelope has no `Error: ` after the channel, which the previous local regex
+  // required — it rendered the whole wrapper to the user.
+  it('strips an envelope whose tail carries no Error: prefix', () => {
+    expect(
+      cleanRuntimeFileListError(
+        new Error("Error invoking remote method 'fs:listFiles': Permission denied")
+      )
+    ).toBe('Permission denied')
+  })
+
+  it('falls back to a sentence, and logs the cause, when the envelope carried no reason', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const error = new Error("Error invoking remote method 'fs:listFiles': Error")
+
+    expect(cleanRuntimeFileListError(error)).toBe(
+      'Orca could not list files here, and the failure did not include a readable reason.'
+    )
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('unreadable'), error)
+    warn.mockRestore()
+  })
+
+  it('never renders the envelope, whatever the channel', () => {
+    expect(
+      cleanRuntimeFileListError(new Error("Error invoking remote method 'x:y': Error: nope"))
+    ).not.toContain('invoking remote method')
   })
 })

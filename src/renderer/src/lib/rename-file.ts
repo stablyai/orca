@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { commitFileExplorerOp } from '@/components/right-sidebar/fileExplorerUndoRedo'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
@@ -7,19 +8,6 @@ import {
   getFileExplorerOperationOwner
 } from '@/components/right-sidebar/file-explorer-operation-owner'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
-
-/**
- * Electron's ipcRenderer.invoke wraps errors as:
- *   "Error invoking remote method 'channel': Error: actual message"
- * Strip the wrapper so users see only the meaningful part.
- */
-export function extractIpcErrorMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof Error)) {
-    return fallback
-  }
-  const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
-  return match ? match[1] : err.message
-}
 
 type RenameFileArgs = {
   oldPath: string

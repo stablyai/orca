@@ -87,3 +87,27 @@ describe('describeAiVaultScanError', () => {
     )
   })
 })
+
+describe('describeAiVaultScanError IPC envelope handling', () => {
+  it('humanizes a scanner error that arrived inside the envelope', () => {
+    expect(
+      describeAiVaultScanError(
+        "Error invoking remote method 'aiVault:listSessions': Error: AI Vault service restart circuit is open."
+      )
+    ).toBe('Session scanning paused after repeated failures. Refresh to try again.')
+  })
+
+  // Why: this used to surface the bare class name "Error" as the scan-issue row.
+  it('replaces an envelope carrying no reason with an actionable line', () => {
+    expect(
+      describeAiVaultScanError("Error invoking remote method 'aiVault:listSessions': Error")
+    ).toBe('The session scan failed without a readable reason. Refresh to try again.')
+  })
+
+  // Why: this used to paint an empty row.
+  it('replaces an empty envelope tail with an actionable line', () => {
+    expect(describeAiVaultScanError("Error invoking remote method 'aiVault:listSessions': ")).toBe(
+      'The session scan failed without a readable reason. Refresh to try again.'
+    )
+  })
+})

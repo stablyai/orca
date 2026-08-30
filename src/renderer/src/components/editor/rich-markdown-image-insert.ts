@@ -9,7 +9,7 @@ import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 export type RichMarkdownImageInsertArgs = {
   editor: Editor

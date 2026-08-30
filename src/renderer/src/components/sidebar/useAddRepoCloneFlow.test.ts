@@ -190,6 +190,33 @@ describe('useAddRepoCloneFlow', () => {
     expect(mocks.stateSetters[3]).toHaveBeenCalledWith(cloneError)
   })
 
+  // Why: this site's fallback used to be `String(err)`, so an envelope with nothing behind it
+  // put the whole wrapper in the dialog's error row.
+  it('shows readable copy rather than the envelope when the clone rejection carries no reason', async () => {
+    mocks.cloneRemote.mockRejectedValue(
+      new Error("Error invoking remote method 'repos:cloneRemote': Error")
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: 'ssh-1',
+      workspaceDir: '/local/workspace',
+      fetchWorktrees: mocks.fetchWorktrees,
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    await result.handleClone()
+
+    const shown = mocks.stateSetters[3].mock.calls.at(-1)?.[0] as string
+    expect(shown).not.toContain('Error invoking remote method')
+    expect(shown).toBe('The clone failed, and the failure did not include a readable reason.')
+    // Why: the rejection itself must stay reachable — the sentence above replaces it on screen only.
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('clones through the selected runtime environment', async () => {
     const repo = makeRepo({ id: 'runtime-repo' })
     const localRepo = makeRepo({

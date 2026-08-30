@@ -1,4 +1,5 @@
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 import {
@@ -132,7 +133,10 @@ function handleConnectError(
   const { connectionId } = context.transportOptions
   const message = extractIpcErrorMessage(
     error,
-    error instanceof Error ? error.message : String(error)
+    translate(
+      'auto.components.terminal.pane.ipcPtyConnect.unreadableConnectError',
+      'The terminal could not start, and the failure did not include a readable reason.'
+    )
   )
   if (
     connectionId &&

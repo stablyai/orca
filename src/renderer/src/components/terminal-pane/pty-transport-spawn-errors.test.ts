@@ -192,6 +192,48 @@ describe('createIpcPtyTransport', () => {
     })
   })
 
+  // Why: this site's fallback used to be `error.message`, which for an envelope with nothing
+  // behind it is the envelope. The terminal error banner is the only place a user learns the
+  // spawn failed, so it must not read as plumbing.
+  it('shows readable copy rather than the envelope when the spawn rejection carries no reason', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi
+      .fn()
+      .mockRejectedValue(new Error("Error invoking remote method 'pty:spawn': Error"))
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport()
+    const onError = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await transport.connect({ url: '', callbacks: { onError } })
+
+    const shown = onError.mock.calls[0]?.[0] as string
+    expect(shown).not.toContain('Error invoking remote method')
+    expect(shown).toBe(
+      'The terminal could not start, and the failure did not include a readable reason.'
+    )
+    // Why: the rejection itself must stay reachable — the sentence above replaces it on screen only.
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const wrappedMessage = `Error invoking remote method 'pty:spawn': Error: ${createTerminalSessionStateSaveFailureMessage()}`

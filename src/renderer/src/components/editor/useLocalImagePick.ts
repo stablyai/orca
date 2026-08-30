@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
-import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 export function useLocalImagePick(
   editor: Editor | null,

@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/update-status-types'
 import { UpdateErrorCardContent } from './UpdateErrorCardContent'
 import { translate } from '@/i18n/i18n'
+import { stripErrorClassPrefix, stripIpcInvokeEnvelopeFrom } from '@/lib/ipc-error'
 
 const COPY_CONFIRMATION_MS = 4_000
 
@@ -19,9 +20,16 @@ function copiedNote(packageFileName: string): string {
 }
 
 function toMessage(error: unknown): string {
-  const message = String((error as Error)?.message ?? error)
-  // Electron prefixes rejected invoke() results with the channel; keep only the user-safe tail.
-  return message.replace(/^Error invoking remote method '[^']*':\s*/, '').replace(/^Error:\s*/, '')
+  const reason = stripIpcInvokeEnvelopeFrom(error)
+  if (reason === null) {
+    // Why: the envelope carried no reason, so this log is the only surviving record of it.
+    console.warn('[linux-package-install] recovery action failed with an unreadable error', error)
+    return translate(
+      'auto.components.LinuxPackageInstallRecoveryCard.unreadableActionError',
+      'That step failed, and the failure did not include a readable reason.'
+    )
+  }
+  return stripErrorClassPrefix(reason)
 }
 
 export function LinuxPackageInstallRecoveryCard({

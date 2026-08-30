@@ -4,6 +4,8 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { translate } from '@/i18n/i18n'
+import { stripIpcInvokeEnvelope } from '@/lib/ipc-error'
 import { isQuickOpenRemoteQueryTooLarge } from '@/components/quick-open-search'
 import {
   cancelRuntimeFileList,
@@ -30,7 +32,16 @@ export type RuntimeFileListState = {
 
 export function cleanRuntimeFileListError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
-  return raw.replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, '')
+  const reason = stripIpcInvokeEnvelope(raw)
+  if (reason === null) {
+    // Why: the envelope carried no reason, so this log is the only surviving record of it.
+    console.warn('[quick-open] runtime file list failed with an unreadable error', error)
+    return translate(
+      'auto.components.QuickOpen.unreadableListError',
+      'Orca could not list files here, and the failure did not include a readable reason.'
+    )
+  }
+  return reason
 }
 
 function debounceRuntimeFilePathSearch(

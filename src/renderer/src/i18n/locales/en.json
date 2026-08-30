@@ -1860,7 +1860,8 @@
         "b227d88520": "{{value0}} files found",
         "995be8ea22": "Copy",
         "cf144856dc": "Copied",
-        "344f8a48dd": "on the host running the Quick Open scan to enable fast, gitignore-aware listing:"
+        "344f8a48dd": "on the host running the Quick Open scan to enable fast, gitignore-aware listing:",
+        "unreadableListError": "Orca could not list files here, and the failure did not include a readable reason."
       },
       "SelectedTextCopyMenu": {
         "9b40d7b018": "Copy"
@@ -3230,6 +3231,9 @@
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Host unavailable",
             "54f29b7c0d": "Loading host…"
+          },
+          "ipcPtyConnect": {
+            "unreadableConnectError": "The terminal could not start, and the failure did not include a readable reason."
           }
         }
       },
@@ -4989,7 +4993,8 @@
           "69f5b5380d": "Cloning...",
           "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
           "cloneParentFolder": "Parent folder",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "unreadableAddError": "Adding the project failed, and the failure did not include a readable reason."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Close",
@@ -5738,7 +5743,8 @@
         },
         "useAddRepoCloneFlow": {
           "4d0013cc93": "Repository cloned",
-          "0dc4d1b657": "Enter a host path for the clone destination."
+          "0dc4d1b657": "Enter a host path for the clone destination.",
+          "unreadableCloneError": "The clone failed, and the failure did not include a readable reason."
         },
         "useAddRepoLocalFolderFlow": {
           "7ab10e4974": "Use a host path to add projects from a remote host.",
@@ -6176,6 +6182,9 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "useCreateRepo": {
+          "unreadableCreateError": "Creating the repository failed, and the failure did not include a readable reason."
         }
       },
       "shared": {
@@ -8631,7 +8640,8 @@
           "ad5d036ecc": "Could not request microphone permission. Voice dictation was not enabled.",
           "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
-          "cd9fe37556": "Microphone permission granted"
+          "cd9fe37556": "Microphone permission granted",
+          "unreadableDownloadError": "The download failed, and the failure did not include a readable reason."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -16275,7 +16285,8 @@
         "53c4b8e148": "No usable authentication agent answered the privileged install request.",
         "c732bcbf8f": "Checking package...",
         "aa57fa4f80": "Command copied. Run it in a system terminal to install {{value0}}, then quit and reopen Orca.",
-        "b7e7c5bc95": "Orca checks the downloaded file against the release metadata at the moment it builds this command. The system package itself is not signature-checked, and Orca cannot vouch for the file after that point."
+        "b7e7c5bc95": "Orca checks the downloaded file against the release metadata at the moment it builds this command. The system package itself is not signature-checked, and Orca cannot vouch for the file after that point.",
+        "unreadableActionError": "That step failed, and the failure did not include a readable reason."
       },
       "pr-check-counts": {
         "passingChip": "{{value0}} passing",

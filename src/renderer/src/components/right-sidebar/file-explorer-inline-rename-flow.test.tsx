@@ -21,7 +21,6 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/rename-file', () => ({
-  extractIpcErrorMessage: vi.fn(),
   renameFileOnDisk: mocks.renameFileOnDisk
 }))
 

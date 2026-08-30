@@ -87,6 +87,8 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   }
 }
 
+const REMOTE_ERROR_STATE = 3
+
 describe('useRemoteRepo default-checkout handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -149,6 +151,57 @@ describe('useRemoteRepo default-checkout handoff', () => {
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'ssh:ssh-1')
+  })
+
+  // Why: this site's fallback used to be `String(err)`, so an envelope with nothing behind it
+  // put the whole wrapper in the remote-add dialog's error row.
+  it('shows readable copy rather than the envelope when the add rejection carries no reason', async () => {
+    mocks.addRemote.mockRejectedValue(
+      new Error("Error invoking remote method 'repos:addRemote': Error")
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { useRemoteRepo } = await import('./AddRepoSteps')
+
+    const result = useRemoteRepo(
+      mocks.fetchWorktrees,
+      vi.fn(),
+      vi.fn(),
+      mocks.onGitRepoReady,
+      vi.fn().mockResolvedValue(null)
+    )
+    await result.handleAddRemoteRepo()
+
+    const shown = mocks.stateSetters[REMOTE_ERROR_STATE].mock.calls.at(-1)?.[0] as string
+    expect(shown).not.toContain('Error invoking remote method')
+    expect(shown).toBe(
+      'Adding the project failed, and the failure did not include a readable reason.'
+    )
+    // Why: the rejection itself must stay reachable — the sentence above replaces it on screen only.
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  // Why: this site matches on the message before rendering it. Opening the envelope is what makes
+  // that match reach the non-git confirmation instead of stranding the user on a raw wrapper.
+  it('still routes a wrapped non-git failure to the confirmation dialog', async () => {
+    mocks.addRemote.mockRejectedValue(
+      new Error("Error invoking remote method 'repos:addRemote': Error: Not a valid git repository")
+    )
+    const { useRemoteRepo } = await import('./AddRepoSteps')
+
+    const result = useRemoteRepo(
+      mocks.fetchWorktrees,
+      vi.fn(),
+      vi.fn(),
+      mocks.onGitRepoReady,
+      vi.fn().mockResolvedValue(null)
+    )
+    await result.handleAddRemoteRepo()
+
+    expect(mocks.storeState.openModal).toHaveBeenCalledWith('confirm-non-git-folder', {
+      folderPath: '/srv/repo',
+      connectionId: 'ssh-1'
+    })
   })
 
   it('continues to completion when refresh is not authoritative after remote add', async () => {

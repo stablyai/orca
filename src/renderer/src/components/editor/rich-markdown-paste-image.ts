@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
 
 export type RichMarkdownImagePasteArgs = {

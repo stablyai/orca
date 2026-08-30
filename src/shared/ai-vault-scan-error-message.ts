@@ -4,10 +4,10 @@
  * row and the thrown-rejection banner. Anything unrecognized passes through, so
  * scanner-authored messages (host name, remote path, cap) keep their own wording.
  */
+import { stripIpcInvokeEnvelope } from './ipc-invoke-envelope'
+
 const RETRY = 'Refresh to try again.'
 
-/** Electron wraps every rejected `ipcMain.handle` before the renderer sees it. */
-const IPC_INVOKE_PREFIX = /^Error invoking remote method '[^']*': (?:\w*Error: )?/
 /** Relay-hosted scanner errors carry a transport-only `Relay ` prefix. */
 const RELAY_PREFIX = /^Relay (?=AI Vault )/
 /** Both the fork-based service and the legacy worker thread emit this family. */
@@ -45,6 +45,11 @@ function humanize(text: string): string | null {
 
 /** Returns user-facing copy, or the original text when it is already meaningful. */
 export function describeAiVaultScanError(raw: string): string {
-  const text = raw.replace(IPC_INVOKE_PREFIX, '').replace(RELAY_PREFIX, '')
+  const stripped = stripIpcInvokeEnvelope(raw)
+  if (stripped === null) {
+    // Why: an envelope with no reason behind it used to surface as "Error" or an empty row.
+    return `The session scan failed without a readable reason. ${RETRY}`
+  }
+  const text = stripped.replace(RELAY_PREFIX, '')
   return humanize(text) ?? text
 }

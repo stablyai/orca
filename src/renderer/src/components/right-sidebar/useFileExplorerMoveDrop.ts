@@ -5,14 +5,7 @@ import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
-
-function extractIpcErrorMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof Error)) {
-    return fallback
-  }
-  const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
-  return match ? match[1] : err.message
-}
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 type UseFileExplorerMoveDropParams = {
   worktreePath: string | null

@@ -152,6 +152,28 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
   })
 
+  // Why: this site's fallback used to be `String(err)`, so an envelope with nothing behind it
+  // put the whole wrapper in the create dialog's error row.
+  it('shows readable copy rather than the envelope when the create rejection carries no reason', async () => {
+    mocks.createRepo.mockRejectedValue(
+      new Error("Error invoking remote method 'repos:create': Error")
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady)
+    await result.handleCreate()
+
+    const shown = mocks.stateSetters[STATE_ERROR_MESSAGE].mock.calls.at(-1)?.[0] as string
+    expect(shown).not.toContain('Error invoking remote method')
+    expect(shown).toBe(
+      'Creating the repository failed, and the failure did not include a readable reason.'
+    )
+    // Why: the rejection itself must stay reachable — the sentence above replaces it on screen only.
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('returns the selected parent directory after the local picker applies it', async () => {
     const pickedDir = '/Users/alice/custom-projects'
     vi.mocked(window.api.repos.pickDirectory).mockResolvedValue(pickedDir)

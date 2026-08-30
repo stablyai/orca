@@ -226,6 +226,57 @@ describe('VoiceSpeechModelSection', () => {
     root.unmount()
   })
 
+  it('shows only the reason behind the IPC envelope when a download fails', async () => {
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      downloadModel: () =>
+        Promise.reject(
+          new Error(
+            "Error invoking remote method 'speech:downloadModel': Error: net::ERR_CONTENT_LENGTH_MISMATCH"
+          )
+        ),
+      modelStates: [{ id: localModel.id, status: 'not-downloaded' }]
+    })
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[role="option"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Failed to download model.', {
+      description: 'net::ERR_CONTENT_LENGTH_MISMATCH'
+    })
+    root.unmount()
+  })
+
+  // Why: an envelope with no reason behind it used to render the bare word "Error" as the
+  // toast description, and the cause was not recorded anywhere.
+  it('falls back to a sentence, and logs the cause, when the envelope carried no reason', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const rejection = new Error("Error invoking remote method 'speech:downloadModel': Error")
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      downloadModel: () => Promise.reject(rejection),
+      modelStates: [{ id: localModel.id, status: 'not-downloaded' }]
+    })
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[role="option"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Failed to download model.', {
+      description: 'The download failed, and the failure did not include a readable reason.'
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('unreadable'), rejection)
+    warn.mockRestore()
+    root.unmount()
+  })
+
   it('keeps the model menu open when starting a local model download', async () => {
     const { container, root } = renderSection({
       deleteModel: () => Promise.resolve(),

@@ -230,7 +230,15 @@ export function useCreateRepo(
       ) {
         return
       }
-      setCreateError(extractIpcErrorMessage(err, String(err)))
+      setCreateError(
+        extractIpcErrorMessage(
+          err,
+          translate(
+            'auto.components.sidebar.useCreateRepo.unreadableCreateError',
+            'Creating the repository failed, and the failure did not include a readable reason.'
+          )
+        )
+      )
     } finally {
       // Why: only clear the loading state if this invocation is still current;
       // a superseded create must not flip the flag back off for a new flow.

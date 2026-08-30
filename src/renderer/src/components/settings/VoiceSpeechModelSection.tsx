@@ -15,12 +15,21 @@ import {
 } from '../ui/dropdown-menu'
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { stripIpcInvokeEnvelopeFrom } from '@/lib/ipc-error'
 
 function describeSpeechModelDownloadError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  // Why: ipcRenderer.invoke wraps main-process rejections; strip the transport
-  // prefix so the toast shows only the underlying download failure.
-  return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+  // Why: the raw cause (e.g. net::ERR_CONTENT_LENGTH_MISMATCH) is the only diagnosable
+  // signal users can report back, so only the transport envelope is removed.
+  const reason = stripIpcInvokeEnvelopeFrom(error)
+  if (reason === null) {
+    // Why: the envelope carried no reason, so this log is the only surviving record of it.
+    console.warn('[voice] speech model download failed with an unreadable error', error)
+    return translate(
+      'auto.components.settings.VoicePane.unreadableDownloadError',
+      'The download failed, and the failure did not include a readable reason.'
+    )
+  }
+  return reason
 }
 
 type VoiceSpeechModelSectionProps = {

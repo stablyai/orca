@@ -177,7 +177,13 @@ export function useAddRepoCloneFlow({
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
-      const message = extractIpcErrorMessage(err, String(err))
+      const message = extractIpcErrorMessage(
+        err,
+        translate(
+          'auto.components.sidebar.useAddRepoCloneFlow.unreadableCloneError',
+          'The clone failed, and the failure did not include a readable reason.'
+        )
+      )
       setCloneError(message)
     } finally {
       if (gen === cloneGenRef.current && requestHostToken === hostTokenRef.current) {

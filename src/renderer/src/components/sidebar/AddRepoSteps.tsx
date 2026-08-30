@@ -213,7 +213,13 @@ export function useRemoteRepo(
       }
       await onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
     } catch (err) {
-      const message = extractIpcErrorMessage(err, String(err))
+      const message = extractIpcErrorMessage(
+        err,
+        translate(
+          'auto.components.sidebar.AddRepoSteps.unreadableAddError',
+          'Adding the project failed, and the failure did not include a readable reason.'
+        )
+      )
       if (message.includes('Not a valid git repository')) {
         // Why: match the local add-project flow — show confirmation dialog so
         // users understand git features will be unavailable, rather than
