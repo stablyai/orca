@@ -1,13 +1,14 @@
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
+import { restorePtyIncarnation } from '../provider/ownership-state'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
 import {
   killPtyFromRuntimeController,
-  markReversibleStopsFromRuntimeController,
   retireRejectedPtyFromRuntimeController,
   stopAndWaitPtyFromRuntimeController
 } from './kill'
+import { markReversibleStopsFromRuntimeController } from './reversible-stop-ownership'
 import {
   attachPtyFromRuntimeController,
   clearBufferFromRuntimeController,
@@ -31,6 +32,7 @@ import {
   writePtyFromRuntimeController
 } from './operations'
 
+/** Binds the runtime's PTY controller surface to this process's provider registry. */
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
 
@@ -51,7 +53,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     // lease machinery, and the in-process local provider streams without
     // attach. Attach-only and false-on-doubt: never creates or resizes.
     attach: (ptyId) => attachPtyFromRuntimeController(deps, ptyId),
-    kill: (ptyId) => killPtyFromRuntimeController(deps, ptyId),
+    kill: (ptyId, opts) => killPtyFromRuntimeController(deps, ptyId, opts),
+    restorePtyIncarnation,
     retireRejectedPty: (ptyId, stopConfirmed) =>
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed),
     markReversibleStops: (ptyIds) => markReversibleStopsFromRuntimeController(deps, ptyIds),

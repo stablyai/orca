@@ -2,12 +2,25 @@ import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { WorkerTerminalResourceRow } from '../../orchestration/worker-terminal-ownership'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
   WorkerDispatchRow
 } from '../../orchestration/types'
 
+export type WorkerTerminalObservationStatus =
+  | 'unattached'
+  | 'missing'
+  | 'identity_changed'
+  | 'live'
+  | 'exited'
+  | 'unverifiable'
+
+/**
+ * Reads a worker's terminal into one verdict. `exact` is false the moment the pane or incarnation
+ * differs from the dispatch's, and lost contact reports `unverifiable` — never `exited`.
+ */
 export async function inspectWorkerTerminal(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
@@ -15,7 +28,7 @@ export async function inspectWorkerTerminal(
 ): Promise<{
   terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
   exact: boolean
-  status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
+  status: WorkerTerminalObservationStatus
   /** Set with `unverifiable`; names what we lost contact with. */
   reason?: string
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */
@@ -60,6 +73,23 @@ export async function inspectWorkerTerminal(
     status: terminal.connected === false ? 'exited' : 'live',
     agentWait
   }
+}
+
+/**
+ * Re-asks the execution host about the recorded incarnation specifically. A handle that no longer
+ * resolves to it answers `unverifiable`, so a replacement never supplies this worker's death proof.
+ */
+export async function recheckProcessLiveness(
+  runtime: OrcaRuntimeService,
+  resource: WorkerTerminalResourceRow
+): Promise<'live' | 'exited' | 'unverifiable'> {
+  const processIncarnation = runtime.getTerminalProcessIncarnation(resource.terminal_handle)
+  if (!processIncarnation || processIncarnation !== resource.process_incarnation) {
+    return 'unverifiable'
+  }
+  return runtime
+    .inspectTerminalProcessIncarnationLiveness(processIncarnation, resource.host_scope)
+    .catch(() => 'unverifiable' as const)
 }
 
 export function exposeContextOnlyWorker(dispatch: DispatchContextRow) {

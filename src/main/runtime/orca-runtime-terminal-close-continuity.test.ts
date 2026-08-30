@@ -4,6 +4,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
+type RuntimePtyRegistry = { ptysById: Map<string, { incarnationId: string | null }> }
 const REPO_ID = 'repo-close-continuity'
 const WORKTREE_PATH = '/tmp/terminal-close-continuity'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
@@ -19,6 +20,12 @@ const CANARY_PTY_ID = 'pty-close-continuity-canary'
 const INCARNATION_ID = '22222222-2222-4222-8222-222222222222'
 const SIBLING_INCARNATION_ID = '44444444-4444-4444-8444-444444444444'
 const CANARY_INCARNATION_ID = '66666666-6666-4666-8666-666666666666'
+const EXPECTED_KILL_OPTIONS = { expectedIncarnationId: INCARNATION_ID }
+const EXPECTED_SIBLING_KILL_OPTIONS = { expectedIncarnationId: SIBLING_INCARNATION_ID }
+const EXPECTED_STOP_OPTIONS = {
+  deadlineMs: expect.any(Number),
+  expectedIncarnationId: INCARNATION_ID
+}
 const canarySessionTab = {
   id: CANARY_TAB_ID,
   ptyId: CANARY_PTY_ID,
@@ -121,6 +128,7 @@ function createHarness(
   let session = makeSession(ptyId, options.includeCanary)
   let sessionAvailable = true
   let incarnationId = INCARNATION_ID
+  let siblingIncarnationId = SIBLING_INCARNATION_ID
   let includeSiblingPty = false
   let victimPtyListed = true
   const repo = {
@@ -178,7 +186,7 @@ function createHarness(
       ? [
           {
             id: SIBLING_PTY_ID,
-            incarnationId: SIBLING_INCARNATION_ID,
+            incarnationId: siblingIncarnationId,
             cwd: WORKTREE_PATH,
             title: 'Fixture sibling shell'
           }
@@ -403,6 +411,9 @@ function createHarness(
     },
     replaceIncarnation: (next: string) => {
       incarnationId = next
+    },
+    replaceSiblingIncarnation: (next: string) => {
+      siblingIncarnationId = next
     }
   }
 }
@@ -437,7 +448,7 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.retirePersistedTab()
     harness.acknowledged.resolve()
     await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: false })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID, EXPECTED_KILL_OPTIONS)
     expect(harness.closeTerminal).not.toHaveBeenCalled()
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
   })
@@ -484,9 +495,7 @@ describe('terminal close and handle incarnation continuity', () => {
       'idempotent-session-retirement'
     ])
     expect(harness.stopAndWait).toHaveBeenCalledTimes(1)
-    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
-    })
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, EXPECTED_STOP_OPTIONS)
     expect(harness.kill).not.toHaveBeenCalled()
     expect(closeMobileSessionTab).toHaveBeenCalledTimes(1)
     expect(closeMobileSessionTab).toHaveBeenCalledWith(`id:${WORKTREE_ID}`, TAB_ID, {
@@ -526,6 +535,43 @@ describe('terminal close and handle incarnation continuity', () => {
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
   })
 
+  it('does not stop replacement tab PTYs after terminal retirement yields', async () => {
+    const harness = createHarness()
+    harness.syncSplitFixtureGraph()
+    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    harness.syncFixtureGraph()
+    harness.setCloseTerminalTabAction(async () => {
+      harness.runtime.markRendererReloading(1)
+      harness.replaceIncarnation('77777777-7777-4777-8777-777777777777')
+      harness.syncFixtureGraph()
+      await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)
+    })
+    harness.setStopAndWaitAction(async () => {
+      harness.replaceSiblingIncarnation('88888888-8888-4888-8888-888888888888')
+      await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)
+    })
+
+    const close = await harness.runtime.closeTerminal(terminal.handle, {
+      expectedProcessIncarnation: `${PTY_ID}:${INCARNATION_ID}`
+    })
+
+    expect(close).toMatchObject({ ptyKilled: false, closeRefusedReason: 'incarnation_replaced' })
+    expect(harness.stopAndWait).toHaveBeenCalledOnce()
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+  it('does not stop a PTY whose pre-teardown incarnation is missing', async () => {
+    const harness = createHarness()
+    const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    const runtime = harness.runtime as unknown as RuntimePtyRegistry
+    runtime.ptysById.get(PTY_ID)!.incarnationId = null
+    harness.setCloseTerminalTabAction(() => harness.retirePersistedTab())
+    expect((await harness.runtime.closeTerminal(handle)).closeRefusedReason).toBe(
+      'incarnation_replaced'
+    )
+    expect(harness.stopAndWait).not.toHaveBeenCalled()
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
   it('requests a stop for every live tab PTY after retirement when the renderer graph is stale', async () => {
     const harness = createHarness()
     harness.syncSplitFixtureGraph()
@@ -541,8 +587,8 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.retirePersistedTab()
     harness.acknowledged.resolve()
     await expect(closing).resolves.toMatchObject({ ptyKilled: false })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-    expect(harness.kill).toHaveBeenCalledWith(SIBLING_PTY_ID)
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID, EXPECTED_KILL_OPTIONS)
+    expect(harness.kill).toHaveBeenCalledWith(SIBLING_PTY_ID, EXPECTED_SIBLING_KILL_OPTIONS)
   })
 
   it('uses verified teardown after retirement before falling back to kill', async () => {
@@ -557,9 +603,7 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.retirePersistedTab()
     harness.acknowledged.resolve()
     await expect(closing).resolves.toMatchObject({ ptyKilled: true })
-    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
-    })
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, EXPECTED_STOP_OPTIONS)
     expect(harness.kill).not.toHaveBeenCalled()
   })
 
@@ -601,7 +645,7 @@ describe('terminal close and handle incarnation continuity', () => {
       ptyStopVerdict: 'unverifiable',
       ptyStopReason: 'a follow-up stop was issued but its outcome could not be verified'
     })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID, EXPECTED_KILL_OPTIONS)
   })
 
   it('leaves a confirmed kill receipt free of any stop verdict', async () => {
@@ -635,10 +679,8 @@ describe('terminal close and handle incarnation continuity', () => {
       ptyStopVerdict: 'unverifiable',
       ptyStopReason: 'provider_unavailable'
     })
-    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
-    })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, EXPECTED_STOP_OPTIONS)
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID, EXPECTED_KILL_OPTIONS)
   })
 
   it('finishes PTY teardown when the session store disappears after retirement', async () => {
@@ -659,9 +701,7 @@ describe('terminal close and handle incarnation continuity', () => {
 
     await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: false })
     expect(harness.closeTerminal).toHaveBeenCalledWith(TAB_ID)
-    expect(harness.stopAndWait).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID, {
-      deadlineMs: expect.any(Number)
-    })
+    expect(harness.stopAndWait).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID, EXPECTED_STOP_OPTIONS)
   })
 
   it('does not tear down a published PTY when retirement fails before acknowledgement', async () => {

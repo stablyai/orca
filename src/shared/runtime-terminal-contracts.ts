@@ -296,8 +296,13 @@ export type RuntimeTerminalClose = {
   tabId: string
   closeMode?: 'tab'
   ptyKilled: boolean
+  closeRefusedReason?: 'incarnation_replaced'
   ptyStopVerdict?: 'live' | 'unverifiable'
   ptyStopReason?: string
+}
+
+export type RuntimeTerminalCloseOptions = {
+  expectedProcessIncarnation?: string
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'

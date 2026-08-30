@@ -36,6 +36,8 @@ export function parseWorkerTerminalHostScope(value: string | null): WorkerTermin
   return null
 }
 
+/** Absence means `exited`, not "lost contact": this reads the execution host's own table, and every
+ *  way of losing it is already `unverifiable` before the listing reaches here. */
 export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
   sessions: readonly PtyProcessInfo[]

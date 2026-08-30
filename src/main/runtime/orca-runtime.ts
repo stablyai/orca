@@ -527,6 +527,7 @@ import {
   type RuntimeTerminalSplit,
   type RuntimeTerminalFocus,
   type RuntimeTerminalClose,
+  type RuntimeTerminalCloseOptions,
   type RuntimeTerminalListHostScope,
   type RuntimeTerminalListResult,
   type RuntimeTerminalOrphanAdoptionRequest,
@@ -2114,11 +2115,16 @@ type RuntimePtyController = {
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
   attach?(ptyId: string): Promise<boolean>
-  kill(ptyId: string): boolean
+  kill(ptyId: string, opts?: { expectedIncarnationId?: PtyIncarnationId }): boolean
+  restorePtyIncarnation?(ptyId: string, incarnationId: PtyIncarnationId): void
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean): void
   stopAndWait?(
     ptyId: string,
-    opts?: { keepHistory?: boolean; deadlineMs?: number }
+    opts?: {
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: PtyIncarnationId
+    }
   ): Promise<boolean>
   markReversibleStops?(ptyIds: readonly string[]): () => void
   getCwd?(ptyId: string): Promise<string | null>
@@ -31967,34 +31973,74 @@ export class OrcaRuntimeService {
     return [...ptyIds]
   }
 
+  /**
+   * Stops the tab's PTYs, each fenced to the incarnation snapshotted before teardown began. A PTY
+   * that was replaced mid-flight is skipped, not stopped; `addressedPtyReplaced` reports that for
+   * the handle the caller addressed so the close can refuse instead of claiming a kill.
+   */
   private async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
-    addressedPtyId: string
-  ): Promise<boolean> {
+    addressedPtyId: string,
+    expectedIncarnations: ReadonlyMap<string, PtyIncarnationId | null>
+  ): Promise<{ addressedPtyStopped: boolean; addressedPtyReplaced: boolean }> {
     let addressedPtyStopped = false
+    let addressedPtyReplaced = false
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
     for (const ptyId of ptyIds) {
+      if (!expectedIncarnations.has(ptyId)) {
+        continue
+      }
+      const expectedIncarnation = expectedIncarnations.get(ptyId)
+      if (!expectedIncarnation) {
+        // A legacy PTY cannot be distinguished from a replacement that reused its id.
+        addressedPtyReplaced ||= ptyId === addressedPtyId
+        continue
+      }
+      const livePty = this.ptysById.get(ptyId)
+      if (!livePty) {
+        continue
+      }
+      if (livePty.incarnationId !== expectedIncarnation) {
+        addressedPtyReplaced ||= ptyId === addressedPtyId
+        continue
+      }
       // Why here: this is the single funnel for an explicit close, and the
       // intent must be on record before the stop, since the provider may report
       // the exit itself with a status that reads like a natural finish.
       this.markPtyStopRequested(ptyId)
       let stopped = false
+      let stopError: string | null = null
       if (this.ptyController?.stopAndWait) {
         try {
-          stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
+          stopped = await this.ptyController.stopAndWait(ptyId, {
+            deadlineMs,
+            ...(expectedIncarnation ? { expectedIncarnationId: expectedIncarnation } : {})
+          })
         } catch (error) {
-          this.markPtyLivenessUnverifiable(
-            ptyId,
-            error instanceof Error ? error.message : String(error)
-          )
+          stopError = error instanceof Error ? error.message : String(error)
         }
         if (!stopped) {
+          const currentPty = this.ptysById.get(ptyId)
+          if (!currentPty) {
+            continue
+          }
+          if (currentPty.incarnationId !== expectedIncarnation) {
+            addressedPtyReplaced ||= ptyId === addressedPtyId
+            continue
+          }
+          if (stopError) {
+            this.markPtyLivenessUnverifiable(ptyId, stopError)
+          }
           const verdict = this.getPtyLivenessVerdict(ptyId)
           const providerAlreadyRetiredPty =
             verdict?.status === 'unverifiable' &&
             verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
           if (!providerAlreadyRetiredPty) {
-            this.ptyController.kill(ptyId)
+            if (expectedIncarnation) {
+              this.ptyController.kill(ptyId, { expectedIncarnationId: expectedIncarnation })
+            } else {
+              this.ptyController.kill(ptyId)
+            }
             if (!verdict || verdict.status === 'live') {
               this.markPtyLivenessUnverifiable(
                 ptyId,
@@ -32004,13 +32050,28 @@ export class OrcaRuntimeService {
           }
         }
       } else {
-        stopped = this.ptyController?.kill(ptyId) ?? false
+        stopped =
+          (expectedIncarnation
+            ? this.ptyController?.kill(ptyId, { expectedIncarnationId: expectedIncarnation })
+            : this.ptyController?.kill(ptyId)) ?? false
       }
       if (ptyId === addressedPtyId) {
         addressedPtyStopped = stopped
       }
     }
-    return addressedPtyStopped
+    return { addressedPtyStopped, addressedPtyReplaced }
+  }
+
+  /** Taken before tab teardown yields; absent ids stay out so a later spawn is never fenced in. */
+  private snapshotPtyIncarnations(ptyIds: readonly string[]): Map<string, PtyIncarnationId | null> {
+    const snapshot = new Map<string, PtyIncarnationId | null>()
+    for (const ptyId of ptyIds) {
+      const pty = this.ptysById.get(ptyId)
+      if (pty) {
+        snapshot.set(ptyId, pty.incarnationId)
+      }
+    }
+    return snapshot
   }
 
   private resolveHandleForTab(tabId: string): string | null {
@@ -32180,10 +32241,25 @@ export class OrcaRuntimeService {
     })
   }
 
-  async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
+  /**
+   * Closes the terminal behind `handle`. With `expectedProcessIncarnation`, the handle must still
+   * resolve to that process both before teardown and after it — otherwise the close is refused with
+   * `incarnation_replaced` and the replacement PTY is left running.
+   */
+  async closeTerminal(
+    handle: string,
+    options: RuntimeTerminalCloseOptions = {}
+  ): Promise<RuntimeTerminalClose> {
     const pty = this.getLivePtyForHandle(handle)
-    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     if (pty) {
+      const initialTabId = pty.pty.tabId ?? pty.record.tabId
+      if (
+        options.expectedProcessIncarnation &&
+        this.getTerminalProcessIncarnation(handle) !== options.expectedProcessIncarnation
+      ) {
+        return this.describeTerminalIncarnationReplacement(handle, initialTabId)
+      }
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
       // Why: PTY exit can immediately replace a ready SSH publication with a pending one, so capture its durable HUB surface before killing it.
       const surface =
         (pty.pty.tabId
@@ -32196,6 +32272,7 @@ export class OrcaRuntimeService {
         : this.countLeavesInTab(tabId)
       if (siblingCount <= 1 && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        const expectedIncarnations = this.snapshotPtyIncarnations(ptyIdsToKill)
         try {
           await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
             localPtyTeardownOwnedExternally: true
@@ -32206,16 +32283,40 @@ export class OrcaRuntimeService {
           }
           this.notifier.closeTerminal?.(tabId)
         }
-        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+        const stop = await this.stopExplicitlyClosedTabPtys(
+          ptyIdsToKill,
+          pty.pty.ptyId,
+          expectedIncarnations
+        )
+        if (stop.addressedPtyReplaced) {
+          return this.describeTerminalIncarnationReplacement(handle, tabId)
+        }
+        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop.addressedPtyStopped)
       }
       if (siblingCount <= 1 && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        const expectedIncarnations = this.snapshotPtyIncarnations(ptyIdsToKill)
         await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
-        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+        const stop = await this.stopExplicitlyClosedTabPtys(
+          ptyIdsToKill,
+          pty.pty.ptyId,
+          expectedIncarnations
+        )
+        if (stop.addressedPtyReplaced) {
+          return this.describeTerminalIncarnationReplacement(handle, tabId)
+        }
+        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop.addressedPtyStopped)
       }
-      const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+      const ptyIdsToKill = [pty.pty.ptyId]
+      const stop = await this.stopExplicitlyClosedTabPtys(
+        ptyIdsToKill,
+        pty.pty.ptyId,
+        this.snapshotPtyIncarnations(ptyIdsToKill)
+      )
+      if (stop.addressedPtyReplaced) {
+        return this.describeTerminalIncarnationReplacement(handle, tabId)
+      }
+      const ptyKilled = stop.addressedPtyStopped
       if (!ptyKilled || siblingCount <= 1) {
         if (surface) {
           // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
@@ -32235,6 +32336,13 @@ export class OrcaRuntimeService {
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
+    if (
+      options.expectedProcessIncarnation &&
+      this.getTerminalProcessIncarnation(handle) !== options.expectedProcessIncarnation
+    ) {
+      return this.describeTerminalIncarnationReplacement(handle, leaf.tabId)
+    }
+    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     // Why: in a multi-pane tab, killing the PTY is enough (renderer's exit handler closes the pane); an extra IPC close would race it and close the whole tab.
     const siblingCount = this.countLeavesInTab(leaf.tabId)
     const ptyIdsToKill =
@@ -32243,14 +32351,19 @@ export class OrcaRuntimeService {
         : leaf.ptyId
           ? [leaf.ptyId]
           : []
+    const expectedIncarnations = this.snapshotPtyIncarnations(ptyIdsToKill)
     if (siblingCount <= 1 && this.notifier?.closeTerminalTab) {
       await this.notifier.closeTerminalTab(leaf.tabId, {
         localPtyTeardownOwnedExternally: true
       })
     }
-    const ptyKilled = leaf.ptyId
-      ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
-      : false
+    const stop = leaf.ptyId
+      ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId, expectedIncarnations)
+      : { addressedPtyStopped: false, addressedPtyReplaced: false }
+    if (stop.addressedPtyReplaced) {
+      return this.describeTerminalIncarnationReplacement(handle, leaf.tabId)
+    }
+    const ptyKilled = stop.addressedPtyStopped
     if (siblingCount > 1 ? !ptyKilled : !this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
     }
@@ -32284,6 +32397,14 @@ export class OrcaRuntimeService {
       return { handle, tabId, ptyKilled, ptyStopVerdict: 'live' }
     }
     return { handle, tabId, ptyKilled }
+  }
+
+  /** The refusal shape: nothing was stopped, so it reports no kill and no stop verdict. */
+  private describeTerminalIncarnationReplacement(
+    handle: string,
+    tabId: string
+  ): RuntimeTerminalClose {
+    return { handle, tabId, ptyKilled: false, closeRefusedReason: 'incarnation_replaced' }
   }
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
@@ -35153,12 +35274,16 @@ export class OrcaRuntimeService {
         persistedSurface.incarnationId === session.incarnationId &&
         Boolean(worktreeId) &&
         runtimeWorktreeIdsEqual(persistedSurface.worktreeId, worktreeId as string)
+      const restoredIncarnationId = controllerIdentity?.incarnationId ?? session.incarnationId
       this.adoptControllerTerminalHandle(
         session.id,
         controllerIdentity?.handle ?? session.terminalHandle,
-        controllerIdentity?.incarnationId ?? session.incarnationId,
+        restoredIncarnationId,
         { exactRestoredSurface: Boolean(restoresExactSurface && controllerIdentity) }
       )
+      if (restoredIncarnationId) {
+        this.ptyController?.restorePtyIncarnation?.(session.id, restoredIncarnationId)
+      }
       if (
         !targetWorktreeId ||
         (worktreeId && runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
@@ -35179,7 +35304,7 @@ export class OrcaRuntimeService {
       if (worktreeId) {
         const pty = this.recordPtyWorktree(session.id, worktreeId, {
           connected: true,
-          ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+          ...(restoredIncarnationId ? { incarnationId: restoredIncarnationId } : {}),
           agentSessionOwners: session.incarnationId ? (session.agentSessionOwners ?? []) : [],
           ...(session.wslDistro !== undefined
             ? { isWsl: Boolean(session.wslDistro), wslDistro: session.wslDistro }

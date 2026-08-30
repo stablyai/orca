@@ -252,12 +252,29 @@ describe('registerPtyHandlers', () => {
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-          spawn: (args: { cols: number; rows: number }) => Promise<{ id: string }>
-          stopAndWait: (ptyId: string) => Promise<boolean>
+          kill: (ptyId: string, opts?: { expectedIncarnationId?: string }) => boolean
+          restorePtyIncarnation: (ptyId: string, incarnationId: string) => void
+          stopAndWait: (
+            ptyId: string,
+            opts?: { expectedIncarnationId?: string }
+          ) => Promise<boolean>
         }
 
-        await controller.spawn({ cols: 80, rows: 24 })
-        await expect(controller.stopAndWait('local-incarnated')).resolves.toBe(true)
+        controller.restorePtyIncarnation('local-incarnated', 'incarnation-live')
+        expect(
+          controller.kill('local-incarnated', { expectedIncarnationId: 'incarnation-replaced' })
+        ).toBe(false)
+        await expect(
+          controller.stopAndWait('local-incarnated', {
+            expectedIncarnationId: 'incarnation-replaced'
+          })
+        ).resolves.toBe(false)
+        expect(provider.shutdown).not.toHaveBeenCalled()
+        await expect(
+          controller.stopAndWait('local-incarnated', {
+            expectedIncarnationId: 'incarnation-live'
+          })
+        ).resolves.toBe(true)
 
         expect(runtime.onPtyExit).toHaveBeenCalledWith('local-incarnated', 0, 'incarnation-live')
       })

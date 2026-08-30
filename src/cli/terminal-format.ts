@@ -229,7 +229,12 @@ function describePtyStop(close: RuntimeTerminalClose): string {
   return ''
 }
 
+/** A refused close reports the refusal, never a stop it did not perform. */
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
+  if (result.close.closeRefusedReason === 'incarnation_replaced') {
+    // Timing-neutral: the refusal can predate teardown, so it cannot claim when the swap happened.
+    return `Terminal ${result.close.handle} no longer holds the expected process incarnation; the replacement PTY was not stopped.`
+  }
   if (result.close.closeMode === 'tab') {
     return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
   }

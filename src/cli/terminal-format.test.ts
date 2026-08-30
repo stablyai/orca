@@ -58,4 +58,21 @@ describe('formatTerminalClose', () => {
       })
     ).toBe('Closed terminal term_live. The PTY is live.')
   })
+
+  // The refusal can also come from the pre-teardown incarnation check, so the copy must not
+  // place the replacement inside the close.
+  it('does not claim a replacement incarnation was closed', () => {
+    const message = formatTerminalClose({
+      close: {
+        handle: 'term_replaced',
+        tabId: 'tab-1',
+        ptyKilled: false,
+        closeRefusedReason: 'incarnation_replaced'
+      }
+    })
+    expect(message).toBe(
+      'Terminal term_replaced no longer holds the expected process incarnation; the replacement PTY was not stopped.'
+    )
+    expect(message).not.toMatch(/during close/)
+  })
 })
