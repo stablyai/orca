@@ -41,7 +41,11 @@ async function withPreflightTimeout<T>(command: string, commandPromise: Promise<
   }
 }
 
-export async function execLocalPreflightCommand(
+/** Rejects on non-zero exit, spawn failure, or timeout — it never reports
+ *  "absent" as a value. A caller that collapses that rejection into `false`
+ *  makes "not installed" and "could not run it" the same answer; see
+ *  docs/reference/wsl-probe-failure-semantics.md before doing so. */
+export async function execLocalPreflightCommandOrThrow(
   command: string,
   args: string[]
 ): Promise<PreflightCommandResult> {
@@ -79,7 +83,7 @@ export async function isCommandAvailable(
   try {
     await (wslTarget
       ? execCommandInWslOrThrow(wslTarget, `${shellQuote(command)} --version`)
-      : execLocalPreflightCommand(command, ['--version']))
+      : execLocalPreflightCommandOrThrow(command, ['--version']))
     return true
   } catch {
     return false
