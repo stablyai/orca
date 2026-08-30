@@ -2,7 +2,8 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import {
   getFreshProcessTableSnapshot,
-  getProcessTableSnapshot,
+  getFreshProcessTableSnapshotProvenance,
+  getProcessTableSnapshotProvenance,
   type ProcessTableRow
 } from '../../shared/process-table-snapshot'
 import {
@@ -25,6 +26,10 @@ export type AgentForegroundProcessResolution = {
   processId?: number
   /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
   anchorPidForeign?: boolean
+  /** When the scan behind this answer began. Present only for POSIX process-table
+   *  reads, which share a process-wide cache: the caller's own clock can be up to a
+   *  TTL newer than the table it was handed, so ordering must use this instead. */
+  tableScanStartedAtMs?: number
 }
 
 type ShellForegroundConfirmationOptions = {
@@ -167,9 +172,9 @@ export async function resolveAgentForegroundProcessWithAvailability(
   }
 
   try {
-    const rows = options.fresh
-      ? await getFreshProcessTableSnapshot()
-      : await getProcessTableSnapshot()
+    const { value: rows, scanStartedAtMs } = options.fresh
+      ? await getFreshProcessTableSnapshotProvenance()
+      : await getProcessTableSnapshotProvenance()
     if (options.fresh && !rows.some((row) => row.pid === shellPid)) {
       return { available: false, processName: fallbackProcess }
     }
@@ -181,7 +186,8 @@ export async function resolveAgentForegroundProcessWithAvailability(
     }
     return {
       available: true,
-      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
+      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess,
+      tableScanStartedAtMs: scanStartedAtMs
     }
   } catch {
     // Why: a failed scan cannot prove fallback ownership; callers retain the last recognized agent.

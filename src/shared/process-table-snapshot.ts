@@ -50,7 +50,7 @@ export function parseProcessTableRows(stdout: string): ProcessTableRow[] {
   return rows
 }
 
-type Snapshot<T> = { value: T; capturedAtMs: number }
+type Snapshot<T> = { value: T; capturedAtMs: number; scanStartedAtMs: number }
 
 type ProcessTableSnapshotReaderDeps<T> = {
   runPs: () => Promise<T>
@@ -71,23 +71,30 @@ export function createProcessTableSnapshotReader<T = string>(
 ): {
   getSnapshot: () => Promise<T>
   getFreshSnapshot: () => Promise<T>
+  getSnapshotProvenance: () => Promise<Snapshot<T>>
+  getFreshSnapshotProvenance: () => Promise<Snapshot<T>>
   reset: () => void
 } {
   const ttlMs = deps.ttlMs ?? DEFAULT_SNAPSHOT_TTL_MS
   let cached: Snapshot<T> | null = null
-  let inFlight: Promise<T> | null = null
+  let inFlight: Promise<Snapshot<T>> | null = null
   let sequence = 0
-  let freshQueued: { promise: Promise<T>; startSequence: number | null } | null = null
+  let freshQueued: { promise: Promise<Snapshot<T>>; startSequence: number | null } | null = null
 
-  async function runSnapshot(): Promise<T> {
-    const promise = deps.runPs()
+  async function runSnapshot(): Promise<Snapshot<T>> {
+    // Why both stamps: TTL reuse must not hand back a snapshot already older than
+    // its window, so freshness dates the answer. But ordering this table against
+    // other evidence needs the earliest moment it could have been read — a process
+    // that started after the scan began may be missing from it either way.
+    const scanStartedAtMs = deps.now()
+    const promise = deps.runPs().then((value) => {
+      const snapshot: Snapshot<T> = { value, capturedAtMs: deps.now(), scanStartedAtMs }
+      cached = snapshot
+      return snapshot
+    })
     inFlight = promise
     try {
-      const value = await promise
-      // Why: stamp capture time AFTER the scan returns so a slow scan can't
-      // hand back a snapshot that is already older than its TTL.
-      cached = { value, capturedAtMs: deps.now() }
-      return value
+      return await promise
     } finally {
       if (inFlight === promise) {
         inFlight = null
@@ -95,9 +102,9 @@ export function createProcessTableSnapshotReader<T = string>(
     }
   }
 
-  async function getSnapshot(): Promise<T> {
+  async function getSnapshot(): Promise<Snapshot<T>> {
     if (cached && deps.now() - cached.capturedAtMs < ttlMs) {
-      return cached.value
+      return cached
     }
     if (inFlight) {
       return inFlight
@@ -110,14 +117,14 @@ export function createProcessTableSnapshotReader<T = string>(
     return runSnapshot()
   }
 
-  function getFreshSnapshot(): Promise<T> {
+  function getFreshSnapshot(): Promise<Snapshot<T>> {
     const requestSequence = ++sequence
     if (freshQueued?.startSequence === null) {
       return freshQueued.promise
     }
     const priorFresh = freshQueued?.promise ?? null
     const priorScan = inFlight
-    const entry: { promise: Promise<T>; startSequence: number | null } = {
+    const entry: { promise: Promise<Snapshot<T>>; startSequence: number | null } = {
       promise: Promise.resolve(undefined as never),
       startSequence: null
     }
@@ -152,8 +159,11 @@ export function createProcessTableSnapshotReader<T = string>(
   }
 
   return {
-    getSnapshot,
-    getFreshSnapshot,
+    getSnapshot: async () => (await getSnapshot()).value,
+    getFreshSnapshot: async () => (await getFreshSnapshot()).value,
+    /** The same reads, with the provenance an ordering comparison needs. */
+    getSnapshotProvenance: getSnapshot,
+    getFreshSnapshotProvenance: getFreshSnapshot,
     // Why: lets tests that mock `ps` per case clear the cross-call cache so one
     // case's snapshot can't satisfy the next within the TTL window.
     reset: () => {
@@ -191,6 +201,21 @@ export function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
 /** Capture process rows from a scan that starts after this request. */
 export function getFreshProcessTableSnapshot(): Promise<ProcessTableRow[]> {
   return defaultReader.getFreshSnapshot()
+}
+
+export type ProcessTableSnapshotProvenance = {
+  value: ProcessTableRow[]
+  /** When the scan behind these rows began. A pane reading a cached snapshot asked
+   *  later than this, so its own clock overstates how current the table is. */
+  scanStartedAtMs: number
+}
+
+export function getProcessTableSnapshotProvenance(): Promise<ProcessTableSnapshotProvenance> {
+  return defaultReader.getSnapshotProvenance()
+}
+
+export function getFreshProcessTableSnapshotProvenance(): Promise<ProcessTableSnapshotProvenance> {
+  return defaultReader.getFreshSnapshotProvenance()
 }
 
 /**

@@ -8,7 +8,8 @@ import {
   SessionTerminationController,
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
 } from './session-termination-controller'
-import type { SubprocessHandle } from './session-subprocess-handle'
+import { observeSubprocessForeground } from './session-subprocess-handle'
+import type { ForegroundProcessObservation, SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -252,8 +253,8 @@ export class Session {
     return this.output.getCwd()
   }
 
-  getForegroundProcess(): string | null {
-    return this.subprocess.getForegroundProcess()
+  observeForegroundProcess(): ForegroundProcessObservation {
+    return observeSubprocessForeground(this.subprocess)
   }
 
   async confirmForegroundProcess(): Promise<string | null> {

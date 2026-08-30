@@ -8,6 +8,7 @@ import {
   type SessionInfo
 } from './types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { PtyProcessInspectionEvidence } from '../../shared/pty-process-inspection-evidence'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
   // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
@@ -42,6 +43,12 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     return this.client.request<{
       foregroundProcess: string | null
       hasChildProcesses: boolean
+      // Why optional: daemons survive in-place app updates, so a pre-evidence
+      // daemon omits the field and readers fall back to the legacy collapse
+      // (readPtyProcessInspectionEvidence). The composed pre-v27 result above
+      // stays evidence-less for the same reason: an old daemon's published
+      // values are the only answer it can give.
+      processEvidence?: PtyProcessInspectionEvidence
     }>('inspectProcess', { sessionId: id })
   }
 

@@ -218,6 +218,9 @@ describe('daemon pty foreground degraded-scan handling', () => {
 
     await readForegroundAt(handle, 0)
     expect(await readForegroundAt(handle, 120_000)).toBe('claude')
+    // A read returns before the scan it schedules settles, so the hold has to
+    // outlive that scan too -- an unreadable job stays unverifiable at any age.
+    expect(await readForegroundAt(handle, 120_001)).toBe('claude')
   })
 
   it('retires an anchored agent immediately when its pid leaves the job, despite a leftover', async () => {
