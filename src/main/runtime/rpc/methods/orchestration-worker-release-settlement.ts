@@ -58,17 +58,16 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
       return retainWorkerTerminalRelease(db, dispatchId, resource)
     }
     if (!close.ptyKilled) {
-      const settled = exactProcessWasAlreadyExited
-        ? settleExitedWorkerTerminalRelease({
+      if (exactProcessWasAlreadyExited) {
+        return (
+          settleExitedWorkerTerminalRelease({
             runtime,
             db,
             dispatchId,
             resource,
             processAction: 'closed_exited_terminal'
-          })
-        : null
-      if (settled) {
-        return settled
+          }) ?? retainWorkerTerminalRelease(db, dispatchId, resource)
+        )
       }
       const reason = describeUnconfirmedAgentStop(close)
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
@@ -83,20 +82,22 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
-    const settled =
-      exactProcessWasAlreadyExited &&
+    // The tab acknowledgement can be lost while the addressed process dies inside close, so the
+    // pre-close snapshot cannot express live -> exited. Only the post-close recheck may settle it,
+    // and it answers `unverifiable` once the handle stops resolving the recorded incarnation.
+    if (
       reason === 'tab_not_found' &&
       (await recheckProcessLiveness(runtime, resource)) === 'exited'
-        ? settleExitedWorkerTerminalRelease({
-            runtime,
-            db,
-            dispatchId,
-            resource,
-            processAction: 'none'
-          })
-        : null
-    if (settled) {
-      return settled
+    ) {
+      return (
+        settleExitedWorkerTerminalRelease({
+          runtime,
+          db,
+          dispatchId,
+          resource,
+          processAction: 'none'
+        }) ?? retainWorkerTerminalRelease(db, dispatchId, resource)
+      )
     }
     if (/disposed|not connected|unavailable/i.test(reason)) {
       return {

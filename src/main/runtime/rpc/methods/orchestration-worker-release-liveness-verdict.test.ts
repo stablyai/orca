@@ -83,8 +83,9 @@ describe('orchestration worker release liveness verdict', () => {
   })
 
   // Why every row pins one half of the guard: settling an absent tab is only safe when the exact
-  // worker was observed exited AND the close failed for exactly that absence. Rows that exercise
-  // only one half would let the other be widened without a red test.
+  // recorded incarnation is proven exited by the post-close recheck AND the close failed for
+  // exactly that absence. Rows that exercise only one half would let the other be widened
+  // without a red test.
   it.each([
     {
       name: 'an exact exited worker after its tab was removed',
@@ -121,7 +122,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      processRecheckCount: 0
+      processRecheckCount: 1
     },
     {
       // An observed exit is not a blank cheque: only an absent tab proves the close itself finished.
@@ -150,7 +151,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      processRecheckCount: 0
+      processRecheckCount: 1
     },
     {
       name: 'an exact exited worker whose process is still listed',
@@ -162,7 +163,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      processRecheckCount: 1
+      processRecheckCount: 2
     },
     {
       name: 'an exact exited worker whose process can no longer be verified',
@@ -174,7 +175,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      processRecheckCount: 1
+      processRecheckCount: 2
     },
     {
       name: 'an exact exited worker whose process incarnation changed',
@@ -210,7 +211,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      processRecheckCount: 1
+      processRecheckCount: 2
     }
   ])(
     'handles $closeError after trying to close $name',
