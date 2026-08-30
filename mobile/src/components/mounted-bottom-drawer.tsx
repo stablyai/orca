@@ -1,13 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import {
-  View,
-  Pressable,
-  ScrollView,
-  Keyboard,
-  BackHandler,
-  Modal,
-  Platform
-} from 'react-native'
+import { View, Pressable, ScrollView, Keyboard, BackHandler, Modal, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {

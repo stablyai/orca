@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
-import { type Image, type View } from 'react-native'
+import type { Image, View } from 'react-native'
 import { usePixelRatio } from '../platform/use-pixel-ratio'
 import type { RpcClient } from '../transport/rpc-client'
 import type {

@@ -4,7 +4,6 @@ import {
   AppState,
   Linking,
   type AppStateStatus,
-  BackHandler,
   FlatList,
   Image,
   View,
@@ -134,7 +133,7 @@ import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-te
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import { useHardwareKeyboardAttached } from '../../../../src/platform/hardware-keyboard'
-import { resolveSessionBackPress } from '../../../../src/session/session-back-press'
+import { useSessionBackHandler } from '../../../../src/session/use-session-back-handler'
 import { useTerminalFrameLayout } from '../../../../src/session/use-terminal-frame-layout'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
 import {
@@ -2181,52 +2180,15 @@ export default function SessionScreen() {
     [markdownDocs, showToast]
   )
 
-  const getDirtyMarkdownDrafts = useCallback(() => {
-    const drafts: DirtyMarkdownDraft[] = []
-    for (const [tabId, doc] of markdownDocs) {
-      if (doc.status === 'ready' && doc.isDirty) {
-        const tab = sessionTabs.find((candidate) => candidate.id === tabId)
-        drafts.push({ tabId, title: tab?.title || 'Markdown', content: doc.localContent })
-      }
-    }
-    return drafts
-  }, [markdownDocs, sessionTabs])
-
-  const leaveSession = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back()
-      return
-    }
-    // Why: Android back can fire at the root route; replace avoids React Navigation's dev-only GO_BACK warning.
-    router.replace(`/h/${hostId}`)
-  }, [hostId, router])
-
-  const requestLeaveSession = useCallback(() => {
-    const dirtyDrafts = getDirtyMarkdownDrafts()
-    if (dirtyDrafts.length === 0) {
-      leaveSession()
-      return
-    }
-    Keyboard.dismiss()
-    setLeaveDrafts(dirtyDrafts)
-  }, [getDirtyMarkdownDrafts, leaveSession])
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (
-        resolveSessionBackPress({
-          liveInputFocused: liveInputRef.current?.isFocused() === true,
-          hardwareKeyboard
-        }) === 'send-escape'
-      ) {
-        handleLiveInputKeyPress({ nativeEvent: { key: 'Escape' } })
-        return true
-      }
-      requestLeaveSession()
-      return true
-    })
-    return () => subscription.remove()
-  }, [handleLiveInputKeyPress, hardwareKeyboard, requestLeaveSession])
+  const { leaveSession, requestLeaveSession } = useSessionBackHandler({
+    handleLiveInputKeyPress,
+    hardwareKeyboard,
+    hostId,
+    liveInputRef,
+    markdownDocs,
+    sessionTabs,
+    setLeaveDrafts
+  })
 
   const discardMarkdownLocalContent = useCallback(
     (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
