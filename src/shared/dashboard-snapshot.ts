@@ -234,3 +234,21 @@ export type DashboardSpawnAgentArgs = {
 export type DashboardSleepWorkspaceArgs = {
   worktreeId: string
 }
+
+/** Longest printed path the file-link bridge accepts; the main-process
+ *  validator enforces it so a pathological TUI line cannot cross the bridge. */
+export const DASHBOARD_MAX_FILE_LINK_PATH_LENGTH = 4_096
+
+/** Opens a file path a preview terminal linkified. Resolution against the
+ *  workspace, host routing and the editor all live in the main renderer, so the
+ *  pop-out only names the workspace and the path exactly as the agent printed
+ *  it — the pop-out has no worktree paths and no editor of its own. */
+export type DashboardOpenFileArgs = {
+  worktreeId: string
+  executionHostId?: ExecutionHostId
+  path: string
+  line: number | null
+  column: number | null
+  /** Shift+Mod-click hands the file to the OS default app, as a pane does. */
+  openWithSystemDefault?: boolean
+}

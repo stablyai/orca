@@ -5,6 +5,7 @@ import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import { launchDashboardAgent } from './launch-dashboard-agent'
+import { openDashboardFileLink } from './open-dashboard-file-link'
 
 // Why: cap snapshot rebuilds during bursts of agent-status pings. The board is a
 // glanceable surface, so ~4 updates/sec is plenty and keeps the cross-worktree
@@ -105,7 +106,8 @@ function watchSnapshotInputs(onChanged: () => void): () => void {
  *     store and publish it to the main process (which relays it to the popout).
  *     Does nothing while the popout is closed, so it's free in the common case.
  *  2. Handle click-to-focus reveal requests forwarded from the popout: activate
- *     the agent's worktree and focus its pane in this (main) window.
+ *     the agent's worktree and focus its pane in this (main) window, and open
+ *     files its preview terminals linkified.
  */
 export function useDashboardPopoutBridge(enabled: boolean): void {
   useEffect(() => {
@@ -134,6 +136,15 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
       activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
     })
+  }, [enabled])
+
+  // Following a file link in a pop-out preview opens the file here, where the
+  // workspace paths and the editor live.
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    return window.api.dashboard.onOpenFile?.(openDashboardFileLink)
   }, [enabled])
 
   // Opening a card's terminal dialog in the popout acks the agent here — the

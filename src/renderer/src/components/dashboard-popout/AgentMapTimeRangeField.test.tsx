@@ -128,6 +128,7 @@ function renderMapView(): ReturnType<typeof render> {
       onQueryChange={vi.fn()}
       filters={{ projects: [], workspaceStatuses: [], reviewStates: [] }}
       onFiltersChange={vi.fn()}
+      onOpenFile={vi.fn()}
       searchInputRef={{ current: null }}
       now={NOW}
       dialogCard={null}

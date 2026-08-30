@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button'
 import {
   dashboardCardDisplayState,
   type DashboardCard,
+  type DashboardOpenFileArgs,
   type DashboardRevealAgentArgs
 } from '../../../../shared/dashboard-snapshot'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
+import type { PreviewFileLinkActivation } from './preview-terminal-file-links'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
@@ -24,6 +26,8 @@ type AgentTerminalDialogProps = {
   /** Focus the agent's pane. The pop-out relays over IPC; the in-window host
    *  activates the worktree/pane locally. */
   onReveal: (args: AgentRevealArgs) => void
+  /** Follow a file link in the preview, routed the same two ways as onReveal. */
+  onOpenFile: (args: DashboardOpenFileArgs) => void
 }
 
 type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
@@ -37,8 +41,19 @@ function AgentTerminalFrame({
   title,
   previewClassName,
   onOpenChange,
-  onReveal
+  onReveal,
+  onOpenFile
 }: AgentTerminalFrameProps): React.JSX.Element {
+  const openFileLink = (activation: PreviewFileLinkActivation): void => {
+    onOpenFile({
+      worktreeId: card.worktreeId,
+      executionHostId: card.executionHostId,
+      path: activation.path,
+      line: activation.line,
+      column: activation.column,
+      openWithSystemDefault: activation.openWithSystemDefault
+    })
+  }
   const reveal = (): void => {
     onReveal({
       repoId: card.repoId,
@@ -76,6 +91,7 @@ function AgentTerminalFrame({
         <AgentTerminalPreview
           ptyId={card.ptyId}
           terminalInput={card.terminalInput ?? null}
+          onOpenFileLink={openFileLink}
           className={previewClassName}
         />
       ) : (
@@ -106,7 +122,8 @@ function AgentTerminalFrame({
 export function AgentTerminalDialog({
   card,
   onOpenChange,
-  onReveal
+  onReveal,
+  onOpenFile
 }: AgentTerminalDialogProps): React.JSX.Element {
   return (
     <Dialog open={card !== null} onOpenChange={onOpenChange}>
@@ -145,6 +162,7 @@ export function AgentTerminalDialog({
             }
             onOpenChange={onOpenChange}
             onReveal={onReveal}
+            onOpenFile={onOpenFile}
           />
         </DialogContent>
       ) : null}
@@ -156,6 +174,7 @@ export function AgentTerminalPanel({
   card,
   onOpenChange,
   onReveal,
+  onOpenFile,
   className
 }: Omit<AgentTerminalDialogProps, 'card'> & {
   card: DashboardCard
@@ -197,6 +216,7 @@ export function AgentTerminalPanel({
         previewClassName="h-auto min-h-0 flex-1"
         onOpenChange={onOpenChange}
         onReveal={onReveal}
+        onOpenFile={onOpenFile}
       />
     </section>
   )

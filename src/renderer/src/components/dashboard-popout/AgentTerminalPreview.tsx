@@ -3,27 +3,26 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
-import {
-  buildPreviewAppearanceOptions,
-  buildPreviewTerminalOptions
-} from './preview-terminal-options'
-import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
+import { buildPreviewTerminalOptions } from './preview-terminal-options'
 import { installPreviewTerminalCompatibility } from './preview-terminal-compatibility'
+import {
+  applyPreviewTerminalAppearance,
+  resolvePreviewTerminalAppearance
+} from './preview-terminal-appearance'
 import { createPreviewClipboardPaster } from './preview-terminal-paste'
 import { installPreviewImeBridge, type PreviewImeBridge } from './preview-terminal-ime-bridge'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { translate } from '@/i18n/i18n'
-import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { installPreviewTerminalKeyHandler } from './preview-terminal-key-handler'
 import { createPreviewGridClaim } from './preview-grid-claim'
 import { installPreviewTerminalAppMenuClipboard } from './preview-terminal-app-menu-clipboard'
+import type { PreviewFileLinkActivation } from './preview-terminal-file-links'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
@@ -52,11 +51,15 @@ function clamp(value: number, min: number, max: number): number {
 export function AgentTerminalPreview({
   ptyId,
   terminalInput = null,
+  onOpenFileLink,
   className
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
+  /** Follows a file path the terminal printed. Omitted leaves paths unlinked —
+   *  the preview itself can neither resolve nor open one. */
+  onOpenFileLink?: (activation: PreviewFileLinkActivation) => void
   className?: string
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -69,17 +72,17 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
-  const { terminalTheme, terminalMode } = useMemo(() => {
-    if (!settings) {
-      return { terminalTheme: null, terminalMode: 'dark' as const }
-    }
-    const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-    const theme = composeActiveTerminalTheme(
-      appearance.theme ?? getBuiltinTheme(appearance.themeName),
-      settings
-    )
-    return { terminalTheme: theme, terminalMode: appearance.mode }
-  }, [settings, systemPrefersDark])
+  const onOpenFileLinkRef = useRef(onOpenFileLink)
+  // Whether the host can open a file at all decides whether paths linkify, so
+  // only gaining or losing that capability rebuilds the terminal; which callback
+  // runs is read live through the ref.
+  const fileLinksEnabled = onOpenFileLink !== undefined
+  // Hover hint for the link under the cursor, mirroring a pane's corner tooltip.
+  const [linkHint, setLinkHint] = useState<string | null>(null)
+  const { terminalTheme, terminalMode } = useMemo(
+    () => resolvePreviewTerminalAppearance(settings, systemPrefersDark),
+    [settings, systemPrefersDark]
+  )
   // A null snapshot means no serializer knows this pty (it died or was never
   // spawned this session) — say so instead of painting a silent blank terminal.
   const [ptyGone, setPtyGone] = useState(false)
@@ -92,7 +95,8 @@ export function AgentTerminalPreview({
     settingsRef.current = settings
     macOptionAsAltRef.current = macOptionAsAlt
     terminalInputRef.current = terminalInput
-  }, [settings, macOptionAsAlt, terminalInput])
+    onOpenFileLinkRef.current = onOpenFileLink
+  }, [settings, macOptionAsAlt, terminalInput, onOpenFileLink])
 
   useEffect(() => {
     setPtyGone(false)
@@ -247,7 +251,12 @@ export function AgentTerminalPreview({
         return
       }
       disposeTerminalCompatibility = installPreviewTerminalCompatibility(terminal, {
-        getSettings: () => settingsRef.current
+        getSettings: () => settingsRef.current,
+        openFileLink: fileLinksEnabled
+          ? (activation) => onOpenFileLinkRef.current?.(activation)
+          : undefined,
+        onLinkHover: setLinkHint,
+        onLinkLeave: () => setLinkHint(null)
       })
     }
 
@@ -402,6 +411,7 @@ export function AgentTerminalPreview({
 
     return () => {
       disposed = true
+      setLinkHint(null)
       if (retryTimer) {
         clearTimeout(retryTimer)
       }
@@ -417,21 +427,16 @@ export function AgentTerminalPreview({
       terminal?.dispose()
       terminalRef.current = null
     }
-  }, [ptyId, terminalTheme, terminalMode])
+  }, [ptyId, terminalTheme, terminalMode, fileLinksEnabled])
 
   // Why: appearance settings must land on the open terminal, and the OS input
   // source can flip Option-as-Alt with no settings change at all. A remount
   // would reconnect the pty and repaint the agent's screen from a new snapshot.
   useEffect(() => {
     const terminal = terminalRef.current
-    if (!terminal) {
-      return
+    if (terminal) {
+      applyPreviewTerminalAppearance(terminal, settings, macOptionAsAlt === 'true')
     }
-    Object.assign(
-      terminal.options,
-      buildPreviewAppearanceOptions(settings, macOptionAsAlt === 'true')
-    )
-    syncPreviewTerminalLigatures(terminal, settings)
   }, [settings, macOptionAsAlt])
 
   return (
@@ -460,6 +465,8 @@ export function AgentTerminalPreview({
       >
         <div ref={containerRef} className="origin-bottom-left" />
       </div>
+      {/* Same corner hint a pane shows on link hover (.pane-link-tooltip). */}
+      {linkHint ? <div className="pane-link-tooltip xterm-hover">{linkHint}</div> : null}
     </div>
   )
 }

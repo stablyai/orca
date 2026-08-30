@@ -274,6 +274,27 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(sendToTrustedMock).toHaveBeenCalledWith('ui:sleepDashboardWorkspace', args)
   })
 
+  it('opens a preview file link in only the trusted main window', () => {
+    const main = makeWindow(mainSender)
+    getTrustedWindowMock.mockReturnValue(main)
+    const args = { worktreeId: 'w1', path: 'src/app.ts', line: 12, column: 3 }
+
+    handlers.get('dashboardPopout:openFile')!({ sender: untrustedSender } as never, args)
+    handlers.get('dashboardPopout:openFile')!({ sender: popoutSender } as never, {
+      ...args,
+      path: ''
+    })
+    handlers.get('dashboardPopout:openFile')!({ sender: popoutSender } as never, {
+      ...args,
+      line: 0
+    })
+    expect(safelyRevealMock).not.toHaveBeenCalled()
+
+    handlers.get('dashboardPopout:openFile')!({ sender: popoutSender } as never, args)
+    expect(safelyRevealMock).toHaveBeenCalledWith(main)
+    expect(mainSender.send).toHaveBeenCalledWith('ui:openDashboardFile', args)
+  })
+
   it('reveals an agent in only the trusted main window', () => {
     const main = makeWindow(mainSender)
     getTrustedWindowMock.mockReturnValue(main)

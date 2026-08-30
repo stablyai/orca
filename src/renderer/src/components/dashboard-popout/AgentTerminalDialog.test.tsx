@@ -76,6 +76,7 @@ describe('AgentTerminalDialog', () => {
         card={card({ terminalInput: TERMINAL_INPUT })}
         onOpenChange={() => {}}
         onReveal={() => {}}
+        onOpenFile={() => {}}
       />
     )
 
@@ -86,7 +87,14 @@ describe('AgentTerminalDialog', () => {
   })
 
   it('passes null when the card carries no profile, so the preview routes by client OS', () => {
-    render(<AgentTerminalDialog card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
+    render(
+      <AgentTerminalDialog
+        card={card()}
+        onOpenChange={() => {}}
+        onReveal={() => {}}
+        onOpenFile={() => {}}
+      />
+    )
 
     expect(screen.getByTestId('preview')).toHaveAttribute('data-terminal-input', 'null')
   })
@@ -97,6 +105,7 @@ describe('AgentTerminalDialog', () => {
         card={card({ bucket: 'idle', dotState: 'done', finishedAt: 100, unseen: false })}
         onOpenChange={() => {}}
         onReveal={() => {}}
+        onOpenFile={() => {}}
       />
     )
 
@@ -112,6 +121,7 @@ describe('AgentTerminalDialog', () => {
         card={card({ bucket: 'done', dotState: 'done', finishedAt: 100, unseen: true })}
         onOpenChange={() => {}}
         onReveal={() => {}}
+        onOpenFile={() => {}}
       />
     )
 
@@ -125,6 +135,7 @@ describe('AgentTerminalDialog', () => {
         card={card({ executionHostId: 'runtime:env-1' })}
         onOpenChange={() => {}}
         onReveal={onReveal}
+        onOpenFile={() => {}}
       />
     )
 
@@ -139,7 +150,14 @@ describe('AgentTerminalDialog', () => {
   })
 
   it('reuses the terminal surface as a non-modal adjacent panel', () => {
-    render(<AgentTerminalPanel card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
+    render(
+      <AgentTerminalPanel
+        card={card()}
+        onOpenChange={() => {}}
+        onReveal={() => {}}
+        onOpenFile={() => {}}
+      />
+    )
 
     expect(screen.getByRole('dialog', { name: 'wt' })).toHaveAttribute('data-state', 'open')
     expect(screen.getByTestId('preview')).toHaveClass('min-h-0', 'flex-1')
@@ -151,7 +169,12 @@ describe('AgentTerminalDialog', () => {
     const onOpenChange = vi.fn()
     render(
       <>
-        <AgentTerminalPanel card={card()} onOpenChange={onOpenChange} onReveal={() => {}} />
+        <AgentTerminalPanel
+          card={card()}
+          onOpenChange={onOpenChange}
+          onReveal={() => {}}
+          onOpenFile={() => {}}
+        />
         <Popover defaultOpen>
           <PopoverTrigger>Details</PopoverTrigger>
           <PopoverContent>Worktree details</PopoverContent>

@@ -1,6 +1,7 @@
 import { Suspense, useMemo, useState, type RefObject } from 'react'
 import type {
   DashboardCard,
+  DashboardOpenFileArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
   DashboardSpawnAgentArgs
@@ -37,6 +38,7 @@ type AgentDashboardMapViewProps = {
   dialogCard: DashboardCard | null
   onDialogOpenChange: (open: boolean) => void
   onRevealAgent: (args: AgentRevealArgs) => void
+  onOpenFile: (args: DashboardOpenFileArgs) => void
   onOpenTerminal: (card: DashboardCard) => void
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
   onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
@@ -57,6 +59,7 @@ export function AgentDashboardMapView({
   dialogCard,
   onDialogOpenChange,
   onRevealAgent,
+  onOpenFile,
   onOpenTerminal,
   onSpawnAgent,
   onSleepWorkspace,
@@ -179,6 +182,7 @@ export function AgentDashboardMapView({
             card={dialogCard}
             onOpenChange={onDialogOpenChange}
             onReveal={onRevealAgent}
+            onOpenFile={onOpenFile}
             className="mr-0 animate-in fade-in-0 slide-in-from-left-2 duration-200 motion-reduce:animate-none"
           />
         ) : null}

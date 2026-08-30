@@ -1,4 +1,5 @@
 import type {
+  DashboardOpenFileArgs,
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
@@ -19,6 +20,7 @@ export type DashboardApi = {
   onAckAgent: (callback: (paneKey: string) => void) => () => void
   onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
   onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
+  onOpenFile: (callback: (args: DashboardOpenFileArgs) => void) => () => void
   requestSnapshot: () => Promise<void>
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
   onViewRequested: (callback: (view: 'board' | 'map') => void) => () => void
@@ -26,6 +28,7 @@ export type DashboardApi = {
   ackAgent: (paneKey: string) => Promise<void>
   spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
+  openFile: (args: DashboardOpenFileArgs) => Promise<void>
 }
 
 export type TerminalPreviewApi = {

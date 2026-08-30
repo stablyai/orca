@@ -18,6 +18,7 @@ vi.mock('../../shared/repo-icon', async (importOriginal) => {
 
 import {
   admitDashboardSnapshot,
+  isDashboardOpenFileArgs,
   isDashboardRevealAgentArgs,
   isDashboardSpawnAgentArgs,
   isDashboardSnapshot
@@ -577,5 +578,34 @@ describe('dashboard payload validation', () => {
     expect(
       isDashboardRevealAgentArgs({ repoId: 'repo-1', worktreeId: 'worktree-1', tabId: '' })
     ).toBe(false)
+  })
+})
+
+describe('isDashboardOpenFileArgs', () => {
+  const args = { worktreeId: 'worktree-1', path: 'src/app.ts', line: 12, column: 3 }
+
+  it('admits a printed path with optional position and host', () => {
+    expect(isDashboardOpenFileArgs(args)).toBe(true)
+    expect(isDashboardOpenFileArgs({ ...args, line: null, column: null })).toBe(true)
+    expect(
+      isDashboardOpenFileArgs({
+        ...args,
+        executionHostId: 'ssh:target-1',
+        openWithSystemDefault: true
+      })
+    ).toBe(true)
+    // A folder workspace card can carry no worktree id; the path still routes.
+    expect(isDashboardOpenFileArgs({ ...args, worktreeId: '' })).toBe(true)
+  })
+
+  it('rejects an empty path, a bad position, or an unparseable host', () => {
+    expect(isDashboardOpenFileArgs({ ...args, path: '' })).toBe(false)
+    expect(isDashboardOpenFileArgs({ ...args, path: 'a'.repeat(4_097) })).toBe(false)
+    expect(isDashboardOpenFileArgs({ ...args, line: 0 })).toBe(false)
+    expect(isDashboardOpenFileArgs({ ...args, column: 1.5 })).toBe(false)
+    expect(isDashboardOpenFileArgs({ ...args, executionHostId: 'runtime:' })).toBe(false)
+    expect(isDashboardOpenFileArgs({ ...args, openWithSystemDefault: 'yes' })).toBe(false)
+    expect(isDashboardOpenFileArgs(null)).toBe(false)
+    expect(isDashboardOpenFileArgs([args])).toBe(false)
   })
 })

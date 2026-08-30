@@ -13,6 +13,7 @@ import {
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../sidebar/workspace-chrome-metrics'
 import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
+import { openDashboardFileLink } from './open-dashboard-file-link'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 import { translate } from '@/i18n/i18n'
 
@@ -54,6 +55,10 @@ function AgentDashboardDrawerBody({
     [onClose]
   )
 
+  // A preview file link opens right here: this window already owns the
+  // workspace paths and the editor the pop-out has to relay for.
+  const handleOpenFile = useCallback(openDashboardFileLink, [])
+
   // Switching to pop-out from the board hands the surface over rather than
   // leaving an in-window board that the setting says should be a window.
   const handleSwitchToPopout = useCallback(() => {
@@ -69,6 +74,7 @@ function AgentDashboardDrawerBody({
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
+      onOpenFile={handleOpenFile}
       onClose={onClose}
       headerActions={
         <AgentDashboardSettingsMenu

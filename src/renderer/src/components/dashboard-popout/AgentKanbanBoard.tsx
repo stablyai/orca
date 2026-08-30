@@ -4,6 +4,7 @@ import {
   DASHBOARD_BUCKET_ORDER,
   type DashboardBucket,
   type DashboardCard,
+  type DashboardOpenFileArgs,
   type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
@@ -33,6 +34,12 @@ function ackAgentViaPopoutRelay(paneKey: string): void {
  *  both channels ship together, so a stale preload lacks both. */
 function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
+}
+
+/** Follow a preview file link from the pop-out window: the main renderer owns
+ *  the workspace paths and the editor. Same `?.` HMR-skew guard as above. */
+function openFileViaPopoutRelay(args: DashboardOpenFileArgs): void {
+  void window.api.dashboard.openFile?.(args)
 }
 
 function bucketLabel(bucket: DashboardBucket): string {
@@ -123,6 +130,9 @@ type AgentKanbanBoardProps = {
   /** Focuses the agent's pane. Defaults to the pop-out IPC relay; the in-window
    *  host activates the worktree/pane locally and closes the overlay. */
   onRevealAgent?: (args: AgentRevealArgs) => void
+  /** Follows a file link in a card's preview terminal. Defaults to the pop-out
+   *  IPC relay; the in-window host opens the file locally. */
+  onOpenFile?: (args: DashboardOpenFileArgs) => void
   /** When provided, renders a close control in the header (in-window mode). The
    *  pop-out relies on its native window controls, so it omits this. */
   onClose?: () => void
@@ -139,6 +149,7 @@ export function AgentKanbanBoard({
   containerClassName = 'h-screen w-screen',
   onAckAgent = ackAgentViaPopoutRelay,
   onRevealAgent = revealAgentViaPopoutRelay,
+  onOpenFile = openFileViaPopoutRelay,
   onClose,
   headerActions
 }: AgentKanbanBoardProps): React.JSX.Element {
@@ -299,6 +310,7 @@ export function AgentKanbanBoard({
           card={dialogCard}
           onOpenChange={handleDialogOpenChange}
           onReveal={onRevealAgent}
+          onOpenFile={onOpenFile}
         />
       </div>
     </TooltipProvider>

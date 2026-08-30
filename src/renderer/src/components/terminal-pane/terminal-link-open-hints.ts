@@ -89,6 +89,12 @@ export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {})
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for system browser`
 }
 
+// Why: the dashboard's preview terminal has no in-app browser to route to, so
+// its hint names only the gesture that works there.
+export function getTerminalPreviewUrlOpenHint(): string {
+  return isMacPlatform() ? '⌘+click to open in browser' : 'Ctrl+click to open in browser'
+}
+
 export function getTerminalUrlSystemBrowserHint(): string {
   return isMacPlatform() ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
 }

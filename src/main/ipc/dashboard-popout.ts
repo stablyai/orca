@@ -13,6 +13,7 @@ import { safelyRevealWindow } from '../window/focus-existing-window'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRenderer } from './ui'
 import {
   admitDashboardSnapshot,
+  isDashboardOpenFileArgs,
   isDashboardPaneKey,
   isDashboardRevealAgentArgs,
   isDashboardSleepWorkspaceArgs,
@@ -40,6 +41,7 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboardPopout:ackAgent')
   ipcMain.removeHandler('dashboardPopout:spawnAgent')
   ipcMain.removeHandler('dashboardPopout:sleepWorkspace')
+  ipcMain.removeHandler('dashboardPopout:openFile')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -142,6 +144,29 @@ export function registerDashboardPopoutHandlers(
     }
     safelyRevealWindow(mainWindow)
     mainWindow.webContents.send('ui:revealDashboardAgent', args)
+    try {
+      app.focus({ steal: true })
+    } catch {
+      // Best-effort; the per-window focus above may still bring it forward.
+    }
+  })
+
+  // Following a file link in a preview terminal lands in the main window's
+  // editor, so it raises that window exactly as click-to-focus does.
+  ipcMain.handle('dashboardPopout:openFile', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardOpenFileArgs(args)
+    ) {
+      return
+    }
+    const mainWindow = getTrustedUIRendererWindow()
+    if (!mainWindow) {
+      return
+    }
+    safelyRevealWindow(mainWindow)
+    mainWindow.webContents.send('ui:openDashboardFile', args)
     try {
       app.focus({ steal: true })
     } catch {

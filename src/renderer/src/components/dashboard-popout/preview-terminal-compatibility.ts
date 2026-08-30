@@ -8,19 +8,30 @@ import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-ar
 import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
 import { installPreviewTerminalLinks } from './preview-terminal-links'
+import {
+  installPreviewTerminalFileLinks,
+  type PreviewFileLinkActivation
+} from './preview-terminal-file-links'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 
 /**
  * Brings the preview's emulator up to a pane's: Orca's Unicode 11 width shim,
- * Windows Ctrl+Alt chord classification, clickable links, ligatures, the TUI
- * wheel multiplier, lazy Arabic shaping, and the IME candidate anchor.
+ * Windows Ctrl+Alt chord classification, clickable URL and file links,
+ * ligatures, the TUI wheel multiplier, lazy Arabic shaping, and the IME
+ * candidate anchor.
  *
  * Returns a disposer for everything bound to the terminal's DOM element, which
  * must run before that terminal is disposed or replaced.
  */
 export function installPreviewTerminalCompatibility(
   terminal: Terminal,
-  deps: { getSettings: () => GlobalSettings | null }
+  deps: {
+    getSettings: () => GlobalSettings | null
+    /** Omitted when the host has no workspace routing to open a file with. */
+    openFileLink?: (activation: PreviewFileLinkActivation) => void
+    onLinkHover?: (text: string) => void
+    onLinkLeave?: () => void
+  }
 ): () => void {
   // Why: the width shim wraps xterm's v11 provider, so the addon that registers
   // it has to load first — and both must precede any replay write, or wide
@@ -29,7 +40,12 @@ export function installPreviewTerminalCompatibility(
   terminal.loadAddon(new Unicode11Addon())
   activateOrcaTerminalUnicodeProvider(terminal)
   installWindowsCtrlAltChordRepair(terminal)
-  installPreviewTerminalLinks(terminal)
+  const linkHover = { hover: deps.onLinkHover, leave: deps.onLinkLeave }
+  const openFileLink = deps.openFileLink
+  installPreviewTerminalLinks(terminal, { ...linkHover, ...(openFileLink ? { openFileLink } : {}) })
+  const fileLinks = openFileLink
+    ? installPreviewTerminalFileLinks(terminal, { ...linkHover, activate: openFileLink })
+    : null
   syncPreviewTerminalLigatures(terminal, deps.getSettings())
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: () =>
@@ -42,6 +58,7 @@ export function installPreviewTerminalCompatibility(
   const imeAnchorHandler = installTerminalImeCandidateAnchor(terminal)
 
   return () => {
+    fileLinks?.dispose()
     if (imeAnchorHandler && terminal.element) {
       terminal.element.removeEventListener('compositionstart', imeAnchorHandler)
       terminal.element.removeEventListener('compositionupdate', imeAnchorHandler)
