@@ -42874,11 +42874,7 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
       if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
         modelIndex = trimmedStart
       }
-      if (
-        promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
-      ) {
+      if (promptIndex === null && normalized.charCodeAt(trimmedStart) === 62) {
         promptIndex = trimmedStart
       }
     }
