@@ -87,6 +87,36 @@ describe('shared agent-hook-listener', () => {
     expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
   })
 
+  it('maps Pi tool approval requests to blocked with tool details', () => {
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_approval_requested',
+          tool_name: 'bash',
+          tool_call_id: 'call-1',
+          reason: 'dangerous command',
+          approval_mode: 'always'
+        }
+      },
+      'production'
+    )
+
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'bash',
+      toolInput: undefined
+    })
+    expect(blocked?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('keeps Pi regular tool_call notifications as working', () => {
     const working = normalizeHookPayload(
       state,

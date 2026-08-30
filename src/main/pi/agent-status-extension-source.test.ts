@@ -673,6 +673,27 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(harness.handlers.session_shutdown).toBeUndefined()
   })
 
+  it('reports Pi approval requests as action-required status', async () => {
+    const harness = createHarness({ kind: 'pi' })
+
+    await harness.callHook('tool_approval_requested', {
+      toolName: 'bash',
+      toolCallId: 'call-1',
+      reason: 'dangerous command',
+      approvalMode: 'always'
+    })
+
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.payload).toEqual({
+      hook_event_name: 'tool_approval_requested',
+      tool_name: 'bash',
+      tool_call_id: 'call-1',
+      reason: 'dangerous command',
+      approval_mode: 'always'
+    })
+  })
+
   it('bounds stalled delivery to one active request and the latest pending status', async () => {
     const finishDeliveries: (() => void)[] = []
     const harness = createHarness({
