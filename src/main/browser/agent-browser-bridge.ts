@@ -7,6 +7,7 @@ import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
 import { acquireElectronDebugger } from './electron-debugger-lease'
+import { imeFallbackKeyEvent, parseCdpKeyEvent } from './cdp-keyboard-us-layout'
 import type { BrowserManager } from './browser-manager'
 import { BrowserError } from './cdp-bridge'
 import type {
@@ -1812,9 +1813,55 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserKeypressResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName, target) => {
+        const parsed = parseCdpKeyEvent(key) ?? imeFallbackKeyEvent(key)
+        if (!parsed) {
+          // Why: a key name the table cannot express must not dispatch keyCode 0 and
+          // report success — route it to the helper, creating its session only now so
+          // the direct path never pays for it.
+          await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+          return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
+        }
+        const wc = this.getWebContents(target.webContentsId)
+        if (!wc || wc.isDestroyed()) {
+          throw new BrowserError(
+            'browser_tab_not_found',
+            `Browser page ${target.browserPageId} is no longer available`
+          )
+        }
+        const event = {
+          windowsVirtualKeyCode: parsed.keyCode,
+          nativeVirtualKeyCode: parsed.keyCode,
+          key: parsed.key,
+          code: parsed.code,
+          modifiers: parsed.modifiers,
+          location: parsed.location
+        }
+        const lease = acquireElectronDebugger(wc)
+        try {
+          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
+            // Why: rawKeyDown is the no-character form; sending keyDown without text
+            // makes Blink synthesize an empty input for editing keys.
+            type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
+            ...event,
+            ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
+          })
+          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
+            type: 'keyUp',
+            ...event,
+            // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
+            modifiers: parsed.modifiers & ~parsed.selfModifier
+          })
+          return { pressed: key }
+        } finally {
+          lease.release()
+        }
+      },
+      { ensureSession: false }
+    )
   }
 
   async pdf(worktreeId?: string, browserPageId?: string): Promise<BrowserPdfResult> {
