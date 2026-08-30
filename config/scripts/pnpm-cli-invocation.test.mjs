@@ -52,18 +52,30 @@ describe('resolvePnpmCliInvocation', () => {
     })
   })
 
-  it('shells out for a Windows .cmd wrapper', () => {
-    expect(
-      resolvePnpmCliInvocation({
-        npmExecPath: 'C:\\Users\\runner\\pnpm.cmd',
-        nodeExecPath: 'C:\\Program Files\\nodejs\\node.exe',
-        platform: 'win32'
-      })
-    ).toEqual({
-      command: 'C:\\Users\\runner\\pnpm.cmd',
-      prefixArgs: [],
-      shell: true
-    })
+  it('shells out for every Windows batch wrapper extension and casing', () => {
+    for (const npmExecPath of [
+      'C:\\Users\\runner\\pnpm.cmd',
+      'C:\\Users\\runner\\pnpm.bat',
+      'C:\\tools\\PNPM.CMD',
+      'C:\\tools\\PNPM.BAT'
+    ]) {
+      expect(
+        resolvePnpmCliInvocation({
+          npmExecPath,
+          nodeExecPath: 'C:\\Program Files\\nodejs\\node.exe',
+          platform: 'win32'
+        })
+      ).toEqual({ command: npmExecPath, prefixArgs: [], shell: true })
+    }
+  })
+
+  // Why: only cmd.exe needs the shell hop; a .cmd-named path elsewhere must still exec directly.
+  it('does not shell out for a .cmd path on a non-Windows platform', () => {
+    for (const platform of ['darwin', 'linux']) {
+      expect(
+        resolvePnpmCliInvocation({ npmExecPath: '/opt/pnpm.cmd', nodeExecPath, platform })
+      ).toEqual({ command: '/opt/pnpm.cmd', prefixArgs: [], shell: false })
+    }
   })
 
   it('treats .js and .mjs CLIs the same as .cjs', () => {
