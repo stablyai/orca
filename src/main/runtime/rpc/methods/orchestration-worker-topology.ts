@@ -271,6 +271,15 @@ export function isUnknownWorkerStartOutcome(error: unknown, stage: string): bool
     error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
       ? (error as { code: string }).code
       : ''
+  if (
+    code === 'terminal_wait_timeout' &&
+    stage === 'agent_readiness' &&
+    error &&
+    typeof error === 'object' &&
+    (error as { terminalLive?: unknown }).terminalLive === true
+  ) {
+    return true
+  }
   if (code === 'operation_unknown') {
     return true
   }

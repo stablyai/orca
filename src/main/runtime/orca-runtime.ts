@@ -21909,7 +21909,7 @@ export class OrcaRuntimeService {
         if (effectiveTimeoutMs > 0) {
           waiter.timeout = setTimeout(() => {
             this.removeWaiter(waiter)
-            reject(new Error('timeout'))
+            reject(createTerminalWaitTimeoutError(Boolean(this.getLivePtyForHandle(waiter.handle))))
           }, effectiveTimeoutMs)
         }
         let waiters = this.waitersByHandle.get(handle)
@@ -22008,7 +22008,14 @@ export class OrcaRuntimeService {
       if (effectiveTimeoutMs > 0) {
         waiter.timeout = setTimeout(() => {
           this.removeWaiter(waiter)
-          reject(new Error('timeout'))
+          let terminalLive = false
+          try {
+            this.getLiveLeafForHandle(waiter.handle)
+            terminalLive = true
+          } catch {
+            // The handle may have gone stale while the timeout callback ran.
+          }
+          reject(createTerminalWaitTimeoutError(terminalLive))
         }, effectiveTimeoutMs)
       }
 
@@ -43139,6 +43146,15 @@ function buildTerminalWait(
     ...(exitCause ? { exitCause } : {}),
     ...(blockedReason ? { blockedReason } : {})
   }
+}
+
+function createTerminalWaitTimeoutError(
+  terminalLive: boolean
+): Error & { code: 'terminal_wait_timeout'; terminalLive: boolean } {
+  return Object.assign(new Error('timeout'), {
+    code: 'terminal_wait_timeout' as const,
+    terminalLive
+  })
 }
 
 function getPtyTerminalState(pty: RuntimePtyWorktreeRecord): RuntimeTerminalState {
