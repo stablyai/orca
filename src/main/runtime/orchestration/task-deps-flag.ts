@@ -1,5 +1,6 @@
+import { isGeneratedId } from './db/generated-id'
+
 const INVALID_DEPS_ERROR = 'Invalid --deps: must be a JSON array of task IDs'
-const GENERATED_TASK_ID_PATTERN = /^task_[0-9a-f]{12}$/i
 
 // Windows PowerShell 5.1 strips the quotes in `["task_x"]` at the native argv boundary.
 export function parseOrchestrationTaskDepsFlag(raw: string): string[] {
@@ -30,5 +31,5 @@ function recoverArgvStrippedTaskDeps(raw: string): string[] | null {
     return []
   }
   const ids = body.split(',').map((entry) => entry.trim())
-  return ids.every((id) => GENERATED_TASK_ID_PATTERN.test(id)) ? ids : null
+  return ids.every((id) => isGeneratedId(id, 'task')) ? ids : null
 }

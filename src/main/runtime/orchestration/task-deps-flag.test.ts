@@ -49,3 +49,17 @@ describe('parseOrchestrationTaskDepsFlag', () => {
     expect(() => parseOrchestrationTaskDepsFlag('[task_abc]')).toThrow('Invalid --deps')
   })
 })
+
+// Why: the recovery grammar used to hardcode 12 hex chars, which silently diverges if generateId's
+// byte count changes. This pins the validator to what the generator actually produces.
+describe('generated-id contract', () => {
+  it('accepts ids the generator produces', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(parseOrchestrationTaskDepsFlag(`[${generateId('task')}]`)).toHaveLength(1)
+    }
+  })
+
+  it('still rejects an id of the wrong length', () => {
+    expect(() => parseOrchestrationTaskDepsFlag('[task_abc]')).toThrow('Invalid --deps')
+  })
+})

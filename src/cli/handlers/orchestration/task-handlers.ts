@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
+import { getOptionalJsonFlag, getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
 import { callOrchestrationMutation } from './mutation-request'
@@ -104,7 +104,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       {
         id: getRequiredStringFlag(flags, 'id'),
         status,
-        result: getOptionalStringFlag(flags, 'result'),
+        result: getOptionalJsonFlag(flags, 'result'),
         run: getOptionalStringFlag(flags, 'run'),
         callerTerminalHandle: await resolveCoordinatorTerminalHandle(flags, cwd, client)
       }

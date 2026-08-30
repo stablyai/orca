@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { getOptionalStringFlag } from '../../flags'
+import { getOptionalJsonFlag, getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import {
   clampOrchestrationAskTimeoutMs,
@@ -53,7 +53,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         run: getOptionalStringFlag(flags, 'run'),
         question,
         resume,
-        options: getOptionalStringFlag(flags, 'options'),
+        options: getOptionalJsonFlag(flags, 'options'),
         timeoutMs: parsedTimeoutMs === undefined ? undefined : timeoutMs,
         from,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
