@@ -1010,7 +1010,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           db.getOrCreateRunDelivery({
             runId: run.id,
             consumerGeneration: generation,
-            wakeTypes
+            wakeTypes,
+            queuedTypes: typeFilter
           })
         let peeked = params.peek ? readPeek() : []
         if (params.peek && peeked.length > 0) {
@@ -1024,6 +1025,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             messages: current.messages,
             count: current.messages.length,
             replayed: current.replayed,
+            queuedMatchingMessages: current.queuedMatchingMessages,
             acknowledged: acknowledged?.delivery.id ?? null,
             timedOut: false,
             cancelled: false,
@@ -1134,6 +1136,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           messages: current?.messages ?? [],
           count: current?.messages.length ?? 0,
           replayed: current?.replayed ?? false,
+          queuedMatchingMessages: current?.queuedMatchingMessages ?? false,
           acknowledged: acknowledged?.delivery.id ?? null,
           timedOut: false,
           cancelled: false,

@@ -97,6 +97,16 @@ describe('orchestration skill guidance', () => {
     )
   })
 
+  it('explains exact Delivery replay and queued lifecycle mail', () => {
+    const skill = readSkill()
+
+    expect(skill).toContain('labels the Delivery as new or an unacknowledged replay')
+    expect(skill).toContain('`deliveryId`, `replayed`, and `queuedMatchingMessages`')
+    expect(skill).toContain('Bare `--ack` is invalid')
+    expect(skill).toContain('The replay remains the same exact batch')
+    expect(skill).toContain('never infer that the queued rows were consumed or included')
+  })
+
   it('keeps full handoffs out of dispatch lifecycle and off the active branch base', () => {
     const skill = readSkill()
     const fullHandoffs = getSection(skill, 'Full Handoffs')

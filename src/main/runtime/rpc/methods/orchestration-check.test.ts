@@ -376,6 +376,133 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.result).toBe(taskResult)
     })
 
+    it('reports matching lifecycle mail queued behind an unacknowledged replay', async () => {
+      setup()
+      const status = db.insertMessage({
+        from: 'worker',
+        to: `run:${activeRunId}`,
+        subject: 'older status',
+        runId: activeRunId
+      })
+      const first = (await call('orchestration.check', {
+        terminal: 'term_coord'
+      })) as { deliveryId: string }
+      const question = db.insertMessage({
+        from: 'worker',
+        to: `run:${activeRunId}`,
+        subject: 'urgent question',
+        type: 'question',
+        priority: 'urgent',
+        runId: activeRunId
+      })
+      const waitSpy = vi.spyOn(runtime, 'waitForMessage')
+
+      const replay = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        wait: true,
+        types: 'worker_done,question,escalation',
+        timeoutMs: 100
+      })) as {
+        deliveryId: string
+        replayed: boolean
+        queuedMatchingMessages: boolean
+        messages: { id: string }[]
+      }
+
+      expect(replay).toMatchObject({
+        deliveryId: first.deliveryId,
+        replayed: true,
+        queuedMatchingMessages: true,
+        messages: [{ id: status.id }]
+      })
+      expect(replay.messages).not.toContainEqual(expect.objectContaining({ id: question.id }))
+      expect(waitSpy).not.toHaveBeenCalled()
+      expect(db.getMessageById(question.id)?.read).toBe(0)
+
+      const next = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        ack: first.deliveryId,
+        wait: true,
+        types: 'worker_done,question,escalation',
+        timeoutMs: 100
+      })) as { acknowledged: string; messages: { id: string }[] }
+      expect(next).toMatchObject({
+        acknowledged: first.deliveryId,
+        messages: [{ id: question.id }]
+      })
+    })
+
+    it('keeps non-wait type filters on queued-mail reporting only', async () => {
+      setup()
+      db.insertMessage({
+        from: 'worker',
+        to: `run:${activeRunId}`,
+        subject: 'older status',
+        runId: activeRunId
+      })
+      const first = (await call('orchestration.check', {
+        terminal: 'term_coord'
+      })) as { deliveryId: string }
+      db.insertMessage({
+        from: 'worker',
+        to: `run:${activeRunId}`,
+        subject: 'queued heartbeat',
+        type: 'heartbeat',
+        runId: activeRunId
+      })
+
+      const replay = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        types: 'worker_done'
+      })) as { deliveryId: string; queuedMatchingMessages: boolean }
+
+      expect(replay).toMatchObject({
+        deliveryId: first.deliveryId,
+        queuedMatchingMessages: false
+      })
+    })
+
+    it('delivers a concurrent send after exact ack without consuming it', async () => {
+      setup()
+      const firstMessage = db.insertMessage({
+        from: 'worker',
+        to: `run:${activeRunId}`,
+        subject: 'first batch',
+        runId: activeRunId
+      })
+      const first = (await call('orchestration.check', {
+        terminal: 'term_coord'
+      })) as { deliveryId: string }
+      let arrivedId = ''
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+        arrivedId = db.insertMessage({
+          from: 'worker',
+          to: `run:${activeRunId}`,
+          subject: 'arrived during ack-and-wait',
+          type: 'escalation',
+          runId: activeRunId
+        }).id
+        return 'notified'
+      })
+
+      const next = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        ack: first.deliveryId,
+        wait: true,
+        types: 'escalation',
+        timeoutMs: 100
+      })) as { acknowledged: string; deliveryId: string; messages: { id: string }[] }
+
+      expect(next).toMatchObject({
+        acknowledged: first.deliveryId,
+        deliveryId: expect.any(String),
+        messages: [{ id: arrivedId }]
+      })
+      expect(next.deliveryId).not.toBe(first.deliveryId)
+      expect(db.getMessageById(firstMessage.id)?.read).toBe(1)
+      expect(db.getMessageById(arrivedId)?.read).toBe(0)
+    })
+
     it('keeps check --all read-only while lifecycle settles at acceptance', async () => {
       setup()
       const { task, dispatch } = createDispatchedTask()

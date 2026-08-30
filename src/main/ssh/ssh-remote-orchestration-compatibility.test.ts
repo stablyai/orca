@@ -251,7 +251,7 @@ describe('legacy SSH orchestration fallback', () => {
         },
         hostCliAvailable
       )
-      expect(checked.stdout).toContain('Delivery ')
+      expect(checked.stdout).toContain(' [new]')
       expect(checked.stdout).toContain(`${message.id} [status] from=${WORKER_HANDLE}`)
       expect(spawn).not.toHaveBeenCalled()
 
@@ -267,6 +267,21 @@ describe('legacy SSH orchestration fallback', () => {
         result: { deliveryId: string; messages: { id: string }[] }
       }
       expect(result.result.messages).toEqual([expect.objectContaining({ id: message.id })])
+
+      const replay = await runRemoteOrcaCli(
+        runtime,
+        {
+          ...baseRequest,
+          argv: ['orchestration', 'check', '--run', run.id]
+        },
+        hostCliAvailable
+      )
+      expect(replay.stdout).toContain(
+        `Delivery ${result.result.deliveryId} [replay: unacknowledged]`
+      )
+      expect(replay.stdout).toContain(
+        `orchestration check --run ${run.id} --ack ${result.result.deliveryId}`
+      )
 
       const acknowledged = await runRemoteOrcaCli(
         runtime,

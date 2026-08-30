@@ -61,6 +61,14 @@ afterEach(() => {
 })
 
 describe('orchestration timeout flag validation', () => {
+  it.each([true, ''])('rejects check --ack without a delivery id before RPC', async (value) => {
+    await expect(invokeCheck(new Map<string, string | boolean>([['ack', value]]))).rejects.toThrow(
+      /--ack/
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    expect(getTerminalHandleMock).not.toHaveBeenCalled()
+  })
+
   it.each(invalidTimeoutValues)('rejects invalid check --timeout-ms: %s', async (_label, value) => {
     const flags = new Map<string, string | boolean>([
       ['wait', true],

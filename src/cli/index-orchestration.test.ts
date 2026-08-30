@@ -93,6 +93,22 @@ describe('orca cli worktree awareness', () => {
   })
 
   it.each([
+    ['orchestration', 'check', '--ack'],
+    ['orchestration', 'check', '--ack=']
+  ])('rejects bare acknowledgment before calling the runtime: %j', async (...args) => {
+    const priorExitCode = process.exitCode
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(args, '/tmp/repo')
+
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain('Missing required --ack')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+    errorSpy.mockRestore()
+  })
+
+  it.each([
     {
       args: ['orchestration', 'reset', '--all'],
       params: { all: true, tasks: undefined, messages: undefined },

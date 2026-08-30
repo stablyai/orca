@@ -50,8 +50,10 @@ describe('OrchestrationDb Run state', () => {
       expect(first?.messages).toHaveLength(50)
       expect(first?.messages[0].subject).toBe('message 0')
       expect(first?.messages[49].subject).toBe('message 49')
+      expect(first?.queuedMatchingMessages).toBe(true)
       expect(replay?.delivery.id).toBe(first?.delivery.id)
       expect(replay?.replayed).toBe(true)
+      expect(replay?.queuedMatchingMessages).toBe(true)
 
       d.acknowledgeRunDelivery({
         runId: run.id,
@@ -129,6 +131,159 @@ describe('OrchestrationDb Run state', () => {
         wakeTypes: ['worker_done']
       })
       expect(delivery?.messages.map((message) => message.subject)).toEqual(['status', 'done'])
+    })
+
+    it('reports newer matching mail behind an exact replay without exposing it', () => {
+      const d = createDb()
+      const run = createBoundRun(d)
+      const status = d.insertMessage({
+        from: 'a',
+        to: `run:${run.id}`,
+        subject: 'status',
+        runId: run.id
+      })
+      const first = d.getOrCreateRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation
+      })!
+      const question = d.insertMessage({
+        from: 'b',
+        to: `run:${run.id}`,
+        subject: 'question',
+        type: 'question',
+        runId: run.id
+      })
+
+      const replay = d.getOrCreateRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation,
+        wakeTypes: ['worker_done', 'question', 'escalation']
+      })!
+
+      expect(replay).toMatchObject({
+        replayed: true,
+        queuedMatchingMessages: true,
+        delivery: { id: first.delivery.id },
+        messages: [{ id: status.id }]
+      })
+      expect(replay.messages).not.toContainEqual(expect.objectContaining({ id: question.id }))
+      expect(d.getMessageById(question.id)?.read).toBe(0)
+
+      expect(
+        d.getOrCreateRunDelivery({
+          runId: run.id,
+          consumerGeneration: run.consumer_generation,
+          queuedTypes: ['worker_done']
+        })?.queuedMatchingMessages
+      ).toBe(false)
+    })
+
+    // Why: routing rewrites to_handle but never sequence, so batch membership -- not a
+    // sequence watermark -- decides what is still queued behind an outstanding Delivery.
+    it('reports queued mail that reaches the Run mailbox with an older sequence', () => {
+      const d = createDb()
+      const run = createBoundRun(d)
+      const held = d.insertMessage({
+        from: 'term_peer',
+        to: 'term_worker',
+        subject: 'worker finished',
+        type: 'worker_done',
+        runId: run.id
+      })
+      const status = d.insertMessage({
+        from: 'term_worker',
+        to: `run:${run.id}`,
+        subject: 'status',
+        runId: run.id
+      })
+      expect(d.getMessageById(held.id)!.sequence).toBeLessThan(
+        d.getMessageById(status.id)!.sequence
+      )
+
+      const first = d.getOrCreateRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation
+      })!
+      expect(first.messages.map((message) => message.id)).toEqual([status.id])
+
+      d.routeUnreadDirectMessagesToRunMailbox(run.id, 'term_worker')
+      expect(d.getMessageById(held.id)!.to_handle).toBe(`run:${run.id}`)
+      expect(d.getMessageById(held.id)!.read).toBe(0)
+
+      const replay = d.getOrCreateRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation,
+        queuedTypes: ['worker_done']
+      })!
+      expect(replay.replayed).toBe(true)
+      expect(replay.delivery.id).toBe(first.delivery.id)
+      expect(replay.messages.map((message) => message.id)).toEqual([status.id])
+      expect(replay.queuedMatchingMessages).toBe(true)
+
+      d.acknowledgeRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation,
+        deliveryId: first.delivery.id
+      })
+      expect(
+        d
+          .getOrCreateRunDelivery({
+            runId: run.id,
+            consumerGeneration: run.consumer_generation
+          })!
+          .messages.map((message) => message.id)
+      ).toEqual([held.id])
+    })
+
+    // The other routing entry point: mail released when a Dispatch settles.
+    it('reports queued mail released from a settled Dispatch mailbox', () => {
+      const d = createDb()
+      const run = createBoundRun(d)
+      const parked = d.insertMessage({
+        from: 'term_worker',
+        to: 'dispatch:disp_1',
+        subject: 'worker finished',
+        type: 'worker_done',
+        runId: run.id
+      })
+      const later = d.insertMessage({
+        from: 'term_other',
+        to: `run:${run.id}`,
+        subject: 'later status',
+        runId: run.id
+      })
+      expect(parked.sequence).toBeLessThan(later.sequence)
+
+      const first = d.getOrCreateRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation
+      })!
+      expect(first.messages.map((message) => message.id)).toEqual([later.id])
+
+      expect(d.routeUnreadDispatchMailboxToRunMailbox('disp_1', run.id).routedCount).toBe(1)
+
+      const replay = d.getOrCreateRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation,
+        queuedTypes: ['worker_done']
+      })!
+      expect(replay.replayed).toBe(true)
+      expect(replay.messages.map((message) => message.id)).toEqual([later.id])
+      expect(replay.queuedMatchingMessages).toBe(true)
+
+      d.acknowledgeRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation,
+        deliveryId: first.delivery.id
+      })
+      expect(
+        d
+          .getOrCreateRunDelivery({
+            runId: run.id,
+            consumerGeneration: run.consumer_generation
+          })!
+          .messages.map((message) => message.id)
+      ).toEqual([parked.id])
     })
 
     it('fences an outstanding batch when the Run consumer changes', () => {

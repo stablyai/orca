@@ -12458,18 +12458,20 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "A deterministic isolated runtime/SQLite/RPC harness covers Run and Dispatch ownership, exact handle and remint-stable pane recipients, fixed Delivery replay and acknowledgment, restart, concurrent pollers, filtered waiters, and built-CLI parity with direct DB state. Schema v28 durably records every coordinator handle through SQLite triggers, backfills current handles on open, recreates routing triggers after old table rebuilds, and atomically canonicalizes coordinator-addressed inserts to run:<id>. A 125-row oracle and 151-row reconciliation suite cover paged old-handle backlogs, commit-without-notify recovery, duplicate Dispatch owners, cancellation, and lifecycle fencing. Federation tests use real databases, dropped acknowledgments, restart/reconnect, and protocol v1/v2 peers; duplicate read rows do not wake again. Daemon and SSH pointer settlement is deterministic, with SSH bounded at 60 seconds beyond the 20-second mux health window. No RPC parameter, stream opcode, or published payload changed. Live headed/headless paired-runtime, physical SSH, WSL, Linux, and Windows acceptance remain gaps.",
+      "coverageNotes": "A deterministic isolated runtime/SQLite/RPC harness covers Run and Dispatch ownership, exact handle and remint-stable pane recipients, fixed Delivery replay and acknowledgment, restart, concurrent pollers, filtered waiters, and built-CLI parity with direct DB state. Schema v28 durably records every coordinator handle through SQLite triggers, backfills current handles on open, recreates routing triggers after old table rebuilds, and atomically canonicalizes coordinator-addressed inserts to run:<id>. A 125-row oracle and 151-row reconciliation suite cover paged old-handle backlogs, commit-without-notify recovery, duplicate Dispatch owners, cancellation, and lifecycle fencing. Federation tests use real databases, dropped acknowledgments, restart/reconnect, and protocol v1/v2 peers; duplicate read rows do not wake again. Daemon and SSH pointer settlement is deterministic, with SSH bounded at 60 seconds beyond the 20-second mux health window. STA-5524 adds optional `replayed` and `queuedMatchingMessages` response fields on the existing RPC; old clients ignore them and new clients label their absence as unavailable when paired with an older runtime, so no capability negotiation or protocol bump is required. Live headed/headless paired-runtime, physical SSH, WSL, Linux, and Windows acceptance remain gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4325",
+        "https://linear.app/stably/issue/STA-5524",
         "https://github.com/stablyai/orca/issues/14522",
         "internal incident evidence: improve-vps-setup, 2026-08-10"
       ],
-      "invariant": "Each message has one stable row ID and authoritative recipient; coordinator-addressed current-delivery inserts are atomically owned by run:<id>. Pointer staging may set delivered_at but never consumes mail. Each Run consumer generation has at most one outstanding Delivery with a fixed ID and fixed message IDs; ordinary checks replay it until an explicit matching acknowledgment marks exactly those rows read. Rebinding fences the old generation, notification types/counts correspond to unread rows retrievable under the same authority, and federation replay imports each stable message identity once without re-waking an already-read duplicate.",
-      "oracle": "Seed status, dispatch, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit acknowledgment, restart, filtered check --wait, and coordinator remint. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Hold a healthy SSH write past five seconds but below the 60-second settlement deadline, then separately exceed the bound and require retryable undelivered state.",
+      "invariant": "Each message has one stable row ID and authoritative recipient; coordinator-addressed current-delivery inserts are atomically owned by run:<id>. Pointer staging may set delivered_at but never consumes mail. Each Run consumer generation has at most one outstanding Delivery with a fixed ID and fixed message IDs; ordinary checks label and replay it until an explicit matching acknowledgment marks exactly those rows read. Mail queued behind the batch remains unseen and unread while a bounded indexed probe reports, by batch membership rather than by sequence, whether queued rows match the waiter's requested types. Rebinding fences the old generation, notification types/counts correspond to unread rows retrievable under the same authority, and federation replay imports each stable message identity once without re-waking an already-read duplicate.",
+      "oracle": "Seed status, dispatch, question, escalation, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit and wrong acknowledgment, bare-ack rejection, restart, filtered check --wait, queued matching-mail signaling, concurrent send during acknowledgment, and coordinator remint. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Hold a healthy SSH write past five seconds but below the 60-second settlement deadline, then separately exceed the bound and require retryable undelivered state.",
       "commands": [
         "pnpm run build:cli && pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-message-delivery-identity.test.ts --reporter=dot --testTimeout=5000",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/rpc/methods/orchestration-runs.test.ts src/main/runtime/rpc/methods/orchestration-send.test.ts src/main/runtime/rpc/methods/orchestration-check.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/orchestration-check-output.test.ts src/cli/handlers/orchestration-timeout.test.ts src/cli/index-orchestration.test.ts src/main/ssh/ssh-remote-orchestration-compatibility.test.ts src/main/runtime/orchestration/orchestration-delivery-queue-boundary.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot"
       ],
       "testFiles": [
@@ -12492,6 +12494,11 @@
         "src/main/runtime/rpc/methods/orchestration-runs.test.ts",
         "src/main/runtime/rpc/methods/orchestration-send.test.ts",
         "src/main/runtime/rpc/methods/orchestration-check.test.ts",
+        "src/shared/orchestration-check-output.test.ts",
+        "src/cli/handlers/orchestration-timeout.test.ts",
+        "src/cli/index-orchestration.test.ts",
+        "src/main/ssh/ssh-remote-orchestration-compatibility.test.ts",
+        "src/main/runtime/orchestration/orchestration-delivery-queue-boundary.test.ts",
         "src/main/runtime/orchestration/federation-sync.test.ts",
         "src/main/runtime/rpc/methods/orchestration-federation.test.ts",
         "src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts"
@@ -12504,6 +12511,7 @@
             "notification count equals the concurrently replayed fixed Delivery batch",
             "unread, peek, all, and type filters preserve explicit acknowledgment semantics",
             "restart replays one outstanding Delivery ID without inserting another Delivery row",
+            "a replay returns its fixed Delivery ID and the same fixed rows without exposing or consuming anything else",
             "a filtered check --wait wakes once without a duplicate terminal pointer",
             "a 125-row old-handle backlog is atomically rebound before coordinator identity changes",
             "committed coordinator mail is canonicalized without relying on notification delivery",
@@ -12529,6 +12537,41 @@
             "a submitted actionable pointer is durably deduplicated across restart without marking mail read",
             "newer Run mail is not pointed behind an outstanding fixed Delivery",
             "same-owner filtered checks drain later 50-row pages before waiting"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts",
+          "assertions": [
+            "a replay reports whether other filter-matching mail is queued behind it without exposing or consuming it",
+            "mail routed into the Run mailbox at a lower sequence than the batch is still reported as queued",
+            "acknowledgment releases exactly the mail that was reported as queued"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration/orchestration-delivery-queue-boundary.test.ts",
+          "assertions": [
+            "a full 50-member batch plus type filters binds within SQLite variable limits",
+            "a batch member is never reported as queued behind itself",
+            "a type filter matching nothing queued reports false"
+          ]
+        },
+        {
+          "file": "src/shared/orchestration-check-output.test.ts",
+          "assertions": [
+            "human output distinguishes new, replayed, and older-runtime Delivery status",
+            "queued matching mail and unavailable mixed-version status remain explicit",
+            "the exact acknowledgment command retains its Run scope"
+          ]
+        },
+        {
+          "file": "src/cli/index-orchestration.test.ts",
+          "assertions": ["bare and empty check --ack values fail before any RPC call"]
+        },
+        {
+          "file": "src/main/ssh/ssh-remote-orchestration-compatibility.test.ts",
+          "assertions": [
+            "remote output labels new and replayed current Run Deliveries",
+            "remote acknowledgment guidance preserves the explicit Run identity"
           ]
         },
         {
@@ -12605,6 +12648,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-28",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/orchestration-check-output.test.ts src/cli/handlers/orchestration-timeout.test.ts src/cli/index-orchestration.test.ts src/main/ssh/ssh-remote-orchestration-compatibility.test.ts src/main/runtime/orchestration/orchestration-delivery-queue-boundary.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 6.75,
+          "summary": "58 tests passed covering new-versus-replayed Delivery labelling, an off-contract queued value rendering as unavailable rather than silence, Run-scoped acknowledgment guidance, bare and empty --ack rejected before any RPC, remote SSH output parity, and the queued-mail probe at the 50-id batch boundary including a batch member never reporting as queued behind itself."
+        },
         {
           "date": "2026-08-13",
           "runner": "local",

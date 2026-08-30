@@ -36,6 +36,9 @@ export type OrchestrationCheckOutput = {
   count: number
   formatted?: string
   deliveryId?: string | null
+  runId?: string
+  replayed?: boolean
+  queuedMatchingMessages?: boolean
   timedOut?: boolean
   cancelled?: boolean
   connectionLost?: boolean
@@ -80,8 +83,9 @@ export function formatOrchestrationCheckText(
         : '[LEGACY COMPATIBILITY]\n'
     : ''
   const deliveryNotice = formatCurrentDeliveryNotice(prepared.legacyCompatibility?.currentDelivery)
+  const deliveryStatus = formatDeliveryStatus(prepared)
   if (prepared.formatted) {
-    return `${legacyHeader}${prepared.formatted}${deliveryNotice}`
+    return `${legacyHeader}${deliveryStatus}${prepared.formatted}${formatDeliveryAction(prepared)}${deliveryNotice}`
   }
   if (prepared.count === 0) {
     if (prepared.timedOut) {
@@ -104,8 +108,35 @@ export function formatOrchestrationCheckText(
         )} [${message.type ?? 'status'}] from=${message.from_handle} "${message.subject}"`
     )
     .join('\n')
-  const output = prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n${rendered}` : rendered
-  return `${legacyHeader}${output}${deliveryNotice}`
+  return `${legacyHeader}${deliveryStatus}${rendered}${formatDeliveryAction(prepared)}${deliveryNotice}`
+}
+
+function formatDeliveryStatus(result: OrchestrationCheckOutput): string {
+  if (!result.deliveryId) {
+    return ''
+  }
+  const status =
+    result.replayed === true
+      ? 'replay: unacknowledged'
+      : result.replayed === false
+        ? 'new'
+        : 'status unavailable from older runtime'
+  return `Delivery ${result.deliveryId} [${status}]\n`
+}
+
+function formatDeliveryAction(result: OrchestrationCheckOutput): string {
+  if (!result.deliveryId) {
+    return ''
+  }
+  // Why: only an observed `false` may render as silence; every other value is unestablished.
+  const queued =
+    result.queuedMatchingMessages === true
+      ? '\nOther messages matching this check are queued behind this Delivery.'
+      : result.queuedMatchingMessages === false
+        ? ''
+        : '\nQueued matching-message status is unavailable from this runtime.'
+  const runFlag = result.runId ? ` --run ${result.runId}` : ''
+  return `${queued}\nAfter processing every message, acknowledge this exact batch with \`orca orchestration check${runFlag} --ack ${result.deliveryId}\`.\n`
 }
 
 export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutput>(

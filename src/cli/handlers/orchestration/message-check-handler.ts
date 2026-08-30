@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
-import { getOptionalStringFlag } from '../../flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
 import {
@@ -20,6 +20,8 @@ type CheckResult = {
   count: number
   formatted?: string
   deliveryId?: string | null
+  replayed?: boolean
+  queuedMatchingMessages?: boolean
   runId?: string
   timedOut?: boolean
   cancelled?: boolean
@@ -31,6 +33,7 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
   'orchestration check': async ({ flags, client, cwd, json }) => {
     const wait = flags.has('wait')
     const peek = flags.has('peek')
+    const ack = flags.has('ack') ? getRequiredStringFlag(flags, 'ack') : undefined
     // Why: older runtimes strip unknown peek and run --unread --peek as destructive mark-read.
     if ([flags.has('unread'), peek, flags.has('all')].filter(Boolean).length > 1) {
       throw new RuntimeClientError(
@@ -56,7 +59,7 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         inject: flags.has('inject') ? true : undefined,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
         run: getOptionalStringFlag(flags, 'run'),
-        ack: getOptionalStringFlag(flags, 'ack'),
+        ack,
         wait: wait ? true : undefined,
         timeoutMs
       })

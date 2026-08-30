@@ -4,6 +4,7 @@ import { generateId } from '../generated-id'
 import { exposeMessageListTimestamps, exposeDeliveryTimestamps } from '../utc-timestamp'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from '../messages/mailbox-routing-page'
 import type { OrchestrationDb } from '../orchestration-db'
+import { hasQueuedMatchingRunMessages } from './run-delivery-queue-status'
 
 export function requireCurrentConsumer(
   this: OrchestrationDb,
@@ -45,8 +46,16 @@ export function getOrCreateRunDelivery(
     consumerGeneration: number
     limit?: number
     wakeTypes?: MessageType[]
+    queuedTypes?: MessageType[]
   }
-): { delivery: DeliveryRow; messages: MessageRow[]; replayed: boolean } | undefined {
+):
+  | {
+      delivery: DeliveryRow
+      messages: MessageRow[]
+      replayed: boolean
+      queuedMatchingMessages: boolean
+    }
+  | undefined {
   const limit = Math.min(
     Math.max(params.limit ?? ORCHESTRATION_DELIVERY_BATCH_LIMIT, 1),
     ORCHESTRATION_DELIVERY_BATCH_LIMIT
@@ -65,8 +74,19 @@ export function getOrCreateRunDelivery(
         )
       }
       const messages = this.getDeliveryMessages(existing)
+      const queuedMatchingMessages = hasQueuedMatchingRunMessages.call(
+        this,
+        params.runId,
+        messages,
+        params.queuedTypes ?? params.wakeTypes
+      )
       this.db.exec('COMMIT')
-      return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
+      return {
+        delivery: exposeDeliveryTimestamps(existing),
+        messages,
+        replayed: true,
+        queuedMatchingMessages
+      }
     }
 
     const address = `run:${params.runId}`
@@ -114,8 +134,19 @@ export function getOrCreateRunDelivery(
         JSON.stringify(messages.map((message) => message.id))
       )
     const delivery = this.getDeliveryRaw(deliveryId) as DeliveryRow
+    const queuedMatchingMessages = hasQueuedMatchingRunMessages.call(
+      this,
+      params.runId,
+      messages,
+      params.queuedTypes ?? params.wakeTypes
+    )
     this.db.exec('COMMIT')
-    return { delivery: exposeDeliveryTimestamps(delivery), messages, replayed: false }
+    return {
+      delivery: exposeDeliveryTimestamps(delivery),
+      messages,
+      replayed: false,
+      queuedMatchingMessages
+    }
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
