@@ -16,6 +16,7 @@
     "../src/main/wsl-availability.ts",
     "../src/main/wsl-distro-list-output.ts",
     "../src/main/wsl-distro-retry.ts",
+    "../src/main/wsl-running-distro-cache.ts",
     "../src/main/wsl.ts",
     "../src/main/persistence/applying-settings/ui-state-read.ts",
     "../src/main/persistence/applying-settings/ui-state-update.ts",
