@@ -43,7 +43,9 @@ describe.skipIf(process.platform === 'win32')('managed hook outside an Orca term
     const dir = createTempDir('orca-outside-')
     const res = runHook(dir)
     expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
+    // Why: Codex fails closed on non-JSON hook stdout (#16356), so the neutral '{}' is required even
+    // outside an Orca terminal; inertness is still asserted by exit 0, empty stderr and no files written.
+    expect(res.stdout).toBe('{}\n')
     expect(res.stderr).toBe('')
     expect(readdirSync(dir)).toEqual(['codex-hook.sh'])
   })
@@ -55,7 +57,9 @@ describe.skipIf(process.platform === 'win32')('managed hook outside an Orca term
       ORCA_PANE_KEY: 'tab:0'
     })
     expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
+    // Why: Codex fails closed on non-JSON hook stdout (#16356), so the neutral '{}' is required even
+    // outside an Orca terminal; inertness is still asserted by exit 0, empty stderr and no files written.
+    expect(res.stdout).toBe('{}\n')
     expect(res.stderr).toBe('')
     // a stale env var must not create a spool tree for an Orca that is not installed here
     expect(readdirSync(dir)).toEqual(['codex-hook.sh'])
@@ -67,7 +71,9 @@ describe.skipIf(process.platform === 'win32')('managed hook outside an Orca term
     writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
     const res = runHook(dir, { ORCA_AGENT_HOOK_ENDPOINT: endpoint })
     expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
+    // Why: Codex fails closed on non-JSON hook stdout (#16356), so the neutral '{}' is required even
+    // outside an Orca terminal; inertness is still asserted by exit 0, empty stderr and no files written.
+    expect(res.stdout).toBe('{}\n')
     expect(res.stderr).toBe('')
     expect(readdirSync(dir).sort()).toEqual(['codex-hook.sh', 'endpoint.env'])
   })
