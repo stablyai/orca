@@ -150,7 +150,8 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
     )
     return excludeMisidentifiedAgents(
       resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl'),
-      (command, args) => execCommandInWsl(wslTarget, [command, ...args].map(shellQuote).join(' '))
+      (command, args) =>
+        execCommandInWslOrThrow(wslTarget, [command, ...args].map(shellQuote).join(' '))
     )
   }
 
@@ -175,7 +176,7 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
   )
   return excludeMisidentifiedAgents(
     resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, process.platform),
-    (command, args) => execLocalPreflightCommand(command, [...args])
+    (command, args) => execLocalPreflightCommandOrThrow(command, [...args])
   )
 }
 
