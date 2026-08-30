@@ -85,7 +85,9 @@ describe('linear-issue-attribute-filter helpers', () => {
         ['fe-todo', 'Todo']
       ]),
       memberNamesById: new Map(),
-      labelNamesById: new Map()
+      labelNamesById: new Map(),
+      statusOptions: [{ key: 'be-todo', primary: 'Todo', ids: ['be-todo', 'fe-todo'] }],
+      labelOptions: []
     })
     expect(pills[0]?.value).toBe('Todo')
   })
@@ -98,7 +100,9 @@ describe('linear-issue-attribute-filter helpers', () => {
         ['s2', 'In Progress']
       ]),
       memberNamesById: new Map(),
-      labelNamesById: new Map([['l1', 'Bug']])
+      labelNamesById: new Map([['l1', 'Bug']]),
+      statusOptions: [],
+      labelOptions: []
     })
     expect(pills.map((p) => p.key)).toEqual(['status', 'priority', 'assignee', 'labels'])
     expect(pills[0]?.value).toContain('Todo')
@@ -261,105 +265,6 @@ const multiTeamStates = [
 const teamBe: LinearTeam = { id: 'team-be', name: 'Backend', key: 'BE' }
 const teamFe: LinearTeam = { id: 'team-fe', name: 'Frontend', key: 'FE' }
 
-function openStatusSection(onChange: (next: LinearIssueAttributeFilter) => void): void {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  roots.push(root)
-
-  act(() => {
-    root.render(
-      <LinearIssueAttributeFilterDropdowns
-        value={{ stateIds: [], priorities: [], assignee: null, labelIds: [] }}
-        onChange={onChange}
-        workspaceId="workspace-1"
-        primaryTeam={teamBe}
-        selectedTeamIds={['team-be', 'team-fe']}
-        availableTeams={[teamBe, teamFe]}
-        teamsSettled
-      />
-    )
-  })
-
-  const trigger = container.querySelector('button')
-  act(() => {
-    trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
-
-  const statusButton = [...document.body.querySelectorAll('button')].find(
-    (button) => button.textContent?.trim() === 'Status'
-  )
-  act(() => {
-    statusButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
-}
-
-function statusRowsNamed(name: string): HTMLElement[] {
-  return [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].filter(
-    (row) => row.textContent?.trim() === name
-  )
-}
-
-// Why: two teams share Linear's default state template, so the picker used to list
-// "Todo"/"Backlog" once per team and each row filtered to a single team's issues (#16785).
-describe('LinearIssueAttributeFilterDropdowns status options across teams', () => {
-  it('lists one row per status name instead of one per team state id', () => {
-    metadataMocks.useTeamsStates.mockImplementation(() => ({
-      data: multiTeamStates,
-      loading: false,
-      error: null
-    }))
-
-    openStatusSection(() => undefined)
-
-    expect(statusRowsNamed('Todo')).toHaveLength(1)
-    expect(statusRowsNamed('Backlog')).toHaveLength(1)
-  })
-
-  it('selects every team state id behind the picked status name', () => {
-    metadataMocks.useTeamsStates.mockImplementation(() => ({
-      data: multiTeamStates,
-      loading: false,
-      error: null
-    }))
-    const onChange = vi.fn()
-
-    openStatusSection(onChange)
-    act(() => {
-      statusRowsNamed('Todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ stateIds: ['be-todo', 'fe-todo'] })
-    )
-  })
-
-  // Why: "All teams" in a large workspace expands one status into an id per team, and the
-  // IPC parser rejects a filter over the transport cap instead of trimming it.
-  it('keeps the expanded status selection within the transport id cap', () => {
-    const overCap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS + 20
-    metadataMocks.useTeamsStates.mockImplementation(() => ({
-      data: Array.from({ length: overCap }, (_unused, index) => ({
-        id: `team-${index}-todo`,
-        name: 'Todo',
-        type: 'unstarted'
-      })),
-      loading: false,
-      error: null
-    }))
-    const onChange = vi.fn()
-
-    openStatusSection(onChange)
-    act(() => {
-      statusRowsNamed('Todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(onChange.mock.calls[0]?.[0].stateIds).toHaveLength(
-      LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
-    )
-  })
-})
-
 function renderDropdowns(value: LinearIssueAttributeFilter): {
   rerender: (next: LinearIssueAttributeFilter) => void
   onChange: ReturnType<typeof vi.fn>
@@ -410,6 +315,71 @@ const emptyFilter: LinearIssueAttributeFilter = {
   labelIds: []
 }
 
+function pickerRowsNamed(name: string): HTMLElement[] {
+  return [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].filter(
+    (row) => row.textContent?.trim() === name
+  )
+}
+
+// Why: two teams share Linear's default state template, so the picker used to list
+// "Todo"/"Backlog" once per team and each row filtered to a single team's issues (#16785).
+describe('LinearIssueAttributeFilterDropdowns status options across teams', () => {
+  it('lists one row per status name instead of one per team state id', () => {
+    metadataMocks.useTeamsStates.mockImplementation(() => ({
+      data: multiTeamStates,
+      loading: false,
+      error: null
+    }))
+
+    renderDropdowns(emptyFilter)
+    openSectionNamed('Status')
+
+    expect(pickerRowsNamed('Todo')).toHaveLength(1)
+    expect(pickerRowsNamed('Backlog')).toHaveLength(1)
+  })
+
+  it('selects every team state id behind the picked status name', () => {
+    metadataMocks.useTeamsStates.mockImplementation(() => ({
+      data: multiTeamStates,
+      loading: false,
+      error: null
+    }))
+    const { onChange } = renderDropdowns(emptyFilter)
+    openSectionNamed('Status')
+    act(() => {
+      pickerRowsNamed('Todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ stateIds: ['be-todo', 'fe-todo'] })
+    )
+  })
+
+  // Why: "All teams" in a large workspace expands one status into an id per team, and the
+  // IPC parser rejects a filter over the transport cap instead of trimming it.
+  it('keeps the expanded status selection within the transport id cap', () => {
+    const overCap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS + 20
+    metadataMocks.useTeamsStates.mockImplementation(() => ({
+      data: Array.from({ length: overCap }, (_unused, index) => ({
+        id: `team-${index}-todo`,
+        name: 'Todo',
+        type: 'unstarted'
+      })),
+      loading: false,
+      error: null
+    }))
+    const { onChange } = renderDropdowns(emptyFilter)
+    openSectionNamed('Status')
+    act(() => {
+      pickerRowsNamed('Todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onChange.mock.calls[0]?.[0].stateIds).toHaveLength(
+      LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
+    )
+  })
+})
+
 function sameNamedMetadata(name: string, count: number): { id: string; name: string }[] {
   return Array.from({ length: count }, (_unused, index) => ({ id: `team-${index}-${name}`, name }))
 }
@@ -428,14 +398,14 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     const { rerender, onChange } = renderDropdowns(emptyFilter)
     openSectionNamed('Status')
     act(() => {
-      statusRowsNamed('todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      pickerRowsNamed('todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     const bounded = onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter
     expect(bounded.stateIds).toHaveLength(LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS)
     rerender(bounded)
 
-    expect(statusRowsNamed('todo')).toHaveLength(1)
+    expect(pickerRowsNamed('todo')).toHaveLength(1)
     expect(document.body.textContent).toContain(
       `Filtering ${LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS} of ${overCap} team statuses`
     )
@@ -452,11 +422,11 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     const { rerender, onChange } = renderDropdowns(emptyFilter)
     openSectionNamed('Status')
     act(() => {
-      statusRowsNamed('todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      pickerRowsNamed('todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)
     act(() => {
-      statusRowsNamed('doing')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      pickerRowsNamed('doing')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     rerender(onChange.mock.calls[1]?.[0] as LinearIssueAttributeFilter)
 
@@ -475,11 +445,71 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     const { rerender, onChange } = renderDropdowns(emptyFilter)
     openSectionNamed('Status')
     act(() => {
-      statusRowsNamed('Todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      pickerRowsNamed('Todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)
 
     expect(document.body.textContent).not.toContain('team statuses')
+    openSectionNamed('Back')
+    expect(document.body.textContent).not.toContain('partial')
+  })
+
+  // Why: the notice only exists inside the detail panel, but the surfaces a user works from
+  // after applying a filter are the collapsed section menu and the pill (#16879).
+  it('flags the trimmed status filter in the section menu and the pill', () => {
+    const overCap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS + 20
+    metadataMocks.useTeamsStates.mockImplementation(() => ({
+      data: sameNamedMetadata('todo', overCap),
+      loading: false,
+      error: null
+    }))
+
+    const { rerender, onChange } = renderDropdowns(emptyFilter)
+    openSectionNamed('Status')
+    act(() => {
+      pickerRowsNamed('todo')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)
+    openSectionNamed('Back')
+
+    expect(document.body.textContent).toContain('1 selected · partial')
+    const pillMarkers = [...document.body.querySelectorAll('span[title]')].filter(
+      (span) => span.textContent === 'partial'
+    )
+    expect(pillMarkers).toHaveLength(1)
+  })
+
+  // Why: the canonical id list is sorted before the cap slices it, so a picked row whose ids
+  // all sort last used to vanish outright — unchecked, uncounted, and with no notice at all.
+  it('keeps and counts a picked status whose ids all sort past the cap', () => {
+    const cap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
+    metadataMocks.useTeamsStates.mockImplementation(() => ({
+      data: [
+        ...Array.from({ length: cap }, (_unused, index) => ({
+          id: `a-${String(index).padStart(3, '0')}`,
+          name: 'Alpha'
+        })),
+        { id: 'z-000', name: 'Zeta' }
+      ],
+      loading: false,
+      error: null
+    }))
+
+    const { rerender, onChange } = renderDropdowns(emptyFilter)
+    openSectionNamed('Status')
+    act(() => {
+      pickerRowsNamed('Alpha')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)
+    act(() => {
+      pickerRowsNamed('Zeta')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const bounded = onChange.mock.calls[1]?.[0] as LinearIssueAttributeFilter
+    rerender(bounded)
+
+    expect(bounded.stateIds).toHaveLength(cap)
+    expect(bounded.stateIds).toContain('z-000')
+    expect(document.body.textContent).toContain(`Filtering ${cap} of ${cap + 1} team statuses`)
   })
 
   it('reports the team labels left out once a picked label exceeds the id cap', () => {
@@ -493,7 +523,7 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     const { rerender, onChange } = renderDropdowns(emptyFilter)
     openSectionNamed('Labels')
     act(() => {
-      statusRowsNamed('bug')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      pickerRowsNamed('bug')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     const bounded = onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter

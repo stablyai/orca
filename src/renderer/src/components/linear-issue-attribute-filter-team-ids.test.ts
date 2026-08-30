@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LinearTeam } from '../../../shared/linear/workspace-types'
 import {
+  capLinearMetadataIdsAcrossGroups,
   expandLinearMetadataGroupKeys,
   groupLinearMetadataByName,
   resolveLinearIssueAttributeFilterTeamIds,
@@ -129,5 +130,33 @@ describe('groupLinearMetadataByName', () => {
       'other-team-todo'
     ])
     expect(expandLinearMetadataGroupKeys(groups, ['other-team-todo'])).toEqual(['other-team-todo'])
+  })
+})
+
+describe('capLinearMetadataIdsAcrossGroups', () => {
+  const groups = [
+    { key: 'alpha', ids: ['a-1', 'a-2', 'a-3'] },
+    { key: 'zeta', ids: ['z-1'] }
+  ]
+
+  it('leaves a selection already within the cap untouched', () => {
+    expect(capLinearMetadataIdsAcrossGroups(groups, ['a-1', 'a-2'], 3)).toEqual(['a-1', 'a-2'])
+  })
+
+  // Why: a plain slice of the sorted id list drops the whole trailing group, which then
+  // renders unchecked and disappears from the coverage count (#16879).
+  it('keeps an id from every picked group instead of slicing the last one away', () => {
+    expect(capLinearMetadataIdsAcrossGroups(groups, ['a-1', 'a-2', 'a-3', 'z-1'], 3)).toEqual([
+      'a-1',
+      'z-1',
+      'a-2'
+    ])
+  })
+
+  it('treats an id no group covers as its own group', () => {
+    expect(capLinearMetadataIdsAcrossGroups(groups, ['a-1', 'a-2', 'a-3', 'other'], 2)).toEqual([
+      'a-1',
+      'other'
+    ])
   })
 })

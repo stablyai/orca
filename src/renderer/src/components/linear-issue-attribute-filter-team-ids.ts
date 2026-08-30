@@ -81,13 +81,87 @@ export function selectedLinearMetadataGroupKeys(
   groups: readonly { key: string; ids: readonly string[] }[],
   selectedIds: readonly string[]
 ): string[] {
+  const keyById = linearMetadataKeyById(groups)
+  return [...new Set(selectedIds.map((id) => keyById.get(id) ?? id))]
+}
+
+function linearMetadataKeyById(
+  groups: readonly { key: string; ids: readonly string[] }[]
+): Map<string, string> {
   const keyById = new Map<string, string>()
   for (const group of groups) {
     for (const id of group.ids) {
       keyById.set(id, group.key)
     }
   }
-  return [...new Set(selectedIds.map((id) => keyById.get(id) ?? id))]
+  return keyById
+}
+
+/** Ids the picked rows stand for, against the ids the transport cap actually kept (#16879). */
+export function linearMetadataGroupCoverage(
+  groups: readonly { key: string; ids: readonly string[] }[],
+  selectedIds: readonly string[]
+): { applied: number; intended: number } {
+  const keys = selectedLinearMetadataGroupKeys(groups, selectedIds)
+  return {
+    applied: selectedIds.length,
+    intended: expandLinearMetadataGroupKeys(groups, keys).length
+  }
+}
+
+/** True when the picked rows stand for more team ids than the filter actually applies. */
+export function isLinearMetadataGroupSelectionPartial(
+  groups: readonly { key: string; ids: readonly string[] }[],
+  selectedIds: readonly string[]
+): boolean {
+  const { applied, intended } = linearMetadataGroupCoverage(groups, selectedIds)
+  return intended > applied
+}
+
+/**
+ * Trim an expanded selection to `max` ids by taking turns across the picked groups.
+ * A plain slice of the canonical (sorted) id list can drop every id of one picked row,
+ * which then renders unchecked with no explanation and vanishes from the coverage count.
+ */
+export function capLinearMetadataIdsAcrossGroups(
+  groups: readonly { key: string; ids: readonly string[] }[],
+  ids: readonly string[],
+  max: number
+): string[] {
+  if (ids.length <= max) {
+    return [...ids]
+  }
+  const keyById = linearMetadataKeyById(groups)
+  const buckets = new Map<string, string[]>()
+  for (const id of ids) {
+    const key = keyById.get(id) ?? id
+    const bucket = buckets.get(key)
+    if (bucket) {
+      bucket.push(id)
+    } else {
+      buckets.set(key, [id])
+    }
+  }
+  const lists = [...buckets.values()]
+  const capped: string[] = []
+  for (let round = 0; capped.length < max; round += 1) {
+    let advanced = false
+    for (const list of lists) {
+      const id = list[round]
+      if (id === undefined) {
+        continue
+      }
+      advanced = true
+      capped.push(id)
+      if (capped.length >= max) {
+        break
+      }
+    }
+    if (!advanced) {
+      break
+    }
+  }
+  return capped
 }
 
 /** Every id behind the picked group keys; an unknown key is itself an id. */
