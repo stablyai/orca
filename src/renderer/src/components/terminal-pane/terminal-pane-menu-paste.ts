@@ -10,7 +10,10 @@ import {
   type TerminalPasteSource,
   type TerminalPasteTextOptions
 } from './terminal-paste-coordinator'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import {
+  formatClipboardImagePasteError,
+  formatTerminalPasteExecutionError
+} from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
@@ -141,10 +144,7 @@ export const pasteTerminalPaneMenuClipboard = async (
       executeTerminalPaneMenuPasteText(context, pane, source, text, options),
     onTextPasteError: () =>
       onPasteError('Paste failed: clipboard text is too large for a safe terminal paste.'),
-    onImagePasteError: (error) => {
-      const detail = error instanceof Error ? error.message : String(error)
-      onPasteError(`Image paste failed: ${detail}`)
-    }
+    onImagePasteError: (error) => onPasteError(formatClipboardImagePasteError(error))
   })
   if (result.status !== 'pasted') {
     return

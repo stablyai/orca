@@ -223,8 +223,12 @@ import {
   type TerminalPasteSource,
   type TerminalPasteTextOptions
 } from './terminal-paste-coordinator'
+import { stripIpcInvokeEnvelope } from '@/lib/ipc-error'
 import { appendTerminalErrorMessage } from './terminal-error-accumulation'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import {
+  formatClipboardImagePasteError,
+  formatTerminalPasteExecutionError
+} from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import {
@@ -300,11 +304,6 @@ function TerminalQuickCommandEditorDialog({
       onSave={onSave}
     />
   )
-}
-
-function formatClipboardImagePasteError(error: unknown): string {
-  const detail = error instanceof Error ? error.message : String(error)
-  return `Image paste failed: ${detail}`
 }
 
 function TerminalPane(
@@ -492,6 +491,11 @@ function TerminalPane(
       setTerminalError(null)
       setSessionStateSaveFailureOpen(true)
       return
+    }
+    // Why: the surface renders the reason without Electron's IPC envelope, so the wrapped form —
+    // which names the channel that failed — has to reach the log from here instead.
+    if (stripIpcInvokeEnvelope(message) !== message) {
+      console.warn('[terminal] pane error reached the error surface IPC-wrapped; raw:', message)
     }
     setTerminalError((prev) => appendTerminalErrorMessage(prev, message))
   })

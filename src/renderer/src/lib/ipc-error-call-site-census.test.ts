@@ -109,6 +109,56 @@ function stripComments(source: string): string {
 // Why: the declaration reads as a call to a plain text match, so it is excluded by name rather
 // than by regex — a narrower pattern would also drop a real call written across two lines.
 const DECLARING_MODULE = 'src/renderer/src/lib/ipc-error.ts'
+const ENVELOPE_MODULE = 'src/shared/ipc-invoke-envelope.ts'
+
+/**
+ * The other half of the population.
+ *
+ * A caller that must not fall back to the wrapper text branches on null instead, so it reaches for
+ * the stripper directly and never appears in CALL_SITES above. Counting only `extractIpcErrorMessage`
+ * reports 30 and reads as a total; it is not one, and the last person to freeze a number here was
+ * wrong for exactly this reason. Both lists together are the set of modules that open the envelope.
+ */
+const DIRECT_STRIPPER_SITES: Readonly<Record<string, { calls: number; surface: string }>> = {
+  'src/renderer/src/components/LinuxPackageInstallRecoveryCard.tsx': {
+    calls: 1,
+    surface: 'recovery card'
+  },
+  'src/renderer/src/components/quick-open-file-list.ts': { calls: 1, surface: 'quick-open list' },
+  'src/renderer/src/components/settings/VoiceSpeechModelSection.tsx': {
+    calls: 1,
+    surface: 'settings row'
+  },
+  'src/renderer/src/components/settings/account-sign-in-error-copy.ts': {
+    calls: 2,
+    surface: 'settings copy+classifier'
+  },
+  'src/renderer/src/components/sidebar/worktree-removal-error-copy.ts': {
+    calls: 2,
+    surface: 'toast'
+  },
+  'src/renderer/src/components/terminal-pane/TerminalPane.tsx': {
+    calls: 1,
+    surface: 'log only — keeps the wrapped form out of the toast and in the console'
+  },
+  'src/renderer/src/components/terminal-pane/terminal-error-accumulation.ts': {
+    calls: 1,
+    surface: 'terminal error toast, via the accumulator every pane-error producer funnels through'
+  },
+  'src/renderer/src/components/terminal-pane/terminal-paste-errors.ts': {
+    calls: 1,
+    surface: 'terminal error toast'
+  },
+  'src/shared/ai-vault-scan-error-message.ts': { calls: 1, surface: 'scan error copy' }
+}
+
+function countDirectStripperCalls(source: string): number {
+  const cleaned = stripComments(source)
+  return (
+    (cleaned.match(/\bstripIpcInvokeEnvelope\(/g)?.length ?? 0) +
+    (cleaned.match(/\bstripIpcInvokeEnvelopeFrom\(/g)?.length ?? 0)
+  )
+}
 
 function countCalls(source: string): number {
   return stripComments(source).match(/\bextractIpcErrorMessage\(/g)?.length ?? 0
@@ -134,11 +184,40 @@ describe('extractIpcErrorMessage call sites', () => {
     expect(found).toEqual(expected)
   })
 
+  it('are joined by the direct stripper sites, which this reader cannot see', () => {
+    const found: Record<string, number> = {}
+    for (const file of listSourceFiles(join(REPO_ROOT, 'src'))) {
+      const name = relative(REPO_ROOT, file).split(sep).join('/')
+      if (name === DECLARING_MODULE || name === ENVELOPE_MODULE) {
+        continue
+      }
+      const calls = countDirectStripperCalls(readFileSync(file, 'utf8'))
+      if (calls > 0) {
+        found[name] = calls
+      }
+    }
+
+    expect(found).toEqual(
+      Object.fromEntries(
+        Object.entries(DIRECT_STRIPPER_SITES).map(([file, { calls }]) => [file, calls])
+      )
+    )
+  })
+
+  /**
+   * What neither list can see, stated rather than implied: both are keyed on the stripper, so they
+   * enumerate sites that already handle the envelope and can never enumerate one that does not. A
+   * leak is invisible here by construction — the terminal error toast was fed a raw envelope for as
+   * long as this file has existed. Surfaces that buffer error text before display need a census
+   * keyed on the surface; `terminal-pane/terminal-error-surface-census.test.ts` is one, for one
+   * surface. Others (`use-task-page-gitlab-fetch.ts`, `use-discard-confirmation.ts`) have none.
+   */
   // Why: this is the number the freeze note got wrong, so it is asserted rather than described.
   it('number 30, and all of them render to a user', () => {
     const total = Object.values(CALL_SITES).reduce((sum, { calls }) => sum + calls, 0)
 
     expect(total).toBe(30)
     expect(Object.values(CALL_SITES).filter(({ surface }) => surface === '')).toEqual([])
+    expect(Object.values(DIRECT_STRIPPER_SITES).filter(({ surface }) => surface === '')).toEqual([])
   })
 })

@@ -3234,6 +3234,13 @@
           },
           "ipcPtyConnect": {
             "unreadableConnectError": "The terminal could not start, and the failure did not include a readable reason."
+          },
+          "terminalErrorAccumulation": {
+            "unreadableTerminalError": "The terminal reported a failure, and it did not include a readable reason."
+          },
+          "terminalPasteErrors": {
+            "imagePasteFailed": "Image paste failed: {{detail}}",
+            "imagePasteUnreadable": "Image paste failed, and the failure did not include a readable reason."
           }
         }
       },
