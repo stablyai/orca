@@ -1,5 +1,6 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
+import { isTmuxCommand, resolveTmuxForegroundAgent } from '../../shared/tmux-foreground-resolution'
 import {
   getFreshProcessTableSnapshot,
   getProcessTableSnapshot,
@@ -175,7 +176,7 @@ export async function resolveAgentForegroundProcessWithAvailability(
     }
     return {
       available: true,
-      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
+      processName: (await resolveAgentForegroundProcessFromPs(rows, shellPid)) ?? fallbackProcess
     }
   } catch {
     // Why: a failed scan cannot prove fallback ownership; callers retain the last recognized agent.
@@ -183,19 +184,15 @@ export async function resolveAgentForegroundProcessWithAvailability(
   }
 }
 
-function resolveAgentForegroundProcessFromPs(
-  rows: ProcessTableRow[],
-  shellPid: number
+function recognizeAgentFromCandidates(
+  candidates: (ProcessTableRow & { depth: number })[],
+  rootRow: ProcessTableRow | undefined
 ): string | null {
-  const shellRow = rows.find((row) => row.pid === shellPid)
-  const candidates = collectDescendants(rows, shellPid).sort(
-    (a, b) => candidateScore(b) - candidateScore(a)
-  )
   // Why: `+` in `ps stat` marks the process holding the terminal foreground.
   // The root shell can hold it after Ctrl-Z, so use the whole PTY tree as the
   // foreground gate; otherwise a stopped agent child still masquerades as live.
   const foregroundIsKnown =
-    shellRow?.stat.includes('+') === true ||
+    rootRow?.stat.includes('+') === true ||
     candidates.some((candidate) => candidate.stat.includes('+'))
   for (const candidate of candidates) {
     if (foregroundIsKnown && !candidate.stat.includes('+')) {
@@ -209,4 +206,29 @@ function resolveAgentForegroundProcessFromPs(
     }
   }
   return null
+}
+
+async function resolveAgentForegroundProcessFromPs(
+  rows: ProcessTableRow[],
+  shellPid: number
+): Promise<string | null> {
+  const shellRow = rows.find((row) => row.pid === shellPid)
+  const candidates = collectDescendants(rows, shellPid).sort(
+    (a, b) => candidateScore(b) - candidateScore(a)
+  )
+  const direct = recognizeAgentFromCandidates(candidates, shellRow)
+  if (direct) {
+    return direct
+  }
+  // Why: tmux double-forks its server and reparents it to pid 1, so an agent
+  // running in a tmux window is a child of the tmux SERVER, not of this pane's
+  // shell — the walk above only reached the tmux client. Hop the fork and
+  // re-run recognition from the client's pane. See issue #7797.
+  const tmuxClientPids = candidates
+    .filter((candidate) => isTmuxCommand(candidate.command))
+    .map((candidate) => candidate.pid)
+  if (tmuxClientPids.length === 0) {
+    return null
+  }
+  return resolveTmuxForegroundAgent({ rows, tmuxClientPids })
 }

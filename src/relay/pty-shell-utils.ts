@@ -11,6 +11,7 @@ import {
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
 import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
+import { isTmuxCommand, resolveTmuxForegroundAgent } from '../shared/tmux-foreground-resolution'
 import {
   resolveOuterWrapperForegroundProcess,
   shouldInspectOuterWrapperForegroundProcess
@@ -270,6 +271,22 @@ async function getRecognizedForegroundDescendant(
         return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
       }
     }
+    // Why: tmux double-forks its server and reparents it to pid 1 (#7797), so an
+    // agent in a tmux window is a child of the SERVER, not this pane's shell
+    // subtree — the walk above only reached the tmux client. Hop the fork and
+    // re-run recognition from the client's pane.
+    const tmuxClientPids = candidates
+      .filter((candidate) => isTmuxCommand(candidate.command))
+      .map((candidate) => candidate.pid)
+    if (tmuxClientPids.length > 0) {
+      const viaTmux = await resolveTmuxForegroundAgent({
+        rows,
+        tmuxClientPids
+      })
+      if (viaTmux) {
+        return viaTmux
+      }
+    }
   } catch {
     // Fall through to node-pty's process name or the root command name.
   }
@@ -310,7 +327,13 @@ export async function getForegroundProcessName(
         (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
       )
     }
-    if (!isShellProcess(fallbackProcess) && !isAgentForegroundWrapperProcess(fallbackProcess)) {
+    if (
+      !isShellProcess(fallbackProcess) &&
+      !isAgentForegroundWrapperProcess(fallbackProcess) &&
+      // Why: tmux must be inspected, not trusted as the foreground — the real
+      // agent hides behind its double-forked server (issue #7797).
+      !isTmuxCommand(fallbackProcess)
+    ) {
       return fallbackProcess
     }
   }
