@@ -758,6 +758,15 @@ jobs:
           src/main/ipc/pty-codex-account-attribution.test.ts
           src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
 
+      - name: Build Electron app for Windows terminal lifecycle E2E
+        run: pnpm exec electron-vite build --mode e2e
+
+      - name: Run Windows terminal close lifecycle regression
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: pnpm run test:e2e tests/e2e/windows-headless-terminal-close-lifecycle.spec.ts --workers=1
+
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package
       # job already packages and smoke-tests an AppImage built that way.

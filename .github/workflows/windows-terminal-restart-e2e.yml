@@ -59,7 +59,8 @@ jobs:
           pnpm run test:e2e
           tests/e2e/restart-restore-terminal-input.spec.ts
           tests/e2e/terminal-restart-persistence.spec.ts
-          --grep "clean restart with a live daemon session|cold-restored pane accepts typing|daemon snapshot relaunch preserves"
+          tests/e2e/windows-headless-terminal-close-lifecycle.spec.ts
+          --grep "clean restart with a live daemon session|cold-restored pane accepts typing|daemon snapshot relaunch preserves|physical Windows exit wins the headless-tab close race"
           --workers=1
 
       - name: Upload Playwright traces
