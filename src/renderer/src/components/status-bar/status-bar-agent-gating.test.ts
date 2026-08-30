@@ -37,4 +37,9 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('antigravity', ['antigravity'])).toBe(true)
     expect(isStatusBarItemAvailable('grok', ['grok'])).toBe(true)
   })
+
+  it('lets live provider evidence override a cached negative PATH result', () => {
+    expect(isStatusBarItemAvailable('codex', [], true)).toBe(true)
+    expect(isStatusBarItemAvailable('codex', [], false)).toBe(false)
+  })
 })
