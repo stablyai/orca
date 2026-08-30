@@ -170,6 +170,7 @@ export type UiCommandEventApi = {
       direction: 'horizontal' | 'vertical'
       command?: string
       telemetrySource?: TerminalPaneSplitSource
+      newLeafId?: string
     }) => void
   ) => () => void
   onRenameTerminal: (

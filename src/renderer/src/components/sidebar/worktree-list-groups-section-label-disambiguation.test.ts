@@ -29,9 +29,11 @@ const makeSetup = (checkout: Repo, projectId: string): ProjectHostSetup => ({
 })
 
 function buildHeaders(repos: Repo[], projects: Project[], setups: ProjectHostSetup[]) {
-  const worktrees = repos.map(
-    (entry): Worktree => ({ ...worktree, id: `wt-${entry.id}`, repoId: entry.id })
-  )
+  const worktrees = repos.map((entry): Worktree => ({
+    ...worktree,
+    id: `wt-${entry.id}`,
+    repoId: entry.id
+  }))
   const rows = buildRows(
     'repo',
     worktrees,

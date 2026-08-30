@@ -14,15 +14,16 @@ import type {
   BrowserViewportPresetId,
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
-import { browserPageDocLocationsEqual } from '../../../../shared/browser-page-doc-location'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import {
   clearClientHostedBrowserCloseIntents,
+  isDurableClientHostedBrowserHandle,
   recordClientHostedBrowserCloseIntents,
   type ClientHostedBrowserCloseIntentsByEnvironment,
   type PendingClientHostedBrowserClose
 } from '@/runtime/client-hosted-browser-close-intents'
+import { isBrowserPageDefinitivelyGone } from '@/runtime/client-hosted-browser-close-intent-replay'
 import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
@@ -31,10 +32,30 @@ import {
   normalizeBrowserHistoryEntries,
   normalizeBrowserHistoryUrl
 } from '../../../../shared/workspace-session-browser-history'
+import {
+  MAX_WORKSPACE_DOC_HISTORY_ENTRIES,
+  normalizeWorkspaceDocHistoryEntries,
+  normalizeWorkspaceDocHistoryTitle,
+  type WorkspaceDocHistoryEntry
+} from '../../../../shared/workspace-doc-history'
+import { browserPageDocLocationsEqual } from '../../../../shared/browser-page-doc-location'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
+import {
+  browserWorkspaceMirrorFieldsEqual,
+  buildBrowserPage,
+  buildWorkspaceFromPage,
+  findPage,
+  findWorkspace,
+  mirrorWorkspaceFromActivePage,
+  normalizeBrowserTitle,
+  normalizeUrl
+} from './browser-page-records'
+import {
+  planBrowserPageConversion,
+  type BrowserPageConversionLeg,
+  type BrowserPageConversionTarget
+} from './browser-page-conversion'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
-import { basename } from '@/lib/path'
-import { isDocPreviewUrl } from '../../../../shared/doc-preview-scheme'
 import {
   getRecentlyClosedTabPosition,
   restoreRecentlyClosedTabPosition,
@@ -259,6 +280,14 @@ export type BrowserSlice = {
     options?: CreateBrowserPageOptions
   ) => BrowserPage | null
   closeBrowserPage: (pageId: string) => void
+  // Why replacement and not mutation: a page's kind (doc vs web) is immutable for its life, so the
+  // address bar converts by replacing the page — fresh id, same workspace row — keeping the two
+  // main-process registry halves disjoint by construction.
+  convertBrowserPage: (
+    pageId: string,
+    target: BrowserPageConversionTarget,
+    options?: { leg?: BrowserPageConversionLeg }
+  ) => BrowserPage | null
   reopenClosedBrowserPage: (workspaceId: string) => BrowserPage | null
   setActiveBrowserPage: (workspaceId: string, pageId: string) => void
   // Focus that never yanks the user across worktrees: per-worktree slots always update, globals only when targeting the active worktree.
@@ -335,48 +364,17 @@ export type BrowserSlice = {
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string) => void
+  workspaceDocHistory: WorkspaceDocHistoryEntry[]
+  /** A visit bumps recency and count; a title-only refresh (bump: false) renames the row. */
+  recordWorkspaceDocVisit: (
+    docLocation: BrowserPageDocLocation,
+    title: string | null,
+    options?: { bump?: boolean }
+  ) => void
   clearBrowserHistory: () => void
   defaultBrowserSessionProfileId: string | null
   defaultBrowserSessionProfileIdByHostId: Partial<Record<ExecutionHostId, string | null>>
   setDefaultBrowserSessionProfileId: (profileId: string | null) => void
-}
-
-function normalizeUrl(url: string): string {
-  const trimmed = url.trim()
-  if (trimmed.length === 0) {
-    return 'about:blank'
-  }
-  // Why: redact at this single URL sink so the Kagi bearer token can't reach BrowserPage.url, which is persisted to disk.
-  return redactKagiSessionToken(trimmed)
-}
-
-function normalizeBrowserTitle(
-  title: string | null | undefined,
-  url: string,
-  docLocation?: BrowserPageDocLocation | null
-): string {
-  if (docLocation) {
-    // Why a document page cannot go through the checks below: its url is the blank URL by design,
-    // which would name every previewed document "New Tab". Its fallback is the file it shows.
-    // Why the grant URL is refused rather than trusted: Chromium reports the URL as the title when
-    // a document declares none, and this title is stored, persisted and mirrored onto the tab —
-    // a grant reaching any of them would outlive the grant and name a document nothing can read.
-    if (!title || isDocPreviewUrl(title)) {
-      return basename(docLocation.filePath) || docLocation.filePath
-    }
-    return title
-  }
-  if (
-    url === 'about:blank' ||
-    url === ORCA_BROWSER_BLANK_URL ||
-    title === 'about:blank' ||
-    title === ORCA_BROWSER_BLANK_URL ||
-    !title
-  ) {
-    // Why: don't surface the internal blank-guest URL as a title (leaks an impl detail, looks broken); show "New Tab" instead.
-    return 'New Tab'
-  }
-  return title
 }
 
 function getBrowserSettingsHostId(
@@ -469,7 +467,10 @@ function browserImportStateForHostUpdate(
 
 function closeRemoteBrowserPageInOwningEnvironment(
   worktreeId: string,
-  handle: RemoteBrowserPageHandle
+  handle: RemoteBrowserPageHandle,
+  // Why a callback and not the store: this is module scope, and the recording action lives on the
+  // slice this file is still defining.
+  recordCloseIntents: (closes: readonly PendingClientHostedBrowserClose[]) => void
 ): void {
   const target: RuntimeClientTarget = { kind: 'environment', environmentId: handle.environmentId }
   void callRuntimeRpc(
@@ -477,121 +478,17 @@ function closeRemoteBrowserPageInOwningEnvironment(
     'browser.tabClose',
     { worktree: toRuntimeWorktreeSelector(worktreeId), page: handle.remotePageId },
     { timeoutMs: 15_000 }
-  ).catch(() => {})
-}
-
-function buildBrowserPage(
-  workspaceId: string,
-  worktreeId: string,
-  url: string,
-  title?: string,
-  browserRuntimeEnvironmentId?: string | null,
-  browserPageId?: string,
-  docLocation?: BrowserPageDocLocation
-): BrowserPage {
-  // Why the url is overridden rather than trusted: this is the one place a page's url is minted,
-  // and it is read by persistence, the mobile publisher, history and the address bar. A grant URL
-  // reaching any of them would outlive the grant and name a document that machine cannot read.
-  const normalizedUrl = docLocation ? ORCA_BROWSER_BLANK_URL : normalizeUrl(url)
-  return {
-    id: browserPageId ?? createBrowserUuid(),
-    workspaceId,
-    worktreeId,
-    url: normalizedUrl,
-    title: normalizeBrowserTitle(title, normalizedUrl, docLocation),
-    // Why: blank pages mount an inert guest (no real navigation); marking them loading would flash the loading affordance.
-    loading: normalizedUrl !== 'about:blank' && normalizedUrl !== ORCA_BROWSER_BLANK_URL,
-    faviconUrl: null,
-    canGoBack: false,
-    canGoForward: false,
-    loadError: null,
-    createdAt: Date.now(),
-    ...(browserRuntimeEnvironmentId !== undefined ? { browserRuntimeEnvironmentId } : {}),
-    ...(docLocation ? { docLocation } : {})
-  }
-}
-
-function buildWorkspaceFromPage(
-  id: string,
-  worktreeId: string,
-  page: BrowserPage,
-  pageIds: string[],
-  sessionProfileId?: string | null,
-  sessionPartition?: string | null
-): BrowserWorkspace {
-  return {
-    id,
-    worktreeId,
-    sessionProfileId: sessionProfileId ?? null,
-    sessionPartition: sessionPartition ?? null,
-    activePageId: page.id,
-    pageIds,
-    url: page.url,
-    title: page.title,
-    loading: page.loading,
-    faviconUrl: page.faviconUrl,
-    canGoBack: page.canGoBack,
-    canGoForward: page.canGoForward,
-    loadError: page.loadError,
-    createdAt: page.createdAt,
-    docLocation: page.docLocation ?? null
-  }
-}
-
-function mirrorWorkspaceFromActivePage(
-  workspace: BrowserWorkspace,
-  pages: BrowserPage[]
-): BrowserWorkspace {
-  const activePage = pages.find((page) => page.id === workspace.activePageId) ?? null
-  if (!activePage) {
-    return {
-      ...workspace,
-      activePageId: null,
-      pageIds: pages.map((page) => page.id),
-      url: 'about:blank',
-      title: translate('auto.store.slices.browser.08fc23631d', 'Browser'),
-      loading: false,
-      faviconUrl: null,
-      canGoBack: false,
-      canGoForward: false,
-      loadError: null,
-      docLocation: null
+  ).catch((error) => {
+    // A close the runtime never heard is a resurrection waiting to happen: the runtime persists
+    // client-hosted pages, so a durable intent replays this same RPC on the next reconnect.
+    // A definitive page-unknown answer means there is nothing left to resurrect.
+    if (!isDurableClientHostedBrowserHandle(handle) || isBrowserPageDefinitivelyGone(error)) {
+      return
     }
-  }
-  return {
-    ...workspace,
-    activePageId: activePage.id,
-    pageIds: pages.map((page) => page.id),
-    url: activePage.url,
-    title: activePage.title,
-    loading: activePage.loading,
-    faviconUrl: activePage.faviconUrl,
-    canGoBack: activePage.canGoBack,
-    canGoForward: activePage.canGoForward,
-    loadError: activePage.loadError,
-    docLocation: activePage.docLocation ?? null
-  }
-}
-
-function browserWorkspaceMirrorFieldsEqual(
-  workspace: BrowserWorkspace,
-  mirrored: BrowserWorkspace
-): boolean {
-  const workspacePageIds = workspace.pageIds ?? []
-  const mirroredPageIds = mirrored.pageIds ?? []
-  return (
-    workspace.activePageId === mirrored.activePageId &&
-    workspacePageIds.length === mirroredPageIds.length &&
-    workspacePageIds.every((pageId, index) => pageId === mirroredPageIds[index]) &&
-    workspace.url === mirrored.url &&
-    workspace.title === mirrored.title &&
-    workspace.loading === mirrored.loading &&
-    workspace.faviconUrl === mirrored.faviconUrl &&
-    workspace.canGoBack === mirrored.canGoBack &&
-    workspace.canGoForward === mirrored.canGoForward &&
-    workspace.loadError === mirrored.loadError &&
-    browserPageDocLocationsEqual(workspace.docLocation ?? null, mirrored.docLocation ?? null)
-  )
+    recordCloseIntents([
+      { environmentId: handle.environmentId, browserPageId: handle.remotePageId, worktreeId }
+    ])
+  })
 }
 
 function getFallbackTabTypeForWorktree(
@@ -612,48 +509,6 @@ function getFallbackTabTypeForWorktree(
   return 'terminal'
 }
 
-const browserWorkspaceByIdCache = new WeakMap<
-  Record<string, BrowserWorkspace[]>,
-  Map<string, BrowserWorkspace>
->()
-const browserPageByIdCache = new WeakMap<Record<string, BrowserPage[]>, Map<string, BrowserPage>>()
-
-function findWorkspace(
-  browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
-  workspaceId: string
-): BrowserWorkspace | null {
-  const cached = browserWorkspaceByIdCache.get(browserTabsByWorktree)
-  if (cached) {
-    return cached.get(workspaceId) ?? null
-  }
-  const workspaceById = new Map<string, BrowserWorkspace>()
-  for (const workspaces of Object.values(browserTabsByWorktree)) {
-    for (const workspace of workspaces) {
-      workspaceById.set(workspace.id, workspace)
-    }
-  }
-  browserWorkspaceByIdCache.set(browserTabsByWorktree, workspaceById)
-  return workspaceById.get(workspaceId) ?? null
-}
-
-function findPage(
-  browserPagesByWorkspace: Record<string, BrowserPage[]>,
-  pageId: string
-): BrowserPage | null {
-  const cached = browserPageByIdCache.get(browserPagesByWorkspace)
-  if (cached) {
-    return cached.get(pageId) ?? null
-  }
-  const pageById = new Map<string, BrowserPage>()
-  for (const pages of Object.values(browserPagesByWorkspace)) {
-    for (const page of pages) {
-      pageById.set(page.id, page)
-    }
-  }
-  browserPageByIdCache.set(browserPagesByWorkspace, pageById)
-  return pageById.get(pageId) ?? null
-}
-
 export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = (set, get) => ({
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
@@ -672,6 +527,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   browserSessionHostIdOverride: null,
   browserSessionImportState: null,
   browserUrlHistory: [],
+  workspaceDocHistory: [],
   defaultBrowserSessionProfileId: null,
   defaultBrowserSessionProfileIdByHostId: {},
 
@@ -1082,7 +938,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
 
     for (const remotePage of remotePagesToClose) {
-      closeRemoteBrowserPageInOwningEnvironment(remotePage.worktreeId, remotePage.handle)
+      closeRemoteBrowserPageInOwningEnvironment(
+        remotePage.worktreeId,
+        remotePage.handle,
+        get().recordClientHostedBrowserCloseIntents
+      )
     }
 
     for (const docPageId of docPageIdsToRelease) {
@@ -1439,7 +1299,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
 
     for (const remotePage of remotePagesToClose) {
-      closeRemoteBrowserPageInOwningEnvironment(remotePage.worktreeId, remotePage.handle)
+      closeRemoteBrowserPageInOwningEnvironment(
+        remotePage.worktreeId,
+        remotePage.handle,
+        get().recordClientHostedBrowserCloseIntents
+      )
     }
 
     if (docPageIdToRelease) {
@@ -1457,6 +1321,110 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (item && workspace) {
       get().setTabLabel(item.id, workspace.title)
     }
+  },
+
+  convertBrowserPage: (pageId, target, options) => {
+    // Why the same assert as createBrowserTab: a conversion materializes a browser surface the
+    // same way a creation does, and a paired web client that cannot host one must refuse here too.
+    // Ownership is resolved ONCE, on the plan's own terms — property-present-undefined means
+    // worktree-inferred — so the assert and the plan cannot disagree about what is being built.
+    const oldPageForOwnership = findPage(get().browserPagesByWorkspace, pageId)
+    const declaredOwnership =
+      target.kind === 'workspace-doc'
+        ? null
+        : 'browserRuntimeEnvironmentId' in target
+          ? target.browserRuntimeEnvironmentId
+          : (oldPageForOwnership?.browserRuntimeEnvironmentId ?? null)
+    assertManagedBrowserMaterializationAllowed(
+      get(),
+      declaredOwnership !== undefined
+        ? declaredOwnership
+        : oldPageForOwnership
+          ? (getRuntimeEnvironmentIdForWorktree(get(), oldPageForOwnership.worktreeId) ?? null)
+          : null
+    )
+    let converted: BrowserPage | null = null
+    let docPageIdToRelease: string | null = null
+    let remotePageToClose: { worktreeId: string; handle: RemoteBrowserPageHandle } | null = null
+    set((s) => {
+      const plan = planBrowserPageConversion(s, pageId, target, options)
+      if (!plan) {
+        return s
+      }
+      converted = plan.newPage
+      // Why collected rather than released inside the reducer: revoking is main-process work, and
+      // it must happen exactly once even if a later set() retries the reducer.
+      if (plan.oldPage.docLocation) {
+        docPageIdToRelease = plan.oldPage.id
+      }
+      const remoteHandle = s.remoteBrowserPageHandlesByPageId[plan.oldPage.id]
+      if (remoteHandle) {
+        remotePageToClose = { worktreeId: plan.oldPage.worktreeId, handle: remoteHandle }
+      }
+      const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
+      delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
+      const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+      delete nextBrowserAnnotationsByPageId[plan.oldPage.id]
+      const nextBrowserCertificateFailuresByPageId = { ...s.browserCertificateFailuresByPageId }
+      delete nextBrowserCertificateFailuresByPageId[plan.oldPage.id]
+      return {
+        browserPagesByWorkspace: {
+          ...s.browserPagesByWorkspace,
+          [plan.workspace.id]: plan.nextPages
+        },
+        browserTabsByWorktree: {
+          ...s.browserTabsByWorktree,
+          [plan.workspace.worktreeId]: (
+            s.browserTabsByWorktree[plan.workspace.worktreeId] ?? []
+          ).map((tab) => (tab.id === plan.workspace.id ? plan.nextWorkspace : tab))
+        },
+        pendingAddressBarFocusByPageId: Object.fromEntries(
+          Object.entries(s.pendingAddressBarFocusByPageId).filter(
+            ([pendingPageId]) => pendingPageId !== plan.oldPage.id
+          )
+        ),
+        pendingAddressBarFocusByTabId: Object.fromEntries(
+          Object.entries(s.pendingAddressBarFocusByTabId).filter(
+            ([pendingPageId]) => pendingPageId !== plan.oldPage.id
+          )
+        ),
+        remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
+        browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
+        browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
+      }
+    })
+    // Why the casts: the assignments happen inside set()'s callback, which TS's flow analysis does
+    // not track, so the initializers' null narrowing would otherwise read these as never.
+    const newPage = converted as BrowserPage | null
+    const remoteClose = remotePageToClose as {
+      worktreeId: string
+      handle: RemoteBrowserPageHandle
+    } | null
+    if (!newPage) {
+      return null
+    }
+    if (remoteClose) {
+      closeRemoteBrowserPageInOwningEnvironment(
+        remoteClose.worktreeId,
+        remoteClose.handle,
+        get().recordClientHostedBrowserCloseIntents
+      )
+    }
+    // Why after the reducer: a closed document must stop being readable, and the grant is the only
+    // authority the preview scheme honors — but the store row has to stop naming it first.
+    if (docPageIdToRelease) {
+      releaseDocPreviewGrant(docPageIdToRelease)
+    }
+    const workspaceAfter = findWorkspace(get().browserTabsByWorktree, newPage.workspaceId)
+    if (workspaceAfter?.activePageId === newPage.id) {
+      const item = Object.values(get().unifiedTabsByWorktree)
+        .flat()
+        .find((entry) => entry.contentType === 'browser' && entry.entityId === newPage.workspaceId)
+      if (item) {
+        get().setTabLabel(item.id, newPage.title)
+      }
+    }
+    return newPage
   },
 
   reopenClosedBrowserPage: (workspaceId) => {
@@ -2089,6 +2057,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         browserCertificateFailuresByPageId: {},
         browserAnnotationsByPageId: {},
         browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? []),
+        workspaceDocHistory: normalizeWorkspaceDocHistoryEntries(session.workspaceDocHistory ?? []),
         // Why restored before the rows are: a close the host never heard must outlive the relaunch
         // that also restores the row it closed, or the restore silently wins.
         clientHostedBrowserCloseIntentsByEnvironment:
@@ -2604,6 +2573,44 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
+  recordWorkspaceDocVisit: (docLocation, title, options) => {
+    const bump = options?.bump ?? true
+    set((s) => {
+      const now = Date.now()
+      const existing = s.workspaceDocHistory.find((entry) =>
+        browserPageDocLocationsEqual(entry.docLocation, docLocation)
+      )
+      if (!existing && !bump) {
+        // A title refresh for a document never visited records nothing.
+        return s
+      }
+      const normalizedTitle = normalizeWorkspaceDocHistoryTitle(
+        title ?? existing?.title,
+        docLocation
+      )
+      const next: WorkspaceDocHistoryEntry[] = existing
+        ? s.workspaceDocHistory.map((entry) =>
+            entry === existing
+              ? {
+                  ...entry,
+                  title: normalizedTitle,
+                  ...(bump ? { lastVisitedAt: now, visitCount: entry.visitCount + 1 } : {})
+                }
+              : entry
+          )
+        : [
+            { docLocation, title: normalizedTitle, lastVisitedAt: now, visitCount: 1 },
+            ...s.workspaceDocHistory
+          ]
+      return {
+        workspaceDocHistory:
+          next.length > MAX_WORKSPACE_DOC_HISTORY_ENTRIES
+            ? normalizeWorkspaceDocHistoryEntries(next)
+            : next
+      }
+    })
+  },
+
   addBrowserHistoryEntry: (url, title) => {
     const safeUrl = redactKagiSessionToken(url)
     if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
@@ -2637,5 +2644,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
   },
 
-  clearBrowserHistory: () => set({ browserUrlHistory: [] })
+  // One clear for both sources: the dropdown presents them as one history.
+  clearBrowserHistory: () => set({ browserUrlHistory: [], workspaceDocHistory: [] })
 })

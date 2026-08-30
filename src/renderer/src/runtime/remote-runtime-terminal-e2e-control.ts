@@ -15,6 +15,7 @@ type E2eRemoteTerminalMultiplexAckGateSnapshot = {
   releasedAckChars: number
   streamSubscribeCount: number
   streamUnsubscribeCount: number
+  initialSnapshotTruncatedCount: number
   transportSubscribeCount: number
   transportUnsubscribeCount: number
 }
@@ -48,6 +49,7 @@ let e2eDroppedOutputFrames = 0
 let e2eReleasedRemoteAckChars = 0
 let e2eStreamSubscribeCount = 0
 let e2eStreamUnsubscribeCount = 0
+let e2eInitialSnapshotTruncatedCount = 0
 let e2eTransportSubscribeCount = 0
 let e2eTransportUnsubscribeCount = 0
 
@@ -84,8 +86,15 @@ function getE2eRemoteAckSnapshot(
     releasedAckChars: e2eReleasedRemoteAckChars,
     streamSubscribeCount: e2eStreamSubscribeCount,
     streamUnsubscribeCount: e2eStreamUnsubscribeCount,
+    initialSnapshotTruncatedCount: e2eInitialSnapshotTruncatedCount,
     transportSubscribeCount: e2eTransportSubscribeCount,
     transportUnsubscribeCount: e2eTransportUnsubscribeCount
+  }
+}
+
+export function recordE2eRemoteTerminalInitialSnapshotTruncated(): void {
+  if (e2eConfig.exposeStore) {
+    e2eInitialSnapshotTruncatedCount += 1
   }
 }
 
@@ -204,6 +213,7 @@ export function resetRemoteRuntimeTerminalE2eState(): void {
   e2eReleasedRemoteAckChars = 0
   e2eStreamSubscribeCount = 0
   e2eStreamUnsubscribeCount = 0
+  e2eInitialSnapshotTruncatedCount = 0
   e2eTransportSubscribeCount = 0
   e2eTransportUnsubscribeCount = 0
 }

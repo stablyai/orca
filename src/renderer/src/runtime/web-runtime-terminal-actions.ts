@@ -11,8 +11,16 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
+  captureWebSessionIntentOwner,
   isWebRuntimeSessionActive
 } from './web-runtime-session-environment'
+import {
+  beginWebRuntimeSplitFocusRequest,
+  captureWebRuntimeSplitFocusTarget,
+  finishWebRuntimeSplitFocusRequest,
+  focusSplitWebRuntimeTerminalPane,
+  type WebRuntimeSplitSource
+} from './web-runtime-split-focus'
 
 const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
 const WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS = 30_000
@@ -21,7 +29,8 @@ let pendingWebRuntimeSplitMirrorTelemetryId = 0
 export function splitWebRuntimeTerminal(
   ptyId: string | null | undefined,
   direction: 'horizontal' | 'vertical',
-  telemetrySource: TerminalPaneSplitSource
+  telemetrySource: TerminalPaneSplitSource,
+  source?: WebRuntimeSplitSource
 ): boolean {
   if (!ptyId) {
     return false
@@ -39,19 +48,29 @@ export function splitWebRuntimeTerminal(
     direction,
     pendingMirrorSuppressionId
   )
-  void window.api.runtimeEnvironments
-    .call({
-      selector: environmentId,
-      method: 'terminal.split',
-      params: {
-        terminal: remote.handle,
-        direction,
-        telemetrySource
-      },
-      timeoutMs: 15_000
-    })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>)
+  const intentOwner = captureWebSessionIntentOwner(environmentId)
+  const focusTarget = source ? captureWebRuntimeSplitFocusTarget(ptyId, source) : null
+  // Advance the fence for every source-bearing gesture, even when its pane metadata is stale.
+  const focusRequest = source
+    ? beginWebRuntimeSplitFocusRequest(intentOwner, source.worktreeId)
+    : null
+  void captureRuntimeEnvironmentCall(
+    environmentId,
+    intentOwner.pairingRevision
+  )({
+    method: 'terminal.split',
+    params: {
+      terminal: remote.handle,
+      direction,
+      telemetrySource
+    },
+    timeoutMs: 15_000
+  })
+    .then(async (response) => {
+      const result = unwrapRuntimeRpcResult(
+        response as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>
+      )
+      await focusSplitWebRuntimeTerminalPane(intentOwner, focusTarget, focusRequest, result?.split)
     })
     .catch((error) => {
       releasePendingMirrorSuppression()
@@ -61,6 +80,7 @@ export function splitWebRuntimeTerminal(
       toast.error(message)
       console.warn('[web-runtime-session] failed to split terminal:', message)
     })
+    .finally(() => finishWebRuntimeSplitFocusRequest(focusRequest))
   return true
 }
 

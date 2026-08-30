@@ -1,15 +1,11 @@
 /**
- * Live-state reads for the typing-latency census: focused-pane identity/screen
+ * Live-state reads for the typing latency census: focused-pane identity/screen
  * mode, mounted agent-row count, and the zustand listener count. Split from the
  * probe so the sampling loop stays free of store/DOM lookups.
  */
 import { useAppStore } from '@/store'
-import {
-  listProbePanes,
-  paneRootElement,
-  type ProbePane
-} from './typing-latency-echo-instrumentation'
-import type { FocusedPaneCensus } from './typing-latency-diagnostic-summary'
+import { listProbePanes, paneRootElement, type ProbePane } from './echo-instrumentation'
+import type { FocusedPaneCensus } from './diagnostic-summary'
 
 type ProbeStoreState = {
   activeTabId?: string | null

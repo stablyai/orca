@@ -10,12 +10,14 @@ import { openChecksPanelHostedReviewUrl } from '../checks-panel-hosted-review-cl
 import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
 import { translate } from '@/i18n/i18n'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
+import { useNow } from '@/hooks/use-now'
 
 export function ChecksPanelEmptyContent({
   model
 }: {
   model: ChecksPanelEmptyContentModel
 }): React.JSX.Element | null {
+  const now = useNow(1000, Boolean(model.activeWorktree))
   const {
     activeReview,
     activeWorktree,
@@ -178,7 +180,7 @@ export function ChecksPanelEmptyContent({
     })
     const emptyStateCopy = { title: reviewState.title, description: reviewState.description }
     const reviewStateAutoRetryText =
-      reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > Date.now()
+      reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > now
         ? translate(
             'auto.components.right.sidebar.ChecksPanel.review.auto_retry',
             'Orca will retry at {{time}}.',
@@ -186,7 +188,7 @@ export function ChecksPanelEmptyContent({
           )
         : null
     const reviewRecoveryRetryDisabled =
-      reviewState.retryDisabledUntil !== undefined && Date.now() < reviewState.retryDisabledUntil
+      reviewState.retryDisabledUntil !== undefined && now < reviewState.retryDisabledUntil
     const reviewRecoveryLabelIsRefresh = reviewState.recovery.includes('refresh')
     // Only offer Retry/Refresh when the selector's recovery set includes it; some states expose none.
     const reviewShowRetryOrRefresh =

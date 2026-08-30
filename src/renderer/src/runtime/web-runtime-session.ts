@@ -28,3 +28,4 @@ export {
   setWebRuntimeTabProps,
   clearWebRuntimeTerminalBuffer
 } from './web-runtime-terminal-actions'
+export type { WebRuntimeSplitSource } from './web-runtime-split-focus'

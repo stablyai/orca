@@ -2406,6 +2406,7 @@ type RuntimeNotifier = {
       direction: 'horizontal' | 'vertical'
       command?: string
       telemetrySource?: TerminalPaneSplitSource
+      newLeafId?: string
     }
   ): void
   renameTerminal(tabId: string, title: string | null): void
@@ -32255,22 +32256,22 @@ export class OrcaRuntimeService {
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
 
-    // Snapshot current leaf keys so the post-split graph-sync delta reveals the new pane.
-    const leafKeysBefore = new Set<string>()
-    for (const [key, l] of this.leaves) {
-      if (l.tabId === leaf.tabId) {
-        leafKeysBefore.add(key)
-      }
-    }
+    const newLeafId = randomUUID()
 
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
       command: opts.command,
-      telemetrySource: opts.telemetrySource
+      telemetrySource: opts.telemetrySource,
+      newLeafId
     })
 
-    const newHandle = await this.waitForNewLeafInTab(leaf.tabId, leafKeysBefore)
-    return { handle: newHandle, tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
+    const newHandle = await this.waitForLeafInTab(leaf.tabId, newLeafId)
+    return {
+      handle: newHandle,
+      tabId: leaf.tabId,
+      paneRuntimeId: leaf.paneRuntimeId,
+      leafId: newLeafId
+    }
   }
 
   private async splitPtyBackedTerminal(
@@ -32460,7 +32461,12 @@ export class OrcaRuntimeService {
       void revealSplit().catch(() => undefined)
     }
 
-    return { handle: this.issuePtyHandle(createdPty ?? pty), tabId: parentTabId, paneRuntimeId: -1 }
+    return {
+      handle: this.issuePtyHandle(createdPty ?? pty),
+      tabId: parentTabId,
+      paneRuntimeId: -1,
+      leafId
+    }
   }
 
   private resolveTerminalSplitSourceAuthority(
@@ -32591,18 +32597,10 @@ export class OrcaRuntimeService {
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
   }
 
-  private waitForNewLeafInTab(
-    tabId: string,
-    existingLeafKeys: Set<string>,
-    timeoutMs = 10_000
-  ): Promise<string> {
+  private waitForLeafInTab(tabId: string, leafId: string, timeoutMs = 10_000): Promise<string> {
     const tryResolve = (): string | null => {
-      for (const [key, leaf] of this.leaves) {
-        if (leaf.tabId === tabId && !existingLeafKeys.has(key) && leaf.ptyId !== null) {
-          return this.issueHandle(leaf)
-        }
-      }
-      return null
+      const leaf = this.leaves.get(this.getLeafKey(tabId, leafId))
+      return leaf?.ptyId !== null && leaf?.ptyId !== undefined ? this.issueHandle(leaf) : null
     }
 
     const existing = tryResolve()

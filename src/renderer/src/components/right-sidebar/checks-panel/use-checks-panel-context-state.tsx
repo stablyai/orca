@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
+import { useNow } from '@/hooks/use-now'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
@@ -125,6 +126,9 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   // Why: no key={worktreeId} remount (caused an IPC storm on Windows); reset branch-specific state during render (not useEffect) so it lands on the same paint.
   const [prevPanelContextKey, setPrevPanelContextKey] = useState(panelContextKey)
   const [prRefreshStateNow, setPrRefreshStateNow] = useState(() => Date.now())
+  // Eligibility expires independently of PR refresh-state timers, so keep the
+  // freshness gate moving while the visible panel is mounted.
+  const panelClockNow = useNow(30_000, isPanelVisible)
   if (panelContextKey !== prevPanelContextKey) {
     setPrevPanelContextKey(panelContextKey)
     setEditingTitle(false)
@@ -138,7 +142,6 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setIsRefreshing(false)
     setEmptyRefreshing(false)
     setConflictDetailsRefreshing(false)
-    setPrRefreshStateNow(Date.now())
     createPrInFlightRef.current = null
     setIsCreatingPr(false)
     setCreatePrError(null)
@@ -229,7 +232,9 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   const isGitLabReviewContext = Boolean(activeGitLabReview || linkedGitLabMR !== null)
   const activeConflictReview = activeReview?.mergeable === 'CONFLICTING' ? activeReview : null
   const prRefreshState = useAppStore((s) =>
-    prCacheKey ? s.getEffectiveGitHubPRRefreshState(prCacheKey, prRefreshStateNow) : undefined
+    prCacheKey
+      ? s.getEffectiveGitHubPRRefreshState(prCacheKey, Math.max(prRefreshStateNow, panelClockNow))
+      : undefined
   )
   const rawPRRefreshState = useAppStore((s) =>
     prCacheKey ? s.prRefreshStates[prCacheKey] : undefined
@@ -280,6 +285,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     prCacheKey,
     prNumber,
     rawPRRefreshState,
+    panelContextKey,
     repo?.id
   ])
 
@@ -324,7 +330,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     clearTitleInputFocusTimer,
     setChecksPanelContentRef,
     prevPanelContextKey,
-    prRefreshStateNow,
+    prRefreshStateNow: Math.max(prRefreshStateNow, panelClockNow),
     setPrRefreshStateNow,
     isFolder,
     prCacheKey,

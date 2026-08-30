@@ -14866,7 +14866,8 @@
           "allowDirectory": "Allow folder",
           "directoryAccessRequestOverflow": "{{folders}}, and {{count}} more",
           "directoryAccessRequestMultiple": "This preview wants to read files in {{folders}}.",
-          "allowDirectories": "Allow {{count}} folders"
+          "allowDirectories": "Allow {{count}} folders",
+          "editAddressControl": "Edit address"
         }
       },
       "diff": {
@@ -16560,7 +16561,8 @@
           "ultra": "Ultra",
           "on": "On",
           "off": "Off"
-        }
+        },
+        "pendingAttachmentLimit": "Too many attachments are waiting. Finish composing before attaching more."
       },
       "tool": {
         "running": "Running…",

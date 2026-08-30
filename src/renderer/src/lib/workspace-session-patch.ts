@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/workspace-session-state-types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
+import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
@@ -135,6 +136,9 @@ export function buildWorkspaceSessionPatch(
   }
   if (changed.has('browserUrlHistory')) {
     patch.browserUrlHistory = normalizeBrowserHistoryEntries(snapshot.browserUrlHistory)
+  }
+  if (changed.has('workspaceDocHistory')) {
+    patch.workspaceDocHistory = normalizeWorkspaceDocHistoryEntries(snapshot.workspaceDocHistory)
   }
   if (changed.has('clientHostedBrowserCloseIntentsByEnvironment')) {
     patch.clientHostedBrowserCloseIntentsByEnvironment =

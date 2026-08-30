@@ -36,6 +36,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { useNow } from '@/hooks/use-now'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
@@ -48,6 +49,7 @@ type PaletteLiveStatus = {
   unreadAgentCompletionPanes: Record<string, true>
   /** Bumped with the maps so consumers re-resolve `now`-sensitive freshness on the same tick. */
   statusEpoch: number
+  now: number
 }
 
 const PaletteLiveStatusContext = createContext<PaletteLiveStatus | null>(null)
@@ -60,6 +62,7 @@ export function PaletteLiveStatusProvider({
   active: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  const now = useNow(30_000, active)
   const {
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
@@ -92,7 +95,6 @@ export function PaletteLiveStatusProvider({
   const value = useMemo<PaletteLiveStatus>(() => {
     // Why: `now` decides freshness, so both derivations must read it on the same tick — otherwise a
     // "done" dot can outlive its window while the worktree row beside it has already decayed.
-    const now = Date.now()
     const entriesByTabId = buildExplicitEntriesByTabId(
       agentStatusByPaneKey,
       migrationUnsupportedByPtyId
@@ -114,7 +116,8 @@ export function PaletteLiveStatusProvider({
       browserTabsByWorktree,
       unreadTerminalTabs,
       unreadAgentCompletionPanes,
-      statusEpoch
+      statusEpoch,
+      now
     }
   }, [
     agentStatusByPaneKey,
@@ -126,7 +129,8 @@ export function PaletteLiveStatusProvider({
     tabsByWorktree,
     terminalLayoutsByTabId,
     unreadAgentCompletionPanes,
-    unreadTerminalTabs
+    unreadTerminalTabs,
+    now
   ])
 
   return (
@@ -222,7 +226,7 @@ export function PaletteRecentTabStatusDot({
   const terminalTabId = row?.terminalTab?.id
   const status: WorktreeStatus | null =
     live && row?.terminalTab
-      ? resolveRecentWorkspaceTabStatus(row, live.paneSources, Date.now())
+      ? resolveRecentWorkspaceTabStatus(row, live.paneSources, live.now)
       : null
   const hasUnread =
     live != null &&

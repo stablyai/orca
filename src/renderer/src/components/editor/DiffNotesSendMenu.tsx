@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { translate } from '@/i18n/i18n'
+import { useNow } from '@/hooks/use-now'
 
 // Why: a keyboard open request the menu never got to consume (e.g. the user
 // navigated away before it mounted) must not reopen the menu on a later remount.
@@ -41,10 +42,11 @@ export function DiffNotesSendMenu({
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
   const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
+  const now = useNow(1000, respondToOpenRequest)
   const openRequestNonce =
     respondToOpenRequest &&
     openRequest?.worktreeId === worktreeId &&
-    Date.now() - openRequest.issuedAt < OPEN_REQUEST_TTL_MS
+    now - (openRequest?.issuedAt ?? 0) < OPEN_REQUEST_TTL_MS
       ? openRequest.nonce
       : null
   const handleOpenRequestHandled = useCallback(

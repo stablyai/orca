@@ -293,7 +293,7 @@ export default function AutomationsPage(): React.JSX.Element {
   // Reuse a move's create key after an ambiguous transport failure so retrying
   // cannot schedule a second copy on the destination authority.
   const moveCreationKeysRef = useRef(new Map<string, string>())
-  const [relativeNow, setRelativeNow] = useState(Date.now())
+  const [relativeNow, setRelativeNow] = useState(() => Date.now())
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
     null
@@ -1644,7 +1644,7 @@ export default function AutomationsPage(): React.JSX.Element {
     [destinationForProject, editingAutomationId, editingHostStableKey]
   )
 
-  const saveAutomation = async (): Promise<void> => {
+  const saveAutomation = async (now: number): Promise<void> => {
     setEditorNotice(null)
     const { hour, minute } = parseDraftTime(draft.time)
     const isHermesSave =
@@ -1800,7 +1800,6 @@ export default function AutomationsPage(): React.JSX.Element {
           return
         }
       }
-      const now = Date.now()
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
       const rrule =
         draft.preset === 'custom'
@@ -2645,7 +2644,7 @@ export default function AutomationsPage(): React.JSX.Element {
         onDraftChange={handleDraftChange}
         onSetupDecisionTouched={markSetupDecisionTouched}
         onApplyTemplate={applyTemplateToDraft}
-        onSave={() => void saveAutomation()}
+        onSave={() => void saveAutomation(Date.now())}
       />
 
       <AutomationDeleteDialog

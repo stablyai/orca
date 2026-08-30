@@ -314,6 +314,15 @@ import type {
 } from '../../../../src/session/mobile-session-route-types'
 
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
+const CLOSED_TAB_TOMBSTONE_TTL_MS = 10_000
+
+function createMobileTerminalMutationId(): string {
+  return `mobile-create:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function getClosedTabTombstoneExpiry(): number {
+  return Date.now() + CLOSED_TAB_TOMBSTONE_TTL_MS
+}
 
 function DiffLineRow({
   line,
@@ -3754,9 +3763,7 @@ export default function SessionScreen() {
     setCreateError('')
 
     // Why: idempotency key so a transport retry (reconnect replay) resolves to the same terminal, not a duplicate; kept compact (no worktree id) for the schema length cap.
-    const clientMutationId = `mobile-create:${Date.now().toString(36)}-${Math.random()
-      .toString(36)
-      .slice(2, 10)}`
+    const clientMutationId = createMobileTerminalMutationId()
 
     try {
       const response = await client.sendRequest('session.tabs.createTerminal', {
@@ -4129,7 +4136,7 @@ export default function SessionScreen() {
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
         // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
-        closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
+        closedTabTombstonesRef.current.set(tab.id, getClosedTabTombstoneExpiry())
         // Why: bulk close re-activates the anchor before awaiting each close;
         // the render-synced ref sees that switch while this closure would not,
         // so comparing against the ref keeps the anchor from being nulled out.

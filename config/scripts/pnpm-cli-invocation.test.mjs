@@ -1,10 +1,15 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 const nodeExecPath = '/usr/local/bin/node'
 
 describe('resolvePnpmCliInvocation', () => {
+  // Why: config/vitest.config.ts does not set unstubEnvs, so stubs would leak into later cases.
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('runs a JS CLI through node so older pnpm.cjs still works', () => {
     expect(
       resolvePnpmCliInvocation({
@@ -47,18 +52,30 @@ describe('resolvePnpmCliInvocation', () => {
     })
   })
 
-  it('shells out for a Windows .cmd wrapper', () => {
-    expect(
-      resolvePnpmCliInvocation({
-        npmExecPath: 'C:\\Users\\runner\\pnpm.cmd',
-        nodeExecPath: 'C:\\Program Files\\nodejs\\node.exe',
-        platform: 'win32'
-      })
-    ).toEqual({
-      command: 'C:\\Users\\runner\\pnpm.cmd',
-      prefixArgs: [],
-      shell: true
-    })
+  it('shells out for every Windows batch wrapper extension and casing', () => {
+    for (const npmExecPath of [
+      'C:\\Users\\runner\\pnpm.cmd',
+      'C:\\Users\\runner\\pnpm.bat',
+      'C:\\tools\\PNPM.CMD',
+      'C:\\tools\\PNPM.BAT'
+    ]) {
+      expect(
+        resolvePnpmCliInvocation({
+          npmExecPath,
+          nodeExecPath: 'C:\\Program Files\\nodejs\\node.exe',
+          platform: 'win32'
+        })
+      ).toEqual({ command: npmExecPath, prefixArgs: [], shell: true })
+    }
+  })
+
+  // Why: only cmd.exe needs the shell hop; a .cmd-named path elsewhere must still exec directly.
+  it('does not shell out for a .cmd path on a non-Windows platform', () => {
+    for (const platform of ['darwin', 'linux']) {
+      expect(
+        resolvePnpmCliInvocation({ npmExecPath: '/opt/pnpm.cmd', nodeExecPath, platform })
+      ).toEqual({ command: '/opt/pnpm.cmd', prefixArgs: [], shell: false })
+    }
   })
 
   it('treats .js and .mjs CLIs the same as .cjs', () => {
@@ -71,18 +88,53 @@ describe('resolvePnpmCliInvocation', () => {
     }
   })
 
-  it('falls back to PATH pnpm when npm_execpath is unset', () => {
-    expect(
-      resolvePnpmCliInvocation({ npmExecPath: undefined, nodeExecPath, platform: 'darwin' })
-    ).toEqual({ command: 'pnpm', prefixArgs: [], shell: false })
+  // Why: `npmExecPath: undefined` would hit the destructuring default and read the ambient
+  // npm_execpath, so an explicit empty string is the only env-independent way to force this branch.
+  it('falls back to PATH pnpm when npm_execpath is empty', () => {
+    expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'darwin' })).toEqual(
+      { command: 'pnpm', prefixArgs: [], shell: false }
+    )
     expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'linux' })).toEqual({
       command: 'pnpm',
       prefixArgs: [],
       shell: false
     })
-    expect(
-      resolvePnpmCliInvocation({ npmExecPath: undefined, nodeExecPath, platform: 'win32' })
-    ).toEqual({ command: 'pnpm.cmd', prefixArgs: [], shell: true })
+    expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'win32' })).toEqual({
+      command: 'pnpm.cmd',
+      prefixArgs: [],
+      shell: true
+    })
+  })
+
+  // Both callers invoke the helper with no options, so the env default is the only path they take.
+  it('reads npm_execpath from the environment when the option is omitted', () => {
+    vi.stubEnv('npm_execpath', '/opt/pnpm/bin/pnpm.cjs')
+    expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'darwin' })).toEqual({
+      command: nodeExecPath,
+      prefixArgs: ['/opt/pnpm/bin/pnpm.cjs'],
+      shell: false
+    })
+
+    vi.stubEnv('npm_execpath', '/opt/pnpm/bin/pnpm')
+    expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'darwin' })).toEqual({
+      command: '/opt/pnpm/bin/pnpm',
+      prefixArgs: [],
+      shell: false
+    })
+  })
+
+  it('falls back to PATH pnpm when npm_execpath is absent from the environment', () => {
+    vi.stubEnv('npm_execpath', undefined)
+    expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'darwin' })).toEqual({
+      command: 'pnpm',
+      prefixArgs: [],
+      shell: false
+    })
+    expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'win32' })).toEqual({
+      command: 'pnpm.cmd',
+      prefixArgs: [],
+      shell: true
+    })
   })
 })
 

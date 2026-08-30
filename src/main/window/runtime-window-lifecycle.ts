@@ -155,7 +155,8 @@ export function registerRuntimeWindowLifecycle(
         paneRuntimeId,
         direction: opts.direction,
         command: opts.command,
-        telemetrySource: opts.telemetrySource
+        telemetrySource: opts.telemetrySource,
+        newLeafId: opts.newLeafId
       })
     },
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),

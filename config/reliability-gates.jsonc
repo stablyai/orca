@@ -2864,6 +2864,15 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/editor/EditorPanelShell.header.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/renderer/src/components/terminal-pane/TerminalLinkActionPopover.test.tsx src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/store/slices/tabs-hydration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/ipc/browser-tab-registration-wait.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        // STA-5681 address-bar convergence: conversion is page replacement (fresh id, one store
+        // commit flips page + mirror + mobile observables), typed workspace paths convert via the
+        // lexical-containment classifier, and doc history carries document identities with no url
+        // field at all. The chip now answers to "Edit address".
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-page-conversion.test.ts src/renderer/src/runtime/sync-runtime-graph-conversion-publish.test.ts src/renderer/src/lib/workspace-doc-address-input.test.ts src/shared/workspace-doc-history.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-suggestions.test.ts",
+        // The convergence journey with real clicks and typing: chip → address bar → URL converts in
+        // place, Back returns across the conversion, a typed path converts a runtime-owned tab, the
+        // dropdown's doc row dedupe-activates. Caught the remote-pane routing gap before it shipped.
+        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-preview-address-bar-convergence.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=list",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line --repeat-each=3",
         // The changed-spec e2e job's own command, which is the only Linux run this gate has.
@@ -2919,7 +2928,13 @@
         "src/renderer/src/store/slices/tabs-hydration.test.ts",
         "src/renderer/src/components/terminal-pane/TerminalLinkActionPopover.test.tsx",
         "src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts",
+        "src/renderer/src/store/slices/browser-page-conversion.test.ts",
+        "src/renderer/src/runtime/sync-runtime-graph-conversion-publish.test.ts",
+        "src/renderer/src/lib/workspace-doc-address-input.test.ts",
+        "src/shared/workspace-doc-history.test.ts",
+        "src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-suggestions.test.ts",
         "tests/e2e/paired-remote-html-preview-local-render.spec.ts",
+        "tests/e2e/paired-preview-address-bar-convergence.spec.ts",
         "tests/e2e/paired-browser-create-navigation-deadline.spec.ts",
         "tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts"
       ],
@@ -8151,15 +8166,15 @@
       "id": "startup-upgrade.persisted-session-corpus",
       "title": "Current Orca preserves or recovers old production persisted sessions",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "startup-persistence",
       "layer": "upgrade-fixture",
       "surfaces": ["startup", "upgrade", "session restore", "daemon restore"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon"],
+      "coverageNotes": "A macOS Electron journey materializes the immutable legacy workspace-session fixture over a live update-surviving daemon PTY, boots current Orca without a current-format session write, and proves the terminal title, marker output, exact PTY, tab identity, repo, and worktree survive both the upgrade launch and a second current-version relaunch. Linux, Windows, SSH, and WSL fixture journeys remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/5356",
         "https://github.com/stablyai/orca/pull/5234",
@@ -8167,21 +8182,40 @@
       ],
       "invariant": "Startup and restore fixes must preserve or explicitly recover sessions from the last affected production persisted-state schema, not only from state written by current code.",
       "oracle": "Boot current Orca against immutable copied user-data fixtures from affected versions and reject blank replacement panes, duplicate resume tabs, silent session loss, or works-only-after-current-write behavior.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "commands": [
+        "SKIP_BUILD=1 pnpm run test:e2e -- tests/e2e/persisted-session-production-upgrade.spec.ts"
+      ],
+      "testFiles": ["tests/e2e/persisted-session-production-upgrade.spec.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/persisted-session-production-upgrade.spec.ts",
+          "assertions": [
+            "upgrades a legacy daemon session and keeps it stable after relaunch"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-29",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm run test:e2e -- tests/e2e/persisted-session-production-upgrade.spec.ts",
+          "result": "passed",
+          "durationSeconds": 16.7,
+          "summary": "The legacy-shaped session retained its exact daemon PTY, terminal output marker, tab, repository, and worktree through the upgrade launch and a second current-version relaunch."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 120,
         "scope": "focused Electron upgrade fixture"
       },
       "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Fixture corpus not implemented."
+        "status": "unknown",
+        "evidence": "One focused local macOS Electron run passed; CI soak history is not collected."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs immutable pre-fix persisted-state fixture."
+        "status": "partial",
+        "evidence": "The immutable legacy-shaped fixture and first-write/second-restart oracle are executable; saved intentional-break red/green evidence is still required."
       },
       "performanceBudget": {
         "required": true,
@@ -8192,7 +8226,11 @@
         "Run second restart after current code writes upgraded state.",
         "Record startup timing and failure artifact."
       ],
-      "knownGaps": ["No fixture corpus or command yet."],
+      "knownGaps": [
+        "The corpus currently contains one minimized legacy local-daemon workspace session.",
+        "Linux, Windows, SSH, and WSL upgrade fixtures remain uncollected.",
+        "The setup uses a current binary to create the live daemon PTY that stands in for the pre-upgrade process; it does not launch an installed legacy artifact."
+      ],
       "demotionRule": "Cannot promote without old production fixture provenance."
     },
     {
@@ -8587,6 +8625,7 @@
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=10 --max-failures=1",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-lossy-initial-snapshot.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-stall-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-probe-gap-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -8635,6 +8674,7 @@
         "src/renderer/src/runtime/runtime-client-events.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts",
         "src/shared/remote-runtime-shared-control-connection.test.ts",
+        "tests/e2e/paired-remote-terminal-lossy-initial-snapshot.spec.ts",
         "tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts",
         "tests/e2e/paired-remote-terminal-stall-recovery.spec.ts",
         "tests/e2e/paired-remote-terminal-probe-gap-recovery.spec.ts",
@@ -8759,6 +8799,13 @@
         {
           "file": "tests/e2e/headless-paired-remote-terminal-stall-recovery.spec.ts",
           "assertions": ["recovers an ACK-starved stream from an isolated headless Orca host"]
+        },
+        {
+          "file": "tests/e2e/paired-remote-terminal-lossy-initial-snapshot.spec.ts",
+          "assertions": [
+            "a nonempty lossy initial snapshot paints exactly once on a paired client",
+            "the authoritative host cursor advances and live output resumes exactly once"
+          ]
         },
         {
           "file": "tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts",
@@ -15995,17 +16042,21 @@
       "providers": ["paired-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["paired-runtime"],
-      "coverageNotes": "Loads the real host RPC methods, the real RpcDispatcher, and the real renderer terminal multiplexer from two builds (current working tree and the newest release tag) and drives them against each other over an in-process transport that reproduces production frame routing, including the host-side decode that silently drops unknown opcodes. Covers the terminal stream only; the session-tab sync channel, agent-session publications, file/Git RPCs, mobile E2EE framing, and the relay transport are uncovered.",
+      "coverageNotes": "Loads the real host RPC methods, real RpcDispatcher, real renderer terminal multiplexer, and codecs from the current working tree, exact pre-fix main, newest release tag, and the pinned reported 1.4.192-client/1.4.191-host commits. In-process transport reproduces production frame routing, including decoder-rejected opcodes. Covers the terminal stream only; session tabs, agent publications, file/Git RPCs, mobile E2EE framing, and relay transport are uncovered.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/12641",
         "https://github.com/stablyai/orca/pull/12655"
       ],
       "invariant": "A client and a server built from different releases must complete subscribe, input delivery to the process, hide/reveal buffer snapshot, transport drop, and resubscribe with no frame refused by the receiving build's decoder, the same negotiated capabilities, and the same published snapshot content — so a new optional field stays safe, a new opcode is only sent after negotiation, and a change in what the host publishes is visible before release.",
-      "oracle": "Run one fixed journey per pairing (old client/new server, new client/old server, and current/current as control) and assert the recorded step list, the exact named frame sequence, both subscribed events with their negotiated capabilities, the exact input texts the host wrote to the PTY before and after reconnect, the rendered snapshot and live-output content, and an empty set of decoder-rejected frames in either direction. Missing host runtime methods are reported by name so a harness gap can never be read as a wire incompatibility.",
+      "oracle": "Run one fixed journey per general pairing (old client/new server, new client/old server, and current/current) plus the pinned reported pair, exact pre-fix main control, and candidate controls. Assert exact frames, subscriptions, input, rendered snapshot/live content, and zero decoder rejects or missing host methods. The reported and pre-fix-main clients must render blank after discarding the nonempty lossy initial image; candidate pairings must paint it once, recover the first post-snapshot sequence gap, and resume contiguous live output once.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts"
       ],
-      "testFiles": ["tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts"],
+      "testFiles": [
+        "tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts",
+        "tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts"
+      ],
       "assertionRefs": [
         {
           "file": "tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts",
@@ -16015,6 +16066,16 @@
             "expect(record.rejected).toEqual([])",
             "expect(record.inputAtProcess).toEqual([JOURNEY_INPUTS.first, JOURNEY_INPUTS.second])",
             "expect(event.capabilities).toEqual({ outputPause: 1 })"
+          ]
+        },
+        {
+          "file": "tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts",
+          "assertions": [
+            "the reported 1.4.192 client discards the reported 1.4.191 host's nonempty lossy snapshot",
+            "the exact pre-fix main client reproduces the same blank rendered terminal",
+            "the candidate client paints that old-host image exactly once and resumes live output",
+            "the candidate client paints the candidate-host image exactly once and resumes live output",
+            "both candidate pairings report zero decoder rejects and missing runtime methods"
           ]
         }
       ],
@@ -16030,8 +16091,8 @@
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 60,
-        "scope": "one baseline checkout extraction plus three in-process journeys"
+        "p95Seconds": 180,
+        "scope": "four historical checkout extractions plus seven in-process pairings"
       },
       "flakeHistory": {
         "status": "not-started",
@@ -16042,18 +16103,18 @@
         "evidence": "Red proven separately for each rule by injecting the violation into the working tree and reverting it. Rule 2: adding opcode 17 and sending it ungated from the client turned new-client/old-server red with rejected rawOpcode 17 in the client-to-host direction, while old-client/new-server stayed green. Rule 3: making the host stop publishing the snapshot `source` field turned both new-server pairings red and left the old-server pairing green; trimming the published initial buffer removed the SnapshotChunk frame and failed the frame-sequence oracle. Rule 1: adding an optional `hiddenOutputReason` field to the snapshot frame kept all pairings green, and making the client require that field turned only new-client/old-server red."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "Test-only infrastructure; it adds no product code path. The extracted baseline tree is cached by resolved commit, so repeat runs skip extraction and each journey completes in roughly 35ms."
+        "required": true,
+        "evidence": "Product reconciliation adds one existing-target comparison per completed snapshot and no timer, polling, subscription, provider call, scan, or subprocess. The test-only host hook adds one environment read per initial subscribe. Extracted trees are cached by commit."
       },
       "promotionCriteria": [
-        "Extend the matrix beyond two version points, for example the previous two minor releases.",
+        "Extend the matrix beyond the newest stable release and pinned reported pair.",
         "Cover a second wire surface, starting with the session-tab sync channel that PR #12641 changed.",
         "Collect 100 consecutive CI passes on the dedicated cross-version-wire job.",
         "Run the job on Linux and Windows runners, not only macOS locally."
       ],
       "knownGaps": [
         "Only the terminal stream is covered; session tabs, agent sessions, file/Git RPCs, mobile E2EE framing, and the relay transport are not.",
-        "Only two version points are compared, so a regression introduced and reverted between them is invisible.",
+        "The newest stable release and pinned reported pair do not expose every intermediate regression.",
         "The host runtime is a stub around a fake PTY, so real PTY, daemon, and SSH provider behavior is out of scope.",
         "The baseline is the newest release tag by default, so the compared pair changes when a new release is cut unless ORCA_CROSS_VERSION_BASELINE_REF pins it.",
         "tests/ is outside every tsconfig include, so the harness is linted and executed but not typechecked."

@@ -15,6 +15,8 @@ import {
   type ClientCreationActionAvailability
 } from './client-creation-action-policy'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+import { getExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { resolveSshWorkspaceBrowserRouteEligibility } from './ssh-workspace-browser-route-eligibility'
 
 export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engine: SearchEngine }
 
@@ -24,6 +26,7 @@ export type OpenWorkspaceBrowserTabRequest = {
   url: string
   intent: WorkspaceBrowserTabIntent
   expectedRuntimeEnvironmentId?: string
+  expectedSshConnectionId?: string
 }
 
 function isExpectedRuntimeBrowserRoute(
@@ -67,6 +70,42 @@ export function canOpenWorkspaceBrowserTabOnRuntime(
     workspaceId,
     expectedRuntimeEnvironmentId
   )
+}
+
+function isExpectedSshBrowserRoute(
+  state: AppState,
+  availability: ClientCreationActionAvailability,
+  route: ReturnType<typeof resolveWorktreeOperationRoute>,
+  workspaceId: string,
+  expectedSshConnectionId: string
+): boolean {
+  if (availability.state !== 'enabled' || workspaceId === FLOATING_TERMINAL_WORKTREE_ID || !route) {
+    return false
+  }
+  const expectedTargetId = expectedSshConnectionId.trim()
+  const eligibility = resolveSshWorkspaceBrowserRouteEligibility(
+    getExecutionHostIdForWorktree(state, workspaceId),
+    state.settings
+  )
+  const host = parseExecutionHostId(route.executionHostId)
+  return (
+    Boolean(expectedTargetId) &&
+    route.runtimeEnvironmentId === null &&
+    eligibility?.eligible === true &&
+    eligibility.targetId === expectedTargetId &&
+    host?.kind === 'ssh' &&
+    host.targetId === expectedTargetId
+  )
+}
+
+export function canOpenWorkspaceBrowserTabOnSsh(
+  state: AppState,
+  workspaceId: string,
+  expectedSshConnectionId: string
+): boolean {
+  const availability = getClientCreationActionPolicy(state, workspaceId)['managed-browser']
+  const route = resolveWorktreeOperationRoute(state, workspaceId)
+  return isExpectedSshBrowserRoute(state, availability, route, workspaceId, expectedSshConnectionId)
 }
 
 // Why: concurrent URL tabs are indistinguishable under a shared "Open URL"
@@ -183,6 +222,11 @@ export async function openWorkspaceBrowserTab(
     request.expectedRuntimeEnvironmentId === undefined
       ? null
       : request.expectedRuntimeEnvironmentId.trim()
+  const expectedSshConnectionId =
+    request.expectedSshConnectionId === undefined ? null : request.expectedSshConnectionId.trim()
+  if (expectedEnvironmentId !== null && expectedSshConnectionId !== null) {
+    throw openFailure(presentation.error, 'browser owner assertion is ambiguous')
+  }
   if (
     expectedEnvironmentId !== null &&
     !isExpectedRuntimeBrowserRoute(
@@ -194,6 +238,18 @@ export async function openWorkspaceBrowserTab(
     )
   ) {
     throw openFailure(presentation.error, 'asserted runtime cannot provide this managed browser')
+  }
+  if (
+    expectedSshConnectionId !== null &&
+    !isExpectedSshBrowserRoute(
+      state,
+      availability,
+      route,
+      request.workspaceId,
+      expectedSshConnectionId
+    )
+  ) {
+    throw openFailure(presentation.error, 'asserted SSH connection cannot provide this browser')
   }
   const host = parseExecutionHostId(route.executionHostId)
   if (!environmentId) {

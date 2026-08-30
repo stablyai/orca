@@ -23,6 +23,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     browserPagesByWorkspace: true,
     activeBrowserTabIdByWorktree: true,
     browserUrlHistory: true,
+    workspaceDocHistory: true,
     remoteBrowserPageHandlesByPageId: true,
     unifiedTabsByWorktree: true,
     groupsByWorktree: true,

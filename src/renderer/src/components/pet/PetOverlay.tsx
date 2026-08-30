@@ -23,6 +23,10 @@ function usePetAnimationName(
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
+  const [agentStatusNow, setAgentStatusNow] = useState(() => Date.now())
+  useEffect(() => {
+    setAgentStatusNow(Date.now())
+  }, [agentStatusEpoch])
 
   // Re-render when the freshness scheduler ticks so stale live states stop
   // driving pet animations even if no other store value changes.
@@ -34,7 +38,7 @@ function usePetAnimationName(
     dragging,
     dragAnimation,
     hovering,
-    now: Date.now(),
+    now: agentStatusNow,
     staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
   })
 }

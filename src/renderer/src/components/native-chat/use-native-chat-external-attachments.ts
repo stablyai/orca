@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
@@ -35,7 +35,9 @@ export function useNativeChatExternalAttachments({
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
 } {
   const disabledRef = useRef(disabled)
-  disabledRef.current = disabled
+  useLayoutEffect(() => {
+    disabledRef.current = disabled
+  }, [disabled])
 
   const resolveAttachmentOwner = useCallback(
     () =>
@@ -47,7 +49,7 @@ export function useNativeChatExternalAttachments({
 
   const attachExternalPaths = useCallback(
     (paths: string[]) => {
-      if (paths.length === 0) {
+      if (paths.length === 0 || disabledRef.current) {
         return
       }
       const owner = resolveAttachmentOwner()

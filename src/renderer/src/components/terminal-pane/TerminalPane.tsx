@@ -2868,6 +2868,8 @@ function TerminalPane(
         return
       }
       splitTerminalPaneWithInheritedCwd({
+        worktreeId,
+        tabId,
         manager,
         getManager: () => managerRef.current,
         paneTransports: paneTransportsRef.current,
@@ -2878,7 +2880,7 @@ function TerminalPane(
         source: 'context_menu'
       })
     },
-    [cwd]
+    [cwd, tabId, worktreeId]
   )
 
   const beginPaneDragFromHeader = useCallback(

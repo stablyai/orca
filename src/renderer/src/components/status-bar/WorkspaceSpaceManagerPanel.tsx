@@ -1315,6 +1315,10 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const migrationUnsupportedByPtyId = useAppStore((state) => state.migrationUnsupportedByPtyId)
   const runtimePaneTitlesByTabId = useAppStore((state) => state.runtimePaneTitlesByTabId)
   const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
+  const [agentStatusNow, setAgentStatusNow] = useState(() => Date.now())
+  useEffect(() => {
+    setAgentStatusNow(Date.now())
+  }, [agentStatusEpoch])
   const retainedAgentsByPaneKey = useAppStore((state) => state.retainedAgentsByPaneKey)
   const openFiles = useAppStore((state) => state.openFiles)
   const editorDrafts = useAppStore((state) => state.editorDrafts)
@@ -1375,7 +1379,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     // hook entries cross the stale boundary so delete readiness recomputes.
     void agentStatusEpoch
     const details = new Map<string, WorkspaceDecisionDetails>()
-    const now = Date.now()
+    const now = agentStatusNow
     for (const worktree of sourceRows) {
       details.set(
         getWorkspaceSpaceWorktreeIdentity(worktree),
@@ -1408,6 +1412,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   }, [
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
+    agentStatusNow,
     agentStatusEpoch,
     agentStatusByPaneKey,
     browserTabsByWorktree,
@@ -2236,7 +2241,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                         settings,
                         activeWorktreeId,
                         activeWorkspaceExecutionHostId,
-                        now: Date.now()
+                        now: agentStatusNow
                       })
                     }
                     gitRefreshState={

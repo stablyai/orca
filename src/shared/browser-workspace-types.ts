@@ -64,6 +64,21 @@ export type BrowserPageDocLocation = {
   filePath: string
 }
 
+/**
+ * Where a converted page came from — one level deep, so Back can cross the conversion boundary.
+ * A `workspace-doc` origin carries the document identity only; a `url` origin carries the page's
+ * last stored (already-fenced) url, so no grant URL can ride provenance into persistence.
+ */
+export type BrowserPageConversionOrigin =
+  | { kind: 'workspace-doc'; docLocation: BrowserPageDocLocation }
+  | {
+      kind: 'url'
+      url: string
+      /** The origin page's runtime ownership, so Back cannot silently move browsing onto this
+       *  desktop: absent = worktree-inferred, null = client-local, string = that runtime. */
+      browserRuntimeEnvironmentId?: string | null
+    }
+
 export type BrowserPage = {
   id: string
   workspaceId: string
@@ -89,6 +104,10 @@ export type BrowserPage = {
   viewportPresetId?: BrowserViewportPresetId | null
   /** Set on a page that shows a workspace document; absent on every page that shows a URL. */
   docLocation?: BrowserPageDocLocation | null
+  /** Set on a page the address bar converted from the other kind; absent everywhere else. */
+  convertedFrom?: BrowserPageConversionOrigin | null
+  /** Set on a page Back returned across a conversion to; Forward re-crosses it. */
+  convertedTo?: BrowserPageConversionOrigin | null
 }
 
 export type BrowserWorkspace = {

@@ -3,9 +3,10 @@
  * per-keystroke samples, plus the scale census (agent rows, tabs, panes,
  * worktree nesting, suspect settings) that explains WHY a renderer is slow.
  *
- * Kept separate from the DOM/store wiring in typing-latency-diagnostic.ts so
+ * Kept separate from the DOM/store wiring in diagnostic.ts so
  * the arithmetic is unit-testable without an xterm or a live store.
  */
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 
 export type LatencyPercentiles = {
   count: number
@@ -39,34 +40,49 @@ export function summarizeLatencySamples(values: readonly number[]): LatencyPerce
   }
 }
 
+export function typingSampleDurationMs(
+  startedAt: number | null,
+  stoppedAt: number | null,
+  now: number
+): number | null {
+  return startedAt === null ? null : Math.max(0, Math.round((stoppedAt ?? now) - startedAt))
+}
+
 export type WorktreeNestingCensus = {
   maxDepth: number
   nestedWorktrees: number
 }
 
-/** Windows and default macOS filesystems are case-insensitive, so compare case-folded. */
-function normalizePathForNesting(rawPath: string): string {
-  const unified = rawPath.replaceAll('\\', '/').toLowerCase()
-  return unified.length > 1 && unified.endsWith('/') ? unified.slice(0, -1) : unified
-}
+type WorktreeLike = { path?: string | null; hostId?: string | null }
 
-export function summarizeWorktreeNesting(paths: readonly string[]): WorktreeNestingCensus {
-  const normalized = paths
-    .filter((path) => typeof path === 'string' && path.length > 0)
-    .map((path) => normalizePathForNesting(path))
-  const unique = [...new Set(normalized)]
+export function summarizeWorktreeNesting(
+  worktrees: readonly WorktreeLike[]
+): WorktreeNestingCensus {
+  const pathsByHost = new Map<string | null, Set<string>>()
+  for (const worktree of worktrees) {
+    if (typeof worktree.path !== 'string' || worktree.path.length === 0) {
+      continue
+    }
+    const hostId = worktree.hostId ?? null
+    const paths = pathsByHost.get(hostId) ?? new Set<string>()
+    paths.add(normalizeRuntimePathForComparison(worktree.path))
+    pathsByHost.set(hostId, paths)
+  }
   let maxDepth = 0
   let nestedWorktrees = 0
-  for (const candidate of unique) {
-    let depth = 0
-    for (const ancestor of unique) {
-      if (ancestor !== candidate && candidate.startsWith(`${ancestor}/`)) {
-        depth += 1
+  for (const paths of pathsByHost.values()) {
+    for (const candidate of paths) {
+      let depth = 0
+      for (const ancestor of paths) {
+        const ancestorPrefix = ancestor.endsWith('/') ? ancestor : `${ancestor}/`
+        if (ancestor !== candidate && candidate.startsWith(ancestorPrefix)) {
+          depth += 1
+        }
       }
-    }
-    maxDepth = Math.max(maxDepth, depth)
-    if (depth > 0) {
-      nestedWorktrees += 1
+      maxDepth = Math.max(maxDepth, depth)
+      if (depth > 0) {
+        nestedWorktrees += 1
+      }
     }
   }
   return { maxDepth, nestedWorktrees }
@@ -87,8 +103,6 @@ export type FocusedPaneCensus = {
 }
 
 type CountableRecord = Record<string, unknown> | null | undefined
-
-type WorktreeLike = { path?: string | null }
 
 export type TypingCensusStoreShape = {
   worktreesByRepo?: Record<string, WorktreeLike[]> | null
@@ -169,22 +183,24 @@ function readNumber(
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-function collectWorktreePaths(byRepo: Record<string, WorktreeLike[]> | null | undefined): string[] {
+function collectWorktrees(
+  byRepo: Record<string, WorktreeLike[]> | null | undefined
+): WorktreeLike[] {
   if (!byRepo) {
     return []
   }
-  const paths: string[] = []
+  const collected: WorktreeLike[] = []
   for (const worktrees of Object.values(byRepo)) {
     if (!Array.isArray(worktrees)) {
       continue
     }
     for (const worktree of worktrees) {
       if (typeof worktree?.path === 'string') {
-        paths.push(worktree.path)
+        collected.push(worktree)
       }
     }
   }
-  return paths
+  return collected
 }
 
 export function summarizeTypingScaleCensus(input: {
@@ -198,14 +214,14 @@ export function summarizeTypingScaleCensus(input: {
 }): TypingScaleCensus {
   const state = input.state
   const settings = state?.settings ?? null
-  const worktreePaths = collectWorktreePaths(state?.worktreesByRepo)
+  const worktrees = collectWorktrees(state?.worktreesByRepo)
   const storeLive = countRecord(state?.agentStatusByPaneKey)
   const storeRetained = countRecord(state?.retainedAgentsByPaneKey)
   return {
     appVersion: input.appVersion,
     repos: state?.worktreesByRepo ? Object.keys(state.worktreesByRepo).length : 0,
-    worktrees: worktreePaths.length,
-    worktreeNesting: summarizeWorktreeNesting(worktreePaths),
+    worktrees: worktrees.length,
+    worktreeNesting: summarizeWorktreeNesting(worktrees),
     tabs: {
       terminal: sumArrayLengths(state?.tabsByWorktree),
       unified: sumArrayLengths(state?.unifiedTabsByWorktree)

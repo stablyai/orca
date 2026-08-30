@@ -45,11 +45,11 @@
     "react/immutability": "off",
     "react/incompatible-library": "off",
     "react/preserve-manual-memoization": "off",
-    "react/purity": "off",
+    "react/purity": "error",
     "react/refs": "off",
     "react/set-state-in-effect": "off",
     "react/set-state-in-render": "error",
-    "react/static-components": "off",
+    "react/static-components": "error",
     "react/use-memo": "error",
     "react/void-use-memo": "error",
     "react/jsx-curly-brace-presence": [

@@ -91,9 +91,11 @@ pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wi
 
 It fails when a frame is refused by the receiving build's decoder (Rule 2), when the
 observed frame sequence changes (Rule 3), or when published snapshot content or
-negotiated capabilities differ from the contract. Adding an optional field keeps it
-green (Rule 1); making a client depend on that field turns the new-client/old-host
-pairing red.
+negotiated capabilities differ from the contract. Repeated frame shapes are compared
+by corresponding journey occurrence (initial, reveal, reconnect), so a field removed
+from one occurrence cannot hide behind a sibling that still publishes it. Adding an
+optional field keeps the suite green (Rule 1); making a client depend on that field
+turns the new-client/old-host pairing red.
 
 ### Never write down what the old side has
 
@@ -109,8 +111,11 @@ Derive the expectation from the baseline that was actually checked out:
 
 - for a published frame, pair each build against a client of its own version and
   compare the skewed pairing against that same-version reference, so the expectation
-  is whatever that build publishes today (`publishedFieldNames` in
-  `tests/e2e/cross-version-wire/published-field-shape.ts`);
+  is whatever that build publishes today. Compare repeated frames by corresponding
+  occurrence with `comparePublishedFieldOccurrences` in
+  `tests/e2e/cross-version-wire/published-field-shape.ts`; never union keys across
+  initial, reveal, and reconnect frames, because a sibling can mask one occurrence's
+  removed field;
 - for a negotiated surface, read the old build's advertised capabilities and
   registered method names from its checkout, and assert they agree with each other
   rather than asserting the old build lacks them;

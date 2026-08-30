@@ -9,7 +9,7 @@
 // same-version reference pairing of the build that publishes the frame.
 
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { comparePublishedFields, publishedFieldNames } from './published-field-shape'
+import { comparePublishedFieldOccurrences, publishedFieldNames } from './published-field-shape'
 import { resolveBaselineReleaseRef, selectLatestStableReleaseTag } from './release-checkout'
 import {
   CrossVersionJourneyStall,
@@ -51,6 +51,7 @@ const EXPECTED_JOURNEY_FRAMES = [
   'C>H Input',
   'C>H Unsubscribe'
 ]
+const SNAPSHOT_START_OCCURRENCES = ['initial', 'reveal', 'reconnect'] as const
 
 let baselineRef: string
 let current: TerminalWireBuild
@@ -81,6 +82,23 @@ function expectJourneyActuallyRan(record: JourneyRecord): void {
   expect(record.subscribedEvents).toHaveLength(2)
   expect(record.snapshotStarts).toHaveLength(3)
   expect(record.missingRuntimeMethods).toEqual([])
+}
+
+function expectSnapshotStartFieldsRemainPublished(args: {
+  older: readonly Record<string, unknown>[]
+  newer: readonly Record<string, unknown>[]
+  olderLabel: string
+  newerLabel: string
+}): void {
+  const skewByOccurrence = comparePublishedFieldOccurrences(args)
+  for (const [index, skew] of skewByOccurrence.entries()) {
+    const occurrence = SNAPSHOT_START_OCCURRENCES[index] ?? `occurrence ${index + 1}`
+    expect(
+      skew.removed,
+      `${args.newerLabel} stopped publishing ${occurrence} SnapshotStart fields ` +
+        `${args.olderLabel} publishes (it added: ${skew.added.join(', ') || 'nothing'})`
+    ).toEqual([])
+  }
 }
 
 function expectWireCompatible(record: JourneyRecord): void {
@@ -151,7 +169,9 @@ describe('cross-version remote terminal wire', () => {
     expectWireCompatible(baselineReference)
     // Anti-vacuous: a reference read from a pairing that published nothing would
     // make every comparison against it trivially true.
-    expect(publishedFieldNames(baselineReference.snapshotStarts).length).toBeGreaterThan(4)
+    for (const start of baselineReference.snapshotStarts) {
+      expect(publishedFieldNames(start).length).toBeGreaterThan(4)
+    }
   })
 
   it(
@@ -185,18 +205,35 @@ describe('cross-version remote terminal wire', () => {
   )
 
   it('adds SnapshotStart fields rather than dropping ones the old host still publishes', () => {
-    const skew = comparePublishedFields({
-      older: publishedFieldNames(baselineReference.snapshotStarts),
-      newer: publishedFieldNames(currentReference.snapshotStarts)
-    })
     // Rule 1 is additive-only. A field the old host still publishes is one an old
     // client may still read, so dropping it breaks that client with no opcode
     // change for the decoder check to catch.
-    expect(
-      skew.removed,
-      `current code stopped publishing SnapshotStart fields ${baselineRef} still publishes ` +
-        `(it added: ${skew.added.join(', ') || 'nothing'})`
-    ).toEqual([])
+    expectSnapshotStartFieldsRemainPublished({
+      older: baselineReference.snapshotStarts,
+      newer: currentReference.snapshotStarts,
+      olderLabel: baselineRef,
+      newerLabel: 'current code'
+    })
+  })
+
+  it('detects a field removed from only the reveal SnapshotStart occurrence', () => {
+    const mutated = currentReference.snapshotStarts.map((start) => ({ ...start }))
+    const revealIndex = SNAPSHOT_START_OCCURRENCES.indexOf('reveal')
+    const reveal = mutated[revealIndex]
+    if (!reveal) {
+      throw new Error('The terminal journey did not publish a reveal SnapshotStart')
+    }
+    expect(reveal).toHaveProperty('seq')
+    delete reveal.seq
+
+    expect(() =>
+      expectSnapshotStartFieldsRemainPublished({
+        older: currentReference.snapshotStarts,
+        newer: mutated,
+        olderLabel: 'current reference',
+        newerLabel: 'current mutation'
+      })
+    ).toThrow(/reveal SnapshotStart fields.*seq/)
   })
 
   it(

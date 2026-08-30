@@ -16,9 +16,9 @@ export type PublishedFieldSkew = {
   removed: string[]
 }
 
-/** Sorted union of the keys across one published frame sequence. */
-export function publishedFieldNames(payloads: Record<string, unknown>[]): string[] {
-  return [...new Set(payloads.flatMap((payload) => Object.keys(payload)))].sort()
+/** Sorted keys from one published frame occurrence. */
+export function publishedFieldNames(payload: Record<string, unknown>): string[] {
+  return Object.keys(payload).sort()
 }
 
 /**
@@ -35,4 +35,27 @@ export function comparePublishedFields(args: {
     added: [...newer].filter((name) => !older.has(name)).sort(),
     removed: [...older].filter((name) => !newer.has(name)).sort()
   }
+}
+
+/** Compare corresponding occurrences without letting sibling frames hide a removal. */
+export function comparePublishedFieldOccurrences(args: {
+  older: readonly Record<string, unknown>[]
+  newer: readonly Record<string, unknown>[]
+}): PublishedFieldSkew[] {
+  if (args.older.length !== args.newer.length) {
+    throw new Error(
+      `Published frame occurrence count differs: older ${args.older.length}, newer ${args.newer.length}`
+    )
+  }
+
+  return args.older.map((older, index) => {
+    const newer = args.newer[index]
+    if (!newer) {
+      throw new Error(`Missing newer published frame occurrence ${index + 1}`)
+    }
+    return comparePublishedFields({
+      older: publishedFieldNames(older),
+      newer: publishedFieldNames(newer)
+    })
+  })
 }

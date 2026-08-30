@@ -27,6 +27,7 @@
     "../src/main/startup/single-instance-lock.ts",
     "../src/main/startup/startup-diagnostics.ts",
     "../src/main/window/focus-existing-window.ts",
+    "../src/main/window/foreground-activation-policy.ts",
     "../src/main/window/macos-app-activation.ts"
   ],
   "compilerOptions": {

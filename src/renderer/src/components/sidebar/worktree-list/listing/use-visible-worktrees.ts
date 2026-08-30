@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import type { AppState } from '@/store/types'
@@ -46,6 +46,10 @@ export function useVisibleSidebarWorktrees(args: {
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const [agentStatusNow, setAgentStatusNow] = useState(() => Date.now())
+  useEffect(() => {
+    setAgentStatusNow(Date.now())
+  }, [agentStatusEpoch])
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const pairedDeviceIdsByEnvironment = useMemo(
@@ -80,7 +84,7 @@ export function useVisibleSidebarWorktrees(args: {
         : getWorktreeIdsWithLiveAgent(
             useAppStore.getState().agentStatusByPaneKey,
             tabsByWorktree,
-            Date.now()
+            agentStatusNow
           ),
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
@@ -101,6 +105,7 @@ export function useVisibleSidebarWorktrees(args: {
   }, [
     args.agentSendTargetWorktreeId,
     agentStatusEpoch,
+    agentStatusNow,
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -51,6 +51,10 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     !showSleepingWorkspaces ? s.browserTabsByWorktree : null
   )
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const [agentStatusNow, setAgentStatusNow] = useState(() => Date.now())
+  useEffect(() => {
+    setAgentStatusNow(Date.now())
+  }, [agentStatusEpoch])
   // Why snapshot on the epoch: the always-mounted drawer must not scan every
   // agent on unrelated store writes; membership changes advance this tick.
   const worktreeIdsWithLiveAgent = useMemo(() => {
@@ -59,10 +63,10 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
       ? getWorktreeIdsWithLiveAgent(
           useAppStore.getState().agentStatusByPaneKey,
           tabsByWorktree,
-          Date.now()
+          agentStatusNow
         )
       : EMPTY_WORKTREE_ID_SET
-  }, [agentStatusEpoch, showSleepingWorkspaces, tabsByWorktree])
+  }, [agentStatusEpoch, agentStatusNow, showSleepingWorkspaces, tabsByWorktree])
 
   return useMemo(() => {
     // Why: the board has its own status ordering, but visibility must match

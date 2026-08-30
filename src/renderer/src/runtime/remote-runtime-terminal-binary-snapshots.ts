@@ -4,6 +4,7 @@ import {
   type TerminalStreamFrame
 } from '../../../shared/terminal-stream-protocol'
 import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal-multiplex-flow-control'
+import { recordE2eRemoteTerminalInitialSnapshotTruncated } from './remote-runtime-terminal-e2e-control'
 import { RemoteRuntimeTerminalResponseController } from './remote-runtime-terminal-response-controller'
 import {
   MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES,
@@ -57,7 +58,12 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
       const target = stream.snapshotTarget
       const info = stream.snapshotInfo
       const pendingRequest = stream.pendingSnapshotRequest
-      const snapshotApplied = !stream.snapshotOverflowed && info?.truncated !== true
+      if (target === 'initial' && info?.truncated === true) {
+        recordE2eRemoteTerminalInitialSnapshotTruncated()
+      }
+      // Initial truncation drops retained history, but the latest-screen image remains authoritative.
+      const snapshotApplied =
+        !stream.snapshotOverflowed && (target === 'initial' || info?.truncated !== true)
       const matchesPendingRequest =
         target === 'request' &&
         pendingRequest &&

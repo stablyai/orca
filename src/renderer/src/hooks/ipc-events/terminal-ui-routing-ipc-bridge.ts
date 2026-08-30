@@ -11,13 +11,14 @@ import {
 export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onSplitTerminal(
-      ({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
+      ({ tabId, paneRuntimeId, direction, command, telemetrySource, newLeafId }) => {
         const detail: SplitTerminalPaneDetail = {
           tabId,
           paneRuntimeId,
           direction,
           command,
-          telemetrySource
+          telemetrySource,
+          newLeafId
         }
         window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
       }

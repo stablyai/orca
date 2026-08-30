@@ -38,6 +38,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   clientHostedBrowserCloseIntentsByEnvironment: 'row-arrays',
   activeTabTypeByWorktree: 'owner-keyed',
   browserUrlHistory: 'none',
+  workspaceDocHistory: 'none',
   activeTabIdByWorktree: 'owner-keyed',
   unifiedTabs: 'owner-keyed-row-arrays',
   tabGroups: 'owner-keyed-row-arrays',

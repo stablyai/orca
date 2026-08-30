@@ -16,7 +16,7 @@ import {
 } from './lib/crash-diagnostics'
 import { installAutomationHostDiagnostic } from './components/automations/automation-host-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
-import { installTypingLatencyDiagnostic } from './lib/typing-latency-diagnostic'
+import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
