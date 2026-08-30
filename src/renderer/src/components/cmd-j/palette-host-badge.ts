@@ -1,9 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 
 export type PaletteHostBadge = {
@@ -22,16 +17,15 @@ function hasActiveRemoteHost(hostOptions: readonly SidebarHostOption[]): boolean
 }
 
 export function getPaletteHostBadge(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | null | undefined,
+  hostId: ExecutionHostId | null | undefined,
   hostOptions: readonly SidebarHostOption[],
   // Why: with a host filter applied the badge is the only thing explaining which
   // rows survived, so it must show even when every remote is disconnected.
   alwaysShowHostLabel = false
 ): PaletteHostBadge | null {
-  if (!repo || (!alwaysShowHostLabel && !hasActiveRemoteHost(hostOptions))) {
+  if (!hostId || (!alwaysShowHostLabel && !hasActiveRemoteHost(hostOptions))) {
     return null
   }
-  const hostId = getRepoExecutionHostId(repo)
   const host = hostOptions.find((option) => option.id === hostId)
   if (!host) {
     return null

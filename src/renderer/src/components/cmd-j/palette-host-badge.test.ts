@@ -20,7 +20,7 @@ describe('getPaletteHostBadge', () => {
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    expect(getPaletteHostBadge({ connectionId: null }, hosts)).toBeNull()
+    expect(getPaletteHostBadge('local', hosts)).toBeNull()
   })
 
   it('returns null when the only non-local host is configured but disconnected', () => {
@@ -32,7 +32,7 @@ describe('getPaletteHostBadge', () => {
 
     // No connection state -> the SSH host is 'disconnected', so there's nothing
     // live to disambiguate from and rows stay badge-free.
-    expect(getPaletteHostBadge({ connectionId: null }, hosts)).toBeNull()
+    expect(getPaletteHostBadge('local', hosts)).toBeNull()
   })
 
   it('badges a disconnected host anyway when a host filter is applied', () => {
@@ -44,7 +44,7 @@ describe('getPaletteHostBadge', () => {
 
     // Why: with a host filter on, the badge is the only thing explaining which
     // rows survived, so liveness must not suppress it.
-    expect(getPaletteHostBadge({ connectionId: 'ssh-1' }, hosts, true)).toEqual({
+    expect(getPaletteHostBadge('ssh:ssh-1', hosts, true)).toEqual({
       hostId: 'ssh:ssh-1',
       label: 'Builder'
     })
@@ -58,7 +58,7 @@ describe('getPaletteHostBadge', () => {
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    expect(getPaletteHostBadge({ connectionId: null }, hosts)).toEqual({
+    expect(getPaletteHostBadge('local', hosts)).toEqual({
       hostId: 'local',
       label: LOCAL_HOST_LABEL
     })
@@ -72,7 +72,7 @@ describe('getPaletteHostBadge', () => {
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    expect(getPaletteHostBadge({ connectionId: 'ssh-1' }, hosts)).toEqual({
+    expect(getPaletteHostBadge('ssh:ssh-1', hosts)).toEqual({
       hostId: 'ssh:ssh-1',
       label: 'Builder'
     })
@@ -104,7 +104,7 @@ describe('getPaletteHostBadge', () => {
       ])
     })
 
-    expect(getPaletteHostBadge({ executionHostId: 'runtime:env-1' }, hosts)).toEqual({
+    expect(getPaletteHostBadge('runtime:env-1', hosts)).toEqual({
       hostId: 'runtime:env-1',
       label: 'env-1'
     })
@@ -117,10 +117,10 @@ describe('getPaletteHostBadge', () => {
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    expect(getPaletteHostBadge({ connectionId: null }, hosts)).toBeNull()
+    expect(getPaletteHostBadge('local', hosts)).toBeNull()
   })
 
-  it('maps repos with no executionHostId/connectionId to local', () => {
+  it('uses the local host label for local identities', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
       sshTargetLabels: new Map([['ssh-1', 'Builder']]),
@@ -128,13 +128,13 @@ describe('getPaletteHostBadge', () => {
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    expect(getPaletteHostBadge({}, hosts)).toEqual({
+    expect(getPaletteHostBadge('local', hosts)).toEqual({
       hostId: 'local',
       label: LOCAL_HOST_LABEL
     })
   })
 
-  it('returns null when the repo is missing', () => {
+  it('returns null when the host identity is missing', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
       sshTargetLabels: new Map([['ssh-1', 'Builder']]),
