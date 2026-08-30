@@ -174,6 +174,9 @@ describe('capLinearMetadataIdsAcrossGroups over-subscribed rows', () => {
     const groups = singleIdGroups(4)
     const ids = groups.flatMap((group) => group.ids)
     expect(capLinearMetadataIdsAcrossGroups(groups, ids, 4)).toEqual(ids)
+    // Why: on the cap, full coverage is indistinguishable from a starved row, so coverage
+    // warns rather than claim what it cannot prove — below the cap it stays quiet (#17342).
+    expect(isLinearMetadataGroupSelectionPartial(groups, ids, 4)).toBe(true)
     expect(isLinearMetadataGroupSelectionPartial(groups, ids, 5)).toBe(false)
   })
 
