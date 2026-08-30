@@ -83,9 +83,23 @@ function findSwallowingFiles(): string[] {
     .sort()
 }
 
+const ALLOWLIST_PATH = 'src/main/wsl/__fixtures__/wsl-probe-failure-swallow-allowlist.txt'
+const GUIDANCE = `See docs/reference/wsl-probe-failure-semantics.md`
+
 describe('WSL probe failure semantics', () => {
   it('records every probe module that reports a failure as a negative answer', () => {
-    expect(findSwallowingFiles()).toEqual([...SWALLOW_ALLOWLIST].sort())
+    const allowed = new Set(SWALLOW_ALLOWLIST)
+    const unlisted = findSwallowingFiles().filter((file) => !allowed.has(file))
+    expect(
+      unlisted,
+      unlisted.length === 0
+        ? ''
+        : `New WSL probe module(s) turn a failure into a negative answer:\n` +
+            `${unlisted.map((file) => `  - ${file}`).join('\n')}\n\n` +
+            `That is only safe while nothing caches the value or uses it to gate\n` +
+            `discovery. If it is safe, add the file to ${ALLOWLIST_PATH}\n` +
+            `with a note saying why. If it is not, ${GUIDANCE} for the options.`
+    ).toEqual([])
   })
 
   it('keeps the allowlist honest', () => {
@@ -94,6 +108,14 @@ describe('WSL probe failure semantics', () => {
     // Why fail on a stale entry rather than ignore it: an entry that no longer
     // matches means the file was fixed, and leaving it listed would let the
     // next swallow site slip back in under an allowance nobody re-reviewed.
-    expect(stale).toEqual([])
+    expect(
+      stale,
+      stale.length === 0
+        ? ''
+        : `These entries no longer match — the files were fixed. Nothing is\n` +
+            `wrong with your change; the ratchet just needs to shrink.\n` +
+            `Delete from ${ALLOWLIST_PATH}:\n` +
+            `${stale.map((entry) => `  - ${entry}`).join('\n')}`
+    ).toEqual([])
   })
 })
