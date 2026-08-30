@@ -63,6 +63,8 @@ import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from 
 import { AgentIcon } from '@/lib/agent-catalog'
 import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
+import type { RateLimitState } from '../../../../shared/rate-limit-types'
+import { resolveStatusBarUsageRateLimits } from './usage-rate-limits-source'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import {
@@ -93,8 +95,10 @@ import {
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   fetchProviderAccountsSnapshot,
+  hasRemoteProviderAccountOwner,
   selectClaudeProviderAccount,
-  selectCodexProviderAccount
+  selectCodexProviderAccount,
+  watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -2045,6 +2049,40 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Why (#15798): with a remote Active Server the usage badges must describe the
+  // machine actually running agents. The provider-accounts snapshot already
+  // carries the server's full RateLimitState; the watcher streams its 5-minute
+  // poll refreshes, and the manual refresh button re-fetches the snapshot.
+  const remoteUsageOwner = hasRemoteProviderAccountOwner(settings)
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  const [remoteRateLimits, setRemoteRateLimits] = useState<RateLimitState | null>(null)
+  useEffect(() => {
+    if (!remoteUsageOwner) {
+      setRemoteRateLimits(null)
+      return
+    }
+    const watcher = watchProviderAccounts(
+      { activeRuntimeEnvironmentId },
+      {
+        onSnapshot: (snapshot) => {
+          if (snapshot.rateLimits) {
+            setRemoteRateLimits(snapshot.rateLimits)
+          }
+        },
+        onError: (error) => {
+          console.error('Failed to stream remote usage snapshot:', error)
+        }
+      }
+    )
+    return () => {
+      watcher.close()
+    }
+  }, [remoteUsageOwner, activeRuntimeEnvironmentId])
+  const effectiveRateLimits = resolveStatusBarUsageRateLimits(
+    rateLimits,
+    remoteRateLimits,
+    remoteUsageOwner
+  )
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
   const [containerWidth, setContainerWidth] = useState(900)
@@ -2093,8 +2131,21 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     }
     setIsRefreshing(true)
     try {
+      // Why (#15798): remote-owned usage refreshes by re-fetching the server's
+      // snapshot; the local poll would describe the wrong machine.
+      const usageRefresh = remoteUsageOwner
+        ? fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+            .then((snapshot) => {
+              if (snapshot.rateLimits) {
+                setRemoteRateLimits(snapshot.rateLimits)
+              }
+            })
+            .catch((error) => {
+              console.error('Failed to refresh remote usage snapshot:', error)
+            })
+        : refreshRateLimits()
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
+      await Promise.all([usageRefresh, refreshDetectedAgents()])
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
@@ -2106,7 +2157,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } =
+    effectiveRateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -2118,8 +2170,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const usageSettings = {
     ...settings,
     antigravityUsageConfigured,
-    minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
+    minimaxCookieConfigured: effectiveRateLimits.minimaxCookieConfigured,
+    grokAuthConfigured: effectiveRateLimits.grokAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
