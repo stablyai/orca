@@ -119,34 +119,21 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     expect(MISSING_LINUX_DISPLAY_MESSAGE).toContain('`xorg-x11-server-Xvfb`')
   })
 
-  it('starts Xvfb when the configured local display is stale', async () => {
+  it('leaves an externally configured stale display untouched', async () => {
     setPlatform('linux')
     process.env.DISPLAY = ':77'
-    spawnSyncMock.mockReturnValue({ status: 0 }) // `which Xvfb` succeeds
-    // First existsSync (stale-socket check) false; later (socket-ready poll) true.
-    existsSyncMock.mockReturnValueOnce(false).mockReturnValue(true)
-    spawnMock.mockReturnValue({ once: vi.fn(), kill: vi.fn(), killed: false })
-    const processOnceSpy = vi.spyOn(process, 'once')
-    const processRemoveListenerSpy = vi.spyOn(process, 'removeListener')
-    const { ensureVirtualDisplayForHeadlessServe, stopVirtualDisplay } =
-      await import('./ensure-virtual-display')
+    statSyncMock.mockReturnValue({ isSocket: () => true })
+    existsSyncMock.mockReturnValue(true)
+    readFileSyncMock.mockImplementation(() => {
+      throw new Error('display lock is outside this namespace')
+    })
+    const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
-    expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
-    expect(spawnMock).toHaveBeenCalledWith(
-      'Xvfb',
-      expect.arrayContaining([':99', '-terminate']),
-      expect.objectContaining({ detached: true })
-    )
-    expect(process.env.DISPLAY).toBe(':99')
-    expect(appMock.disableHardwareAcceleration).toHaveBeenCalled()
-    expect(appMock.commandLine.appendSwitch).toHaveBeenCalledWith('disable-dev-shm-usage')
-    expect(appMock.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu')
-    expect(processOnceSpy).toHaveBeenCalledWith('exit', stopVirtualDisplay)
-    const readyHandler = appMock.once.mock.calls.find(([event]) => event === 'ready')?.[1]
-    expect(readyHandler).toBeTypeOf('function')
-    readyHandler()
-    expect(processRemoveListenerSpy).toHaveBeenCalledWith('exit', stopVirtualDisplay)
-    expect(appMock.once.mock.calls.some(([event]) => event === 'will-quit')).toBe(false)
+    expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(false)
+    expect(spawnSyncMock).not.toHaveBeenCalled()
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(rmSyncMock).not.toHaveBeenCalled()
+    expect(process.env.DISPLAY).toBe(':77')
   })
 
   it('reuses an existing virtual display only when its X server is alive', async () => {

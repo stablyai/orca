@@ -174,8 +174,18 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
   configureHeadlessServeChromiumFlags()
 
   // Offscreen serve windows require X11; Wayland alone still needs Xvfb.
-  if (hasUsableXDisplay(process.env.DISPLAY)) {
-    return true
+  // Never delete artifacts from an externally managed display: a container may
+  // expose its socket without the host lock/PID being visible here.
+  const configuredDisplay = process.env.DISPLAY?.trim()
+  if (configuredDisplay) {
+    if (hasUsableXDisplay(configuredDisplay)) {
+      return true
+    }
+    console.warn(
+      `[serve] DISPLAY=${configuredDisplay} is not verifiably live; leaving it untouched. ` +
+        'Unset DISPLAY to let Orca start its own Xvfb.'
+    )
+    return false
   }
 
   if (!hasXvfbBinary()) {
