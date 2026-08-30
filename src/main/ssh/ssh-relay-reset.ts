@@ -2,6 +2,7 @@ import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { terminateRelaySocketHolderScript } from './ssh-relay-socket-termination'
 
 export async function forceStopRelayForTarget(
   conn: SshConnection,
@@ -13,24 +14,10 @@ export async function forceStopRelayForTarget(
     `sock_name=${escapedSockName}`,
     'base="${HOME}/.orca-remote"',
     'if [ -d "$base" ]; then',
+    // Why: glob every version dir — an older generation's daemon keeps running
+    // under its own install dir and only its socket name identifies it.
     '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name"; do',
-    '    [ -S "$sock" ] || continue',
-    '    pid=""',
-    // Why: lsof ORs selectors by default; -a prevents reset from targeting
-    // every Unix-socket holder instead of only the per-relay socket (#8762).
-    '    if command -v lsof >/dev/null 2>&1; then',
-    '      pid=$(lsof -t -a -U "$sock" 2>/dev/null | tr "\\n" " ")',
-    '    fi',
-    '    if [ -z "$pid" ] && command -v pgrep >/dev/null 2>&1; then',
-    '      pid=$(pgrep -f "$sock_name" 2>/dev/null | ' +
-      'awk -v self="$$" -v parent="$PPID" \'$1 != self && $1 != parent\' | tr "\\n" " ")',
-    '    fi',
-    '    if [ -n "$pid" ]; then',
-    '      kill -TERM $pid 2>/dev/null || true',
-    '      sleep 0.2',
-    '      kill -KILL $pid 2>/dev/null || true',
-    '    fi',
-    '    rm -f "$sock"',
+    ...terminateRelaySocketHolderScript('"$sock"', '"$sock_name"').map((line) => `    ${line}`),
     '  done',
     'fi'
   ].join('\n')

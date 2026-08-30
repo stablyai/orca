@@ -77,6 +77,10 @@ import {
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import {
+  RELAY_SOCKET_HOLDER_UNKNOWN_MARKER,
+  terminateRelaySocketHolderScript
+} from './ssh-relay-socket-termination'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
   isWindowsRelayPipePath,
@@ -1442,15 +1446,27 @@ async function launchRelay(
           '[ssh-relay] Socket reconnect failed, launching fresh relay:',
           err instanceof Error ? err.message : String(err)
         )
-        // Why: stale socket from a crashed relay — remove it so the fresh launch can bind at the same path.
-        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`, { signal }).catch(
-          (cleanupErr) => {
-            if (isUnconfirmedSshCommandTermination(cleanupErr)) {
-              throw cleanupErr
-            }
+        // Why: kill the daemon before dropping its socket — the socket path is the only
+        // handle left on a detached relay, so unlinking first strands it and every PTY it
+        // owns with nothing able to reach or reap them (#8585).
+        const cleanupOutput = await execCommand(
+          conn,
+          terminateRelaySocketHolderScript(shellEscape(sockFile), shellEscape(sockName)).join('\n'),
+          { signal }
+        ).catch((cleanupErr) => {
+          if (isUnconfirmedSshCommandTermination(cleanupErr)) {
+            throw cleanupErr
           }
-        )
+          return ''
+        })
         signal?.throwIfAborted()
+        if (cleanupOutput.includes(RELAY_SOCKET_HOLDER_UNKNOWN_MARKER)) {
+          // Why: the socket is kept on purpose, so the fresh launch below may hit
+          // EADDRINUSE and refuse rather than orphan a daemon that is still live (#8585).
+          console.warn(
+            '[ssh-relay] Host has neither lsof nor pgrep; kept the relay socket so a live daemon stays reachable'
+          )
+        }
       }
     }
   } catch (err) {

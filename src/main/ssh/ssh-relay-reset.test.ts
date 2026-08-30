@@ -12,12 +12,13 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 import { forceStopRelayForTarget } from './ssh-relay-reset'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { RELAY_SOCKET_HOLDER_UNKNOWN_MARKER } from './ssh-relay-socket-termination'
 import type { SshConnection } from './ssh-connection'
 
 const TARGET_PID = '11111'
 const UNRELATED_PID = '22222'
 
-type LsofMode = 'match' | 'empty'
+type HolderProbeMode = 'match' | 'empty' | 'absent'
 
 function writeExecutable(filePath: string, body: string): void {
   writeFileSync(filePath, `#!/bin/sh\n${body}\n`, { mode: 0o755 })
@@ -47,25 +48,29 @@ async function capturedResetScript(): Promise<string> {
   return vi.mocked(execCommand).mock.lastCall?.[1] ?? ''
 }
 
-async function runResetScript(lsofMode: LsofMode): Promise<{
+async function runResetScript(mode: HolderProbeMode): Promise<{
   killCalls: string[]
   pgrepCalls: string[]
   socketExists: boolean
+  stdout: string
 }> {
   const script = await capturedResetScript()
   const home = mkdtempSync(join(tmpdir(), 'orca-'))
   const binDir = join(home, 'bin')
+  // Why: an empty PATH entry is how 'absent' models a host that ships neither tool.
+  const emptyBinDir = join(home, 'empty-bin')
   const socketDir = join(home, '.orca-remote')
   const socketPath = join(socketDir, relaySocketNameForInstanceId('ssh-1'))
   const killLog = join(home, 'kill.log')
   const pgrepLog = join(home, 'pgrep.log')
   mkdirSync(binDir)
+  mkdirSync(emptyBinDir)
   mkdirSync(socketDir, { recursive: true })
   writeFileSync(killLog, '')
   writeFileSync(pgrepLog, '')
 
   const lsofBody =
-    lsofMode === 'empty'
+    mode === 'empty'
       ? 'exit 1'
       : `case " $* " in
   *" -a "*) printf '%s\\n' "$TARGET_PID" ;;
@@ -82,7 +87,7 @@ printf '%s\\n' "$TARGET_PID"`
   const server = createServer()
   try {
     await listenOnSocket(server, socketPath)
-    execFileSync(
+    const stdout = execFileSync(
       '/bin/sh',
       [
         '-c',
@@ -96,7 +101,7 @@ eval "$RESET_SCRIPT"`
           ...process.env,
           HOME: home,
           KILL_LOG: killLog,
-          PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
+          PATH: mode === 'absent' ? emptyBinDir : `${binDir}${delimiter}${process.env.PATH ?? ''}`,
           PGREP_LOG: pgrepLog,
           RESET_SCRIPT: script,
           TARGET_PID,
@@ -107,7 +112,8 @@ eval "$RESET_SCRIPT"`
     return {
       killCalls: readFileSync(killLog, 'utf8').split('\n').filter(Boolean),
       pgrepCalls: readFileSync(pgrepLog, 'utf8').split('\n').filter(Boolean),
-      socketExists: existsSync(socketPath)
+      socketExists: existsSync(socketPath),
+      stdout: stdout.toString()
     }
   } finally {
     await closeServer(server)
@@ -153,6 +159,19 @@ describe('forceStopRelayForTarget', () => {
       expect(result.killCalls).toEqual([`-TERM ${TARGET_PID}`, `-KILL ${TARGET_PID}`])
       expect(result.pgrepCalls).toEqual(['called'])
       expect(result.socketExists).toBe(false)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the socket when the host has neither lsof nor pgrep',
+    async () => {
+      const result = await runResetScript('absent')
+
+      // Why (#8585): unlinking a socket whose holder we could not even look up strands the
+      // daemon just as the old code did; keeping it leaves GC and a later reset able to find it.
+      expect(result.killCalls).toEqual([])
+      expect(result.socketExists).toBe(true)
+      expect(result.stdout).toContain(RELAY_SOCKET_HOLDER_UNKNOWN_MARKER)
     }
   )
 })
