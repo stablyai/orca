@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, registerSshPtyProvider } from './pty'
+import { buildAbsentPtyInspection } from '../../shared/pty-process-inspection-evidence'
 import { ptyOwnership } from './pty/provider/ownership-state'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -260,9 +261,11 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
       false
     )
     // The sole owner's inspection answer stays immediate too: with no swap in
-    // flight there is no window in which its word could be fabricated.
+    // flight there is no window in which its word could be fabricated. Immediate
+    // is not the same as observed — this id was never watched exiting, so the
+    // absence publishes `unverifiable`, never a confirmed exit.
     await expect(
       handlers.get('pty:inspectProcess')!(null, { id: 'never-spawned-pty' })
-    ).resolves.toEqual({ foregroundProcess: null, hasChildProcesses: false, unavailable: true })
+    ).resolves.toEqual(buildAbsentPtyInspection('unverifiable'))
   })
 })

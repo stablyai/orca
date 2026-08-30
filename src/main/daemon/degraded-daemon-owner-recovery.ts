@@ -1,6 +1,7 @@
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import { retireSpawnedSessionExitCertificates } from './daemon-spawn-exit-certificate-retirement'
 
 export class DegradedDaemonOwnerRecovery {
   private readonly attachResolver: DaemonSessionOwnerResolver<IPtyProvider>
@@ -17,9 +18,17 @@ export class DegradedDaemonOwnerRecovery {
   }
 
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
-    return opts.attachOnly && opts.sessionId
-      ? await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
-      : await this.spawnFresh(opts)
+    const result =
+      opts.attachOnly && opts.sessionId
+        ? await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+        : await this.spawnFresh(opts)
+    // Why here too and not only in DaemonPtyRouter: the certificate that could answer for this
+    // reused id belongs to an adapter, and only its issuer can retire it, so every path that
+    // brings a session up owes the same fan-out — degraded mode included. Without it a
+    // superseded generation keeps vouching `exited` for the pane its replacement now owns,
+    // and this router falls back to exactly those generations once it loses the route.
+    retireSpawnedSessionExitCertificates(this.daemonAdapters, result)
+    return result
   }
 
   probe = async (sessionId: string): Promise<boolean | null> =>

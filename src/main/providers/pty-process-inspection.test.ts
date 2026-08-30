@@ -28,7 +28,7 @@ describe('PTY provider process inspection', () => {
     expect(inspectProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
   })
 
-  it('returns unavailable to the renderer when a stale PTY is gone', async () => {
+  it('returns unavailable to the renderer for a provider that cannot vouch for the absence', async () => {
     const provider = {
       hasPty: vi.fn(() => false)
     } as unknown as IPtyProvider
@@ -36,8 +36,51 @@ describe('PTY provider process inspection', () => {
     await expect(inspectPtyProviderProcessForRenderer(provider, 'pty-missing')).resolves.toEqual({
       foregroundProcess: null,
       hasChildProcesses: false,
-      unavailable: true
+      unavailable: true,
+      processEvidence: {
+        foreground: { verdict: 'unverifiable', reason: 'no provider could route to this PTY' },
+        children: { verdict: 'unverifiable', reason: 'no provider could route to this PTY' }
+      }
     })
+  })
+
+  it('publishes a watched local exit as exited, with no unavailable marker', async () => {
+    const provider = {
+      hasPty: vi.fn(() => false),
+      ptyAbsenceVerdict: vi.fn(() => 'exited' as const)
+    } as unknown as IPtyProvider
+
+    await expect(inspectPtyProviderProcessForRenderer(provider, 'pty-exited')).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      processEvidence: {
+        foreground: { verdict: 'observed', processName: null },
+        children: { verdict: 'exited' }
+      }
+    })
+  })
+
+  it('publishes a lost route as unverifiable, never as an exit', async () => {
+    const provider = {
+      hasPty: vi.fn(() => false),
+      ptyAbsenceVerdict: vi.fn(() => 'unverifiable' as const)
+    } as unknown as IPtyProvider
+
+    const result = await inspectPtyProviderProcessForRenderer(provider, 'pty-unrouted')
+
+    expect(result.unavailable).toBe(true)
+    expect(result.processEvidence?.children.verdict).toBe('unverifiable')
+  })
+
+  it('keeps an untyped terminal_gone unverifiable', async () => {
+    const provider = {
+      inspectProcess: vi.fn().mockRejectedValue(new Error('terminal_gone'))
+    } as unknown as IPtyProvider
+
+    const result = await inspectPtyProviderProcessForRenderer(provider, 'pty-legacy')
+
+    expect(result.unavailable).toBe(true)
+    expect(result.processEvidence?.children.verdict).toBe('unverifiable')
   })
 
   it('preserves non-stale renderer inspection failures', async () => {

@@ -117,6 +117,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly disconnectOnly: Mock
     readonly onData: Mock
     readonly onExit: Mock
+    readonly retireExitCertificate: Mock
     readonly callOrder: string[]
     constructor(opts: MockAdapter['options']) {
       this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
@@ -153,6 +154,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
         return () => {}
       })
       this.onExit = vi.fn(() => () => {})
+      this.retireExitCertificate = vi.fn()
       adapterInstances.push(this as unknown as MockAdapter)
     }
   }

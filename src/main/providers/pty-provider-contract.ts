@@ -137,6 +137,14 @@ export type IPtyProvider = {
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
   hasPty?: (id: string) => boolean
+  /**
+   * What this provider's `hasPty(id) === false` proves. Absence from a provider's
+   * own table is only `exited` when that provider watched the process go; an id it
+   * never owned (a restored daemon session before the swap, a lost route) is
+   * `unverifiable` (docs/reference/ssh-execution-boundary.md). Omitting it means
+   * `unverifiable` — the safe answer for a provider that cannot tell them apart.
+   */
+  ptyAbsenceVerdict?: (id: string) => 'exited' | 'unverifiable'
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): boolean | void

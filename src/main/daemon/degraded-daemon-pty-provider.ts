@@ -1,7 +1,8 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DegradedDaemonAbsenceVerdict } from './degraded-daemon-absence-verdict'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
-import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
+import { PtyGoneError, inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -14,6 +15,7 @@ import type {
 import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
+  fanoutSyntheticSessionExits,
   findDaemonAdapter,
   listProviderSessionIds
 } from './degraded-daemon-session-routing'
@@ -27,6 +29,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private legacy: DaemonPtyAdapter[]
   private fallback: IPtyProvider
   private sessionProviders = new Map<string, IPtyProvider>()
+  private absence = new DegradedDaemonAbsenceVerdict(this.sessionProviders)
   private freshSpawns: DegradedDaemonFreshSpawnRouter
   private ownerRecovery: DegradedDaemonOwnerRecovery
   private unsubscribers: (() => void)[] = []
@@ -59,6 +62,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.unsubscribers.push(
         provider.onData((payload) => this.dataListeners.forEach((listener) => listener(payload))),
         provider.onExit((payload) => {
+          // Record before forgetRoute drops the only routing record of this owner.
+          this.absence.recordWatchedExit(payload.id, provider)
           this.ownerRecovery.forgetRoute(payload.id)
           this.exitListeners.forEach((listener) => listener(payload))
         })
@@ -83,7 +88,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
     this.freshSpawns.canProvideSnapshot(id)
 
-  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
+  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> =>
+    this.absence.observeSpawn(this.ownerRecovery.spawn(opts))
 
   // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
@@ -93,6 +99,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     const mapped = this.sessionProviders.get(id)
     return mapped ? (mapped.hasPty?.(id) ?? true) : this.findProviderForExistingSession(id) !== null
   }
+
+  ptyAbsenceVerdict = (id: string): 'exited' | 'unverifiable' => this.absence.read(id)
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
     const mapped = this.sessionProviders.get(id)
@@ -189,7 +197,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   inspectProcess(id: string) {
     return this.hasPty(id)
       ? inspectPtyProviderProcess(this.providerFor(id), id)
-      : Promise.reject(new Error('terminal_gone'))
+      : Promise.reject(new PtyGoneError(this.ptyAbsenceVerdict(id)))
   }
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).confirmForegroundProcess?.(id) ?? null
@@ -313,14 +321,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   fanoutCurrentDaemonSyntheticExits(code: number): void {
-    for (const id of this.getCurrentDaemonSessionIds()) {
-      this.sessionProviders.delete(id)
-      // Why: restart kills listed sessions even when the adapter did not track them active.
-      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-      for (const listener of [...this.exitListeners]) {
-        listener({ id, code })
-      }
-    }
+    const ids = this.getCurrentDaemonSessionIds()
+    fanoutSyntheticSessionExits(ids, this.sessionProviders, this.exitListeners, code)
   }
 
   async disconnectOnly(): Promise<void> {

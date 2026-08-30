@@ -151,6 +151,7 @@ function createAdapter(
     }),
     ackColdRestore: vi.fn(),
     clearTombstone: vi.fn(),
+    retireExitCertificate: vi.fn(),
     reconcileOnStartup: vi.fn(async () => reconcileResult ?? { alive: sessions, killed: [] }),
     dispose: vi.fn(),
     disconnectOnly: vi.fn(async () => {}),

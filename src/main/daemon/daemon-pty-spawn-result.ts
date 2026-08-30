@@ -101,7 +101,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     const cachedRestore = this.coldRestoreCache.get(sessionId)
     if (cachedRestore) {
       // Why: wake-after-sleep lands here too; sleep dropped active tracking + the history writer, so re-register both or the next sleep/wake restores a blank terminal.
-      this.activeSessionIds.add(sessionId)
+      this.markSessionActive(sessionId, result.incarnationId)
       if (this.historyManager && !historyRecovery.identityChanged) {
         const recoveryFreeze = takeHistoryRecoveryFreeze(historyRecovery, sessionId)
         if (historyRecovery.unreadableSessionId === sessionId) {
@@ -168,7 +168,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     }
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
-    this.activeSessionIds.add(sessionId)
+    this.markSessionActive(sessionId, result.incarnationId)
     const providerSequence = providerSequenceFromCreateOrAttach(result)
 
     // Cold restore: daemon made a new session but disk history shows an unclean shutdown → return saved scrollback.

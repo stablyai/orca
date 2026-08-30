@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { onMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -98,11 +99,17 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(mainWindow as never)
       setLocalPtyProvider({ inspectProcess } as never)
 
-      await expect(handlers.get('pty:inspectProcess')!(null, { id })).resolves.toEqual({
+      const result = (await handlers.get('pty:inspectProcess')!(null, {
+        id
+      })) as PtyProcessInspection
+      expect(result).toMatchObject({
         foregroundProcess: null,
         hasChildProcesses: false,
         unavailable: true
       })
+      // Why the evidence too: `unavailable` with no evidence reads as an observed idle
+      // shell through readPtyProcessInspectionEvidence's legacy fallback.
+      expect(result.processEvidence?.children.verdict).toBe('unverifiable')
       expect(inspectProcess).not.toHaveBeenCalled()
     }
   )
@@ -507,14 +514,35 @@ describe('registerPtyHandlers', () => {
       unavailable: true
     })
   })
-  it('settles a stale renderer process inspection as unavailable', async () => {
+  it('settles a stale renderer process inspection as unverifiable when the provider cannot vouch', async () => {
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider({ hasPty: vi.fn(() => false) } as never)
 
     await expect(handlers.get('pty:inspectProcess')!(null, { id: 'gone-pty' })).resolves.toEqual({
       foregroundProcess: null,
       hasChildProcesses: false,
-      unavailable: true
+      unavailable: true,
+      processEvidence: {
+        foreground: { verdict: 'unverifiable', reason: 'no provider could route to this PTY' },
+        children: { verdict: 'unverifiable', reason: 'no provider could route to this PTY' }
+      }
+    })
+  })
+
+  it('settles a watched local exit as exited, with no unavailable marker', async () => {
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider({
+      hasPty: vi.fn(() => false),
+      ptyAbsenceVerdict: vi.fn(() => 'exited')
+    } as never)
+
+    await expect(handlers.get('pty:inspectProcess')!(null, { id: 'exited-pty' })).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      processEvidence: {
+        foreground: { verdict: 'observed', processName: null },
+        children: { verdict: 'exited' }
+      }
     })
   })
 })

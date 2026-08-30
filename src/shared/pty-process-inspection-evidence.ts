@@ -56,6 +56,41 @@ export function buildPtyProcessInspectionWireResult(
   }
 }
 
+const LOST_ROUTE_REASON = 'no provider could route to this PTY'
+
+/**
+ * The published shape for a PTY the host has no handle for, honest about which
+ * absence it is: a watched exit publishes positive `exited` evidence and no
+ * `unavailable`, while a lost route publishes `unverifiable` and keeps
+ * `unavailable` — which now means exactly "could not ask".
+ *
+ * `foregroundProcess` / `hasChildProcesses` are `null` / `false` either way, but
+ * `unavailable` is itself a legacy field and a watched exit no longer carries it,
+ * so an old reader does see a change. That is Rule 3 in
+ * docs/reference/remote-wire-compatibility.md ("a field the host stops
+ * populating"), and it needs no capability gate only because this shape never
+ * crosses a versioned peer: both producers are on the Electron IPC leg, and a
+ * relay host answers an absent PTY by throwing `terminal_gone` instead.
+ */
+export function buildAbsentPtyInspection(
+  absence: 'exited' | 'unverifiable',
+  reason = LOST_ROUTE_REASON
+): PtyProcessInspectionWireResult & { unavailable?: true } {
+  if (absence === 'exited') {
+    return buildPtyProcessInspectionWireResult(
+      { verdict: 'observed', processName: null },
+      { verdict: 'exited' }
+    )
+  }
+  return {
+    ...buildPtyProcessInspectionWireResult(
+      { verdict: 'unverifiable', reason },
+      { verdict: 'unverifiable', reason }
+    ),
+    unavailable: true
+  }
+}
+
 /**
  * Compose the inspection a host that predates `processEvidence` can answer with.
  * Pre-v27 daemons expose only `getForegroundProcess`, so the child half is

@@ -10,6 +10,7 @@ import {
   disposePtyListeners,
   ptyAgentSessionIds,
   ptyForceKillTimers,
+  ptyObservedExits,
   ptyPhysicalExits,
   ptyProcesses,
   ptyShutdownOperations,
@@ -263,6 +264,7 @@ export function killAllLocalPtys(): void {
     destroyPtyProcess(proc, { alreadyKilled: true })
     // Why: app quit replaces node-pty's onExit as final owner; overlapping shutdown waiters must join this boundary.
     ptyPhysicalExits.get(id)?.markExited()
+    ptyObservedExits.set(id, true)
     clearPtyState(id)
   }
 }

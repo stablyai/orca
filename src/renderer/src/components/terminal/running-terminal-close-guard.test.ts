@@ -192,7 +192,10 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toBeNull()
   })
 
-  it('fails open when a remote handle reports the inspection as unavailable', async () => {
+  it('asks when a remote handle reports the inspection as unavailable', async () => {
+    // Why not fail open: the host answered "I could not route to this pane", which is the
+    // same non-answer this guard's own timeout already prompts on. It applies only to an id
+    // the liveness map still vouches for; see running-terminal-close-absence-evidence.test.ts.
     inspectRuntimeTerminalProcessMock.mockResolvedValue({
       foregroundProcess: null,
       hasChildProcesses: true,
@@ -203,8 +206,8 @@ describe('guardRunningTerminalClose', () => {
     guard(onClose)
     await settleProbe()
 
-    expect(onClose).toHaveBeenCalledTimes(1)
-    expect(visibleRequest()).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).not.toBeNull()
   })
 
   it('prompts once for a split tab where only the second pane is busy', async () => {

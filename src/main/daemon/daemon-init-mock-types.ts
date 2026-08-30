@@ -34,6 +34,7 @@ export type MockAdapter = {
   onData: Mock
   onExit: Mock
   // Why: the router calls onData/onExit on each adapter; the stub returns a no-op unsubscribe so router subscription doesn't explode.
+  retireExitCertificate: Mock
   callOrder: string[]
 }
 

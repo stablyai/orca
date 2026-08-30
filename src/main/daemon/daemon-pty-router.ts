@@ -12,6 +12,7 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import { retireSpawnedSessionExitCertificates } from './daemon-spawn-exit-certificate-retirement'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -38,6 +39,12 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    const result = await this.spawnOnOwner(opts)
+    retireSpawnedSessionExitCertificates(this.allAdapters(), result)
+    return result
+  }
+
+  private async spawnOnOwner(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     if (opts.attachOnly && opts.sessionId) {
       return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
     }
@@ -83,6 +90,16 @@ export class DaemonPtyRouter implements IPtyProvider {
       return routed.hasPty(id)
     }
     return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
+  }
+
+  // Why every adapter and not the route: the exit fan-out forgets a session's route before
+  // anything reads this, so a routed-only lookup turns every watched exit `unverifiable`.
+  // Widening is safe because each adapter vouches only for exits it watched — an id no
+  // adapter observed still answers `unverifiable` rather than borrowing a death certificate.
+  ptyAbsenceVerdict(id: string): 'exited' | 'unverifiable' {
+    return this.allAdapters().some((adapter) => adapter.ptyAbsenceVerdict(id) === 'exited')
+      ? 'exited'
+      : 'unverifiable'
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {

@@ -709,6 +709,40 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('reconcileOnStartup', () => {
+    it('ignores a delayed exit for the incarnation a reconciled live session replaced', async () => {
+      const wt = 'repo-a::/wt/reconciled-incarnation'
+      const spawned = await adapter.spawn({ cols: 80, rows: 24, worktreeId: wt })
+      expect(spawned.incarnationId).toBeDefined()
+
+      adapter.dispose()
+      adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      const exits: string[] = []
+      adapter.onExit(({ id }) => exits.push(id))
+
+      await adapter.reconcileOnStartup(new Set([wt]))
+
+      type EventListener = (event: unknown) => void
+      const clientListeners = (
+        adapter as unknown as {
+          client: {
+            eventListeners: { each: (visit: (listener: EventListener) => void) => void }
+          }
+        }
+      ).client.eventListeners
+      clientListeners.each((listener) =>
+        listener({
+          type: 'event',
+          event: 'exit',
+          sessionId: spawned.id,
+          payload: { code: 0, incarnationId: 'superseded-incarnation' }
+        })
+      )
+
+      expect(adapter.hasPty(spawned.id)).toBe(true)
+      expect(adapter.ptyAbsenceVerdict(spawned.id)).toBe('unverifiable')
+      expect(exits).toEqual([])
+    })
+
     it('returns alive sessions for valid worktrees', async () => {
       const wt = 'repo-a::/wt/active'
       await adapter.spawn({ cols: 80, rows: 24, worktreeId: wt })

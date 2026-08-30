@@ -1,6 +1,7 @@
 import { getPtyIpc } from '../../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty-process-inspection'
+import { buildAbsentPtyInspection } from '../../../../shared/pty-process-inspection-evidence'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
@@ -168,16 +169,16 @@ export function installPtyInspectIpcHandlers(deps: {
   )
 
   ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) => {
-    // Why: same routing hazard as pty:hasPty — an unroutable id must read as unavailable, not as a local-provider answer or a raised IPC error.
+    // Why: same routing hazard as pty:hasPty — an unroutable id must read as unverifiable, not as a local-provider answer or a raised IPC error.
     if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true as const }
+      return buildAbsentPtyInspection('unverifiable', 'no registered provider owns this PTY id')
     }
     // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, so
     // nothing it reports about one is an observation; the post-swap owner must
     // answer completion-sensitive inspection.
     await awaitSwapWindow(args.id)
     if (!hasPtyProviderForInspection(args.id)) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true as const }
+      return buildAbsentPtyInspection('unverifiable', 'no registered provider owns this PTY id')
     }
     return inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
   })

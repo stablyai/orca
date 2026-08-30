@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { BoundedMap } from '../../shared/bounded-map'
 import type { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
@@ -58,6 +59,10 @@ export const ptyExitDisposables = new Map<string, { dispose: () => void }>()
 export const ptyCleanupCallbacks = new Map<string, () => void>()
 export const ptyTerminationMode = new Map<string, 'graceful' | 'force'>()
 export const ptyPhysicalExits = new Map<string, PhysicalExitTracker>()
+// Why a tombstone rather than `!ptyProcesses.has(id)`: bare absence also describes an id this
+// provider never owned (a restored daemon session read before the swap), which observes nothing.
+// Only ids whose exit this provider watched may answer `exited`; eviction degrades to unverifiable.
+export const ptyObservedExits = new BoundedMap<string, true>({ maxEntries: 1_024 })
 // Why: a wrapper spawn (macOS TCC login) reports its own status, never the
 // shell's, so its exit numbers must not be read as the agent's (STA-4536).
 export const ptyReportsChildExitStatus = new Map<string, boolean>()

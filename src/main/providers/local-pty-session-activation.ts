@@ -19,6 +19,7 @@ import {
   ptyIncarnations,
   ptyInitialCwd,
   ptyLoadGeneration,
+  ptyObservedExits,
   ptyPhysicalExits,
   ptyProcesses,
   ptyReportsChildExitStatus,
@@ -49,6 +50,7 @@ export function activateLocalPtySession(args: {
   createPtyPhysicalExit(id)
   ptyReportsChildExitStatus.set(id, args.reportsChildExitStatus)
   ptyProcesses.set(id, proc)
+  ptyObservedExits.delete(id)
   ptyInitialCwd.set(id, plan.cwd)
   if (spawnedWslDistro !== undefined) {
     ptyWslDistroById.set(id, spawnedWslDistro)
@@ -133,6 +135,7 @@ export function activateLocalPtySession(args: {
     })
     const wasTerminationRequested = ptyTerminationMode.has(id)
     ptyPhysicalExits.get(id)?.markExited()
+    ptyObservedExits.set(id, true)
     // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
     if (process.platform !== 'win32') {
       ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}

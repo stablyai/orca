@@ -11,6 +11,26 @@ export function listProviderSessionIds(
     .map(([id]) => id)
 }
 
+/**
+ * Drop each session's route and tell listeners it exited. A daemon restart kills the
+ * sessions it listed even when the adapter never tracked them active, so this fans out
+ * for listed ids rather than tracked ones.
+ */
+export function fanoutSyntheticSessionExits(
+  sessionIds: readonly string[],
+  sessionProviders: Map<string, IPtyProvider>,
+  exitListeners: readonly ((payload: { id: string; code: number }) => void)[],
+  code: number
+): void {
+  for (const id of sessionIds) {
+    sessionProviders.delete(id)
+    // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+    for (const listener of [...exitListeners]) {
+      listener({ id, code })
+    }
+  }
+}
+
 /** Attach-only session adoption: refuses the in-process fallback route. A
  *  fallback pty cannot own a daemon-surviving session by definition, and its
  *  no-op attach resolving would pin a subscriber-driven attach as succeeded

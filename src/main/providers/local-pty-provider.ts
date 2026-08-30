@@ -14,6 +14,7 @@ import {
   advanceLoadGeneration,
   clearPtyState,
   pendingLocalPtySpawns,
+  ptyObservedExits,
   ptyProcesses,
   ptyShellName,
   resetLoadGeneration,
@@ -74,6 +75,8 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
+  ptyAbsenceVerdict = (id: string): 'exited' | 'unverifiable' =>
+    ptyObservedExits.has(id) ? 'exited' : 'unverifiable'
   write(id: string, data: string): boolean {
     return writeLocalPty(id, data)
   }
@@ -212,5 +215,6 @@ export function _resetLocalPtyProviderStateForTest(): void {
   for (const id of ptyProcesses.keys()) {
     clearPtyState(id)
   }
+  ptyObservedExits.clear()
   resetLoadGeneration()
 }
