@@ -146,11 +146,9 @@ export function attachMainWindowServices(
   scheduleHistoryGc(async () => {
     return getKnownWorktreeIdsForHistoryGc(store)
   })
-  // Why: daemon PTYs survive renderer restarts, so at boot they're unregistered; hydrate so they aren't mislabeled REMOTE (idempotent, safe to re-run).
-  void hydrateLocalPtyRegistryAtBoot(store)
-  const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
-  if (localPtyStartupReady) {
-    void localPtyStartupReady
+  const localPtyProviderStartupReady = options?.awaitLocalPtyProviderStartup?.()
+  if (localPtyProviderStartupReady) {
+    void localPtyProviderStartupReady
       .then(() => hydrateLocalPtyRegistryAtBoot(store))
       .catch((error) => {
         console.warn(
@@ -158,6 +156,8 @@ export function attachMainWindowServices(
           error instanceof Error ? error.message : String(error)
         )
       })
+  } else {
+    void hydrateLocalPtyRegistryAtBoot(store)
   }
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)

@@ -121,6 +121,7 @@ describe('startup ordering', () => {
     expect(desktopStartup).toContain(
       'openWindow: () => openMainWindow({ revealOnDidFinishLoad: true })'
     )
+    expect(desktopStartup).toContain('bindServices: bindTerminalRuntimeStartupServices')
     expect(desktopStartup).toContain('shellPathReady,')
     expect(desktopStartup).toContain('startServices: startTerminalRuntimeStartupServices')
     expect(barrier).toContain('managedWslCliStartupBarrierReady')

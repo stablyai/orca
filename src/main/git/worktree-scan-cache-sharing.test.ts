@@ -30,6 +30,7 @@ import {
   _getWorktreeScanCacheSizesForTests,
   _resetWorktreeScanCacheForTests,
   listWorktrees,
+  listWorktreesStrict,
   moveWorktree,
   removeWorktree,
   WORKTREE_LIST_TIMEOUT_MS
@@ -115,6 +116,19 @@ describe('listWorktrees in-flight sharing', () => {
 
       expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
       expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 0, generations: 0 })
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('distinguishes fail-soft empty results from strict scan failures', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const failure = new Error('git spawn timed out')
+      gitExecFileAsyncMock.mockRejectedValue(failure)
+
+      await expect(listWorktrees('/repo')).resolves.toEqual([])
+      await expect(listWorktreesStrict('/repo')).rejects.toBe(failure)
     } finally {
       warnSpy.mockRestore()
     }
