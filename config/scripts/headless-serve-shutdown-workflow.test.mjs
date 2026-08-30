@@ -61,6 +61,8 @@ describe('headless serve shutdown PR gate', () => {
     )
     expect(launcherShutdownStep.run).toContain('--entrypoint launcher')
     expect(appImageShutdownStep.run).toContain('--entrypoint appimage')
+    expect(appImageShutdownStep.run).toContain('--signal-target serving-electron')
+    expect(appImageShutdownStep.run).toContain('--int-delivery pid')
     expect(steps.indexOf(shutdownStep)).toBeGreaterThan(steps.indexOf(packageStep))
     expect(steps.indexOf(launcherShutdownStep)).toBeGreaterThan(steps.indexOf(shutdownStep))
     expect(steps.indexOf(appImageShutdownStep)).toBeGreaterThan(steps.indexOf(launcherShutdownStep))
@@ -68,6 +70,17 @@ describe('headless serve shutdown PR gate', () => {
 
   it('keeps the readiness parser line-buffered', () => {
     expect(signalCase).toContain("| sed -u -n 's/^[^{]*//p'")
+  })
+
+  it('checks that a serving-electron signal target owns the ready socket', () => {
+    const ssRecord =
+      'LISTEN 0 128 127.0.0.1:41235 0.0.0.0:* users:(("orca-ide",pid=23,fd=7),("orca-ide",pid=25,fd=8))'
+    expect([...ssRecord.matchAll(/pid=([0-9]+)/g)].map((match) => match[1])).toEqual(['23', '25'])
+    expect(signalCase).toContain(
+      'listener_before_pids=$(grep -oE \'pid=[0-9]+\' <<<"$listener_before" | cut -d= -f2 || true)'
+    )
+    expect(signalCase).toContain('signal_target_pid=$(head -n1 <<<"$listener_before_pids")')
+    expect(signalCase).toContain('outside the entrypoint process tree')
   })
 
   it('keeps owned Xvfb alive during the documented systemd graceful stop', () => {

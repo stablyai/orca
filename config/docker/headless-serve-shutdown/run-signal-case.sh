@@ -91,6 +91,7 @@ if [[ -z "$listener_before" ]]; then
   echo "FAIL: ready listener has no socket owner at $bound_endpoint" >&2
   exit 1
 fi
+listener_before_pids=$(grep -oE 'pid=[0-9]+' <<<"$listener_before" | cut -d= -f2 || true)
 
 tree_pids=()
 declare -A tree_start_ticks
@@ -123,8 +124,15 @@ fi
 
 signal_target_pid=$app_pid
 if [[ "$signal_target_kind" == serving-electron ]]; then
-  signal_target_pid=$(awk '/\/orca-ide .* --serve / {print $1; exit}' <<<"$tree_snapshot")
+  # The ready socket identifies the serving Electron even when AppImage's
+  # extraction wrapper rewrites the command line before it reaches Chromium.
+  signal_target_pid=$(head -n1 <<<"$listener_before_pids")
   [[ -n "$signal_target_pid" ]] || { echo "FAIL: serving Electron process not found" >&2; exit 1; }
+  if [[ -z "${tree_start_ticks[$signal_target_pid]+present}" ]]; then
+    echo "FAIL: ready listener PID $signal_target_pid is outside the entrypoint process tree" >&2
+    echo "listener: $listener_before" >&2
+    exit 1
+  fi
 elif [[ "$signal_target_kind" != app ]]; then
   echo "unsupported signal target: $signal_target_kind" >&2
   exit 64
@@ -189,6 +197,7 @@ jq -nc \
   --argjson signalTargetPid "$signal_target_pid" \
   --arg endpoint "$bound_endpoint" \
   --arg listenerBefore "$listener_before" \
+  --arg listenerBeforePids "$listener_before_pids" \
   --arg listenerAfter "$listener_after" \
   --arg xvfbPids "$xvfb_pids" \
   --arg treeBefore "$tree_snapshot" \
@@ -199,7 +208,7 @@ jq -nc \
   --arg survivors "${survivors[*]:-}" \
   --arg residue "$owned_residue" \
   --arg corePattern "$(cat /proc/sys/kernel/core_pattern)" \
-  '{signal:$signal,signalDelivery:$signalDelivery,entrypointKind:$entrypointKind,signalTargetKind:$signalTargetKind,appPid:$appPid,signalTargetPid:$signalTargetPid,boundEndpoint:$endpoint,listenerBefore:$listenerBefore,listenerAfter:$listenerAfter,xvfbPids:$xvfbPids,treeBefore:$treeBefore,waitStatus:$waitStatus,fatalEvidence:$fatalEvidence,canaryAlive:$canaryAlive,registeredCliVerified:$registeredCliVerified,survivingTreePids:$survivors,ownedResidue:$residue,corePattern:$corePattern}'
+  '{signal:$signal,signalDelivery:$signalDelivery,entrypointKind:$entrypointKind,signalTargetKind:$signalTargetKind,appPid:$appPid,signalTargetPid:$signalTargetPid,boundEndpoint:$endpoint,listenerBefore:$listenerBefore,listenerBeforePids:$listenerBeforePids,listenerAfter:$listenerAfter,xvfbPids:$xvfbPids,treeBefore:$treeBefore,waitStatus:$waitStatus,fatalEvidence:$fatalEvidence,canaryAlive:$canaryAlive,registeredCliVerified:$registeredCliVerified,survivingTreePids:$survivors,ownedResidue:$residue,corePattern:$corePattern}'
 
 if ((wait_status != 0)) || [[ -n "$listener_after" ]] || [[ "$fatal_evidence" != false ]] \
   || [[ "$canary_alive" != true ]] || ((${#survivors[@]})) || [[ -n "$owned_residue" ]]; then

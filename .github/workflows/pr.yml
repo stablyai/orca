@@ -693,6 +693,7 @@ jobs:
         run: >-
           node config/scripts/run-headless-serve-shutdown-docker.mjs
           --appimage dist/orca-linux.AppImage --entrypoint appimage
+          --signal-target serving-electron --int-delivery pid
 
       # A default container reproduces the hostile AppImage launch environment.
       - name: Verify Linux CLI launch contract
