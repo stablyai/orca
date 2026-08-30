@@ -2158,10 +2158,7 @@ function updateHostSessionTabIdMappings(args: {
     setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
   }
   for (const entry of args.agentTabs) {
-    hostSessionTabIdByLocalKey.set(
-      hostSessionTabMappingKey({ ...args, tabId: entry.unifiedTab.id }),
-      entry.hostTabId
-    )
+    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
   }
 }
 
