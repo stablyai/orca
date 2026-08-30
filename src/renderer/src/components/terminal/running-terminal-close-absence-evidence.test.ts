@@ -132,9 +132,7 @@ describe('terminal-tab close on PTY absence evidence', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('leaves a degraded in-contact probe on its existing close-silently behavior', async () => {
-    // Loss of contact with the child-process probe on a pane the host still routes to:
-    // no `unavailable`, so this guard reaches no new verdict and behaves as it always has.
+  it('asks when an in-contact child-process probe is unverifiable', async () => {
     inspectRuntimeTerminalProcessMock.mockResolvedValue(
       buildPtyProcessInspectionWireResult(
         { verdict: 'unverifiable', reason: 'process table scan degraded' },
@@ -144,7 +142,7 @@ describe('terminal-tab close on PTY absence evidence', () => {
 
     const onClose = await closeTab()
 
-    expect(visibleRequest()).toBeNull()
-    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(visibleRequest()).not.toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
   })
 })

@@ -181,13 +181,40 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('fails open and closes when the probe rejects (wedged relay / legacy provider)', async () => {
+  // Why not fail open: a rejection observed nothing, and this close kills the pty — the
+  // same destruction the window-close path stops and asks about on a rejected probe.
+  it('asks when the probe rejects for a tracked pty (wedged relay / legacy provider)', async () => {
     inspectRuntimeTerminalProcessMock.mockRejectedValue(new Error('rpc_timeout'))
     const onClose = vi.fn()
 
     guard(onClose)
     await settleProbe()
 
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
+  })
+
+  // Why per-id and not per-tab: the rejection arm is narrowed by the same liveness map the
+  // `unavailable` arm uses, so a stale layout leaf cannot drag a closable tab into a prompt.
+  it('closes when only a layout-only pty rejects and the tracked pane is idle', async () => {
+    setState({
+      ptyIdsByTabId: { 'tab-1': ['pty-a'] },
+      terminalLayoutsByTabId: {
+        'tab-1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-stale' } }
+      }
+    })
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => {
+      if (ptyId === 'pty-stale') {
+        throw new Error('no registered provider owns this PTY id')
+      }
+      return { foregroundProcess: 'zsh', hasChildProcesses: false }
+    })
+    const onClose = vi.fn()
+
+    guard(onClose)
+    await settleProbe()
+
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(2)
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(visibleRequest()).toBeNull()
   })
@@ -196,9 +223,11 @@ describe('guardRunningTerminalClose', () => {
     // Why not fail open: the host answered "I could not route to this pane", which is the
     // same non-answer this guard's own timeout already prompts on. It applies only to an id
     // the liveness map still vouches for; see running-terminal-close-absence-evidence.test.ts.
+    // `hasChildProcesses` stays false so this exercises the `unavailable` rule, not the
+    // live-child rule above it.
     inspectRuntimeTerminalProcessMock.mockResolvedValue({
       foregroundProcess: null,
-      hasChildProcesses: true,
+      hasChildProcesses: false,
       unavailable: true
     })
     const onClose = vi.fn()
@@ -208,6 +237,24 @@ describe('guardRunningTerminalClose', () => {
 
     expect(onClose).not.toHaveBeenCalled()
     expect(visibleRequest()).not.toBeNull()
+  })
+
+  it('asks when a tracked pty child-process inspection is unverifiable', async () => {
+    inspectRuntimeTerminalProcessMock.mockResolvedValue({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      processEvidence: {
+        foreground: { verdict: 'unverifiable', reason: 'ps timed out' },
+        children: { verdict: 'unverifiable', reason: 'ps timed out' }
+      }
+    })
+    const onClose = vi.fn()
+
+    guard(onClose)
+    await settleProbe()
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
   })
 
   it('prompts once for a split tab where only the second pane is busy', async () => {
@@ -357,6 +404,38 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()?.copyKind).toBe('agent')
   })
 
+  it('closes after a tracked pty exits when only a stale layout probe times out', async () => {
+    setState({
+      ptyIdsByTabId: { 'tab-1': ['pty-a'] },
+      terminalLayoutsByTabId: {
+        'tab-1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-stale' } }
+      }
+    })
+    inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => {
+      if (ptyId === 'pty-stale') {
+        return new Promise(() => {})
+      }
+      return {
+        foregroundProcess: 'zsh',
+        hasChildProcesses: false,
+        processEvidence: {
+          foreground: { verdict: 'observed' as const, processName: 'zsh' },
+          children: { verdict: 'exited' as const }
+        }
+      }
+    })
+    vi.useFakeTimers()
+    const onClose = vi.fn()
+
+    guard(onClose)
+    await settleProbe()
+    vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
+    vi.useRealTimers()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(visibleRequest()).toBeNull()
+  })
+
   it('closes rather than wedging when the timed-out prompt throws', async () => {
     const requestSpy = vi
       .spyOn(useRunningTerminalCloseConfirmStore.getState(), 'requestRunningTerminalCloseConfirm')
@@ -395,9 +474,9 @@ describe('guardRunningTerminalClose', () => {
   })
 
   // Why: an SSH drop zeroes ptyIdsByTabId while the layout still names the pane. The stale
-  // binding is probed, that probe fails on the dead link, and the close falls open — so a
-  // reconnecting tab stays closable instead of being blocked behind a prompt for a pty
-  // nobody can reach. Documented so the behavior is a decision, not an accident.
+  // binding is probed and that probe fails on the dead link, but the id is layout-only, so
+  // the rejection arm's narrowing lets the close through — a reconnecting tab stays closable
+  // instead of being blocked behind a prompt for a pty nobody can reach.
   it('closes a reconnecting ssh tab whose pty ids were already zeroed', async () => {
     setState({ ptyIdsByTabId: { 'tab-1': [] } })
     inspectRuntimeTerminalProcessMock.mockRejectedValue(new Error('ssh_disconnected'))
