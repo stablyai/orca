@@ -70,6 +70,10 @@ describe('headless serve shutdown PR gate', () => {
 
   it('keeps the readiness parser line-buffered', () => {
     expect(signalCase).toContain("| sed -u -n 's/^[^{]*//p'")
+    expect(signalCase).toContain(
+      'A readiness event can land as the timeout tears down the tail pipeline.'
+    )
+    expect(signalCase).toContain('ready_line=$(sed -u -n')
   })
 
   it('checks that a serving-electron signal target owns the ready socket', () => {

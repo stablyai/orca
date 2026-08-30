@@ -60,6 +60,11 @@ ready_line=$(timeout "$startup_timeout_seconds" bash -c '
     | sed -u -n 's/^[^{]*//p' \
     | jq --unbuffered -Rnc '\''first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))'\''
 ' bash "$app_pid" "$stdout_log" || true)
+# A readiness event can land as the timeout tears down the tail pipeline.
+if [[ -z "$ready_line" ]]; then
+  ready_line=$(sed -u -n 's/^[^{]*//p' "$stdout_log" \
+    | jq --unbuffered -Rnc 'first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))')
+fi
 if [[ -z "$ready_line" ]]; then
   cat "$stdout_log" "$stderr_log" >&2
   echo "FAIL: entrypoint exited or timed out before orca_server_ready" >&2
