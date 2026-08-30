@@ -2210,7 +2210,12 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "paperclip": "Paperclip",
+        "paperclipActiveRun": "Paperclip already has an active run for this issue.",
+        "paperclipClaimMarkers": "This Paperclip issue still has active claim markers.",
+        "paperclipUnknownRun": "Paperclip run state could not be verified. Launch is blocked.",
+        "paperclipNonExclusiveConfirm": "Orca cannot reserve this Paperclip issue. Start a non-exclusive workspace anyway?"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -8335,7 +8340,10 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "paperclip": "Paperclip",
+          "paperclipDescription": "Connect a Paperclip project and browse its issues in Tasks.",
+          "paperclipSetup": "Open Paperclip integration"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -11506,6 +11514,18 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "paperclip": {
+          "description": "Browse Paperclip issues and start linked Orca workspaces.",
+          "test": "Test",
+          "disconnect": "Disconnect",
+          "localOnly": "Initial support is limited to Paperclip’s local-trusted loopback server. Authenticated and remote-only servers stay disabled so credentials never cross renderer or runtime boundaries.",
+          "origin": "Paperclip origin",
+          "companyId": "Paperclip company ID",
+          "companyIdPlaceholder": "Company ID",
+          "projectId": "Paperclip project ID",
+          "projectIdPlaceholder": "Project ID",
+          "connect": "Connect local Paperclip"
         }
       },
       "right": {
@@ -16427,6 +16447,11 @@
           "externalLinkConfirm": "Open link",
           "externalLinkCancel": "Cancel"
         }
+      },
+      "paperclipIssueList": {
+        "connect": "Connect Paperclip in Settings → Integrations.",
+        "use": "Use in workspace",
+        "empty": "No issues in this Paperclip project."
       }
     },
     "i18n": {

@@ -110,4 +110,47 @@ describe('workspace linked-item source context', () => {
       )
     ).toBe(true)
   })
+
+  it('requires Paperclip connection, company, and project scope to agree', () => {
+    const item: WorkspaceLinkedItem = {
+      provider: 'paperclip',
+      type: 'issue',
+      number: 0,
+      title: 'PAP-12 Connect Paperclip',
+      url: 'https://paperclip.example/acme/issues/PAP-12',
+      paperclipIssueId: 'issue-12',
+      paperclipIdentifier: 'PAP-12',
+      paperclipConnectionId: 'connection-1',
+      paperclipCompanyId: 'company-1',
+      paperclipProjectId: 'project-1'
+    }
+    const context: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'paperclip',
+      projectId: 'orca-project-1',
+      hostId: 'local',
+      providerIdentity: {
+        provider: 'paperclip',
+        connectionId: 'connection-1',
+        companyId: 'company-1',
+        projectId: 'project-1'
+      }
+    }
+
+    expect(isWorkspaceLinkedItemSourceContextMatch(item, context)).toBe(true)
+    expect(
+      isWorkspaceLinkedItemSourceContextMatch({ ...item, paperclipCompanyId: 'company-2' }, context)
+    ).toBe(false)
+    expect(
+      isWorkspaceLinkedItemSourceContextMatch(item, {
+        ...context,
+        providerIdentity: {
+          provider: 'paperclip',
+          connectionId: 'connection-1',
+          companyId: 'company-2',
+          projectId: 'project-1'
+        }
+      })
+    ).toBe(false)
+  })
 })

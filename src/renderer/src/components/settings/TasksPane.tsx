@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { Github, Gitlab, Paperclip } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
@@ -22,7 +22,8 @@ import {
 } from './task-source-setup-state'
 import {
   JIRA_INTEGRATION_SECTION_ID,
-  LINEAR_INTEGRATION_SECTION_ID
+  LINEAR_INTEGRATION_SECTION_ID,
+  PAPERCLIP_INTEGRATION_SECTION_ID
 } from './task-provider-integration-section-ids'
 import { getTasksPaneSearchKeywords } from './tasks-search'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
@@ -89,6 +90,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  paperclip: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.paperclip', 'Paperclip')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.paperclipDescription',
+        'Connect a Paperclip project and browse its issues in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <Paperclip className={className} />
   }
 }
 
@@ -227,6 +240,17 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onConnected={() => void checkJiraConnection()}
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
                   />
+                ) : provider === 'paperclip' ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openIntegrations(PAPERCLIP_INTEGRATION_SECTION_ID)}
+                  >
+                    {translate(
+                      'auto.components.settings.TasksPane.paperclipSetup',
+                      'Open Paperclip integration'
+                    )}
+                  </Button>
                 ) : (
                   <CodeHostSetupSteps
                     providerLabel={meta.label}

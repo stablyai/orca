@@ -37,7 +37,23 @@ export function isWorkspaceLinkedItemSourceContextMatch(
     return false
   }
   if (itemProvider !== 'jira') {
-    return true
+    if (itemProvider !== 'paperclip') {
+      return true
+    }
+    const identity = context.providerIdentity
+    return (
+      item.type === 'issue' &&
+      item.number === 0 &&
+      identity?.provider === 'paperclip' &&
+      !!identity.connectionId &&
+      !!identity.companyId &&
+      !!identity.projectId &&
+      !!item.paperclipIssueId &&
+      !!item.paperclipIdentifier &&
+      item.paperclipConnectionId === identity.connectionId &&
+      item.paperclipCompanyId === identity.companyId &&
+      item.paperclipProjectId === identity.projectId
+    )
   }
   const identity = context.providerIdentity
   const itemUrl = parseJiraIssueUrl(item.url)

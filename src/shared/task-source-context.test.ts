@@ -117,7 +117,7 @@ describe('task source context', () => {
     expect(local).not.toBe(enterpriseRepo)
   })
 
-  it('serializes provider identities for GitLab, Linear, and Jira cache scopes', () => {
+  it('serializes provider identities for GitLab, Linear, Jira, and Paperclip cache scopes', () => {
     const base = {
       projectId: 'project-1',
       hostId: LOCAL_EXECUTION_HOST_ID,
@@ -149,6 +149,51 @@ describe('task source context', () => {
         }
       })
     ).toContain(encodeURIComponent('https://example.atlassian.net/OPS'))
+    expect(
+      getTaskSourceCacheScope({
+        ...base,
+        provider: 'paperclip',
+        providerIdentity: {
+          provider: 'paperclip',
+          connectionId: 'connection-1',
+          companyId: 'company-1',
+          projectId: 'paperclip-project-1'
+        }
+      })
+    ).toContain(encodeURIComponent('connection-1/company-1/paperclip-project-1'))
+  })
+
+  it('round-trips a Paperclip source without credential or origin fields', () => {
+    const context = normalizeStoredTaskSourceContext({
+      kind: 'task-source',
+      provider: 'paperclip',
+      projectId: 'orca-project-1',
+      hostId: 'local',
+      providerIdentity: {
+        provider: 'paperclip',
+        connectionId: 'connection-1',
+        companyId: 'company-1',
+        projectId: 'paperclip-project-1'
+      }
+    })
+
+    expect(context).toEqual({
+      kind: 'task-source',
+      provider: 'paperclip',
+      projectId: 'orca-project-1',
+      hostId: 'local',
+      projectHostSetupId: null,
+      repoId: null,
+      providerIdentity: {
+        provider: 'paperclip',
+        connectionId: 'connection-1',
+        companyId: 'company-1',
+        projectId: 'paperclip-project-1'
+      },
+      accountLabel: null
+    })
+    expect(JSON.stringify(context)).not.toContain('apiOrigin')
+    expect(JSON.stringify(context)).not.toContain('token')
   })
 
   it('drops provider identities that do not match the source provider', () => {

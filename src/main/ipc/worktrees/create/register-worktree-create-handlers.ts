@@ -27,6 +27,10 @@ import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-sche
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import {
+  assertNoPaperclipRuntimeLink,
+  withPaperclipWorkspaceAdmission
+} from '../../../paperclip/paperclip-workspace-admission'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -59,11 +63,18 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         let result: CreateWorktreeResult
         try {
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
-          result = isFolderRepo(repo)
-            ? createFolderWorkspace(createArgs, repo, store)
-            : repo.connectionId
-              ? await createRemoteWorktree(createArgs, repo, store, mainWindow)
-              : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
+          result = await withPaperclipWorkspaceAdmission({
+            linkedWorkItem: createArgs.linkedWorkItem,
+            linkedTaskSourceContext: createArgs.linkedTaskSourceContext,
+            store,
+            localTarget: !repo.connectionId,
+            create: () =>
+              isFolderRepo(repo)
+                ? createFolderWorkspace(createArgs, repo, store)
+                : repo.connectionId
+                  ? createRemoteWorktree(createArgs, repo, store, mainWindow)
+                  : createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
+          })
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           track('workspace_create_failed', {
@@ -105,6 +116,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     'worktrees:adoptProvisionedRoot',
     async (_event, rawArgs: AdoptProvisionedRootArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
+      assertNoPaperclipRuntimeLink(args.linkedWorkItem, args.linkedTaskSourceContext)
       return withWorktreeSpan({ stage: 'create' }, async () => {
         const repo = findExactRepoOwner(store, args.repoId, args.executionHostId)
         if (!repo || isFolderRepo(repo)) {

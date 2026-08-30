@@ -18,6 +18,11 @@ export function areWorkspaceLinkedItemsEqual(
     a.url === b.url &&
     (a.linearIdentifier ?? null) === (b.linearIdentifier ?? null) &&
     (a.jiraIdentifier ?? null) === (b.jiraIdentifier ?? null) &&
+    (a.paperclipIssueId ?? null) === (b.paperclipIssueId ?? null) &&
+    (a.paperclipIdentifier ?? null) === (b.paperclipIdentifier ?? null) &&
+    (a.paperclipConnectionId ?? null) === (b.paperclipConnectionId ?? null) &&
+    (a.paperclipCompanyId ?? null) === (b.paperclipCompanyId ?? null) &&
+    (a.paperclipProjectId ?? null) === (b.paperclipProjectId ?? null) &&
     (a.repoId ?? null) === (b.repoId ?? null)
   )
 }
@@ -31,7 +36,8 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     raw.provider !== 'github' &&
     raw.provider !== 'gitlab' &&
     raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
+    raw.provider !== 'jira' &&
+    raw.provider !== 'paperclip'
   ) {
     return null
   }
@@ -59,6 +65,21 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
       : {}),
     ...(typeof raw.jiraIdentifier === 'string' && raw.jiraIdentifier.trim().length > 0
       ? { jiraIdentifier: raw.jiraIdentifier.trim() }
+      : {}),
+    ...(typeof raw.paperclipIssueId === 'string' && raw.paperclipIssueId.trim().length > 0
+      ? { paperclipIssueId: raw.paperclipIssueId.trim() }
+      : {}),
+    ...(typeof raw.paperclipIdentifier === 'string' && raw.paperclipIdentifier.trim().length > 0
+      ? { paperclipIdentifier: raw.paperclipIdentifier.trim() }
+      : {}),
+    ...(typeof raw.paperclipConnectionId === 'string' && raw.paperclipConnectionId.trim().length > 0
+      ? { paperclipConnectionId: raw.paperclipConnectionId.trim() }
+      : {}),
+    ...(typeof raw.paperclipCompanyId === 'string' && raw.paperclipCompanyId.trim().length > 0
+      ? { paperclipCompanyId: raw.paperclipCompanyId.trim() }
+      : {}),
+    ...(typeof raw.paperclipProjectId === 'string' && raw.paperclipProjectId.trim().length > 0
+      ? { paperclipProjectId: raw.paperclipProjectId.trim() }
       : {}),
     ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
       ? { repoId: raw.repoId.trim() }

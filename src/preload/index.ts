@@ -2122,6 +2122,16 @@ const api = {
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
+  paperclip: {
+    connectLocalTrusted: (args) => ipcRenderer.invoke('paperclip:connectLocalTrusted', args),
+    disconnect: () => ipcRenderer.invoke('paperclip:disconnect'),
+    status: () => ipcRenderer.invoke('paperclip:status'),
+    testConnection: () => ipcRenderer.invoke('paperclip:testConnection'),
+    listIssues: (args) => ipcRenderer.invoke('paperclip:listIssues', args),
+    getIssue: (args) => ipcRenderer.invoke('paperclip:getIssue', args),
+    getLaunchAdmission: (args) => ipcRenderer.invoke('paperclip:getLaunchAdmission', args)
+  },
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void

@@ -22,6 +22,7 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-schemas'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
+import { assertNoPaperclipRuntimeLink } from '../../../paperclip/paperclip-workspace-admission'
 
 export const WORKTREE_METHODS: RpcMethod[] = [
   ...WORKTREE_CATALOG_METHODS,
@@ -79,6 +80,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       // the same clientMutationId; dedupe so the host returns the in-flight/created
       // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
       context.runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
+        assertNoPaperclipRuntimeLink(params.linkedWorkItem, params.linkedTaskSourceContext)
         const { runtime } = context
         const repo = await runtime.showRepo(params.repo)
         const automationProvenance = resolveAutomationWorkspaceProvenance({
@@ -130,46 +132,49 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.set',
     params: WorktreeSet,
-    handler: async (params, { runtime }) => ({
-      worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
-        displayName: params.displayName,
-        linkedIssue: params.linkedIssue,
-        linkedPR: params.linkedPR,
-        linkedLinearIssue: params.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabMR: params.linkedGitLabMR,
-        linkedGitLabIssue: params.linkedGitLabIssue,
-        linkedBitbucketPR: params.linkedBitbucketPR,
-        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
-        linkedGiteaPR: params.linkedGiteaPR,
-        linkedWorkItem: params.linkedWorkItem,
-        linkedTaskSourceContext: params.linkedTaskSourceContext,
-        comment: params.comment,
-        isArchived: params.isArchived,
-        isUnread: params.isUnread,
-        isPinned: params.isPinned,
-        sortOrder: params.sortOrder,
-        manualOrder: params.manualOrder,
-        lastActivityAt: params.lastActivityAt,
-        createdAt: params.createdAt,
-        sparseDirectories: params.sparseDirectories,
-        sparseBaseRef: params.sparseBaseRef,
-        sparsePresetId: params.sparsePresetId,
-        baseRef: params.baseRef,
-        workspaceStatus: params.workspaceStatus,
-        pushTarget: params.pushTarget,
-        diffComments: params.diffComments,
-        mobileDiffReview: params.mobileDiffReview,
-        lineage:
-          params.parentWorktree || params.noParent === true
-            ? {
-                parentWorktree: params.parentWorktree,
-                noParent: params.noParent === true
-              }
-            : undefined
-      } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
-    })
+    handler: async (params, { runtime }) => {
+      assertNoPaperclipRuntimeLink(params.linkedWorkItem, params.linkedTaskSourceContext)
+      return {
+        worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
+          displayName: params.displayName,
+          linkedIssue: params.linkedIssue,
+          linkedPR: params.linkedPR,
+          linkedLinearIssue: params.linkedLinearIssue,
+          linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
+          linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+          linkedGitLabMR: params.linkedGitLabMR,
+          linkedGitLabIssue: params.linkedGitLabIssue,
+          linkedBitbucketPR: params.linkedBitbucketPR,
+          linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
+          linkedGiteaPR: params.linkedGiteaPR,
+          linkedWorkItem: params.linkedWorkItem,
+          linkedTaskSourceContext: params.linkedTaskSourceContext,
+          comment: params.comment,
+          isArchived: params.isArchived,
+          isUnread: params.isUnread,
+          isPinned: params.isPinned,
+          sortOrder: params.sortOrder,
+          manualOrder: params.manualOrder,
+          lastActivityAt: params.lastActivityAt,
+          createdAt: params.createdAt,
+          sparseDirectories: params.sparseDirectories,
+          sparseBaseRef: params.sparseBaseRef,
+          sparsePresetId: params.sparsePresetId,
+          baseRef: params.baseRef,
+          workspaceStatus: params.workspaceStatus,
+          pushTarget: params.pushTarget,
+          diffComments: params.diffComments,
+          mobileDiffReview: params.mobileDiffReview,
+          lineage:
+            params.parentWorktree || params.noParent === true
+              ? {
+                  parentWorktree: params.parentWorktree,
+                  noParent: params.noParent === true
+                }
+              : undefined
+        } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
+      }
+    }
   }),
   defineMethod({
     name: 'worktree.persistSortOrder',

@@ -72,6 +72,13 @@ export function useTaskPageStoreBindings() {
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const paperclipStatus = useAppStore((s) => s.paperclipStatus)
+  const paperclipStatusChecked = useAppStore((s) => s.paperclipStatusChecked)
+  const paperclipIssues = useAppStore((s) => s.paperclipIssues)
+  const paperclipIssuesLoading = useAppStore((s) => s.paperclipIssuesLoading)
+  const paperclipError = useAppStore((s) => s.paperclipError)
+  const loadPaperclipIssues = useAppStore((s) => s.loadPaperclipIssues)
+  const getPaperclipLaunchAdmission = useAppStore((s) => s.getPaperclipLaunchAdmission)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
   useLayoutEffect(() => {
@@ -84,6 +91,7 @@ export function useTaskPageStoreBindings() {
   const jiraStatusReady = jiraStatusCurrent && jiraStatusChecked
   const linearConnected = linearStatusCurrent && linearStatus.connected
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
+  const paperclipConnected = paperclipStatusChecked && paperclipStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
@@ -147,6 +155,13 @@ export function useTaskPageStoreBindings() {
     searchJiraIssues,
     listJiraIssues,
     checkJiraConnection,
+    paperclipStatus,
+    paperclipStatusChecked,
+    paperclipIssues,
+    paperclipIssuesLoading,
+    paperclipError,
+    loadPaperclipIssues,
+    getPaperclipLaunchAdmission,
     providerRuntimeContextKey,
     providerRuntimeContextKeyRef,
     linearStatusCurrent,
@@ -156,6 +171,7 @@ export function useTaskPageStoreBindings() {
     jiraStatusReady,
     linearConnected,
     jiraConnected,
+    paperclipConnected,
     submitShortcutLabel,
     eligibleRepos
   }

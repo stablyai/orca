@@ -43,6 +43,8 @@ import {
   JiraIssueListHost,
   type JiraIssueListHostProps
 } from '@/components/task-page/jira/jira-issue-list-host'
+import { PaperclipIssueList } from '@/components/task-page/paperclip/paperclip-issue-list'
+import type { PaperclipIssue } from '../../../../shared/paperclip-types'
 import {
   NewGithubIssueDialog,
   type NewGithubIssueDialogProps
@@ -92,6 +94,7 @@ export function TaskPageLayout({
   primaryRepo,
   gitlabList,
   jiraList,
+  paperclipList,
   linearViews,
   newGithubIssue,
   newLinearProject,
@@ -119,6 +122,14 @@ export function TaskPageLayout({
   primaryRepo: Repo | null
   gitlabList: GitlabWorkItemListProps
   jiraList: JiraIssueListHostProps
+  paperclipList: {
+    connected: boolean
+    issues: readonly PaperclipIssue[]
+    loading: boolean
+    error: string | null
+    onLoad: () => void
+    onUse: (issue: PaperclipIssue) => void
+  }
   linearViews: LinearViewsHostProps
   newGithubIssue: NewGithubIssueDialogProps
   newLinearProject: NewLinearProjectDialogProps
@@ -170,6 +181,8 @@ export function TaskPageLayout({
             <JiraIssueListHost {...jiraList} />
           ) : taskSource === 'linear' ? (
             <LinearViewsHost {...linearViews} />
+          ) : taskSource === 'paperclip' ? (
+            <PaperclipIssueList {...paperclipList} />
           ) : null}
         </div>
       </div>

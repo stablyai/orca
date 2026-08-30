@@ -11,6 +11,7 @@ import {
 import type { AutomationHostTarget } from './automation-host-client'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import { getTaskProviderDisplayName } from '@/components/task-provider-display-name'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -198,7 +199,7 @@ function getAutomationSourceAvailability(
   if (!availability) {
     return null
   }
-  const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
+  const providerLabel = getTaskProviderDisplayName(sourceContext.provider)
   switch (availability.reason) {
     case undefined:
       break
@@ -250,19 +251,6 @@ function getAutomationSourceAvailability(
     )
   }
   return null
-}
-
-function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
 }
 
 export function getRuntimeAutomationAvailability(

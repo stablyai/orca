@@ -80,6 +80,8 @@ describe('useFullCreationExecution cancellation', () => {
         .mockResolvedValue(prepared),
       resolvedInitialWorkspaceStatus: undefined,
       selectedRepoIsGit: true,
+      selectedRepoIsRemote: false,
+      selectedRepoSettings: null,
       setSidebarOpen: vi.fn<FullCreationExecutionInput['setSidebarOpen']>(),
       sparseEnabled: false,
       taskSourceContext: null,

@@ -138,10 +138,11 @@ export function findPendingLinkedWorkItemCreationId(
   pendingCreations: Readonly<Record<string, PendingWorktreeCreation>>,
   request: Pick<
     WorktreeCreationRequest,
-    'repoId' | 'linkedIssue' | 'linkedPR' | 'workspaceRunContext'
+    'repoId' | 'linkedIssue' | 'linkedPR' | 'linkedWorkItem' | 'workspaceRunContext'
   >
 ): string | null {
-  if (request.linkedIssue == null && request.linkedPR == null) {
+  const paperclip = request.linkedWorkItem?.provider === 'paperclip' ? request.linkedWorkItem : null
+  if (request.linkedIssue == null && request.linkedPR == null && !paperclip) {
     return null
   }
   const hostId = request.workspaceRunContext?.hostId ?? null
@@ -151,6 +152,13 @@ export function findPendingLinkedWorkItemCreationId(
       pending.repoId === request.repoId &&
       pending.linkedIssue === request.linkedIssue &&
       pending.linkedPR === request.linkedPR &&
+      (paperclip
+        ? pending.linkedWorkItem?.provider === 'paperclip' &&
+          pending.linkedWorkItem.paperclipIssueId === paperclip.paperclipIssueId &&
+          pending.linkedWorkItem.paperclipConnectionId === paperclip.paperclipConnectionId &&
+          pending.linkedWorkItem.paperclipCompanyId === paperclip.paperclipCompanyId &&
+          pending.linkedWorkItem.paperclipProjectId === paperclip.paperclipProjectId
+        : true) &&
       (pending.workspaceRunContext?.hostId ?? null) === hostId
     )
   })

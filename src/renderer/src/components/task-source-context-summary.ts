@@ -4,7 +4,8 @@ import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskProvider } from '../../../shared/task-providers'
-import type { TaskProviderIdentity, TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { getTaskProviderIdentityLabel } from './task-provider-identity-label'
 
 export type TaskSourceContextSummary = {
   label: string
@@ -45,6 +46,7 @@ export function getTaskSourceContextSummary(args: {
   selectedRepoCount?: number
   linearWorkspaceName?: string | null
   jiraSiteName?: string | null
+  paperclipProjectName?: string | null
 }): TaskSourceContextSummary {
   switch (args.provider) {
     case 'github':
@@ -60,6 +62,13 @@ export function getTaskSourceContextSummary(args: {
     case 'jira':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
         accountLabel: args.jiraSiteName,
+        accountHostId: args.accountHostId,
+        hostLabelById: args.hostLabelById,
+        hostAvailability: args.hostAvailability
+      })
+    case 'paperclip':
+      return getAccountBackedTaskSourceSummary(args.providerLabel, {
+        accountLabel: args.paperclipProjectName,
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
@@ -117,7 +126,7 @@ function getRepoBackedTaskSourceSummary(args: {
   const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
   const availabilityLabel = getAvailabilityLabel(unavailableHosts)
   const identityLabels = uniqueLabels(
-    contexts.map((context) => getProviderIdentityLabel(context.providerIdentity))
+    contexts.map((context) => getTaskProviderIdentityLabel(context.providerIdentity))
   )
   const accountLabels = uniqueLabels(contexts.map((context) => context.accountLabel))
   const repoCount = args.selectedRepoCount ?? contexts.length
@@ -178,26 +187,6 @@ function getAccountBackedTaskSourceSummary(
       .filter((part): part is string => Boolean(part))
       .join(' · '),
     title: titleParts.join(' · ')
-  }
-}
-
-function getProviderIdentityLabel(
-  identity: TaskProviderIdentity | null | undefined
-): string | null {
-  if (!identity) {
-    return null
-  }
-  switch (identity.provider) {
-    case 'github':
-      return `${identity.owner}/${identity.repo}`
-    case 'gitlab':
-      return identity.namespace && identity.project
-        ? `${identity.namespace}/${identity.project}`
-        : (identity.projectId ?? null)
-    case 'linear':
-      return identity.workspaceName ?? identity.workspaceId ?? null
-    case 'jira':
-      return identity.siteUrl ?? identity.siteId ?? null
   }
 }
 

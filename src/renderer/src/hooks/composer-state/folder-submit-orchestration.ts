@@ -47,6 +47,7 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
 import { toast } from 'sonner'
+import { assertPaperclipSubmitAdmission } from './paperclip-submit-admission'
 
 export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInput) {
   const {
@@ -111,6 +112,10 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           agent && submitLinkedWorkItem
             ? resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note)
             : null
+        await assertPaperclipSubmitAdmission(
+          submitLinkedWorkItem,
+          !folderTargetIsRemote && !folderTargetRuntimeEnvironmentId
+        )
         const folderWorkspaceCreated = await submitFolderWorkspaceCreate({
           projectGroup: selectedProjectGroup,
           name: smartGitHubMetadata?.workspaceName ?? name,

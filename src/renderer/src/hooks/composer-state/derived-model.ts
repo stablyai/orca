@@ -16,7 +16,7 @@ export type ComposerDerivedModel = {
   currentYamlHooks: OrcaHooks | null
   setupConfig: SetupConfig | null
   setupPolicy: SetupRunPolicy
-  linkedWorkItemProvider: 'github' | 'gitlab' | 'linear' | 'jira' | null
+  linkedWorkItemProvider: 'github' | 'gitlab' | 'linear' | 'jira' | 'paperclip' | null
   willApplyIssueCommandAsPrompt: boolean
   shouldWaitForIssueAutomationCheck: boolean
   requiresExplicitSetupChoice: boolean

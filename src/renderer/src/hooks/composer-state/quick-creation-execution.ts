@@ -43,6 +43,7 @@ import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import { translate } from '@/i18n/i18n'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import { assertPaperclipSubmitAdmission } from './paperclip-submit-admission'
 import { buildQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
@@ -191,6 +192,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           ...(selectedRecipe?.checkoutMode ? { checkoutMode: selectedRecipe.checkoutMode } : {})
         }
       }
+
+      await assertPaperclipSubmitAdmission(
+        submitLinkedWorkItem,
+        !selectedRepoIsRemote && getActiveRuntimeTarget(selectedRepoSettings).kind === 'local'
+      )
 
       const request = buildQuickCreationRequest({
         repoId,

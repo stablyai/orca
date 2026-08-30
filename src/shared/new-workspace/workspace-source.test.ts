@@ -61,6 +61,22 @@ describe('workspace source policy', () => {
         url: 'https://acme.atlassian.net/browse/FUS-1'
       })
     ).toBe(true)
+    const paperclip = {
+      provider: 'paperclip' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'Local Paperclip task',
+      url: 'http://127.0.0.1:3100/issues/issue-1',
+      paperclipIssueId: 'issue-1',
+      paperclipConnectionId: 'connection-1',
+      paperclipCompanyId: 'company-1',
+      paperclipProjectId: 'project-1'
+    }
+    expect(shouldPreserveWorkspaceSourceOnRepoChange(paperclip)).toBe(true)
+    expect(buildWorkspaceSourceSelection({ linkedWorkItem: paperclip })).toMatchObject({
+      kind: 'paperclip',
+      label: 'Local Paperclip task'
+    })
     // Why: Jira items picked from smart search may arrive without an explicit
     // provider; preservation must still hold via URL/identifier inference.
     expect(

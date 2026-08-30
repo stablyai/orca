@@ -1,5 +1,6 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import type { StatsSummary } from '../../../shared/process-stats-types'
+import type { PaperclipApi } from '../../../preload/api/paperclip-api'
 import { createWebE2EApi } from './preload-api/web-e2e-api'
 import {
   createAccountsApi,
@@ -89,6 +90,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     gl: createGitLabApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
+    paperclip: createUnavailablePaperclipApi(),
     hooks: createHooksApi(),
     stats: {
       getSummary: async () =>
@@ -137,5 +139,21 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ...createWebAgentStatusApi(),
     ...createWebMobileApi(),
     ...createWebTelemetryApi()
+  }
+}
+
+function createUnavailablePaperclipApi(): PaperclipApi {
+  const message = 'Paperclip is available only in the local Orca desktop app.'
+  const unsupported = (): never => {
+    throw new Error(message)
+  }
+  return {
+    connectLocalTrusted: async () => ({ ok: false, error: message }),
+    disconnect: async () => unsupported(),
+    status: async () => ({ connected: false, connection: null }),
+    testConnection: async () => ({ ok: false, error: message }),
+    listIssues: async () => unsupported(),
+    getIssue: async () => unsupported(),
+    getLaunchAdmission: async () => unsupported()
   }
 }

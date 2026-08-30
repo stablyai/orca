@@ -46,6 +46,7 @@ describe('web preload API composition', () => {
       'gl',
       'hostedReview',
       'linear',
+      'paperclip',
       'hooks',
       'stats',
       'memory',
@@ -81,6 +82,20 @@ describe('web preload API composition', () => {
     expect(Object.keys(globals.window.api.projects)).toEqual([])
     expect(Reflect.get(globals.window.api.projects, 'then')).toBeUndefined()
     expect(Object.keys(globals.window.electron)).toEqual([])
+    await expect(globals.window.api.paperclip.status()).resolves.toEqual({
+      connected: false,
+      connection: null
+    })
+    await expect(
+      globals.window.api.paperclip.connectLocalTrusted({
+        origin: 'http://127.0.0.1:3101',
+        companyId: 'company-1',
+        projectId: 'project-1'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Paperclip is available only in the local Orca desktop app.'
+    })
   })
 
   it('snapshots E2E config before runtime storage initialization', async () => {
