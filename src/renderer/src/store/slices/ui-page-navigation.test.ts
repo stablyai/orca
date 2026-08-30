@@ -677,6 +677,34 @@ describe('createUISlice space navigation', () => {
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
   })
 
+  it('records and rewinds GitHub visits on close', () => {
+    const store = createUIStore()
+    store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })
+
+    store.getState().recordWorktreeVisit('a')
+    store.getState().openGithubPage()
+    expect(store.getState().worktreeNavHistory).toEqual(['a', 'github'])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+
+    store.getState().closeGithubPage()
+    expect(store.getState().activeView).toBe('terminal')
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('returns to the originating view after closing GitHub', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openGithubPage()
+
+    expect(store.getState().activeView).toBe('github')
+    expect(store.getState().previousViewBeforeGithub).toBe('tasks')
+
+    store.getState().closeGithubPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
   it('records and rewinds Skills visits on close', () => {
     const store = createUIStore()
     store.setState({ worktreesByRepo: { 'repo-1': [makeWorktree('a')] } })

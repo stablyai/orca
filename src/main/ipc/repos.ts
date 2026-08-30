@@ -11,6 +11,7 @@ import { registerRepoUpdateHandler } from './repos/repo-update-handler'
 import { registerSparsePresetHandlers } from './repos/sparse-preset-handlers'
 import { registerRepoFolderPickerHandlers } from './repos/repo-folder-picker-handlers'
 import { registerRepoCloneHandlers } from './repos/repo-clone-lifecycle'
+import { registerGitHubAccountCloneHandlers } from './github-auth'
 import { registerRepoGitUsernameHandler } from './repos/repo-git-username-handler'
 import { registerBaseRefQueryHandlers } from './repos/base-ref-query-handlers'
 
@@ -50,6 +51,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:clone')
   ipcMain.removeHandler('repos:cloneAbort')
   ipcMain.removeHandler('repos:cloneRemote')
+  ipcMain.removeHandler('githubAuth:cloneRepo')
+  ipcMain.removeHandler('githubAuth:deleteClonedRepoFiles')
   ipcMain.removeHandler('repos:isGitAvailable')
   ipcMain.removeHandler('repos:getDefaultCreateProjectParent')
   ipcMain.removeHandler('repos:getGitUsername')
@@ -73,6 +76,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   registerSparsePresetHandlers(mainWindow, store)
   registerRepoFolderPickerHandlers(mainWindow)
   registerRepoCloneHandlers(mainWindow, store)
+  registerGitHubAccountCloneHandlers(mainWindow, store)
   registerRepoGitUsernameHandler(store)
   registerBaseRefQueryHandlers(store)
 }
