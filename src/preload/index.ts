@@ -4035,6 +4035,12 @@ const api = {
       ipcRenderer.on('ui:reloadBrowserPage', listener)
       return () => ipcRenderer.removeListener('ui:reloadBrowserPage', listener)
     },
+    onToggleBrowserViewport: (callback: (browserPageId: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, browserPageId: string): void =>
+        callback(browserPageId)
+      ipcRenderer.on('ui:toggleBrowserViewport', listener)
+      return () => ipcRenderer.removeListener('ui:toggleBrowserViewport', listener)
+    },
     onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward'): void =>
         callback(direction)

@@ -84,6 +84,7 @@ export type KeybindingActionId =
   | 'browser.reload'
   | 'browser.hardReload'
   | 'browser.focusAddressBar'
+  | 'browser.toggleMobileDesktopViewport'
   | 'browser.grabElement'
   | 'editor.find'
   | 'editor.replace'
@@ -795,6 +796,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'browser',
     searchKeywords: ['shortcut', 'browser', 'address', 'url', 'location'],
     defaultBindings: platformBindings(['Mod+L'])
+  },
+  {
+    id: 'browser.toggleMobileDesktopViewport',
+    title: 'Toggle Mobile/Desktop Viewport',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: [
+      'shortcut',
+      'browser',
+      'viewport',
+      'mobile',
+      'desktop',
+      'responsive',
+      'toggle'
+    ],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'browser.grabElement',

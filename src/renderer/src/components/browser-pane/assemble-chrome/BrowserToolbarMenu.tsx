@@ -5,10 +5,7 @@ import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import type { BrowserViewportPresetId } from '../../../../../shared/browser-workspace-types'
-import {
-  browserViewportPresetToOverride,
-  getBrowserViewportPreset
-} from '../../../../../shared/browser-viewport-presets'
+import { applyBrowserPageViewportPreset } from '../host-guest/browser-viewport-preset-actions'
 import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
@@ -38,7 +35,6 @@ export function BrowserToolbarMenu({
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
-  const setBrowserPageViewportPreset = useAppStore((s) => s.setBrowserPageViewportPreset)
   const browserCookieTourStepActive = useAppStore(
     (s) => s.activeContextualTourId === 'browser' && s.activeContextualTourStepIndex === 2
   )
@@ -53,10 +49,7 @@ export function BrowserToolbarMenu({
   const shouldForceMenuOpen = browserCookieTourStepActive && isActive && !importHintVisible
 
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void => {
-    setBrowserPageViewportPreset(browserPageId, nextId)
-    const preset = getBrowserViewportPreset(nextId)
-    const override = preset ? browserViewportPresetToOverride(preset) : null
-    void window.api.browser.setViewportOverride({ browserPageId, override })
+    applyBrowserPageViewportPreset(browserPageId, nextId)
   }
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)

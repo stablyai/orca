@@ -101,6 +101,8 @@ export const browserPageSchema = z.object({
   // added still validate; without this, zod would strip the field during
   // restore and reset the user's chosen preset on every app restart.
   viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
+  lastMobileViewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
+  lastDesktopViewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
   // Why listed here and not just typed: z.object strips what it does not name, so an unlisted
   // docLocation restores a workspace document as a blank New Tab — the page keeps its blank url
   // and loses the only field that said which document it was.

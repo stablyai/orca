@@ -104,6 +104,7 @@ export type UiCommandEventApi = {
   onFocusBrowserAddressBar: (callback: () => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
   onReloadBrowserPage: (callback: () => void) => () => void
+  onToggleBrowserViewport: (callback: (browserPageId: string) => void) => () => void
   onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
   onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onHardReloadBrowserPage: (callback: () => void) => () => void
