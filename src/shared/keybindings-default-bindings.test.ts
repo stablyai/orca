@@ -19,6 +19,17 @@ describe('keybindings', () => {
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
   })
 
+  it('binds adjacent project cycling to horizontal workspace navigation chords', () => {
+    expect(getEffectiveKeybindingsForAction('project.navigatePrevious', 'darwin')).toEqual([
+      'Mod+Shift+ArrowLeft'
+    ])
+    expect(getEffectiveKeybindingsForAction('project.navigateNext', 'linux')).toEqual([
+      'Mod+Shift+ArrowRight'
+    ])
+    expect(formatKeybindingList(['Mod+Shift+ArrowLeft'], 'darwin')).toBe('⌘⇧←')
+    expect(formatKeybindingList(['Mod+Shift+ArrowRight'], 'linux')).toBe('Ctrl+Shift+→')
+  })
+
   it.each(['darwin', 'linux', 'win32'] as const)(
     'binds editor word wrap to Alt+Z on %s',
     (platform) => {
