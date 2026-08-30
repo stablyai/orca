@@ -226,6 +226,62 @@ describe('TerminalHost', () => {
       }
     })
 
+    it('submits the startup command before flushing input queued behind shell readiness', async () => {
+      vi.useFakeTimers()
+      try {
+        await host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          command: 'echo hello',
+          shellReadySupported: true,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+        host.write('session-1', 'typed input')
+
+        lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+        vi.advanceTimersByTime(30)
+        expect(lastSubprocess.write).toHaveBeenCalledTimes(1)
+        expect(lastSubprocess.write).toHaveBeenNthCalledWith(1, 'echo hello')
+
+        vi.advanceTimersByTime(50)
+        expect(lastSubprocess.write).toHaveBeenCalledTimes(3)
+        expect(lastSubprocess.write).toHaveBeenNthCalledWith(1, 'echo hello')
+        expect(lastSubprocess.write).toHaveBeenNthCalledWith(2, '\r')
+        expect(lastSubprocess.write).toHaveBeenNthCalledWith(3, 'typed input')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('queues input that arrives during delayed startup submission', async () => {
+      vi.useFakeTimers()
+      try {
+        await host.createOrAttach({
+          sessionId: 'session-1',
+          cols: 80,
+          rows: 24,
+          command: 'echo hello',
+          shellReadySupported: true,
+          streamClient: { onData: vi.fn(), onExit: vi.fn() }
+        })
+
+        lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+        vi.advanceTimersByTime(30)
+        host.write('session-1', 'typed input')
+        expect(lastSubprocess.write).toHaveBeenCalledTimes(1)
+        expect(lastSubprocess.write).toHaveBeenNthCalledWith(1, 'echo hello')
+
+        vi.advanceTimersByTime(50)
+        expect(lastSubprocess.write).toHaveBeenCalledTimes(3)
+        expect(lastSubprocess.write).toHaveBeenNthCalledWith(1, 'echo hello')
+        expect(lastSubprocess.write).toHaveBeenNthCalledWith(2, '\r')
+        expect(lastSubprocess.write).toHaveBeenNthCalledWith(3, 'typed input')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('delivers startup commands immediately when the spawned shell cannot emit the ready marker', async () => {
       vi.useFakeTimers()
       spawnFn = vi.fn(() => {

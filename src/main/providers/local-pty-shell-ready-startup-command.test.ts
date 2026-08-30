@@ -77,6 +77,43 @@ describe('writeStartupCommandWhenShellReady', () => {
     expect(proc._writes).toEqual(['claude', '\r'])
   })
 
+  it('queues terminal input until the delayed CR submits the startup command', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    const writer = writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
+
+    await ready
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
+    await Promise.resolve()
+
+    expect(writer.tryEnqueueInput('typed input')).toBe(true)
+    expect(proc._writes).toEqual(['claude'])
+
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual(['claude', '\r', 'typed input'])
+  })
+
+  it('queues terminal input while the startup command is still waiting for shell readiness', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    const writer = writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
+
+    expect(writer.tryEnqueueInput('typed input')).toBe(true)
+    expect(proc._writes).toEqual([])
+
+    await ready
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
+    await Promise.resolve()
+    expect(proc._writes).toEqual(['claude'])
+
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual(['claude', '\r', 'typed input'])
+  })
+
   it('writes the command before a delayed CR on Windows', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     const proc = createMockProc()

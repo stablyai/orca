@@ -95,6 +95,7 @@ import {
 } from '../shell-prompt-readiness-probe'
 import { expandWindowsPathEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { DelayedStartupCommandWriter } from '../pty/delayed-startup-command-writer'
 
 import {
   getDefaultCwd,
@@ -173,6 +174,7 @@ type ExitCallback = (payload: {
 const dataListeners = new Set<DataCallback>()
 const exitListeners = new Set<ExitCallback>()
 const startupIngressByPty = new Map<string, PtyStartupIngress>()
+const startupCommandWriterByPty = new Map<string, DelayedStartupCommandWriter>()
 
 /**
  * Disposes native node-pty listeners registered for a PTY id.
@@ -231,6 +233,7 @@ function clearPtyState(id: string): void {
   ptyTerminationMode.delete(id)
   ptyReportsChildExitStatus.delete(id)
   ptyPhysicalExits.delete(id)
+  startupCommandWriterByPty.delete(id)
 }
 
 function createPtyPhysicalExit(id: string): void {
@@ -1071,7 +1074,7 @@ export class LocalPtyProvider implements IPtyProvider {
           shellName: spawnedShellName,
           waitsForShellReady: shellReadyLaunch?.supportsReadyMarker === true
         })
-      writeStartupCommandWhenShellReady(
+      const startupCommandWriter = writeStartupCommandWhenShellReady(
         shellReadyPromise,
         proc,
         args.command,
@@ -1080,6 +1083,7 @@ export class LocalPtyProvider implements IPtyProvider {
         },
         { bracketedPasteSafe }
       )
+      startupCommandWriterByPty.set(id, startupCommandWriter)
     }
 
     // Why: publish the OS pid for the memory collector; proc.pid can be briefly 0/undefined before node-pty sees the child.
@@ -1107,6 +1111,9 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = ptyProcesses.get(id)
     if (!proc) {
       return false
+    }
+    if (startupCommandWriterByPty.get(id)?.tryEnqueueInput(data)) {
+      return true
     }
     proc.write(data)
     return true

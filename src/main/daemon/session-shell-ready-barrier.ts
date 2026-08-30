@@ -17,7 +17,7 @@ import type { HeadlessEmulator } from './headless-emulator'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { basename } from 'node:path'
 import type { ShellReadyState } from './types'
-import { DelayedStartupCommandWriter } from './delayed-startup-command-writer'
+import { DelayedStartupCommandWriter } from '../pty/delayed-startup-command-writer'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
 // Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
@@ -56,7 +56,9 @@ export class SessionShellReadyBarrier {
   private readonly startupCommandWriter: DelayedStartupCommandWriter
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
-    this.startupCommandWriter = new DelayedStartupCommandWriter(deps.subprocess)
+    this.startupCommandWriter = new DelayedStartupCommandWriter((data) =>
+      deps.subprocess.write(data)
+    )
     if (deps.shellReadySupported) {
       this._state = 'pending'
       this.scanState = createShellStartupOutputScanState()
@@ -105,6 +107,9 @@ export class SessionShellReadyBarrier {
 
   /** Queues `data` when the gate is closed; false means the caller must write it through. */
   tryEnqueue(data: string): boolean {
+    if (this.startupCommandWriter.tryEnqueueInput(data)) {
+      return true
+    }
     if (!this.isGatingWrites) {
       return false
     }
@@ -117,7 +122,7 @@ export class SessionShellReadyBarrier {
       this.preReadyStdinQueue.push({ kind: 'startup-command', command, bracketedPasteSafe })
       return
     }
-    this.startupCommandWriter.write(command, bracketedPasteSafe)
+    this.startupCommandWriter.writeStartupCommand(command, bracketedPasteSafe)
   }
 
   ingestSubprocessData(data: string): void {
@@ -259,7 +264,9 @@ export class SessionShellReadyBarrier {
     this.preReadyStdinQueue = []
     for (const pending of queued) {
       if (pending.kind === 'startup-command') {
-        this.startupCommandWriter.write(pending.command, pending.bracketedPasteSafe)
+        this.startupCommandWriter.writeStartupCommand(pending.command, pending.bracketedPasteSafe)
+      } else if (this.startupCommandWriter.tryEnqueueInput(pending.data)) {
+        continue
       } else {
         this.deps.subprocess.write(pending.data)
       }
