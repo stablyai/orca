@@ -13,6 +13,9 @@ const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   let remaining = limit
   let data = ''
+  // Join source chunks once; repeated `data += chunk` can flatten tiny-chunk floods.
+  let dataParts: string[] | null = null
+  let dataLength = 0
   let foreground: boolean | null = null
   let forceForegroundRefresh = false
   let followupForegroundRefresh = false
@@ -56,7 +59,15 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       additionalBeforeWriteCallbacks.push(chunk.beforeWrite)
     }
     if (chunk.data.length <= remaining) {
-      data += chunk.data
+      if (dataParts) {
+        dataParts.push(chunk.data)
+      } else if (dataLength === 0) {
+        data = chunk.data
+      } else {
+        dataParts = [data, chunk.data]
+        data = ''
+      }
+      dataLength += chunk.data.length
       remaining -= chunk.data.length
       entry.queuedChars -= chunk.data.length
       // Clear drained slots before the 64-chunk compaction can release them.
@@ -79,7 +90,16 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       continue
     }
 
-    data += chunk.data.slice(0, remaining)
+    const prefix = chunk.data.slice(0, remaining)
+    if (dataParts) {
+      dataParts.push(prefix)
+    } else if (dataLength === 0) {
+      data = prefix
+    } else {
+      dataParts = [data, prefix]
+      data = ''
+    }
+    dataLength += prefix.length
     const residual = chunk.data.slice(remaining)
     // Geometric flattening bounds retained parents while keeping total copy work linear.
     const flatten = residual.length * 2 <= chunk.retainedChars
@@ -97,9 +117,10 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
     entry.queuedChars = 0
   }
   recordQueueDebugPressure()
-  return data
+  const assembledData = dataParts ? dataParts.join('') : data
+  return assembledData
     ? {
-        data,
+        data: assembledData,
         foreground: foreground === true,
         forceForegroundRefresh,
         followupForegroundRefresh,
