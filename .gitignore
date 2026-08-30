@@ -132,6 +132,12 @@ validation-screenshots/
 /notes/
 /pr-evidence/
 
+# Per-task agent scratch trees, named for the Orca task id. They hold evidence and sometimes whole
+# nested repo checkouts; a foreign checkout is not this repo's changed code, and 39,079 files from
+# one overflowed the argument list of `check:code-quality:changed`. Unanchored because a lane can
+# create one from any working directory.
+.orca-task-*/
+
 # Playwright
 test-results/
 playwright-report/

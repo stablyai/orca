@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -114,10 +115,19 @@ export function collectAddedLineRanges(root, requestedBase) {
 function parseOxlintOutput(stdout, label) {
   const start = stdout.indexOf('{')
   const end = stdout.lastIndexOf('}')
-  if (start === -1 || end === -1) {
-    throw new Error(`${label} did not return Oxlint JSON output.`)
+  if (start !== -1 && end !== -1) {
+    try {
+      return JSON.parse(stdout.slice(start, end + 1))
+    } catch {
+      // Fall through so the caller sees what Oxlint actually printed.
+    }
   }
-  return JSON.parse(stdout.slice(start, end + 1))
+  // Why echo it: Oxlint writes configuration failures to stdout, and a wrapper's own
+  // warning can carry braces that this slice mistakes for the report, so discarding the
+  // output leaves the gate dying with no reason anywhere in the log.
+  throw new Error(
+    `${label} did not return Oxlint JSON output. Oxlint printed:\n${stdout.trim().slice(0, 2000)}`
+  )
 }
 
 function normalizedDiagnosticPath(root, filename) {
@@ -263,21 +273,145 @@ function printDiagnostic(diagnostic, root) {
   console.error(`${file}:${line} ${code}: ${diagnostic.message}`)
 }
 
-function runOxlintScan(root, scan, files) {
-  const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-  const result = spawnSync(pnpm, ['exec', 'oxlint', ...scan.args, '--format', 'json', ...files], {
+// Why: Oxlint takes paths as positional arguments only — no stdin, no @file — so one
+// oversized changed set makes the spawn itself fail with E2BIG and the gate never runs.
+// The file list is only part of what the spawn carries, so budget against the whole of it.
+//
+// POSIX execve() charges argv strings, the inherited environment, AND one pointer per
+// entry against a single ceiling: macOS caps that at kern.argmax (1 MiB), Linux at
+// max(min(6 MiB, RLIMIT_STACK/4), 128 KiB) — 2 MiB at the default 8 MiB stack.
+//
+// Budgeting just under the kernel's own ceiling is not enough. macOS copies argv and the
+// environment into the child's stack, and a Node child dies from the squeeze well before
+// the kernel refuses the exec: measured here, a total near 970 KiB SIGSEGVs on Node 24 and
+// throws a stack-overflow RangeError on Node 26, while E2BIG only starts around 1,048 KiB.
+// Half of kern.argmax leaves that cliff ~450 KiB away.
+//
+// Windows is a different shape entirely: CreateProcess caps only the command line, at
+// 32,767 UTF-16 units, and passes the environment in a separate block that does not count.
+// Counting UTF-8 bytes against a UTF-16 ceiling over-estimates, which is the safe direction.
+const POSIX_SPAWN_CEILING_BYTES = 512 * 1024
+const WINDOWS_COMMAND_LINE_CEILING_BYTES = 32767
+// Every entry costs a pointer beside its bytes, and libuv may wrap a Windows argument in
+// quotes. Measured on macOS: 6,096 paths cost ~48 KiB in pointers alone.
+const PER_ENTRY_OVERHEAD_BYTES = 12
+// Slack for kernel padding and the exec path the kernel copies alongside argv.
+const SPAWN_HEADROOM_BYTES = 8 * 1024
+// A full ceiling's worth of paths would be a single enormous batch; hold the file list to
+// what the gate already used so an ordinary changed set still spawns once per scan.
+const MAX_BATCH_ARGUMENT_BYTES = 256 * 1024
+// A pathological environment must not drive the budget to zero, which would spawn Oxlint
+// once per path.
+const MIN_BATCH_ARGUMENT_BYTES = 8 * 1024
+
+function spawnEntryBytes(entries) {
+  let total = 0
+  for (const entry of entries) {
+    total += Buffer.byteLength(entry, 'utf8') + PER_ENTRY_OVERHEAD_BYTES
+  }
+  return total
+}
+
+export function environmentEntries(env = process.env) {
+  const entries = []
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) {
+      entries.push(`${key}=${value}`)
+    }
+  }
+  return entries
+}
+
+export function maxBatchArgumentBytes({
+  platform = process.platform,
+  fixedArguments = [],
+  env = process.env
+} = {}) {
+  const windows = platform === 'win32'
+  const ceiling = windows ? WINDOWS_COMMAND_LINE_CEILING_BYTES : POSIX_SPAWN_CEILING_BYTES
+  const carried =
+    spawnEntryBytes(fixedArguments) + (windows ? 0 : spawnEntryBytes(environmentEntries(env)))
+  return Math.min(
+    MAX_BATCH_ARGUMENT_BYTES,
+    Math.max(MIN_BATCH_ARGUMENT_BYTES, ceiling - SPAWN_HEADROOM_BYTES - carried)
+  )
+}
+
+export function batchFilesByArgumentBytes(files, limit = maxBatchArgumentBytes()) {
+  const batches = []
+  let batch = []
+  let bytes = 0
+  for (const file of files) {
+    // A single path over the limit still gets its own batch: an empty argument list
+    // would make Oxlint lint the whole working directory instead.
+    const cost = Buffer.byteLength(file, 'utf8') + PER_ENTRY_OVERHEAD_BYTES
+    if (batch.length > 0 && bytes + cost > limit) {
+      batches.push(batch)
+      batch = []
+      bytes = 0
+    }
+    batch.push(file)
+    bytes += cost
+  }
+  if (batch.length > 0) {
+    batches.push(batch)
+  }
+  return batches
+}
+
+// Why resolve the manifest rather than joining node_modules: pnpm's store is not a flat
+// tree, and `bin` is the launcher the package itself declares. Not `pnpm exec`, which on
+// Windows routes through pnpm.cmd and cmd.exe, whose command line caps at 8,191 characters
+// instead of CreateProcess' 32,767.
+let cachedOxlintCliPath = null
+function oxlintCliPath() {
+  if (cachedOxlintCliPath === null) {
+    const manifestPath = createRequire(import.meta.url).resolve('oxlint/package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    cachedOxlintCliPath = path.join(path.dirname(manifestPath), manifest.bin.oxlint)
+  }
+  return cachedOxlintCliPath
+}
+
+function oxlintCommand(scan) {
+  return {
+    command: process.execPath,
+    fixedArguments: [oxlintCliPath(), ...scan.args, '--format', 'json']
+  }
+}
+
+function spawnOxlintBatch(root, scan, batch) {
+  const { command, fixedArguments } = oxlintCommand(scan)
+  const result = spawnSync(command, [...fixedArguments, ...batch], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 128 * 1024 * 1024
   })
   if (result.error) {
-    throw result.error
+    // Why restate it: a bare spawn error reads as a crash in the gate rather than a
+    // failure to launch Oxlint over this batch.
+    throw new Error(
+      `${scan.label} could not run Oxlint over ${batch.length} file(s): ${result.error.message}`,
+      { cause: result.error }
+    )
   }
   if (!result.stdout.trim()) {
     process.stderr.write(result.stderr)
     throw new Error(`${scan.label} failed before producing diagnostics.`)
   }
-  return parseOxlintOutput(result.stdout, scan.label).diagnostics ?? []
+  return result.stdout
+}
+
+export function runOxlintScan(root, scan, files, spawnBatch = spawnOxlintBatch) {
+  const { command, fixedArguments } = oxlintCommand(scan)
+  const limit = maxBatchArgumentBytes({ fixedArguments: [command, ...fixedArguments] })
+  const diagnostics = []
+  for (const batch of batchFilesByArgumentBytes(files, limit)) {
+    diagnostics.push(
+      ...(parseOxlintOutput(spawnBatch(root, scan, batch), scan.label).diagnostics ?? [])
+    )
+  }
+  return diagnostics
 }
 
 export function main(
