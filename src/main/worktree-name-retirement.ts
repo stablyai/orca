@@ -18,7 +18,7 @@ import {
   computeRemoteWorktreePath,
   computeWorktreePathAsync,
   getWorktreePathSettings,
-  hasRepoWorktreeBasePath
+  hasConfiguredWorktreeBasePath
 } from './ipc/worktree-logic'
 import { worktreePathComparisonKey } from './ipc/worktree-path-comparison'
 import {
@@ -46,7 +46,10 @@ type RetirementWriteStore = {
   mergeRetiredWorktreeNamesForNamespace?(namespaceKey: string, names: Iterable<string>): boolean
   getSshTarget?: SshTargetLookup
 }
-type RetirementPathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
+type RetirementPathSettings = Pick<
+  GlobalSettings,
+  'nestWorkspaces' | 'workspaceDir' | 'hostSettingOverrides'
+>
 
 /** Only canonical generator output is persisted. Collision retries advance canonical tiers, so a
  *  repeat-suffixed path can never be generated again and needs no permanent registry entry. */
@@ -68,7 +71,7 @@ async function getRetirementProbePath(
   const pathSettings = getWorktreePathSettings(repo, settings)
   return repo.connectionId
     ? computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
-        useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+        useConfiguredAbsolutePath: hasConfiguredWorktreeBasePath(repo, settings)
       })
     : computeWorktreePathAsync(RETIREMENT_PROBE_NAME, repo.path, pathSettings)
 }
@@ -83,7 +86,7 @@ export function getRemoteRetirementNamespaceKey(
   }
   const pathSettings = getWorktreePathSettings(repo, settings)
   const probePath = computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
-    useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+    useConfiguredAbsolutePath: hasConfiguredWorktreeBasePath(repo, settings)
   })
   return retirementNamespaceKey(retirementHostIdentity(repo, lookupSshTarget), probePath)
 }
@@ -107,8 +110,10 @@ async function getRetirementCollisionKey(
   const cacheKey = [
     hostIdentity,
     repo.path,
-    repo.worktreeBasePath ?? '',
-    settings.workspaceDir,
+    // Why the effective base and not `repo.worktreeBasePath`: a host-scoped default
+    // feeds the probe path too, so a key blind to it hands the repo the namespace of
+    // whatever root the host pointed at before.
+    getWorktreePathSettings(repo, settings).workspaceDir,
     settings.nestWorkspaces ? 'nested' : 'flat'
   ].join('\u0000')
   const cached = collisionKeyCache.get(cacheKey)

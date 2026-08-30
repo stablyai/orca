@@ -21,6 +21,12 @@ export function resolveWorkspaceLayoutPath(repoPath: string, layoutPath: string)
     : resolveRuntimePath(repoPath, layoutPath)
 }
 
+/** Resolves one configured base path against the repo: a POSIX-absolute value on a
+ *  WSL repo lands inside the distro, and a relative one resolves from the repo root. */
+export function resolveConfiguredWorktreeBasePath(repoPath: string, configured: string): string {
+  return resolveWorkspaceLayoutPath(repoPath, resolveWslRepoWorktreeBasePath(repoPath, configured))
+}
+
 /**
  * Why: the per-project worktree base (#1846) is an explicit statement that a
  * directory holds this project's workspaces, so it outranks the path
@@ -33,6 +39,5 @@ export function resolveConfiguredWorktreeBasePaths(
   if (!repo || !configured) {
     return []
   }
-  const runtimeBase = resolveWslRepoWorktreeBasePath(repo.path, configured)
-  return [resolveWorkspaceLayoutPath(repo.path, runtimeBase)]
+  return [resolveConfiguredWorktreeBasePath(repo.path, configured)]
 }

@@ -196,6 +196,12 @@ describe('collectWorktreeTrashSweepRoots', () => {
     ).toEqual([])
   })
 
+  it('skips runtime-owned repos, which carry no connectionId', () => {
+    expect(
+      collectWorktreeTrashSweepRoots([repo({ executionHostId: 'runtime:env-1' })], settings)
+    ).toEqual([])
+  })
+
   it('skips WSL repos that cannot create host trash', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

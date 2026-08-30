@@ -12,6 +12,7 @@ import {
   computeWorkspaceRoot,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
+  hasConfiguredWorktreeBasePath,
   shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
@@ -712,5 +713,93 @@ describe('isOrphanCompatiblePreflightError', () => {
     })
 
     expect(isOrphanCompatiblePreflightError(error)).toBe(false)
+  })
+})
+
+describe('host-scoped worktree base paths', () => {
+  const HOST_BASE_PATH = '/remote/home/.orca/workspaces'
+  const settings = {
+    nestWorkspaces: false,
+    workspaceDir: '/local/workspaces',
+    hostSettingOverrides: {
+      'ssh:ssh-1': { defaultWorktreeLocation: HOST_BASE_PATH }
+    }
+  } as const
+  const remoteRepo = { path: '/remote/repo', connectionId: 'ssh-1' }
+
+  it('applies the host default to every repo on that host', () => {
+    expect(getWorktreePathSettings(remoteRepo, settings).workspaceDir).toBe(HOST_BASE_PATH)
+    expect(getWorktreeCreationLayout(remoteRepo, settings)).toEqual({
+      path: HOST_BASE_PATH,
+      nestWorkspaces: false
+    })
+  })
+
+  it('lets a repo base path win over the host default', () => {
+    const repo = { ...remoteRepo, worktreeBasePath: '../custom' }
+    expect(getWorktreePathSettings(repo, settings).workspaceDir).toBe('../custom')
+  })
+
+  it('leaves repos on other hosts on the client default', () => {
+    expect(
+      getWorktreePathSettings({ path: '/other/repo', connectionId: 'ssh-2' }, settings).workspaceDir
+    ).toBe('/local/workspaces')
+    expect(getWorktreePathSettings({ path: '/projects/repo' }, settings).workspaceDir).toBe(
+      '/local/workspaces'
+    )
+  })
+
+  it('applies a local host default to local repos', () => {
+    const localSettings = {
+      nestWorkspaces: false,
+      workspaceDir: '/local/workspaces',
+      hostSettingOverrides: { local: { defaultWorktreeLocation: '/local/elsewhere' } }
+    } as const
+    expect(getWorktreePathSettings({ path: '/projects/repo' }, localSettings).workspaceDir).toBe(
+      '/local/elsewhere'
+    )
+  })
+
+  it('keeps an absolute host default on the SSH path instead of a repo-qualified sibling', () => {
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        remoteRepo.path,
+        getWorktreePathSettings(remoteRepo, settings),
+        { useConfiguredAbsolutePath: hasConfiguredWorktreeBasePath(remoteRepo, settings) }
+      )
+    ).toBe('/remote/home/.orca/workspaces/feature')
+
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        remoteRepo.path,
+        getWorktreePathSettings(remoteRepo, { ...settings, nestWorkspaces: true }),
+        { useConfiguredAbsolutePath: hasConfiguredWorktreeBasePath(remoteRepo, settings) }
+      )
+    ).toBe('/remote/home/.orca/workspaces/repo/feature')
+  })
+
+  it('still qualifies SSH siblings when only the client default is set', () => {
+    const clientOnly = { nestWorkspaces: false, workspaceDir: '/local/workspaces' }
+    expect(hasConfiguredWorktreeBasePath(remoteRepo, clientOnly)).toBe(false)
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        remoteRepo.path,
+        getWorktreePathSettings(remoteRepo, clientOnly),
+        { useConfiguredAbsolutePath: hasConfiguredWorktreeBasePath(remoteRepo, clientOnly) }
+      )
+    ).toBe('/remote/repo-feature')
+  })
+
+  it('treats a blank host default as unset', () => {
+    const blank = {
+      nestWorkspaces: false,
+      workspaceDir: '/local/workspaces',
+      hostSettingOverrides: { 'ssh:ssh-1': { defaultWorktreeLocation: '   ' } }
+    } as const
+    expect(hasConfiguredWorktreeBasePath(remoteRepo, blank)).toBe(false)
+    expect(getWorktreePathSettings(remoteRepo, blank).workspaceDir).toBe('/local/workspaces')
   })
 })
