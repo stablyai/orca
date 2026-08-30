@@ -31901,6 +31901,11 @@ export class OrcaRuntimeService {
     return [...ptyIds]
   }
 
+  /**
+   * Stops the tab's PTYs, each fenced to the incarnation snapshotted before teardown began. A PTY
+   * that was replaced mid-flight is skipped, not stopped; `addressedPtyReplaced` reports that for
+   * the handle the caller addressed so the close can refuse instead of claiming a kill.
+   */
   private async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string,
@@ -31980,6 +31985,7 @@ export class OrcaRuntimeService {
     return { addressedPtyStopped, addressedPtyReplaced }
   }
 
+  /** Taken before tab teardown yields; absent ids stay out so a later spawn is never fenced in. */
   private snapshotPtyIncarnations(ptyIds: readonly string[]): Map<string, PtyIncarnationId | null> {
     const snapshot = new Map<string, PtyIncarnationId | null>()
     for (const ptyId of ptyIds) {
@@ -32158,6 +32164,11 @@ export class OrcaRuntimeService {
     })
   }
 
+  /**
+   * Closes the terminal behind `handle`. With `expectedProcessIncarnation`, the handle must still
+   * resolve to that process both before teardown and after it — otherwise the close is refused with
+   * `incarnation_replaced` and the replacement PTY is left running.
+   */
   async closeTerminal(
     handle: string,
     options: RuntimeTerminalCloseOptions = {}
@@ -32311,6 +32322,7 @@ export class OrcaRuntimeService {
     return { handle, tabId, ptyKilled }
   }
 
+  /** The refusal shape: nothing was stopped, so it reports no kill and no stop verdict. */
   private describeTerminalIncarnationReplacement(
     handle: string,
     tabId: string

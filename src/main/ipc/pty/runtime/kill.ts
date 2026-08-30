@@ -11,6 +11,11 @@ import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/live
 import { recordUndeliveredSshPtyKill } from './undelivered-ssh-kill'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
+/**
+ * Stops one PTY, optionally fenced to `expectedIncarnationId`: every await re-checks the fence, so
+ * a replacement that took the id over is never stopped and never inherits this call's exit.
+ * Returns whether the stop was dispatched, not whether the process died.
+ */
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
@@ -35,8 +40,10 @@ export function killPtyFromRuntimeController(
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
   connectionId ??= parsedSshId?.connectionId
-  // Defaulted so a replayable order aims at the incarnation this call addressed, never at one
-  // that took the id over while the stop was in flight.
+  /**
+   * Records a replayable SSH stop order. Defaulted so it aims at the incarnation this call
+   * addressed, never at one that took the id over while the stop was in flight.
+   */
   const recordUndelivered = (incarnationId = expectedIncarnationId): void => {
     recordUndeliveredSshPtyKill({
       store,
@@ -46,11 +53,13 @@ export function killPtyFromRuntimeController(
       incarnationId
     })
   }
+  /** Publishes an exit the provider never reported, tagged so listeners can reject a stale one. */
   const announceSyntheticExit = (code: number, incarnationId?: string): void => {
     runtime?.onPtyExit(ptyId, code, incarnationId)
     rememberSyntheticKillExit(ptyId)
     sendPtyExitToRenderer({ id: ptyId, code, ...(incarnationId ? { incarnationId } : {}) })
   }
+  /** Closes out a shutdown that threw, without ever claiming the process died. */
   const reportFailedStop = (err: unknown): void => {
     console.warn(
       `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
@@ -73,6 +82,7 @@ export function killPtyFromRuntimeController(
     // either way, and the intent is what the next handshake replays.
     recordUndelivered()
   }
+  /** Resolves the provider only now — after any daemon swap — and fires the shutdown through it. */
   const killWithCurrentProvider = (): boolean => {
     if (!ptyIncarnationStillExpected(ptyId, expectedIncarnationId)) {
       return false

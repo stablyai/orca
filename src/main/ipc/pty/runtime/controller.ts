@@ -32,6 +32,7 @@ import {
   writePtyFromRuntimeController
 } from './operations'
 
+/** Binds the runtime's PTY controller surface to this process's provider registry. */
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
 

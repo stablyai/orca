@@ -22,6 +22,11 @@ export type WorkerReleaseReceipt = {
   lastError?: string
 }
 
+/**
+ * Closes the exact leased terminal and turns the outcome into a receipt. Every unproven path lands
+ * on `retained` rather than a release, and a close that refuses on incarnation, or a lease that
+ * stopped being current across any await, is one of them.
+ */
 export async function closeAndSettleWorkerTerminalRelease(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -131,6 +136,7 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
   }
 }
 
+/** Settles a release on a proven-exited process; null when the lease no longer proves ownership. */
 function settleExitedWorkerTerminalRelease(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -153,6 +159,7 @@ function settleExitedWorkerTerminalRelease(args: {
   }
 }
 
+/** Null rather than a pair of nulls, so a receipt distinguishes "no archive" from an empty one. */
 export function summarizeWorkerTerminalArchive(resource: WorkerTerminalResourceRow) {
   if (!resource.archive_source && !resource.archive_status) {
     return null
@@ -160,6 +167,7 @@ export function summarizeWorkerTerminalArchive(resource: WorkerTerminalResourceR
   return { source: resource.archive_source, status: resource.archive_status }
 }
 
+/** The one landing for unproven identity: keep the resource retained, claim no process action. */
 function retainWorkerTerminalRelease(
   db: OrchestrationDb,
   dispatchId: string,
@@ -175,6 +183,7 @@ function retainWorkerTerminalRelease(
   }
 }
 
+/** Operator instructions carried on receipts that could not settle. */
 function inspectRecovery(dispatchId: string): string {
   return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
 }

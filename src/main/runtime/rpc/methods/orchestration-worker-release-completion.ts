@@ -62,6 +62,7 @@ export function exposeWorkerTerminalResource(resource: WorkerTerminalResourceRow
   }
 }
 
+/** Receipt-shaped archive field for a row that may not exist at all. */
 export function archiveSummary(
   resource: WorkerTerminalResourceRow | null
 ): { source: string | null; status: string | null } | null {
@@ -94,6 +95,7 @@ export function completeWorkerTerminalRelease(
   return release
 }
 
+/** The un-deduplicated body of {@link completeWorkerTerminalRelease}; never call it directly. */
 async function completeWorkerTerminalReleaseOnce(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {

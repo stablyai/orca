@@ -17,6 +17,10 @@ export type WorkerTerminalObservationStatus =
   | 'exited'
   | 'unverifiable'
 
+/**
+ * Reads a worker's terminal into one verdict. `exact` is false the moment the pane or incarnation
+ * differs from the dispatch's, and lost contact reports `unverifiable` — never `exited`.
+ */
 export async function inspectWorkerTerminal(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
@@ -71,6 +75,10 @@ export async function inspectWorkerTerminal(
   }
 }
 
+/**
+ * Re-asks the execution host about the recorded incarnation specifically. A handle that no longer
+ * resolves to it answers `unverifiable`, so a replacement never supplies this worker's death proof.
+ */
 export async function recheckProcessLiveness(
   runtime: OrcaRuntimeService,
   resource: WorkerTerminalResourceRow
