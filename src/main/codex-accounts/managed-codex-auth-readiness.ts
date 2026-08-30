@@ -92,27 +92,57 @@ export type StoredCodexCredentialState =
   | 'unreadable'
   | 'no-credential'
 
+export type StoredCodexAuthMode =
+  | 'apikey'
+  | 'chatgpt'
+  | 'chatgptAuthTokens'
+  | 'agentIdentity'
+  | 'personalAccessToken'
+  | 'bedrockApiKey'
+  | `unknown:${string}`
+
+export type StoredCodexAuthObservation = {
+  state: StoredCodexCredentialState
+  mode: StoredCodexAuthMode | null
+  contents: string | null
+}
+
 // Why: callers deciding whether to deselect an account must tell a settled
 // logout ('no-credential') apart from a rotation in progress ('unreadable') or
 // an absent file ('missing') — collapsing them to false logs users out on races.
 export function readStoredCodexCredentialState(authPath: string): StoredCodexCredentialState {
+  return readStoredCodexAuthObservation(authPath).state
+}
+
+export function readStoredCodexAuthObservation(authPath: string): StoredCodexAuthObservation {
   let raw: string
   try {
     raw = readFileSync(authPath, 'utf8')
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     // Why: Windows auth.json rotation can surface transient EPERM/EBUSY reads.
-    return code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'unreadable'
+    return {
+      state: code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'unreadable',
+      mode: null,
+      contents: null
+    }
   }
+  return { ...classifyStoredCodexAuthContents(raw), contents: raw }
+}
+
+export function classifyStoredCodexAuthContents(raw: string): {
+  state: Exclude<StoredCodexCredentialState, 'missing'>
+  mode: StoredCodexAuthMode | null
+} {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
     // Torn JSON means a write is in flight, not that the credential is gone.
-    return 'unreadable'
+    return { state: 'unreadable', mode: null }
   }
   if (!isRecord(parsed) || Object.keys(parsed).length === 0) {
-    return 'no-credential'
+    return { state: 'no-credential', mode: null }
   }
   const auth = parsed as StoredCodexAuth
   const hasCredential =
@@ -120,13 +150,42 @@ export function readStoredCodexCredentialState(authPath: string): StoredCodexCre
       ? hasCredentialWithoutDeclaredMode(auth)
       : hasCredentialForDeclaredMode(auth)
   if (hasCredential) {
-    return 'present'
+    return { state: 'present', mode: storedAuthMode(auth) }
   }
-  return hasIncompleteCredentialMaterial(auth) ? 'incomplete' : 'no-credential'
+  return {
+    state: hasIncompleteCredentialMaterial(auth) ? 'incomplete' : 'no-credential',
+    mode: null
+  }
 }
 
 export function hasStoredCodexCredential(authPath: string): boolean {
   return readStoredCodexCredentialState(authPath) === 'present'
+}
+
+function storedAuthMode(auth: StoredCodexAuth): StoredCodexAuthMode {
+  if (isNonEmptyString(auth.auth_mode)) {
+    switch (auth.auth_mode) {
+      case 'apikey':
+      case 'chatgpt':
+      case 'chatgptAuthTokens':
+      case 'agentIdentity':
+      case 'personalAccessToken':
+      case 'bedrockApiKey':
+        return auth.auth_mode
+      default:
+        return `unknown:${auth.auth_mode}`
+    }
+  }
+  if (isNonEmptyString(auth.personal_access_token)) {
+    return 'personalAccessToken'
+  }
+  if (hasBedrockApiKey(auth.bedrock_api_key)) {
+    return 'bedrockApiKey'
+  }
+  if (isNonEmptyString(auth.OPENAI_API_KEY)) {
+    return 'apikey'
+  }
+  return 'chatgpt'
 }
 
 function hasCredentialForDeclaredMode(auth: StoredCodexAuth): boolean {
@@ -137,8 +196,9 @@ function hasCredentialForDeclaredMode(auth: StoredCodexAuth): boolean {
     case 'apikey':
       return isNonEmptyString(auth.OPENAI_API_KEY)
     case 'chatgpt':
-    case 'chatgptAuthTokens':
       return hasChatGptCredential(auth.tokens)
+    case 'chatgptAuthTokens':
+      return hasExternalChatGptCredential(auth.tokens)
     case 'agentIdentity':
       return hasAgentIdentityCredential(auth.agent_identity)
     case 'personalAccessToken':
@@ -180,6 +240,12 @@ function hasChatGptCredential(tokens: unknown): boolean {
     isNonEmptyString(tokens.access_token) &&
     isNonEmptyString(tokens.id_token) &&
     isNonEmptyString(tokens.refresh_token)
+  )
+}
+
+function hasExternalChatGptCredential(tokens: unknown): boolean {
+  return (
+    isRecord(tokens) && isNonEmptyString(tokens.access_token) && isNonEmptyString(tokens.id_token)
   )
 }
 

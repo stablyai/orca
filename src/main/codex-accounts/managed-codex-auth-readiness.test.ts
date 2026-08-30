@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import {
+  classifyStoredCodexAuthContents,
   readStoredCodexCredentialState,
   waitForManagedCodexAuthReady
 } from './managed-codex-auth-readiness'
@@ -28,6 +29,59 @@ afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+describe('classifyStoredCodexAuthContents', () => {
+  it('keeps external ChatGPT tokens distinct and permits an empty refresh token', () => {
+    const classified = classifyStoredCodexAuthContents(
+      JSON.stringify({
+        ...testChatGptAuth,
+        auth_mode: 'chatgptAuthTokens',
+        tokens: { ...testChatGptAuth.tokens, refresh_token: '' }
+      })
+    )
+
+    expect(classified).toEqual({ state: 'present', mode: 'chatgptAuthTokens' })
+  })
+
+  it.each([
+    [{ auth_mode: 'agentIdentity', agent_identity: 'identity' }, 'agentIdentity'],
+    [
+      { auth_mode: 'personalAccessToken', personal_access_token: 'pat-test' },
+      'personalAccessToken'
+    ],
+    [{ auth_mode: 'bedrockApiKey', bedrock_api_key: { api_key: 'bedrock' } }, 'bedrockApiKey']
+  ])('preserves the declared mode for %j', (auth, mode) => {
+    expect(classifyStoredCodexAuthContents(JSON.stringify(auth))).toEqual({
+      state: 'present',
+      mode
+    })
+  })
+
+  it('keeps different future declared modes unequal', () => {
+    const first = classifyStoredCodexAuthContents(
+      JSON.stringify({ auth_mode: 'futureOne', credential: 'one' })
+    )
+    const second = classifyStoredCodexAuthContents(
+      JSON.stringify({ auth_mode: 'futureTwo', credential: 'two' })
+    )
+
+    expect(first.mode).toBe('unknown:futureOne')
+    expect(second.mode).toBe('unknown:futureTwo')
+    expect(first.mode).not.toBe(second.mode)
+  })
+
+  it.each([
+    [{ personal_access_token: 'pat-test' }, 'personalAccessToken'],
+    [{ bedrock_api_key: { api_key: 'bedrock' } }, 'bedrockApiKey'],
+    [{ OPENAI_API_KEY: 'sk-test' }, 'apikey'],
+    [{ tokens: testChatGptAuth.tokens }, 'chatgpt']
+  ])('infers the legacy mode for %j', (auth, mode) => {
+    expect(classifyStoredCodexAuthContents(JSON.stringify(auth))).toEqual({
+      state: 'present',
+      mode
+    })
+  })
 })
 
 describe('waitForManagedCodexAuthReady', () => {
