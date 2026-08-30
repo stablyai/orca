@@ -181,6 +181,16 @@ describe('per-job path classification', () => {
     expectClassification(['native/computer-use-macos/Package.swift'], {})
   })
 
+  it('runs Linux packaging when an artifact contract changes', () => {
+    for (const file of [
+      'config/docker/cli-launch-contract/Dockerfile',
+      'config/docker/cli-launch-contract/run-cli-case.sh',
+      'config/scripts/run-linux-cli-launch-contract-docker.mjs'
+    ]) {
+      expectClassification([file], { package: true })
+    }
+  })
+
   it('runs shell contracts when live-shell inputs change', () => {
     expectClassification(['src/main/daemon/shell-ready.ts'], {
       shell_contracts: true,

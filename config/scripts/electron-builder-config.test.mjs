@@ -269,8 +269,8 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
   })
 
-  it('uses AppImage and deb as local Linux targets without changing existing artifact names', () => {
-    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb'])
+  it('uses the release artifact set as local Linux targets without changing existing names', () => {
+    expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
     expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
     expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
     expect(electronBuilderConfig.rpm).toMatchObject({

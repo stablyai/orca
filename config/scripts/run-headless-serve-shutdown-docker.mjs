@@ -17,7 +17,7 @@ if (!appImageArg) {
 if (!['app', 'serving-electron'].includes(signalTarget)) {
   fail(`Unsupported --signal-target: ${signalTarget}`)
 }
-if (!['app', 'launcher'].includes(entrypoint)) {
+if (!['app', 'appimage', 'launcher'].includes(entrypoint)) {
   fail(`Unsupported --entrypoint: ${entrypoint}`)
 }
 if (!['pid', 'foreground-process-group'].includes(intDelivery)) {
@@ -107,6 +107,8 @@ try {
         `ORCA_TEST_ENTRYPOINT=${entrypoint}`,
         '-e',
         `ORCA_INT_DELIVERY=${intDelivery}`,
+        '-v',
+        `${appImage}:/input/orca.AppImage:ro`,
         '-v',
         `${artifactVolume}:/artifacts:ro`,
         image,

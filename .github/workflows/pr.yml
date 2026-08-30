@@ -620,6 +620,7 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -682,6 +683,20 @@ jobs:
 
       - name: Verify headless serve signal shutdown
         run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
+
+      - name: Verify extracted launcher serve signal shutdown
+        run: >-
+          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          --appimage dist/orca-linux.AppImage --entrypoint launcher
+
+      - name: Verify AppImage CLI registration and serve signal shutdown
+        run: >-
+          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          --appimage dist/orca-linux.AppImage --entrypoint appimage
+
+      # A default container reproduces the hostile AppImage launch environment.
+      - name: Verify Linux CLI launch contract
+        run: node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked

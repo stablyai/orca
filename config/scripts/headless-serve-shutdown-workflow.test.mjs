@@ -44,12 +44,25 @@ describe('headless serve shutdown PR gate', () => {
     const steps = workflow.jobs.package.steps
     const packageStep = steps.find((step) => step.name === 'Package unpacked app')
     const shutdownStep = steps.find((step) => step.name === 'Verify headless serve signal shutdown')
+    const launcherShutdownStep = steps.find(
+      (step) => step.name === 'Verify extracted launcher serve signal shutdown'
+    )
+    const appImageShutdownStep = steps.find(
+      (step) => step.name === 'Verify AppImage CLI registration and serve signal shutdown'
+    )
 
     expect(packageStep.run).toContain('--linux AppImage --x64 --publish never')
     expect(shutdownStep.run).toBe(
       'node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage'
     )
+    expect(launcherShutdownStep.run).toContain(
+      'node config/scripts/run-headless-serve-shutdown-docker.mjs'
+    )
+    expect(launcherShutdownStep.run).toContain('--entrypoint launcher')
+    expect(appImageShutdownStep.run).toContain('--entrypoint appimage')
     expect(steps.indexOf(shutdownStep)).toBeGreaterThan(steps.indexOf(packageStep))
+    expect(steps.indexOf(launcherShutdownStep)).toBeGreaterThan(steps.indexOf(shutdownStep))
+    expect(steps.indexOf(appImageShutdownStep)).toBeGreaterThan(steps.indexOf(launcherShutdownStep))
   })
 
   it('keeps owned Xvfb alive during the documented systemd graceful stop', () => {

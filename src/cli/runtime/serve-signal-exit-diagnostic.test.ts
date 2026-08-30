@@ -144,13 +144,24 @@ describe('superviseForegroundServe signal exits', () => {
     process.emit('SIGHUP', 'SIGHUP')
     expect(child.kill).toHaveBeenCalledWith('SIGHUP')
 
-    child.emit('exit', 0, null)
+    child.emit('exit', null, 'SIGHUP')
     await expect(supervised).resolves.toBe(0)
     expect(process.listeners('SIGHUP')).toEqual(listenersBefore)
 
     const killCallsAfterExit = child.kill.mock.calls.length
     process.emit('SIGHUP', 'SIGHUP')
     expect(child.kill).toHaveBeenCalledTimes(killCallsAfterExit)
+  })
+
+  it('treats a child exit through the caller-forwarded SIGINT as graceful', async () => {
+    setPlatform('linux')
+    const child = new FakeChildProcess()
+    const supervised = superviseChild(child)
+
+    process.emit('SIGINT', 'SIGINT')
+    child.emit('exit', null, 'SIGINT')
+
+    await expect(supervised).resolves.toBe(0)
   })
 
   it('does not terminate an exited child when update handoff completion fails late', async () => {

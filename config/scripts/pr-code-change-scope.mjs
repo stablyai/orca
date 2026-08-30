@@ -180,6 +180,8 @@ const SHARED_PACKAGE_PREFIXES = [
 
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  'config/docker/cli-launch-contract/',
+  'config/scripts/run-linux-cli-launch-contract',
   'native/computer-use-linux/',
   'resources/linux/',
   'config/scripts/run-headless-serve'

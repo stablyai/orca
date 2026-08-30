@@ -41,8 +41,8 @@ chmod 700 "$XDG_RUNTIME_DIR"
 
 case "$entrypoint_kind" in
   app) entrypoint=("$app_root/AppRun" --no-sandbox) ;;
+  appimage) entrypoint=(/input/orca.AppImage --appimage-extract-and-run --no-sandbox) ;;
   launcher)
-    export ELECTRON_DISABLE_SANDBOX=1
     entrypoint=("$app_root/resources/bin/orca-ide")
     ;;
   *) echo "unsupported entrypoint: $entrypoint_kind" >&2; exit 64 ;;
@@ -57,12 +57,31 @@ app_start_ticks=$(awk '{print $22}' "/proc/$app_pid/stat")
 # shellcheck disable=SC2016
 ready_line=$(timeout "$startup_timeout_seconds" bash -c '
   tail --pid="$1" -n +1 -F "$2" 2>/dev/null \
-    | jq --unbuffered -nc '\''first(inputs | select(.type == "orca_server_ready" and .schemaVersion == 1))'\''
+    | sed -n 's/^[^{]*//p' \
+    | jq --unbuffered -Rnc '\''first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))'\''
 ' bash "$app_pid" "$stdout_log" || true)
 if [[ -z "$ready_line" ]]; then
   cat "$stdout_log" "$stderr_log" >&2
-  echo "FAIL: AppRun exited or timed out before orca_server_ready" >&2
+  echo "FAIL: entrypoint exited or timed out before orca_server_ready" >&2
   exit 1
+fi
+
+registered_cli_verified=false
+if [[ "$entrypoint_kind" == appimage ]]; then
+  registered_cli="$HOME/.local/bin/orca-ide"
+  expected_target="$XDG_CACHE_HOME/orca/appimage/launcher/orca-ide"
+  actual_target=$(readlink "$registered_cli" 2>/dev/null || true)
+  if [[ "$actual_target" != "$expected_target" ]]; then
+    echo "FAIL: registered CLI target is ${actual_target:-missing}; expected $expected_target" >&2
+    exit 1
+  fi
+  if ! registered_help=$("$registered_cli" --help 2>&1) \
+    || [[ "$registered_help" != *'Usage: orca <command>'* ]]; then
+    echo "FAIL: registered CLI did not execute the packaged help command" >&2
+    printf '%s\n' "$registered_help" >&2
+    exit 1
+  fi
+  registered_cli_verified=true
 fi
 
 bound_endpoint=$(jq -r '.boundEndpoint' <<<"$ready_line")
@@ -176,10 +195,11 @@ jq -nc \
   --argjson waitStatus "$wait_status" \
   --argjson fatalEvidence "$fatal_evidence" \
   --argjson canaryAlive "$canary_alive" \
+  --argjson registeredCliVerified "$registered_cli_verified" \
   --arg survivors "${survivors[*]:-}" \
   --arg residue "$owned_residue" \
   --arg corePattern "$(cat /proc/sys/kernel/core_pattern)" \
-  '{signal:$signal,signalDelivery:$signalDelivery,entrypointKind:$entrypointKind,signalTargetKind:$signalTargetKind,appPid:$appPid,signalTargetPid:$signalTargetPid,boundEndpoint:$endpoint,listenerBefore:$listenerBefore,listenerAfter:$listenerAfter,xvfbPids:$xvfbPids,treeBefore:$treeBefore,waitStatus:$waitStatus,fatalEvidence:$fatalEvidence,canaryAlive:$canaryAlive,survivingTreePids:$survivors,ownedResidue:$residue,corePattern:$corePattern}'
+  '{signal:$signal,signalDelivery:$signalDelivery,entrypointKind:$entrypointKind,signalTargetKind:$signalTargetKind,appPid:$appPid,signalTargetPid:$signalTargetPid,boundEndpoint:$endpoint,listenerBefore:$listenerBefore,listenerAfter:$listenerAfter,xvfbPids:$xvfbPids,treeBefore:$treeBefore,waitStatus:$waitStatus,fatalEvidence:$fatalEvidence,canaryAlive:$canaryAlive,registeredCliVerified:$registeredCliVerified,survivingTreePids:$survivors,ownedResidue:$residue,corePattern:$corePattern}'
 
 if ((wait_status != 0)) || [[ -n "$listener_after" ]] || [[ "$fatal_evidence" != false ]] \
   || [[ "$canary_alive" != true ]] || ((${#survivors[@]})) || [[ -n "$owned_residue" ]]; then
