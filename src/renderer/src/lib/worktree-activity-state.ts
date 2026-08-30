@@ -101,3 +101,27 @@ export function isInactiveWorkspace(
     worktreeIdsWithLiveAgent
   )
 }
+
+/**
+ * Whether "Hide sleeping" hides this workspace. A slept workspace with a pending
+ * notification (isUnread) stays reachable so an agent completion isn't buried.
+ */
+export function isHiddenBySleepFilter(
+  worktree: { id: string; isUnread?: boolean },
+  showSleepingWorkspaces: boolean,
+  tabsByWorktree: TabsByWorktree | null | undefined,
+  ptyIdsByTabId: PtyIdsByTabId | null | undefined,
+  browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
+  worktreeIdsWithLiveAgent: ReadonlySet<string>
+): boolean {
+  if (showSleepingWorkspaces || worktree.isUnread) {
+    return false
+  }
+  return isInactiveWorkspace(
+    worktree.id,
+    tabsByWorktree,
+    ptyIdsByTabId,
+    browserTabsByWorktree,
+    worktreeIdsWithLiveAgent
+  )
+}

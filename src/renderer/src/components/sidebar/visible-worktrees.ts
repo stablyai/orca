@@ -23,7 +23,7 @@ import {
 } from './visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getWorktreeIdsWithLiveAgent, isHiddenBySleepFilter } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import {
@@ -144,11 +144,14 @@ export function computeVisibleWorktrees(
   if (!opts.showSleepingWorkspaces) {
     // Why no !hideDefaultBranchWorkspace term: that filter already ran above, so
     // an explicit hide still wins over the exemption.
+    // Keep a slept workspace visible while it has a pending notification, so an
+    // unread agent completion isn't silently hidden by the Hide-sleeping filter.
     all = all.filter(
       (w) =>
         isSleepingSweepExemptWorkspace(w, opts.alwaysShowDefaultBranchWorkspace) ||
-        !isInactiveWorkspace(
-          w.id,
+        !isHiddenBySleepFilter(
+          w,
+          opts.showSleepingWorkspaces,
           opts.tabsByWorktree,
           opts.ptyIdsByTabId,
           opts.browserTabsByWorktree,

@@ -60,7 +60,10 @@ import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceFromOtherDevice
 } from '@/components/sidebar/workspace-creator-visibility'
-import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import {
+  getLiveAgentStatusByWorktreeId,
+  isHiddenBySleepFilter
+} from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
   bestPaletteQualityRank,
@@ -1031,13 +1034,15 @@ function WorktreeJumpPaletteContent({
         ) {
           return false
         }
+        // Keep a slept workspace listed while it has a pending notification so
+        // the Hide-sleeping filter can't bury an unread agent completion.
         if (
-          !showSleepingWorkspaces &&
           // Why the exemption here too: Cmd+J re-implements the sidebar's
           // filter pass, so the shared predicate is what keeps them in step.
           !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
-          isInactiveWorkspace(
-            worktree.id,
+          isHiddenBySleepFilter(
+            worktree,
+            showSleepingWorkspaces,
             tabsByWorktree,
             ptyIdsByTabId,
             browserTabsByWorktree,
