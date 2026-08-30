@@ -9,29 +9,40 @@ if [[ $# -gt 1 ]]; then
 fi
 
 if ((EUID == 0)); then
-  state_dir=$(mktemp -d /tmp/orca-appimage-startup.XXXXXX)
-  chown -R orca:orca "$state_dir"
-  exec runuser --user orca --preserve-environment -- env ORCA_STARTUP_STATE_DIR="$state_dir" "$0" "$@"
+  if ! state_dir=$(mktemp -d /tmp/orca-appimage-startup.XXXXXX); then
+    echo 'FAIL: unable to create the AppImage startup state directory' >&2
+    exit 1
+  fi
+  if ! chown orca:orca "$state_dir"; then
+    echo "FAIL: unable to hand the AppImage startup state directory to orca: $state_dir" >&2
+    rm -rf -- "$state_dir" || true
+    exit 1
+  fi
+  exec runuser --user orca --preserve-environment -- env \
+    ORCA_STARTUP_STATE_DIR="$state_dir" \
+    ORCA_STARTUP_STATE_DIR_CLEANUP=1 \
+    "$0" "$@"
 fi
 
-state_dir=${ORCA_STARTUP_STATE_DIR:-$(mktemp -d /tmp/orca-appimage-startup.XXXXXX)}
+remove_state_dir_on_exit=${ORCA_STARTUP_STATE_DIR_CLEANUP:-0}
+if [[ -n "${ORCA_STARTUP_STATE_DIR:-}" ]]; then
+  state_dir=$ORCA_STARTUP_STATE_DIR
+else
+  if ! state_dir=$(mktemp -d /tmp/orca-appimage-startup.XXXXXX); then
+    echo 'FAIL: unable to create the AppImage startup state directory' >&2
+    exit 1
+  fi
+  remove_state_dir_on_exit=1
+fi
 stdout_log="$state_dir/stdout.log"
 stderr_log="$state_dir/stderr.log"
 launcher_pid=
 launcher_start_ticks=
 launcher_pgid=
+launcher_status=
+launcher_waited=false
 tree_pids=()
 declare -A tree_start_ticks=()
-
-mkdir -p "$state_dir/home" "$state_dir/config" "$state_dir/cache" "$state_dir/runtime"
-chmod 700 "$state_dir/runtime"
-export HOME="$state_dir/home"
-export XDG_CONFIG_HOME="$state_dir/config"
-export XDG_CACHE_HOME="$state_dir/cache"
-export XDG_RUNTIME_DIR="$state_dir/runtime"
-export LIBGL_ALWAYS_SOFTWARE=1
-export ORCA_STARTUP_DIAGNOSTICS=1
-ulimit -c 0
 
 read_start_ticks() {
   local pid=$1
@@ -127,9 +138,41 @@ wait_for_owned_exit() {
 
 dump_logs() {
   echo "--- desktop startup stdout ---" >&2
-  cat "$stdout_log" 2>/dev/null || true
+  cat "$stdout_log" >&2 2>/dev/null || true
   echo "--- desktop startup stderr ---" >&2
-  cat "$stderr_log" 2>/dev/null || true
+  cat "$stderr_log" >&2 2>/dev/null || true
+}
+
+cleanup_state_dir() {
+  [[ "$remove_state_dir_on_exit" == 1 ]] || return 0
+  [[ "$state_dir" =~ ^/tmp/orca-appimage-startup\.[^/]+$ ]] || return 0
+  [[ -d "$state_dir" && ! -L "$state_dir" && -O "$state_dir" ]] || return 0
+  rm -rf -- "$state_dir"
+}
+
+capture_launcher_status() {
+  [[ "$launcher_waited" == false ]] || return 0
+  [[ -n "$launcher_pid" ]] || return 1
+  if wait "$launcher_pid"; then
+    launcher_status=0
+  else
+    launcher_status=$?
+  fi
+  launcher_waited=true
+}
+
+report_launcher_exit() {
+  local reason=$1
+  local observed_status=unknown
+  local exit_status=1
+  if capture_launcher_status; then
+    observed_status=$launcher_status
+    if ((launcher_status != 0)); then
+      exit_status=$launcher_status
+    fi
+  fi
+  echo "FAIL: desktop launcher exited before ${reason} (status=${observed_status})" >&2
+  exit "$exit_status"
 }
 
 cleanup() {
@@ -142,18 +185,28 @@ cleanup() {
     signal_owned_processes KILL || true
     wait_for_owned_exit 5 || status=1
   fi
-  wait "$launcher_pid" 2>/dev/null || true
+  capture_launcher_status || true
   if ((status != 0)); then
     dump_logs
   else
-    rm -rf "$state_dir" || status=1
-    if ((status != 0)); then
+    if ! cleanup_state_dir; then
+      status=1
       dump_logs
     fi
   fi
   exit "$status"
 }
 trap cleanup EXIT
+
+mkdir -p "$state_dir/home" "$state_dir/config" "$state_dir/cache" "$state_dir/runtime"
+chmod 700 "$state_dir/runtime"
+export HOME="$state_dir/home"
+export XDG_CONFIG_HOME="$state_dir/config"
+export XDG_CACHE_HOME="$state_dir/cache"
+export XDG_RUNTIME_DIR="$state_dir/runtime"
+export LIBGL_ALWAYS_SOFTWARE=1
+export ORCA_STARTUP_DIAGNOSTICS=1
+ulimit -c 0
 
 [[ -r "$appimage" ]] || { echo "FAIL: AppImage is not readable: $appimage" >&2; exit 1; }
 
@@ -163,8 +216,7 @@ launcher_pid=$!
 launcher_start_ticks=$(read_start_ticks "$launcher_pid" 2>/dev/null || true)
 launcher_pgid=$(ps -o pgid= -p "$launcher_pid" 2>/dev/null | tr -d ' ' || true)
 if [[ -z "$launcher_start_ticks" ]]; then
-  echo "FAIL: desktop launcher exited before its identity could be recorded" >&2
-  exit 1
+  report_launcher_exit 'its identity could be recorded'
 fi
 
 marker_seen=false
@@ -175,11 +227,14 @@ while ((SECONDS < deadline)); do
     break
   fi
   if ! identity_alive "$launcher_pid" "$launcher_start_ticks"; then
-    break
+    report_launcher_exit 'the updater-setup-done marker'
   fi
   sleep 0.2
 done
 if [[ "$marker_seen" != true ]]; then
+  if ! identity_alive "$launcher_pid" "$launcher_start_ticks"; then
+    report_launcher_exit 'the updater-setup-done marker'
+  fi
   echo "FAIL: desktop AppImage did not emit updater-setup-done within ${startup_timeout_seconds}s" >&2
   exit 1
 fi

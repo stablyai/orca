@@ -156,7 +156,7 @@ function runDesktopStartupOracle({ image, appImage, platform }) {
     'none',
     '--read-only',
     '--tmpfs',
-    '/tmp:rw,nosuid,nodev,exec,size=128m',
+    '/tmp:rw,nosuid,nodev,exec,size=1g',
     '--shm-size',
     '256m',
     '--cap-drop',

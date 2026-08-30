@@ -129,6 +129,19 @@ describe('headless serve shutdown PR gate', () => {
   it('preserves startup logs when the launcher exits before its marker', () => {
     expect(desktopStartupOracle).toContain('signal_process_group TERM || true')
     expect(desktopStartupOracle).toContain('signal_process_group KILL || true')
+    expect(desktopStartupOracle).toContain('cat "$stdout_log" >&2 2>/dev/null || true')
+    expect(desktopStartupOracle).toContain('cat "$stderr_log" >&2 2>/dev/null || true')
+    expect(desktopStartupOracle).toContain(
+      'FAIL: desktop launcher exited before ${reason} (status=${observed_status})'
+    )
+    expect(desktopStartupOracle).toContain('ORCA_STARTUP_STATE_DIR_CLEANUP=1')
+    expect(desktopStartupOracle).toContain(
+      '[[ "$state_dir" =~ ^/tmp/orca-appimage-startup\\.[^/]+$ ]] || return 0'
+    )
+  })
+
+  it('gives the original AppImage enough bounded extraction space', () => {
+    expect(shutdownDockerRunner).toContain("'/tmp:rw,nosuid,nodev,exec,size=1g'")
   })
 
   it('keeps owned Xvfb alive during the documented systemd graceful stop', () => {
