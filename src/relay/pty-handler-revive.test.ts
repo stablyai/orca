@@ -111,6 +111,57 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_SHELL_FEATURES).not.toContain('identity')
   })
 
+  it('does not leak the relay process own pane identity into a spawned or revived pane', async () => {
+    // Why: the relay inherits process.env wholesale, and a relay is routinely started *from* an
+    // Orca agent pane — so that pane's identity quadruple rides into every pane the relay spawns.
+    // ORCA_AGENT_LAUNCH_TOKEN is the damaging member: it is Orca's proof of authorship, and an
+    // inherited one makes an unrelated remote pane claim the launch of the pane the relay was
+    // started from. The retired-pane fence is keyed on it, so one leaked token lets any pane on
+    // the relay pass a fence another pane set. The daemon path already scrubs exactly these four
+    // keys (removeUnspecifiedPaneIdentityEnv); this pins the same contract for the relay.
+    const leaked = {
+      ORCA_PANE_KEY: 'relay-own-tab:relay-own-leaf',
+      ORCA_TAB_ID: 'relay-own-tab',
+      ORCA_WORKTREE_ID: 'relay-own-wt',
+      ORCA_AGENT_LAUNCH_TOKEN: 'relay-own-launch-token'
+    }
+    const saved = new Map(Object.keys(leaked).map((key) => [key, process.env[key]]))
+    Object.assign(process.env, leaked)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      // A bare remote pane: the client names no pane identity at all.
+      await dispatcher.callRequest('pty.spawn', { cols: 90, rows: 30, cwd: '/tmp' })
+      const freshEnv = (mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }).env
+      for (const key of Object.keys(leaked)) {
+        expect(`${key}=${freshEnv[key]}`).toBe(`${key}=undefined`)
+      }
+
+      // And across revive, where no pane identity is ever re-supplied for the token.
+      const state = JSON.stringify([
+        { id: 'pty-9', pid: process.pid, cols: 80, rows: 24, cwd: '/tmp', paneKey: 'tab-9:1' }
+      ])
+      await handler.dispose({ waitForPhysicalExit: false })
+      mockPtySpawn.mockClear()
+      dispatcher = createMockDispatcher()
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      await dispatcher.callRequest('pty.revive', { state })
+      const revivedEnv = (mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }).env
+      expect(revivedEnv.ORCA_PANE_KEY).toBe('tab-9:1')
+      expect(`token=${revivedEnv.ORCA_AGENT_LAUNCH_TOKEN}`).toBe('token=undefined')
+      expect(`tab=${revivedEnv.ORCA_TAB_ID}`).toBe('tab=undefined')
+      expect(`wt=${revivedEnv.ORCA_WORKTREE_ID}`).toBe('wt=undefined')
+    } finally {
+      killSpy.mockRestore()
+      for (const [key, value] of saved) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+  })
+
   it('fences both revived worktree identity and cwd with rollback', async () => {
     const finishSiblingAdmission = vi.fn()
     const beginWorktreePtySpawn = vi.fn((operationPath: string) => {
