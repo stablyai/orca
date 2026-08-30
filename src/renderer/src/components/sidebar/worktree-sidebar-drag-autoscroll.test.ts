@@ -3,6 +3,7 @@ import {
   getWorktreeSidebarDragAutoscroll,
   getWorktreeSidebarBoundaryDrop,
   getWorktreeSidebarDragRectsForGroup,
+  getWorktreeSidebarDragRectsForRows,
   refreshWorktreeSidebarDragSession,
   type WorktreeSidebarDragRect,
   type WorktreeSidebarDragSession
@@ -21,6 +22,7 @@ const SESSION: WorktreeSidebarDragSession = {
   draggedIds: ['b'],
   reorderDraggedIds: ['b'],
   reorderUnitDraggedIds: ['b'],
+  lineageSiblingReorder: null,
   rects: [{ worktreeId: 'b', groupIndex: 1, top: 48, bottom: 88 }],
   grab: null,
   anchor: null
@@ -133,6 +135,23 @@ describe('getWorktreeSidebarDragRectsForGroup', () => {
     expect(getWorktreeSidebarDragRectsForGroup(container, 'repo:one')).toEqual([
       { worktreeId: 'a', groupIndex: 0, top: 250, bottom: 290 },
       { worktreeId: 'b', groupIndex: 1, top: 310, bottom: 350 }
+    ])
+  })
+
+  it('indexes nested rects by host-qualified row key', () => {
+    const container = makeContainer([
+      makeDragElement('shared', 'repo:one', '0', 140, 180, undefined, 'host:local:shared'),
+      makeDragElement('shared', 'repo:one', '1', 90, 130, undefined, 'host:ssh:shared')
+    ])
+
+    expect(
+      getWorktreeSidebarDragRectsForRows(container, [
+        { rowKey: 'host:local:shared', worktreeId: 'local-child' },
+        { rowKey: 'host:ssh:shared', worktreeId: 'ssh-child' }
+      ])
+    ).toEqual([
+      { worktreeId: 'ssh-child', groupIndex: 1, top: 40, bottom: 80 },
+      { worktreeId: 'local-child', groupIndex: 0, top: 90, bottom: 130 }
     ])
   })
 })
@@ -268,13 +287,17 @@ function makeDragElement(
   groupIndex: string,
   top: number,
   bottom: number,
-  virtualRow?: { start: number; top: number }
+  virtualRow?: { start: number; top: number },
+  rowKey?: string
 ): HTMLElement {
   const attributes = new Map([
     ['data-worktree-drag-id', worktreeId],
     ['data-worktree-drag-group-key', groupKey],
     ['data-worktree-drag-group-index', groupIndex]
   ])
+  if (rowKey) {
+    attributes.set('data-worktree-row-key', rowKey)
+  }
   const virtualRowElement = virtualRow
     ? ({
         getAttribute: (name: string) =>

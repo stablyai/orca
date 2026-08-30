@@ -7,6 +7,7 @@ import {
   updateWorkspaceKanbanSidebarDropTargetVisual
 } from '../../workspace-kanban-sidebar-drop'
 import { updateSidebarDragPreviewPosition } from '../../worktree-sidebar-pointer-drag-dom'
+import type { WorktreeSidebarDropPreview } from '../../worktree-sidebar-drop-preview'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import {
@@ -72,6 +73,21 @@ function clearInsertionLine(args: WorktreePointerDragFrameArgs): void {
   args.setPinDragOver(false)
   args.setWorktreeDragState((prev) =>
     clearWorktreeDropPreview(prev, { pointerY: args.drag.currentY, matchPointerY: true })
+  )
+}
+function showReorderDrop(
+  args: WorktreePointerDragFrameArgs,
+  drop: WorktreeSidebarDropPreview
+): void {
+  args.drag.latestStatusDropTarget = null
+  clearWorkspaceKanbanSidebarDropTargetVisual()
+  args.setDragOverStatus(null)
+  args.setPinDragOver(false)
+  args.setWorktreeDragState((prev) =>
+    applyWorktreeDropPreview(prev, drop, {
+      pointerY: args.drag.currentY,
+      matchPointerY: true
+    })
   )
 }
 
@@ -143,6 +159,11 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     clearInsertionLine(args)
     return
   }
+  const lineageSiblingDrop = ctx.computeWorktreeLineageSiblingDrop(drag.currentY)
+  if (lineageSiblingDrop) {
+    showReorderDrop(args, lineageSiblingDrop)
+    return
+  }
   if (
     shouldPreferSidebarStatusDropTarget({
       sourceGroupKey: drag.sourceGroupKey,
@@ -159,11 +180,5 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     showStatusHoverWithoutInsertionLine(args, preferredStatusTarget)
     return
   }
-  drag.latestStatusDropTarget = null
-  clearWorkspaceKanbanSidebarDropTargetVisual()
-  args.setDragOverStatus(null)
-  args.setPinDragOver(false)
-  args.setWorktreeDragState((prev) =>
-    applyWorktreeDropPreview(prev, drop, { pointerY: drag.currentY, matchPointerY: true })
-  )
+  showReorderDrop(args, drop)
 }

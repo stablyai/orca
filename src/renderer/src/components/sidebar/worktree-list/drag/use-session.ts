@@ -23,6 +23,7 @@ import {
   type WorktreeSidebarDropPreview
 } from '../../worktree-sidebar-drop-preview'
 import { getWorktreeDragGroups, getWorktreeDragIndexes } from './groups'
+import { useWorktreeLineageSiblingDrag } from './use-lineage-sibling-session'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 
 export type WorktreeStatusDropRequest = {
@@ -89,6 +90,13 @@ export function useWorktreeDragSession(args: {
     () => getWorktreeDragIndexes(rows),
     [rows]
   )
+  const { getLineageSiblingReorder, computeLineageSiblingDrop: computeWorktreeLineageSiblingDrop } =
+    useWorktreeLineageSiblingDrag({
+      rows,
+      naturalWorktreeIds: naturalDragWorktreeIds,
+      scrollRef,
+      sessionRef: worktreeDragSessionRef
+    })
   const refreshWorktreeDragSession = useCallback((): boolean => {
     const session = worktreeDragSessionRef.current
     const container = scrollRef.current
@@ -225,14 +233,18 @@ export function useWorktreeDragSession(args: {
       groupIndexByRowKey,
       getReorderDraggedIds,
       getReorderUnitDraggedIds,
+      getLineageSiblingReorder,
       refreshWorktreeDragSession,
       computeWorktreeDrop,
-      computeWorktreeStatusDrop
+      computeWorktreeStatusDrop,
+      computeWorktreeLineageSiblingDrop
     }),
     [
       computeWorktreeDrop,
+      computeWorktreeLineageSiblingDrop,
       computeWorktreeStatusDrop,
       getReorderDraggedIds,
+      getLineageSiblingReorder,
       getReorderUnitDraggedIds,
       groupIndexByRowKey,
       groupKeyByRowKey,

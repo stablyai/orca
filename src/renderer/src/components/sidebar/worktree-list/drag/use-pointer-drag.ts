@@ -121,12 +121,16 @@ export function useWorktreePointerDrag(args: {
       drag.previewOffsetY = offsetY
       suppressWorktreeClickUntilRef.current = window.performance.now() + 500
       setSidebarPointerDragDocumentStyles(true)
+      const sourceRowKey = drag.sourceRow.getAttribute('data-worktree-row-key')
       session.worktreeDragSessionRef.current = {
         draggingWorktreeId: drag.worktreeId,
         sourceGroupKey: drag.sourceGroupKey,
         draggedIds: drag.draggedIds,
         reorderDraggedIds: drag.reorderDraggedIds,
         reorderUnitDraggedIds: drag.reorderUnitDraggedIds,
+        lineageSiblingReorder: sourceRowKey
+          ? session.getLineageSiblingReorder(sourceRowKey, drag.draggedIds)
+          : null,
         rects: drag.rects,
         // Why: reuse the floating preview's own offset so the hit test tracks the
         // card the user sees, not the raw pointer.

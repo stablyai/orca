@@ -7,33 +7,57 @@ import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-project
 import {
   getReorderedWorktreeIdsToUnnest,
   getWorktreeLineageDropTargetId,
+  getWorktreeLineageSiblingDropIndex,
   isWorktreeLineageDropZoneHit
 } from './worktree-lineage-drag-drop'
 
 describe('isWorktreeLineageDropZoneHit', () => {
-  it('keeps the top and bottom of a card available for reorder drops', () => {
+  it('keeps narrow top and bottom gutters available for reorder drops', () => {
     const rect = { top: 100, bottom: 200 } as DOMRect
 
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 120, rect })).toBe(false)
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 150, rect })).toBe(true)
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 180, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 115, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 116, rect })).toBe(true)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 184, rect })).toBe(true)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 185, rect })).toBe(false)
   })
 
-  it('caps the parent-drop band on tall cards', () => {
+  it('keeps the card interior available for nesting on tall cards', () => {
     const rect = { top: 0, bottom: 180 } as DOMRect
 
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 67, rect })).toBe(false)
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 90, rect })).toBe(true)
-    expect(isWorktreeLineageDropZoneHit({ pointerY: 113, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 15, rect })).toBe(false)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 16, rect })).toBe(true)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 164, rect })).toBe(true)
+    expect(isWorktreeLineageDropZoneHit({ pointerY: 165, rect })).toBe(false)
+  })
+})
+
+describe('getWorktreeLineageSiblingDropIndex', () => {
+  const rects = [
+    { groupIndex: 0, top: 100, bottom: 140 },
+    { groupIndex: 1, top: 150, bottom: 190 }
+  ]
+
+  it('returns only the explicit before and after gutters', () => {
+    expect(getWorktreeLineageSiblingDropIndex({ pointerY: 100, rects })).toBe(0)
+    expect(getWorktreeLineageSiblingDropIndex({ pointerY: 107, rects })).toBe(0)
+    expect(getWorktreeLineageSiblingDropIndex({ pointerY: 108, rects })).toBeNull()
+    expect(getWorktreeLineageSiblingDropIndex({ pointerY: 132, rects })).toBeNull()
+    expect(getWorktreeLineageSiblingDropIndex({ pointerY: 133, rects })).toBe(1)
+    expect(getWorktreeLineageSiblingDropIndex({ pointerY: 150, rects })).toBe(1)
+    expect(getWorktreeLineageSiblingDropIndex({ pointerY: 183, rects })).toBe(2)
+  })
+
+  it('does not turn the gap between sibling cards into an ambiguous drop target', () => {
+    expect(getWorktreeLineageSiblingDropIndex({ pointerY: 145, rects })).toBeNull()
   })
 })
 
 describe('getWorktreeLineageDropTargetId', () => {
-  it('returns the row id only when the pointer is in the card content middle band', () => {
+  it('returns the row id throughout the card interior, but not its reorder gutter', () => {
     const { container, target } = makeTarget({ worktreeId: 'parent', top: 100, bottom: 200 })
 
-    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 120 })).toBeNull()
-    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBe('parent')
+    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 110 })).toBeNull()
+    expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 120 })).toBe('parent')
   })
 
   it('ignores content targets outside the sidebar container', () => {

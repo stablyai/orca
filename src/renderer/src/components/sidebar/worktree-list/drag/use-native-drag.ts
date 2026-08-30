@@ -62,6 +62,7 @@ export function useWorktreeNativeDrag(args: {
         draggedIds,
         reorderDraggedIds,
         reorderUnitDraggedIds,
+        lineageSiblingReorder: null,
         rects,
         grab: getWorktreeSidebarDragGrab({
           offsetY: event.clientY - sourceRect.top,

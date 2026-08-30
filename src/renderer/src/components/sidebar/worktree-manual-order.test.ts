@@ -392,6 +392,32 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
     ])
   })
 
+  it('reorders one lineage sibling group without moving its parent or root peers', () => {
+    const result = buildManualOrderUpdatesForVisibleGroups({
+      groups: [
+        {
+          key: 'lineage-siblings:row:parent',
+          worktreeIds: ['child-a', 'child-b', 'child-c']
+        }
+      ],
+      sourceGroupKey: 'lineage-siblings:row:parent',
+      draggedIds: ['child-c'],
+      dropIndex: 0,
+      allWorktreeIds: ['parent', 'child-a', 'child-b', 'child-c', 'root-peer'],
+      now: 10_000,
+      rankByWorktreeId: new Map([
+        ['parent', 5000],
+        ['child-a', 4000],
+        ['child-b', 3000],
+        ['child-c', 2000],
+        ['root-peer', 1000]
+      ])
+    })
+
+    expect(result.orderedIds).toEqual(['child-c', 'child-a', 'child-b'])
+    expect(Array.from(result.updates)).toEqual([['child-c', { manualOrder: 10_000 }]])
+  })
+
   it('reorders a very large visible group without overflowing argument limits', () => {
     const ids = Array.from({ length: 130_000 }, (_, index) => `wt-${index}`)
     const rankByWorktreeId = new Map(

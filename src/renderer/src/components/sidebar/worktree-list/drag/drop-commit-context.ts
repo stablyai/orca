@@ -7,6 +7,7 @@ import type { WorktreeDragGroup } from '../../worktree-manual-order'
 import type { WorktreeDragUnitGroup } from '../../worktree-drag-units'
 import type { WorktreeSidebarDropPreview } from '../../worktree-sidebar-drop-preview'
 import type { WorktreeStatusDropRequest } from './use-session'
+import type { WorktreeLineageSiblingDrop } from './use-lineage-sibling-session'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 
 export const NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK = (): void => {}
@@ -25,6 +26,7 @@ export type WorktreeDropCommitContext = {
   worktreeDragGroups: readonly WorktreeDragGroup[]
   worktreeDragUnitGroups: readonly WorktreeDragUnitGroup[]
   computeWorktreeDrop: (pointerY: number) => WorktreeSidebarDropPreview | null
+  computeWorktreeLineageSiblingDrop: (pointerY: number) => WorktreeLineageSiblingDrop | null
   computeWorktreeStatusDrop: (
     request: WorktreeStatusDropRequest
   ) => WorktreeSidebarDropPreview | null

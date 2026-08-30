@@ -137,6 +137,9 @@ export function renderWorktreeItemRow(
     : undefined
   const worktreeDragGroupKey = ctx.groupKeyByRowKey.get(itemRow.rowKey)
   const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
+  const nestedPreviewOffset = nested
+    ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(itemRow.worktree.id) ?? 0)
+    : 0
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
     (ctx.worktreePointerDragRef.current?.latestStatusDropTarget?.target.lineageParentId ===
@@ -162,8 +165,10 @@ export function renderWorktreeItemRow(
       data-worktree-drag-group-key={worktreeDragGroupKey}
       data-worktree-drag-group-index={ctx.groupIndexByRowKey.get(itemRow.rowKey)}
       className={cn(
-        // Why: don't transition 'transform' — it lags/flashes when TanStack Virtual repositions adjacent rows.
-        'relative transition-[opacity,filter] duration-150 ease-out',
+        nested
+          ? 'relative transition-[opacity,filter,transform] duration-150 ease-out'
+          : // Why: top-level transforms come from TanStack Virtual; transitioning them lags adjacent rows.
+            'relative transition-[opacity,filter] duration-150 ease-out',
         ctx.worktreeDragState.draggingWorktreeId === itemRow.worktree.id &&
           // Why: the fixed drag preview is the affordance; a translucent source row would bleed through sticky headers/footers.
           'pointer-events-none opacity-0'
@@ -183,7 +188,8 @@ export function renderWorktreeItemRow(
         ctx.onRowPointerDown(event, itemRow.worktree, itemRow.rowKey)
       }}
       style={{
-        paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined
+        paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined,
+        transform: nestedPreviewOffset === 0 ? undefined : `translateY(${nestedPreviewOffset}px)`
       }}
     >
       <WorktreeCard

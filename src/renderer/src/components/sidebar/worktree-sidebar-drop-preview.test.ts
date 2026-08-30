@@ -25,6 +25,19 @@ describe('computeWorktreeSidebarDropPreview', () => {
       dropIndicatorY: 129
     })
   })
+  it('honors an exact lineage sibling gutter slot', () => {
+    expect(
+      computeWorktreeSidebarDropPreview({
+        pointerY: 90,
+        containerTop: 0,
+        scrollTop: 0,
+        rects,
+        groupIds: ['done-a', 'done-b'],
+        draggedIds: ['done-a'],
+        fixedDropIndex: 2
+      })
+    ).toMatchObject({ dropIndex: 2 })
+  })
 
   it('returns null outside the group boundary', () => {
     expect(

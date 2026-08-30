@@ -178,6 +178,8 @@ export function computeWorktreeSidebarDropPreview(args: {
   groupIds: readonly string[]
   draggedIds: readonly string[]
   draggingWorktreeId?: string | null
+  // A lineage sibling gutter already identifies the exact before/after slot.
+  fixedDropIndex?: number
   fallbackGap?: number
   // Where the card was grabbed, so the drop follows the card rather than the bare
   // pointer. Omitted for native HTML5 drags, which have no reliable grab offset.
@@ -220,11 +222,17 @@ export function computeWorktreeSidebarDropPreview(args: {
     return null
   }
 
+  const fixedDropIndex =
+    args.fixedDropIndex === undefined
+      ? null
+      : Math.max(0, Math.min(args.groupIds.length, args.fixedDropIndex))
   const heldIndex = args.anchor
     ? resolveWorktreeSidebarDropAnchorIndex({ anchor: args.anchor, groupIds: args.groupIds })
     : null
   let dropIndex: number
-  if (heldIndex !== null) {
+  if (fixedDropIndex !== null) {
+    dropIndex = fixedDropIndex
+  } else if (heldIndex !== null) {
     dropIndex = heldIndex
   } else if (boundaryDrop.kind === 'drop') {
     dropIndex = boundaryDrop.dropIndex

@@ -22,6 +22,15 @@ export type WorktreeSidebarDragRect = {
   top: number
   bottom: number
 }
+export type WorktreeSidebarDragRowIdentity = { rowKey: string; worktreeId: string }
+
+export type WorktreeLineageSiblingReorder = {
+  key: string
+  rows: readonly WorktreeSidebarDragRowIdentity[]
+  worktreeIds: readonly string[]
+  draggedIds: readonly string[]
+  rects: readonly WorktreeSidebarDragRect[]
+}
 
 export type WorktreeSidebarDragSession = {
   draggingWorktreeId: string
@@ -29,6 +38,7 @@ export type WorktreeSidebarDragSession = {
   draggedIds: readonly string[]
   reorderDraggedIds: readonly string[]
   reorderUnitDraggedIds: readonly string[]
+  lineageSiblingReorder: WorktreeLineageSiblingReorder | null
   // Why: one live coordinate space for both hit testing and rendering. Stability
   // against mid-drag card resizes comes from holding the drop *decision*
   // (`anchor`), not from freezing this geometry.
@@ -129,16 +139,41 @@ export function getWorktreeSidebarDragRectsForGroup(
   container: HTMLElement,
   groupKey: string
 ): WorktreeSidebarDragRect[] {
-  const containerRect = container.getBoundingClientRect()
-  const rects: WorktreeSidebarDragRect[] = []
-  container.querySelectorAll<HTMLElement>('[data-worktree-drag-id]').forEach((element) => {
+  return getWorktreeSidebarDragRects(container, (element) => {
     if (element.getAttribute('data-worktree-drag-group-key') !== groupKey) {
-      return
+      return null
     }
     const worktreeId = element.getAttribute('data-worktree-drag-id')
     const rawGroupIndex = element.getAttribute('data-worktree-drag-group-index')
     const groupIndex = rawGroupIndex === null ? Number.NaN : Number(rawGroupIndex)
-    if (!worktreeId || !Number.isFinite(groupIndex)) {
+    return worktreeId && Number.isFinite(groupIndex) ? { worktreeId, groupIndex } : null
+  })
+}
+
+export function getWorktreeSidebarDragRectsForRows(
+  container: HTMLElement,
+  rows: readonly WorktreeSidebarDragRowIdentity[]
+): WorktreeSidebarDragRect[] {
+  const identityByRowKey = new Map(
+    rows.map((row, groupIndex) => [row.rowKey, { worktreeId: row.worktreeId, groupIndex }])
+  )
+  return getWorktreeSidebarDragRects(container, (element) => {
+    const rowKey = element.getAttribute('data-worktree-row-key')
+    return rowKey === null ? null : (identityByRowKey.get(rowKey) ?? null)
+  })
+}
+
+function getWorktreeSidebarDragRects(
+  container: HTMLElement,
+  getIdentity: (
+    element: HTMLElement
+  ) => Pick<WorktreeSidebarDragRect, 'worktreeId' | 'groupIndex'> | null
+): WorktreeSidebarDragRect[] {
+  const containerRect = container.getBoundingClientRect()
+  const rects: WorktreeSidebarDragRect[] = []
+  container.querySelectorAll<HTMLElement>('[data-worktree-row-key]').forEach((element) => {
+    const identity = getIdentity(element)
+    if (!identity) {
       return
     }
     const rect = element.getBoundingClientRect()
@@ -149,8 +184,7 @@ export function getWorktreeSidebarDragRectsForGroup(
         ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
         : rect.top - containerRect.top + container.scrollTop
     rects.push({
-      worktreeId,
-      groupIndex,
+      ...identity,
       // Why: drop previews animate via row transforms. Anchor hit-testing to
       // the virtual row's static slot so animated offsets cannot perturb it.
       top,

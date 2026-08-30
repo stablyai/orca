@@ -5,10 +5,15 @@ import { getLineageRenderInfo } from './worktree-lineage-projection'
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-parent-content]'
 const WORKTREE_DRAG_ROW_SELECTOR = '[data-worktree-drag-id]'
 
-const LINEAGE_DROP_ZONE_RATIO = 0.4
-const LINEAGE_DROP_ZONE_MAX_HEIGHT_PX = 44
+const LINEAGE_REORDER_GUTTER_MAX_PX = 16
+const LINEAGE_REORDER_GUTTER_RATIO = 0.2
 
 type VerticalRect = Pick<DOMRect, 'top' | 'bottom'>
+type IndexedVerticalRect = VerticalRect & { groupIndex: number }
+
+function getLineageReorderGutterHeight(height: number): number {
+  return Math.min(LINEAGE_REORDER_GUTTER_MAX_PX, height * LINEAGE_REORDER_GUTTER_RATIO)
+}
 
 export function isWorktreeLineageDropZoneHit(args: {
   pointerY: number
@@ -19,10 +24,28 @@ export function isWorktreeLineageDropZoneHit(args: {
     return false
   }
 
-  const zoneHeight = Math.min(height * LINEAGE_DROP_ZONE_RATIO, LINEAGE_DROP_ZONE_MAX_HEIGHT_PX)
-  const zoneTop = args.rect.top + (height - zoneHeight) / 2
-  const zoneBottom = args.rect.bottom - (height - zoneHeight) / 2
-  return args.pointerY >= zoneTop && args.pointerY <= zoneBottom
+  const gutter = getLineageReorderGutterHeight(height)
+  return args.pointerY >= args.rect.top + gutter && args.pointerY <= args.rect.bottom - gutter
+}
+
+export function getWorktreeLineageSiblingDropIndex(args: {
+  pointerY: number
+  rects: readonly IndexedVerticalRect[]
+}): number | null {
+  for (const rect of args.rects) {
+    const height = Math.max(0, rect.bottom - rect.top)
+    if (height <= 0) {
+      continue
+    }
+    const gutter = getLineageReorderGutterHeight(height)
+    if (args.pointerY >= rect.top && args.pointerY < rect.top + gutter) {
+      return rect.groupIndex
+    }
+    if (args.pointerY > rect.bottom - gutter && args.pointerY <= rect.bottom) {
+      return rect.groupIndex + 1
+    }
+  }
+  return null
 }
 
 export function getWorktreeLineageDropTargetId(args: {

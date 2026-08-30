@@ -95,6 +95,22 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       ctx.clearWorktreeDrag()
       return
     }
+    const lineageSiblingDrop = ctx.computeWorktreeLineageSiblingDrop(event.clientY)
+    if (lineageSiblingDrop) {
+      ctx.onReorderWorktrees({
+        groups: [
+          {
+            key: lineageSiblingDrop.groupKey,
+            worktreeIds: lineageSiblingDrop.worktreeIds
+          }
+        ],
+        sourceGroupKey: lineageSiblingDrop.groupKey,
+        draggedIds: lineageSiblingDrop.draggedIds,
+        dropIndex: lineageSiblingDrop.dropIndex
+      })
+      ctx.clearWorktreeDrag()
+      return
+    }
     if (
       shouldPreferSidebarStatusDropTarget({
         sourceGroupKey: drag.sourceGroupKey,
