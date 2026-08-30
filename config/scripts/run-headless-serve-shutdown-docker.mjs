@@ -77,6 +77,7 @@ try {
     '-lc',
     [
       'trap \'status=$?; if [ "$status" -ne 0 ]; then cat /artifacts/appimage-help.log /artifacts/appimage-extract.log 2>/dev/null || true; fi; exit "$status"\' EXIT',
+      'test -r /input/orca.AppImage && test -x /input/orca.AppImage || { echo "FAIL: AppImage bind must be readable and executable" >&2; exit 1; }',
       'timeout --kill-after=5s 15s /input/orca.AppImage --appimage-help > /artifacts/appimage-help.log 2>&1',
       'cd /artifacts',
       'timeout --kill-after=10s 120s /input/orca.AppImage --appimage-extract > /artifacts/appimage-extract.log 2>&1',

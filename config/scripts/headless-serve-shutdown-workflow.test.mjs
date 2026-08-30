@@ -140,6 +140,15 @@ describe('headless serve shutdown PR gate', () => {
     )
   })
 
+  it('requires the bound AppImage to be executable before launch and extraction', () => {
+    expect(desktopStartupOracle).toContain(
+      '[[ -x "$appimage" ]] || { echo "FAIL: AppImage is not executable: $appimage" >&2; exit 1; }'
+    )
+    expect(shutdownDockerRunner).toContain(
+      '\'test -r /input/orca.AppImage && test -x /input/orca.AppImage || { echo "FAIL: AppImage bind must be readable and executable" >&2; exit 1; }\''
+    )
+  })
+
   it('gives the original AppImage enough bounded extraction space', () => {
     expect(shutdownDockerRunner).toContain("'/tmp:rw,nosuid,nodev,exec,size=1g'")
   })

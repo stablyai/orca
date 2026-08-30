@@ -209,6 +209,7 @@ export ORCA_STARTUP_DIAGNOSTICS=1
 ulimit -c 0
 
 [[ -r "$appimage" ]] || { echo "FAIL: AppImage is not readable: $appimage" >&2; exit 1; }
+[[ -x "$appimage" ]] || { echo "FAIL: AppImage is not executable: $appimage" >&2; exit 1; }
 
 setsid --wait dbus-run-session -- xvfb-run -a "$appimage" --appimage-extract-and-run --no-sandbox \
   >"$stdout_log" 2>"$stderr_log" &

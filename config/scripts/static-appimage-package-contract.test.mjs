@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -75,6 +75,20 @@ describe('static AppImage package contract', () => {
       'unsupported artifact name'
     )
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects a readable but non-executable AppImage',
+    async () => {
+      await withFixture(
+        'orca-linux.AppImage',
+        createRuntime(),
+        (path) => {
+          expect(() => verifyStaticAppImagePackage(path, 1)).toThrow(/not executable/)
+        },
+        { mode: 0o644 }
+      )
+    }
+  )
 
   it.each([
     [
@@ -198,11 +212,12 @@ function writeProgramHeader(
   runtime.writeBigUInt64LE(BigInt(alignment), headerOffset + 48)
 }
 
-async function withFixture(filename, contents, check) {
+async function withFixture(filename, contents, check, { mode = 0o755 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-static-appimage-contract-'))
   try {
     const path = join(root, filename)
     await writeFile(path, contents)
+    await chmod(path, mode)
     await check(path)
   } finally {
     await rm(root, { recursive: true, force: true })

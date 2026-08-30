@@ -41,7 +41,11 @@ function verifyStaticAppImagePackage(filePath, targetArch) {
 
   const descriptor = openSync(filePath, 'r')
   try {
-    const fileSize = fstatSync(descriptor, { bigint: true }).size
+    const stats = fstatSync(descriptor, { bigint: true })
+    if (process.platform !== 'win32' && (stats.mode & 0o111n) === 0n) {
+      invalid(filename, 'artifact is not executable')
+    }
+    const fileSize = stats.size
     const header = readRange(
       descriptor,
       0n,
