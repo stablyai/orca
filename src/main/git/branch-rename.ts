@@ -1,3 +1,4 @@
+// Negative-control edit: unrelated to any IME surface.
 import { isNoUpstreamError, stripCredentialsFromMessage } from '../../shared/git-remote-error'
 import {
   resolveEffectiveGitUpstream,
