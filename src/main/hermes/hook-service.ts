@@ -1,7 +1,7 @@
-import { rmSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import {
   readTextFileRemote,
   writeTextFileRemoteAtomic
@@ -152,7 +152,8 @@ export class HermesHookService {
     }
     const pluginDir = getPluginDir()
     if (getPluginFilesState(pluginDir).managed) {
-      rmSync(pluginDir, { recursive: true, force: true })
+      // A throw here skips the config rewrite below, leaving the hook enabled after the user removed it.
+      removeTreeSync(pluginDir)
     }
     writeConfigFile(configPath, disablePlugin(parsed.config))
     return this.getStatus()

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { findRawRecursiveRemovals } from '../shared/raw-recursive-removal-scan'
+import { readSourceRegionBody } from '../shared/source-region-body'
 import {
   WINDOWS_RM_MAX_RETRIES,
   transientLockRemovalOptions
@@ -80,28 +81,36 @@ const USER_FACING_DELETIONS: UserFacingDeletion[] = [
     file: 'src/cli/handlers/account.ts',
     region: 'async function cleanupClaudeLoginArtifacts',
     deletes: "a removed account's config directory"
+  },
+  {
+    file: 'src/cli/handlers/account.ts',
+    region: 'async function addCodexAccount',
+    deletes: 'the temporary CODEX_HOME an interrupted login left behind'
+  },
+  {
+    file: 'src/main/claude-accounts/claude-login-session.ts',
+    region: 'async function removeTemporaryClaudeConfigDir',
+    deletes: 'the temporary Claude config directory a login wrote into'
+  },
+  // Both halves of one gesture: the file explorer's confirmed permanent delete. The renderer routes
+  // it to the runtime host, and a relay host serves it from the other side of the wire.
+  {
+    file: 'src/main/runtime/orca-runtime-files.ts',
+    region: 'async deleteFileExplorerPath',
+    deletes: 'a file or folder the user deleted from the file explorer'
+  },
+  {
+    file: 'src/relay/fs-path-mutation-requests.ts',
+    region: 'export async function deleteRelayPath',
+    deletes: 'that same file explorer delete, on a relay host'
   }
 ]
 
-/** The body of `region` in `source`, from its signature to the brace that closes it. */
+/** The body of `region` in `source`, or a failed expectation naming the region that moved. */
 function readRegion(source: string, region: string): string {
-  const start = source.indexOf(region)
-  expect(start, `region "${region}" is gone; re-point this guard at its new name`).toBeGreaterThan(
-    -1
-  )
-  const open = source.indexOf('{', start)
-  let depth = 0
-  for (let i = open; i < source.length; i += 1) {
-    if (source[i] === '{') {
-      depth += 1
-    } else if (source[i] === '}') {
-      depth -= 1
-      if (depth === 0) {
-        return source.slice(start, i + 1)
-      }
-    }
-  }
-  throw new Error(`region "${region}" never closes`)
+  const body = readSourceRegionBody(source, region)
+  expect(body, `region "${region}" is gone; re-point this guard at its new name`).not.toBeNull()
+  return body ?? ''
 }
 
 describe('user-facing deletions carry the Windows removal policy', () => {
@@ -121,14 +130,15 @@ describe('user-facing deletions carry the Windows removal policy', () => {
     }
   )
 
-  it('the region reader returns a real body rather than an empty string', () => {
-    // Without this every assertion above passes for a region that matched nothing.
-    const body = readRegion(
-      readFileSync(join(REPO_ROOT, 'src/main/speech/model-manager.ts'), 'utf8'),
-      'async deleteModel'
-    )
-    expect(body).toContain('removeTree')
-    expect(body.length).toBeGreaterThan(100)
+  it('every named region reads back a real body', () => {
+    // Without this, every assertion above passes for a region whose body was read short — which a
+    // signature like `): Promise<{ ok: true }> {` did until the reader learned to skip return types.
+    for (const { file, region } of USER_FACING_DELETIONS) {
+      const body = readRegion(readFileSync(join(REPO_ROOT, file), 'utf8'), region)
+      expect(body.length, `${file}#${region}`).toBeGreaterThan(100)
+      // `removeTree` is passed by reference in one region, so match the name rather than a call.
+      expect(body, `${file}#${region}`).toMatch(/removeTree(Sync)?\b|transientLockRemovalOptions\(/)
+    }
   })
 
   it('the scan still reports a region that forgot the retries', () => {

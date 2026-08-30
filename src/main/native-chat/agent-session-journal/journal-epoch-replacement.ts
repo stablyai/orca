@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { join } from 'node:path'
 import { copyFileDurable } from '../../durable-file-write'
+import { removeTree } from '../../../shared/windows-transient-lock-removal'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -87,7 +88,8 @@ export async function replaceJournalEpoch(input: {
     })
     await publishPreparedFile(stagingDir, input.journalDir, JOURNAL_LOG_FILE)
   } finally {
-    await rm(stagingDir, { recursive: true, force: true })
+    // The epoch is published by now; a scratch removal must not turn that into a rejection.
+    await removeTree(stagingDir)
   }
 }
 

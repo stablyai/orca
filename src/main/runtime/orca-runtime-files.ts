@@ -20,6 +20,7 @@ import {
 import { homedir, tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import { transientLockRemovalOptions } from '../../shared/windows-transient-lock-removal'
 import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import {
@@ -2122,7 +2123,8 @@ export class RuntimeFileCommands {
       preserveSymlink: true
     })
     // Why: a non-local runtime has no client Trash; this delete is permanent, so the renderer confirms before calling.
-    await rm(targetPath, { recursive: recursive === true, force: true })
+    // The retry policy is spread rather than removeTree'd because this delete is only recursive on request.
+    await rm(targetPath, { ...transientLockRemovalOptions(), recursive: recursive === true })
     return { ok: true }
   }
 

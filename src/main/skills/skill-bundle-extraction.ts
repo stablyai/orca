@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, open, readFile, rm } from 'node:fs/promises'
+import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   AGENT_PLUGIN_MANIFEST_PATH,
@@ -15,6 +15,7 @@ import {
 } from '../../shared/skill-package-manifest'
 import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../shared/skill-install-failure'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { observeSkillPackage } from './skill-package-identity'
 import {
   openSkillTarGzip,
@@ -256,7 +257,8 @@ export async function extractSkillBundleArchive(input: {
     archive.abort(failure)
     await archive.archiveIdentity.catch(() => undefined)
     if (destinationCreated) {
-      await rm(input.destinationDirectory, { recursive: true, force: true })
+      // Rolling back must not replace the failure the caller needs to see.
+      await removeTree(input.destinationDirectory)
     }
     throw failure
   }

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
@@ -249,7 +249,7 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
   const result = await withInteractiveLoginCleanup(
     session,
     async () => {
-      rmSync(codexHome, { recursive: true, force: true })
+      removeTreeSync(codexHome)
     },
     async () => {
       // Why: plain OAuth binds a loopback callback the user's browser cannot reach

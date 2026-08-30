@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 export type ServeSimRuntimeMaterializerOptions = {
   bundledPackageDir: string
@@ -67,8 +68,10 @@ export function materializeServeSimRuntime(
   try {
     mkdirSync(targetRootDir, { recursive: true })
     pruneStaleServeSimRuntimes(targetRootDir, version)
-    rmSync(stagingDir, { recursive: true, force: true })
-    rmSync(targetDir, { recursive: true, force: true })
+    removeTreeSync(stagingDir)
+    // Why the shared policy: a half-materialized targetDir Windows still holds can never be renamed
+    // over, so serve-sim stays permanently unavailable on that machine.
+    removeTreeSync(targetDir)
     cpSync(bundledPackageDir, stagingDir, { recursive: true })
     for (const relativePath of EXECUTABLE_RELATIVE_PATHS) {
       const executablePath = join(stagingDir, relativePath)
@@ -89,6 +92,7 @@ export function materializeServeSimRuntime(
   } catch {
     return null
   } finally {
-    rmSync(stagingDir, { recursive: true, force: true })
+    // A throw here would escape a function whose contract is `string | null`.
+    removeTreeSync(stagingDir)
   }
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, opendir, rm } from 'node:fs/promises'
+import { lstat, mkdir, opendir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 
 const OWNER_DIRECTORY_PREFIX = 'owner-'
 const OWNER_DIRECTORY_PATTERN =
@@ -36,7 +37,7 @@ export class SkillUploadStagingOwnership {
   }
 
   async remove(): Promise<void> {
-    await rm(this.directory, { recursive: true, force: true })
+    await removeTree(this.directory)
   }
 
   private async cleanupAbandonedOwners(): Promise<void> {
@@ -55,7 +56,8 @@ export class SkillUploadStagingOwnership {
         const candidate = join(this.root, entry.name)
         const stats = await lstat(candidate).catch(() => null)
         if (stats?.isDirectory() && !stats.isSymbolicLink()) {
-          await rm(candidate, { recursive: true, force: true })
+          // This sweep gates initialize(), so one locked orphan would block every upload.
+          await removeTree(candidate)
         }
       }
     } finally {

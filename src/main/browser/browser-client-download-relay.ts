@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, rmSync } from 'node:fs'
-import { open, rm, stat } from 'node:fs/promises'
+import { mkdirSync } from 'node:fs'
+import { open, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { removeTree, removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 import {
   BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES,
@@ -54,7 +55,7 @@ const nodeRelayFilesystem: RelayFilesystem = {
     mkdirSync(directory, { recursive: true, mode: 0o700 })
   },
   removeDirectorySync: (directory) => {
-    rmSync(directory, { recursive: true, force: true })
+    removeTreeSync(directory)
   },
   readChunks: async function* (filePath, chunkBytes) {
     const handle = await open(filePath, 'r')
@@ -73,7 +74,7 @@ const nodeRelayFilesystem: RelayFilesystem = {
   },
   size: async (filePath) => (await stat(filePath)).size,
   removeDirectory: async (directory) => {
-    await rm(directory, { recursive: true, force: true })
+    await removeTree(directory)
   }
 }
 

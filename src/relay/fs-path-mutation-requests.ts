@@ -1,6 +1,7 @@
 import { writeFile, stat, lstat, mkdir, rename, cp, rm } from 'node:fs/promises'
 import { expandTilde } from './context'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
+import { transientLockRemovalOptions } from '../shared/windows-transient-lock-removal'
 import type { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 
 export async function writeRelayFile(params: Record<string, unknown>) {
@@ -29,7 +30,7 @@ export async function deleteRelayPath(
   if (stats.isDirectory() && !recursive) {
     throw new Error('Cannot delete directory without recursive flag')
   }
-  const remove = () => rm(targetPath, { recursive: !!recursive, force: true })
+  const remove = () => rm(targetPath, { ...transientLockRemovalOptions(), recursive: !!recursive })
   if (stats.isDirectory()) {
     // Why: forced orphan cleanup bypasses git.removeWorktree but must hold
     // the same relay-wide watcher fence through recursive deletion.

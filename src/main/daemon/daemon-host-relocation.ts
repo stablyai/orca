@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { quarantineCorruptDaemonPidRecord } from './daemon-pid-record-quarantine'
@@ -272,7 +273,7 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   const staging = join(root, `${version}.staging-${randomBytes(6).toString('hex')}`)
   try {
     mkdirSync(root, { recursive: true })
-    rmSync(staging, { recursive: true, force: true })
+    removeTreeSync(staging)
     executeManifest(buildDaemonHostManifest(sources), staging)
     // Marker written LAST so an interrupted copy leaves a marker-less staging dir the next launch discards.
     const marker: MaterializeMarker = {
@@ -281,12 +282,13 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
       entryRelPath: sources.entryRelPath
     }
     writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
-    // Replace any stale/partial dest, then publish the staging dir atomically.
-    rmSync(dest, { recursive: true, force: true })
+    // Replace any stale/partial dest, then publish the staging dir atomically. The retry policy is
+    // load-bearing: a dest Windows still holds makes the rename below fail and relocation give up.
+    removeTreeSync(dest)
     renameSync(staging, dest)
   } catch {
     try {
-      rmSync(staging, { recursive: true, force: true })
+      removeTreeSync(staging)
     } catch {
       // Best-effort staging cleanup.
     }

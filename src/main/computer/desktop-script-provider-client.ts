@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
@@ -20,6 +20,7 @@ import {
 } from './desktop-script-action'
 import { validateComputerProviderActionParams } from './computer-provider-action-validation'
 import { execBridge, mapBridgeError } from './desktop-script-provider-bridge'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import {
   optionalNumberParam,
   optionalStringParam,
@@ -222,7 +223,8 @@ export class DesktopScriptProviderClient {
       }
       return response
     } finally {
-      await rm(operationDirectory, { force: true, recursive: true })
+      // This provider runs on Linux and Windows only, so the retry policy is live here.
+      await removeTree(operationDirectory)
     }
   }
 

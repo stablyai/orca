@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, realpath } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
@@ -140,7 +140,7 @@ export async function installPluginFromGit(input: {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {
-      await rm(stagingDir, { recursive: true, force: true })
+      await removeTree(stagingDir)
     }
   })
 }
@@ -189,7 +189,7 @@ export async function installPluginFromMarketplace(input: {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {
-      await rm(stagingDir, { recursive: true, force: true })
+      await removeTree(stagingDir)
     }
   })
 }

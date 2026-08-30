@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, open, readFile, rm } from 'node:fs/promises'
+import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   SKILL_PACKAGE_MAX_MANIFEST_BYTES,
@@ -8,6 +8,7 @@ import {
   type SkillPackageManifestV1
 } from '../../shared/skill-package-manifest'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type { ObservedSkillPackage } from './skill-package-identity'
 import {
   openSkillTarGzip,
@@ -227,7 +228,8 @@ export async function extractSkillPackageArchive(input: {
     archive.abort(failure)
     await archive.archiveIdentity.catch(() => undefined)
     if (destinationCreated) {
-      await rm(input.destinationDirectory, { recursive: true, force: true })
+      // Rolling back must not replace the failure the caller needs to see.
+      await removeTree(input.destinationDirectory)
     }
     throw failure
   }

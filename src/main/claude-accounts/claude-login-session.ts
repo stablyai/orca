@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { toWindowsWslPath } from '../wsl'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { runWslProcess } from '../wsl/wsl-runner'
 import type { CapturedClaudeAuth } from './claude-auth-capture'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
@@ -138,5 +139,6 @@ async function removeTemporaryClaudeConfigDir(config: ClaudeCommandConfig): Prom
     }
     return
   }
-  rmSync(config.windowsPath, { recursive: true, force: true })
+  // This branch is the Windows one by construction, and the directory holds login material.
+  removeTreeSync(config.windowsPath)
 }

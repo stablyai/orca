@@ -1,9 +1,10 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
 import { getUserPluginsDir } from './plugin-discovery'
 import { checkoutPluginGitSource } from './plugin-git-repository'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import {
   installPluginFromMarketplace,
   readPluginLockfile,
@@ -93,7 +94,7 @@ export class PluginMarketplaceInstaller {
         ...(listing.blockedByKillList ? { blockedByKillList: listing.blockedByKillList } : {})
       }
     } finally {
-      await rm(stagingDirectory, { recursive: true, force: true })
+      await removeTree(stagingDirectory)
     }
   }
 

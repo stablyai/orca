@@ -1,5 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
-import { chmod, mkdir, mkdtemp, open, readdir, rm } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, open, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   SKILL_PACKAGE_CONTENT_TYPE,
@@ -11,6 +11,7 @@ import {
   throwIfSkillDownloadUnavailable
 } from './skill-package-download-availability'
 import { startSkillPhaseOperation } from './skill-operation-observability'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const MAX_REDIRECTS = 3
@@ -146,7 +147,8 @@ async function prepareTemporaryRoot(path: string): Promise<string> {
             : null
           const pid = Number(match?.[1])
           if (match && Number.isSafeInteger(pid) && !processIsAlive(pid)) {
-            await rm(join(path, entry.name), { recursive: true, force: true })
+            // A dead process's leftover directory must not fail this process's download.
+            await removeTree(join(path, entry.name))
           }
         })
       )
@@ -269,10 +271,10 @@ async function downloadSkillPackageGrantUnobserved(
         archivePath,
         archiveSha256,
         compressedBytes,
-        cleanup: () => rm(temporaryDirectory, { recursive: true, force: true })
+        cleanup: () => removeTree(temporaryDirectory)
       }
     } catch (error) {
-      await rm(temporaryDirectory, { recursive: true, force: true })
+      await removeTree(temporaryDirectory)
       throw error
     }
   } finally {

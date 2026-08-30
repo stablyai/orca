@@ -9,6 +9,7 @@ import {
   type SkillPackageManifestV1
 } from '../../shared/skill-package-manifest'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
 import { startSkillPhaseOperation } from './skill-operation-observability'
 import {
@@ -129,7 +130,7 @@ async function createSkillPackageArchiveUnobserved(
     await renameSkillPathWithWindowsRetry(temporaryArchive, input.archivePath)
     return { manifest, archivePath: input.archivePath, ...archiveIdentity }
   } finally {
-    await rm(workDirectory, { recursive: true, force: true })
+    await removeTree(workDirectory)
     await rm(temporaryArchive, { force: true }).catch(() => undefined)
   }
 }

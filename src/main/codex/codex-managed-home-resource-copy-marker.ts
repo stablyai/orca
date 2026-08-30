@@ -1,5 +1,6 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 /**
  * Ownership markers for system Codex resources a managed home had to copy.
@@ -45,10 +46,7 @@ function readCopiedResourceSourcePath(managedHomePath: string, entryName: string
 export function clearCopiedResourceMarker(managedHomePath: string, entryName: string): void {
   // Why: a malformed marker directory must not block Codex launch or prevent
   // an owned resource from being repaired.
-  rmSync(getResourceCopyMarkerPath(managedHomePath, entryName), {
-    recursive: true,
-    force: true
-  })
+  removeTreeSync(getResourceCopyMarkerPath(managedHomePath, entryName))
 }
 
 export function targetIsOwnedFallbackCopy(

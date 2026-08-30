@@ -5,7 +5,6 @@ import {
   readFileSync,
   readlinkSync,
   rmdirSync,
-  rmSync,
   statSync,
   symlinkSync,
   unlinkSync
@@ -18,6 +17,7 @@ import {
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
 import { observe, observeResolvedPathEntry } from './codex-path-observation'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -151,7 +151,7 @@ function linkSystemCodexResource(
         return
       }
     }
-    rmSync(targetPath, { recursive: true, force: true })
+    removeTreeSync(targetPath)
   }
 
   if (preferCopy) {
@@ -189,7 +189,9 @@ function copySystemCodexResourceAsOwnedFallback(
   symlinkError?: unknown
 ): void {
   try {
-    rmSync(targetPath, { recursive: true, force: true })
+    // Why the shared policy: the copy below is errorOnExist, so a target Windows
+    // still holds leaves Codex running against the stale mirrored resource.
+    removeTreeSync(targetPath)
     cpSync(sourcePath, targetPath, {
       recursive: true,
       force: false,
@@ -203,7 +205,7 @@ function copySystemCodexResourceAsOwnedFallback(
     // Why: an unmarked copy cannot be refreshed or safely removed later.
     // Roll it back instead of stranding stale instructions in the runtime home.
     try {
-      rmSync(targetPath, { recursive: true, force: true })
+      removeTreeSync(targetPath)
     } catch (cleanupError) {
       console.warn(
         '[codex-home] Failed to remove incomplete resource copy:',
@@ -270,7 +272,7 @@ function removeCopiedResourceIfOwned(
   if (!targetIsOwnedFallbackCopy(targetPath, managedHomePath, entryName, sourcePath)) {
     return
   }
-  rmSync(targetPath, { recursive: true, force: true })
+  removeTreeSync(targetPath)
   clearCopiedResourceMarker(managedHomePath, entryName)
 }
 

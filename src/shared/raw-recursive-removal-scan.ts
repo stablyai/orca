@@ -61,7 +61,8 @@ export function findRawRecursiveRemovals(source: string): number[] {
     if (!args.includes('recursive')) {
       continue
     }
-    if (args.includes('maxRetries')) {
+    // The shared policy helper *is* the retry count, so a call spreading it is not an offender.
+    if (args.includes('maxRetries') || args.includes('transientLockRemovalOptions')) {
       continue
     }
     offenders.push(source.slice(0, match.index).split('\n').length)

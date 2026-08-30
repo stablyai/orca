@@ -12,10 +12,10 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  rmSync,
   unlinkSync
 } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -1424,7 +1424,7 @@ async function importCookiesFromFirefox(
       }
     }
   } catch {
-    rmSync(tmpDir, { recursive: true, force: true })
+    removeTreeSync(tmpDir)
     return {
       ok: false,
       reason: 'Could not copy Firefox cookies database. Try closing Firefox first.'
@@ -1463,7 +1463,7 @@ async function importCookiesFromFirefox(
 
     diag(`  Firefox source has ${rows.length} cookies`)
     if (rows.length === 0) {
-      rmSync(tmpDir, { recursive: true, force: true })
+      removeTreeSync(tmpDir)
       return { ok: false, reason: 'No cookies found in Firefox.' }
     }
 
@@ -1498,7 +1498,7 @@ async function importCookiesFromFirefox(
       })
     }
 
-    rmSync(tmpDir, { recursive: true, force: true })
+    removeTreeSync(tmpDir)
 
     if (validated.length === 0) {
       return { ok: false, reason: 'No valid cookies found in Firefox.' }
@@ -1512,7 +1512,7 @@ async function importCookiesFromFirefox(
       options
     )
   } catch (err) {
-    rmSync(tmpDir, { recursive: true, force: true })
+    removeTreeSync(tmpDir)
     diag(`  Firefox import failed: ${String(err)}`)
     return {
       ok: false,

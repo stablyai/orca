@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type {
   RuntimeBrowserCommandHost,
   RuntimeBrowserCommands
@@ -185,7 +186,8 @@ export class ElectronServeBrowserProcess {
       }
     }
     if (sidecarDataPath) {
-      await rm(sidecarDataPath, { recursive: true, force: true })
+      // The sidecar was only just SIGKILLed, which is exactly when Windows still holds its profile.
+      await removeTree(sidecarDataPath)
     }
   }
 
