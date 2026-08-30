@@ -41,28 +41,35 @@ test.describe('Window drag with terminal focus', () => {
       .toBe(true)
 
     const dragRegions = await orcaPage.evaluate((selectors) => {
-      return selectors.map((selector) => {
-        const element = document.querySelector<HTMLElement>(selector)
-        if (!element) {
-          return { selector, appRegion: 'missing', userSelect: 'missing' }
+      // Why: assert every match, not just the first — the split layout's 4px
+      // strip precedes the tab rows, so checking one element would pass while
+      // the row the user actually grabs went back to no-drag.
+      return selectors.flatMap((selector) => {
+        const elements = [...document.querySelectorAll<HTMLElement>(selector)]
+        if (elements.length === 0) {
+          return [{ selector, appRegion: 'missing', userSelect: 'missing' }]
         }
-        const style = getComputedStyle(element)
-        return {
-          selector,
-          appRegion: style.getPropertyValue('-webkit-app-region').trim(),
-          userSelect: style.userSelect
-        }
+        return elements.map((element) => {
+          const style = getComputedStyle(element)
+          return {
+            selector,
+            appRegion: style.getPropertyValue('-webkit-app-region').trim(),
+            userSelect: style.userSelect
+          }
+        })
       })
     }, DRAG_SURFACE_SELECTORS)
 
-    expect(dragRegions).toEqual(
-      DRAG_SURFACE_SELECTORS.map((selector) => ({
-        selector,
-        appRegion: 'drag',
-        // Why: the press is only swallowed by the OS caption while the region is
-        // draggable; `none` keeps a stray press from starting a selection.
-        userSelect: 'none'
-      }))
+    // Why: a selector that matches nothing must fail loudly instead of leaving
+    // an empty list that trivially satisfies the offender check below.
+    expect(new Set(dragRegions.map((region) => region.selector))).toEqual(
+      new Set(DRAG_SURFACE_SELECTORS)
     )
+    const offenders = dragRegions.filter(
+      // Why: the press only reaches the OS caption while the region is draggable;
+      // `none` keeps a stray press from starting a selection.
+      (region) => region.appRegion !== 'drag' || region.userSelect !== 'none'
+    )
+    expect(offenders).toEqual([])
   })
 })
