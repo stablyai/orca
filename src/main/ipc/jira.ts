@@ -17,6 +17,7 @@ import {
   listProjects,
   listTransitions,
   searchIssues,
+  searchUsers,
   updateIssue
 } from '../jira/issues'
 import type {
@@ -206,7 +207,10 @@ export function registerJiraHandlers(): void {
       title: args.title.trim(),
       description: args.description?.trim() || undefined,
       customFields:
-        args.customFields && typeof args.customFields === 'object' ? args.customFields : undefined
+        args.customFields && typeof args.customFields === 'object' ? args.customFields : undefined,
+      userFieldKeys: Array.isArray(args.userFieldKeys)
+        ? args.userFieldKeys.filter((key): key is string => typeof key === 'string')
+        : undefined
     })
   })
 
@@ -292,6 +296,13 @@ export function registerJiraHandlers(): void {
       )
     }
   )
+
+  ipcMain.handle('jira:searchUsers', async (_event, args?: { query?: string; siteId?: string }) => {
+    return searchUsers(
+      typeof args?.query === 'string' ? args.query : undefined,
+      normalizeSiteId(args?.siteId)
+    )
+  })
 
   ipcMain.handle('jira:listTransitions', async (_event, args: { key: string; siteId?: string }) => {
     if (typeof args?.key !== 'string' || !args.key.trim()) {

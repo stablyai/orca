@@ -16513,6 +16513,11 @@
     }
   },
   "components": {
+    "jiraUserPicker": {
+      "select": "Select {{value0}}",
+      "search": "Search users",
+      "empty": "No users found"
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",

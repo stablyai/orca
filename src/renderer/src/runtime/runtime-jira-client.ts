@@ -280,6 +280,21 @@ export async function jiraListAssignableUsers(
     : window.api.jira.listAssignableUsers(args)
 }
 
+export async function jiraSearchUsers(
+  settings: RuntimeJiraSettings,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return []
+  }
+  const target = getJiraRuntimeTarget(settings)
+  const args = { query, siteId: siteId ?? undefined }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<JiraUser[]>(target, 'jira.searchUsers', args, { timeoutMs: 30_000 })
+    : window.api.jira.searchUsers(args)
+}
+
 export async function jiraListTransitions(
   settings: RuntimeJiraSettings,
   key: string,

@@ -1342,6 +1342,8 @@ export default function TaskPage(): React.JSX.Element {
     setJiraCreateFieldsError,
     newJiraIssueCustomFieldValues,
     setNewJiraIssueCustomFieldValues,
+    jiraUserFieldSelections,
+    setJiraUserFieldSelections,
     discardNewJiraIssueDraft,
     includeJiraSiteNameInProjectLabel,
     sortedAvailableJiraProjects,
@@ -1358,6 +1360,7 @@ export default function TaskPage(): React.JSX.Element {
     selectedJiraSiteId,
     availableJiraProjects,
     jiraConnected,
+    jiraViewer: jiraConnected ? jiraStatus.viewer : null,
     settings,
     jiraTaskSourceContext
   })
@@ -3041,6 +3044,9 @@ export default function TaskPage(): React.JSX.Element {
     visibleJiraCreateFields,
     newJiraIssueCustomFieldValues,
     setNewJiraIssueCustomFieldValues,
+    jiraUserFieldSelections,
+    setJiraUserFieldSelections,
+    jiraProviderSettings: jiraTaskSourceContext ?? settings,
     submitShortcutLabel,
     hasMissingJiraCreateField
   }

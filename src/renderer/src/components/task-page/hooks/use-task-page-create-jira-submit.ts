@@ -3,7 +3,10 @@ import { toast } from 'sonner'
 
 import { translate } from '@/i18n/i18n'
 import { jiraCreateIssue, jiraGetIssue } from '@/runtime/runtime-jira-client'
-import { buildJiraCreateCustomFields } from '@/components/task-page-jira-create-fields'
+import {
+  buildJiraCreateCustomFields,
+  getJiraUserCreateFieldKeys
+} from '@/components/task-page-jira-create-fields'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type {
   JiraCreateField,
@@ -72,6 +75,7 @@ export function useTaskPageCreateJiraSubmit({
       visibleJiraCreateFields,
       newJiraIssueCustomFieldValues
     )
+    const userFieldKeys = getJiraUserCreateFieldKeys(visibleJiraCreateFields)
     setNewJiraIssueSubmitting(true)
     const submitProviderRuntimeContextKey = providerRuntimeContextKey
     try {
@@ -81,7 +85,8 @@ export function useTaskPageCreateJiraSubmit({
         issueTypeId: newJiraIssueTargetType.id,
         title,
         description: newJiraIssueBody || undefined,
-        customFields
+        customFields,
+        userFieldKeys: userFieldKeys.length > 0 ? userFieldKeys : undefined
       })
       if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
         return

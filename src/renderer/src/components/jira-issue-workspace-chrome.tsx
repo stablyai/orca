@@ -2,6 +2,7 @@ import { ArrowRight, LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { JiraUserOptionList } from '@/components/jira-user-picker'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
@@ -199,25 +200,16 @@ export function JiraIssueMetadataBar({
           >
             {translate('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
           </button>
-          {users.map((user) => (
-            <button
-              key={user.accountId}
-              type="button"
-              onClick={() =>
-                void mutateIssue(
-                  'assignee',
-                  { assigneeAccountId: user.accountId },
-                  { assignee: user }
-                )
-              }
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
-            >
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="size-5 rounded-full" />
-              ) : null}
-              <span className="truncate">{user.displayName}</span>
-            </button>
-          ))}
+          <JiraUserOptionList
+            users={users}
+            onSelect={(user) =>
+              void mutateIssue(
+                'assignee',
+                { assigneeAccountId: user.accountId },
+                { assignee: user }
+              )
+            }
+          />
         </PopoverContent>
       </Popover>
     </div>

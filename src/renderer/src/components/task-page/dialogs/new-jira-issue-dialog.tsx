@@ -33,7 +33,14 @@ import { getJiraProjectSelectionKey } from '@/components/task-page-jira-project-
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { JiraCreateField, JiraIssueType, JiraProject } from '../../../../../shared/jira-types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type {
+  JiraCreateField,
+  JiraIssueType,
+  JiraProject,
+  JiraUser
+} from '../../../../../shared/jira-types'
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 
 export type NewJiraIssueDialogProps = {
   newJiraIssueOpen: boolean
@@ -68,6 +75,9 @@ export type NewJiraIssueDialogProps = {
   visibleJiraCreateFields: JiraCreateField[]
   newJiraIssueCustomFieldValues: Record<string, string>
   setNewJiraIssueCustomFieldValues: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  jiraUserFieldSelections: Record<string, JiraUser>
+  setJiraUserFieldSelections: React.Dispatch<React.SetStateAction<Record<string, JiraUser>>>
+  jiraProviderSettings: TaskSourceContext | GlobalSettings | null
   hasMissingJiraCreateField: boolean
   submitShortcutLabel: string
 }
@@ -106,6 +116,9 @@ export function NewJiraIssueDialog(props: NewJiraIssueDialogProps): React.JSX.El
     visibleJiraCreateFields,
     newJiraIssueCustomFieldValues,
     setNewJiraIssueCustomFieldValues,
+    jiraUserFieldSelections,
+    setJiraUserFieldSelections,
+    jiraProviderSettings,
     hasMissingJiraCreateField,
     submitShortcutLabel
   } = props
@@ -311,6 +324,10 @@ export function NewJiraIssueDialog(props: NewJiraIssueDialogProps): React.JSX.El
             newJiraIssueCustomFieldValues={newJiraIssueCustomFieldValues}
             setNewJiraIssueCustomFieldValues={setNewJiraIssueCustomFieldValues}
             newJiraIssueSubmitting={newJiraIssueSubmitting}
+            jiraUserFieldSelections={jiraUserFieldSelections}
+            setJiraUserFieldSelections={setJiraUserFieldSelections}
+            providerSettings={jiraProviderSettings}
+            siteId={newJiraIssueTargetProject?.siteId}
           />
           <p className="text-[10px] text-muted-foreground">
             {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
