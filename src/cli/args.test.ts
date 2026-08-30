@@ -123,6 +123,16 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('environment')).toBe('worktree')
   })
 
+  it.each([
+    ['--project', 'project', 'project', 'setups'],
+    ['--project=project', 'project', 'setups']
+  ])('preserves a command-named project selector in %j', (...args) => {
+    const parsed = parseArgs(args, [['project', 'setups']])
+
+    expect(parsed.commandPath).toEqual(['project', 'setups'])
+    expect(parsed.flags.get('project')).toBe('project')
+  })
+
   it('parses emulator reinstall as a boolean flag', () => {
     const parsed = parseArgs(['emulator', 'install', 'app.apk', '--reinstall', '--device', 'emu'])
 

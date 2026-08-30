@@ -136,7 +136,9 @@ describe('CLI launch redirect: command form', () => {
 
   it.each([
     ['--project', 'github:stablyai/orca', 'project', 'setups'],
-    ['--project=github:stablyai/orca', 'project', 'setups']
+    ['--project=github:stablyai/orca', 'project', 'setups'],
+    ['--project', 'project', 'project', 'setups'],
+    ['--project=project', 'project', 'setups']
   ])('preserves a project selector in %j', (...args) => {
     expect(getCliLaunchArgs([linux.execPath, ...args], linux.cliEntryPath, linuxOptions)).toEqual(
       args
