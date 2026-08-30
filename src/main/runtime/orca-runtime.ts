@@ -7268,6 +7268,7 @@ export class OrcaRuntimeService {
     const graphWasReady = this.graphStatus === 'ready'
     const previousTabs = this.tabs
     const previousLeaves = this.leaves
+    const graphWasReloading = this.graphStatus === 'reloading'
     this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
     const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(graph.leaves)
     const mobileSessionResyncWorktrees = new Set<string>()
@@ -7457,6 +7458,10 @@ export class OrcaRuntimeService {
     }
     if (rendererGeneration !== undefined) {
       this.rendererGeneration = rendererGeneration
+    }
+    if (graphWasReloading) {
+      // Remote clients may discard repo snapshots while the graph is unavailable.
+      this.notifyReposChangedForRemoteClients()
     }
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
