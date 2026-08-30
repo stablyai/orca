@@ -469,18 +469,23 @@ function FileReader({
   title,
   relativePath,
   language,
-  diffCommentActions
+  diffCommentActions,
+  initialScrollOffset,
+  onScrollOffsetChange
 }: {
   doc: FileDocState | undefined
   title: string
   relativePath: string
   language?: string
   diffCommentActions?: DiffCommentActions
+  initialScrollOffset?: number
+  onScrollOffsetChange?: (offset: number) => void
 }) {
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]
   )
+  const filePreviewScrollRef = useRef<ScrollView>(null)
   const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
   const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
   const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
@@ -601,6 +606,14 @@ function FileReader({
     return () => clearTimeout(timer)
   }, [doc, syntaxLanguage])
 
+  useEffect(() => {
+    // Why: FileReader remounts on every tab switch (see fileScrollOffsetsRef in
+    // the parent), so restore the saved offset once this tab's content is ready.
+    if (doc?.status === 'ready' && initialScrollOffset) {
+      filePreviewScrollRef.current?.scrollTo({ y: initialScrollOffset, animated: false })
+    }
+  }, [doc?.status, initialScrollOffset])
+
   if (!doc || doc.status === 'loading') {
     return (
       <View style={styles.markdownState}>
@@ -707,8 +720,11 @@ function FileReader({
   const renderSourceText = (content: string) => (
     <View style={styles.markdownEditor}>
       <ScrollView
+        ref={filePreviewScrollRef}
         style={styles.filePreviewScroll}
         contentContainerStyle={styles.filePreviewContent}
+        onScroll={(e) => onScrollOffsetChange?.(e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
       >
         <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
           <MobileSyntaxSegments
@@ -845,6 +861,9 @@ export default function SessionScreen() {
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
   const markdownDocsRef = useRef<Map<string, MarkdownDocState>>(new Map())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
+  // FileReader unmounts on every tab switch (conditional render below), so its
+  // ScrollView loses scroll position; remember it per tab id here instead.
+  const fileScrollOffsetsRef = useRef<Map<string, number>>(new Map())
   const [diffComments, setDiffComments] = useState<DiffComment[]>([])
   const diffCommentsRef = useRef<DiffComment[]>([])
   const [diffCommentBusy, setDiffCommentBusy] = useState(false)
@@ -4650,10 +4669,15 @@ export default function SessionScreen() {
             ) : activeFileTab ? (
               <View style={styles.markdownFrame}>
                 <FileReader
+                  key={activeFileTab.id}
                   doc={fileDocs.get(activeFileTab.id)}
                   title={activeFileTab.title || 'File'}
                   relativePath={activeFileTab.relativePath}
                   language={activeFileTab.language}
+                  initialScrollOffset={fileScrollOffsetsRef.current.get(activeFileTab.id) ?? 0}
+                  onScrollOffsetChange={(offset) => {
+                    fileScrollOffsetsRef.current.set(activeFileTab.id, offset)
+                  }}
                   diffCommentActions={
                     activeFileTab.diffSource === 'staged' || activeFileTab.diffSource === 'unstaged'
                       ? {
