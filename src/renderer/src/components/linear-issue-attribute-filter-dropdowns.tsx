@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTeamsLabels, useTeamsMembers, useTeamsStates } from '@/hooks/useIssueMetadata'
 import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
 import { translate } from '@/i18n/i18n'
@@ -17,11 +18,13 @@ import {
 } from '../../../shared/linear/issue-attribute-filter'
 import type { LinearTeam } from '../../../shared/linear/workspace-types'
 import {
-  LinearIssueFilterSectionDetail,
-  LinearIssueFilterSectionMenu,
   clearLinearIssueAttributeFacet,
   countLinearIssueAttributeFilters,
-  linearIssueAttributeFilterPillLabels,
+  linearIssueAttributeFilterPillLabels
+} from './linear-issue-attribute-filter-pills'
+import {
+  LinearIssueFilterSectionDetail,
+  LinearIssueFilterSectionMenu,
   type LinearIssueFilterSectionKey
 } from './linear-issue-attribute-filter-sections'
 import {
@@ -60,18 +63,26 @@ function ActivePill({
       <span className="text-muted-foreground">{label}:</span>
       <span className="max-w-[160px] truncate font-medium">{value}</span>
       {partial ? (
-        <span
-          className="text-muted-foreground"
-          title={translate(
-            'auto.components.linear-issue-attribute-filter-dropdowns.partialCoverageTitle',
-            'Some teams are left out of this filter. Open Filters for details.'
-          )}
-        >
-          {translate(
-            'auto.components.linear-issue-attribute-filter-dropdowns.partialCoverage',
-            'partial'
-          )}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* Why: a bare title attribute reaches neither keyboard nor screen reader. */}
+            <button
+              type="button"
+              className="rounded-sm text-muted-foreground underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {translate(
+                'auto.components.linear-issue-attribute-filter-dropdowns.partialCoverage',
+                'partial'
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {translate(
+              'auto.components.linear-issue-attribute-filter-dropdowns.partialCoverageTitle',
+              'Some teams may be left out of this filter. Open Filters for details.'
+            )}
+          </TooltipContent>
+        </Tooltip>
       ) : null}
       <button
         type="button"

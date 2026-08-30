@@ -8,7 +8,8 @@ import {
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
-  canonicalizeLinearIssueAttributeFilter,
+  LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS,
+  LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS,
   type LinearIssueAttributeFilter
 } from '../../../shared/linear/issue-attribute-filter'
 import { getLinearPriorityLabel } from './task-page-localized-options'
@@ -24,109 +25,6 @@ export type LinearIssueFilterSectionKey = 'status' | 'priority' | 'assignee' | '
 /** Picker row backed by every same-named id across the selected teams (#16785). */
 export type LinearIssueFilterGroupedOption = PickerOption & { ids: string[] }
 
-/** Same-named ids from different teams are one selection to the user. */
-function distinctFacetNames(ids: readonly string[], namesById: Map<string, string>): string[] {
-  return [...new Set(ids.map((id) => namesById.get(id) ?? id))]
-}
-
-export function countLinearIssueAttributeFilters(value: LinearIssueAttributeFilter): number {
-  const canonical = canonicalizeLinearIssueAttributeFilter(value)
-  return (
-    (canonical.stateIds.length > 0 ? 1 : 0) +
-    (canonical.priorities.length > 0 ? 1 : 0) +
-    (canonical.assignee ? 1 : 0) +
-    (canonical.labelIds.length > 0 ? 1 : 0)
-  )
-}
-
-export function clearLinearIssueAttributeFacet(
-  value: LinearIssueAttributeFilter,
-  facet: LinearIssueFilterSectionKey
-): LinearIssueAttributeFilter {
-  switch (facet) {
-    case 'status':
-      return { ...value, stateIds: [] }
-    case 'priority':
-      return { ...value, priorities: [] }
-    case 'assignee':
-      return { ...value, assignee: null }
-    case 'labels':
-      return { ...value, labelIds: [] }
-  }
-}
-
-/** A removable filter pill; `partial` marks a facet the transport id cap trimmed (#16879). */
-export type LinearIssueFilterPill = {
-  key: LinearIssueFilterSectionKey
-  label: string
-  value: string
-  partial: boolean
-}
-
-export function linearIssueAttributeFilterPillLabels(options: {
-  value: LinearIssueAttributeFilter
-  stateNamesById: Map<string, string>
-  memberNamesById: Map<string, string>
-  labelNamesById: Map<string, string>
-  statusOptions: readonly LinearIssueFilterGroupedOption[]
-  labelOptions: readonly LinearIssueFilterGroupedOption[]
-}): LinearIssueFilterPill[] {
-  const canonical = canonicalizeLinearIssueAttributeFilter(options.value)
-  const pills: LinearIssueFilterPill[] = []
-  if (canonical.stateIds.length > 0) {
-    pills.push({
-      key: 'status',
-      label: translate('auto.components.linear-issue-attribute-filter-sections.status', 'Status'),
-      value: distinctFacetNames(canonical.stateIds, options.stateNamesById).join(', '),
-      partial: isLinearMetadataGroupSelectionPartial(options.statusOptions, canonical.stateIds)
-    })
-  }
-  if (canonical.priorities.length > 0) {
-    pills.push({
-      key: 'priority',
-      label: translate(
-        'auto.components.linear-issue-attribute-filter-sections.priority',
-        'Priority'
-      ),
-      value: canonical.priorities.map((p) => getLinearPriorityLabel(p)).join(', '),
-      partial: false
-    })
-  }
-  if (canonical.assignee?.kind === 'unassigned') {
-    pills.push({
-      key: 'assignee',
-      label: translate(
-        'auto.components.linear-issue-attribute-filter-sections.assignee',
-        'Assignee'
-      ),
-      value: translate(
-        'auto.components.linear-issue-attribute-filter-sections.unassigned',
-        'Unassigned'
-      ),
-      partial: false
-    })
-  } else if (canonical.assignee?.kind === 'user') {
-    pills.push({
-      key: 'assignee',
-      label: translate(
-        'auto.components.linear-issue-attribute-filter-sections.assignee',
-        'Assignee'
-      ),
-      value: options.memberNamesById.get(canonical.assignee.id) ?? canonical.assignee.id,
-      partial: false
-    })
-  }
-  if (canonical.labelIds.length > 0) {
-    pills.push({
-      key: 'labels',
-      label: translate('auto.components.linear-issue-attribute-filter-sections.labels', 'Labels'),
-      value: distinctFacetNames(canonical.labelIds, options.labelNamesById).join(', '),
-      partial: isLinearMetadataGroupSelectionPartial(options.labelOptions, canonical.labelIds)
-    })
-  }
-  return pills
-}
-
 function priorityOptions(): PickerOption[] {
   return [0, 1, 2, 3, 4].map((priority) => ({
     key: String(priority),
@@ -137,7 +35,8 @@ function priorityOptions(): PickerOption[] {
 /** "{{count}} selected", flagged when the transport id cap left teams out (#16879). */
 function facetSummary(
   options: readonly LinearIssueFilterGroupedOption[],
-  selectedIds: readonly string[]
+  selectedIds: readonly string[],
+  max: number
 ): string {
   const count = selectedLinearMetadataGroupKeys(options, selectedIds).length
   if (count === 0) {
@@ -148,7 +47,7 @@ function facetSummary(
     '{{count}} selected',
     { count }
   )
-  return isLinearMetadataGroupSelectionPartial(options, selectedIds)
+  return isLinearMetadataGroupSelectionPartial(options, selectedIds, max)
     ? translate(
         'auto.components.linear-issue-attribute-filter-sections.partialCoverageSuffix',
         '{{value0}} · partial',
@@ -172,7 +71,11 @@ export function LinearIssueFilterSectionMenu({
     {
       key: 'status',
       label: translate('auto.components.linear-issue-attribute-filter-sections.status', 'Status'),
-      summary: facetSummary(statusOptions, value.stateIds)
+      summary: facetSummary(
+        statusOptions,
+        value.stateIds,
+        LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
+      )
     },
     {
       key: 'priority',
@@ -207,7 +110,11 @@ export function LinearIssueFilterSectionMenu({
     {
       key: 'labels',
       label: translate('auto.components.linear-issue-attribute-filter-sections.labels', 'Labels'),
-      summary: facetSummary(labelOptions, value.labelIds)
+      summary: facetSummary(
+        labelOptions,
+        value.labelIds,
+        LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS
+      )
     }
   ]
 
@@ -353,7 +260,16 @@ export function LinearIssueFilterSectionDetail({
             onChange(isStatus ? { ...value, stateIds: ids } : { ...value, labelIds: ids })
           }}
         />
-        <LinearFacetCoverageNotice facet={section} options={options} selectedIds={selectedIds} />
+        <LinearFacetCoverageNotice
+          facet={section}
+          options={options}
+          selectedIds={selectedIds}
+          max={
+            isStatus
+              ? LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
+              : LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS
+          }
+        />
       </div>
     )
   }
