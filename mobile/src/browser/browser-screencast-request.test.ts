@@ -43,4 +43,16 @@ describe('buildMobileBrowserScreencastRequest', () => {
     expect(buildMobileBrowserScreencastRequest(null, 2)).toBeNull()
     expect(buildMobileBrowserScreencastRequest({ width: 0, height: 640 }, 2)).toBeNull()
   })
+
+  it('updates requested pixels when display density changes', () => {
+    const layout = { width: 800, height: 600 }
+    expect(buildMobileBrowserScreencastRequest(layout, 1)).toMatchObject({
+      maxWidth: 800,
+      maxHeight: 600
+    })
+    expect(buildMobileBrowserScreencastRequest(layout, 1.5)).toMatchObject({
+      maxWidth: 1200,
+      maxHeight: 900
+    })
+  })
 })

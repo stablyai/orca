@@ -74,6 +74,7 @@ export type TerminalLiveInputFocusTarget = {
 
 type FocusTerminalLiveInputTargetOptions = {
   readonly keyboardHeight: number
+  readonly hardwareKeyboard?: boolean
   readonly refocus: () => void
 }
 
@@ -230,13 +231,13 @@ export function scheduleTerminalLiveInputFocus(
 
 export function focusTerminalLiveInputTarget(
   input: TerminalLiveInputFocusTarget | null,
-  { keyboardHeight, refocus }: FocusTerminalLiveInputTargetOptions
+  { hardwareKeyboard, keyboardHeight, refocus }: FocusTerminalLiveInputTargetOptions
 ): void {
   if (!input) {
     return
   }
 
-  if (keyboardHeight <= 0 && input.isFocused?.()) {
+  if (!hardwareKeyboard && keyboardHeight <= 0 && input.isFocused?.()) {
     // Why: Android can keep a hidden TextInput focused after the IME is dismissed;
     // focus() is then a no-op, so force a new focus session to reopen the keyboard.
     input.blur()

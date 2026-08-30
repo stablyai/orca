@@ -1,13 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
-import {
-  View,
-  Pressable,
-  StyleSheet,
-  Platform,
-  useWindowDimensions,
-  Keyboard,
-  BackHandler
-} from 'react-native'
+import { View, Pressable, StyleSheet, Platform, Keyboard, BackHandler } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -26,6 +18,8 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useWindowBounds } from '../layout/window-bounds'
+import { resolveSessionBackPress } from '../session/session-back-press'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -41,9 +35,21 @@ type Props = {
   children: ReactNode
   zIndex?: number
   widthPx?: number
+  hardwareKeyboard?: boolean
+  liveInputFocused?: boolean
+  onHardwareEscape?: () => void
 }
 
-export function RightDrawer({ visible, onClose, children, zIndex, widthPx }: Props) {
+export function RightDrawer({
+  visible,
+  onClose,
+  children,
+  zIndex,
+  widthPx,
+  hardwareKeyboard,
+  liveInputFocused,
+  onHardwareEscape
+}: Props) {
   const [mounted, setMounted] = useState(visible)
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
@@ -66,6 +72,9 @@ export function RightDrawer({ visible, onClose, children, zIndex, widthPx }: Pro
       onHidden={() => setMounted(false)}
       zIndex={zIndex}
       widthPx={widthPx}
+      hardwareKeyboard={hardwareKeyboard}
+      liveInputFocused={liveInputFocused}
+      onHardwareEscape={onHardwareEscape}
     >
       {children}
     </MountedRightDrawer>
@@ -82,12 +91,15 @@ function MountedRightDrawer({
   onHidden,
   children,
   zIndex = 1000,
-  widthPx
+  widthPx,
+  hardwareKeyboard = false,
+  liveInputFocused = false,
+  onHardwareEscape
 }: MountedRightDrawerProps) {
   const translateX = useSharedValue(0)
   const progress = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
-  const { width: screenWidth } = useWindowDimensions()
+  const { width: screenWidth } = useWindowBounds()
   const insets = useSafeAreaInsets()
   const { isWideLayout } = useResponsiveLayout()
   const panelWidth = resolveRightDrawerPanelWidth(screenWidth, isWideLayout, widthPx)
@@ -112,11 +124,18 @@ function MountedRightDrawer({
       return
     }
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (
+        resolveSessionBackPress({ hardwareKeyboard, liveInputFocused }) === 'send-escape' &&
+        onHardwareEscape
+      ) {
+        onHardwareEscape()
+        return true
+      }
       onClose()
       return true
     })
     return () => sub.remove()
-  }, [visible, onClose])
+  }, [hardwareKeyboard, liveInputFocused, onClose, onHardwareEscape, visible])
 
   const dismiss = useCallback(() => {
     onClose()

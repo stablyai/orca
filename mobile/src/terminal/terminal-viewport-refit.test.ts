@@ -2,17 +2,21 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import {
+  areTerminalViewportWidthsAligned,
   isTerminalUpdateViewportApplied,
   isTerminalUpdateViewportUpdated,
   isTerminalViewportRefitTargetCurrent,
   reduceTerminalFrameHeightRefit,
+  resetTerminalKeyboardVisibilityForWidthChange,
   resolveTerminalUpdateViewportCapability,
   type TerminalFrameHeightRefitEvent,
   type TerminalFrameHeightRefitState,
   type TerminalUpdateViewportCapability
 } from './terminal-viewport-refit-state'
 
-const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
+const hookSource =
+  readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./use-terminal-layout-refit-triggers.ts', import.meta.url), 'utf8')
 const sessionSource = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
   'utf8'
@@ -22,21 +26,20 @@ describe('terminal viewport refit', () => {
   it('refits when the window dimensions change (fold/unfold, rotation)', () => {
     // Why: a PTY fitted on the folded cover screen must be re-measured when
     // the window grows, or the terminal renders in a fraction of the display.
-    expect(hookSource).toContain('useWindowDimensions()')
+    expect(hookSource).toContain('useWindowBounds()')
     const start = hookSource.indexOf('const { width: windowWidth, height: windowHeight }')
     expect(start).toBeGreaterThanOrEqual(0)
     const resizeEffect = hookSource.slice(start)
     expect(resizeEffect).toContain('viewportMeasuredRef.current = false')
     expect(resizeEffect).toContain('scheduleViewportRefit()')
-    expect(resizeEffect).toContain(
-      '[windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit]'
-    )
+    expect(resizeEffect).toContain('windowHeight')
+    expect(resizeEffect).toContain('windowWidth')
   })
 
   it('still refits when the tab strip toggles visibility', () => {
-    const start = hookSource.indexOf('const prevTabStripVisibleRef')
+    const start = hookSource.indexOf('const previousTabStripVisibleRef')
     expect(start).toBeGreaterThanOrEqual(0)
-    const tabEffect = hookSource.slice(start, hookSource.indexOf('useWindowDimensions()'))
+    const tabEffect = hookSource.slice(start, hookSource.indexOf('useWindowBounds()'))
     expect(tabEffect).toContain('viewportMeasuredRef.current = false')
     expect(tabEffect).toContain('scheduleViewportRefit()')
   })
@@ -44,13 +47,43 @@ describe('terminal viewport refit', () => {
   it('refits the PTY when terminal text scale changes', () => {
     // Why: mobile text size must change the real PTY grid, not just scale pixels
     // in the WebView, or wrapped CLI output diverges from what the shell sees.
-    const start = hookSource.indexOf('const prevTextScaleRef = useRef(textScale)')
+    const start = hookSource.indexOf('const previousTextScaleRef = useRef(textScale)')
     expect(start).toBeGreaterThanOrEqual(0)
     const textScaleEffect = hookSource.slice(start, start + 600)
-    expect(textScaleEffect).toContain('prevTextScaleRef.current === textScale')
+    expect(textScaleEffect).toContain('previousTextScaleRef.current === textScale')
     expect(textScaleEffect).toContain('viewportMeasuredRef.current = false')
     expect(textScaleEffect).toContain('scheduleViewportRefit()')
-    expect(textScaleEffect).toContain('[textScale, viewportMeasuredRef, scheduleViewportRefit]')
+    expect(textScaleEffect).toContain('textScale')
+  })
+
+  it('flushes a refit deferred behind the IME when a hardware keyboard is detected', () => {
+    // Why: notifyHardwareKeyboard used to clear keyboardVisible directly and
+    // strand `pending`; the later IME-hide event then matched state and never
+    // refit. Routing through the reducer as keyboard-visibility(false) flushes.
+    const start = hookSource.indexOf('const notifyHardwareKeyboard = useCallback(')
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(hookSource.slice(start, start + 300)).toContain(
+      "notifyFrameHeightEvent({ type: 'keyboard-visibility', visible: false })"
+    )
+
+    let state: TerminalFrameHeightRefitState = {
+      frameHeight: 600,
+      keyboardVisible: false,
+      pending: false
+    }
+    const dispatch = (event: TerminalFrameHeightRefitEvent) => {
+      const transition = reduceTerminalFrameHeightRefit(state, event)
+      state = transition.state
+      return transition.shouldRefit
+    }
+    expect(dispatch({ type: 'keyboard-visibility', visible: true })).toBe(false)
+    expect(dispatch({ type: 'frame-height', height: 540 })).toBe(false)
+    expect(state.pending).toBe(true)
+    // Hardware keyboard signal arrives as keyboard-visibility(false): flush now.
+    expect(dispatch({ type: 'keyboard-visibility', visible: false })).toBe(true)
+    expect(state).toEqual({ frameHeight: 540, keyboardVisible: false, pending: false })
+    // The trailing IME-hide is a no-op instead of a stranded pending refit.
+    expect(dispatch({ type: 'keyboard-visibility', visible: false })).toBe(false)
   })
 
   it('coalesces keyboard-visible frame-height churn into one refit after close', () => {
@@ -84,7 +117,7 @@ describe('terminal viewport refit', () => {
   })
 
   it('routes imperative height notifications through the keyboard-aware reducer', () => {
-    const start = hookSource.indexOf('const notifyFrameHeightRefitEvent = useCallback(')
+    const start = hookSource.indexOf('const notifyFrameHeightEvent = useCallback(')
     expect(start).toBeGreaterThanOrEqual(0)
     const notifier = hookSource.slice(start, start + 1_300)
     expect(notifier).toContain('reduceTerminalFrameHeightRefit(')
@@ -152,9 +185,31 @@ describe('terminal viewport refit', () => {
     expect(sessionSource).toContain('tabStripVisible: terminals.length > 1')
     expect(sessionSource).toContain('textScale: terminalTextScale')
     expect(sessionSource).toContain('connState,')
-    expect(sessionSource).toContain('notifyTerminalFrameHeight(nextHeight)')
+    expect(sessionSource).toContain('onLayout={handleTerminalFrameLayout}')
     expect(sessionSource).toContain('notifyKeyboardVisibility(true)')
     expect(sessionSource).toContain('notifyKeyboardVisibility(false)')
+  })
+
+  it('waits for RN and WebView widths to agree', () => {
+    expect(areTerminalViewportWidthsAligned(800, 720)).toBe(false)
+    expect(areTerminalViewportWidthsAligned(800, 800)).toBe(true)
+    expect(hookSource).toContain('areTerminalViewportWidthsAligned(')
+    expect(hookSource).toContain('notifyWebViewViewport')
+  })
+
+  it('uses a trailing 250ms debounce during resize drags', () => {
+    expect(hookSource).toContain('}, 250)')
+    expect(hookSource).toContain('clearTimeout(refitTimerRef.current)')
+  })
+
+  it('clears stale keyboard visibility after a major width change', () => {
+    const state = resetTerminalKeyboardVisibilityForWidthChange(
+      { frameHeight: 500, keyboardVisible: true, pending: true },
+      700,
+      900
+    )
+    expect(state.keyboardVisible).toBe(false)
+    expect(state.pending).toBe(true)
   })
 
   it('does not rerender SessionScreen for frame-height-only layout changes', () => {
@@ -164,10 +219,10 @@ describe('terminal viewport refit', () => {
   })
 
   it('defers height-only window resizes while the keyboard is visible', () => {
-    const start = hookSource.indexOf('const prevWindowDimsRef')
+    const start = hookSource.indexOf('const previousWindowBoundsRef')
     const windowEffect = hookSource.slice(start, start + 1_100)
     expect(windowEffect).toContain(
-      'prev.width === windowWidth && frameHeightRefitStateRef.current.keyboardVisible'
+      'previous.width === windowWidth && frameHeightStateRef.current.keyboardVisible'
     )
   })
 

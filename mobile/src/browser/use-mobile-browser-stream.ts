@@ -1,5 +1,6 @@
 import { useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
-import { PixelRatio, type Image, type View } from 'react-native'
+import type { Image, View } from 'react-native'
+import { usePixelRatio } from '../platform/use-pixel-ratio'
 import type { RpcClient } from '../transport/rpc-client'
 import type {
   BrowserScreencastFrame,
@@ -129,9 +130,10 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     visibleFrameLayerRef
   })
 
+  const pixelRatio = usePixelRatio()
   const streamRequest = useMemo(
-    () => buildMobileBrowserScreencastRequest(layout, PixelRatio.get(), browserViewMode),
-    [browserViewMode, layout]
+    () => buildMobileBrowserScreencastRequest(layout, pixelRatio, browserViewMode),
+    [browserViewMode, layout, pixelRatio]
   )
 
   const frameGeometry = useMemo(

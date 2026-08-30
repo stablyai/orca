@@ -12,6 +12,7 @@ import { MobileBrowserPane, type MobileBrowserTab } from './MobileBrowserPane'
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  Dimensions: { addEventListener: () => ({ remove: () => {} }) },
   Image: 'Image',
   PanResponder: { create: () => ({ panHandlers: {} }) },
   PixelRatio: { get: () => 2 },

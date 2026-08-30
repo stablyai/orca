@@ -77,6 +77,13 @@ export function dispatchTerminalWebViewNotification(
     if (scale > 0) {
       handlers.onTextScaleChange?.(scale)
     }
+  } else if (msg.type === 'viewport-changed') {
+    const width = typeof msg.innerWidth === 'number' ? msg.innerWidth : 0
+    const height = typeof msg.innerHeight === 'number' ? msg.innerHeight : 0
+    const dpr = typeof msg.dpr === 'number' ? msg.dpr : 1
+    if (width > 0 && height > 0) {
+      handlers.onViewportChanged?.(width, height, dpr)
+    }
   } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
     // eslint-disable-next-line no-console
     console.warn('[mobile-clip] selection cancelled by pinch')

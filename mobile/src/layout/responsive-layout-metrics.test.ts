@@ -36,4 +36,34 @@ describe('responsive layout metrics', () => {
       horizontalPadding: spacing.lg
     })
   })
+
+  it('classifies freeform desktop windows by their bounds', () => {
+    expect(getResponsiveLayoutMetrics(800, 600).windowClass).toBe('medium')
+    expect(getResponsiveLayoutMetrics(1024, 768).windowClass).toBe('expanded')
+    expect(getResponsiveLayoutMetrics(1280, 720).windowClass).toBe('expanded')
+    expect(getResponsiveLayoutMetrics(1920 / 1.5, 1080 / 1.5).windowClass).toBe('expanded')
+  })
+
+  it('keeps wide layout stable while resizing around the breakpoint', () => {
+    const wide = getResponsiveLayoutMetrics(760, 700)
+    expect(getResponsiveLayoutMetrics(690, 700, wide).isWideLayout).toBe(true)
+    expect(getResponsiveLayoutMetrics(675, 700, wide).isWideLayout).toBe(false)
+  })
+
+  it('keeps window class stable while resizing around the 600 and 840 dp breakpoints', () => {
+    const medium = getResponsiveLayoutMetrics(700, 600)
+    expect(medium.windowClass).toBe('medium')
+    expect(getResponsiveLayoutMetrics(590, 600, medium).windowClass).toBe('medium')
+    expect(getResponsiveLayoutMetrics(575, 600, medium).windowClass).toBe('compact')
+    expect(getResponsiveLayoutMetrics(850, 600, medium).windowClass).toBe('medium')
+    expect(getResponsiveLayoutMetrics(864, 600, medium).windowClass).toBe('expanded')
+
+    const compact = getResponsiveLayoutMetrics(500, 600)
+    expect(getResponsiveLayoutMetrics(610, 600, compact).windowClass).toBe('compact')
+    expect(getResponsiveLayoutMetrics(624, 600, compact).windowClass).toBe('medium')
+
+    const expanded = getResponsiveLayoutMetrics(1000, 600)
+    expect(getResponsiveLayoutMetrics(830, 600, expanded).windowClass).toBe('expanded')
+    expect(getResponsiveLayoutMetrics(815, 600, expanded).windowClass).toBe('medium')
+  })
 })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import { AppState, Platform, useWindowDimensions, type AppStateStatus } from 'react-native'
+import { AppState, Platform, type AppStateStatus } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { TerminalWebViewHandle } from './TerminalWebView'
@@ -8,12 +8,13 @@ import {
   isTerminalUpdateViewportApplied,
   isTerminalUpdateViewportUpdated,
   isTerminalViewportRefitTargetCurrent,
+  areTerminalViewportWidthsAligned,
   reduceTerminalFrameHeightRefit,
   resolveTerminalUpdateViewportCapability,
-  type TerminalFrameHeightRefitEvent,
   type TerminalFrameHeightRefitState,
   type TerminalUpdateViewportCapability
 } from './terminal-viewport-refit-state'
+import { useTerminalLayoutRefitTriggers } from './use-terminal-layout-refit-triggers'
 
 export type TerminalViewportDims = { cols: number; rows: number }
 
@@ -41,6 +42,8 @@ type TerminalViewportRefitOptions = {
 type TerminalViewportRefitNotifications = {
   notifyTerminalFrameHeight: (height: number) => void
   notifyKeyboardVisibility: (visible: boolean) => void
+  notifyHardwareKeyboard: () => void
+  notifyWebViewViewport: (width: number, height: number) => void
 }
 
 // Why: re-measure on layout changes outside the subscribe path (tab strip, fold/rotate/resize), or a PTY renders "cut in half" (#4579).
@@ -75,6 +78,7 @@ export function useTerminalViewportRefit(
     keyboardVisible: false,
     pending: false
   })
+  const webViewViewportRef = useRef<{ width: number; height: number } | null>(null)
   // Why: marks the armed timer as a height refit so its callback re-checks the keyboard; other refits always run unguarded.
   const heightOriginatedRefitRef = useRef(false)
   const scheduleViewportRefit = useCallback(
@@ -110,6 +114,14 @@ export function useTerminalViewportRefit(
         if (!ref) {
           return
         }
+        if (
+          !areTerminalViewportWidthsAligned(
+            terminalFrameWidth,
+            webViewViewportRef.current?.width ?? null
+          )
+        ) {
+          return
+        }
         const isCurrentTarget = () =>
           isTerminalViewportRefitTargetCurrent({
             activeHandle: activeHandleRef.current,
@@ -122,7 +134,10 @@ export function useTerminalViewportRefit(
             currentRunSeq: refitRunSeqRef.current
           })
         void (async () => {
-          const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
+          const dims = await ref.measureFitDimensions(
+            terminalFrameHeightRef.current || undefined,
+            terminalFrameWidth || undefined
+          )
           if (!isCurrentTarget()) {
             return
           }
@@ -171,7 +186,7 @@ export function useTerminalViewportRefit(
           initializedHandlesRef.current.delete(handle)
           subscribeToTerminal(handle)
         })()
-      }, 150)
+      }, 250)
     },
     [
       activeHandleRef,
@@ -184,7 +199,8 @@ export function useTerminalViewportRefit(
       deviceTokenRef,
       initializedHandlesRef,
       unsubscribeTerminal,
-      subscribeToTerminal
+      subscribeToTerminal,
+      terminalFrameWidth
     ]
   )
   const scheduleForcedViewportRefit = useCallback(() => {
@@ -192,77 +208,15 @@ export function useTerminalViewportRefit(
     scheduleViewportRefit()
   }, [scheduleViewportRefit])
 
-  // Why: the tab strip toggles at the 1↔2 terminal boundary (~40px area change), so the cached viewport goes stale.
-  const prevTabStripVisibleRef = useRef(tabStripVisible)
-  useEffect(() => {
-    if (prevTabStripVisibleRef.current === tabStripVisible) {
-      return
-    }
-    prevTabStripVisibleRef.current = tabStripVisible
-    viewportMeasuredRef.current = false
-    scheduleViewportRefit()
-  }, [tabStripVisible, viewportMeasuredRef, scheduleViewportRefit])
-
-  // Why: fold/unfold and rotation change window dims with no subscribe/tab change; refit or the grid stays stale (fit capped at 1).
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
-  const prevWindowDimsRef = useRef({ width: windowWidth, height: windowHeight })
-  useEffect(() => {
-    const prev = prevWindowDimsRef.current
-    if (prev.width === windowWidth && prev.height === windowHeight) {
-      return
-    }
-    prevWindowDimsRef.current = { width: windowWidth, height: windowHeight }
-    // Why: adjustResize can change only window height while the IME is open; the frame-height notifier corrects once it closes.
-    if (prev.width === windowWidth && frameHeightRefitStateRef.current.keyboardVisible) {
-      return
-    }
-    viewportMeasuredRef.current = false
-    scheduleViewportRefit()
-  }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
-
-  // Why: on text-size change the refit's 150ms debounce lets the WebView apply the new fontSize before we re-measure cell metrics.
-  const prevTextScaleRef = useRef(textScale)
-  useEffect(() => {
-    if (prevTextScaleRef.current === textScale) {
-      return
-    }
-    prevTextScaleRef.current = textScale
-    viewportMeasuredRef.current = false
-    scheduleViewportRefit()
-  }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
-
-  // Why: panel dock/undock or sidebar resize changes frame width with no window/tab change, so the cached viewport goes stale.
-  const prevFrameWidthRef = useRef(terminalFrameWidth)
-  useEffect(() => {
-    if (prevFrameWidthRef.current === terminalFrameWidth) {
-      return
-    }
-    prevFrameWidthRef.current = terminalFrameWidth
-    viewportMeasuredRef.current = false
-    scheduleViewportRefit()
-  }, [terminalFrameWidth, viewportMeasuredRef, scheduleViewportRefit])
-
-  const notifyFrameHeightRefitEvent = useCallback(
-    (event: TerminalFrameHeightRefitEvent) => {
-      const transition = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, event)
-      frameHeightRefitStateRef.current = transition.state
-      if (!transition.shouldRefit) {
-        return
-      }
-      viewportMeasuredRef.current = false
-      scheduleViewportRefit({ heightOriginated: true })
-    },
-    [viewportMeasuredRef, scheduleViewportRefit]
-  )
-  // Why: notify imperatively so layout churn doesn't rerender the full session.
-  const notifyTerminalFrameHeight = useCallback(
-    (height: number) => notifyFrameHeightRefitEvent({ type: 'frame-height', height }),
-    [notifyFrameHeightRefitEvent]
-  )
-  const notifyKeyboardVisibility = useCallback(
-    (visible: boolean) => notifyFrameHeightRefitEvent({ type: 'keyboard-visibility', visible }),
-    [notifyFrameHeightRefitEvent]
-  )
+  const layoutNotifications = useTerminalLayoutRefitTriggers({
+    frameHeightStateRef: frameHeightRefitStateRef,
+    scheduleViewportRefit,
+    tabStripVisible,
+    terminalFrameWidth,
+    textScale,
+    viewportMeasuredRef,
+    webViewViewportRef
+  })
 
   useEffect(() => {
     if (Platform.OS !== 'ios') {
@@ -311,5 +265,5 @@ export function useTerminalViewportRefit(
     }
   }, [])
 
-  return { notifyTerminalFrameHeight, notifyKeyboardVisibility }
+  return layoutNotifications
 }

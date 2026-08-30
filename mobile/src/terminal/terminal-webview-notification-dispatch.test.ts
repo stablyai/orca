@@ -36,4 +36,13 @@ describe('dispatchTerminalWebViewNotification', () => {
       altScreen: false
     })
   })
+
+  it('routes measured WebView viewport changes', () => {
+    const onViewportChanged = vi.fn()
+    dispatchTerminalWebViewNotification(
+      { type: 'viewport-changed', innerWidth: 800, innerHeight: 600, dpr: 1.5 },
+      { onViewportChanged, reportEngineError: vi.fn() }
+    )
+    expect(onViewportChanged).toHaveBeenCalledWith(800, 600, 1.5)
+  })
 })

@@ -38,6 +38,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
+  readonly onKeyPressObserved?: () => void
 }
 
 type TerminalLiveInputCommitHandlers = {
@@ -61,7 +62,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   liveInputTerminalHandles,
   liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
-  setLiveInputCapture
+  setLiveInputCapture,
+  onKeyPressObserved
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const {
     applyLiveInputMirror,
@@ -150,6 +152,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputKeyPress = useCallback(
     (event: TerminalLiveInputKeyPressEvent) => {
+      onKeyPressObserved?.()
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         return
       }
@@ -186,6 +189,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       clearPendingLiveInputCommit,
       flushPendingLiveInputText,
       liveInputTerminalHandles,
+      onKeyPressObserved,
       sendLiveTerminalInputRef,
       waitForPendingLiveInputFlush
     ]
