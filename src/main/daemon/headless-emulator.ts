@@ -24,7 +24,7 @@ import { installDeviceAttributesResponder } from './startup-device-attributes-re
 import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
-import { readTerminalCursorLineContext } from './terminal-cursor-line-context'
+import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
 
 export type HeadlessEmulatorOptions = {
   cols: number

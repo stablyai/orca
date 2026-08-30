@@ -98,6 +98,7 @@ import {
   resolveNonLatinControlChordInput
 } from './terminal-non-latin-control-chord'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import { installTerminalImeComposerPlaceholderMask } from './terminal-ime-composer-placeholder-mask'
 import { isCurrentPlatformIosWeb } from '@/lib/ios-web-platform'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
@@ -1077,6 +1078,7 @@ export function useTerminalPaneLifecycle({
           ? installTerminalImeLinuxCandidateState(pane.terminal.element)
           : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
         // Why after the tracker: the preedit stops propagation on `input` while
         // a syllable is held, so anything on this element that needs those
         // events has to be registered ahead of it. Nothing does today — the
@@ -1092,6 +1094,7 @@ export function useTerminalPaneLifecycle({
           : null
         imeCompositionDisposablesRef.current.set(pane.id, {
           dispose: () => {
+            imeComposerPlaceholderMask.dispose()
             imeCompositionTracker.dispose()
             linuxImeCandidateState?.dispose()
             iosHangulPreedit?.dispose()
