@@ -661,6 +661,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # Why here and not after packaging: this needs nothing but the checkout, runs in
+      # seconds, and the encoding it asserts is decided by the checkout itself. Placed
+      # first it reports in about a minute instead of after a 20-minute package.
+      - name: Check Windows CLI shim line endings
+        shell: pwsh
+        run: ./config/scripts/check-windows-launcher-line-endings.ps1
+
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:

@@ -23,9 +23,13 @@
 # wrapper does change.
 /src/main/__fixtures__/shell-wrapper-snapshots/*.txt linguist-generated=true
 
-# Undecided (STA-4307 follow-up): whether the Windows CLI shim should ship CRLF.
-# cmd.exe reads LF-only batch files, but orca.cmd uses `goto` with labels, which is
-# the one batch construct with a history of misbehaving without CRLF. Pinning it
-# changes a shipped byte, so it is a product call rather than a hygiene fix.
-# If we decide yes, it is exactly this one line:
-#   /resources/win32/bin/orca.cmd text eol=crlf
+# The one deliberate CRLF exception, and it is not a hygiene lapse: it is the byte
+# that already ships. The release runner has no pin and sets no core.autocrlf, so it
+# converted this file on checkout — the committed blob is 644 B with 0 CR, while the
+# copy inside v1.4.192's orca-windows-setup.exe is 665 B with 21 CR, the same bytes
+# with every LF doubled. Under the blanket rule above it would check out LF instead,
+# changing a shipped byte on a batch file that uses `goto` with labels, in a shape
+# nothing in CI executes. The pin only changes the working tree; the index stays LF.
+# check-line-ending-policy.mjs asserts this pin still resolves, and
+# check-windows-launcher-line-endings.ps1 runs the shim both ways on windows-2022.
+/resources/win32/bin/orca.cmd text eol=crlf

@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import {
   checkLineEndingPolicy,
   containsCrlf,
+  CRLF_PINNED_PATHS,
+  findPinViolations,
   findViolations,
   hasShebang,
   parseCheckAttr
@@ -86,6 +88,43 @@ describe('findViolations', () => {
   })
 })
 
+describe('findPinViolations', () => {
+  const shim = 'resources/win32/bin/orca.cmd'
+  const pin = (over = {}) => [{ path: shim, tracked: true, crlf: false, ...over }]
+  const attrs = (eol) => new Map([[shim, eol === undefined ? {} : { eol }]])
+
+  it('passes the shim when it is LF in the index and CRLF on checkout', () => {
+    expect(findPinViolations(pin(), attrs('crlf'))).toEqual([])
+  })
+
+  // This is what #17303's blanket rule alone produces, and what flips a shipped byte.
+  it('flags the shim once the blanket LF rule reclaims it', () => {
+    const found = findPinViolations(pin(), attrs('lf'))
+    expect(found).toHaveLength(1)
+    expect(found[0].rule).toContain('not crlf')
+  })
+
+  it('flags an unpinned shim, which is the accident that decided its bytes before', () => {
+    const found = findPinViolations(pin(), attrs(undefined))
+    expect(found).toHaveLength(1)
+    expect(found[0].rule).toContain('unspecified')
+  })
+
+  // eol=crlf converts on checkout, so a CRLF blob would reach macOS and Linux too.
+  it('still requires the stored blob to be LF', () => {
+    const found = findPinViolations(pin({ crlf: true }), attrs('crlf'))
+    expect(found).toHaveLength(1)
+    expect(found[0].rule).toContain('blob contains CRLF')
+  })
+
+  // Otherwise deleting the file would silently empty the rule instead of failing it.
+  it('flags a pin whose path is no longer tracked instead of skipping it', () => {
+    const found = findPinViolations(pin({ tracked: false }), attrs('crlf'))
+    expect(found).toHaveLength(1)
+    expect(found[0].rule).toContain('not tracked')
+  })
+})
+
 describe('the repo itself', () => {
   const root = new URL('../..', import.meta.url).pathname
 
@@ -99,6 +138,18 @@ describe('the repo itself', () => {
   // A silent git failure would empty the population and read as a clean repo.
   it('throws rather than reporting clean when git cannot answer', () => {
     expect(() => checkLineEndingPolicy(tmpdir())).toThrow(/git ls-files exited/)
+  })
+
+  it('keeps the Windows CLI shim pinned to CRLF, outside the LF population', () => {
+    const { entries, pins } = checkLineEndingPolicy(root)
+    // The literal path, not CRLF_PINNED_PATHS: comparing the result to the constant
+    // that produced it passes just as happily when someone empties the constant.
+    expect(CRLF_PINNED_PATHS).toContain('resources/win32/bin/orca.cmd')
+    expect(pins.map((p) => p.path)).toContain('resources/win32/bin/orca.cmd')
+    expect(pins.every((p) => p.tracked && !p.crlf)).toBe(true)
+    // The two rules must not overlap: the shim has no shebang and no executable bit,
+    // so requiring CRLF here cannot contradict the LF rule above.
+    expect(entries.map((e) => e.path)).not.toContain('resources/win32/bin/orca.cmd')
   })
 
   it('covers the shipped launchers, the packaging scripts and the commit hook', () => {

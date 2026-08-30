@@ -86,6 +86,57 @@ export function findViolations(entries, attrs) {
 }
 
 /**
+ * The one path the blanket LF rule must NOT reclaim. `cmd.exe` is its only consumer:
+ * it carries no shebang and no executable bit, so the population above never sees it.
+ * v1.4.192 already shipped it converted — a 644-byte LF blob arrived in the installer
+ * as 665 bytes with 21 CR, because the release runner pins nothing and sets no
+ * `core.autocrlf`. Pinning reproduces those bytes on every machine; leaving it to the
+ * blanket rule would change them. Asserted, not just allowed: an exception nothing
+ * checks is exactly how this file's encoding became a runner-image accident.
+ */
+export const CRLF_PINNED_PATHS = ['resources/win32/bin/orca.cmd']
+
+/**
+ * Mirror of {@link findViolations} for the CRLF exception, and deliberately not a
+ * `!== 'lf'` inversion of it: the blob assertion points the same way for both rules.
+ * `eol=crlf` converts on checkout, so the stored blob must still be LF — a CRLF blob
+ * would reach macOS and Linux too, where the exception has no reason to exist.
+ *
+ * @param pins {{ path: string, tracked: boolean, crlf: boolean }[]}
+ * @param attrs Map<string, { eol?: string }>
+ */
+export function findPinViolations(pins, attrs) {
+  const violations = []
+  for (const pin of pins) {
+    // A pin naming a path that no longer exists is a silent hole, not a clean repo.
+    if (!pin.tracked) {
+      violations.push({
+        path: pin.path,
+        rule: 'pinned to CRLF but not tracked',
+        detail: 'the pin no longer names a file; move the .gitattributes line or drop it'
+      })
+      continue
+    }
+    if (pin.crlf) {
+      violations.push({
+        path: pin.path,
+        rule: 'committed blob contains CRLF',
+        detail: 'eol=crlf already converts on checkout; a CRLF blob ships CRLF everywhere'
+      })
+    }
+    const eol = attrs.get(pin.path)?.eol
+    if (eol !== 'crlf') {
+      violations.push({
+        path: pin.path,
+        rule: `checked out with eol=${eol ?? 'unspecified'}, not crlf`,
+        detail: 'this is the shipped Windows CLI shim; LF here changes a byte cmd.exe parses'
+      })
+    }
+  }
+  return violations
+}
+
+/**
  * Why the explicit status check: `git grep` exits 1 on "no matches", which is
  * indistinguishable from a failure unless we look. A silently empty result here would
  * drop 100+ files from the population and still report a clean repo.
@@ -148,7 +199,7 @@ function readIndexBlobs(root, files) {
  * working-tree scan would fail for everyone on Windows and prove nothing. The committed
  * blob is the thing that actually ships.
  */
-export function collectExecutableArtifacts(root) {
+function readIndex(root) {
   const index = new Map()
   const executableBit = new Set()
   for (const entry of gitText(root, ['ls-files', '-s', '-z']).split('\0')) {
@@ -166,6 +217,11 @@ export function collectExecutableArtifacts(root) {
       executableBit.add(file)
     }
   }
+  return { index, executableBit }
+}
+
+export function collectExecutableArtifacts(root) {
+  const { index, executableBit } = readIndex(root)
   // `git grep` narrows 20k tracked files to ~130 candidates in one C-side pass; the
   // anchor is per-line, so this is a superset that the blob read below trims exactly.
   // `-z` because plain `-l` quotes any path git considers unusual.
@@ -206,23 +262,42 @@ export function collectExecutableArtifacts(root) {
   return entries
 }
 
+export function collectCrlfPins(root) {
+  const { index } = readIndex(root)
+  const tracked = CRLF_PINNED_PATHS.filter((file) => index.has(file))
+  const blobs = readIndexBlobs(
+    root,
+    tracked.map((file) => ({ path: file, sha: index.get(file) }))
+  )
+  return CRLF_PINNED_PATHS.map((file) => ({
+    path: file,
+    tracked: index.has(file),
+    crlf: containsCrlf(blobs.get(file) ?? Buffer.alloc(0))
+  }))
+}
+
 export function checkLineEndingPolicy(root) {
   const entries = collectExecutableArtifacts(root)
+  const pins = collectCrlfPins(root)
+  const queried = [...entries.map((e) => e.path), ...pins.map((p) => p.path)]
   const attrs = parseCheckAttr(
-    gitText(
-      root,
-      ['check-attr', '-z', '--stdin', 'eol'],
-      `${entries.map((e) => e.path).join('\0')}\0`
-    )
+    gitText(root, ['check-attr', '-z', '--stdin', 'eol'], `${queried.join('\0')}\0`)
   )
-  return { entries, violations: findViolations(entries, attrs) }
+  return {
+    entries,
+    pins,
+    violations: [...findViolations(entries, attrs), ...findPinViolations(pins, attrs)]
+  }
 }
 
 function main(root) {
-  const { entries, violations } = checkLineEndingPolicy(root)
-  if (entries.length === 0) {
+  const { entries, pins, violations } = checkLineEndingPolicy(root)
+  if (entries.length === 0 || pins.length === 0) {
     // A population of zero means the discovery broke, not that the repo got clean.
-    console.error('::error::line-ending policy: found no executable artifacts to check.')
+    console.error(
+      '::error::line-ending policy: nothing to check' +
+        ` (${entries.length} executable artifact(s), ${pins.length} CRLF-pinned path(s)).`
+    )
     return 1
   }
   if (violations.length > 0) {
@@ -236,7 +311,10 @@ function main(root) {
     )
     return 1
   }
-  console.log(`line-ending policy OK — ${entries.length} executable artifact(s), all LF.`)
+  console.log(
+    `line-ending policy OK — ${entries.length} executable artifact(s) LF, ` +
+      `${pins.length} CRLF-pinned path(s) still pinned.`
+  )
   return 0
 }
 
