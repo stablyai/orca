@@ -16,7 +16,6 @@ const FIXTURE_BYTES = 384
 describe('static AppImage package contract', () => {
   it.each([
     ['orca-linux.AppImage', 0x3e, 1],
-    ['orca-linux.AppImage', 0xb7, 3],
     ['orca-linux-arm64.AppImage', 0xb7, 'arm64']
   ])('accepts a dependency-free type-2 %s runtime', async (filename, machine, targetArch) => {
     await withFixture(filename, createRuntime({ machine }), (path) => {
@@ -25,6 +24,8 @@ describe('static AppImage package contract', () => {
   })
 
   it.each([
+    ['generic filename for an arm64 runtime and target', 'orca-linux.AppImage', 0xb7, 3],
+    ['arm64 filename for an x64 runtime and target', 'orca-linux-arm64.AppImage', 0x3e, 1],
     ['generic x64 runtime for an arm64 target', 'orca-linux.AppImage', 0x3e, 3],
     ['generic arm64 runtime for an x64 target', 'orca-linux.AppImage', 0xb7, 1],
     ['arm64 artifact filename for an x64 target', 'orca-linux-arm64.AppImage', 0xb7, 1],

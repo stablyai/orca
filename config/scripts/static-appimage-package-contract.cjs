@@ -1,7 +1,10 @@
 const { closeSync, fstatSync, openSync, readSync } = require('node:fs')
 const { basename } = require('node:path')
 
-const ALLOWED_FILENAMES = new Set(['orca-linux.AppImage', 'orca-linux-arm64.AppImage'])
+const EXPECTED_ARCHITECTURE_BY_FILENAME = new Map([
+  ['orca-linux.AppImage', 'x64'],
+  ['orca-linux-arm64.AppImage', 'arm64']
+])
 const APPIMAGE_MAGIC = Buffer.from([0x41, 0x49, 0x02])
 const RUNTIME_SOURCE = Buffer.from('https://github.com/AppImage/type2-runtime')
 const TARGET_ARCHITECTURE_BY_ENUM = new Map([
@@ -21,12 +24,15 @@ const MAX_DYNAMIC_BYTES = 1024 * 1024
 
 function verifyStaticAppImagePackage(filePath, targetArch) {
   const filename = basename(filePath)
-  if (!ALLOWED_FILENAMES.has(filename)) {
-    invalid(filename, `unsupported artifact name; expected ${[...ALLOWED_FILENAMES].join(' or ')}`)
+  const filenameArchitecture = EXPECTED_ARCHITECTURE_BY_FILENAME.get(filename)
+  if (!filenameArchitecture) {
+    invalid(
+      filename,
+      `unsupported artifact name; expected ${[...EXPECTED_ARCHITECTURE_BY_FILENAME.keys()].join(' or ')}`
+    )
   }
   const targetArchitecture = normalizeTargetArchitecture(targetArch, filename)
-  const filenameArchitecture = filename === 'orca-linux-arm64.AppImage' ? 'arm64' : null
-  if (filenameArchitecture && filenameArchitecture !== targetArchitecture) {
+  if (filenameArchitecture !== targetArchitecture) {
     invalid(
       filename,
       `artifact filename targets ${filenameArchitecture}, but electron-builder target is ${targetArchitecture}`
