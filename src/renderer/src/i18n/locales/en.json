@@ -405,7 +405,11 @@
         "workspace": {
           "cleanup": {
             "9d6e531da6": "Workspace no longer exists.",
+            "listingUnverifiable": "Orca couldn't reach this workspace's host to check whether it still exists. Reconnect and try again.",
             "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing.",
+            "unsavedEditorSinceConfirmation": "This workspace has unsaved editor changes that deleting it would discard permanently. Review it before removing.",
+            "liveWorkSinceConfirmation": "A terminal or agent in this workspace is running. Review it before removing.",
+            "livenessUnverifiableSinceConfirmation": "Orca cannot verify this workspace's terminals. Review it before removing.",
             "hostCollision": "Error: this workspace exists on multiple hosts at the same path",
             "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again.",
             "gitStatusUnavailable": "Orca couldn't check this workspace's git status. Try again, or delete it from its host-specific sidebar or project list.",

@@ -12,11 +12,18 @@ import {
 } from '../../../../shared/workspace-cleanup-host-identity'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 import {
-  preflightWorkspaceCleanupCandidates,
   resolveWorkspaceCleanupRemovalTargets,
   type WorkspaceCleanupRemovalTarget
 } from './workspace-cleanup-removal-targets'
-import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup-candidate-enrichment'
+import { preflightWorkspaceCleanupCandidates } from './workspace-cleanup-preflight-scan'
+import {
+  applyWorkspaceCleanupDismissal,
+  enrichWorkspaceCleanupCandidates
+} from './workspace-cleanup-candidate-enrichment'
+import {
+  pruneWorkspaceCleanupRowReads,
+  rewriteWorkspaceCleanupRowsFromRead
+} from './workspace-cleanup-row-recency'
 import { invalidateWorkspaceCleanupScanProgress } from './workspace-cleanup-scan-progress'
 
 export type WorkspaceCleanupFailure = {
@@ -70,7 +77,7 @@ export async function removeWorkspaceCleanupCandidates(
     removableTargets.push(target)
   }
 
-  const preflights = await preflightWorkspaceCleanupCandidates(
+  const preflight = await preflightWorkspaceCleanupCandidates(
     removableTargets,
     get,
     (candidates, state) =>
@@ -87,19 +94,33 @@ export async function removeWorkspaceCleanupCandidates(
     ignoreWorkspaceCleanupScanSurvivors?: boolean
   }[] = []
 
-  for (const preflight of preflights) {
-    if (!preflight.ok) {
-      failures.push(preflight.failure)
+  const refreshedCandidates: WorkspaceCleanupCandidate[] = []
+  const retiredIdentities = new Set<string>()
+  for (const result of preflight.results) {
+    if (!result.ok) {
+      failures.push(result.failure)
+      if (result.refreshedCandidate) {
+        refreshedCandidates.push(result.refreshedCandidate)
+      }
+      if (result.retiredCandidateIdentity) {
+        retiredIdentities.add(result.retiredCandidateIdentity)
+      }
       continue
     }
     targetsToRemove.push({
-      target: preflight.target,
-      candidate: preflight.candidate,
-      ...(preflight.sameIdSurvivingHostId
-        ? { sameIdSurvivingHostId: preflight.sameIdSurvivingHostId }
+      target: result.target,
+      candidate: result.candidate,
+      ...(result.sameIdSurvivingHostId
+        ? { sameIdSurvivingHostId: result.sameIdSurvivingHostId }
         : {})
     })
   }
+  publishRefreshedWorkspaceCleanupCandidates(
+    set,
+    refreshedCandidates,
+    retiredIdentities,
+    preflight.scannedAt
+  )
   const scheduledRemovalIdentities = new Set(
     targetsToRemove.map(({ candidate }) => getWorkspaceCleanupCandidateIdentity(candidate))
   )
@@ -187,6 +208,12 @@ export async function removeWorkspaceCleanupCandidates(
           state.workspaceCleanupScan && remainingCandidates
             ? { ...state.workspaceCleanupScan, candidates: remainingCandidates }
             : state.workspaceCleanupScan,
+        // Why: a read left behind for a deleted row is dead weight a later row
+        // with the same identity would inherit as its own.
+        workspaceCleanupRowReadAt: pruneWorkspaceCleanupRowReads(
+          state.workspaceCleanupRowReadAt,
+          remainingCandidates ?? []
+        ),
         // Why: dismissals and viewed marks for removed worktrees are dead
         // weight in the store and in every persisted-dismissals write.
         workspaceCleanupDismissals: pruneWorkspaceCleanupDismissals(
@@ -214,6 +241,82 @@ export async function removeWorkspaceCleanupCandidates(
     failures,
     ...(preservedBranches.length > 0 ? { preservedBranches } : {})
   }
+}
+
+/**
+ * The rule this whole surface turns on: **a cleanup row shows the most recent
+ * read of that workspace, and consent is only ever spent on a verdict the user
+ * has actually seen.**
+ *
+ * *Recency* is a property of a ROW, not of the list it sits in. `scannedAt` dates
+ * a whole scan, so the moment a republish puts a newer row into an older list the
+ * two disagree, and a streamed progress tick creates that disagreement on purpose:
+ * it pins `scannedAt` to the snapshot's while writing rows read minutes later. A
+ * comparison against `scan.scannedAt` therefore cannot decide anything here, and
+ * this function used to make no other. The read time travels with the row instead,
+ * in `workspaceCleanupRowReadAt`, and `rewriteWorkspaceCleanupRowsFromRead` both
+ * consults it and stamps what it writes — the two are one operation because
+ * splitting them is what failed: a map only the refusals wrote to had no entry for
+ * the tick's row, so honouring it changed nothing.
+ *
+ * *Recency also decides existence*, which "the most recent read wins" does not say
+ * on its own. Retiring a row is a verdict read at a moment like any other, so a row
+ * whose newest read says it is there — and busy — outranks an older read that did
+ * not list it. Dropping it anyway is worse than showing it stale: the user cannot
+ * see the thing they are being asked about.
+ *
+ * *Consent* is not decided here at all. The delete is authorized against
+ * `approvedCandidate`, captured when the user confirmed and never read from
+ * the list, so publishing can only ever disclose — it cannot re-authorize a
+ * stale confirmation no matter which row it writes.
+ *
+ * The one limit publishing does carry is provenance, and it is structural: this
+ * walks the rows the list already holds, so it can neither resurrect a workspace
+ * that is gone nor invent one the list never showed. A workspace this read no
+ * longer lists has no refreshed picture to put in its place — repeating
+ * "Workspace no longer exists" forever is not something the user can act on — so
+ * that row is dropped rather than rewritten, under the same recency rule.
+ */
+function publishRefreshedWorkspaceCleanupCandidates(
+  set: (partial: (state: AppState) => Partial<AppState>) => void,
+  refreshed: readonly WorkspaceCleanupCandidate[],
+  retiredIdentities: ReadonlySet<string>,
+  rescannedAt: number | null
+): void {
+  if (refreshed.length === 0 && retiredIdentities.size === 0) {
+    return
+  }
+  set((state) => {
+    const scan = state.workspaceCleanupScan
+    // `null` means the rescan never ran, which also means it found nothing to
+    // report and this returned above — kept as the safe arm of its type.
+    // The `scannedAt` arm restates the row rule rather than adding to it: the
+    // settle and the cache hydrate stamp every row they publish with exactly the
+    // `scannedAt` they publish, so it only decides rows no read has dated yet.
+    if (!scan || rescannedAt === null || rescannedAt < scan.scannedAt) {
+      return {}
+    }
+    const { candidates, rowReads, changed } = rewriteWorkspaceCleanupRowsFromRead({
+      listed: scan.candidates,
+      readAt: rescannedAt,
+      // Preflight enrichment skips dismissals so a dismissed row stays
+      // removable; the published row must not lose the mark that hides it.
+      refreshed: refreshed.map((candidate) =>
+        applyWorkspaceCleanupDismissal(candidate, state.workspaceCleanupDismissals)
+      ),
+      retiredIdentities,
+      rowReads: state.workspaceCleanupRowReadAt
+    })
+    if (!changed) {
+      return {}
+    }
+    // `scannedAt` still describes the older read these rows now sit beside; the
+    // rows this republish wrote carry their own time in `workspaceCleanupRowReadAt`.
+    return {
+      workspaceCleanupScan: { ...scan, candidates },
+      workspaceCleanupRowReadAt: rowReads
+    }
+  })
 }
 
 function pruneWorkspaceCleanupDismissals(

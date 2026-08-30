@@ -34,6 +34,10 @@ const HOST_B_HOST_ID: ExecutionHostId = 'ssh:ssh-1'
 const HOST_UNRESOLVED_MESSAGE =
   'Orca cannot tell which host owns this workspace. Refresh projects and review it again.'
 const WORKSPACE_GONE_MESSAGE = 'Workspace no longer exists.'
+/** The refreshed scan never reached the confirmed host, so its silence about that
+ *  host's row establishes nothing — including that the workspace is gone. */
+const HOST_UNREACHED_MESSAGE =
+  "Orca couldn't reach this workspace's host to check whether it still exists. Reconnect and try again."
 
 const mockApi = {
   worktrees: {
@@ -172,11 +176,15 @@ function installRemovalTransport(
   )
 }
 
-function seedScan(candidates: readonly WorkspaceCleanupCandidate[]): void {
+function seedScan(
+  candidates: readonly WorkspaceCleanupCandidate[],
+  repoListings: WorkspaceCleanupScanResult['repoListings'] = []
+): void {
   mockApi.workspaceCleanup.scan.mockResolvedValue({
     scannedAt: NOW,
     candidates: [...candidates],
-    errors: []
+    errors: [],
+    repoListings
   } satisfies WorkspaceCleanupScanResult)
 }
 
@@ -282,7 +290,40 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
     expect(routedHostIds).toEqual([])
     // The confirmed host's row is simply not there any more; do not fall through
     // to another host's row, which would decide force/blockers for a workspace
-    // it does not own.
+    // it does not own. Host A's listing says nothing about host B's checkout, so
+    // the refusal names the loss of contact rather than claiming a deletion.
+    expect(removal.failures).toEqual([
+      {
+        worktreeId: WORKTREE_ID,
+        executionHostId: HOST_B_HOST_ID,
+        displayName: 'shared-workspace',
+        message: HOST_UNREACHED_MESSAGE
+      }
+    ])
+  })
+
+  it('refuses and retires the row when the confirmed host listed its workspaces without it', async () => {
+    // The same omission, but host B answered this time — that is what turns the
+    // absence into evidence, and only then may the stale row be reconciled away.
+    const hosts = createHostDirectories()
+    const routedHostIds: string[] = []
+    installRemovalTransport(
+      { [HOST_A_HOST_ID]: hosts.hostARoot, [HOST_B_HOST_ID]: hosts.hostBRoot },
+      routedHostIds
+    )
+    seedScan(
+      [makeHostCandidate(HOST_A_HOST_ID)],
+      [{ repoId: 'repo1', executionHostId: HOST_B_HOST_ID, verdict: 'exited' }]
+    )
+
+    const store = createTestStore()
+
+    const removal = await store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID], {
+      approvedCandidates: [makeHostCandidate(HOST_B_HOST_ID)]
+    })
+
+    expect(fs.existsSync(hosts.hostBMarkerPath), 'host B must survive the refusal').toBe(true)
+    expect(routedHostIds).toEqual([])
     expect(removal.failures).toEqual([
       {
         worktreeId: WORKTREE_ID,

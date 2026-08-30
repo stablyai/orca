@@ -223,7 +223,14 @@ describe('workspace cleanup removal verification and consent', () => {
     })
     const moved = makeCandidate({ ...approved, executionHostId: 'ssh:remote' })
     installWorkspaceCleanupApi(
-      vi.fn().mockResolvedValue({ scannedAt: NOW, candidates: [moved], errors: [] })
+      vi.fn().mockResolvedValue({
+        scannedAt: NOW,
+        candidates: [moved],
+        errors: [],
+        // The confirmed host answered and no longer holds the workspace; without
+        // that the omission would only mean nobody reached it.
+        repoListings: [{ repoId: 'repo1', executionHostId: 'local', verdict: 'exited' }]
+      })
     )
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)

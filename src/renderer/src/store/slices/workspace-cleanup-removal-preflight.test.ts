@@ -569,7 +569,7 @@ describe('workspace cleanup removal and protection', () => {
           worktreeId: WORKTREE_ID,
           executionHostId: 'local',
           displayName: 'old-workspace',
-          message: 'Workspace changed after confirmation. Refresh to review it before removing.'
+          message: "Orca cannot verify this workspace's terminals. Review it before removing."
         }
       ]
     })

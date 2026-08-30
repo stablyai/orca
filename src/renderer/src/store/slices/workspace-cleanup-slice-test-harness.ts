@@ -85,7 +85,10 @@ export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> 
 
 export function installWorkspaceCleanupApi(
   scan: ReturnType<typeof vi.fn>,
-  getCachedScan: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(null)
+  getCachedScan: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue(null),
+  // Removal preflight re-probes PTYs through enrichment; a test that drives
+  // terminal liveness needs both surfaces on the same window.
+  pty?: Record<string, ReturnType<typeof vi.fn>>
 ) {
   ;(globalThis as { window: unknown }).window = {
     api: {
@@ -97,7 +100,8 @@ export function installWorkspaceCleanupApi(
         hasKillableLocalProcesses: vi.fn().mockResolvedValue({
           hasKillableProcesses: false
         })
-      }
+      },
+      ...(pty ? { pty } : {})
     }
   }
 }

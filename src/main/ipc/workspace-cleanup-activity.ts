@@ -5,6 +5,11 @@ import type { Worktree } from '../../shared/worktree/types'
 import { getPersistedWorkspaceCleanupActivityAt } from '../../shared/workspace-cleanup'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
+import {
+  WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
+  WorkspaceCleanupScanCancelledError,
+  withWorkspaceCleanupTimeout
+} from './workspace-cleanup-scan-primitives'
 
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>
 type ReadTextFile = (targetPath: string, options?: { tailBytes?: number }) => Promise<string>
@@ -193,5 +198,41 @@ async function readMtime(targetPath: string, statPath: StatPath): Promise<number
     return Number.isFinite(stats.mtimeMs) ? stats.mtimeMs : 0
   } catch {
     return 0
+  }
+}
+
+/**
+ * Why bounded: fs stat has no cancellation, so on a hung network or WSL mount an
+ * unbounded read abandons threadpool work per row. On timeout the caller is told
+ * to stop statting this repo and the persisted stamp stands in.
+ */
+export async function resolveCleanupActivityWithTimeout(
+  repo: Repo,
+  worktree: Worktree,
+  onActivityStatsUnavailable: () => void,
+  signal?: AbortSignal,
+  fsActivityCache?: WorkspaceCleanupFsActivityCache
+): Promise<Worktree> {
+  try {
+    return await withWorkspaceCleanupTimeout(
+      () =>
+        resolveWorkspaceCleanupActivityWorktree(
+          repo,
+          worktree,
+          undefined,
+          undefined,
+          fsActivityCache
+        ),
+      WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
+      'Timed out reading worktree activity.',
+      signal
+    )
+  } catch (error) {
+    if (error instanceof WorkspaceCleanupScanCancelledError) {
+      throw error
+    }
+    onActivityStatsUnavailable()
+    console.warn('Workspace cleanup activity scan failed', error)
+    return resolvePersistedWorkspaceCleanupActivityWorktree(worktree)
   }
 }

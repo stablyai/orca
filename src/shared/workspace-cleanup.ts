@@ -1,3 +1,4 @@
+import type { WorkspaceCleanupRepoListing } from './workspace-cleanup-omission-verdict'
 // Type-only, so the cycle back through workspace-cleanup-filter-model erases at build.
 import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-state'
 import type { ExecutionHostId } from './execution-host'
@@ -127,6 +128,9 @@ export type WorkspaceCleanupScanResult = {
   scannedAt: number
   candidates: WorkspaceCleanupCandidate[]
   errors: WorkspaceCleanupScanError[]
+  /** What an omission from `candidates` means, per repo this scan visited. Absent
+   *  on hosts that predate the field, which reads as `unverifiable` throughout. */
+  repoListings?: WorkspaceCleanupRepoListing[]
 }
 
 export type WorkspaceCleanupScanProgress = WorkspaceCleanupScanResult & {

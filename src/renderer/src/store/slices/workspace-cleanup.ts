@@ -22,6 +22,10 @@ import {
 } from './workspace-cleanup-candidate-enrichment'
 import { scanWorkspaceCleanup } from './workspace-cleanup-scan-lifecycle'
 import {
+  applyWorkspaceCleanupRowRead,
+  type WorkspaceCleanupRowReads
+} from './workspace-cleanup-row-recency'
+import {
   removeWorkspaceCleanupCandidates,
   type WorkspaceCleanupFailure,
   type WorkspaceCleanupRemoveOptions,
@@ -45,6 +49,8 @@ export type WorkspaceCleanupSlice = {
   workspaceCleanupError: string | null
   workspaceCleanupDismissals: Record<string, WorkspaceCleanupDismissal>
   workspaceCleanupViewedCandidates: Record<string, WorkspaceCleanupViewedCandidate>
+  /** When each listed row was read. See workspace-cleanup-row-recency.ts. */
+  workspaceCleanupRowReadAt: WorkspaceCleanupRowReads
   scanWorkspaceCleanup: (args?: WorkspaceCleanupScanArgs) => Promise<WorkspaceCleanupScanResult>
   hydrateWorkspaceCleanupFromCache: () => Promise<boolean>
   markWorkspaceCleanupCandidateViewed: (candidate: WorkspaceCleanupCandidate) => void
@@ -71,12 +77,26 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   workspaceCleanupError: null,
   workspaceCleanupDismissals: {},
   workspaceCleanupViewedCandidates: {},
+  workspaceCleanupRowReadAt: {},
   scanWorkspaceCleanup: (args) => scanWorkspaceCleanup(get, set, args),
   hydrateWorkspaceCleanupFromCache: () =>
     hydrateWorkspaceCleanupScanFromCache({
       hasLiveScanState: () => get().workspaceCleanupScan !== null || get().workspaceCleanupLoading,
       enrich: (candidates) => enrichWorkspaceCleanupCandidates(candidates, get()),
-      apply: (scan) => set({ workspaceCleanupScan: scan })
+      // The cache is a read like any other. It only ever fills an EMPTY slice, so
+      // it has nothing to lose to and nothing to preserve — but it still dates the
+      // rows it seeds, because a writer left outside this rule is what this whole
+      // module exists to stop.
+      apply: (scan) => {
+        const { rowReads } = applyWorkspaceCleanupRowRead({
+          rows: scan.candidates,
+          readAt: scan.scannedAt,
+          published: scan.candidates,
+          listed: [],
+          rowReads: {}
+        })
+        set({ workspaceCleanupScan: scan, workspaceCleanupRowReadAt: rowReads })
+      }
     }),
   markWorkspaceCleanupCandidateViewed: (candidate) => {
     const now = Date.now()
