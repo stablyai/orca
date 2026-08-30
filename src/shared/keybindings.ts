@@ -2240,6 +2240,45 @@ export function matchKeybindingDigitIndex(
   return null
 }
 
+export type KeybindingModifierChord = {
+  meta: boolean
+  control: boolean
+  alt: boolean
+  shift: boolean
+}
+
+/** Platform-resolved modifier combos that arm a digit-index action, so UI can reveal the 1-9 labels while one is held. */
+export function getDigitIndexModifierChords(
+  actionId: KeybindingActionId,
+  platform: NodeJS.Platform,
+  overrides?: KeybindingOverrides
+): KeybindingModifierChord[] {
+  const chords: KeybindingModifierChord[] = []
+  for (const binding of getEffectiveKeybindingsForAction(actionId, platform, overrides)) {
+    const parsed = parseKeybinding(binding)
+    if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
+      continue
+    }
+    const chord = platformModifiers(parsed, platform)
+    // Why: canonicalizeDigitIndexBinding accepts a bare "1", so a hand-edited file can reach here
+    // with no modifier at all. An empty chord would arm on every ordinary keystroke.
+    if (!chord.meta && !chord.control && !chord.alt && !chord.shift) {
+      continue
+    }
+    if (!chords.some((existing) => keybindingModifierChordsEqual(existing, chord))) {
+      chords.push(chord)
+    }
+  }
+  return chords
+}
+
+export function keybindingModifierChordsEqual(
+  a: KeybindingModifierChord,
+  b: KeybindingModifierChord
+): boolean {
+  return a.meta === b.meta && a.control === b.control && a.alt === b.alt && a.shift === b.shift
+}
+
 function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
   switch (modifier) {
     case 'Mod':

@@ -8,6 +8,7 @@ import {
   getWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import WorktreeCard, { type ActiveSurfaceVariant } from '../../WorktreeCard'
+import { WorkspaceShortcutIndexBadge } from '../../WorkspaceShortcutIndexBadge'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import {
@@ -31,6 +32,7 @@ export type WorktreeItemRowContext = {
   folderBackedProjectGroupIds: ReadonlySet<string>
   groupKeyByRowKey: ReadonlyMap<string, string>
   groupIndexByRowKey: ReadonlyMap<string, number>
+  workspaceShortcutIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
   worktreeDragState: WorktreeRowDragState
   worktreePointerDragRef: React.MutableRefObject<WorktreePointerDrag | null>
@@ -142,6 +144,7 @@ export function renderWorktreeItemRow(
     (ctx.worktreePointerDragRef.current?.latestStatusDropTarget?.target.lineageParentId ===
       itemRow.worktree.id ||
       ctx.nativeLineageDropTargetId === itemRow.worktree.id)
+  const workspaceShortcutIndex = ctx.workspaceShortcutIndexByRowKey.get(itemRow.rowKey)
   const isActiveWorktree =
     ctx.activeWorktreeId === itemRow.worktree.id &&
     (!ctx.activeWorkspaceExecutionHostId ||
@@ -225,6 +228,11 @@ export function renderWorktreeItemRow(
           itemRow.lineageGroupKey ? ctx.getLineageToggleHandler(itemRow.lineageGroupKey) : undefined
         }
       />
+      {workspaceShortcutIndex ? (
+        <div className="pointer-events-none absolute right-3 top-1.5 z-10">
+          <WorkspaceShortcutIndexBadge index={workspaceShortcutIndex} />
+        </div>
+      ) : null}
     </div>
   )
 }

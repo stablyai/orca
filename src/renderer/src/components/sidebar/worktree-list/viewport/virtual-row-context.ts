@@ -29,6 +29,7 @@ type BuildArgs = {
   sshConnectionStates: AppState['sshConnectionStates']
   newCardStyle: boolean
   folderBackedProjectGroupIds: ReadonlySet<string>
+  workspaceShortcutIndexByRowKey: ReadonlyMap<string, number>
   session: WorktreeDragSession
   runtime: WorktreeDragRuntime
   primaryActive: ReturnType<typeof usePrimaryActiveWorktreeRow>
@@ -115,6 +116,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       folderBackedProjectGroupIds: args.folderBackedProjectGroupIds,
       groupKeyByRowKey: session.groupKeyByRowKey,
       groupIndexByRowKey: session.groupIndexByRowKey,
+      workspaceShortcutIndexByRowKey: args.workspaceShortcutIndexByRowKey,
       agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,
       worktreeDragState: runtime.worktreeDragState,
       worktreePointerDragRef: runtime.worktreePointerDragRef,
@@ -142,6 +144,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       activeWorktreeId: props.activeWorktreeId,
       currentWorktreeId: props.currentWorktreeId,
       selectedWorktreeIds: props.selectedWorktreeIds,
+      workspaceShortcutIndexByRowKey: args.workspaceShortcutIndexByRowKey,
       repoMap: props.repoMap,
       worktreeMap: props.worktreeMap,
       worktreeLineageById: props.worktreeLineageById,

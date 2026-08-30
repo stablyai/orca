@@ -44,22 +44,34 @@ export function getPreferredWorktreeRows(
   return preferredRows
 }
 
-export function getRenderedWorktreesInSidebarOrder(
+/** One rendered workspace card: the key of the row that draws it plus the workspace it stands for. */
+export type RenderedSidebarWorktreeEntry = { rowKey: string; worktree: Worktree }
+
+export function getRenderedWorktreeEntriesInSidebarOrder(
   rows: readonly HostSectionRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-): Worktree[] {
+): RenderedSidebarWorktreeEntry[] {
   const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
   const preferredRowKeys = new Set(
     getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.rowKey)
   )
-  const renderedWorktrees: Worktree[] = []
+  const entries: RenderedSidebarWorktreeEntry[] = []
 
   for (const row of rows) {
     if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
-      renderedWorktrees.push(row.worktree)
+      entries.push({ rowKey: row.rowKey, worktree: row.worktree })
     } else if (row.type === 'folder-workspace') {
-      renderedWorktrees.push(folderWorkspaceToWorktree(row.folderWorkspace))
+      entries.push({ rowKey: row.key, worktree: folderWorkspaceToWorktree(row.folderWorkspace) })
     }
   }
-  return renderedWorktrees
+  return entries
+}
+
+export function getRenderedWorktreesInSidebarOrder(
+  rows: readonly HostSectionRow[],
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+): Worktree[] {
+  return getRenderedWorktreeEntriesInSidebarOrder(rows, pinnedDisplayPolicy).map(
+    (entry) => entry.worktree
+  )
 }

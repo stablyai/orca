@@ -27,6 +27,7 @@ import { useWorktreeSidebarScrollSuppression } from './use-scroll-suppression'
 import { EMPTY_PROJECT_GROUPS, type VirtualizedWorktreeViewportProps } from './viewport-props'
 import { useWorktreeDropCommitContext } from '../drag/use-drop-commit-context'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
+import { useWorkspaceShortcutIndexByRowKey } from '../../workspace-index-shortcut-badges'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
 
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
@@ -64,6 +65,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const scrollSuppression = useWorktreeSidebarScrollSuppression(scrollRef)
   const { markDirectScrollInput, markScrollMovement } = scrollSuppression
 
+  const workspaceShortcutIndexByRowKey = useWorkspaceShortcutIndexByRowKey(
+    rows,
+    pinnedDisplayPolicy
+  )
   const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
   const firstHeaderIndex = useMemo(
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
@@ -295,6 +300,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const rowContext = buildWorktreeVirtualRowContext({
     props,
+    workspaceShortcutIndexByRowKey,
     renderRows,
     firstHeaderIndex,
     virtualization,

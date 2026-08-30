@@ -4,7 +4,10 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostSectionRow } from './host-section-rows'
-import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
+import {
+  getRenderedWorktreeEntriesInSidebarOrder,
+  getRenderedWorktreesInSidebarOrder
+} from './worktree-sidebar-row-preference'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -101,5 +104,31 @@ describe('getRenderedWorktreesInSidebarOrder', () => {
     expect(
       getRenderedWorktreesInSidebarOrder(rows, 'duplicate-in-groups').map(({ id }) => id)
     ).toEqual(['folder:folder-1', 'pinned', 'after-folder'])
+  })
+})
+
+describe('getRenderedWorktreeEntriesInSidebarOrder', () => {
+  it('reports the row key each card renders under, so Cmd+1-9 badges can address it', () => {
+    const pinned = worktree('pinned', true)
+    const rows: HostSectionRow[] = [
+      item(pinned, 'pinned'),
+      {
+        type: 'folder-workspace',
+        key: 'folder-workspace:folder-1',
+        folderWorkspace,
+        projectGroup,
+        depth: 0,
+        groupDepth: 0
+      },
+      item(pinned, 'repo:repo-1')
+    ]
+
+    expect(getRenderedWorktreeEntriesInSidebarOrder(rows, 'duplicate-in-groups')).toEqual([
+      {
+        rowKey: 'folder-workspace:folder-1',
+        worktree: expect.objectContaining({ id: 'folder:folder-1' })
+      },
+      { rowKey: 'repo:repo-1:pinned', worktree: pinned }
+    ])
   })
 })

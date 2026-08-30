@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   findKeybindingConflicts,
+  getDigitIndexModifierChords,
   isDigitIndexActionId,
   keybindingFromInputForAction,
   matchKeybindingDigitIndex,
@@ -185,6 +186,34 @@ describe('digit-index shortcuts', () => {
     expect(normalizeKeybindingListForAction('tab.selectByIndex', 'Mod+P')).toMatchObject({
       ok: false
     })
+  })
+
+  it('resolves the modifiers that arm a range, for UI that reveals the digits while they are held', () => {
+    expect(getDigitIndexModifierChords('workspace.selectByIndex', 'darwin')).toEqual([
+      { meta: true, control: false, alt: false, shift: false }
+    ])
+    expect(getDigitIndexModifierChords('workspace.selectByIndex', 'win32')).toEqual([
+      { meta: false, control: true, alt: false, shift: false }
+    ])
+    // Why not a Shift example: matchKeybindingDigitIndex cannot match Shift+digit on macOS
+    // (the OS reports '!', not '1'), so a Shift binding is not a chord this can honestly arm.
+    expect(
+      getDigitIndexModifierChords('workspace.selectByIndex', 'darwin', {
+        'workspace.selectByIndex': ['Alt+1']
+      })
+    ).toEqual([{ meta: false, control: false, alt: true, shift: false }])
+    // An unbound row arms nothing, so no card gets a badge.
+    expect(
+      getDigitIndexModifierChords('workspace.selectByIndex', 'darwin', {
+        'workspace.selectByIndex': []
+      })
+    ).toEqual([])
+    // A hand-edited bare digit must not arm: an empty chord would match every ordinary keystroke.
+    expect(
+      getDigitIndexModifierChords('workspace.selectByIndex', 'darwin', {
+        'workspace.selectByIndex': ['1']
+      })
+    ).toEqual([])
   })
 
   it('lets the two ranges swap modifiers without a false conflict', () => {
