@@ -7,11 +7,13 @@ const { getSshGitProviderMock, gitExecFileAsyncMock } = vi.hoisted(() => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
+  getSshGitProviderGeneration: () => 0,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH Git provider unavailable'
 }))
 
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
+import { _resetGitHostProbeBreaker } from './git-host-probe-breaker'
 import {
   assertRemoteUrlReadable,
   isTransientGitProbeError,
@@ -23,6 +25,7 @@ describe('remote URL probe', () => {
   beforeEach(() => {
     getSshGitProviderMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    _resetGitHostProbeBreaker()
   })
 
   it('bounds local and WSL remote reads with the shared timeout', async () => {

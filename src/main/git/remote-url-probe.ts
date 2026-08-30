@@ -1,9 +1,20 @@
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   getSshGitProvider,
+  getSshGitProviderGeneration,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
+import {
+  gitProbeHostKey,
+  isGitHostProbeBlockedError,
+  runGuardedGitHostProbe
+} from './git-host-probe-breaker'
 import { gitExecFileAsync } from './runner'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import {
+  isWslLinkedWorktreeGitRoutingCandidate,
+  prepareWslLinkedWorktreeGitRouting
+} from './wsl-linked-worktree-git-routing'
 
 /**
  * The `git remote get-url` probe every forge integration runs to decide whether
@@ -25,27 +36,72 @@ export type RemoteUrlProbeContext = {
   wslDistro?: string
 }
 
+/**
+ * Which host executes this probe, resolved the way the runner resolves routing
+ * rather than from the caller's hint alone.
+ *
+ * Why it has to match: a Windows-drive worktree linked into a WSL repo carries a
+ * `wslDistro` but runs *host* git, and a `\wsl$` UNC cwd names its distro
+ * nowhere else. Key either one wrong and the budget is silently useless — the
+ * linked worktree's instant successes would reset the wedged distro's streak on
+ * every poll, so the breaker could never open.
+ */
+async function localProbeHostKey(context: RemoteUrlProbeContext): Promise<string> {
+  if (
+    isWslLinkedWorktreeGitRoutingCandidate(context.repoPath, context.wslDistro) &&
+    (await prepareWslLinkedWorktreeGitRouting(context.repoPath, context.wslDistro))
+  ) {
+    return gitProbeHostKey({})
+  }
+  // Why the cwd first: `resolveCommand` reads the cwd's distro before the hint,
+  // so identity follows execution. Why the platform gate: off Windows nothing is
+  // routed into WSL, and a literal `//wsl$/x` directory is an ordinary path.
+  const cwdDistro =
+    process.platform === 'win32' ? parseWslUncPath(context.repoPath)?.distro : undefined
+  const wslDistro = cwdDistro ?? context.wslDistro
+  return gitProbeHostKey(wslDistro ? { wslDistro } : {})
+}
+
 /** Reads a remote URL, or null when the repo's SSH runtime is not connected. */
 export async function readRemoteUrl(
   context: RemoteUrlProbeContext,
   remoteName: string
 ): Promise<string | null> {
   if (context.connectionId) {
-    const provider = getSshGitProvider(context.connectionId)
+    const connectionId = context.connectionId
+    const provider = getSshGitProvider(connectionId)
     if (!provider) {
+      // Costs no git, so there is nothing here for the host's budget to learn.
       return null
     }
-    const { stdout } = await provider.exec(['remote', 'get-url', remoteName], context.repoPath, {
-      signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
-    })
-    return stdout
+    return runGuardedGitHostProbe(
+      gitProbeHostKey({
+        connectionId,
+        connectionGeneration: getSshGitProviderGeneration(connectionId)
+      }),
+      async () => {
+        const { stdout } = await provider.exec(
+          ['remote', 'get-url', remoteName],
+          context.repoPath,
+          { signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS) }
+        )
+        return stdout
+      },
+      isTransientGitProbeError
+    )
   }
-  const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
-    cwd: context.repoPath,
-    timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
-    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
-  })
-  return stdout
+  return runGuardedGitHostProbe(
+    await localProbeHostKey(context),
+    async () => {
+      const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
+        cwd: context.repoPath,
+        timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
+        ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+      })
+      return stdout
+    },
+    isTransientGitProbeError
+  )
 }
 
 const TRANSIENT_PROBE_PATTERNS = [
@@ -62,6 +118,11 @@ const TRANSIENT_PROBE_PATTERNS = [
  * report it as "no review": it is an unavailable result, not a negative one.
  */
 export function isTransientGitProbeError(error: unknown): boolean {
+  // Why: a probe the host's failure budget refused never reached the host, so it
+  // stands in for exactly the deadline kill it was issued instead of.
+  if (isGitHostProbeBlockedError(error)) {
+    return true
+  }
   // Why: an abort — this probe's deadline, or a caller cancelling — carries no
   // message a pattern could match, but it is the emptiest answer of all.
   if (
