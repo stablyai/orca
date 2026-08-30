@@ -1,7 +1,6 @@
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
-  dashboardCardDisplayState,
   type DashboardCard,
   type DashboardCardDotState,
   type DashboardSnapshot,
@@ -217,9 +216,10 @@ export function buildDashboardSnapshot(
       const unseen =
         !isTitleDerived &&
         (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
-      const bucket = dashboardBucketForDotState(
-        dashboardCardDisplayState({ dotState, workingMode, unseen })
-      )
+      // Bucket on reported state, not seen-ness: routing through
+      // dashboardCardDisplayState hid acknowledged completions in Idle (#12168).
+      // Monitoring is unaffected — it buckets as 'working' either way.
+      const bucket = dashboardBucketForDotState(dotState)
       // Why: only a live pty can open a preview terminal, and only a
       // card-rendering caller can open one — the sidebar's bucket counts must
       // not pay host resolution on every agent-status tick.

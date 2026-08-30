@@ -1,9 +1,8 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import {
-  dashboardCardDisplayState,
-  type DashboardCard,
-  type DashboardCardSubagent,
-  type DashboardSnapshot
+import type {
+  DashboardCard,
+  DashboardCardSubagent,
+  DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
 
@@ -51,9 +50,8 @@ export function patchDashboardSnapshotFromAgentStatus(
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
-  const bucket = dashboardBucketForDotState(
-    dashboardCardDisplayState({ dotState, workingMode, unseen })
-  )
+  // Mirrors buildDashboardSnapshot: the column follows reported state, not seen-ness.
+  const bucket = dashboardBucketForDotState(dotState)
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),

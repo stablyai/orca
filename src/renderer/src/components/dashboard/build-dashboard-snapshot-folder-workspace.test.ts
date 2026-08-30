@@ -135,6 +135,28 @@ describe('buildDashboardSnapshot folder workspaces', () => {
     ])
   })
 
+  // Why: a group folder is where a user drives several repos from one terminal,
+  // so they sit on that pane while it works — auto-ack marks the run seen the
+  // moment it finishes. The board must still list the completed work.
+  it('keeps a finished group-folder agent on the board after auto-ack', () => {
+    const finishedState = state()
+    finishedState.agentStatusByPaneKey = {
+      [PANE_KEY]: { ...entry(), state: 'done', stateStartedAt: NOW - 60_000 }
+    }
+    finishedState.acknowledgedAgentsByPaneKey = { [PANE_KEY]: NOW - 30_000 }
+
+    const snapshot = buildDashboardSnapshot(finishedState, NOW)
+
+    expect(snapshot.cards).toHaveLength(1)
+    expect(snapshot.cards[0]).toMatchObject({
+      bucket: 'done',
+      dotState: 'done',
+      unseen: false,
+      repoName: 'Documentation',
+      worktreeName: 'Docs workspace'
+    })
+  })
+
   it('classifies a folder workspace from its own runtime host stamp', () => {
     const runtimeState = state()
     runtimeState.folderWorkspaces = [
