@@ -29,7 +29,7 @@ import {
 export type { PreflightRuntimeContext }
 import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
 import {
-  execCommandInWsl,
+  execCommandInWslOrThrow,
   execLocalPreflightCommand,
   isCommandAvailable,
   isCommandOnPath,
@@ -254,7 +254,7 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
     await (wslTarget
-      ? execCommandInWsl(wslTarget, `${shellQuote('gh')} auth status`)
+      ? execCommandInWslOrThrow(wslTarget, `${shellQuote('gh')} auth status`)
       : execLocalPreflightCommand('gh', ['auth', 'status']))
     // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
     // authentication issues for the checked hosts/accounts.
@@ -275,7 +275,7 @@ async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolea
 async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
     await (wslTarget
-      ? execCommandInWsl(wslTarget, `${shellQuote('glab')} auth status`)
+      ? execCommandInWslOrThrow(wslTarget, `${shellQuote('glab')} auth status`)
       : execLocalPreflightCommand('glab', ['auth', 'status']))
     return true
   } catch (error) {

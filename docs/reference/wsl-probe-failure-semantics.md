@@ -12,7 +12,7 @@ answer.
 
 ```ts
 try {
-  await execCommandInWsl(target, `${shellQuote(command)} --version`)
+  await execCommandInWslOrThrow(target, `${shellQuote(command)} --version`)
   return true
 } catch {
   return false // "not installed" and "could not ask" are now the same value

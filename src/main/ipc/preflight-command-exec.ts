@@ -58,7 +58,10 @@ export async function execLocalPreflightCommand(
   return withPreflightTimeout(command, commandPromise)
 }
 
-export async function execCommandInWsl(
+// Throws on any failure — a distro that is booting/unreachable throws the
+// same way a command that genuinely doesn't exist does. Callers must not
+// collapse both into "absent"; see docs/reference/wsl-probe-failure-semantics.md.
+export async function execCommandInWslOrThrow(
   target: WslPreflightTarget,
   command: string
 ): Promise<PreflightCommandResult> {
@@ -75,7 +78,7 @@ export async function isCommandAvailable(
 ): Promise<boolean> {
   try {
     await (wslTarget
-      ? execCommandInWsl(wslTarget, `${shellQuote(command)} --version`)
+      ? execCommandInWslOrThrow(wslTarget, `${shellQuote(command)} --version`)
       : execLocalPreflightCommand(command, ['--version']))
     return true
   } catch {
@@ -97,7 +100,7 @@ export async function isCommandOnPath(
   }
   try {
     // Why: preflight must validate the executable on PATH, not a shell alias or function.
-    const { stdout } = await execCommandInWsl(
+    const { stdout } = await execCommandInWslOrThrow(
       wslTarget,
       [
         // Same skip as agent detection: without it this branch answers "yes"
