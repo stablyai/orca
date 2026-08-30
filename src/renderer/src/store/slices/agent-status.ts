@@ -29,6 +29,7 @@ import {
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import { agentEntrySessionStartedAt } from '../../../../shared/agent-session-start-time'
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   getRepoExecutionHostId,
@@ -559,7 +560,7 @@ function retainedAgentEntryFromLive(
     worktreeId,
     tab,
     agentType,
-    startedAt: entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+    startedAt: agentEntrySessionStartedAt(entry)
   }
 }
 
@@ -2349,6 +2350,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           tabId: statusTabId,
           terminalTitle: effectiveTitle,
           stateHistory: history,
+          // Why: `history` trims oldest-first at the cap, so latch the session's first state
+          // once — otherwise the sidebar's row clock advances with every turn past the cap and
+          // busy agents re-sort themselves. Falls back for entries that predate the field.
+          firstStateStartedAt:
+            existing?.firstStateStartedAt ??
+            existing?.stateHistory[0]?.startedAt ??
+            existing?.stateStartedAt ??
+            stateStartedAt,
           toolName: payload.toolName,
           toolInput: payload.toolInput,
           // Why: full untruncated AskUserQuestion JSON so mobile/web can render the live prompt

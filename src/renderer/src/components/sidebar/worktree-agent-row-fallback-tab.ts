@@ -1,9 +1,10 @@
+import { agentEntrySessionStartedAt } from '../../../../shared/agent-session-start-time'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 export function effectiveWorktreeAgentRowStartedAt(entry: AgentStatusEntry): number {
-  return entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+  return agentEntrySessionStartedAt(entry)
 }
 
 export function tabFromWorktreeAttributedStatusEntry(
