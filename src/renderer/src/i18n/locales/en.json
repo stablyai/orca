@@ -16186,6 +16186,10 @@
         "optionsFromTeam": "Options from {{team}}",
         "clearAll": "Clear all filters"
       },
+      "linear-issue-attribute-filter-coverage-notice": {
+        "statusPartialTeamCoverage": "Filtering {{value0}} of {{value1}} team statuses — issues from the remaining teams are not included.",
+        "labelsPartialTeamCoverage": "Filtering {{value0}} of {{value1}} team labels — issues from the remaining teams are not included."
+      },
       "linear-issue-attribute-filter-sections": {
         "status": "Status",
         "priority": "Priority",

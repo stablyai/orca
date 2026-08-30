@@ -12,6 +12,7 @@ import {
   type LinearIssueAttributeFilter
 } from '../../../shared/linear/issue-attribute-filter'
 import { getLinearPriorityLabel } from './task-page-localized-options'
+import { LinearFacetCoverageNotice } from './linear-issue-attribute-filter-coverage-notice'
 import {
   expandLinearMetadataGroupKeys,
   selectedLinearMetadataGroupKeys
@@ -317,6 +318,11 @@ export function LinearIssueFilterSectionDetail({
             onChange({ ...value, stateIds: expandLinearMetadataGroupKeys(statusOptions, keys) })
           }
         />
+        <LinearFacetCoverageNotice
+          facet="status"
+          options={statusOptions}
+          selectedIds={value.stateIds}
+        />
       </div>
     )
   }
@@ -337,6 +343,11 @@ export function LinearIssueFilterSectionDetail({
           onChange={(keys) =>
             onChange({ ...value, labelIds: expandLinearMetadataGroupKeys(labelOptions, keys) })
           }
+        />
+        <LinearFacetCoverageNotice
+          facet="labels"
+          options={labelOptions}
+          selectedIds={value.labelIds}
         />
       </div>
     )
