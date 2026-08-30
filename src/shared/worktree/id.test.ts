@@ -159,6 +159,13 @@ describe('worktreeIdComparisonKey path-spelling parity for id: selectors (#16243
   })
 
   // #15598/#15616: the same Windows checkout is recorded with both separators.
+  it('folds macOS /tmp and /var firmlink spellings Git reports as /private/... (#16753)', () => {
+    expect(key('repo-123::/private/tmp/orca/wt')).toBe(key('repo-123::/tmp/orca/wt'))
+    expect(key('repo-123::/private/var/folders/xx/wt')).toBe(key('repo-123::/var/folders/xx/wt'))
+    expect(key('repo-123::/private/tmpdir/wt')).not.toBe(key('repo-123::/tmpdir/wt'))
+    expect(key('repo-123::/private/Users/ada/wt')).not.toBe(key('repo-123::/Users/ada/wt'))
+  })
+
   it('folds Windows separator and drive-letter case, as `path:` already does', () => {
     const windows = 'repo-123::D:/Agentic/game2'
     expect(key('repo-123::D:\\Agentic\\game2')).toBe(key(windows))

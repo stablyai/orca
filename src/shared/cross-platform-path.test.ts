@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   areLocalWindowsWslPathAliases,
+  foldMacOSFirmlinkPrefix,
   isCaseInsensitiveRuntimeRoot,
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
+  normalizeWorktreeSelectorPathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
 } from './cross-platform-path'
@@ -111,6 +113,22 @@ describe('cross-platform path containment', () => {
         '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\line\nbreak'
       )
     ).toBe('line\nbreak')
+  })
+
+  it('folds macOS firmlink spellings for worktree selectors without touching /private/Users', () => {
+    expect(foldMacOSFirmlinkPrefix('/private/tmp/orca/wt')).toBe('/tmp/orca/wt')
+    expect(foldMacOSFirmlinkPrefix('/tmp/orca/wt')).toBe('/tmp/orca/wt')
+    expect(foldMacOSFirmlinkPrefix('/private/var/folders/xx')).toBe('/var/folders/xx')
+    expect(foldMacOSFirmlinkPrefix('/private/tmpdir/x')).toBe('/private/tmpdir/x')
+    expect(foldMacOSFirmlinkPrefix('/private/Users/ada')).toBe('/private/Users/ada')
+    expect(normalizeWorktreeSelectorPathForComparison('/private/tmp/orca/wt/')).toBe(
+      normalizeWorktreeSelectorPathForComparison('/tmp/orca/wt')
+    )
+    expect(normalizeWorktreeSelectorPathForComparison('/private/var/folders/xx')).toBe(
+      normalizeWorktreeSelectorPathForComparison('/var/folders/xx')
+    )
+    // General path comparison stays unfolded so relativePathInsideRoot segment counts stay aligned.
+    expect(normalizeRuntimePathForComparison('/private/tmp/orca/wt')).toBe('/private/tmp/orca/wt')
   })
 
   it('matches macOS NFD paths against agent-recorded NFC paths', () => {

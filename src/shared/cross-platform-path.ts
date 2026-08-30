@@ -56,6 +56,27 @@ export function normalizeRuntimePathForComparison(rawValue: string): string {
   return isWindowsPath ? normalized.toLowerCase() : normalized
 }
 
+/**
+ * Comparison only. macOS firmlinks `/tmp`→`/private/tmp` and `/var`→`/private/var`,
+ * and Git reports the private spelling while callers often keep the public one.
+ * Kept out of `normalizeRuntimePathForComparison` because that function's
+ * relative-path slicer counts raw segments and a prefix fold would desync them.
+ */
+export function foldMacOSFirmlinkPrefix(pathname: string): string {
+  if (pathname === '/private/tmp' || pathname.startsWith('/private/tmp/')) {
+    return `/tmp${pathname.slice('/private/tmp'.length)}`
+  }
+  if (pathname === '/private/var' || pathname.startsWith('/private/var/')) {
+    return `/var${pathname.slice('/private/var'.length)}`
+  }
+  return pathname
+}
+
+/** Worktree `id:` / `path:` selector comparison. Never persist or return this as a real path. */
+export function normalizeWorktreeSelectorPathForComparison(rawValue: string): string {
+  return foldMacOSFirmlinkPrefix(normalizeRuntimePathForComparison(rawValue))
+}
+
 export function areLocalWindowsWslPathAliases(left: string, right: string): boolean {
   const leftIdentity = getLocalWindowsWslPathIdentity(left)
   const rightIdentity = getLocalWindowsWslPathIdentity(right)

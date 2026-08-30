@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../cross-platform-path'
+import { normalizeWorktreeSelectorPathForComparison } from '../cross-platform-path'
 import { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
 import type { Repo } from '../repo-types'
 
@@ -29,16 +29,16 @@ export function getRepoIdFromWorktreeId(worktreeId: string): string {
 
 /**
  * Canonical comparison form of a worktree id: the repoId is compared EXACT and only the path folds,
- * through the same `normalizeRuntimePathForComparison` a `path:` selector has always applied and
- * byte-exact id matching denied the renderer (#16243). Null for a malformed id, so callers keep
- * exact matching for it. Comparison only — never persist or return this key.
+ * through the same `normalizeWorktreeSelectorPathForComparison` a `path:` selector applies
+ * (#16243, #16753). Null for a malformed id, so callers keep exact matching for it.
+ * Comparison only — never persist or return this key.
  */
 export function worktreeIdComparisonKey(worktreeId: string): string | null {
   const parsed = splitWorktreeId(worktreeId)
   if (!parsed || !parsed.repoId || !parsed.worktreePath) {
     return null
   }
-  return `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${normalizeRuntimePathForComparison(
+  return `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${normalizeWorktreeSelectorPathForComparison(
     parsed.worktreePath
   )}`
 }

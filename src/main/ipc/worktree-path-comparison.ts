@@ -1,5 +1,8 @@
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import {
+  foldMacOSFirmlinkPrefix,
+  isWindowsAbsolutePathLike
+} from '../../shared/cross-platform-path'
 
 export function areWorktreePathsEqual(
   leftPath: string,
@@ -108,11 +111,5 @@ function normalizePosixWorktreePathForComparison(
   platform: NodeJS.Platform
 ): string {
   const normalized = posix.normalize(posix.resolve(pathValue))
-  if (platform !== 'darwin') {
-    return normalized
-  }
-  if (normalized === '/private/tmp') {
-    return '/tmp'
-  }
-  return normalized.startsWith('/private/tmp/') ? normalized.slice('/private'.length) : normalized
+  return platform === 'darwin' ? foldMacOSFirmlinkPrefix(normalized) : normalized
 }
