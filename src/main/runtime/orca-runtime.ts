@@ -657,6 +657,7 @@ import {
 } from '../../shared/tui-agent-launch-defaults'
 import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
+import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import {
   getTuiAgentLaunchCommand,
   isTuiAgent,
@@ -30514,6 +30515,7 @@ export class OrcaRuntimeService {
           claudeAgentTeamsMode
         )
         let agentTeamsPlan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined
+        const agentTeamsPaneShell = this.resolveClaudeAgentTeamsPaneShell()
         try {
           agentTeamsPlan = adoptedBeforeLaunch
             ? undefined
@@ -30524,6 +30526,7 @@ export class OrcaRuntimeService {
                   ...process.env,
                   ...baseEnv
                 },
+                paneShell: agentTeamsPaneShell,
                 createTeamEnv: (shimDir, shimBin) =>
                   this.claudeAgentTeams.createLaunchEnv({
                     leaderHandle: preAllocatedHandle,
@@ -30532,7 +30535,8 @@ export class OrcaRuntimeService {
                       ...baseEnv
                     },
                     shimDir,
-                    shimBin
+                    shimBin,
+                    paneShell: agentTeamsPaneShell
                   }).env
               })
         } catch (error) {
@@ -32655,7 +32659,17 @@ export class OrcaRuntimeService {
       leaderHandle: args.handle,
       baseEnv,
       shimDir,
-      shimBin
+      shimBin,
+      paneShell: this.resolveClaudeAgentTeamsPaneShell()
+    })
+  }
+
+  /** Teammate panes launch on the local host, so the local Windows shell preference decides their grammar. */
+  private resolveClaudeAgentTeamsPaneShell(): AgentStartupShell | undefined {
+    return resolveLocalWindowsAgentStartupShell({
+      platform: process.platform,
+      isRemote: false,
+      terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null
     })
   }
 

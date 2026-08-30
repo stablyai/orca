@@ -8,7 +8,12 @@ import {
   isDirectClaudeCommand,
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
+import { supportsClaudeAgentTeamsPaneCommand } from '../../shared/claude-agent-teams-pane-command'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
+import {
+  resolveStartupShell,
+  type AgentStartupShell
+} from '../../shared/tui-agent-startup-shell'
 import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
 
 export type ClaudeAgentTeamsLaunchPlan = {
@@ -22,35 +27,69 @@ export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): P
   await writeIfChanged(join(root, 'tmux'), unixShimScript())
   if (process.platform === 'win32') {
     await writeIfChanged(join(root, 'tmux.cmd'), windowsClaudeAgentTeamsShimScript())
+    await installWindowsShimExecutable(root)
   }
   return root
+}
+
+/** Path of the Windows shim Claude Code can actually spawn; see installWindowsShimExecutable. */
+export function windowsClaudeAgentTeamsShimExecutablePath(root = defaultShimRoot()): string {
+  return join(root, 'tmux.exe')
+}
+
+/**
+ * Claude Code spawns `tmux` with no shell, and Node refuses to spawn `.cmd`
+ * without one (CVE-2024-27980), so `tmux.cmd` alone is unreachable — the spawn
+ * fails with EINVAL before the shim runs. The packaged launcher is a
+ * self-contained .NET Framework executable that already forwards argv to the
+ * Orca CLI, and it switches to tmux-shim mode when its own file name is `tmux`,
+ * so a copy of it under that name is the shim.
+ */
+async function installWindowsShimExecutable(root: string): Promise<void> {
+  const launcher = bundledLauncherPath()
+  if (!launcher || !isExecutableFile(launcher)) {
+    return
+  }
+  await writeIfChanged(windowsClaudeAgentTeamsShimExecutablePath(root), await readFile(launcher))
 }
 
 export async function buildClaudeAgentTeamsLaunchPlan(args: {
   command: string | undefined
   mode: ClaudeAgentTeamsMode | undefined
   baseEnv: Record<string, string | undefined>
+  /** Shell the panes type into; decides whether Orca can spell the teammate command. */
+  paneShell?: AgentStartupShell
+  shimRoot?: string
   createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
 }): Promise<ClaudeAgentTeamsLaunchPlan | null> {
   const mode = args.mode ?? 'off'
   if (!args.command || mode === 'off' || !isDirectClaudeCommand(args.command)) {
     return null
   }
-  if (mode === 'in-process' || process.platform === 'win32') {
-    return {
-      command: addClaudeTeammateModeInProcess(args.command),
-      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
-    }
+  const inProcess: ClaudeAgentTeamsLaunchPlan = {
+    command: addClaudeTeammateModeInProcess(args.command),
+    env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+  }
+  // Why: Claude Code writes pane commands for sh, and cmd.exe is the one pane shell Orca cannot re-spell them for.
+  if (
+    mode === 'in-process' ||
+    !supportsClaudeAgentTeamsPaneCommand(resolveStartupShell(process.platform, args.paneShell))
+  ) {
+    return inProcess
   }
   const shimBin = resolveClaudeAgentTeamsShimBin(args.baseEnv)
   if (!shimBin) {
     // Why: without an absolute CLI path the shim would resolve a bare `orca` against the pane cwd, so degrade instead.
-    return {
-      command: addClaudeTeammateModeInProcess(args.command),
-      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
-    }
+    return inProcess
   }
-  const shimDir = await ensureClaudeAgentTeamsShimDir()
+  const shimDir = await ensureClaudeAgentTeamsShimDir(args.shimRoot ?? defaultShimRoot())
+  // Why: the .cmd shim is unspawnable from Claude Code, so without the executable the team would launch paneless.
+  if (
+    process.platform === 'win32' &&
+    !isExecutableFile(windowsClaudeAgentTeamsShimExecutablePath(shimDir))
+  ) {
+    return inProcess
+  }
   const env = args.createTeamEnv(shimDir, shimBin)
   return {
     command: addClaudeTeammateModeAuto(args.command),
@@ -169,9 +208,13 @@ export function windowsClaudeAgentTeamsShimScript(): string {
   ].join('\r\n')
 }
 
-async function writeIfChanged(path: string, content: string): Promise<void> {
+async function writeIfChanged(path: string, content: string | Buffer): Promise<void> {
   try {
-    if ((await readFile(path, 'utf8')) === content) {
+    if (typeof content === 'string') {
+      if ((await readFile(path, 'utf8')) === content) {
+        return
+      }
+    } else if (content.equals(await readFile(path))) {
       return
     }
   } catch {

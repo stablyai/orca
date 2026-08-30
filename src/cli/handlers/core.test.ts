@@ -40,7 +40,6 @@ function mockClaudeChild(): { once: (event: string, cb: (...args: unknown[]) => 
 }
 
 describe('orca claude-teams CLI handler', () => {
-  const isWindows = process.platform === 'win32'
   let previousRunAsNode: string | undefined
   let previousPaneKey: string | undefined
   let previousExitCode: typeof process.exitCode
@@ -91,9 +90,7 @@ describe('orca claude-teams CLI handler', () => {
     process.exitCode = previousExitCode
   })
 
-  // Guarded to non-Windows: the handler early-returns unsupported_platform on
-  // win32, so the leak path never runs there.
-  it.skipIf(isWindows)(
+  it(
     'does not leak ELECTRON_RUN_AS_NODE into the spawned claude child',
     async () => {
       await runClaudeTeams()
@@ -109,7 +106,7 @@ describe('orca claude-teams CLI handler', () => {
     }
   )
 
-  it.skipIf(isWindows)(
+  it(
     'still forwards non-Electron parent env and prepareLaunch env to claude',
     async () => {
       const previousMarker = process.env.ORCA_TEST_MARKER

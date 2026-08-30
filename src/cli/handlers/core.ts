@@ -59,12 +59,6 @@ function getOptionalServePort(flags: Map<string, string | boolean>): string | nu
 
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
   'claude-teams': async ({ client, rawArgs }) => {
-    if (process.platform === 'win32') {
-      throw new RuntimeClientError(
-        'unsupported_platform',
-        'Claude Agent Teams native panes are not supported on Windows.'
-      )
-    }
     const paneKey = process.env.ORCA_PANE_KEY
     if (!paneKey) {
       throw new RuntimeClientError(

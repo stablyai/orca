@@ -4,6 +4,7 @@ import {
   tmuxSendKeysText,
   tmuxValue
 } from '../../shared/claude-agent-teams-tmux-compat'
+import { claudeAgentTeamsPaneCommand } from '../../shared/claude-agent-teams-pane-command'
 import { describeUnconfirmedAgentStop } from '../../shared/pty-liveness-verdict'
 import {
   formatContext,
@@ -116,7 +117,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const splitTarget = resolveSplitTarget(team, targetPane, parsed.flags.has('-h'))
     const split = await api.splitTerminal(splitTarget.pane.handle, {
       direction: splitTarget.direction,
-      command: parsed.positional.join(' ') || undefined,
+      command: claudeAgentTeamsPaneCommand(parsed.positional.join(' '), team.paneShell),
       env: paneEnv(team, fakePaneId),
       envToDelete: ['TERM_PROGRAM'],
       activate: false
@@ -173,7 +174,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     try {
       const split = await api.splitTerminal(origin.handle, {
         direction: pane.splitDirection ?? 'horizontal',
-        command,
+        command: claudeAgentTeamsPaneCommand(command, team.paneShell),
         env: paneEnv(team, pane.fakePaneId),
         envToDelete: ['TERM_PROGRAM'],
         activate: false

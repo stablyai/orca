@@ -1,3 +1,4 @@
+import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalFocus,
@@ -67,6 +68,8 @@ export type AgentTeam = {
   token: string
   leaderPane: string
   leaderHandle: string
+  /** Shell the teammate panes type into; Claude Code writes its commands for sh. */
+  paneShell: AgentStartupShell
   sessionName: string
   windowIndex: string
   tmuxValue: string
