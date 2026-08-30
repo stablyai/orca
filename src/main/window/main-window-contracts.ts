@@ -1,8 +1,10 @@
 import type { KeybindingOverrides } from '../../shared/keybindings'
 
 export type CreateMainWindowOptions = {
-  /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */
+  /** Returns true when a manual app.quit() (Cmd+Q) is in progress; the renderer skips the running-process confirm dialog only when those PTYs also survive it. */
   getIsQuitting?: () => boolean
+  /** Answers whether the local PTYs that exist all survive the quit, so it may skip the running-process warning. Absent/throwing reads as "no". */
+  getLocalPtysSurviveQuit?: () => boolean
   /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */
   onQuitAborted?: () => void
   onRendererProcessGone?: (

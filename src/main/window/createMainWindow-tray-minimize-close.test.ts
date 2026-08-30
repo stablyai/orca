@@ -204,6 +204,7 @@ describe('createMainWindow', () => {
       expect(instance.hide).not.toHaveBeenCalled()
       expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
         isQuitting: false,
+        localPtysSurviveQuit: false,
         requestId: expect.any(Number)
       })
     })
@@ -219,6 +220,7 @@ describe('createMainWindow', () => {
       expect(instance.hide).not.toHaveBeenCalled()
       expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
         isQuitting: true,
+        localPtysSurviveQuit: false,
         requestId: expect.any(Number)
       })
     })
@@ -266,6 +268,7 @@ describe('createMainWindow', () => {
       expect(instance.hide).not.toHaveBeenCalled()
       expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
         isQuitting: false,
+        localPtysSurviveQuit: false,
         requestId: expect.any(Number)
       })
     })
@@ -306,7 +309,8 @@ describe('createMainWindow', () => {
 
       expect(instance.hide).not.toHaveBeenCalled()
       expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
-        isQuitting: false
+        isQuitting: false,
+        localPtysSurviveQuit: false
       })
     })
   })

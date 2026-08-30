@@ -88,6 +88,7 @@ describe('createMainWindow', () => {
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
       isQuitting: true,
+      localPtysSurviveQuit: false,
       requestId: expect.any(Number)
     })
 
@@ -322,6 +323,7 @@ describe('createMainWindow', () => {
     expect(attachClientPageRendererMock).toHaveBeenCalledWith(webContents)
     expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
       isQuitting: true,
+      localPtysSurviveQuit: false,
       requestId: expect.any(Number)
     })
 
@@ -417,6 +419,7 @@ describe('createMainWindow', () => {
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
       isQuitting: false,
+      localPtysSurviveQuit: false,
       requestId: expect.any(Number)
     })
   })
@@ -522,5 +525,114 @@ describe('createMainWindow', () => {
     await vi.advanceTimersByTimeAsync(1)
 
     expect(destroy).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The renderer cannot see whether a quit hands this window's local shells to the
+   * daemon or ends them with the process, so main answers it on the close request
+   * itself. Asserted on the real payload the real close handler sends — a stubbed
+   * sender would keep passing if the field stopped being produced.
+   */
+  describe('local-PTY survival on the close request', () => {
+    function installWindowMock(): {
+      windowHandlers: Record<string, (...args: any[]) => void>
+      webContents: { send: ReturnType<typeof vi.fn> }
+    } {
+      const windowHandlers: Record<string, (...args: any[]) => void> = {}
+      const webContents = {
+        on: vi.fn((event, handler) => {
+          windowHandlers[event] = handler
+        }),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return {
+          webContents,
+          on: vi.fn((event, handler) => {
+            windowHandlers[event] = handler
+          }),
+          isDestroyed: vi.fn(() => false),
+          isMaximized: vi.fn(() => true),
+          isFullScreen: vi.fn(() => false),
+          getSize: vi.fn(() => [1200, 800]),
+          setSize: vi.fn(),
+          maximize: vi.fn(),
+          show: vi.fn(),
+          loadFile: vi.fn(),
+          loadURL: vi.fn()
+        }
+      })
+      return { windowHandlers, webContents }
+    }
+
+    function lastCloseRequest(webContents: { send: ReturnType<typeof vi.fn> }): {
+      isQuitting: boolean
+      localPtysSurviveQuit: boolean
+    } {
+      const calls = webContents.send.mock.calls.filter(
+        ([channel]) => channel === 'window:close-requested'
+      )
+      return calls.at(-1)![1]
+    }
+
+    it('reports survival while the daemon owns fresh persistent PTYs', () => {
+      const { windowHandlers, webContents } = installWindowMock()
+      createMainWindow(null, {
+        getIsQuitting: () => true,
+        getLocalPtysSurviveQuit: () => true
+      })
+
+      windowHandlers.close({ preventDefault: vi.fn() } as never)
+
+      expect(lastCloseRequest(webContents).localPtysSurviveQuit).toBe(true)
+    })
+
+    it('re-reads the daemon on every attempt, so a daemon lost mid-run is not still trusted', () => {
+      let daemonOwnsPtys = true
+      const { windowHandlers, webContents } = installWindowMock()
+      createMainWindow(null, {
+        getIsQuitting: () => true,
+        getLocalPtysSurviveQuit: () => daemonOwnsPtys
+      })
+
+      windowHandlers.close({ preventDefault: vi.fn() } as never)
+      expect(lastCloseRequest(webContents).localPtysSurviveQuit).toBe(true)
+
+      daemonOwnsPtys = false
+      windowHandlers.close({ preventDefault: vi.fn() } as never)
+      expect(lastCloseRequest(webContents).localPtysSurviveQuit).toBe(false)
+    })
+
+    it('reports no survival when the daemon read throws', () => {
+      const { windowHandlers, webContents } = installWindowMock()
+      createMainWindow(null, {
+        getIsQuitting: () => true,
+        getLocalPtysSurviveQuit: () => {
+          throw new Error('daemon socket gone')
+        }
+      })
+
+      windowHandlers.close({ preventDefault: vi.fn() } as never)
+
+      expect(lastCloseRequest(webContents).localPtysSurviveQuit).toBe(false)
+    })
+
+    it('answers the renderer-drawn X too, which never reaches the native close event', () => {
+      const { webContents } = installWindowMock()
+      createMainWindow(null, { getLocalPtysSurviveQuit: () => true })
+
+      vi.mocked(ipcMain.on).mock.calls.find(
+        ([channel]) => channel === 'window:request-close'
+      )?.[1]?.({} as never)
+
+      expect(lastCloseRequest(webContents)).toEqual({
+        isQuitting: false,
+        localPtysSurviveQuit: true
+      })
+    })
   })
 })

@@ -15,6 +15,8 @@ import { PROTOCOL_VERSION } from './types'
 
 let spawner: DaemonSpawner | null = null
 let adapter: DaemonProvider | null = null
+// A degraded provider that was swapped out while its app-owned shells were still running.
+let strandedDegradedProvider: DegradedDaemonPtyProvider | null = null
 
 export function installDaemonProvider(newSpawner: DaemonSpawner, newAdapter: DaemonProvider): void {
   spawner = newSpawner
@@ -36,6 +38,25 @@ export function getDaemonSpawner(): DaemonSpawner | null {
  */
 export function daemonOwnsFreshPersistentPtys(): boolean {
   return adapter !== null && !(adapter instanceof DegradedDaemonPtyProvider)
+}
+
+/**
+ * Whether the local PTYs this process can still reach all survive its quit.
+ *
+ * Why not `daemonOwnsFreshPersistentPtys()` alone: that answers about the provider installed
+ * at the moment of asking, and app-owned shells outlive the provider that spawned them. This
+ * one answers about the PTYs that exist, which is what a quit destroys.
+ */
+export function localPtysSurviveQuit(): boolean {
+  if (!daemonOwnsFreshPersistentPtys()) {
+    return false
+  }
+  if (strandedDegradedProvider?.hasLiveFallbackPtys() === true) {
+    return false
+  }
+  // Nothing left to answer for; stop holding the retired provider alive.
+  strandedDegradedProvider = null
+  return true
 }
 
 /** Endpoint coordinates of the daemon this process installed, for out-of-band health probes. */
@@ -117,6 +138,14 @@ export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
 
 // Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
 export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
+  // Why the outgoing provider is kept: a degraded provider's fresh terminals are this
+  // process's own children, and `shutdownFallbackSessions` is best-effort by design — a
+  // restart that SUCCEEDED can still leave one running. The swap stops anyone asking that
+  // provider about them, so the reference has to outlive it or those shells become invisible
+  // to every survival question below.
+  if (adapter instanceof DegradedDaemonPtyProvider && adapter !== newAdapter) {
+    strandedDegradedProvider = adapter
+  }
   adapter = newAdapter
   setLocalPtyProvider(newAdapter)
 }

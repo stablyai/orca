@@ -21,6 +21,8 @@ import {
 import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { AppIdentity } from '../shared/app-identity'
 import type { PtyProcessInspectionEvidence } from '../shared/pty-process-inspection-evidence'
+import type { WindowCloseRequestPayload } from '../shared/window-close-request'
+import { subscribeToWindowCloseRequest } from './window-close-request-subscription'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
@@ -4537,19 +4539,10 @@ const api = {
       ipcRenderer.send('menu:popup')
     },
     /** Fired by main when the user tries to close the window; renderer confirms running
-     *  terminals then calls confirmWindowClose(). isQuitting (Cmd+Q / app.quit) skips that dialog. */
-    onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { isQuitting: boolean; requestId?: number }
-      ): void => {
-        // Why: main cannot reach will-quit while a frozen renderer owns the window close handshake.
-        ipcRenderer.send('window:close-request-received', data?.requestId)
-        callback({ isQuitting: data?.isQuitting ?? false })
-      }
-      ipcRenderer.on('window:close-requested', listener)
-      return () => ipcRenderer.removeListener('window:close-requested', listener)
-    },
+     *  terminals then calls confirmWindowClose(). A quit (Cmd+Q / app.quit) skips that
+     *  dialog only when main also reports the local PTYs survive it. */
+    onWindowCloseRequested: (callback: (data: WindowCloseRequestPayload) => void): (() => void) =>
+      subscribeToWindowCloseRequest(ipcRenderer, callback),
     /** Tell the main process to proceed with the window close. */
     confirmWindowClose: (): void => {
       ipcRenderer.send('window:confirm-close')

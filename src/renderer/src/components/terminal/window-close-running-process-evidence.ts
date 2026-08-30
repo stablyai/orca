@@ -1,7 +1,46 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { readPtyProcessInspectionEvidenceForAbsenceAction } from '../../../../shared/pty-process-inspection-evidence'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+// Why the leaf module and not @/lib/connection-context: that wrapper reads the store
+// singleton, and this module must stay callable with a state it was handed.
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import {
+  inspectRuntimeTerminalProcess,
+  isRemoteRuntimePtyId
+} from '@/runtime/runtime-terminal-inspection'
+import type { AppState } from '@/store/types'
+
+type WindowClosePaneState = Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId'> &
+  Parameters<typeof getConnectionIdFromState>[0]
+
+/**
+ * The panes a window close must ask about.
+ *
+ * Runtime-environment panes never qualify: that host is one this window only views,
+ * and it outlives the window by design. A QUIT additionally drops panes on a resolved
+ * SSH target — shutdown marks the lease `detached` rather than `terminated` and the
+ * remote shell is nohup-detached, so quitting destroys nothing there and probing it
+ * would only make the quit slower. Nothing else is dropped: `getConnectionIdFromState`
+ * answers `undefined` while the backing repo has not hydrated, and an unresolved host
+ * is not evidence the work survives, so those panes stay in and get probed.
+ *
+ * Why the owning host is read here and not before every probe: `inspectProcess`
+ * dispatches on the PTY id and answers each pane on whichever host runs it, so this
+ * selection is about SURVIVAL, never about who can answer.
+ */
+export function collectWindowClosePtyIds(
+  state: WindowClosePaneState,
+  isQuitting: boolean
+): string[] {
+  return Object.entries(state.tabsByWorktree).flatMap(([worktreeId, worktreeTabs]) => {
+    if (isQuitting && typeof getConnectionIdFromState(state, worktreeId) === 'string') {
+      return []
+    }
+    return worktreeTabs
+      .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+      .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
+  })
+}
 
 /**
  * Whether any PTY the window owns must stop it from closing silently.

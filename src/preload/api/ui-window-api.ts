@@ -1,4 +1,5 @@
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
+import type { WindowCloseRequestPayload } from '../../shared/window-close-request'
 import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import type {
   RichMarkdownContextMenuCommandPayload,
@@ -45,7 +46,7 @@ export type UiWindowApi = {
   onMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
   requestClose: () => void
   popupMenu: () => void
-  onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
+  onWindowCloseRequested: (callback: (data: WindowCloseRequestPayload) => void) => () => void
   confirmWindowClose: () => void
   notifyWindowRevealed: () => void
 }

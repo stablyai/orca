@@ -10,8 +10,9 @@
 // save/discard instead of being silently vetoed by a beforeunload handler.
 
 import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
+import type { WindowCloseRequestPayload } from '../../../shared/window-close-request'
 
-export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
+export type WindowCloseRequestHandler = (data: WindowCloseRequestPayload) => void
 
 /** Returns true to allow the close to proceed, false to cancel it (e.g. the user
  *  picked "Cancel" in an unsaved-changes prompt). */
@@ -93,7 +94,7 @@ async function runWindowCloseGuards(): Promise<boolean> {
  *  directly. Why confirm directly: with no workbench mounted there are no
  *  terminals or editor tabs to protect, so blocking would just deadlock the
  *  window (#5144). */
-export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }): Promise<void> {
+export async function dispatchWindowCloseRequest(data: WindowCloseRequestPayload): Promise<void> {
   if (closeInFlight) {
     return
   }

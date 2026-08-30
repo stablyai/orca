@@ -28,6 +28,21 @@ export async function attachDaemonOwnedSession(
 
 /** Probes providers for an id absent from the routing map and adopts the
  *  first proven owner into the map. */
+/**
+ * Whether any session still routed to `provider` is one it still holds a PTY for.
+ *
+ * An id the provider cannot answer for counts as alive: an undetermined answer must never be
+ * spent as proof that the work is gone (docs/reference/ssh-execution-boundary.md).
+ */
+export function hasLiveProviderPtys(
+  sessionProviders: ReadonlyMap<string, IPtyProvider>,
+  provider: IPtyProvider
+): boolean {
+  return listProviderSessionIds(sessionProviders, provider).some(
+    (id) => provider.hasPty?.(id) ?? true
+  )
+}
+
 export function adoptOwningProvider(
   sessionProviders: Map<string, IPtyProvider>,
   providers: readonly IPtyProvider[],

@@ -61,6 +61,7 @@ import {
 } from './ipc/pty'
 import {
   initDaemonPtyProvider,
+  localPtysSurviveQuit,
   disconnectDaemon,
   getDaemonProvider,
   listLiveDaemonPtyIds,
@@ -1521,6 +1522,12 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
 
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
+    // Why a getter: quit's killAllPty() is a no-op only while the daemon adapter is
+    // installed, and that can change after the window exists (fail-open init, a
+    // fault that swaps in the degraded provider, a restart that recovers from one).
+    // Asked at close time, not before, and about the PTYs that exist rather than the
+    // provider now installed — a degraded provider's app-owned shells outlive its swap.
+    getLocalPtysSurviveQuit: () => localPtysSurviveQuit(),
     onQuitAborted: () => {
       isQuitting = false
       clearExpectedRendererReload()

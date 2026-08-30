@@ -66,7 +66,7 @@ describe('window-close-request-coordinator', () => {
 
   // The #5144 contract: a close request must always be acted on.
   it('confirms the close directly when no rich handler is registered (no-workspace path)', async () => {
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
 
     expect(confirmWindowClose).toHaveBeenCalledTimes(1)
   })
@@ -78,7 +78,7 @@ describe('window-close-request-coordinator', () => {
     })
     window.addEventListener('beforeunload', beforeUnload, { once: true })
 
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
 
     expect(beforeUnload).toHaveBeenCalledTimes(1)
     expect(confirmWindowClose).not.toHaveBeenCalled()
@@ -96,7 +96,7 @@ describe('window-close-request-coordinator', () => {
       { once: true }
     )
 
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
 
     expect(confirmWindowClose).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalledWith(
@@ -116,7 +116,7 @@ describe('window-close-request-coordinator', () => {
       once: true
     })
 
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
 
     expect(confirmWindowClose).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalledWith(
@@ -128,9 +128,9 @@ describe('window-close-request-coordinator', () => {
     const handler = vi.fn()
     setWindowCloseRequestHandler(handler)
 
-    await dispatchWindowCloseRequest({ isQuitting: false })
+    await dispatchWindowCloseRequest({ isQuitting: false, localPtysSurviveQuit: false })
 
-    expect(handler).toHaveBeenCalledWith({ isQuitting: false })
+    expect(handler).toHaveBeenCalledWith({ isQuitting: false, localPtysSurviveQuit: false })
     // Why: confirmation is the rich handler's responsibility (after save dialogs
     // / running-process checks) — dispatch must not short-circuit it.
     expect(confirmWindowClose).not.toHaveBeenCalled()
@@ -142,7 +142,7 @@ describe('window-close-request-coordinator', () => {
     setWindowCloseRequestHandler(handler)
     addGuard(() => false)
 
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
 
     expect(confirmWindowClose).not.toHaveBeenCalled()
     expect(handler).not.toHaveBeenCalled()
@@ -153,7 +153,7 @@ describe('window-close-request-coordinator', () => {
     addGuard(() => true)
     addGuard(async () => true)
 
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
 
     expect(confirmWindowClose).toHaveBeenCalledTimes(1)
   })
@@ -163,7 +163,7 @@ describe('window-close-request-coordinator', () => {
     addGuard(() => false)
     addGuard(second)
 
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
 
     expect(second).not.toHaveBeenCalled()
     expect(confirmWindowClose).not.toHaveBeenCalled()
@@ -179,9 +179,9 @@ describe('window-close-request-coordinator', () => {
     )
     addGuard(guard)
 
-    const first = dispatchWindowCloseRequest({ isQuitting: true })
+    const first = dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
     // Second request arrives while the first guard's dialog is still open.
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
     expect(guard).toHaveBeenCalledTimes(1)
 
     resolveGuard(true)
@@ -194,7 +194,7 @@ describe('window-close-request-coordinator', () => {
     const unregister = registerWindowCloseGuard(guard)
     unregister()
 
-    await dispatchWindowCloseRequest({ isQuitting: true })
+    await dispatchWindowCloseRequest({ isQuitting: true, localPtysSurviveQuit: false })
 
     expect(guard).not.toHaveBeenCalled()
     expect(confirmWindowClose).toHaveBeenCalledTimes(1)

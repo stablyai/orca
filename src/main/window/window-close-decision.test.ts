@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveWindowCloseAction } from './window-close-decision'
+import { resolveLocalPtysSurviveQuit, resolveWindowCloseAction } from './window-close-decision'
 
 describe('resolveWindowCloseAction', () => {
   it('allows a renderer-confirmed close', () => {
@@ -53,5 +53,32 @@ describe('resolveWindowCloseAction', () => {
         isRendererCrashed: true
       })
     ).toBe('allow-confirmed')
+  })
+})
+
+/**
+ * The quit bypass is only correct while the daemon owns the shells; asked in any
+ * other state it closes over live local work. These pin that "could not tell" is
+ * never spent as a yes.
+ */
+describe('resolveLocalPtysSurviveQuit', () => {
+  it('reports survival when the daemon owns fresh persistent PTYs', () => {
+    expect(resolveLocalPtysSurviveQuit(() => true)).toBe(true)
+  })
+
+  it('reports no survival when the daemon does not own fresh persistent PTYs', () => {
+    expect(resolveLocalPtysSurviveQuit(() => false)).toBe(false)
+  })
+
+  it('reports no survival when nothing can answer the question', () => {
+    expect(resolveLocalPtysSurviveQuit(undefined)).toBe(false)
+  })
+
+  it('reports no survival when the daemon read throws', () => {
+    expect(
+      resolveLocalPtysSurviveQuit(() => {
+        throw new Error('daemon socket gone')
+      })
+    ).toBe(false)
   })
 })

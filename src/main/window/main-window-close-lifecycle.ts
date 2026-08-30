@@ -1,8 +1,9 @@
 import { ipcMain, Menu, Notification, type BrowserWindow } from 'electron'
 import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../shared/quit-teardown-deadline'
+import type { WindowCloseRequestPayload } from '../../shared/window-close-request'
 import { translateMain } from '../i18n/main-i18n'
 import type { Store } from '../persistence'
-import { resolveWindowCloseAction } from './window-close-decision'
+import { resolveLocalPtysSurviveQuit, resolveWindowCloseAction } from './window-close-decision'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
@@ -119,10 +120,15 @@ export function installMainWindowCloseLifecycle(args: {
       armQuitRendererAckTimer(requestId)
     }
     // Why: renderer owns the close decision; the always-mounted App root subscription lets even pre-workspace states reply (#5144).
+    // Why the survival fact rides along: the renderer decides whether to warn, but
+    // only main knows whether the daemon will keep this window's local shells alive
+    // past the quit. Read per request — the adapter is installed, swapped and lost
+    // over a run, so a value captured at window creation would be stale.
     mainWindow.webContents.send('window:close-requested', {
       isQuitting,
+      localPtysSurviveQuit: resolveLocalPtysSurviveQuit(opts?.getLocalPtysSurviveQuit),
       requestId
-    })
+    } satisfies WindowCloseRequestPayload)
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
     // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
@@ -173,7 +179,10 @@ export function installMainWindowCloseLifecycle(args: {
     if (hideToTrayIfEnabled()) {
       return
     }
-    mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    mainWindow.webContents.send('window:close-requested', {
+      isQuitting: false,
+      localPtysSurviveQuit: resolveLocalPtysSurviveQuit(opts?.getLocalPtysSurviveQuit)
+    } satisfies WindowCloseRequestPayload)
   }
   // Why: renderer-drawn title-bar ··· menu button replicates the Alt-key reveal autoHideMenuBar provides (Windows/Linux).
   const popupMenuChannel = 'menu:popup'

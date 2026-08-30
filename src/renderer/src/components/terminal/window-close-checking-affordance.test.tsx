@@ -64,7 +64,7 @@ function idleInspection(): unknown {
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 let confirmWindowClose: ReturnType<typeof vi.fn>
-let proceed: ((isQuitting: boolean) => void) | null = null
+let proceed: ((isQuitting: boolean, localPtysSurviveQuit: boolean) => void) | null = null
 /** Resolves the in-flight inspection, so a probe can be held past the delay on purpose. */
 let settleInspection: ((value: unknown) => void) | null = null
 
@@ -141,7 +141,7 @@ async function settleWith(value: unknown): Promise<void> {
 
 async function startWindowClose(): Promise<void> {
   await act(async () => {
-    proceed!(false)
+    proceed!(false, false)
     await Promise.resolve()
   })
 }
@@ -203,13 +203,15 @@ describe('window close pending affordance', () => {
     // The deferral is armed per attempt, and the requests that supersede one need
     // never reach the hook: Terminal hands a close with dirty editors to the
     // unsaved-changes dialog and returns, so nothing here can cancel this timer.
-    setWindowCloseRequestHandler(({ isQuitting }) => proceed!(isQuitting))
+    setWindowCloseRequestHandler(({ isQuitting, localPtysSurviveQuit }) =>
+      proceed!(isQuitting, localPtysSurviveQuit)
+    )
     await act(async () => {
-      await dispatchWindowCloseRequest({ isQuitting: false })
+      await dispatchWindowCloseRequest({ isQuitting: false, localPtysSurviveQuit: false })
     })
     setWindowCloseRequestHandler(() => {})
     await act(async () => {
-      await dispatchWindowCloseRequest({ isQuitting: false })
+      await dispatchWindowCloseRequest({ isQuitting: false, localPtysSurviveQuit: false })
     })
 
     await advancePast(WINDOW_CLOSE_CHECKING_AFFORDANCE_DELAY_MS)
@@ -222,9 +224,11 @@ describe('window close pending affordance', () => {
 
   it('still raises it for the attempt that is current, driven the same way', async () => {
     // Polarity control: the fence must not swallow the affordance itself.
-    setWindowCloseRequestHandler(({ isQuitting }) => proceed!(isQuitting))
+    setWindowCloseRequestHandler(({ isQuitting, localPtysSurviveQuit }) =>
+      proceed!(isQuitting, localPtysSurviveQuit)
+    )
     await act(async () => {
-      await dispatchWindowCloseRequest({ isQuitting: false })
+      await dispatchWindowCloseRequest({ isQuitting: false, localPtysSurviveQuit: false })
     })
 
     await advancePast(WINDOW_CLOSE_CHECKING_AFFORDANCE_DELAY_MS)
@@ -311,7 +315,7 @@ describe('window close pending affordance', () => {
 
   it('does not arm the affordance for a quit that never probes', async () => {
     await act(async () => {
-      proceed!(true)
+      proceed!(true, true)
       await Promise.resolve()
     })
 
@@ -336,7 +340,7 @@ describe('window close pending affordance', () => {
     await startWindowClose()
 
     await act(async () => {
-      proceed!(true)
+      proceed!(true, true)
       await Promise.resolve()
     })
     await advancePast(WINDOW_CLOSE_CHECKING_AFFORDANCE_DELAY_MS * 2)

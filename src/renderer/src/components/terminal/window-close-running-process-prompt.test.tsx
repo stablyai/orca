@@ -10,6 +10,7 @@ import {
   type PtyProcessInspectionEvidence
 } from '../../../../shared/pty-process-inspection-evidence'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { AppState } from '@/store/types'
 
 /**
@@ -28,6 +29,7 @@ vi.mock('@/lib/shutdown-checkpoint-failure-toast', () => ({
 }))
 
 import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
+import { readWindowCloseRequestPayload } from '../../../../shared/window-close-request'
 import {
   dispatchWindowCloseRequest,
   registerWindowCloseGuard,
@@ -45,6 +47,15 @@ const LOCAL_WORKTREE_ID = 'repo-local::/home/dev/work'
  *  no execution host, which is the whole point of the daemon case below. */
 const DAEMON_PTY_ID = `${LOCAL_WORKTREE_ID}${PTY_SESSION_ID_SEPARATOR}a1b2c3d4`
 const SSH_WORKTREE_ID = 'repo-ssh::/srv/work'
+/** Minted by the real encoder rather than spelled `remote:…` here, so the fixture
+ *  tracks `isRemoteRuntimePtyId` instead of a copy of its prefix. Bound to the LOCAL
+ *  worktree on purpose: its repo resolves to no connection, so the SSH skip cannot be
+ *  what keeps this pane out and the runtime exclusion is the only thing under test. */
+const RUNTIME_PTY_ID = toRemoteRuntimePtyId('terminal-1', 'runtime-env-1')
+/** The owner-less encoding the same minter produces for a legacy binding, which
+ *  `updateTabPtyId` still writes as `legacyRemotePtyId`. Both forms must be excluded:
+ *  a filter that only recognised the owner-bearing one would let this pane through. */
+const LEGACY_RUNTIME_PTY_ID = toRemoteRuntimePtyId('terminal-legacy')
 const SHELL = 'zsh'
 
 /**
@@ -125,7 +136,7 @@ function observedLiveInspection(): InspectionShape {
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 let confirmWindowClose: ReturnType<typeof vi.fn>
-let proceed: ((isQuitting: boolean) => void) | null = null
+let proceed: ((isQuitting: boolean, localPtysSurviveQuit: boolean) => void) | null = null
 
 function Harness(): React.ReactNode {
   const prompt = useWindowCloseRunningProcessPrompt()
@@ -164,16 +175,30 @@ function installInspectProcess(
  * every branch, so a test that skips the coordinator cannot tell two requests apart
  * and would pass on code that closes a cancelled window.
  */
-async function requestWindowClose(isQuitting = false): Promise<void> {
+async function requestWindowClose(isQuitting = false, localPtysSurviveQuit = false): Promise<void> {
   await act(async () => {
-    await dispatchWindowCloseRequest({ isQuitting })
+    await dispatchWindowCloseRequest({ isQuitting, localPtysSurviveQuit })
     await Promise.resolve()
   })
 }
 
 async function runWindowClose(): Promise<void> {
   await act(async () => {
-    await dispatchWindowCloseRequest({ isQuitting: false })
+    await dispatchWindowCloseRequest({ isQuitting: false, localPtysSurviveQuit: false })
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
+/** Drives the quit branch through the same reader the preload uses, so the survival
+ *  fact reaching the prompt is the one main's payload actually produces. */
+async function runQuit(payload: {
+  isQuitting: unknown
+  localPtysSurviveQuit?: unknown
+}): Promise<void> {
+  const read = readWindowCloseRequestPayload(payload)
+  await act(async () => {
+    await dispatchWindowCloseRequest(read)
     await Promise.resolve()
     await Promise.resolve()
   })
@@ -204,7 +229,9 @@ beforeEach(() => {
     root!.render(<Harness />)
   })
   // Terminal's registered handler, minus the branches each test installs itself.
-  setWindowCloseRequestHandler(({ isQuitting }) => proceed!(isQuitting))
+  setWindowCloseRequestHandler(({ isQuitting, localPtysSurviveQuit }) =>
+    proceed!(isQuitting, localPtysSurviveQuit)
+  )
 })
 
 afterEach(() => {
@@ -397,10 +424,11 @@ describe('window close with a degraded local process read', () => {
   })
 
   /** The close paths that never probe end an attempt just as surely as the ones that do.
-   *  A quit arrives on the same re-sent `window:close-requested` and skips the probe
-   *  entirely, and its shutdown checkpoint can veto it — which leaves the window open
-   *  with the earlier attempt's probe still outstanding. `vetoNextCloses` is the real
-   *  producer: `confirmNativeWindowClose` reads `window.dispatchEvent`'s own return. */
+   *  A quit whose local shells main reports will survive arrives on the same re-sent
+   *  `window:close-requested` and skips the probe entirely, and its shutdown checkpoint
+   *  can veto it — which leaves the window open with the earlier attempt's probe still
+   *  outstanding. `vetoNextCloses` is the real producer: `confirmNativeWindowClose`
+   *  reads `window.dispatchEvent`'s own return. */
   function vetoNextCloses(): () => void {
     const veto = (event: Event): void => event.preventDefault()
     window.addEventListener('beforeunload', veto)
@@ -413,11 +441,11 @@ describe('window close with a degraded local process read', () => {
     await requestWindowClose()
     expect(settle).toHaveLength(1)
 
-    // The user hits Cmd+Q while the first probe is still out. A quit never probes,
-    // and the dirty-file checkpoint vetoes it, so the window simply stays open.
+    // The user hits Cmd+Q while the first probe is still out. A quit main vouches
+    // for never probes, and the dirty-file checkpoint vetoes it, so the window stays open.
     const stopVetoing = vetoNextCloses()
     try {
-      await requestWindowClose(true)
+      await requestWindowClose(true, true)
       expect(confirmWindowClose).not.toHaveBeenCalled()
       expect(vi.mocked(showShutdownCheckpointFailureToast)).toHaveBeenCalledTimes(1)
 
@@ -441,7 +469,7 @@ describe('window close with a degraded local process read', () => {
 
     const stopVetoing = vetoNextCloses()
     try {
-      await requestWindowClose(true)
+      await requestWindowClose(true, true)
       expect(vi.mocked(showShutdownCheckpointFailureToast)).toHaveBeenCalledTimes(1)
 
       // Why the toast count and not `confirmWindowClose`: the veto is a standing
@@ -467,7 +495,7 @@ describe('window close with a degraded local process read', () => {
   it('still closes the window directly on a quit that no checkpoint vetoes', async () => {
     installInspectProcess(async () => observedLiveInspection())
 
-    await requestWindowClose(true)
+    await requestWindowClose(true, true)
 
     expect(confirmWindowClose).toHaveBeenCalledTimes(1)
     expect(vi.mocked(showShutdownCheckpointFailureToast)).not.toHaveBeenCalled()
@@ -543,11 +571,17 @@ describe('Terminal.tsx routes the native window-close request through the guard'
   it('registers a handler that probes before closing', () => {
     // Anchored on the effect's indent so a comment or a hoisted helper of the
     // same name cannot stand in for the registered handler.
-    const start = source.indexOf('    setWindowCloseRequestHandler(({ isQuitting }) => {')
+    const start = source.indexOf(
+      '    setWindowCloseRequestHandler(({ isQuitting, localPtysSurviveQuit }) => {'
+    )
     const end = source.indexOf('    return () => setWindowCloseRequestHandler(null)', start)
     expect(start).toBeGreaterThanOrEqual(0)
     expect(end).toBeGreaterThan(start)
-    expect(source.slice(start, end)).toContain('proceedToNativeWindowClose(isQuitting)')
+    // Both arguments, from the payload: dropping the survival fact here restores the
+    // unconditional quit bypass with the whole probe still sitting behind it.
+    expect(source.slice(start, end)).toContain(
+      'proceedToNativeWindowClose(isQuitting, localPtysSurviveQuit)'
+    )
   })
 
   it('still defers a dirty-editor close instead of probing, as the stand-in handler does', () => {
@@ -555,12 +589,12 @@ describe('Terminal.tsx routes the native window-close request through the guard'
     // this handler, and the branch that produced the bug is the one that returns
     // WITHOUT calling proceedToNativeWindowClose. If Terminal ever probed here
     // instead, the copy would be testing a shape Terminal no longer has.
-    const start = source.indexOf('    setWindowCloseRequestHandler(({ isQuitting }) => {')
+    const start = source.indexOf('    setWindowCloseRequestHandler((')
     const end = source.indexOf('    return () => setWindowCloseRequestHandler(null)', start)
     const handler = source.slice(start, end)
     const dirtyBranch = handler.slice(
       handler.indexOf('const dirtyFiles'),
-      handler.indexOf('proceedToNativeWindowClose(isQuitting)')
+      handler.indexOf('proceedToNativeWindowClose(isQuitting')
     )
     expect(dirtyBranch).toContain('queueEditorCloseRequests(')
     expect(dirtyBranch).toContain('return')
@@ -576,6 +610,30 @@ describe('Terminal.tsx routes the native window-close request through the guard'
       source.split('window.api.ui.confirmWindowClose(').length - 1,
       'Terminal.tsx may only close the window unprobed for an intentional app restart'
     ).toBe(1)
+  })
+
+  /**
+   * The dirty-editor branch defers the close instead of taking it, so the survival
+   * fact has a second call site: it is stashed on the pending record and spent when
+   * the save/discard flow finishes. Only the direct call above was pinned, which
+   * left this one free to drop the fact and silently restore the unconditional quit
+   * bypass for every window that happened to have unsaved work.
+   */
+  it('carries the survival fact through the deferred dirty-editor close as well', () => {
+    const start = source.indexOf(
+      '    setWindowCloseRequestHandler(({ isQuitting, localPtysSurviveQuit }) => {'
+    )
+    const end = source.indexOf('    return () => setWindowCloseRequestHandler(null)', start)
+    expect(start).toBeGreaterThanOrEqual(0)
+    // Stashed with the request. Anchored on the queue call itself, not the bare
+    // object literal: the handler's own destructuring pattern is the same text, so
+    // a looser match is satisfied by the signature and pins nothing.
+    expect(source.slice(start, end)).toContain(
+      'dirtyFiles.map((file) => file.id),\n          { isQuitting, localPtysSurviveQuit }'
+    )
+    // Spent on the replay: both fields off the pending record, not a re-derived default.
+    expect(source).toContain('pendingWindowClose.isQuitting')
+    expect(source).toContain('pendingWindowClose.localPtysSurviveQuit')
   })
 })
 
@@ -709,10 +767,7 @@ describe('window close with a direct-SSH terminal', () => {
     vi.useFakeTimers()
     try {
       installInspectProcess(() => new Promise<InspectionShape>(() => {}))
-      await act(async () => {
-        proceed!(false)
-        await Promise.resolve()
-      })
+      await requestWindowClose()
       // Why assert the not-yet state first: without it a bound of 0 would pass.
       expect(warningIsVisible()).toBe(false)
       await act(async () => {
@@ -761,6 +816,193 @@ describe('window close with a direct-SSH terminal', () => {
 })
 
 /**
+ * Quit used to skip the confirmation unconditionally. That is only safe while the
+ * daemon owns the shells — quit calls `killAllPty()` (a no-op against the daemon
+ * adapter) and `disconnectDaemon()`, so the daemon keeps its children. Without an
+ * adapter the same children are this process's and die with it, measured in an
+ * isolated node-pty probe: a foreground worker died on a bare parent exit while a
+ * detached-fork control survived. So the bypass is now conditional on main saying
+ * the work survives, and nothing else.
+ */
+describe('quit with local terminals', () => {
+  const UNRESOLVED_WORKTREE_ID = 'repo-unhydrated::/home/dev/pending'
+
+  it('warns about a live local process when the daemon does not own the PTYs', async () => {
+    installInspectProcess(async () => observedLiveInspection())
+
+    await runQuit({ isQuitting: true, localPtysSurviveQuit: false })
+
+    expect(warningIsVisible()).toBe(true)
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+  })
+
+  it('closes silently while the daemon owns the PTYs, without probing at all', async () => {
+    const inspectProcess = installInspectProcess(async () => observedLiveInspection())
+
+    await runQuit({ isQuitting: true, localPtysSurviveQuit: true })
+
+    expect(warningIsVisible()).toBe(false)
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+    // The quit must not get slower for work that is being handed over, not ended.
+    expect(inspectProcess).not.toHaveBeenCalled()
+  })
+
+  it('still closes silently with no daemon when the local shell is observed idle', async () => {
+    installInspectProcess(async () => observedIdleInspection())
+
+    await runQuit({ isQuitting: true, localPtysSurviveQuit: false })
+
+    expect(warningIsVisible()).toBe(false)
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('warns when the local read was degraded, because "could not tell" is not "idle"', async () => {
+    installInspectProcess(async () => degradedLocalInspection())
+
+    await runQuit({ isQuitting: true, localPtysSurviveQuit: false })
+
+    expect(warningIsVisible()).toBe(true)
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+  })
+
+  /** A payload with no survival field at all — an older main, or a close request built
+   *  before the daemon wiring existed. Read through the real preload reader, so the
+   *  absence arrives exactly as it would on the wire. */
+  it('warns when the payload never said whether the PTYs survive', async () => {
+    installInspectProcess(async () => observedLiveInspection())
+
+    await runQuit({ isQuitting: true })
+
+    expect(warningIsVisible()).toBe(true)
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+  })
+
+  /** The daemon fact answers a quit and nothing else: an X-close ends the renderer
+   *  either way, and the guard #17044/#17077 settled must keep running there. */
+  it('still probes an ordinary window close even while the daemon owns the PTYs', async () => {
+    const inspectProcess = installInspectProcess(async () => observedLiveInspection())
+
+    await requestWindowClose(false, true)
+
+    expect(inspectProcess).toHaveBeenCalledWith(PTY_ID)
+    expect(warningIsVisible()).toBe(true)
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+  })
+
+  /** SSH panes are the one thing a quit genuinely does not end: shutdown marks the
+   *  lease `detached` rather than `terminated` and the remote shell is nohup-detached.
+   *  Probing them would only make the quit slower over work that keeps running. */
+  it('does not probe or warn about a direct-SSH pane on quit', async () => {
+    getStateMock.mockReturnValue(storeStateWithPtys({ [SSH_WORKTREE_ID]: [SSH_PTY_ID] }))
+    const inspectProcess = installInspectProcess(async () => observedLiveInspection())
+
+    await runQuit({ isQuitting: true, localPtysSurviveQuit: false })
+
+    expect(inspectProcess).not.toHaveBeenCalled()
+    expect(warningIsVisible()).toBe(false)
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+  })
+
+  /** The quit flag's own read site, not the survival conjunct: `collectWindowClosePtyIds`
+   *  drops SSH panes on a quit, so a truthy non-boolean coerced to a yes closes over remote
+   *  work with no probe even while the survival answer is a clean no. */
+  it('probes and warns about an SSH pane when the quit flag is malformed rather than a real yes', async () => {
+    getStateMock.mockReturnValue(storeStateWithPtys({ [SSH_WORKTREE_ID]: [SSH_PTY_ID] }))
+    const inspectProcess = installInspectProcess(async () => observedLiveInspection())
+
+    await runQuit({ isQuitting: 'yes', localPtysSurviveQuit: false })
+
+    expect(inspectProcess.mock.calls.map(([ptyId]) => ptyId)).toEqual([SSH_PTY_ID])
+    expect(warningIsVisible()).toBe(true)
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+  })
+
+  it('warns about the local pane of a mixed window while leaving the SSH pane alone', async () => {
+    getStateMock.mockReturnValue(
+      storeStateWithPtys({
+        [LOCAL_WORKTREE_ID]: [PTY_ID],
+        [SSH_WORKTREE_ID]: [SSH_PTY_ID]
+      })
+    )
+    const inspectProcess = installInspectProcess(async () => observedLiveInspection())
+
+    await runQuit({ isQuitting: true, localPtysSurviveQuit: false })
+
+    expect(inspectProcess.mock.calls.map(([ptyId]) => ptyId)).toEqual([PTY_ID])
+    expect(warningIsVisible()).toBe(true)
+  })
+
+  /** The owner read answers `undefined` while the backing repo has not hydrated — the
+   *  exact case the old `!== null` filter mistook for remote. An unresolved host is not
+   *  evidence that the work survives, so the pane stays in the probe. */
+  it('probes a pane whose owning host has not resolved yet rather than assuming it survives', async () => {
+    getStateMock.mockReturnValue(storeStateWithPtys({ [UNRESOLVED_WORKTREE_ID]: [PTY_ID] }))
+    const inspectProcess = installInspectProcess(async () => observedLiveInspection())
+
+    await runQuit({ isQuitting: true, localPtysSurviveQuit: false })
+
+    expect(inspectProcess).toHaveBeenCalledWith(PTY_ID)
+    expect(warningIsVisible()).toBe(true)
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Runtime-environment panes run on a host this window is only a viewer of and outlive
+ * it by design, so the close must neither probe nor warn about them. The exclusion was
+ * carried through three refactors with nothing asserting it: every case above binds
+ * only local, SSH or daemon ids, so removing the filter outright changed no result.
+ */
+describe('window close with a runtime-environment pane', () => {
+  it('closes silently without probing a window whose only pane runs on a runtime host', async () => {
+    getStateMock.mockReturnValue(storeStateWithPtys({ [LOCAL_WORKTREE_ID]: [RUNTIME_PTY_ID] }))
+    const inspectProcess = installInspectProcess(async () => observedLiveInspection())
+
+    await runWindowClose()
+
+    expect(inspectProcess).not.toHaveBeenCalled()
+    expect(warningIsVisible()).toBe(false)
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+  })
+
+  /** The single-pane case alone passes for a guard that drops every pane. This one
+   *  fails unless the local pane is still probed and the runtime pane still is not. */
+  it('probes only the local pane of a window that also holds a runtime pane', async () => {
+    getStateMock.mockReturnValue(
+      storeStateWithPtys({
+        [LOCAL_WORKTREE_ID]: [PTY_ID, RUNTIME_PTY_ID, LEGACY_RUNTIME_PTY_ID]
+      })
+    )
+    const inspectProcess = installInspectProcess(async () => observedIdleInspection())
+
+    await runWindowClose()
+
+    expect(inspectProcess.mock.calls.map(([ptyId]) => ptyId)).toEqual([PTY_ID])
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+  })
+
+  /** Live work on the runtime host must not raise the warning: it is not work this
+   *  window ends. Without the exclusion this is the case that prompts on every close. */
+  it('does not warn about live work on the runtime host', async () => {
+    getStateMock.mockReturnValue(
+      storeStateWithPtys({
+        [LOCAL_WORKTREE_ID]: [PTY_ID, RUNTIME_PTY_ID, LEGACY_RUNTIME_PTY_ID]
+      })
+    )
+    installInspectProcess(async (ptyId) =>
+      ptyId === RUNTIME_PTY_ID || ptyId === LEGACY_RUNTIME_PTY_ID
+        ? observedLiveInspection()
+        : observedIdleInspection()
+    )
+
+    await runWindowClose()
+
+    expect(warningIsVisible()).toBe(false)
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
  * A window-close request can leave the renderer without ever reaching
  * `proceedToNativeWindowClose` — a pre-close guard can veto it in the coordinator,
  * and Terminal defers it behind the unsaved-changes dialog. Both end the previous
@@ -778,7 +1020,6 @@ describe('a request that never reaches the probe still ends the previous attempt
   it('does not close the window on a probe outstanding when a guard vetoed the next request', async () => {
     // The Settings unsaved-author-prompt guard is the real producer: it returns false
     // when the user picks Cancel, and the coordinator then returns with the window open.
-    setWindowCloseRequestHandler(({ isQuitting }) => proceed!(isQuitting))
     const settle = installDeferredInspections()
 
     await requestWindowClose()
@@ -812,16 +1053,16 @@ describe('a request that never reaches the probe still ends the previous attempt
     cancelUnsavedChangesDialog: () => void
   } {
     let dirty = false
-    let windowCloseAfterDirty: { isQuitting: boolean } | null = null
-    setWindowCloseRequestHandler(({ isQuitting }) => {
+    let windowCloseAfterDirty: { isQuitting: boolean; localPtysSurviveQuit: boolean } | null = null
+    setWindowCloseRequestHandler(({ isQuitting, localPtysSurviveQuit }) => {
       if (windowCloseAfterDirty) {
         return
       }
       if (dirty) {
-        windowCloseAfterDirty = { isQuitting }
+        windowCloseAfterDirty = { isQuitting, localPtysSurviveQuit }
         return
       }
-      proceed!(isQuitting)
+      proceed!(isQuitting, localPtysSurviveQuit)
     })
     return {
       setDirty: (next) => {
@@ -883,7 +1124,6 @@ describe('a request that never reaches the probe still ends the previous attempt
 
   it('still closes the window when nothing superseded the request', async () => {
     // Polarity control: the fence must not swallow the ordinary close.
-    setWindowCloseRequestHandler(({ isQuitting }) => proceed!(isQuitting))
     const settle = installDeferredInspections()
 
     await requestWindowClose()

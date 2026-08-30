@@ -15,6 +15,7 @@ import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
   findDaemonAdapter,
+  hasLiveProviderPtys,
   listProviderSessionIds
 } from './degraded-daemon-session-routing'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
@@ -307,6 +308,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   async shutdownFallbackSessions(): Promise<number> {
     return shutdownDegradedFallbackSessions(this.sessionProviders, this.fallback)
   }
+
+  /** Fresh terminals spawned while degraded are this process's own children and die with it.
+   *  `shutdownFallbackSessions` is best-effort by design, so a restart that succeeded can
+   *  still leave one running — asked of the fallback itself, because the question is which
+   *  PTYs exist, not which provider is installed. */
+  hasLiveFallbackPtys = (): boolean => hasLiveProviderPtys(this.sessionProviders, this.fallback)
 
   getCurrentDaemonSessionIds(): string[] {
     return listProviderSessionIds(this.sessionProviders, this.current)

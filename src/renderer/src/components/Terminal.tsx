@@ -520,7 +520,10 @@ function Terminal(): React.JSX.Element | null {
   }, [])
 
   // Why: defer confirmWindowClose() while tabs are dirty — the beforeunload guard preventDefault()s, so an immediate confirm leaves the window open with no UI.
-  const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
+  const windowCloseAfterDirtyRef = useRef<{
+    isQuitting: boolean
+    localPtysSurviveQuit: boolean
+  } | null>(null)
 
   const { proceedToNativeWindowClose, windowCloseDialog } = useWindowCloseRunningProcessPrompt()
 
@@ -591,7 +594,10 @@ function Terminal(): React.JSX.Element | null {
     const pendingWindowClose = windowCloseAfterDirtyRef.current
     if (pendingWindowClose) {
       windowCloseAfterDirtyRef.current = null
-      proceedToNativeWindowClose(pendingWindowClose.isQuitting)
+      proceedToNativeWindowClose(
+        pendingWindowClose.isQuitting,
+        pendingWindowClose.localPtysSurviveQuit
+      )
     }
   }, [
     getNextQueuedEditorClose,
@@ -602,7 +608,10 @@ function Terminal(): React.JSX.Element | null {
   ])
 
   const queueEditorCloseRequests = useCallback(
-    (fileIds: string[], pendingWindowClose?: { isQuitting: boolean }) => {
+    (
+      fileIds: string[],
+      pendingWindowClose?: { isQuitting: boolean; localPtysSurviveQuit: boolean }
+    ) => {
       if (pendingWindowClose) {
         windowCloseAfterDirtyRef.current = pendingWindowClose
       }
@@ -2363,7 +2372,7 @@ function Terminal(): React.JSX.Element | null {
   // Handle main-process window close requests: only dirty editor files block close (terminal sessions detach via daemon/SSH).
   // Why: register into the coordinator, not IPC directly, so quits on the Terminal-less landing page are still handled (#5144).
   useEffect(() => {
-    setWindowCloseRequestHandler(({ isQuitting }) => {
+    setWindowCloseRequestHandler(({ isQuitting, localPtysSurviveQuit }) => {
       if (isIntentionalAppRestartInProgress()) {
         window.api.ui.confirmWindowClose()
         return
@@ -2378,12 +2387,12 @@ function Terminal(): React.JSX.Element | null {
       if (dirtyFiles.length > 0) {
         queueEditorCloseRequests(
           dirtyFiles.map((file) => file.id),
-          { isQuitting }
+          { isQuitting, localPtysSurviveQuit }
         )
         return
       }
 
-      proceedToNativeWindowClose(isQuitting)
+      proceedToNativeWindowClose(isQuitting, localPtysSurviveQuit)
     })
     return () => setWindowCloseRequestHandler(null)
   }, [proceedToNativeWindowClose, queueEditorCloseRequests])
