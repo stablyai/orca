@@ -7,6 +7,10 @@ import {
   _setWslAvailabilityCacheForTests,
   dropStaleWslAvailabilityFailure
 } from './wsl-availability'
+import {
+  _resetRunningWslDistroCacheForTests,
+  resolveRunningWslDistros
+} from './wsl-running-distro-cache'
 
 // Why re-exported rather than defined here: the relay bundle needs the path
 // conversion without this module's distro-probing subprocess graph.
@@ -133,7 +137,6 @@ let wslDistroListRetryAfterMs = 0
 let wslDistroListEmptyStreak = 0
 let wslDistroProbeSequence = 0
 let wslDistroCacheSequence = 0
-let runningWslDistroProbe: Promise<string[]> | null = null
 function armWslDistroListRetry(): void {
   const now = Date.now()
   // Concurrent completions belong to the retry window already armed by the first result.
@@ -233,29 +236,18 @@ export async function listWslDistrosAsync(): Promise<string[]> {
   }
 }
 
-/** Running user distros only. Results are not cached, but concurrent callers
- *  share one probe so IPC fan-out cannot multiply wsl.exe processes. */
+/** Running user distros only — see `resolveRunningWslDistros` for the fallback/backoff and
+ *  single-flight contract shared by every caller. */
 export async function listRunningWslDistrosAsync(): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
-  if (runningWslDistroProbe) {
-    return runningWslDistroProbe
-  }
-
-  const probe = execFileUtf8('wsl.exe', ['--list', '--running', '--quiet'], {
-    ...process.env,
-    WSL_UTF8: '1'
-  })
-    .then((output) => filterUserWslDistros(parseWslDistros(output)))
-    .catch(() => [] as string[])
-    .finally(() => {
-      if (runningWslDistroProbe === probe) {
-        runningWslDistroProbe = null
-      }
-    })
-  runningWslDistroProbe = probe
-  return probe
+  return resolveRunningWslDistros(() =>
+    execFileUtf8('wsl.exe', ['--list', '--running', '--quiet'], {
+      ...process.env,
+      WSL_UTF8: '1'
+    }).then((output) => filterUserWslDistros(parseWslDistros(output)))
+  )
 }
 
 export function hasCachedWslDistros(): boolean {
@@ -358,7 +350,7 @@ export function _resetWslCachesForTests(): void {
   wslDistroListEmptyStreak = 0
   wslDistroProbeSequence = 0
   wslDistroCacheSequence = 0
-  runningWslDistroProbe = null
+  _resetRunningWslDistroCacheForTests()
   _resetWslAvailabilityCacheForTests()
 }
 

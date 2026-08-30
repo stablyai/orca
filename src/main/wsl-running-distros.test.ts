@@ -14,6 +14,10 @@ import {
   listRunningWslHomeDirsAsync
 } from './wsl'
 import { filterPathsToRunningWslDistrosAsync } from './wsl-running-path-filter'
+import {
+  observeWslTranscriptRunningState,
+  resetWslTranscriptRunningObserverForTests
+} from './native-chat/wsl-transcript-running-observer'
 
 async function withPlatform<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -29,6 +33,8 @@ describe('running WSL distro discovery', () => {
   afterEach(() => {
     execFileMock.mockReset()
     _resetWslCachesForTests()
+    resetWslTranscriptRunningObserverForTests()
+    vi.useRealTimers()
   })
 
   it('lists only running user distros without starting them', async () => {
@@ -153,6 +159,52 @@ describe('running WSL distro discovery', () => {
     await withPlatform('linux', async () => {
       await expect(listRunningWslDistrosAsync()).resolves.toEqual([])
       expect(execFileMock).not.toHaveBeenCalled()
+    })
+  })
+
+  // Consumer-level: what a live transcript watcher sees when wsl.exe stays broken across
+  // a whole polling session, not just a single failed call.
+  it('keeps reporting a session running through a sustained wsl.exe outage, without unbounded spawns', async () => {
+    let spawnCount = 0
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      spawnCount += 1
+      callback(null, 'Ubuntu\n')
+    })
+
+    await withPlatform('win32', async () => {
+      // Seed a real last-known-good answer before the outage starts.
+      await expect(listRunningWslDistrosAsync()).resolves.toEqual(['Ubuntu'])
+      expect(spawnCount).toBe(1)
+
+      // wsl.exe now fails on every call — a persistent, not transient, break.
+      execFileMock.mockImplementation((_command, _args, _options, callback) => {
+        spawnCount += 1
+        callback(new Error('wsl unavailable'), '')
+      })
+
+      vi.useFakeTimers()
+      const observedStates: boolean[] = []
+      const stop = observeWslTranscriptRunningState(
+        '\\\\wsl.localhost\\Ubuntu\\home\\ada\\a.jsonl',
+        () => {
+          observedStates.push(true)
+        },
+        () => {
+          observedStates.push(false)
+        }
+      )
+
+      // 30 minutes of the 2s transcript-watcher poll (~900 ticks) against a broken wsl.exe.
+      await vi.advanceTimersByTimeAsync(30 * 60_000)
+      stop()
+
+      // A live session must never be reported as stopped just because discovery is broken —
+      // that would make every open WSL transcript vanish out from under the user.
+      expect(observedStates.length).toBeGreaterThan(0)
+      expect(observedStates.every((state) => state === true)).toBe(true)
+
+      // Backoff must keep the real wsl.exe spawn count far below one per 2s poll tick.
+      expect(spawnCount).toBeLessThan(15)
     })
   })
 })
