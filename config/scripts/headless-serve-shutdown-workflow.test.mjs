@@ -70,6 +70,10 @@ describe('headless serve shutdown PR gate', () => {
 
   it('keeps the readiness parser line-buffered', () => {
     expect(signalCase).toContain("| sed -u -n 's/^[^{]*//p'")
+    expect(signalCase).toContain('startup_timeout_seconds=${ORCA_STARTUP_TIMEOUT_SECONDS:-180}')
+    expect(signalCase).toContain(
+      'timeout --foreground --signal=TERM --kill-after=5s "$startup_timeout_seconds"'
+    )
     expect(signalCase).toContain(
       'A readiness event can land as the timeout tears down the tail pipeline.'
     )

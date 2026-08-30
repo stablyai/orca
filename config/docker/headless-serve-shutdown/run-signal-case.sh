@@ -6,7 +6,9 @@ app_root=${ORCA_TEST_APP_ROOT:-/artifacts/root}
 signal_target_kind=${ORCA_SIGNAL_TARGET:-app}
 entrypoint_kind=${ORCA_TEST_ENTRYPOINT:-app}
 int_delivery=${ORCA_INT_DELIVERY:-foreground-process-group}
-startup_timeout_seconds=${ORCA_STARTUP_TIMEOUT_SECONDS:-90}
+# Packaged Electron startup can approach 90s on a cold CI runner; leave room
+# for the readiness line to reach the log before the observer deadline.
+startup_timeout_seconds=${ORCA_STARTUP_TIMEOUT_SECONDS:-180}
 
 if ((EUID == 0)); then
   exec runuser --user orca --preserve-environment -- "$0" "$@"
@@ -55,7 +57,7 @@ app_start_ticks=$(awk '{print $22}' "/proc/$app_pid/stat")
 
 # The inner shell expands its positional parameters.
 # shellcheck disable=SC1083,SC2016
-ready_line=$(timeout "$startup_timeout_seconds" bash -c '
+ready_line=$(timeout --foreground --signal=TERM --kill-after=5s "$startup_timeout_seconds" bash -c '
   tail --pid="$1" -n +1 -F "$2" 2>/dev/null \
     | sed -u -n 's/^[^{]*//p' \
     | jq --unbuffered -Rnc '\''first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))'\''
