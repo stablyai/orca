@@ -60,6 +60,37 @@ describe('appendTerminalErrorMessage', () => {
     )
   })
 
+  it('#15241: bounds growth when a recurring error carries a changing timestamp', () => {
+    let accumulated: string | null = null
+    for (let i = 0; i < 500; i++) {
+      accumulated = appendTerminalErrorMessage(
+        accumulated,
+        `Remote terminal write failed at 14:32:${String(i).padStart(2, '0')}.`
+      )
+    }
+    // Why: none of these 500 messages are exact repeats (the timestamp differs each time),
+    // so containsWholeLineRun never matches — without a cap this grows to 500 lines/~21KB.
+    expect(accumulated?.split('\n').length).toBe(20)
+    expect(accumulated).toContain('14:32:499')
+    expect(accumulated).not.toContain('14:32:00.')
+  })
+
+  it('#15241: bounds a single oversized first message, not just repeated appends', () => {
+    const oversizedFirstMessage = Array.from({ length: 30 }, (_, i) => `line ${i}`).join('\n')
+    const accumulated = appendTerminalErrorMessage(null, oversizedFirstMessage)
+    expect(accumulated.split('\n').length).toBe(20)
+    expect(accumulated).toContain('line 29')
+    expect(accumulated).not.toContain('line 9\n')
+  })
+
+  it('#15241: keeps only the most recent lines once the cap is exceeded', () => {
+    let accumulated: string | null = null
+    for (let i = 0; i < 25; i++) {
+      accumulated = appendTerminalErrorMessage(accumulated, `error ${i}`)
+    }
+    expect(accumulated).toBe(Array.from({ length: 20 }, (_, i) => `error ${i + 5}`).join('\n'))
+  })
+
   it('stays a newline-joined string the toast can still filter per line', () => {
     const accumulated = appendTerminalErrorMessage(
       appendTerminalErrorMessage(null, 'SSH connection failed: host unreachable'),
