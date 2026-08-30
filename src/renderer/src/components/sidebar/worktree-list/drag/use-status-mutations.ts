@@ -11,12 +11,11 @@ import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../../workspace-
 import {
   buildManualOrderUpdatesForGroupDrop,
   buildManualOrderUpdatesForVisibleGroups,
-  shouldWriteManualOrderForGroupDrop,
-  type WorktreeDragGroup
+  shouldWriteManualOrderForGroupDrop
 } from '../../worktree-manual-order'
 import { buildWorkspaceKanbanSidebarDropUpdates } from '../../workspace-kanban-sidebar-drop'
 import type { SortBy } from '../../smart-sort'
-import type { WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
+import type { WorktreeReorderRequest, WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 import type { WorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
 
 // Every write a sidebar drop can make: status changes, pin, manual order, and the board lane drop.
@@ -133,12 +132,7 @@ export function useWorktreeStatusMutations(args: {
   )
 
   const reorderWorktrees = useCallback(
-    (reorderArgs: {
-      groups: readonly WorktreeDragGroup[]
-      sourceGroupKey: string
-      draggedIds: readonly string[]
-      dropIndex: number
-    }) => {
+    (reorderArgs: WorktreeReorderRequest) => {
       const result = buildManualOrderUpdatesForVisibleGroups({
         ...reorderArgs,
         now: Date.now(),
@@ -152,7 +146,10 @@ export function useWorktreeStatusMutations(args: {
         [...result.updates].map(([worktreeId, updates]) => ({
           worktreeId,
           updates,
-          executionHostId: worktreeMap.get(worktreeId)?.hostId ?? 'local'
+          executionHostId:
+            reorderArgs.executionHostIdByWorktreeId?.get(worktreeId) ??
+            worktreeMap.get(worktreeId)?.hostId ??
+            'local'
         }))
       )
     },

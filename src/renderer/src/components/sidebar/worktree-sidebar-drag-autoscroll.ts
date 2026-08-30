@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeDragUnitGroup } from './worktree-drag-units'
 import type {
@@ -28,6 +29,7 @@ export type WorktreeLineageSiblingReorder = {
   key: string
   rows: readonly WorktreeSidebarDragRowIdentity[]
   worktreeIds: readonly string[]
+  executionHostIdByWorktreeId: ReadonlyMap<string, ExecutionHostId>
   draggedIds: readonly string[]
   rects: readonly WorktreeSidebarDragRect[]
 }

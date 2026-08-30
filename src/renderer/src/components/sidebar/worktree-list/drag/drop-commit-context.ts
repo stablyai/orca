@@ -1,4 +1,5 @@
 import type React from 'react'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
@@ -17,6 +18,13 @@ export type WorktreeStatusDropAtIndexArgs = {
   status: WorkspaceStatus
   dropIndex: number
   groups: readonly WorktreeDragGroup[]
+}
+export type WorktreeReorderRequest = {
+  groups: readonly WorktreeDragGroup[]
+  sourceGroupKey: string
+  draggedIds: readonly string[]
+  dropIndex: number
+  executionHostIdByWorktreeId?: ReadonlyMap<string, ExecutionHostId>
 }
 
 // The shared surface every drop path (pointer, native drag, document capture) commits through.
@@ -43,11 +51,6 @@ export type WorktreeDropCommitContext = {
   clearWorktreeDrag: () => void
   onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void
-  onReorderWorktrees: (args: {
-    groups: readonly WorktreeDragGroup[]
-    sourceGroupKey: string
-    draggedIds: readonly string[]
-    dropIndex: number
-  }) => void
+  onReorderWorktrees: (args: WorktreeReorderRequest) => void
   onPinWorktrees: (worktreeIds: readonly string[]) => void
 }

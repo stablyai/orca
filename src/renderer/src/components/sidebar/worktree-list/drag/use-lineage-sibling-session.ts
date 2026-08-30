@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import type React from 'react'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostSectionRow } from '../../host-section-rows'
 import { getWorktreeLineageSiblingDropIndex } from '../../worktree-lineage-drag-drop'
 import {
@@ -20,6 +21,7 @@ import {
 export type WorktreeLineageSiblingDrop = WorktreeSidebarDropPreview & {
   groupKey: string
   worktreeIds: readonly string[]
+  executionHostIdByWorktreeId: ReadonlyMap<string, ExecutionHostId>
   draggedIds: readonly string[]
 }
 
@@ -46,6 +48,9 @@ export function useWorktreeLineageSiblingDrag(args: {
         return null
       }
       const rects = getWorktreeSidebarDragRectsForRows(container, selection.rows)
+      // Why: descendants render recursively inside one mounted parent virtual row.
+      // Dragging a child therefore implies every visible direct sibling is mounted;
+      // partial geometry is an invalid DOM state, not a virtualization boundary.
       return rects.length === selection.worktreeIds.length ? { ...selection, rects } : null
     },
     [args.scrollRef, siblingGroupIndex]
@@ -80,6 +85,7 @@ export function useWorktreeLineageSiblingDrag(args: {
         ? {
             groupKey: siblingReorder.key,
             worktreeIds: siblingReorder.worktreeIds,
+            executionHostIdByWorktreeId: siblingReorder.executionHostIdByWorktreeId,
             draggedIds: siblingReorder.draggedIds,
             ...preview
           }

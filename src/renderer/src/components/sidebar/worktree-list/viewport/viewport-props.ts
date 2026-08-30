@@ -19,8 +19,10 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
-import type { WorktreeDragGroup } from '../../worktree-manual-order'
-import type { WorktreeStatusDropAtIndexArgs } from '../drag/drop-commit-context'
+import type {
+  WorktreeReorderRequest,
+  WorktreeStatusDropAtIndexArgs
+} from '../drag/drop-commit-context'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 
@@ -94,12 +96,7 @@ export type VirtualizedWorktreeViewportProps = {
     worktreeIds: readonly string[],
     status: WorkspaceStatus
   ) => boolean
-  onReorderWorktrees: (args: {
-    groups: readonly WorktreeDragGroup[]
-    sourceGroupKey: string
-    draggedIds: readonly string[]
-    dropIndex: number
-  }) => void
+  onReorderWorktrees: (args: WorktreeReorderRequest) => void
   // Why: grouping remounts the viewport, add/delete stays mounted; bridge both so the virtualizer never resets to scrollTop 0.
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostSectionRow } from '../../host-section-rows'
 import {
   buildWorktreeLineageSiblingGroupIndex,
@@ -10,13 +11,13 @@ const NATURAL_SECTION = 'repo:repo-1'
 function item(
   id: string,
   depth: number,
-  options: { rowKey?: string; sectionKey?: string } = {}
+  options: { rowKey?: string; sectionKey?: string; hostId?: ExecutionHostId } = {}
 ): Extract<HostSectionRow, { type: 'item' }> {
   return {
     type: 'item',
     rowKey: options.rowKey ?? `row:${id}`,
     sectionKey: options.sectionKey ?? NATURAL_SECTION,
-    worktree: { id, repoId: 'repo-1' } as never,
+    worktree: { id, repoId: 'repo-1', hostId: options.hostId } as never,
     repo: { id: 'repo-1' } as never,
     depth,
     groupDepth: 0,
@@ -74,14 +75,14 @@ describe('buildWorktreeLineageSiblingGroupIndex', () => {
     ])
   })
 
-  it('keys same-id parent families by their host-qualified row keys', () => {
+  it('keys same-id parent families by row key and retains their execution host', () => {
     const rows = [
-      item('parent', 0, { rowKey: 'host:local:parent' }),
-      item('local-a', 1, { rowKey: 'host:local:a' }),
-      item('local-b', 1, { rowKey: 'host:local:b' }),
-      item('parent', 0, { rowKey: 'host:ssh:parent' }),
-      item('ssh-a', 1, { rowKey: 'host:ssh:a' }),
-      item('ssh-b', 1, { rowKey: 'host:ssh:b' })
+      item('parent', 0, { rowKey: 'host:local:parent', hostId: 'local' }),
+      item('shared-child', 1, { rowKey: 'host:local:shared', hostId: 'local' }),
+      item('local-b', 1, { rowKey: 'host:local:b', hostId: 'local' }),
+      item('parent', 0, { rowKey: 'host:ssh:parent', hostId: 'ssh:host-b' }),
+      item('shared-child', 1, { rowKey: 'host:ssh:shared', hostId: 'ssh:host-b' }),
+      item('ssh-b', 1, { rowKey: 'host:ssh:b', hostId: 'ssh:host-b' })
     ]
 
     const index = buildWorktreeLineageSiblingGroupIndex(rows, naturalIds(rows))
@@ -89,6 +90,13 @@ describe('buildWorktreeLineageSiblingGroupIndex', () => {
     expect(index.groups.map((group) => group.key)).toEqual([
       'lineage-siblings:host:local:parent',
       'lineage-siblings:host:ssh:parent'
+    ])
+    const sshSelection = resolveWorktreeLineageSiblingSelection(index, 'host:ssh:shared', [
+      'shared-child'
+    ])
+    expect(Array.from(sshSelection?.executionHostIdByWorktreeId ?? [])).toEqual([
+      ['shared-child', 'ssh:host-b'],
+      ['ssh-b', 'ssh:host-b']
     ])
   })
 

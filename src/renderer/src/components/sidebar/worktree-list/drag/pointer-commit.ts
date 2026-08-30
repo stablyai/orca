@@ -106,7 +106,8 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         ],
         sourceGroupKey: lineageSiblingDrop.groupKey,
         draggedIds: lineageSiblingDrop.draggedIds,
-        dropIndex: lineageSiblingDrop.dropIndex
+        dropIndex: lineageSiblingDrop.dropIndex,
+        executionHostIdByWorktreeId: lineageSiblingDrop.executionHostIdByWorktreeId
       })
       ctx.clearWorktreeDrag()
       return

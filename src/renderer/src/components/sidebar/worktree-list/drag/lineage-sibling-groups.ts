@@ -1,9 +1,11 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostSectionRow } from '../../host-section-rows'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 
 export type WorktreeLineageSiblingRow = {
   rowKey: string
   worktreeId: string
+  executionHostId?: ExecutionHostId
 }
 
 export type WorktreeLineageSiblingGroup = {
@@ -18,6 +20,7 @@ export type WorktreeLineageSiblingGroupIndex = {
 
 export type WorktreeLineageSiblingSelection = WorktreeLineageSiblingGroup & {
   worktreeIds: readonly string[]
+  executionHostIdByWorktreeId: ReadonlyMap<string, ExecutionHostId>
   draggedIds: readonly string[]
 }
 
@@ -53,7 +56,11 @@ export function buildWorktreeLineageSiblingGroupIndex(
 
     const key = `lineage-siblings:${parent.rowKey}`
     const group = groupsByKey.get(key) ?? { key, rows: [] }
-    group.rows.push({ rowKey: row.rowKey, worktreeId: row.worktree.id })
+    group.rows.push({
+      rowKey: row.rowKey,
+      worktreeId: row.worktree.id,
+      executionHostId: row.worktree.hostId
+    })
     groupsByKey.set(key, group)
   }
 
@@ -85,7 +92,18 @@ export function resolveWorktreeLineageSiblingSelection(
   }
   const draggedIdSet = new Set(draggedIds)
   const orderedDraggedIds = worktreeIds.filter((id) => draggedIdSet.has(id))
+  const executionHostIdByWorktreeId = new Map<string, ExecutionHostId>()
+  for (const row of group.rows) {
+    if (row.executionHostId) {
+      executionHostIdByWorktreeId.set(row.worktreeId, row.executionHostId)
+    }
+  }
   return orderedDraggedIds.length > 0
-    ? { ...group, worktreeIds, draggedIds: orderedDraggedIds }
+    ? {
+        ...group,
+        worktreeIds,
+        draggedIds: orderedDraggedIds,
+        executionHostIdByWorktreeId
+      }
     : null
 }
