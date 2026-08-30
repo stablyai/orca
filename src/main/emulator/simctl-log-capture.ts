@@ -1,5 +1,4 @@
-import { spawn } from 'node:child_process'
-import type { ExecFileException } from 'node:child_process'
+import { spawnProcess } from '../../shared/child-process/run-process'
 import { mapSimctlError } from './simctl-simulator-devices'
 import { parseSimulatorLogLine, simctlLogShowArgs, type SimulatorLogEntry } from './simctl-log'
 
@@ -17,11 +16,11 @@ export function captureSimulatorLog(
   options?: { lines?: number; filters?: readonly string[]; window?: string }
 ): Promise<SimulatorLogEntry[]> {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      'xcrun',
-      simctlLogShowArgs(udid, { filters: options?.filters, window: options?.window }),
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    )
+    const child = spawnProcess({
+      program: 'xcrun',
+      args: simctlLogShowArgs(udid, { filters: options?.filters, window: options?.window }),
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
     const entries: SimulatorLogEntry[] = []
     const lineLimit = options?.lines
     let nextEntryIndex = 0
@@ -71,7 +70,7 @@ export function captureSimulatorLog(
       }
       settled = true
       clearTimeout(timeout)
-      reject(mapSimctlError(error as ExecFileException, stderr))
+      reject(mapSimctlError(error as Parameters<typeof mapSimctlError>[0], stderr))
     })
     child.once('close', (code, signal) => {
       if (settled) {

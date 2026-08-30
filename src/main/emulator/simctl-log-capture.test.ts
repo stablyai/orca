@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 
 const spawnMock = vi.hoisted(() => vi.fn())
-vi.mock('node:child_process', () => ({ spawn: spawnMock }))
+vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: spawnMock }))
 
 import { captureSimulatorLog } from './simctl-log-capture'
 
@@ -43,11 +43,19 @@ describe('captureSimulatorLog', () => {
       { timestamp: 'two', level: 'Error', message: 'second' },
       { timestamp: 'three', level: 'Fault', message: 'third' }
     ])
-    expect(spawnMock).toHaveBeenCalledWith(
-      'xcrun',
-      expect.arrayContaining(['simctl', 'spawn', 'device-1', 'log', 'show', '--style', 'ndjson']),
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    )
+    expect(spawnMock).toHaveBeenCalledWith({
+      program: 'xcrun',
+      args: expect.arrayContaining([
+        'simctl',
+        'spawn',
+        'device-1',
+        'log',
+        'show',
+        '--style',
+        'ndjson'
+      ]),
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
   })
 
   it('maps unavailable simctl errors', async () => {
