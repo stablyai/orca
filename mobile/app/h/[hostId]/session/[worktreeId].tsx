@@ -1134,6 +1134,16 @@ export default function SessionScreen() {
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
 
+  function handleDictationError(err: unknown) {
+    const error = err instanceof Error ? err : new Error(String(err))
+    if (isDictationSetupRequiredError(error.message)) {
+      setShowDictationSetup(true)
+      return
+    }
+    triggerError()
+    showToast(error.message)
+  }
+
   const dictation = useMobileDictation({
     client,
     enabled: canSend,
@@ -1175,13 +1185,7 @@ export default function SessionScreen() {
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
-      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
-      if (isDictationSetupRequiredError(err.message)) {
-        setShowDictationSetup(true)
-        return
-      }
-      triggerError()
-      showToast(err.message)
+      handleDictationError(err)
     }
   })
 
@@ -1194,10 +1198,9 @@ export default function SessionScreen() {
       if (dictationRouteContextRef.current === routeContext) {
         dictationRouteContextRef.current = null
       }
-      triggerError()
-      showToast(err instanceof Error ? err.message : String(err))
+      handleDictationError(err)
     })
-  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+  }, [activeHandle, dictation, handleDictationError, liveInputTerminalHandles])
 
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null
