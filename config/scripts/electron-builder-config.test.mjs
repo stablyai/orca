@@ -619,6 +619,11 @@ describe('electron-builder config', () => {
           'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n',
           'utf8'
         )
+        await writeFile(
+          join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json'),
+          `${JSON.stringify({ name: 'orca-compiled-output', type: 'commonjs', private: true })}\n`,
+          'utf8'
+        )
         const unpackedCliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
         await mkdir(join(unpackedCliDir, 'handlers'), { recursive: true })
         await writeFile(join(unpackedCliDir, 'handlers', 'skills.js'), '', 'utf8')
@@ -637,10 +642,14 @@ describe('electron-builder config', () => {
         await electronBuilderConfig.afterPack({
           appOutDir: join(root, 'linux-unpacked'),
           electronPlatformName: 'linux',
-          arch: 1
+          arch: 1,
+          packager: { appInfo: { version: '9.9.9' } }
         })
 
         expect((await stat(launcherPath)).mode & 0o111).not.toBe(0)
+        await expect(
+          readFile(join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json'), 'utf8')
+        ).resolves.toContain('"version": "9.9.9"')
       } finally {
         await rm(root, { recursive: true, force: true })
       }

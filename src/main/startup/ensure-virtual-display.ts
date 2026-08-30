@@ -1,5 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 
 // Why: headless `orca serve` backs browser panes with offscreen BrowserWindows.
@@ -12,6 +13,8 @@ const XVFB_STARTUP_TIMEOUT_MS = 5_000
 const XVFB_POLL_INTERVAL_MS = 50
 const VIRTUAL_DISPLAY_NUMBER = 99
 const VIRTUAL_DISPLAY = `:${VIRTUAL_DISPLAY_NUMBER}`
+const XVFB_INSTALL_GUIDANCE =
+  'Install `xvfb` on Debian/Ubuntu or `xorg-x11-server-Xvfb` on RPM-based systems.'
 
 let xvfbProcess: ChildProcess | null = null
 
@@ -54,8 +57,8 @@ function isDisplayServerAlive(displayNumber: number): boolean {
     // signal 0 probes existence without affecting the process.
     process.kill(pid, 0)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EPERM'
   }
 }
 
@@ -95,6 +98,72 @@ function waitForDisplaySocket(displayNumber: number, deadline: number): boolean 
   return existsSync(socket)
 }
 
+// Validate display syntax and local sockets before Chromium reaches Ozone initialization.
+export function hasUsableLinuxDisplay(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (process.platform !== 'linux') {
+    return true
+  }
+
+  const ozonePlatform = app.commandLine.getSwitchValue('ozone-platform').trim().toLowerCase()
+  const ozonePlatformHint = env.ELECTRON_OZONE_PLATFORM_HINT?.trim().toLowerCase()
+  const selectedPlatform =
+    ozonePlatform === 'x11' || ozonePlatform === 'wayland'
+      ? ozonePlatform
+      : ozonePlatformHint === 'x11' || ozonePlatformHint === 'wayland'
+        ? ozonePlatformHint
+        : null
+
+  if (selectedPlatform === 'x11') {
+    return hasUsableXDisplay(env.DISPLAY)
+  }
+  if (selectedPlatform === 'wayland') {
+    return hasUsableWaylandDisplay(env)
+  }
+  return hasUsableXDisplay(env.DISPLAY) || hasUsableWaylandDisplay(env)
+}
+
+export const MISSING_LINUX_DISPLAY_MESSAGE = [
+  'Orca needs a usable display server, but the selected X11 or Wayland endpoint is unavailable.',
+  'Check DISPLAY, WAYLAND_DISPLAY, XDG_RUNTIME_DIR, and any --ozone-platform override.',
+  `Use \`orca-ide serve\` to run headless. On a bare server, ${XVFB_INSTALL_GUIDANCE}`
+].join('\n')
+
+function isUnixSocket(path: string): boolean {
+  try {
+    return statSync(path).isSocket()
+  } catch {
+    return false
+  }
+}
+
+function hasUsableXDisplay(value: string | undefined): boolean {
+  const display = value?.trim()
+  if (!display) {
+    return false
+  }
+
+  const localDisplay = /^(?:unix\/?)?:(\d+)(?:\.\d+)?$/i.exec(display)
+  // Remote endpoints cannot be proven with local socket checks.
+  if (!localDisplay) {
+    return /^\S+:\d+(?:\.\d+)?$/.test(display)
+  }
+  const displayNumber = Number(localDisplay[1])
+  return isUnixSocket(xvfbSocketPath(displayNumber)) && isDisplayServerAlive(displayNumber)
+}
+
+function hasUsableWaylandDisplay(env: NodeJS.ProcessEnv): boolean {
+  const display = env.WAYLAND_DISPLAY?.trim()
+  if (!display) {
+    return false
+  }
+  if (isAbsolute(display)) {
+    return isUnixSocket(display)
+  }
+
+  const runtimeDir = env.XDG_RUNTIME_DIR?.trim()
+  return Boolean(runtimeDir && isAbsolute(runtimeDir) && isUnixSocket(join(runtimeDir, display)))
+}
+
 /**
  * Ensure a usable X display for headless Linux serve. Returns true when a
  * display is available (pre-existing or freshly started), false when browser
@@ -107,16 +176,15 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
 
   configureHeadlessServeChromiumFlags()
 
-  // Why: respect an externally provided display (a real X server, or the image
-  // already running its own Xvfb). Don't start a competing one.
-  if (process.env.DISPLAY && process.env.DISPLAY.trim().length > 0) {
+  // Offscreen serve windows require X11; Wayland alone still needs Xvfb.
+  if (hasUsableXDisplay(process.env.DISPLAY)) {
     return true
   }
 
   if (!hasXvfbBinary()) {
     console.warn(
       '[serve] Xvfb not found; browser panes are unavailable on this headless Linux host. ' +
-        'Install Xvfb (e.g. `apt-get install xvfb`) or set DISPLAY to enable them.'
+        `${XVFB_INSTALL_GUIDANCE} Set DISPLAY to enable them with an existing X server.`
     )
     return false
   }

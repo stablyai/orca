@@ -392,11 +392,13 @@ Rolling back is the case that needs care — see [Roll back](#roll-back).
 
 ### Record the version you deploy
 
-Orca has no headless version command: there is no `--version` flag or `version`
-subcommand, and `orca serve` prints only its endpoint. Choose a release tag
-explicitly instead of following the `latest` URL, and record it next to the
-binary so upgrades are auditable. The steps below keep that record in
-`/opt/orca/VERSION`.
+The bundled CLI launcher prints the Orca build with `orca-ide --version`. For an
+extracted deployment, that launcher is
+`squashfs-root/resources/bin/orca-ide`; deb/rpm installs and CLI registration put
+it on `PATH`. Do not use `orca-linux.AppImage --version` for this audit because
+Electron owns the direct binary's version flags and may report its own runtime
+version. For an AppImage service, choose a release tag explicitly and record it
+next to the binary. The steps below keep that record in `/opt/orca/VERSION`.
 
 ### Upgrade steps
 
