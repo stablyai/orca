@@ -1,5 +1,5 @@
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
-import { listWorktreesUnshared } from './worktree-listing'
+import { listWorktreesStrict, listWorktreesUnshared } from './worktree-listing'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from './worktree-operation-options'
 
@@ -50,26 +50,28 @@ export function _resetWorktreeScanCacheForTests(): void {
 }
 
 /**
- * List all worktrees for a git repo at the given path. Concurrent calls for
- * the same repo share one scan (unless the caller passes an AbortSignal,
- * which must only cancel its own scan).
+ * Share one in-flight scan per (repo, distro, deadline, generation). `run` decides whether failures
+ * soften or propagate; both variants must coalesce so a create overlapping a sidebar refresh does
+ * not spawn a second `git worktree list` (expensive on Windows).
  */
-export function listWorktrees(
+function shareWorktreeScan(
   repoPath: string,
-  options: GitWorktreeExecOptions = {}
+  options: GitWorktreeExecOptions,
+  run: (repoPath: string, options: GitWorktreeExecOptions) => Promise<GitWorktreeInfo[]>
 ): Promise<GitWorktreeInfo[]> {
   if (options.signal) {
-    return listWorktreesUnshared(repoPath, options)
+    return run(repoPath, options)
   }
   const generation = worktreeScanGenerations.get(repoPath) ?? 0
   const timeout = options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   // Why: callers with different deadlines cannot safely share which timeout wins the scan.
-  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${generation}`
+  // Why `run.name`: a strict joiner must never receive a softened `[]` from a lenient scan.
+  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${generation}\0${run.name}`
   const inFlight = inFlightWorktreeScans.get(key)
   if (inFlight) {
     return inFlight
   }
-  const scan = listWorktreesUnshared(repoPath, options).finally(() => {
+  const scan = run(repoPath, options).finally(() => {
     if (inFlightWorktreeScans.get(key) === scan) {
       inFlightWorktreeScans.delete(key)
     }
@@ -77,4 +79,27 @@ export function listWorktrees(
   })
   inFlightWorktreeScans.set(key, scan)
   return scan
+}
+
+/**
+ * List all worktrees for a git repo at the given path. Concurrent calls for
+ * the same repo share one scan (unless the caller passes an AbortSignal,
+ * which must only cancel its own scan). Git failures soften to `[]`.
+ */
+export function listWorktrees(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return shareWorktreeScan(repoPath, options, listWorktreesUnshared)
+}
+
+/**
+ * `listWorktreesStrict` through the same in-flight map, so callers that must see a Git failure
+ * (worktree-create verification) still coalesce with a concurrent refresh (#16520).
+ */
+export function listWorktreesSharedStrict(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return shareWorktreeScan(repoPath, options, listWorktreesStrict)
 }

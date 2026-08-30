@@ -25,11 +25,29 @@ describe('quote-stripped JSON flag detection', () => {
     expect(looksQuoteStripped('[a,,b]')).toBe(false)
   })
 
-  it('names the shell rather than blaming the value', () => {
-    const message = describeQuoteStrippedJsonFlag('options', '[a,b]')
-    expect(message).toContain('--options arrived as [a,b]')
+  it('requires a key:value pair per entry before calling an object stripped', () => {
+    // Quoting these cannot produce a valid object, so they are ordinary invalid JSON.
+    expect(looksQuoteStripped('{a,b}')).toBe(false)
+    expect(looksQuoteStripped('{a:b,c}')).toBe(false)
+    expect(looksQuoteStripped('{:b}')).toBe(false)
+    expect(looksQuoteStripped('{a:}')).toBe(false)
+    expect(looksQuoteStripped('{a:b}')).toBe(true)
+    expect(looksQuoteStripped('{a:b,c:d}')).toBe(true)
+  })
+
+  it('explains the likely cause without echoing the value', () => {
+    const message = describeQuoteStrippedJsonFlag('payload', '{secret:hunter2}')
+    expect(message).toContain('--payload is not valid JSON')
     expect(message).toContain('PowerShell 5.1')
     expect(message).toContain('$v')
+    // A payload can carry secrets, and this reaches --json output.
+    expect(message).not.toContain('hunter2')
+    expect(message).not.toContain('secret')
     expect(describeQuoteStrippedJsonFlag('options', '["a","b"]')).toBeNull()
+  })
+
+  it('hedges the shell attribution, since it inspects only the value shape', () => {
+    // The same shape occurs when a macOS/Linux user simply forgets to quote.
+    expect(describeQuoteStrippedJsonFlag('options', '[a,b]')).toContain('If you ran this from')
   })
 })

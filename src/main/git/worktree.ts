@@ -22,7 +22,8 @@ export { removeWorktree } from './worktree-removal'
 export {
   _getWorktreeScanCacheSizesForTests,
   _resetWorktreeScanCacheForTests,
-  listWorktrees
+  listWorktrees,
+  listWorktreesSharedStrict
 } from './worktree-scan-cache'
 export { addSparseWorktree } from './worktree-sparse-add'
 export { parseCoreSparseCheckoutFlag } from './worktree-sparse-state'
