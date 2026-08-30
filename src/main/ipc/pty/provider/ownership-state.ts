@@ -9,6 +9,11 @@ export function isCurrentPtyExit(payload: { id: string; incarnationId?: string }
   return !current || payload.incarnationId === current
 }
 
+/** An unset expectation fences nothing; a set one must still own `id` after every await. */
+export function ptyIncarnationStillExpected(id: string, expectedIncarnationId?: string): boolean {
+  return !expectedIncarnationId || ptyIncarnationById.get(id) === expectedIncarnationId
+}
+
 export function deletePtyOwnership(id: string): void {
   ptyOwnership.delete(id)
 }
