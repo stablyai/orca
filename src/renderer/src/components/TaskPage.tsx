@@ -440,6 +440,62 @@ export default function TaskPage(): React.JSX.Element {
     page: number
     scrollTop: number
   } | null>(null)
+  const hadGitHubDetailRef = useRef(false)
+
+  const persistTaskListPosition = useCallback(() => {
+    const state = useAppStore.getState()
+    if (
+      state.activeView !== 'tasks' ||
+      state.taskPageData.openGitHubWorkItem ||
+      taskSource !== 'github' ||
+      githubMode !== 'items'
+    ) {
+      return
+    }
+    const position = {
+      contextKey: githubResumeContextKey,
+      page: currentPageRef.current,
+      scrollTop: githubListScrollRef.current?.scrollTop ?? githubListScrollTopRef.current
+    }
+    githubListScrollTopRef.current = position.scrollTop
+    taskListPositionRef.current = position
+    state.setTaskListPosition(position)
+  }, [
+    currentPageRef,
+    githubListScrollRef,
+    githubListScrollTopRef,
+    githubMode,
+    githubResumeContextKey,
+    taskSource
+  ])
+
+  const handleCloseTaskPage = useCallback(() => {
+    persistTaskListPosition()
+    closeTaskPage()
+  }, [closeTaskPage, persistTaskListPosition])
+
+  useLayoutEffect(() => {
+    const hasGitHubDetail = Boolean(pageData.openGitHubWorkItem)
+    if (
+      hadGitHubDetailRef.current &&
+      !hasGitHubDetail &&
+      pendingGithubScrollRestoreRef.current === null
+    ) {
+      const savedPosition = useAppStore.getState().taskListPosition
+      if (
+        savedPosition?.contextKey === githubResumeContextKey &&
+        savedPosition.page === currentPage
+      ) {
+        pendingGithubScrollRestoreRef.current = savedPosition.scrollTop
+      }
+    }
+    hadGitHubDetailRef.current = hasGitHubDetail
+  }, [
+    currentPage,
+    githubResumeContextKey,
+    pageData.openGitHubWorkItem,
+    pendingGithubScrollRestoreRef
+  ])
 
   useLayoutEffect(() => {
     if (
@@ -464,21 +520,6 @@ export default function TaskPage(): React.JSX.Element {
     githubListScrollTopRef,
     pendingGithubScrollRestoreRef
   ])
-
-  useEffect(
-    () => () => {
-      const position = taskListPositionRef.current
-      const state = useAppStore.getState()
-      if (position && !state.taskPageData.openGitHubWorkItem) {
-        state.setTaskListPosition({
-          contextKey: position.contextKey,
-          page: position.page,
-          scrollTop: position.scrollTop
-        })
-      }
-    },
-    []
-  )
 
   // Why: keyed on selectedReposKey, not the selectedRepos array — a background
   // repos:changed refresh mid-flight would otherwise bump the generation and
@@ -540,19 +581,11 @@ export default function TaskPage(): React.JSX.Element {
     if (scrollTop === null || !scrollElement || !pages[currentPage]) {
       return
     }
-    let frame: number | null = null
-    let timeout: number | null = null
     let observer: ResizeObserver | null = null
+    let mutations: MutationObserver | null = null
     const clearScheduledRestore = (): void => {
-      if (frame !== null) {
-        window.cancelAnimationFrame(frame)
-        frame = null
-      }
-      if (timeout !== null) {
-        window.clearTimeout(timeout)
-        timeout = null
-      }
       observer?.disconnect()
+      mutations?.disconnect()
     }
     const restore = (): void => {
       const committedScrollElement = githubListScrollRef.current
@@ -566,42 +599,54 @@ export default function TaskPage(): React.JSX.Element {
         page: currentPage,
         scrollTop
       }
-      if (Math.abs(committedScrollElement.scrollTop - scrollTop) < 1) {
+      const pageItems = pages[currentPage]
+      const maxScrollTop = Math.max(
+        0,
+        committedScrollElement.scrollHeight - committedScrollElement.clientHeight
+      )
+      const restored = Math.abs(committedScrollElement.scrollTop - scrollTop) < 1
+      const isKnownShortPage =
+        pageItems !== null && pageItems !== undefined && pageItems.length < githubPageSize
+      const settledShortPage =
+        isKnownShortPage && maxScrollTop < scrollTop && !tasksLoading && !paginationLoading
+      if (restored || settledShortPage) {
+        const settledScrollTop = committedScrollElement.scrollTop
+        githubListScrollTopRef.current = settledScrollTop
+        useAppStore.getState().setTaskListPosition({
+          contextKey: githubResumeContextKey,
+          page: currentPage,
+          scrollTop: settledScrollTop
+        })
         pendingGithubScrollRestoreRef.current = null
         clearScheduledRestore()
       }
     }
     observer = new ResizeObserver(restore)
+    mutations = new MutationObserver(() => {
+      for (const child of scrollElement.children) {
+        observer?.observe(child)
+      }
+      restore()
+    })
+    mutations.observe(scrollElement, { childList: true, subtree: true })
+    observer.observe(scrollElement)
     for (const child of scrollElement.children) {
       observer.observe(child)
     }
     restore()
-    if (pendingGithubScrollRestoreRef.current === scrollTop) {
-      frame = window.requestAnimationFrame(restore)
-      timeout = window.setTimeout(() => {
-        if (pendingGithubScrollRestoreRef.current === scrollTop) {
-          const committedScrollTop = githubListScrollRef.current?.scrollTop ?? 0
-          githubListScrollTopRef.current = committedScrollTop
-          taskListPositionRef.current = {
-            contextKey: githubResumeContextKey,
-            page: currentPage,
-            scrollTop: committedScrollTop
-          }
-          pendingGithubScrollRestoreRef.current = null
-        }
-        clearScheduledRestore()
-      }, 5_000)
-    }
     return clearScheduledRestore
   }, [
     currentPage,
+    githubPageSize,
     dialogWorkItem,
     githubResumeContextKey,
     pages,
     githubListScrollTopRef,
     pendingGithubScrollRestoreRef,
     githubListScrollRef.current?.scrollTop,
-    githubListScrollRef
+    githubListScrollRef,
+    paginationLoading,
+    tasksLoading
   ])
 
   const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
@@ -1937,14 +1982,14 @@ export default function TaskPage(): React.JSX.Element {
       }
 
       event.preventDefault()
-      closeTaskPage()
+      handleCloseTaskPage()
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [
     activeModal,
-    closeTaskPage,
+    handleCloseTaskPage,
     dialogWorkItem,
     newIssueOpen,
     newLinearIssueOpen,
@@ -2582,7 +2627,7 @@ export default function TaskPage(): React.JSX.Element {
   })
 
   const sourceToolbar: TaskPageSourceToolbarProps = {
-    closeTaskPage,
+    closeTaskPage: handleCloseTaskPage,
     visibleSourceOptions,
     taskSource,
     taskSourceAvailabilityNoticeByProvider,

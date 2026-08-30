@@ -112,12 +112,14 @@ export function GithubWorkItemTable(props: GithubWorkItemTableProps): React.JSX.
         style={{ scrollbarGutter: 'stable' }}
         onScroll={(event) => {
           const state = useAppStore.getState()
-          if (
-            state.activeView !== 'tasks' ||
-            state.taskPageData.openGitHubWorkItem ||
-            pendingGithubScrollRestoreRef.current !== null
-          ) {
+          if (state.activeView !== 'tasks' || state.taskPageData.openGitHubWorkItem) {
             return
+          }
+          if (pendingGithubScrollRestoreRef.current !== null) {
+            if (!event.isTrusted) {
+              return
+            }
+            pendingGithubScrollRestoreRef.current = null
           }
           const scrollTop = event.currentTarget.scrollTop
           githubListScrollTopRef.current = scrollTop
@@ -367,6 +369,11 @@ export function GithubWorkItemTable(props: GithubWorkItemTableProps): React.JSX.
               if (githubListScrollRef.current) {
                 githubListScrollRef.current.scrollTop = 0
               }
+              useAppStore.getState().setTaskListPosition({
+                contextKey: githubResumeContextKey,
+                page,
+                scrollTop: 0
+              })
               if (pages[page] !== null && pages[page] !== undefined) {
                 currentPageRef.current = page
                 setCurrentPage(page)

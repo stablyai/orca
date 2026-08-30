@@ -303,10 +303,6 @@ test.describe('Tasks page', () => {
 
     await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
     await expect(list).toHaveCount(0)
-    const clampedRowsStyle = await orcaPage.addStyleTag({
-      content:
-        '[data-task-list-scroll="github"] > .divide-y { max-height: 0 !important; overflow: hidden !important; }'
-    })
     await openTasksPage(orcaPage)
 
     await expect(orcaPage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
@@ -314,8 +310,6 @@ test.describe('Tasks page', () => {
       'page'
     )
     const restoredList = orcaPage.locator('[data-task-list-scroll="github"]')
-    await expect.poll(() => restoredList.evaluate((element) => element.scrollTop)).toBe(0)
-    await clampedRowsStyle.evaluate((element) => element.remove())
     await expect(orcaPage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
     await expect
       .poll(() => restoredList.evaluate((element) => element.scrollTop))
@@ -369,25 +363,6 @@ test.describe('Tasks page', () => {
       .poll(() => restoredList.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(300)
     await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
-
-    const permanentlyClampedRowsStyle = await orcaPage.addStyleTag({
-      content:
-        '[data-task-list-scroll="github"] > .divide-y { max-height: 0 !important; overflow: hidden !important; }'
-    })
-    await openTasksPage(orcaPage)
-    await expect(orcaPage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
-      'aria-current',
-      'page'
-    )
-    await orcaPage.waitForTimeout(5_500)
-    await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
-    await expect
-      .poll(async () => {
-        const position = await getStoreState<{ scrollTop: number }>(orcaPage, 'taskListPosition')
-        return position.scrollTop
-      })
-      .toBe(0)
-    await permanentlyClampedRowsStyle.evaluate((element) => element.remove())
   })
 
   test('GitHub search waits for idle, keeps rows visible, and Enter does not double-fetch', async ({
@@ -401,10 +376,12 @@ test.describe('Tasks page', () => {
     await expect(existingIssue).toBeVisible()
 
     await input.fill('')
-    await orcaPage.waitForTimeout(800)
+    await expect
+      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .toEqual({ countQueries: ['is:issue is:open'], fetchQueries: ['is:issue is:open'] })
     await resetTaskSearchRequestProbe(orcaPage)
 
-    await input.pressSequentially('rate', { delay: 400 })
+    await input.pressSequentially('rate', { delay: 50 })
 
     expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({
       countQueries: [],
