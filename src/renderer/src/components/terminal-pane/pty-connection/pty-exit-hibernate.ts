@@ -229,6 +229,11 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     // entry so the hover UI only shows what is running *now*.
     useAppStore.getState().removeAgentStatus(session.cacheKey)
     useAppStore.getState().clearPaneForegroundAgent(session.cacheKey)
+    // Why: for remote-runtime PTYs the dispose path skips releasing the
+    // renderer-owned claim (the parked watcher takes it over). On actual PTY
+    // exit there is no parked watcher, so release it here to avoid leaking a
+    // stale hasClientWrite entry.
+    session.releaseRendererOwnedAgentStatusPane?.()
     // The runtime graph is the CLI's source for live terminal bindings, so
     // we must republish when a pane loses its PTY instead of waiting for a
     // broader layout change that may never happen.

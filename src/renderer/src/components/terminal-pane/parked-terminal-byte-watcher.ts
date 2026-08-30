@@ -27,6 +27,13 @@ import {
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import {
+  markRendererOwnedAgentStatusWrite,
+  registerRendererOwnedAgentStatusPane
+} from './renderer-owned-agent-status-registry'
+import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 
 // Why: keep the live path's BEL-vs-completion race window so notification behavior is identical whether a tab is parked or mounted.
 const PARKED_NOTIFICATION_GRACE_MS = AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS
@@ -66,6 +73,16 @@ export function startParkedTerminalByteWatcher(
   const remoteRuntimePty = isRemoteRuntimePtyId(ptyId)
   const drivesTabTitle = options.drivesTabTitle ?? true
   const paneKey = makePaneKey(tabId, options.leafId)
+
+  // Why: for remote-runtime PTYs the renderer owns agent status (main never
+  // sees their bytes). The mounted pane's dispose no longer releases the claim
+  // for these PTYs, so this registration preserves hasClientWrite across the
+  // park/reveal handoff and lets buildMirroredAgentStatusPatch keep the entry
+  // instead of deleting it on the next host snapshot (which carries no
+  // agentStatus for remote-runtime surfaces).
+  const releaseRendererOwnedAgentStatusPane = remoteRuntimePty
+    ? registerRendererOwnedAgentStatusPane(paneKey, getRemoteRuntimePtyEnvironmentId(ptyId) ?? '')
+    : null
 
   // Why: one watcher per PTY — a stale watcher from a previous park cycle would double-fire bell/completion for the same bytes.
   parkedWatcherDisposersByPtyId.get(ptyId)?.()
@@ -246,7 +263,29 @@ export function startParkedTerminalByteWatcher(
           onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
           onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
           onPrLink: (link) =>
-            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
+            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link),
+          // Why: for remote-runtime PTYs the renderer owns agent status; the
+          // parked watcher must keep the store row fresh and prove the
+          // renderer-owned claim so buildMirroredAgentStatusPatch doesn't
+          // delete it (the host snapshot carries no agentStatus for these).
+          ...(remoteRuntimePty
+            ? {
+                onAgentStatus: (payload) => {
+                  const state = useAppStore.getState()
+                  const routing = resolveLiveAgentStatusConnectionRouting({
+                    state,
+                    paneKey,
+                    ptyId,
+                    expectedConnectionId: getConnectionIdFromState(state, worktreeId)
+                  })
+                  if (!routing) {
+                    return
+                  }
+                  markRendererOwnedAgentStatusWrite(paneKey)
+                  state.setAgentStatus(paneKey, payload, undefined, undefined, routing)
+                }
+              }
+            : {})
         },
         // Why: activation-deferred tabs can start a watcher before any pane restored the title; ordinary parked tabs avoid this IPC.
         restoreTitleOnRegister: options.restoreTitleOnRegister === true
@@ -288,6 +327,10 @@ export function startParkedTerminalByteWatcher(
     releaseHiddenDeliveryClaim?.()
     unsubscribeByteParsers?.()
     unregisterFactConsumer?.()
+    // Why: release the renderer-owned agent-status claim so a subsequent
+    // non-parked closure doesn't leave a stale hasClientWrite entry that would
+    // fence out the host mirror forever.
+    releaseRendererOwnedAgentStatusPane?.()
     // Why: clears tracker/timer/detector state so the watcher can't fire after the revealed pane's live parsers take over.
     processor?.clearAccumulatedState()
     commandFinishedScanner?.reset()
