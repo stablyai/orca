@@ -1537,6 +1537,8 @@ export class AgentHookServer {
         ? rootContextPreservingPayload
         : {
             ...rootContextPreservingPayload,
+            // Why: provider session provenance belongs to the incoming agent, not the pane identity that replaced it.
+            providerSession: undefined,
             payload: {
               ...rootContextPreservingPayload.payload,
               agentType: identity.agentType
