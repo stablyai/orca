@@ -141,7 +141,9 @@ describe('orca emulator CLI handlers', () => {
         '--lines',
         '20',
         '--filter',
-        'com.example.App'
+        'com.example.App',
+        '--worktree',
+        'all'
       ],
       '/repo/project'
     )
