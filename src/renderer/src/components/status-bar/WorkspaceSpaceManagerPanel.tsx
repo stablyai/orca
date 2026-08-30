@@ -1375,6 +1375,8 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const decisionDetailsByWorktreeIdentity = useMemo(() => {
     // Why: active-agent freshness is time-based. The epoch bumps when fresh
     // hook entries cross the stale boundary so delete readiness recomputes.
+    // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
+    // share a sample, so the timestamp alone would not re-key this memo.
     void agentStatusEpoch
     const details = new Map<string, WorkspaceDecisionDetails>()
     const now = agentStatusNow

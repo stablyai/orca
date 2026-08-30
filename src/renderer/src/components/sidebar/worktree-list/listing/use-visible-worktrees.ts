@@ -71,6 +71,8 @@ export function useVisibleSidebarWorktrees(args: {
   )
 
   const recomputedVisibleWorktrees = useMemo(() => {
+    // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
+    // share a sample, so the timestamp alone would not re-key this memo.
     void agentStatusEpoch
     return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,

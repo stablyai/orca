@@ -74,8 +74,8 @@ function getSharedNowClock(intervalMs: number): SharedNowClock {
 }
 
 // Why: a disabled caller must not hold the shared interval open or re-render on
-// its ticks. It still reads the shared snapshot, so it can never show a value
-// older than an enabled caller at the same cadence.
+// its ticks. It reads the shared snapshot, which is frozen while nobody at this
+// cadence is subscribed — see the activation caveat on useNow.
 const subscribeWhileDisabled = (): (() => void) => () => {}
 
 // Why: relative timestamps drift once mounted. A coarse tick keeps the "Xm
@@ -87,9 +87,12 @@ const subscribeWhileDisabled = (): (() => void) => () => {}
 // which meant N timers firing at staggered mount times for N rows on
 // screen — turning one logical tick into N independent React commits.
 //
-// Pass `enabled: false` while a surface cannot show the value; joining a clock
-// another caller already keeps running yields a snapshot at most `intervalMs`
-// old, so pick the coarsest cadence the label can tolerate.
+// Pass `enabled: false` while a surface cannot show the value. Activation is not
+// instant: subscription happens in a passive effect, so the render that flips
+// `enabled` still reads the previous snapshot — at most `intervalMs` old if
+// another caller keeps the cadence running, and arbitrarily old if none does.
+// Fine for a drifting label, wrong for a deadline; check those against
+// `Date.now()` in the effect that acts on them instead.
 export function useNow(intervalMs: number, enabled = true): number {
   const clock = getSharedNowClock(intervalMs)
   return useSyncExternalStore(

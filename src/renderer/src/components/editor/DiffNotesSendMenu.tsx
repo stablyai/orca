@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { translate } from '@/i18n/i18n'
-import { useNow } from '@/hooks/use-now'
 
 // Why: a keyboard open request the menu never got to consume (e.g. the user
 // navigated away before it mounted) must not reopen the menu on a later remount.
@@ -42,14 +41,14 @@ export function DiffNotesSendMenu({
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
   const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
-  // Why: only a pending request for this worktree can age out, so the clock runs
-  // for the few ms one is outstanding instead of for the menu's whole lifetime.
+  // Why: the TTL is a deadline, not a label, so it is enforced on the commit
+  // that opens the menu (see NotesSendMenu) where the clock is exact — a render
+  // clock either burns a tick per second or reads stale at the moment it matters.
   const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
-  const now = useNow(1000, hasPendingOpenRequest)
-  const openRequestNonce =
-    hasPendingOpenRequest && now - (openRequest?.issuedAt ?? 0) < OPEN_REQUEST_TTL_MS
-      ? (openRequest?.nonce ?? null)
-      : null
+  const openRequestNonce = hasPendingOpenRequest ? (openRequest?.nonce ?? null) : null
+  const openRequestExpiresAt = hasPendingOpenRequest
+    ? (openRequest?.issuedAt ?? 0) + OPEN_REQUEST_TTL_MS
+    : null
   const handleOpenRequestHandled = useCallback(
     () => consumeOpenRequest(worktreeId),
     [consumeOpenRequest, worktreeId]
@@ -100,6 +99,7 @@ export function DiffNotesSendMenu({
       iconClassName={iconClassName}
       align={align}
       openRequestNonce={openRequestNonce}
+      openRequestExpiresAt={openRequestExpiresAt}
       onOpenRequestHandled={handleOpenRequestHandled}
       onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
     />

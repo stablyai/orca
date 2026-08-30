@@ -56,7 +56,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   // sleeping-workspaces board cannot evict the sample the live boards share.
   const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
   // Why snapshot on the epoch: the always-mounted drawer must not scan every
-  // agent on unrelated store writes; membership changes advance this tick.
+  // agent on unrelated store writes; membership changes advance this tick. Keep
+  // the epoch itself in the deps — two bumps in one millisecond share a sample,
+  // so `agentStatusNow` alone would not re-key the memo.
   const worktreeIdsWithLiveAgent = useMemo(() => {
     void agentStatusEpoch
     return !showSleepingWorkspaces
