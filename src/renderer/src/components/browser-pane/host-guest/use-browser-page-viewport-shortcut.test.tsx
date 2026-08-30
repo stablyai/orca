@@ -41,7 +41,7 @@ function Harness({ scope = 'focused' }: { scope?: BrowserChromeShortcutScope }):
   return <input data-browser-overlay-tab-id={page.workspaceId} data-testid="browser-input" />
 }
 
-function pressViewportChord(target: HTMLElement = window.document.body): void {
+function pressViewportChord(target: HTMLElement = window.document.body, repeat = false): void {
   act(() => {
     target.dispatchEvent(
       new KeyboardEvent('keydown', {
@@ -49,6 +49,7 @@ function pressViewportChord(target: HTMLElement = window.document.body): void {
         code: 'KeyV',
         metaKey: true,
         altKey: true,
+        repeat,
         bubbles: true,
         cancelable: true
       })
@@ -90,6 +91,14 @@ describe('useBrowserPageViewportShortcut', () => {
     pressViewportChord()
 
     expect(applyPreset).toHaveBeenCalledWith('page-1', 'mobile-l')
+  })
+
+  it('ignores auto-repeated browser chrome shortcuts', () => {
+    render(<Harness />)
+
+    pressViewportChord(window.document.body, true)
+
+    expect(applyPreset).not.toHaveBeenCalled()
   })
 
   it('does not claim the chord from a terminal or editor target in another split', () => {
