@@ -213,7 +213,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
 
       expect(hasUsableLinuxDisplay({ DISPLAY: ':77' })).toBe(false)
-      expect(existsSyncMock).toHaveBeenCalledWith('/tmp/.X77-lock')
+      expect(readFileSyncMock).toHaveBeenCalledWith('/tmp/.X77-lock', 'utf8')
     })
 
     it('accepts a live local X11 server owned by another user', async () => {

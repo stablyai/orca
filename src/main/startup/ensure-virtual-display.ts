@@ -40,14 +40,11 @@ function xDisplayLockPath(displayNumber: number): string {
 // the server PID; if that process is gone, the display is dead despite the socket.
 function isDisplayServerAlive(displayNumber: number): boolean {
   const lockPath = xDisplayLockPath(displayNumber)
-  if (!existsSync(lockPath)) {
-    // No lock means no server claimed this display; the bare socket is stale.
-    return false
-  }
   let pid: number
   try {
     pid = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10)
   } catch {
+    // Missing or unreadable lock means no server claimed this display.
     return false
   }
   if (!Number.isInteger(pid) || pid <= 0) {
