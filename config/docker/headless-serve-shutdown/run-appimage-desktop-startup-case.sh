@@ -86,9 +86,9 @@ process_is_xvfb() {
 
 signal_process_group() {
   local signal=$1
-  identity_alive "$launcher_pid" "$launcher_start_ticks" || return
-  [[ "$launcher_pgid" =~ ^[0-9]+$ ]] || return
-  [[ "$launcher_pgid" != "$(ps -o pgid= -p "$$" | tr -d ' ')" ]] || return
+  identity_alive "$launcher_pid" "$launcher_start_ticks" || return 0
+  [[ "$launcher_pgid" =~ ^[0-9]+$ ]] || return 0
+  [[ "$launcher_pgid" != "$(ps -o pgid= -p "$$" | tr -d ' ')" ]] || return 0
   kill -s "$signal" -- "-$launcher_pgid" 2>/dev/null || true
 }
 
@@ -135,11 +135,11 @@ dump_logs() {
 cleanup() {
   local status=$?
   trap - EXIT
-  signal_process_group TERM
-  signal_owned_processes TERM
+  signal_process_group TERM || true
+  signal_owned_processes TERM || true
   if ! wait_for_owned_exit 10; then
-    signal_process_group KILL
-    signal_owned_processes KILL
+    signal_process_group KILL || true
+    signal_owned_processes KILL || true
     wait_for_owned_exit 5 || status=1
   fi
   wait "$launcher_pid" 2>/dev/null || true

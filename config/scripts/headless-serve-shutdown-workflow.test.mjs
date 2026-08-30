@@ -11,6 +11,10 @@ const shutdownDockerRunner = readFileSync(
   'utf8'
 )
 const shutdownDockerfile = readFileSync('config/docker/headless-serve-shutdown/Dockerfile', 'utf8')
+const desktopStartupOracle = readFileSync(
+  'config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh',
+  'utf8'
+)
 
 function readSystemdUnitBlocks(doc, unitName) {
   const escapedUnitName = unitName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -120,6 +124,11 @@ describe('headless serve shutdown PR gate', () => {
     expect(extractionCall).toBeGreaterThan(startupCall)
     expect(signalLoop).toBeGreaterThan(startupCall)
     expect(shutdownDockerRunner).toContain("'/usr/local/bin/run-appimage-desktop-startup-case'")
+  })
+
+  it('preserves startup logs when the launcher exits before its marker', () => {
+    expect(desktopStartupOracle).toContain('signal_process_group TERM || true')
+    expect(desktopStartupOracle).toContain('signal_process_group KILL || true')
   })
 
   it('keeps owned Xvfb alive during the documented systemd graceful stop', () => {
