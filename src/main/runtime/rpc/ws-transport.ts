@@ -63,6 +63,7 @@ export class WebSocketTransport implements RpcTransport {
   private wsClientIds = new Map<WebSocket, string>()
   private heartbeatConnections = new Set<WebSocket>()
   private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
+  private fallbackListenDenied = false
 
   constructor({
     host,
@@ -127,6 +128,12 @@ export class WebSocketTransport implements RpcTransport {
     return this.port
   }
 
+  // Why: reports that the OS refused a listen on the persisted fallback (reserved range), not merely that
+  // the bind failed — callers need the distinction to tell a dead port from a momentarily busy one.
+  get persistedFallbackListenDenied(): boolean {
+    return this.fallbackListenDenied
+  }
+
   // Why: the actual OS-reported bind interface, so callers can verify loopback vs all-interfaces (STA-2370).
   get resolvedHost(): string | null {
     const addr = this.httpServer?.address()
@@ -137,6 +144,7 @@ export class WebSocketTransport implements RpcTransport {
     if (this.wss) {
       return
     }
+    this.fallbackListenDenied = false
 
     // Why: bind a persisted fallback first so devices paired to it aren't stranded (STA-1511); serve --port flips to pinned-first (issue #8535); on failure each candidate falls through to OS-assigned port 0.
     const persistedFallbackPort =
@@ -155,10 +163,9 @@ export class WebSocketTransport implements RpcTransport {
         return
       } catch (error: unknown) {
         // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
-        if (
-          port !== persistedFallbackPort &&
-          (!isPortListenFallbackError(error, port) || port === 0)
-        ) {
+        if (port === persistedFallbackPort) {
+          this.fallbackListenDenied = isListenPermissionDenied(error, port)
+        } else if (!isPortListenFallbackError(error, port) || port === 0) {
           throw error
         }
         console.warn(
@@ -340,10 +347,15 @@ function isPortListenFallbackError(error: unknown, port: number): boolean {
   if (!(error instanceof Error) || !('code' in error)) {
     return false
   }
-  if (error.code === 'EADDRINUSE') {
-    return true
-  }
+  return error.code === 'EADDRINUSE' || isListenPermissionDenied(error, port)
+}
+
+// Why: the OS reserving the port itself (Windows Hyper-V excluded ranges) rather than another process
+// holding it — the former stays refused for this boot, the latter frees up on its own.
+function isListenPermissionDenied(error: unknown, port: number): boolean {
   return (
+    error instanceof Error &&
+    'code' in error &&
     error.code === 'EACCES' &&
     'syscall' in error &&
     error.syscall === 'listen' &&

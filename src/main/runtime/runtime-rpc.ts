@@ -20,7 +20,11 @@ import { fingerprintAuthenticatedPairingCredential } from './rpc/orchestration-m
 import type { RpcMessageContext, RpcTransport } from './rpc/transport'
 import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
-import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
+import {
+  clearWsFallbackPort,
+  readWsFallbackPort,
+  writeWsFallbackPort
+} from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
@@ -1226,9 +1230,7 @@ export class OrcaRuntimeRpcServer {
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
-          if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
-            writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
-          }
+          this.syncPersistedWsFallback(transport)
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
         } catch (error) {
@@ -1271,6 +1273,21 @@ export class OrcaRuntimeRpcServer {
         )
       }
     })
+  }
+
+  // Why: a fallback the OS refused to listen on is dead, and keeping it re-arms the STA-4859 endpoint
+  // flip-flop; dropping it costs devices paired to it one re-pair. Merely-occupied or unclassified
+  // failures keep the file so a still-valid pairing self-heals next launch (STA-1511), and a pinned port
+  // (#9005) never attempts the fallback, so its success proves nothing. wsPort 0 (E2E) stays exempt.
+  private syncPersistedWsFallback(transport: WebSocketTransport): void {
+    if (this.wsPort === 0) {
+      return
+    }
+    if (transport.resolvedPort !== this.wsPort) {
+      writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
+    } else if (!this.preferPinnedWsPort && transport.persistedFallbackListenDenied) {
+      clearWsFallbackPort(this.userDataPath)
+    }
   }
 
   // Why: STA-2370 — a desktop with no previously-connected device stays on loopback until the user
@@ -1460,11 +1477,7 @@ export class OrcaRuntimeRpcServer {
       this.transports[metaIndex] = { kind: 'websocket', endpoint: widened.endpoint }
     }
     try {
-      // Why: a rebind that lands on a different port (same-port bind refused) must be persisted so a
-      // later reconnect from a device paired to this port matches on the next launch (STA-1511).
-      if (this.wsPort !== 0 && widened.transport.resolvedPort !== this.wsPort) {
-        writeWsFallbackPort(this.userDataPath, widened.transport.resolvedPort)
-      }
+      this.syncPersistedWsFallback(widened.transport)
       this.writeMetadata()
     } catch (persistError) {
       // Why: the wide listener is live and tracked; a persistence failure must not tear it down. Keep
@@ -1478,6 +1491,8 @@ export class OrcaRuntimeRpcServer {
 
   // Why: a failed widen already tore down the loopback listener; bring one back on the same host/port so the
   // runtime keeps serving locally (wsBoundHost stays loopback, so the next pairing offer retries the widen).
+  // Deliberately does NOT sync the fallback store: this is a degraded loopback-only listener that serves no
+  // pairing, so persisting its port would overwrite the fallback that paired devices still dial.
   private async recoverWebSocketBindAfterFailedWiden(
     index: number,
     previousPort: number

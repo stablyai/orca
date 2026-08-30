@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // Why: when the preferred WS port is taken (second Orca instance), the OS
@@ -41,5 +41,17 @@ export function writeWsFallbackPort(userDataPath: string, port: number): void {
   } catch {
     // Why: persistence is best-effort — failing to record the port must not
     // break transport startup; the cost is a re-pair after the next restart.
+  }
+}
+
+// Why: a fallback the OS refused to listen on is obsolete — leaving it re-arms a dead endpoint next
+// launch and flip-flops the advertised port (STA-4859, Windows reserved ranges that move across reboots).
+export function clearWsFallbackPort(userDataPath: string): void {
+  const target = join(userDataPath, FALLBACK_PORT_FILE)
+  try {
+    rmSync(target, { force: true })
+  } catch (error) {
+    // Why: best-effort like the write, but a silent failure re-arms the flip-flop — say so.
+    console.warn(`[ws-fallback-port-store] Failed to clear ${target}:`, error)
   }
 }
