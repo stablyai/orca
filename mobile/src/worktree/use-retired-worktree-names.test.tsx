@@ -49,19 +49,38 @@ function mountNames() {
         renderer.update(createElement(Probe, props))
       })
     },
+    /** Full RPC envelopes on purpose: a bare `{ result }` is not what the transport delivers, and
+     *  faking one is what let a resolved *error* envelope read as an empty registry. */
     async settle(
       index: number,
       retiredNamesByRepo: Record<string, unknown>,
       retiredNameTiersByRepo: Record<string, unknown> = {}
     ) {
       await act(async () => {
-        pending[index]!.resolve({ result: { retiredNamesByRepo, retiredNameTiersByRepo } })
+        pending[index]!.resolve({
+          id: '1',
+          ok: true,
+          result: { retiredNamesByRepo, retiredNameTiersByRepo },
+          _meta: { runtimeId: 'r' }
+        })
         await Promise.resolve()
       })
     },
     async fail(index: number) {
       await act(async () => {
         pending[index]!.reject(new Error('host unreachable'))
+        await Promise.resolve()
+      })
+    },
+    /** A host-side error: the RPC *resolves* carrying an error envelope, it does not reject. */
+    async refuse(index: number) {
+      await act(async () => {
+        pending[index]!.resolve({
+          id: '1',
+          ok: false,
+          error: { code: 'internal_error', message: 'registry unavailable' },
+          _meta: { runtimeId: 'r' }
+        })
         await Promise.resolve()
       })
     }
@@ -128,6 +147,18 @@ describe('useRetiredWorktreeNames', () => {
     await probe.fail(1)
 
     expect(probe.names).toEqual(['nautilus'])
+  })
+
+  // Regression: an RPC error envelope resolves rather than rejecting, so it slipped past the
+  // `.catch` and was read as "this repo has retired nothing", blanking the cache.
+  it('keeps previously loaded names when the host answers with an error', async () => {
+    const probe = mountNames()
+    await probe.settle(0, { 'repo-1': ['nautilus'] }, { 'repo-1': 2 })
+
+    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
+    await probe.refuse(1)
+
+    expect(probe.registry).toEqual({ exhaustedTiers: 2, names: ['nautilus'] })
   })
 
   // Regression: the effect used to depend on [client, repoId] only, so a workspace created while

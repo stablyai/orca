@@ -246,6 +246,44 @@ describe('createWorktreeWithNameRetry', () => {
     expect(attempts.map((attempt) => attempt.params.name)).toEqual(['nautilus-2', 'nautilus-3'])
   })
 
+  it('routes to the name the host actually created, not the one this client proposed', async () => {
+    // The host advances past a retired cwd on its own, so the created workspace can carry a later
+    // candidate than the one sent. Routing on the proposal titles the workspace wrongly until the
+    // live-name hook catches up.
+    const client = {
+      sendRequest: async () => ({
+        id: '1',
+        ok: true,
+        result: { worktree: { id: 'wt-1', displayName: 'nautilus-4' } },
+        _meta: { runtimeId: 'r' }
+      })
+    } as unknown as RpcClient
+
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'nautilus',
+        nameWasGenerated: true,
+        buildParams: (name) => ({ repo: 'id:r', name, nameWasGenerated: true }),
+        supportsIdempotentCutoverRetry: false
+      })
+    ).resolves.toEqual({ worktreeId: 'wt-1', name: 'nautilus-4' })
+  })
+
+  it('falls back to the proposed name when the host answers without one', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient([{ id: 'wt-1' }], attempts)
+
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'otter',
+        buildParams: (name) => ({ repo: 'id:r', name }),
+        supportsIdempotentCutoverRetry: false
+      })
+    ).resolves.toEqual({ worktreeId: 'wt-1', name: 'otter' })
+  })
+
   it('does not replay an ambiguous cutover when the host lacks idempotency support', async () => {
     const attempts: Attempt[] = []
     const client = scriptedClient([{ throws: new LogicalClientCutoverError() }], attempts)

@@ -44,10 +44,11 @@ export function useRetiredWorktreeNames(
     }
     void client
       .sendRequest('worktree.listRetiredNames', { repo: `id:${activeRepoId}` })
+      // Why the envelope check and not just `.catch`: an RPC error *resolves* carrying
+      // `ok: false`, so a host-side failure used to read as "this repo has retired nothing" and
+      // blank the cache — un-retiring every name until the next successful refresh.
       .then((response) =>
-        settle(
-          readRetiredNameRegistryForRepo((response as { result?: unknown }).result, activeRepoId)
-        )
+        settle(response.ok ? readRetiredNameRegistryForRepo(response.result, activeRepoId) : null)
       )
       .catch(() => settle(null))
     return () => {
