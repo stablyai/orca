@@ -122,8 +122,7 @@ function getOverlayRestoreBlocks(spec: ZshStartupHookSpec): (string | null)[] {
     MIMOCODE_HOME_RESTORE,
     spec.restores.remoteCliBinDir ? REMOTE_CLI_BIN_DIR_RESTORE : null,
     getPosixOmpShellWrapper(),
-    spec.restores.codexHome ? CODEX_HOME_RESTORE : null,
-    spec.restores.codexLaunchPreflight ? getPosixCodexShellLaunchPreflight() : null
+    spec.restores.codexHome ? CODEX_HOME_RESTORE : null
   ]
 }
 
@@ -160,6 +159,11 @@ function buildDeferredInit(spec: ZshStartupHookSpec): string {
 ${permanentPrecmd}
 ${joinBlocks([
   featureGuard('overlay', getOverlayRestoreBlocks(spec)),
+  spec.restores.codexLaunchPreflight
+    ? `  if __orca_has_feature overlay || __orca_has_feature codex-hooks; then
+${indentBlock(getPosixCodexShellLaunchPreflight().replace(/\n$/, ''), '    ')}
+  fi`
+    : null,
   // Why no /etc/zshrc repair branch: ZDOTDIR was handed back before that file
   // ran, so the value it derives is the user's own path. #11044 is unreachable.
   `  if [[ -n "\${_orca_histfile:-}" ]]; then

@@ -189,6 +189,29 @@ describe('getRelayShellLaunchConfig', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'installs the post-profile Codex hook wrapper only when the relay selects the feature',
+    () => {
+      const config = getRelayShellLaunchConfig(
+        '/bin/zsh',
+        {
+          HOME: homeDir
+        },
+        'linux',
+        {
+          codexHooksEnabled: true
+        }
+      )
+      const zshenv = readFileSync(
+        join(homeDir, '.orca-relay', 'shell-ready', 'zsh', '.zshenv'),
+        'utf8'
+      )
+
+      expect(config.env.ORCA_SHELL_FEATURES).toContain('codex-hooks')
+      expect(zshenv).toContain('__orca_codex_hooks_feature')
+    }
+  )
+
   it('keeps PowerShell Core on POSIX remotes as a login shell', () => {
     expect(getRelayShellLaunchConfig('/usr/bin/pwsh', { HOME: homeDir }, 'linux')).toEqual({
       args: ['-l'],

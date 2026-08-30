@@ -8,6 +8,9 @@ import {
 } from '../main/shell-startup-features'
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../main/zsh-wrapper-dir-ownership'
 import { ensureOverlayRestoreWrappers } from './pty-shell-overlay-wrappers'
+import { getFishCodexShellLaunchPreflight } from '../main/pty/codex-shell-launch-preflight'
+import { getFishShellReadyInitCommand } from '../main/shell-templates'
+import { SHELL_READY_MARKER_ESCAPED } from '../main/providers/local-pty-shell-ready-marker'
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
 
@@ -65,6 +68,7 @@ export function getRelayShellLaunchConfig(
   options: {
     emitReadyMarker?: boolean
     emitStartupIdentity?: boolean
+    codexHooksEnabled?: boolean
     terminalWindowsWslDistro?: string | null
   } = {}
 ): RelayShellLaunchConfig {
@@ -87,6 +91,17 @@ export function getRelayShellLaunchConfig(
     }
   }
 
+  if (shellName === 'fish' && options.emitReadyMarker === true) {
+    return {
+      args: [
+        '-l',
+        '-C',
+        `${getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED)}\n${getFishCodexShellLaunchPreflight({ hooksEnabled: options.codexHooksEnabled })}`
+      ],
+      env: {},
+      supportsReadyMarker: true
+    }
+  }
   if (shellName !== 'zsh' && shellName !== 'bash') {
     return unwrapped
   }
@@ -100,7 +115,8 @@ export function getRelayShellLaunchConfig(
     env,
     hasStartupCommand: startupCommandRequested,
     waitsForShellReady: options.emitReadyMarker === true,
-    emitsStartupIdentity: options.emitStartupIdentity === true
+    emitsStartupIdentity: options.emitStartupIdentity === true,
+    codexHooksEnabled: options.codexHooksEnabled === true
   })
   // Why bash is always wrapped: its rcfile carries the OSC 133 command-lifecycle
   // hooks unconditionally today, and dropping them would strand agent rows on

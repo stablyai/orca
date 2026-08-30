@@ -14,12 +14,21 @@
  * binaries only, so it cannot run a builtin.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
 import { clearEnvCommand, quoteStartupArg, withoutEnvCommand } from './tui-agent-startup-shell'
+import { buildAgentStartupPlan } from './tui-agent-startup'
 
 const FISH = resolveFishBinary(4)
 
@@ -57,11 +66,19 @@ function basename(path: string): string {
 // Why a real (empty) HOME rather than a bogus one: fish needs a writable config
 // dir to hold universal variables, and warns loudly on every launch without it.
 const SANDBOX_HOME = mkdtempSync(path.join(tmpdir(), 'orca-shell-portability-'))
+const SANDBOX_BIN = path.join(SANDBOX_HOME, 'bin')
+const CODEX_PROBE_OUTPUT = path.join(SANDBOX_HOME, 'codex-argv')
+mkdirSync(SANDBOX_BIN)
+writeFileSync(
+  path.join(SANDBOX_BIN, 'codex'),
+  '#!/bin/sh\n: > "$ORCA_CODEX_TEST_OUTPUT"\nfor orca_arg do printf \'%s\\037\' "$orca_arg" >> "$ORCA_CODEX_TEST_OUTPUT"; done\n'
+)
+chmodSync(path.join(SANDBOX_BIN, 'codex'), 0o755)
 
 /** Env with no user shell config reachable, so only Orca's own text is exercised. */
 function sandboxEnv(): NodeJS.ProcessEnv {
   return {
-    PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+    PATH: `${SANDBOX_BIN}:/usr/bin:/bin:/usr/sbin:/sbin`,
     HOME: SANDBOX_HOME,
     XDG_CONFIG_HOME: path.join(SANDBOX_HOME, 'config'),
     XDG_DATA_HOME: path.join(SANDBOX_HOME, 'data')
@@ -69,11 +86,15 @@ function sandboxEnv(): NodeJS.ProcessEnv {
 }
 
 /** Runs one line in a real shell with no user config reachable. */
-function runInShell(shell: LiveShell, script: string): string {
+function runInShell(
+  shell: LiveShell,
+  script: string,
+  extraEnv: Record<string, string> = {}
+): string {
   return execFileSync(shell.path, ['-c', script], {
     encoding: 'utf8',
     timeout: 20_000,
-    env: sandboxEnv()
+    env: { ...sandboxEnv(), ...extraEnv }
   })
 }
 
@@ -139,6 +160,24 @@ describe.skipIf(process.platform === 'win32')(
         // forged by a value that was mis-split into two arguments.
         const output = runInShell(shell, `printf '%s\\0' ${quoted}`)
         expect(output.split('\0').slice(0, -1)).toEqual(argv)
+      })
+
+      it('runs a persisted remote Codex launch under nounset without coordinates', () => {
+        const nounset = shell.name === 'fish' ? '' : 'set -u; '
+        const plan = buildAgentStartupPlan({
+          agent: 'codex',
+          prompt: '',
+          cmdOverrides: {},
+          platform: 'linux',
+          shell: 'posix',
+          isRemote: true,
+          allowEmptyPromptLaunch: true
+        })
+        writeFileSync(CODEX_PROBE_OUTPUT, '')
+        runInShell(shell, `${nounset}${plan?.launchConfig.agentCommand}`, {
+          ORCA_CODEX_TEST_OUTPUT: CODEX_PROBE_OUTPUT
+        })
+        expect(readFileSync(CODEX_PROBE_OUTPUT, 'utf8')).toBe('')
       })
 
       // Why `set -u` gets its own case: the copied resume command puts the clear

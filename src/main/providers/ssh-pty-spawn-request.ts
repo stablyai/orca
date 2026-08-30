@@ -7,6 +7,7 @@ export function buildSshPtySpawnRequest(args: {
   options: PtySpawnOptions
   remoteCliBridgeEnv?: RemoteCliBridgeEnv
   supportsCreateOperation: boolean
+  codexHooksEnabled?: boolean
 }): Record<string, unknown> {
   const { options } = args
   return {
@@ -34,6 +35,7 @@ export function buildSshPtySpawnRequest(args: {
     ...(options.startupCommandDelivery
       ? { startupCommandDelivery: options.startupCommandDelivery }
       : {}),
+    ...(args.codexHooksEnabled === true ? { codexHooksEnabled: true } : {}),
     // Why: attach identity must survive even when hook variables are stripped from the shell env.
     ...(options.paneKey ? { paneKey: options.paneKey } : {}),
     ...(options.tabId ? { tabId: options.tabId } : {}),

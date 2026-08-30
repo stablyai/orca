@@ -417,13 +417,15 @@ describe('spawn', () => {
 
   it('forwards provider command delivery to the relay', async () => {
     mux.request.mockResolvedValue({ id: 'pty-provider-command' })
+    provider = new SshPtyProvider('conn-1', mux as never, undefined, 1, () => true)
 
     await provider.spawn({
       cols: 120,
       rows: 40,
       command: 'echo from-runtime',
       commandDelivery: 'provider',
-      startupCommandDelivery: 'shell-ready'
+      startupCommandDelivery: 'shell-ready',
+      launchAgent: 'codex'
     })
 
     expectRequest(mux.request, 'pty.spawn', {
@@ -432,9 +434,25 @@ describe('spawn', () => {
       cwd: undefined,
       env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
       command: 'echo from-runtime',
+      launchAgent: 'codex',
       commandDelivery: 'provider',
-      startupCommandDelivery: 'shell-ready'
+      startupCommandDelivery: 'shell-ready',
+      codexHooksEnabled: true
     })
+  })
+
+  it('fails closed when remote Codex hooks are disabled', async () => {
+    mux.request.mockResolvedValue({ id: 'pty-disabled-hooks' })
+
+    await provider.spawn({
+      cols: 120,
+      rows: 40,
+      launchAgent: 'codex',
+      env: { ORCA_AGENT_HOOK_PORT: '43117' }
+    })
+
+    const spawnCall = mux.request.mock.calls.find((call) => call[0] === 'pty.spawn')
+    expect(spawnCall?.[1]).not.toHaveProperty('codexHooksEnabled')
   })
 
   it('injects the relay-backed Orca CLI bridge into remote PTY env', async () => {

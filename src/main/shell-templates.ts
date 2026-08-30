@@ -34,7 +34,9 @@ __orca_has_feature() { (( \${_orca_shell_features[(Ie)$1]} )) }`
 /** The bash rcfile equivalent of ZSH_FEATURE_CHANNEL_BLOCK. */
 export const BASH_FEATURE_CHANNEL_BLOCK = `_orca_shell_features=",\${${SHELL_STARTUP_FEATURE_ENV}:-},"
 builtin unset ${SHELL_STARTUP_FEATURE_ENV}
-__orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }`
+__orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }
+__orca_codex_hooks_enabled=""
+__orca_has_feature codex-hooks && __orca_codex_hooks_enabled=1`
 
 // Why one line usable by both languages: __orca_has_feature is defined with the
 // same name and semantics in the zsh and bash channel blocks above.

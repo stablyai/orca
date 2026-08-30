@@ -82,6 +82,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: 'claude --resume session-1',
+      launchAgent: 'claude',
       telemetry: {
         agent_kind: 'claude',
         launch_source: 'sidebar',

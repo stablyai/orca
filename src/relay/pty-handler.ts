@@ -22,6 +22,10 @@ import { addWslEnvKeys } from '../shared/wsl-env'
 import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
+import {
+  hasCompleteRemoteAgentHookContext,
+  isDirectPosixCodexCommand
+} from './codex-hook-launch-policy'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
@@ -90,6 +94,7 @@ import {
   injectRelayFishHistoryEnv,
   injectRelayHistoryEnv
 } from './terminal-history'
+import { RELAY_OWNED_AGENT_HOOK_ENV_KEYS } from './agent-hook-endpoint-coordinates'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -684,6 +689,9 @@ export class PtyHandler {
       },
       rendererEnv
     ) as Record<string, string>
+    for (const key of RELAY_OWNED_AGENT_HOOK_ENV_KEYS) {
+      delete baseEnv[key]
+    }
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
@@ -1652,6 +1660,15 @@ export class PtyHandler {
       }
     }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
+    const remoteCodexHookLaunch = Boolean(
+      launchCommandHint &&
+      launchAgent &&
+      params.codexHooksEnabled === true &&
+      hasCompleteRemoteAgentHookContext({ env: spawnEnv, paneKey: params.paneKey }) &&
+      launchAgent === 'codex' &&
+      process.platform !== 'win32' &&
+      isDirectPosixCodexCommand(launchCommandHint)
+    )
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
       launchCommand: launchCommandHint,
@@ -1660,17 +1677,19 @@ export class PtyHandler {
     })
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
-      shouldUseShellReadyStartupDelivery({
-        command: launchCommandHint,
-        startupCommandDelivery:
-          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
-      })
+      (remoteCodexHookLaunch ||
+        shouldUseShellReadyStartupDelivery({
+          command: launchCommandHint,
+          startupCommandDelivery:
+            params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+        }))
     const managedStartupCommand = shouldProviderDeliverCommand ? command : launchCommandHint
     // Why: both renderer- and provider-delivered startup commands use this marker; the delivering side strips it from output.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro,
       emitReadyMarker: shouldEmitShellReadyMarker,
-      emitStartupIdentity: shouldEmitShellReadyMarker
+      emitStartupIdentity: shouldEmitShellReadyMarker,
+      codexHooksEnabled: remoteCodexHookLaunch
     })
     const rendererShellReadySupported =
       !shouldProviderDeliverCommand && shellLaunch.supportsReadyMarker

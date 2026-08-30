@@ -44,6 +44,12 @@ import {
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
 
+const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+const HOOK_SERVER_ENV = {
+  ORCA_AGENT_HOOK_PORT: '43117',
+  ORCA_AGENT_HOOK_TOKEN: 'token-1'
+}
+
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
   let handler: PtyHandler
@@ -165,6 +171,95 @@ describe('PtyHandler', () => {
       expect(handler.retainedStartupCommandCount).toBe(1)
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'selects Codex hooks from the authoritative relay launch context',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-codex-hook-feature-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      handler.addEnvAugmenter(() => HOOK_SERVER_ENV)
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir, ORCA_PANE_KEY: PANE_KEY },
+          paneKey: PANE_KEY,
+          command: 'codex',
+          launchAgent: 'codex',
+          codexHooksEnabled: true
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('codex-hooks')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32').each([
+    ['another agent', { launchAgent: 'claude', command: 'codex', codexHooksEnabled: true }],
+    [
+      'an opaque launcher',
+      { launchAgent: 'codex', command: 'mise exec -- codex', codexHooksEnabled: true }
+    ],
+    [
+      'an absolute executable',
+      { launchAgent: 'codex', command: '/opt/codex/bin/codex', codexHooksEnabled: true }
+    ],
+    ['an old-client request', { launchAgent: 'codex', command: 'codex' }],
+    [
+      'an incomplete pane context',
+      { launchAgent: 'codex', command: 'codex', codexHooksEnabled: true, missingPane: true }
+    ]
+  ])('does not select Codex hooks for %s', async (_label, launch) => {
+    const oldShell = process.env.SHELL
+    const oldHome = process.env.HOME
+    const homeDir = mkdtempSync(join(tmpdir(), 'relay-codex-hook-negative-'))
+
+    process.env.SHELL = '/bin/bash'
+    process.env.HOME = homeDir
+    handler.addEnvAugmenter(() => HOOK_SERVER_ENV)
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: {
+          HOME: homeDir,
+          ...(!('missingPane' in launch) ? { ORCA_PANE_KEY: PANE_KEY } : {})
+        },
+        ...(!('missingPane' in launch) ? { paneKey: PANE_KEY } : {}),
+        launchAgent: launch.launchAgent,
+        command: launch.command,
+        ...('codexHooksEnabled' in launch ? { codexHooksEnabled: launch.codexHooksEnabled } : {})
+      })
+    } finally {
+      if (oldShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = oldShell
+      }
+      if (oldHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = oldHome
+      }
+      rmSync(homeDir, { recursive: true, force: true })
+    }
+
+    const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(spawnEnv.ORCA_SHELL_FEATURES).not.toContain('codex-hooks')
+  })
 
   it.skipIf(process.platform === 'win32')(
     'enables shell-ready marker env for provider-delivered startup commands',

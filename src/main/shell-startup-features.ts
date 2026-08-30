@@ -15,6 +15,7 @@ export const SHELL_STARTUP_FEATURE_ENV = 'ORCA_SHELL_FEATURES'
 
 export const SHELL_STARTUP_FEATURES = [
   'overlay',
+  'codex-hooks',
   'history',
   'markers',
   'ready',
@@ -44,6 +45,8 @@ export type ShellStartupFeatureInput = {
   waitsForShellReady: boolean
   /** True when Orca needs the shell to announce its PID at startup. */
   emitsStartupIdentity: boolean
+  /** True when this host-recognized launch needs Codex hook argv injection. */
+  codexHooksEnabled?: boolean
 }
 
 function shellName(shellPath: string): string {
@@ -72,6 +75,9 @@ export function selectShellStartupFeatures(input: ShellStartupFeatureInput): She
   const features: ShellStartupFeature[] = []
   if (overlay) {
     features.push('overlay')
+  }
+  if (input.codexHooksEnabled) {
+    features.push('codex-hooks')
   }
   if (history) {
     features.push('history')

@@ -4,6 +4,8 @@ import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
 
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
 const DEV_COMMAND_NAME = 'orca-dev'
+const CODEX_VERSION_PROBE_ATTEMPTS = 40
+const CODEX_VERSION_PROBE_INTERVAL_SECONDS = '0.05'
 
 export type CodexShellLaunchPreflightCommandOptions = {
   hooksEnabled: boolean
@@ -72,26 +74,157 @@ export function getPosixCodexShellLaunchPreflight(): string {
 # Why || : twice — zsh alone aborts inside the substitution, but every shell's
 # assignment adopts its exit status, so an absent codex trips set -e in bash too.
 __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" && -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+__orca_codex_alias="$(alias codex 2>/dev/null || :)"
+__orca_codex_hooks_enabled="\${__orca_codex_hooks_enabled:-}"
+__orca_has_feature codex-hooks 2>/dev/null && __orca_codex_hooks_enabled=1
+__orca_codex_hooks_override() {
+  local value
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --) return 1 ;;
+      --enable|--disable) [[ "\${2:-}" == hooks || "\${2:-}" == codex_hooks ]] && return 0 ;;
+      --enable=hooks|--disable=hooks|--enable=codex_hooks|--disable=codex_hooks) return 0 ;;
+      -c|--config) value="\${2:-}" ;;
+      -c=*|--config=*) value="\${1#*=}" ;;
+      -c?*) value="\${1#-c}" ;;
+      *) value="" ;;
+    esac
+    case "$value" in
+      features.hooks|features.hooks=*|features.hooks[[:space:]]*=*|features.codex_hooks|features.codex_hooks=*|features.codex_hooks[[:space:]]*=*) return 0 ;;
+    esac
+    shift
+  done
+  return 1
+}
+__orca_codex_hooks_feature() {
+  local __orca_codex_version __orca_codex_major __orca_codex_minor __orca_codex_patch __orca_codex_probe_file __orca_codex_probe_pid __orca_codex_remaining __orca_codex_probe_status
+  __orca_codex_probe_file="$(mktemp "\${TMPDIR:-/tmp}/orca-codex-version.XXXXXX" 2>/dev/null)" || return 0
+  command codex --version >"$__orca_codex_probe_file" 2>/dev/null &
+  __orca_codex_probe_pid=$!
+  __orca_codex_remaining=${CODEX_VERSION_PROBE_ATTEMPTS}
+  while kill -0 "$__orca_codex_probe_pid" 2>/dev/null && [[ $__orca_codex_remaining -gt 0 ]]; do
+    sleep ${CODEX_VERSION_PROBE_INTERVAL_SECONDS} 2>/dev/null || break
+    __orca_codex_remaining=$(( __orca_codex_remaining - 1 ))
+  done
+  if kill -0 "$__orca_codex_probe_pid" 2>/dev/null; then
+    kill -KILL "$__orca_codex_probe_pid" 2>/dev/null || :
+    wait "$__orca_codex_probe_pid" 2>/dev/null || :
+    rm -f "$__orca_codex_probe_file"
+    return 0
+  fi
+  if wait "$__orca_codex_probe_pid" 2>/dev/null; then __orca_codex_probe_status=0; else __orca_codex_probe_status=$?; fi
+  __orca_codex_version="$(<"$__orca_codex_probe_file")"
+  rm -f "$__orca_codex_probe_file"
+  [[ "$__orca_codex_probe_status" == 0 ]] || return 0
+  __orca_codex_version="\${__orca_codex_version##* }"
+  __orca_codex_major="\${__orca_codex_version%%.*}"
+  __orca_codex_minor="\${__orca_codex_version#*.}"; __orca_codex_minor="\${__orca_codex_minor%%.*}"
+  __orca_codex_patch="\${__orca_codex_version#*.*.}"; __orca_codex_patch="\${__orca_codex_patch%%[-+]*}"
+  [[ -n "$__orca_codex_major" && -n "$__orca_codex_minor" && -n "$__orca_codex_patch" ]] || return 0
+  [[ "$__orca_codex_major" != *[^0-9]* && "$__orca_codex_minor" != *[^0-9]* && "$__orca_codex_patch" != *[^0-9]* ]] || return 0
+  if (( __orca_codex_major >= 1 )); then
+    printf hooks
+  elif (( __orca_codex_minor >= 129 )); then
+    printf hooks
+  elif (( __orca_codex_minor >= 114 )); then
+    printf codex_hooks
+  fi
+}
+if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}\${__orca_codex_hooks_enabled:-}" && -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" && ( -z "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" || -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ) && ! ( -z "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -n "$__orca_codex_alias" ) ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
-    "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    [[ -z "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" ]] || "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    local __orca_codex_feature=""
+    if [[ -n "\${__orca_codex_hooks_enabled:-}" && -n "\${ORCA_AGENT_HOOK_PORT:-}" && -n "\${ORCA_AGENT_HOOK_TOKEN:-}" && -n "\${ORCA_PANE_KEY:-}" ]] && ! __orca_codex_hooks_override "$@"; then
+      __orca_codex_feature="$(__orca_codex_hooks_feature)"
+    fi
+    if [[ -n "$__orca_codex_feature" ]]; then
+      command codex --enable "$__orca_codex_feature" "$@"
+      return $?
+    fi
     command codex "$@"
   }
 fi
-unset __orca_codex_binary
+unset __orca_codex_binary __orca_codex_alias
 `
 }
 
-export function getFishCodexShellLaunchPreflight(): string {
-  return `# Why captured: an unquoted (type -t codex) expands to zero words when codex is
-# absent, leaving "test = file" — fish then errors instead of failing closed.
-# Quoting in place is not the fix; fish never substitutes inside double quotes.
+export function getFishCodexShellLaunchPreflight(options: { hooksEnabled?: boolean } = {}): string {
+  const hookSetup = options.hooksEnabled
+    ? `set -g __orca_codex_hooks_enabled 1
+function __orca_codex_hooks_override
+  set index 1
+  while test $index -le (count $argv)
+    set value $argv[$index]
+    switch $value
+      case --
+        return 1
+      case --enable --disable
+        set next $argv[(math $index + 1)]
+        if test "$next" = hooks; or test "$next" = codex_hooks; return 0; end
+      case '--enable=hooks' '--disable=hooks' '--enable=codex_hooks' '--disable=codex_hooks'
+        return 0
+      case '-c' '--config'
+        set value $argv[(math $index + 1)]
+      case '-c=*' '--config=*'
+        set value (string split -m1 = $value)[2]
+      case '-c?*'
+        set value (string sub -s 3 $value)
+    end
+    if string match -qr '^features\\.(hooks|codex_hooks)([[:space:]]*=|=|$)' -- $value; return 0; end
+    set index (math $index + 1)
+  end
+  return 1
+end
+function __orca_codex_hooks_feature
+  set temp_root /tmp
+  if set -q TMPDIR; and test -n "$TMPDIR"; set temp_root $TMPDIR; end
+  set probe_file (command mktemp "$temp_root/orca-codex-version.XXXXXX" 2>/dev/null); or return
+  command codex --version >$probe_file 2>/dev/null &
+  set probe_pid $last_pid
+  set remaining ${CODEX_VERSION_PROBE_ATTEMPTS}
+  while command kill -0 $probe_pid 2>/dev/null; and test $remaining -gt 0
+    command sleep ${CODEX_VERSION_PROBE_INTERVAL_SECONDS} 2>/dev/null; or break
+    set remaining (math $remaining - 1)
+  end
+  if command kill -0 $probe_pid 2>/dev/null
+    command kill -KILL $probe_pid 2>/dev/null
+    wait $probe_pid 2>/dev/null
+    command rm -f $probe_file
+    return
+  end
+  wait $probe_pid 2>/dev/null
+  set probe_status $status
+  set version (string collect <$probe_file)
+  command rm -f $probe_file
+  if test "$probe_status" != 0; return; end
+  set version (string split ' ' -- $version)[-1]
+  if not string match -qr '^[0-9]+\\.[0-9]+\\.[0-9]+([-+].*)?$' -- $version; return; end
+  set parts (string split . -- $version)
+  if test $parts[1] -ge 1; or test $parts[2] -ge 129
+    printf hooks
+  else if test $parts[2] -ge 114
+    printf codex_hooks
+  end
+end`
+    : ''
+  return `${hookSetup}
+# Why captured: an absent codex expands to zero words and makes fish parse an invalid test.
 set -l __orca_codex_type (type -t codex 2>/dev/null)
-if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test "$__orca_codex_type" = file
+if test -n "$ORCA_CODEX_LAUNCH_PREFLIGHT$__orca_codex_hooks_enabled"; and test "$__orca_codex_type" = file; and begin; test -z "$ORCA_CODEX_LAUNCH_PREFLIGHT"; or test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; end
   function codex
-    command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
+    if test -n "$ORCA_CODEX_LAUNCH_PREFLIGHT"
+      command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
+    end
+    set feature
+    if test -n "$__orca_codex_hooks_enabled"; and test -n "$ORCA_AGENT_HOOK_PORT"; and test -n "$ORCA_AGENT_HOOK_TOKEN"; and test -n "$ORCA_PANE_KEY"; and not __orca_codex_hooks_override $argv
+      set feature (__orca_codex_hooks_feature)
+    end
+    if test -n "$feature"
+      command codex --enable "$feature" $argv
+      return $status
+    end
     command codex $argv
   end
 end

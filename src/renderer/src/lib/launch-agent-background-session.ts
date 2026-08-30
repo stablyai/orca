@@ -115,10 +115,11 @@ export async function launchAgentBackgroundSession(
     command: sshConnectionId ? startupPlan.launchCommand : null,
     waitForShellReady:
       Boolean(sshConnectionId) &&
-      shouldUseShellReadyStartupDelivery({
-        command: startupPlan.launchCommand,
-        startupCommandDelivery: startupPlan.startupCommandDelivery
-      }),
+      (agent === 'codex' ||
+        shouldUseShellReadyStartupDelivery({
+          command: startupPlan.launchCommand,
+          startupCommandDelivery: startupPlan.startupCommandDelivery
+        })),
     write: (ptyId, data) => window.api.pty.write(ptyId, data)
   })
   // Route by the worktree's owner host, not the focused runtime.

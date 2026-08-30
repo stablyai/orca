@@ -73,9 +73,10 @@ export function launchAiVaultSessionInNewTab(args: {
     : store.createTab(args.worktreeId, targetGroupId)
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
+    launchAgent: args.agent,
     ...(args.env ? { env: args.env } : {}),
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-    ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
+    ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
     ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(args.agent),

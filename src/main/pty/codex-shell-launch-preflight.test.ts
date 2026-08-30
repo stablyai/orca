@@ -188,6 +188,53 @@ function expectNamedAliasSurvives(shell: string, enableAliases: string): void {
   expect(readFileSync(preflightMarker, 'utf-8')).toBe('agent hooks prepare-codex')
 }
 
+function runRemoteHookLaunch(shell: string, version: string, args = '', alias = false): string {
+  const root = mkdtempSync(join(tmpdir(), 'orca-codex-remote-hook-alias-'))
+  roots.push(root)
+  const bin = join(root, 'bin')
+  mkdirSync(bin)
+  writeExecutable(
+    join(bin, 'codex'),
+    `#!/bin/sh\nif [ "\${1-}" = --version ]; then printf 'codex-cli %s\\n' ${JSON.stringify(version)}; exit 0; fi\nprintf '%s\\n' "$*"\n`
+  )
+  const isZsh = shell.endsWith('/zsh')
+  const preflight = getPosixCodexShellLaunchPreflight()
+  const setup = isZsh
+    ? [
+        '__orca_deferred_init() {',
+        '__orca_has_feature() { [[ "$1" == codex-hooks ]]; }',
+        preflight,
+        '}',
+        ...(alias ? ["alias codex='GIT_AUTHOR_NAME=Codex codex --alias-flag'"] : []),
+        '__orca_deferred_init'
+      ]
+    : [
+        ...(alias ? ["alias codex='GIT_AUTHOR_NAME=Codex codex --alias-flag'"] : []),
+        '__orca_has_feature() { [[ "$1" == codex-hooks ]]; }',
+        preflight
+      ]
+  return execFileSync(
+    shell,
+    [
+      ...(isZsh ? ['-f'] : ['--noprofile', '--norc']),
+      '-c',
+      [isZsh ? 'setopt aliases' : 'shopt -s expand_aliases', ...setup, `eval 'codex ${args}'`].join(
+        '\n'
+      )
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+        ORCA_AGENT_HOOK_PORT: '43117',
+        ORCA_AGENT_HOOK_TOKEN: 'token-1',
+        ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111'
+      }
+    }
+  ).trim()
+}
+
 afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -217,6 +264,31 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
 
   it.skipIf(!bashAvailable)('keeps a user alias named codex working in bash', () => {
     expectNamedAliasSurvives('/bin/bash', 'shopt -s expand_aliases')
+  })
+
+  it.each([
+    ['/bin/bash', '0.113.0', ''],
+    ['/bin/bash', '0.114.0', '--enable codex_hooks'],
+    ['/bin/bash', '0.129.0', '--enable hooks'],
+    ['/bin/bash', '1.beta.0', ''],
+    ['/bin/bash', '10.x.y', ''],
+    ['/bin/zsh', '0.129.0', '--enable hooks']
+  ])('selects hook argv in %s for Codex %s', (shell, version, expected) => {
+    if (!existsSync(shell)) {
+      return
+    }
+    expect(runRemoteHookLaunch(shell, version)).toBe(expected)
+  })
+
+  it('preserves an explicit launch hook override after alias expansion', () => {
+    expect(runRemoteHookLaunch('/bin/bash', '0.149.0', '--disable hooks')).toBe('--disable hooks')
+  })
+
+  it.each(['/bin/bash', '/bin/zsh'])('fails open without replacing a user alias in %s', (shell) => {
+    if (!existsSync(shell)) {
+      return
+    }
+    expect(runRemoteHookLaunch(shell, '0.149.0', '', true)).toBe('--alias-flag')
   })
 
   it('still launches Codex when the best-effort preflight fails', () => {

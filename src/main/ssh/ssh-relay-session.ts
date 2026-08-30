@@ -110,6 +110,7 @@ import {
 } from '../../shared/ssh-ai-vault-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import {
   openSshPtyConsumerSession,
   type OpenSshPtyConsumerSessionOptions,
@@ -1018,7 +1019,8 @@ export class SshRelaySession {
       this.targetId,
       mux,
       this.remoteCliBridgeEnv ?? undefined,
-      providerGeneration
+      providerGeneration,
+      () => this.areRemoteCodexHooksEnabled()
     )
     const consumerOwnerState = this.activePtyConsumerOwner()
     if (consumerOwnerState) {
@@ -1473,6 +1475,16 @@ export class SshRelaySession {
   private areAgentStatusHooksEnabled(): boolean {
     const store = this.store as { getSettings?: Store['getSettings'] }
     return isAgentStatusHooksEnabled(store.getSettings?.())
+  }
+
+  private areRemoteCodexHooksEnabled(): boolean {
+    const store = this.store as { getSettings?: Store['getSettings'] }
+    const settings = store.getSettings?.()
+    return (
+      isRemoteAgentHooksEnabled() &&
+      isAgentStatusHooksEnabled(settings) &&
+      isTuiAgentEnabled('codex', settings?.disabledTuiAgents)
+    )
   }
 
   private wireUpRemoteWorkspaceEvents(mux: SshChannelMultiplexer): void {

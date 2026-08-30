@@ -2,6 +2,8 @@
 _orca_shell_features=",${ORCA_SHELL_FEATURES:-},"
 builtin unset ORCA_SHELL_FEATURES
 __orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }
+__orca_codex_hooks_enabled=""
+__orca_has_feature codex-hooks && __orca_codex_hooks_enabled=1
 __orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
 # Why a plain variable: the channel is consumed and destroyed in these first
 # lines, so nothing this shell later spawns can see or inherit the selection.
@@ -87,6 +89,86 @@ if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
   # an `alias omp` otherwise rewrites at parse time, aborting the rest of the file.
   function omp { __orca_omp "$@"; }
 fi
+
+# Why: a typed alias expands inside the shell, after pane launch prep.
+# Why unalias inside the substitution: an alias named codex makes command -v
+# report the alias text, and the subshell leaves the user's own alias intact.
+# Why || : twice — zsh alone aborts inside the substitution, but every shell's
+# assignment adopts its exit status, so an absent codex trips set -e in bash too.
+__orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
+__orca_codex_alias="$(alias codex 2>/dev/null || :)"
+__orca_codex_hooks_enabled="${__orca_codex_hooks_enabled:-}"
+__orca_has_feature codex-hooks 2>/dev/null && __orca_codex_hooks_enabled=1
+__orca_codex_hooks_override() {
+  local value
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --) return 1 ;;
+      --enable|--disable) [[ "${2:-}" == hooks || "${2:-}" == codex_hooks ]] && return 0 ;;
+      --enable=hooks|--disable=hooks|--enable=codex_hooks|--disable=codex_hooks) return 0 ;;
+      -c|--config) value="${2:-}" ;;
+      -c=*|--config=*) value="${1#*=}" ;;
+      -c?*) value="${1#-c}" ;;
+      *) value="" ;;
+    esac
+    case "$value" in
+      features.hooks|features.hooks=*|features.hooks[[:space:]]*=*|features.codex_hooks|features.codex_hooks=*|features.codex_hooks[[:space:]]*=*) return 0 ;;
+    esac
+    shift
+  done
+  return 1
+}
+__orca_codex_hooks_feature() {
+  local __orca_codex_version __orca_codex_major __orca_codex_minor __orca_codex_patch __orca_codex_probe_file __orca_codex_probe_pid __orca_codex_remaining __orca_codex_probe_status
+  __orca_codex_probe_file="$(mktemp "${TMPDIR:-/tmp}/orca-codex-version.XXXXXX" 2>/dev/null)" || return 0
+  command codex --version >"$__orca_codex_probe_file" 2>/dev/null &
+  __orca_codex_probe_pid=$!
+  __orca_codex_remaining=40
+  while kill -0 "$__orca_codex_probe_pid" 2>/dev/null && [[ $__orca_codex_remaining -gt 0 ]]; do
+    sleep 0.05 2>/dev/null || break
+    __orca_codex_remaining=$(( __orca_codex_remaining - 1 ))
+  done
+  if kill -0 "$__orca_codex_probe_pid" 2>/dev/null; then
+    kill "$__orca_codex_probe_pid" 2>/dev/null || :
+    wait "$__orca_codex_probe_pid" 2>/dev/null || :
+    rm -f "$__orca_codex_probe_file"
+    return 0
+  fi
+  if wait "$__orca_codex_probe_pid" 2>/dev/null; then __orca_codex_probe_status=0; else __orca_codex_probe_status=$?; fi
+  __orca_codex_version="$(<"$__orca_codex_probe_file")"
+  rm -f "$__orca_codex_probe_file"
+  [[ "$__orca_codex_probe_status" == 0 ]] || return 0
+  __orca_codex_version="${__orca_codex_version##* }"
+  __orca_codex_major="${__orca_codex_version%%.*}"
+  __orca_codex_minor="${__orca_codex_version#*.}"; __orca_codex_minor="${__orca_codex_minor%%.*}"
+  __orca_codex_patch="${__orca_codex_version#*.*.}"; __orca_codex_patch="${__orca_codex_patch%%[-+]*}"
+  [[ -n "$__orca_codex_major" && -n "$__orca_codex_minor" && -n "$__orca_codex_patch" ]] || return 0
+  [[ "$__orca_codex_major" != *[^0-9]* && "$__orca_codex_minor" != *[^0-9]* && "$__orca_codex_patch" != *[^0-9]* ]] || return 0
+  if (( __orca_codex_major >= 1 )); then
+    printf hooks
+  elif (( __orca_codex_minor >= 129 )); then
+    printf hooks
+  elif (( __orca_codex_minor >= 114 )); then
+    printf codex_hooks
+  fi
+}
+if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}${__orca_codex_hooks_enabled:-}" && -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" && ! ( -z "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -n "$__orca_codex_alias" ) ]]; then
+  # Why the function reserved word: it suppresses alias expansion of the name,
+  # which otherwise rewrites this header at parse time and aborts the whole file.
+  function codex {
+    [[ -z "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" ]] || "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    local __orca_codex_feature=""
+    if [[ -n "${__orca_codex_hooks_enabled:-}" && -n "${ORCA_AGENT_HOOK_PORT:-}" && -n "${ORCA_AGENT_HOOK_TOKEN:-}" && -n "${ORCA_PANE_KEY:-}" ]] && ! __orca_codex_hooks_override "$@"; then
+      __orca_codex_feature="$(__orca_codex_hooks_feature)"
+    fi
+    if [[ -n "$__orca_codex_feature" ]]; then
+      command codex --enable "$__orca_codex_feature" "$@"
+      return $?
+    fi
+    command codex "$@"
+  }
+fi
+unset __orca_codex_binary __orca_codex_alias
 
 if [[ -n "${ORCA_HISTFILE:-}" ]]; then
   HISTFILE="$ORCA_HISTFILE"
