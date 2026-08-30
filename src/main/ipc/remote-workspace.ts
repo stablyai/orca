@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
@@ -29,10 +30,17 @@ import { normalizeSnapshot } from './remote-workspace-snapshot-normalization'
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
+type RemoteWorkspaceRefresh = {
+  requestedRevision: number
+  staleRetryCount: number
+}
+const remoteWorkspaceRefreshes = new Map<string, RemoteWorkspaceRefresh>()
+const REMOTE_WORKSPACE_STALE_RETRY_DELAYS_MS = [25, 100, 250] as const
 
 export function _resetRemoteWorkspaceCachesForTests(): void {
   clearRemoteWorkspaceSnapshotCache()
   clearRemoteWorkspacePatchTails()
+  remoteWorkspaceRefreshes.clear()
 }
 
 export function _getRemoteWorkspaceCacheSizesForTests(): {
@@ -80,11 +88,111 @@ function exportSessionForTarget(
   })
 }
 
+function publishRemoteWorkspaceSnapshot(
+  targetId: string,
+  snapshot: ReturnType<typeof normalizeSnapshot>,
+  sourceClientId?: string
+): void {
+  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  const event: RemoteWorkspaceChangedEvent = {
+    targetId,
+    snapshot,
+    ...(sourceClientId ? { sourceClientId } : {})
+  }
+  const win = mainWindowGetter?.()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('remoteWorkspace:changed', event)
+  }
+}
+
+async function refreshRemoteWorkspaceSnapshot(
+  targetId: string,
+  refresh: RemoteWorkspaceRefresh
+): Promise<void> {
+  try {
+    while (remoteWorkspaceRefreshes.get(targetId) === refresh) {
+      const target = getSshConnectionStore()?.getTarget(targetId)
+      if (!target) {
+        return
+      }
+      const snapshot = await getRemoteSnapshot(target, { remember: false })
+      if (!snapshot || remoteWorkspaceRefreshes.get(targetId) !== refresh) {
+        return
+      }
+      if (snapshot.revision < refresh.requestedRevision) {
+        const retryDelay = REMOTE_WORKSPACE_STALE_RETRY_DELAYS_MS[refresh.staleRetryCount]
+        if (retryDelay === undefined) {
+          console.warn(
+            `[remote-workspace] Snapshot for ${targetId} remained at revision ${snapshot.revision} below required revision ${refresh.requestedRevision} after ${refresh.staleRetryCount} retries`
+          )
+          return
+        }
+        refresh.staleRetryCount++
+        await delay(retryDelay)
+        continue
+      }
+      publishRemoteWorkspaceSnapshot(targetId, snapshot)
+      return
+    }
+  } catch (err) {
+    console.warn(
+      `[remote-workspace] Failed to refresh ${targetId} after revision ${refresh.requestedRevision}: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    )
+  }
+}
+
+function reconcileRemoteWorkspaceRefreshWithSnapshot(targetId: string, revision: number): void {
+  const refresh = remoteWorkspaceRefreshes.get(targetId)
+  if (!refresh) {
+    return
+  }
+  refresh.requestedRevision = Math.max(refresh.requestedRevision, revision)
+  if (revision === refresh.requestedRevision) {
+    remoteWorkspaceRefreshes.delete(targetId)
+  }
+}
+
+function queueRemoteWorkspaceRefresh(targetId: string, revision: number): void {
+  const existing = remoteWorkspaceRefreshes.get(targetId)
+  if (existing) {
+    if (revision > existing.requestedRevision) {
+      existing.requestedRevision = revision
+      existing.staleRetryCount = 0
+    }
+    return
+  }
+  const refresh: RemoteWorkspaceRefresh = {
+    requestedRevision: revision,
+    staleRetryCount: 0
+  }
+  remoteWorkspaceRefreshes.set(targetId, refresh)
+  void refreshRemoteWorkspaceSnapshot(targetId, refresh).finally(() => {
+    if (remoteWorkspaceRefreshes.get(targetId) === refresh) {
+      remoteWorkspaceRefreshes.delete(targetId)
+    }
+  })
+}
+
 export function handleRemoteWorkspaceNotification(
   targetId: string,
   method: string,
   params: Record<string, unknown>
 ): void {
+  if (method === 'workspace.refreshRequired') {
+    const revision = params.revision
+    const sourceClientId = params.sourceClientId
+    if (
+      typeof revision === 'number' &&
+      Number.isSafeInteger(revision) &&
+      revision >= 0 &&
+      sourceClientId !== CLIENT_ID
+    ) {
+      queueRemoteWorkspaceRefresh(targetId, revision)
+    }
+    return
+  }
   if (method !== 'workspace.changed') {
     return
   }
@@ -94,16 +202,12 @@ export function handleRemoteWorkspaceNotification(
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const snapshot = normalizeSnapshot(params.snapshot, namespace)
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
-  const event: RemoteWorkspaceChangedEvent = {
+  reconcileRemoteWorkspaceRefreshWithSnapshot(targetId, snapshot.revision)
+  publishRemoteWorkspaceSnapshot(
     targetId,
     snapshot,
-    sourceClientId: typeof params.sourceClientId === 'string' ? params.sourceClientId : undefined
-  }
-  const win = mainWindowGetter?.()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('remoteWorkspace:changed', event)
-  }
+    typeof params.sourceClientId === 'string' ? params.sourceClientId : undefined
+  )
 }
 
 export function registerRemoteWorkspaceHandlers(

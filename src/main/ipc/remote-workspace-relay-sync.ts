@@ -17,7 +17,8 @@ import {
 } from './remote-workspace-snapshot-normalization'
 
 export async function getRemoteSnapshot(
-  target: SshTarget
+  target: SshTarget,
+  options: { remember?: boolean } = {}
 ): Promise<RemoteWorkspaceSnapshot | null> {
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
@@ -27,7 +28,9 @@ export async function getRemoteSnapshot(
   try {
     const raw = await mux.request('workspace.get', { namespace })
     const snapshot = normalizeSnapshot(raw, namespace)
-    rememberRemoteWorkspaceSnapshot(target.id, snapshot)
+    if (options.remember !== false) {
+      rememberRemoteWorkspaceSnapshot(target.id, snapshot)
+    }
     return snapshot
   } catch (err) {
     if ((err as { code?: unknown })?.code === -32601) {

@@ -151,11 +151,26 @@ export class WorkspaceSessionHandler {
       session: patch.session as Record<string, unknown>
     }
     this.write(snapshot)
-    this.dispatcher.notify('workspace.changed', {
+    const sourceClientId = typeof params.clientId === 'string' ? params.clientId : undefined
+    const changedParams = {
       namespace,
       snapshot,
-      sourceClientId: typeof params.clientId === 'string' ? params.clientId : undefined
-    })
+      sourceClientId
+    }
+    const refreshParams = {
+      namespace,
+      revision: snapshot.revision,
+      sourceClientId
+    }
+    for (const clientId of this.dispatcher.activeClientIds()) {
+      if (
+        !this.dispatcher.publishProducerNotification(clientId, 'workspace.changed', changedParams)
+      ) {
+        // Why: the full snapshot can exceed the producer frame capacity; a control-lane
+        // invalidation lets the client pull it through the larger response lane instead.
+        this.dispatcher.notifyClient(clientId, 'workspace.refreshRequired', refreshParams)
+      }
+    }
     return { ok: true, snapshot }
   }
 
