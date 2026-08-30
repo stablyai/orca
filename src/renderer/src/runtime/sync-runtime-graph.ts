@@ -1305,10 +1305,7 @@ export function buildMobileSessionTabSnapshots(
       return file ? isMobilePublishableOpenFile(file) : false
     })
     const publishableTerminalIds = [...terminalTabByIdForWorktree.values()]
-      .filter(
-        (terminal) =>
-          !isWebOnlyMirroredTerminalTab(terminal, inputs.terminalLayoutByTabId.get(terminal.id))
-      )
+      .filter((terminal) => isMobilePublishableTerminalTab(inputs, terminal))
       .map((terminal) => terminal.id)
     const groupProjection = buildMobileSessionGroupProjection(inputs, {
       terminalIds: publishableTerminalIds,
@@ -1524,8 +1521,14 @@ function appendFallbackEditorTabsToGroups(
   const fallbackTabIdSet = new Set(fallbackTabs.map((tab) => tab.tabId))
 
   for (const fallback of fallbackTabs) {
+    // Why the membership test on the tab's own group: a groupId naming no host group is one the host
+    // layout can never place, so minting a published group for it lands the tab in a pane-less group.
+    const strandedGroupId =
+      fallback.groupId !== null &&
+      !groupIndexById.has(fallback.groupId) &&
+      !sourceGroupsById.has(fallback.groupId)
     const targetGroupId =
-      fallback.groupId ??
+      (strandedGroupId ? null : fallback.groupId) ??
       (activeGroupId && (groupIndexById.has(activeGroupId) || sourceGroupsById.has(activeGroupId))
         ? activeGroupId
         : firstTargetGroupId)
@@ -1915,6 +1918,25 @@ function buildMobileLaunchDraftsByPaneKey(args: {
     draftsByPaneKey.set(makePaneKey(terminal.id, ownerLeafId), draft)
   }
   return draftsByPaneKey ?? EMPTY_NARROWED_BY_KEY
+}
+
+/**
+ * Why a second guard beside the mirrored-tab one: a terminal occupies its group under the parent tab
+ * id but publishes one row per pane, so one with no live pane and no persisted layout publishes no
+ * rows at all. Leaving it in the group would name a tab the client has no row to resolve it to.
+ */
+function isMobilePublishableTerminalTab(
+  inputs: MobileSessionWorktreeInputs,
+  terminal: NonNullable<AppState['tabsByWorktree'][string]>[number]
+): boolean {
+  const savedLayout = inputs.terminalLayoutByTabId.get(terminal.id)
+  if (isWebOnlyMirroredTerminalTab(terminal, savedLayout)) {
+    return false
+  }
+  return (
+    getRuntimeLeafIdsForTerminal(inputs.mountedSurfaceCaptureByTabId.get(terminal.id), savedLayout)
+      .length > 0
+  )
 }
 
 function buildMobileTerminalSurfaceTabs(
