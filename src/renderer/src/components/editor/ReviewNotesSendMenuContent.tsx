@@ -26,7 +26,7 @@ import {
   agentTypeToIconAgent
 } from '@/lib/agent-status'
 import { track } from '@/lib/telemetry'
-import { useNow } from '@/components/dashboard/useNow'
+import { useNow } from '@/hooks/use-now'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'

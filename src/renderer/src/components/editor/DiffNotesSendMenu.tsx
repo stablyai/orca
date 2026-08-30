@@ -42,12 +42,13 @@ export function DiffNotesSendMenu({
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
   const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
-  const now = useNow(1000, respondToOpenRequest)
+  // Why: only a pending request for this worktree can age out, so the clock runs
+  // for the few ms one is outstanding instead of for the menu's whole lifetime.
+  const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
+  const now = useNow(1000, hasPendingOpenRequest)
   const openRequestNonce =
-    respondToOpenRequest &&
-    openRequest?.worktreeId === worktreeId &&
-    now - (openRequest?.issuedAt ?? 0) < OPEN_REQUEST_TTL_MS
-      ? openRequest.nonce
+    hasPendingOpenRequest && now - (openRequest?.issuedAt ?? 0) < OPEN_REQUEST_TTL_MS
+      ? (openRequest?.nonce ?? null)
       : null
   const handleOpenRequestHandled = useCallback(
     () => consumeOpenRequest(worktreeId),

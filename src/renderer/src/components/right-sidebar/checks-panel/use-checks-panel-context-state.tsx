@@ -126,9 +126,10 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   // Why: no key={worktreeId} remount (caused an IPC storm on Windows); reset branch-specific state during render (not useEffect) so it lands on the same paint.
   const [prevPanelContextKey, setPrevPanelContextKey] = useState(panelContextKey)
   const [prRefreshStateNow, setPrRefreshStateNow] = useState(() => Date.now())
-  // Eligibility expires independently of PR refresh-state timers, so keep the
-  // freshness gate moving while the visible panel is mounted.
-  const panelClockNow = useNow(30_000, isPanelVisible)
+  // Why: eligibility expires on wall time, independently of the PR refresh-state
+  // timers, so the freshness gate needs its own tick. ChecksPanel is unmounted
+  // (not hidden) when the panel closes, so the clock needs no visibility gate.
+  const panelClockNow = useNow(30_000)
   if (panelContextKey !== prevPanelContextKey) {
     setPrevPanelContextKey(panelContextKey)
     setEditingTitle(false)
@@ -285,7 +286,6 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     prCacheKey,
     prNumber,
     rawPRRefreshState,
-    panelContextKey,
     repo?.id
   ])
 
@@ -331,7 +331,6 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setChecksPanelContentRef,
     prevPanelContextKey,
     prRefreshStateNow: Math.max(prRefreshStateNow, panelClockNow),
-    setPrRefreshStateNow,
     isFolder,
     prCacheKey,
     hostedReviewCacheKey,

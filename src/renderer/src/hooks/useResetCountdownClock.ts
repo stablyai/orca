@@ -36,16 +36,14 @@ export function useResetCountdownClock(resetTimes: readonly (number | null | und
     setScheduledNow(Date.now())
   }, [key])
 
-  const now = scheduledNow
-
   useEffect(() => {
-    const delayMs = getResetCountdownNextTickDelay(now, times)
+    const delayMs = getResetCountdownNextTickDelay(scheduledNow, times)
     if (delayMs === null) {
       return
     }
     const timeout = window.setTimeout(() => setScheduledNow(Date.now()), delayMs)
     return () => window.clearTimeout(timeout)
-  }, [now, times])
+  }, [scheduledNow, times])
 
-  return now
+  return scheduledNow
 }

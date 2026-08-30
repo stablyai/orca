@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
-import { useNow } from '@/components/dashboard/useNow'
+import { useNow } from '@/hooks/use-now'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import {
   selectSendTargetControlInputs,

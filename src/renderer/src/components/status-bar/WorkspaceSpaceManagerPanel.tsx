@@ -49,6 +49,7 @@ import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
 import { useAppStore } from '../../store'
+import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import {
   getRepoMapFromState,
   getWorktreeMapFromState,
@@ -1315,10 +1316,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const migrationUnsupportedByPtyId = useAppStore((state) => state.migrationUnsupportedByPtyId)
   const runtimePaneTitlesByTabId = useAppStore((state) => state.runtimePaneTitlesByTabId)
   const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
-  const [agentStatusNow, setAgentStatusNow] = useState(() => Date.now())
-  useEffect(() => {
-    setAgentStatusNow(Date.now())
-  }, [agentStatusEpoch])
+  const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((state) => state.retainedAgentsByPaneKey)
   const openFiles = useAppStore((state) => state.openFiles)
   const editorDrafts = useAppStore((state) => state.editorDrafts)

@@ -253,9 +253,8 @@ export function ProviderPanel({
   showResetCredits?: boolean
   usagePercentageDisplay?: UsagePercentageDisplay
 }): React.JSX.Element {
-  const now = useResetCountdownClock(
-    p ? getWindowSections(p).map((section) => section.window?.resetsAt) : []
-  )
+  const windowSections = p ? getWindowSections(p) : []
+  const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
@@ -341,7 +340,7 @@ export function ProviderPanel({
 
       <div className={`border-t ${dividerClass}`} />
 
-      {getWindowSections(p).map((s) => (
+      {windowSections.map((s) => (
         <ProviderRateLimitWindowSection
           key={s.label}
           window={s.window}

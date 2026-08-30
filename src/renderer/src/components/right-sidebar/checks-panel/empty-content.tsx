@@ -17,7 +17,15 @@ export function ChecksPanelEmptyContent({
 }: {
   model: ChecksPanelEmptyContentModel
 }): React.JSX.Element | null {
-  const now = useNow(1000, Boolean(model.activeWorktree))
+  // Why: the auto-retry line and the retry-disabled window are the only readers,
+  // and both are populated solely by a GitHub refresh error — so an idle panel
+  // (and every folder workspace, which never reaches them) stays tick-free
+  // rather than re-rendering the create composer once a second.
+  const now = useNow(
+    1000,
+    model.prRefreshState?.nextAutoRetryAt !== undefined ||
+      model.prRefreshState?.retryDisabledUntil !== undefined
+  )
   const {
     activeReview,
     activeWorktree,

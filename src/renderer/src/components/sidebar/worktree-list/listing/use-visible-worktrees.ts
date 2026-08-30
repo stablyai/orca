@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -46,10 +47,9 @@ export function useVisibleSidebarWorktrees(args: {
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
-  const [agentStatusNow, setAgentStatusNow] = useState(() => Date.now())
-  useEffect(() => {
-    setAgentStatusNow(Date.now())
-  }, [agentStatusEpoch])
+  // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
+  // sleeping-workspaces list cannot evict the sample the live lists share.
+  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const pairedDeviceIdsByEnvironment = useMemo(
