@@ -57,6 +57,10 @@ describe('local Linux build target', () => {
       })
     )
 
+    expect(buildLinuxElectronBuilderArgs('x64')).toEqual(
+      expect.arrayContaining(['--linux', 'AppImage', 'deb', 'rpm', '--x64'])
+    )
+
     runLocalLinuxBuild({
       arch: 'x64',
       environment: { PATH: '/bin', ORCA_LINUX_ARM64_RELEASE: '1' },

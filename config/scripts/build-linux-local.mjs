@@ -32,6 +32,7 @@ export function buildLinuxElectronBuilderArgs(arch, extraArgs = []) {
     '--linux',
     'AppImage',
     'deb',
+    'rpm',
     `--${arch}`,
     ...extraArgs
   ]
