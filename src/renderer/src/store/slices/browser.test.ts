@@ -105,18 +105,23 @@ function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotat
 }
 
 describe('createBrowserSlice annotations', () => {
-  it('keeps the latest mobile and desktop viewport presets synchronized with menu changes', () => {
+  it('keeps the latest mobile preset and non-mobile state synchronized with menu changes', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId!
 
     store.getState().setBrowserPageViewportPreset(pageId, 'mobile-l')
-    store.getState().setBrowserPageViewportPreset(pageId, 'laptop-l')
+    expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]).toMatchObject({
+      viewportPresetId: 'mobile-l',
+      lastMobileViewportPresetId: 'mobile-l',
+      lastNonMobileViewportPresetId: null
+    })
 
+    store.getState().setBrowserPageViewportPreset(pageId, 'laptop-l')
     expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]).toMatchObject({
       viewportPresetId: 'laptop-l',
       lastMobileViewportPresetId: 'mobile-l',
-      lastDesktopViewportPresetId: 'laptop-l'
+      lastNonMobileViewportPresetId: 'laptop-l'
     })
   })
 

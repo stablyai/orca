@@ -138,12 +138,7 @@ export function forwardGuestShortcutInput(
     // Why: the address bar lives in renderer chrome, not the guest page; forward so the active BrowserPane can focus its input.
     renderer.send('ui:focusBrowserAddressBar')
   } else if (
-    keybindingMatchesAction(
-      'browser.toggleMobileDesktopViewport',
-      input,
-      process.platform,
-      keybindings
-    )
+    keybindingMatchesAction('browser.toggleMobileViewport', input, process.platform, keybindings)
   ) {
     renderer.send('ui:toggleBrowserViewport', browserTabId)
   } else if (keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)) {

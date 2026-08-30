@@ -27,7 +27,7 @@ const page: BrowserPage = {
   createdAt: 1,
   viewportPresetId: 'desktop',
   lastMobileViewportPresetId: 'mobile-l',
-  lastDesktopViewportPresetId: 'desktop'
+  lastNonMobileViewportPresetId: 'desktop'
 }
 
 let guestToggle: ((browserPageId: string) => void) | null = null
@@ -78,7 +78,7 @@ describe('useBrowserPageViewportShortcut', () => {
       }
     })
     useAppStore.setState({
-      keybindings: { 'browser.toggleMobileDesktopViewport': ['Mod+Alt+V'] }
+      keybindings: { 'browser.toggleMobileViewport': ['Mod+Alt+V'] }
     })
   })
 

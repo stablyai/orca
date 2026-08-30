@@ -29,7 +29,7 @@ export function useBrowserPageViewportShortcut({
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (
         !keybindingMatchesAction(
-          'browser.toggleMobileDesktopViewport',
+          'browser.toggleMobileViewport',
           event,
           shortcutPlatform,
           keybindings

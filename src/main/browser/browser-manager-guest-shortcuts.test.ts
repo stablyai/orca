@@ -337,7 +337,7 @@ describe('browserManager', () => {
       keybindings: {
         'tab.newBrowser': ['Mod+Alt+B'],
         'worktree.quickOpen': ['Mod+Shift+O'],
-        'browser.toggleMobileDesktopViewport': ['Mod+Alt+V']
+        'browser.toggleMobileViewport': ['Mod+Alt+V']
       }
     }))
 

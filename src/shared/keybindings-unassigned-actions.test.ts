@@ -11,14 +11,12 @@ describe('keybindings', () => {
   it('keeps browser viewport toggling unassigned on every platform', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     for (const platform of platforms) {
-      expect(
-        getEffectiveKeybindingsForAction('browser.toggleMobileDesktopViewport', platform)
-      ).toEqual([])
+      expect(getEffectiveKeybindingsForAction('browser.toggleMobileViewport', platform)).toEqual([])
     }
 
-    const definition = getKeybindingDefinition('browser.toggleMobileDesktopViewport')
+    const definition = getKeybindingDefinition('browser.toggleMobileViewport')
     expect(definition).toMatchObject({
-      title: 'Toggle Mobile/Desktop Viewport',
+      title: 'Toggle Mobile Viewport',
       group: 'Browser',
       scope: 'browser'
     })

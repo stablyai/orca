@@ -4,33 +4,35 @@ import { resolveBrowserViewportToggleTarget } from './browser-viewport-preset-ac
 
 type Selection = Pick<
   BrowserPage,
-  'viewportPresetId' | 'lastMobileViewportPresetId' | 'lastDesktopViewportPresetId'
+  'viewportPresetId' | 'lastMobileViewportPresetId' | 'lastNonMobileViewportPresetId'
 >
 
 function selection(overrides: Partial<Selection> = {}): Selection {
   return {
     viewportPresetId: null,
     lastMobileViewportPresetId: null,
-    lastDesktopViewportPresetId: null,
+    lastNonMobileViewportPresetId: undefined,
     ...overrides
   }
 }
 
 describe('resolveBrowserViewportToggleTarget', () => {
-  it('uses Mobile M from the responsive viewport and Desktop from a mobile viewport', () => {
+  it('uses Mobile M from the responsive viewport and returns to the responsive viewport', () => {
     expect(resolveBrowserViewportToggleTarget(selection())).toBe('mobile-m')
-    expect(resolveBrowserViewportToggleTarget(selection({ viewportPresetId: 'mobile-m' }))).toBe(
-      'desktop'
-    )
+    expect(
+      resolveBrowserViewportToggleTarget(
+        selection({ viewportPresetId: 'mobile-m', lastNonMobileViewportPresetId: null })
+      )
+    ).toBeNull()
   })
 
-  it('switches in both directions using the most recently selected presets', () => {
+  it('switches in both directions using the most recently selected states', () => {
     expect(
       resolveBrowserViewportToggleTarget(
         selection({
           viewportPresetId: 'mobile-l',
           lastMobileViewportPresetId: 'mobile-l',
-          lastDesktopViewportPresetId: 'laptop-l'
+          lastNonMobileViewportPresetId: 'laptop-l'
         })
       )
     ).toBe('laptop-l')
@@ -39,7 +41,7 @@ describe('resolveBrowserViewportToggleTarget', () => {
         selection({
           viewportPresetId: 'laptop-l',
           lastMobileViewportPresetId: 'mobile-l',
-          lastDesktopViewportPresetId: 'laptop-l'
+          lastNonMobileViewportPresetId: 'laptop-l'
         })
       )
     ).toBe('mobile-l')
@@ -51,5 +53,10 @@ describe('resolveBrowserViewportToggleTarget', () => {
         selection({ viewportPresetId: 'desktop', lastMobileViewportPresetId: 'laptop' })
       )
     ).toBe('mobile-m')
+    expect(
+      resolveBrowserViewportToggleTarget(
+        selection({ viewportPresetId: 'mobile-m', lastNonMobileViewportPresetId: 'mobile-l' })
+      )
+    ).toBeNull()
   })
 })

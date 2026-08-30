@@ -1827,14 +1827,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const rememberedPresets = {
         ...(currentPreset?.mobile
           ? { lastMobileViewportPresetId: currentPreset.id }
-          : currentPreset
-            ? { lastDesktopViewportPresetId: currentPreset.id }
-            : {}),
+          : { lastNonMobileViewportPresetId: currentPreset?.id ?? null }),
         ...(nextPreset?.mobile
           ? { lastMobileViewportPresetId: nextPreset.id }
-          : nextPreset
-            ? { lastDesktopViewportPresetId: nextPreset.id }
-            : {})
+          : { lastNonMobileViewportPresetId: nextPreset?.id ?? null })
       }
       const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
         entry.id === pageId ? { ...entry, ...rememberedPresets, viewportPresetId } : entry
