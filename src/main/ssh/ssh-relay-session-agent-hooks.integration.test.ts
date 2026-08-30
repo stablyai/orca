@@ -602,6 +602,11 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         toolAgentType: 'Review',
         claudeRunningNonAgentTask: true,
         providerSessionOnly: true,
+        reconcileDiagnostic: {
+          kind: 'unverifiable',
+          reason: 'remote-contact-lost',
+          observedAt: 1234
+        },
         providerSession: {
           key: 'session_id',
           id: 'ssh-relay-session-1',
@@ -630,11 +635,23 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
             key: 'session_id',
             id: 'ssh-relay-session-1',
             transcriptPath: '/tmp/ssh-relay-session-1.jsonl'
+          },
+          reconcileDiagnostic: {
+            kind: 'unverifiable',
+            reason: 'remote-contact-lost',
+            observedAt: 1234
           }
         }),
         'conn-hook-metadata'
       )
     )
+    expect(agentHookServer.getStatusSnapshot()[0]).toMatchObject({
+      reconcileDiagnostic: {
+        kind: 'unverifiable',
+        reason: 'remote-contact-lost',
+        observedAt: 1234
+      }
+    })
     ingestSpy.mockRestore()
   })
 

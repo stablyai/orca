@@ -71,6 +71,18 @@ describe('AgentHookServer pane authority', () => {
     ])
   })
 
+  it('re-arms Codex restart reconciliation on the destination pane after transfer', () => {
+    const server = new AgentHookServer()
+    const schedule = vi.fn()
+    ;(
+      server as unknown as { scheduleCodexRestartReconciliation: (paneKey: string) => void }
+    ).scheduleCodexRestartReconciliation = schedule
+
+    server.transferPaneAuthority(SOURCE, TARGET, 'pty-1')
+
+    expect(schedule).toHaveBeenCalledWith(TARGET)
+  })
+
   it('requires live PTY ownership for a first transfer and trusts the chained alias afterward', () => {
     const server = new AgentHookServer()
 

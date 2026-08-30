@@ -5,6 +5,7 @@ import {
   parseAgentStatusPayload
 } from '../../shared/agent-status-types'
 import { PANE } from './server.test-fixtures'
+import { createShedSubagentsField } from '../../shared/agent-hook-relay'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -191,6 +192,188 @@ describe('AgentHookServer ingestRemote', () => {
         payload
       })
     )
+  })
+
+  it('clears a stale Codex roster only when the relay marks its transcript snapshot authoritative', () => {
+    const server = new AgentHookServer()
+    const child = {
+      id: '019fa65f-3144-7151-9c02-cff7a28f3171',
+      description: '/root/ssh_restart_qa',
+      state: 'working' as const,
+      startedAt: 1_000
+    }
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PostToolUse',
+        payload: { state: 'working', prompt: '', agentType: 'codex', subagents: [child] }
+      },
+      'conn-1'
+    )
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PostToolUse',
+        isReplay: true,
+        payload: { state: 'working', prompt: '', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]?.subagents).toEqual([child])
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PostToolUse',
+        isReplay: true,
+        codexSubagentsAuthoritative: true,
+        payload: { state: 'working', prompt: '', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+  })
+
+  for (const hookEventName of ['PostToolUse', 'SessionStart', 'Stop']) {
+    it(`does not clear a Codex roster when relay shedding removed an authoritative ${hookEventName} snapshot`, () => {
+      const server = new AgentHookServer()
+      const child = {
+        id: '019fa65f-3144-7151-9c02-cff7a28f3171',
+        state: 'working' as const,
+        startedAt: 1_000
+      }
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName: 'PostToolUse',
+          payload: { state: 'working', prompt: '', agentType: 'codex', subagents: [child] }
+        },
+        'conn-1'
+      )
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          hookEventName,
+          isReplay: true,
+          codexSubagentsAuthoritative: true,
+          shedFields: [createShedSubagentsField([{ ...child, id: `${child.id}-different` }])],
+          payload: {
+            state: hookEventName === 'Stop' ? 'done' : 'working',
+            prompt: '',
+            agentType: 'codex'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(server.getStatusSnapshot()[0]?.subagents).toEqual([child])
+    })
+  }
+
+  it('accepts a transcript-proved parent completion over the historical replay hook name', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PostToolUse',
+        payload: { state: 'working', prompt: '', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PostToolUse',
+        isReplay: true,
+        codexSubagentsAuthoritative: true,
+        codexAuthoritativeParentState: 'done',
+        payload: { state: 'done', prompt: '', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]?.state).toBe('done')
+    expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
+  })
+
+  it('marks a nonterminal relay cache replay as unconfirmed until live evidence arrives', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PostToolUse',
+        isReplay: true,
+        codexSubagentsAuthoritative: true,
+        codexAuthoritativeParentState: 'working',
+        payload: { state: 'working', prompt: '', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      restoredUnconfirmed: true
+    })
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'PostToolUse',
+        payload: { state: 'working', prompt: '', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
+  })
+
+  it('keeps transcript-proved children discovered from a cached SessionStart', () => {
+    const server = new AgentHookServer()
+    const child = {
+      id: '019fa65f-3144-7151-9c02-cff7a28f3171',
+      state: 'working' as const,
+      startedAt: 1_000
+    }
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hookEventName: 'SessionStart',
+        isReplay: true,
+        codexSubagentsAuthoritative: true,
+        payload: {
+          state: 'working',
+          prompt: '',
+          agentType: 'codex',
+          subagents: [child]
+        }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]?.subagents).toEqual([child])
   })
 
   it('preserves active pane identity when a nested remote hook reports another agent', () => {

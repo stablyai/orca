@@ -13,6 +13,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
+import type { AgentReconcileDiagnostic } from '../../../../shared/agent-reconcile-diagnostic'
 import { rendererAgentStatusObservations } from '../../lib/renderer-agent-status-observations'
 import {
   agentProviderSessionsEqual,
@@ -118,6 +119,7 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   /** Ingress provenance for this write (STA-4293). Read by nothing yet; a caller that omits
    *  it produces exactly the entry it produces today. See agent-status-observation.ts. */
   observation?: AgentStatusObservation
+  reconcileDiagnostic?: AgentReconcileDiagnostic | null
 }
 
 export type AgentStatusTiming = { updatedAt?: number; stateStartedAt?: number }
@@ -2381,6 +2383,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // Why: never inherited from `existing` — an unstamped write is an unstamped
           // observation, not the previous one repeated.
           ...(payload.observation ? { observation: payload.observation } : {}),
+          ...(payload.reconcileDiagnostic !== undefined
+            ? { reconcileDiagnostic: payload.reconcileDiagnostic }
+            : {}),
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted,
           // Why: done→done repaints (OSC 9999, reconnect snapshot replays) re-deliver a

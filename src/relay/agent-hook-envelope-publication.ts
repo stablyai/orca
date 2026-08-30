@@ -220,6 +220,9 @@ export function publishAgentHookEnvelope(
     const shedField =
       field === 'subagents' ? createShedSubagentsField(candidate.payload.subagents ?? []) : field
     delete candidate.payload[field]
+    if (field === 'subagents') {
+      candidate.codexSubagentsAuthoritative = undefined
+    }
     shedFields.push(shedField)
   }
 }

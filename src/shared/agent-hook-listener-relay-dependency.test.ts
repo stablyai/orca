@@ -78,6 +78,7 @@ describe('agent hook listener relay dependency boundary', () => {
     const listenerPathPrefix = resolve(sharedRoot, 'agent-hook-listener')
     const relayConsumers = [
       resolve(sharedRoot, '../relay/agent-hook-server.ts'),
+      resolve(sharedRoot, '../relay/agent-hook-request.ts'),
       resolve(sharedRoot, '../relay/agent-hook-result-retry-scheduler.ts')
     ]
     const pending = relayConsumers.flatMap((consumer) =>

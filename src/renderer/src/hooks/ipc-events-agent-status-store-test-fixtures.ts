@@ -36,6 +36,11 @@ export type AgentStatusSetData = {
   launchToken?: string
   providerSession?: { key: 'session_id'; id: string }
   providerSessionOnly?: boolean
+  reconcileDiagnostic?: {
+    kind: 'unverifiable'
+    reason: 'transcript-unreadable'
+    observedAt: number
+  } | null
   orchestration?: {
     taskId?: string
     dispatchId?: string

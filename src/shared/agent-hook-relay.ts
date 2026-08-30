@@ -25,6 +25,7 @@
 import { createHash } from 'node:crypto'
 
 import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentReconcileDiagnostic } from './agent-reconcile-diagnostic'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentHookTarget } from './agent-hook-types'
 
@@ -103,6 +104,12 @@ export type AgentHookRelayEnvelope = {
   providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
+  /** Optional proof that the relay read the parent transcript and the Codex roster is complete. */
+  codexSubagentsAuthoritative?: boolean
+  /** Optional parent lifecycle state proved by restart transcript reconciliation. */
+  codexAuthoritativeParentState?: 'working' | 'waiting' | 'done'
+  /** Optional restart reconciliation diagnostic; older peers ignore it. */
+  reconcileDiagnostic?: AgentReconcileDiagnostic | null
   /** Claude background-work evidence for input-interrupt inference on the receiving host. */
   claudeRunningNonAgentTask?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
@@ -124,6 +131,16 @@ export const AGENT_HOOK_NOTIFICATION_METHOD = 'agent.hook' as const
  *  "shed in transit" from "the agent cleared it"; rosters include their digest. */
 export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'
+
+export function hasShedSubagentsField(shedFields: unknown): boolean {
+  return (
+    Array.isArray(shedFields) &&
+    shedFields.some(
+      (field) =>
+        typeof field === 'string' && field.startsWith(AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX)
+    )
+  )
+}
 
 function subagentRosterDigest(subagents: readonly AgentSubagentSnapshot[]): string {
   const stableRoster = subagents.map(({ id, state, startedAt, agentType, model, description }) => [

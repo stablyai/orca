@@ -476,6 +476,27 @@ describe('publishAgentHookEnvelope shed marker', () => {
     }
   })
 
+  it('drops roster authority when the authoritative roster itself is shed', () => {
+    const primary = makeBoundedClient(16_384)
+    const dispatcher = new RelayDispatcher(primary.write, primary.options)
+    try {
+      const envelope = makeEnvelope({
+        lastAssistantMessage: 8_000,
+        interactivePrompt: 6_000,
+        subagents: 40
+      })
+      envelope.codexSubagentsAuthoritative = true
+      publishAgentHookEnvelope(dispatcher, envelope)
+
+      const published = decodeEnvelopes(primary)[0]
+      expect(published.payload.subagents).toBeUndefined()
+      expect(published.codexSubagentsAuthoritative).toBeUndefined()
+      expect(envelope.codexSubagentsAuthoritative).toBe(true)
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
   it('omits the marker when nothing was shed and never stamps the caller envelope', () => {
     const primary = makeBoundedClient(65536)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)

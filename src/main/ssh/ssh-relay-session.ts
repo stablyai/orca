@@ -1510,8 +1510,11 @@ export class SshRelaySession {
         teammateName?: unknown
         toolAgentType?: unknown
         isReplay?: unknown
+        codexSubagentsAuthoritative?: unknown
+        codexAuthoritativeParentState?: unknown
         providerSession?: unknown
         providerSessionOnly?: unknown
+        reconcileDiagnostic?: unknown
         shedFields?: unknown
         claudeRunningNonAgentTask?: unknown
         payload?: unknown
@@ -1545,8 +1548,12 @@ export class SshRelaySession {
           toolAgentType:
             typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
           isReplay: envelope.isReplay === true ? true : undefined,
+          codexSubagentsAuthoritative:
+            envelope.codexSubagentsAuthoritative === true ? true : undefined,
+          codexAuthoritativeParentState: envelope.codexAuthoritativeParentState,
           providerSession: envelope.providerSession,
           providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
+          reconcileDiagnostic: envelope.reconcileDiagnostic,
           // Why: names the fields the relay dropped to fit the frame; ingestRemote restores them.
           shedFields: envelope.shedFields,
           claudeRunningNonAgentTask:

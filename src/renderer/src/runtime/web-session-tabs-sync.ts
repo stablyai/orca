@@ -1497,7 +1497,11 @@ function buildMirroredAgentStatusPatch(
             // (#12906). Host-first unlike providerSession: only the host can mint one.
             lastAssistantMessage:
               (hostIdentityPredatesCurrentTurn ? undefined : entry.lastAssistantMessage) ??
-              existing.lastAssistantMessage
+              existing.lastAssistantMessage,
+            reconcileDiagnostic:
+              hostIdentityPredatesCurrentTurn || entry.reconcileDiagnostic === undefined
+                ? existing.reconcileDiagnostic
+                : entry.reconcileDiagnostic
           }
         : entry
     nextByPaneKey.set(entry.paneKey, nextEntry)
@@ -1563,6 +1567,10 @@ function buildMirroredAgentStatusPatch(
       entry.state === 'done' &&
       agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
     const workingModeChanged = existing?.workingMode !== entry.workingMode
+    const reconcileDiagnosticChanged = !sameAgentReconcileDiagnostic(
+      existing?.reconcileDiagnostic,
+      entry.reconcileDiagnostic
+    )
     const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
@@ -1572,7 +1580,10 @@ function buildMirroredAgentStatusPatch(
       doneAttentionChanged ||
       isMirroredCommandCodeTurnBump(existing, entry)
     aggregateRelevantChange =
-      aggregateRelevantChange || entrySortRelevantChange || workingModeChanged
+      aggregateRelevantChange ||
+      entrySortRelevantChange ||
+      workingModeChanged ||
+      reconcileDiagnosticChanged
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
@@ -2326,6 +2337,16 @@ function sameAgentStateHistory(
   )
 }
 
+function sameAgentReconcileDiagnostic(
+  a: AgentStatusEntry['reconcileDiagnostic'],
+  b: AgentStatusEntry['reconcileDiagnostic']
+): boolean {
+  return (
+    a === b ||
+    Boolean(a && b && a.kind === b.kind && a.reason === b.reason && a.observedAt === b.observedAt)
+  )
+}
+
 function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEntry): boolean {
   if (!a) {
     return false
@@ -2348,6 +2369,7 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.interrupted === b.interrupted &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
+    sameAgentReconcileDiagnostic(a.reconcileDiagnostic, b.reconcileDiagnostic) &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )

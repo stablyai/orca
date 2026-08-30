@@ -99,7 +99,12 @@ export function reconcileRemoteCodexState(
   eventName: string | undefined,
   agentId: string | undefined,
   payload: ParsedAgentStatusPayload,
-  previous: ParsedAgentStatusPayload | undefined
+  previous: ParsedAgentStatusPayload | undefined,
+  options: {
+    subagentsAuthoritative?: boolean
+    subagentsShed?: boolean
+    authoritativeParentState?: CodexLeadTurnState['state']
+  } = {}
 ): ParsedAgentStatusPayload {
   if (previous?.agentType === 'codex') {
     seedCodexStateFromSnapshot(state, paneKey, previous)
@@ -112,16 +117,31 @@ export function reconcileRemoteCodexState(
     return payload
   }
   const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  if (options.subagentsAuthoritative) {
+    roster.clear()
+  }
   if (payload.subagents) {
     seedCodexSubagentRoster(roster, payload.subagents)
+  }
+  if (options.authoritativeParentState) {
+    const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
+    state.codexLeadStateByPaneKey.set(paneKey, {
+      state: options.authoritativeParentState,
+      model: payload.model ?? previousLead?.model
+    })
   }
   if (agentId) {
     if (eventName === 'SubagentStop') {
       finishCodexSubagent(roster, agentId)
     }
   } else {
-    const leadState = codexLeadStateForHookEvent(eventName)
-    if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
+    const leadState = options.authoritativeParentState
+      ? undefined
+      : codexLeadStateForHookEvent(eventName)
+    if (
+      (eventName === 'SessionStart' && !options.subagentsAuthoritative && !options.subagentsShed) ||
+      (eventName === 'Stop' && !payload.subagents && !options.subagentsShed)
+    ) {
       roster.clear()
     }
     if (leadState) {

@@ -1,5 +1,5 @@
-import { closeSync, openSync, readSync, readdirSync, statSync, type Stats } from 'node:fs'
-import { basename, dirname, extname, isAbsolute, join } from 'node:path'
+import { closeSync, openSync, readSync, statSync, type Stats } from 'node:fs'
+import { extname, isAbsolute } from 'node:path'
 
 import {
   finishCodexSubagent,
@@ -7,10 +7,10 @@ import {
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
+import { resolveCodexChildTranscript } from './codex-subagent-transcript-paths'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
-const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
 const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
@@ -19,14 +19,15 @@ type JsonlCursor = {
   filePath?: string
   offset: number
   carry: string
+  coverageAuthoritative: boolean
 }
 
 type TrackedTranscriptSubagent = JsonlCursor & {
   description?: string
-  /** Latest model seen in the child's own rollout. Retained across polls
-   *  because the cursor is incremental: `turn_context` is emitted once per
-   *  turn, so a later read usually carries no model at all. */
+  /** Retained because incremental reads usually omit the earlier `turn_context`. */
   model?: string
+  restoredState?: 'working' | 'waiting'
+  restoredFromSnapshot?: true
   startedAt: number
   unresolvedSince?: number
 }
@@ -34,6 +35,8 @@ type TrackedTranscriptSubagent = JsonlCursor & {
 export type CodexSubagentTranscriptState = {
   parent: JsonlCursor
   subagents: Map<string, TrackedTranscriptSubagent>
+  parentTerminalObserved?: boolean
+  parentReadable?: boolean
 }
 
 type JsonRecord = Record<string, unknown>
@@ -59,8 +62,12 @@ function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
   if (stats.size < cursor.offset) {
     cursor.offset = 0
     cursor.carry = ''
+    cursor.coverageAuthoritative = false
   }
   if (stats.size === cursor.offset) {
+    if (cursor.offset === 0) {
+      cursor.coverageAuthoritative = true
+    }
     return []
   }
   const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
@@ -79,6 +86,12 @@ function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
     }
   }
   const skippedPrefix = start !== cursor.offset
+  if (skippedPrefix) {
+    cursor.coverageAuthoritative = false
+  }
+  if (start === 0 && cursor.offset === 0) {
+    cursor.coverageAuthoritative = true
+  }
   const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
   const lines = content.split('\n')
   cursor.offset = start + bytesRead
@@ -96,77 +109,9 @@ function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
       if (parsed) {
         records.push(parsed)
       }
-    } catch {
-      // A malformed rollout line must not block later lifecycle events.
-    }
+    } catch {}
   }
   return records
-}
-
-function readTranscriptDirectory(directory: string): string[] {
-  let entries: string[]
-  try {
-    entries = readdirSync(directory)
-  } catch {
-    return []
-  }
-  if (entries.length > TRANSCRIPT_DIRECTORY_MAX_ENTRIES) {
-    entries = entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
-  }
-  return entries
-}
-
-// Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
-function childDayDirectory(parentPath: string, startedAt: number): string | undefined {
-  const dayDir = dirname(parentPath)
-  const monthDir = dirname(dayDir)
-  const yearDir = dirname(monthDir)
-  if (
-    !/^\d{2}$/.test(basename(dayDir)) ||
-    !/^\d{2}$/.test(basename(monthDir)) ||
-    !/^\d{4}$/.test(basename(yearDir)) ||
-    !Number.isFinite(startedAt)
-  ) {
-    return undefined
-  }
-  const startedOn = new Date(startedAt)
-  if (Number.isNaN(startedOn.getTime())) {
-    return undefined
-  }
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return join(
-    dirname(yearDir),
-    String(startedOn.getFullYear()).padStart(4, '0'),
-    pad(startedOn.getMonth() + 1),
-    pad(startedOn.getDate())
-  )
-}
-
-function resolveChildTranscript(
-  parentPath: string,
-  threadId: string,
-  startedAt: number,
-  entriesByDirectory: Map<string, string[]>
-): string | undefined {
-  if (!SAFE_THREAD_ID.test(threadId)) {
-    return undefined
-  }
-  const suffix = `-${threadId}.jsonl`
-  const parentDir = dirname(parentPath)
-  const childDir = childDayDirectory(parentPath, startedAt)
-  const directories = childDir && childDir !== parentDir ? [parentDir, childDir] : [parentDir]
-  for (const directory of directories) {
-    let entries = entriesByDirectory.get(directory)
-    if (!entries) {
-      entries = readTranscriptDirectory(directory)
-      entriesByDirectory.set(directory, entries)
-    }
-    const fileName = entries.find((entry) => entry.endsWith(suffix))
-    if (fileName) {
-      return join(directory, fileName)
-    }
-  }
-  return undefined
 }
 
 function readActivity(recordValue: JsonRecord):
@@ -204,9 +149,7 @@ function readActivity(recordValue: JsonRecord):
   }
 }
 
-/** Latest model from the child's own `turn_context` records. A child can be
- *  launched on a different model than its parent, so this is read from the
- *  child rollout rather than inherited. */
+/** Read from the child's rollout because its model can differ from the parent's. */
 function readChildModel(records: JsonRecord[]): string | undefined {
   let model: string | undefined
   for (const recordValue of records) {
@@ -223,24 +166,20 @@ function readChildModel(records: JsonRecord[]): string | undefined {
 }
 
 function childIsComplete(records: JsonRecord[]): boolean {
-  let complete = false
+  let lifecycle: unknown
   for (const recordValue of records) {
-    if (recordValue.type !== 'event_msg') {
-      continue
-    }
-    const payload = record(recordValue.payload)
-    if (payload?.type === 'task_started') {
-      complete = false
-    } else if (payload?.type === 'task_complete') {
-      complete = true
+    const eventType =
+      recordValue.type === 'event_msg' ? record(recordValue.payload)?.type : undefined
+    if (eventType === 'task_started' || eventType === 'task_complete') {
+      lifecycle = eventType
     }
   }
-  return complete
+  return lifecycle === 'task_complete'
 }
 
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
-    parent: { offset: 0, carry: '' },
+    parent: { offset: 0, carry: '', coverageAuthoritative: false },
     subagents: new Map()
   }
 }
@@ -248,7 +187,9 @@ export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptSta
 export function hasTrackedCodexTranscriptSubagents(
   state: CodexSubagentTranscriptState | undefined
 ): boolean {
-  return Boolean(state && state.subagents.size > 0)
+  return Boolean(
+    state && [...state.subagents.values()].some((subagent) => !subagent.restoredFromSnapshot)
+  )
 }
 
 export function reconcileCodexSubagentTranscript(
@@ -258,16 +199,27 @@ export function reconcileCodexSubagentTranscript(
 ): void {
   const normalizedPath = transcriptPath?.trim()
   if (!normalizedPath || !isAbsolute(normalizedPath) || extname(normalizedPath) !== '.jsonl') {
+    state.parentReadable = false
     return
   }
   if (state.parent.filePath !== normalizedPath) {
     for (const id of state.subagents.keys()) {
       finishCodexSubagent(roster, id)
     }
-    state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
+    state.parent = { filePath: normalizedPath, offset: 0, carry: '', coverageAuthoritative: false }
     state.subagents.clear()
+    state.parentTerminalObserved = undefined
+    state.parentReadable = undefined
   }
-  for (const recordValue of readJsonlCursor(state.parent) ?? []) {
+  const parentRecords = readJsonlCursor(state.parent)
+  state.parentReadable = parentRecords !== undefined
+  for (const recordValue of parentRecords ?? []) {
+    if (recordValue.type === 'event_msg') {
+      const eventType = record(recordValue.payload)?.type
+      if (eventType === 'task_started' || eventType === 'task_complete') {
+        state.parentTerminalObserved = eventType === 'task_complete'
+      }
+    }
     const activity = readActivity(recordValue)
     if (!activity) {
       continue
@@ -280,22 +232,29 @@ export function reconcileCodexSubagentTranscript(
     const tracked = state.subagents.get(activity.id) ?? {
       offset: 0,
       carry: '',
+      coverageAuthoritative: false,
       startedAt: activity.startedAt
     }
     tracked.description = activity.description ?? tracked.description
+    tracked.restoredFromSnapshot = undefined
     state.subagents.set(activity.id, tracked)
     upsertCodexSubagent(
       roster,
       activity.id,
-      { description: tracked.description, state: 'working' },
+      { description: tracked.description, state: tracked.restoredState ?? 'working' },
       tracked.startedAt
     )
+  }
+  for (const tracked of state.subagents.values()) {
+    if (!tracked.restoredFromSnapshot) {
+      tracked.restoredState = undefined
+    }
   }
   const entriesByDirectory = new Map<string, string[]>()
   const now = Date.now()
   for (const [id, tracked] of state.subagents) {
     if (!tracked.filePath) {
-      tracked.filePath = resolveChildTranscript(
+      tracked.filePath = resolveCodexChildTranscript(
         normalizedPath,
         id,
         tracked.startedAt,
@@ -318,6 +277,8 @@ export function reconcileCodexSubagentTranscript(
       // otherwise drop a model found on an earlier poll.
       setCodexSubagentModel(roster, id, tracked.model)
       if (!childIsComplete(records)) {
+        tracked.restoredFromSnapshot = undefined
+        tracked.restoredState = undefined
         continue
       }
     }

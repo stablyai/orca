@@ -386,6 +386,40 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('drops a hydrated remote entry with an empty connection identity', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: '   ',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            providerSession: {
+              key: 'session_id',
+              id: 'remote-codex-session',
+              transcriptPath: '/remote/codex/rollout.jsonl'
+            },
+            payload: { state: 'working', prompt: 'remote cached', agentType: 'codex' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([])
+    } finally {
+      server.stop()
+    }
+  })
+
   it('clearPaneState evicts the entry from the on-disk file', async () => {
     const server = new AgentHookServer()
     await server.start({
