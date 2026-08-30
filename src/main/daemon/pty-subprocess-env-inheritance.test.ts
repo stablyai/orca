@@ -119,17 +119,21 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
+  it('does not inherit parent-scoped Orca env when caller omits it', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const saved = {
       ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
       ORCA_TAB_ID: process.env.ORCA_TAB_ID,
-      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID,
+      ORCA_SEQUENCED_STARTUP_COMMAND: process.env.ORCA_SEQUENCED_STARTUP_COMMAND,
+      ORCA_SEQUENCED_STARTUP_SCRIPT: process.env.ORCA_SEQUENCED_STARTUP_SCRIPT
     }
     process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.ORCA_TAB_ID = 'parent-tab'
     process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+    process.env.ORCA_SEQUENCED_STARTUP_COMMAND = 'parent-agent'
+    process.env.ORCA_SEQUENCED_STARTUP_SCRIPT = 'parent-gate'
 
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
@@ -147,19 +151,25 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_PANE_KEY).toBeUndefined()
     expect(env.ORCA_TAB_ID).toBeUndefined()
     expect(env.ORCA_WORKTREE_ID).toBeUndefined()
+    expect(env.ORCA_SEQUENCED_STARTUP_COMMAND).toBeUndefined()
+    expect(env.ORCA_SEQUENCED_STARTUP_SCRIPT).toBeUndefined()
   })
 
-  it('preserves explicit child Orca pane identity over parent env', async () => {
+  it('preserves explicit child-scoped Orca env over parent env', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const saved = {
       ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
       ORCA_TAB_ID: process.env.ORCA_TAB_ID,
-      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID,
+      ORCA_SEQUENCED_STARTUP_COMMAND: process.env.ORCA_SEQUENCED_STARTUP_COMMAND,
+      ORCA_SEQUENCED_STARTUP_SCRIPT: process.env.ORCA_SEQUENCED_STARTUP_SCRIPT
     }
     process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.ORCA_TAB_ID = 'parent-tab'
     process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+    process.env.ORCA_SEQUENCED_STARTUP_COMMAND = 'parent-agent'
+    process.env.ORCA_SEQUENCED_STARTUP_SCRIPT = 'parent-gate'
 
     try {
       await createPtySubprocess({
@@ -169,7 +179,9 @@ describe('createPtySubprocess', () => {
         env: {
           ORCA_PANE_KEY: 'child-tab:child-leaf',
           ORCA_TAB_ID: 'child-tab',
-          ORCA_WORKTREE_ID: 'child-worktree'
+          ORCA_WORKTREE_ID: 'child-worktree',
+          ORCA_SEQUENCED_STARTUP_COMMAND: 'child-agent',
+          ORCA_SEQUENCED_STARTUP_SCRIPT: 'child-gate'
         }
       })
     } finally {
@@ -186,6 +198,8 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_PANE_KEY).toBe('child-tab:child-leaf')
     expect(env.ORCA_TAB_ID).toBe('child-tab')
     expect(env.ORCA_WORKTREE_ID).toBe('child-worktree')
+    expect(env.ORCA_SEQUENCED_STARTUP_COMMAND).toBe('child-agent')
+    expect(env.ORCA_SEQUENCED_STARTUP_SCRIPT).toBe('child-gate')
   })
 
   it.each([

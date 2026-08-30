@@ -24,6 +24,7 @@ import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
+import { removeUnspecifiedPtyChildScopedEnv } from '../shared/pty-child-scoped-env'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -684,6 +685,7 @@ export class PtyHandler {
       },
       rendererEnv
     ) as Record<string, string>
+    removeUnspecifiedPtyChildScopedEnv(baseEnv, rendererEnv)
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {

@@ -89,6 +89,66 @@ describe('PtyHandler', () => {
     expect(spawnOptions.env.PATH).toBe(expectedEnv.PATH)
   })
 
+  it('does not inherit parent-scoped Orca env and preserves explicit child values', async () => {
+    const keys = [
+      'ORCA_PANE_KEY',
+      'ORCA_TAB_ID',
+      'ORCA_WORKTREE_ID',
+      'ORCA_AGENT_LAUNCH_TOKEN',
+      'ORCA_SEQUENCED_STARTUP_COMMAND',
+      'ORCA_SEQUENCED_STARTUP_SCRIPT'
+    ] as const
+    const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+    for (const key of keys) {
+      process.env[key] = `parent-${key}`
+    }
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      await dispatcher.callRequest('pty.spawn', {
+        env: Object.fromEntries(keys.map((key) => [key, `child-${key}`]))
+      })
+    } finally {
+      for (const key of keys) {
+        if (saved[key] === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = saved[key]
+        }
+      }
+    }
+
+    const inherited = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+    const explicit = mockPtySpawn.mock.calls[1][2] as { env: Record<string, string> }
+    for (const key of keys) {
+      expect(inherited.env[key]).toBeUndefined()
+      expect(explicit.env[key]).toBe(`child-${key}`)
+    }
+  })
+
+  it('leaves an ordinary user terminal unguarded when the relay itself was launched from a gated agent pane', async () => {
+    // Why: the scrub has to run BEFORE buildSpawnEnv's consumers read the env.
+    // An inherited sequencing command otherwise becomes this pane's launch-command
+    // hint, and the credential guard then disables Git prompts in a user terminal.
+    const saved = process.env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+    process.env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] = 'claude --dangerously-skip-permissions'
+
+    try {
+      await dispatcher.callRequest('pty.spawn', { env: { GIT_TERMINAL_PROMPT: '1' } })
+    } finally {
+      if (saved === undefined) {
+        delete process.env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+      } else {
+        process.env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] = saved
+      }
+    }
+
+    const userEnv = mockPtySpawn.mock.calls[0][2].env as Record<string, string>
+    expect(userEnv.GIT_TERMINAL_PROMPT).toBe('1')
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(false)
+  })
+
   describe('half-activated conda env (#14195)', () => {
     const CONDA_KEYS = [
       'CONDA_SHLVL',

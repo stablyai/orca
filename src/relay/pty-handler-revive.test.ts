@@ -422,8 +422,13 @@ describe('PtyHandler', () => {
   })
 
   it('revive preserves attach identity metadata without exporting hook identity env', async () => {
-    const oldPaneKey = process.env.ORCA_PANE_KEY
-    const oldTabId = process.env.ORCA_TAB_ID
+    const keys = [
+      'ORCA_PANE_KEY',
+      'ORCA_TAB_ID',
+      'ORCA_SEQUENCED_STARTUP_COMMAND',
+      'ORCA_SEQUENCED_STARTUP_SCRIPT'
+    ] as const
+    const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
     delete process.env.ORCA_PANE_KEY
     delete process.env.ORCA_TAB_ID
     try {
@@ -436,15 +441,12 @@ describe('PtyHandler', () => {
         tabId: 'tab-5'
       })
     } finally {
-      if (oldPaneKey === undefined) {
-        delete process.env.ORCA_PANE_KEY
-      } else {
-        process.env.ORCA_PANE_KEY = oldPaneKey
-      }
-      if (oldTabId === undefined) {
-        delete process.env.ORCA_TAB_ID
-      } else {
-        process.env.ORCA_TAB_ID = oldTabId
+      for (const key of keys) {
+        if (saved[key] === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = saved[key]
+        }
       }
     }
     const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
@@ -454,27 +456,27 @@ describe('PtyHandler', () => {
     dispatcher = createMockDispatcher()
     handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-    delete process.env.ORCA_PANE_KEY
-    delete process.env.ORCA_TAB_ID
+    for (const key of keys) {
+      process.env[key] = `parent-${key}`
+    }
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
       killSpy.mockRestore()
-      if (oldPaneKey === undefined) {
-        delete process.env.ORCA_PANE_KEY
-      } else {
-        process.env.ORCA_PANE_KEY = oldPaneKey
-      }
-      if (oldTabId === undefined) {
-        delete process.env.ORCA_TAB_ID
-      } else {
-        process.env.ORCA_TAB_ID = oldTabId
+      for (const key of keys) {
+        if (saved[key] === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = saved[key]
+        }
       }
     }
 
     const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(callArgs.env.ORCA_PANE_KEY).toBeUndefined()
     expect(callArgs.env.ORCA_TAB_ID).toBeUndefined()
+    expect(callArgs.env.ORCA_SEQUENCED_STARTUP_COMMAND).toBeUndefined()
+    expect(callArgs.env.ORCA_SEQUENCED_STARTUP_SCRIPT).toBeUndefined()
 
     await expect(
       dispatcher.callRequest('pty.attach', {

@@ -42,6 +42,7 @@ import type { ShellReadySignal } from './local-pty-shell-ready-startup-command'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { removeUnspecifiedPtyChildScopedEnv } from '../../shared/pty-child-scoped-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
 import { dropIncoherentCondaActivationEnv } from '../pty/conda-activation-env'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
@@ -103,7 +104,6 @@ import {
   getWslContextFromWorktreeId,
   normalizeLocalCallerSessionId,
   promoteAgentTeamsShimPath,
-  removeUnspecifiedPaneIdentityEnv,
   resolveForegroundFallbackProcess
 } from './local-pty-launch-helpers'
 
@@ -613,8 +613,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: supports-hyperlinks rejects TERM_PROGRAM=Orca, so tools drop OSC 8 links; force it since xterm.js parses them.
       FORCE_HYPERLINK: '1'
     } as Record<string, string>
-    // Why: Orca can be launched from an Orca terminal; pane identity belongs to the child PTY, not the parent shell.
-    removeUnspecifiedPaneIdentityEnv(spawnEnv, args.env)
+    // Why: Orca can be launched from an Orca terminal; pane identity and setup launch state belong to the child PTY.
+    removeUnspecifiedPtyChildScopedEnv(spawnEnv, args.env)
     removeAppImageRuntimeEnv(spawnEnv)
     removeInheritedNoColor(spawnEnv)
     for (const key of args.envToDelete ?? []) {

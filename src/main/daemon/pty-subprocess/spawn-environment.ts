@@ -7,6 +7,7 @@ import { stripLegacyTerminalShimEnv } from '../../pty/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/terminal-color-env'
 import { resolvePathEnvKey } from '../../pty/windows-environment-path'
 import { dropInheritedOrcaHistFile } from '../../worktree-history-file-path'
+import { removeUnspecifiedPtyChildScopedEnv } from '../../../shared/pty-child-scoped-env'
 import {
   gitCredentialPromptGuardEnv,
   mergeGitConfigEnvProtocol
@@ -19,12 +20,6 @@ import {
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
-const PANE_IDENTITY_ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
-] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 
 function composeGuardedDaemonGitConfigEnv(
@@ -55,17 +50,6 @@ function deleteRequestedDaemonEnvKeys(
   }
   if (deleteOrcaOwnedCodexHome) {
     delete env.CODEX_HOME
-  }
-}
-
-function removeUnspecifiedPaneIdentityEnv(
-  env: Record<string, string>,
-  explicitEnv: Record<string, string> | undefined
-): void {
-  for (const key of PANE_IDENTITY_ENV_KEYS) {
-    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
-      delete env[key]
-    }
   }
 }
 
@@ -146,7 +130,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   if (opts.env?.TERM) {
     env.TERM = opts.env.TERM
   }
-  removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  removeUnspecifiedPtyChildScopedEnv(env, opts.env)
   if (opts.env?.fish_history === undefined) {
     dropInheritedOrcaFishHistory(env)
   }
