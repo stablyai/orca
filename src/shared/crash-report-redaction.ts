@@ -23,15 +23,52 @@ const CREDENTIAL_URL_PATTERN = /\b[A-Za-z0-9._%+-]+:[A-Za-z0-9._%+-]+@(?=[^/\s]+
 const SECRET_ASSIGNMENT_PATTERN =
   /\b(token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|account[_-]?key)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^&\s,;]+)/gi
 
-// Quoted paths retain spaces; unquoted paths stop at whitespace to preserve prose.
+// Characters that end an unquoted path token.
+const PATH_STOP = '\\s"\'`<>)'
+// A crossing looks ahead over a bounded window. Unbounded, it re-read the rest of the line at every
+// space, so one long line cost a second to sanitise. The run bound is a filesystem's longest
+// segment; without it a single long run carrying many separators costs as much on its own.
+const MAX_CROSSED_RUNS = 2
+const MAX_RUN_LENGTH = 255
+
+// What may follow a space and still be the same path. No run in the window starts with the separator
+// (so a second path on the same line stays a second path) and none carries ':' (so two stack frames
+// do not collapse into one). Beyond that the window must reach a run that is path evidence by
+// itself, because nothing else separates a path's spaced segments from the prose that follows one:
+//   'Very Private Share\\creds.txt' -- a run carrying a separator and a name, or a separator twice
+//     ('Team Share\\orca\\workspace'), is a segment chain, so plain runs may precede it. 'but
+//     read/write failed' reaches neither and is left alone.
+//   'My Notes.txt' -- a spaced last segment is only a name, so every run before it has to carry a
+//     separator. 'then push git@github.com' does not, which stops a host from reading as a file.
+const pathContinuation = (separator: string): string => {
+  const body = `[^${PATH_STOP}:]{0,${MAX_RUN_LENGTH}}`
+  const run = `[^${PATH_STOP}:${separator}]${body}`
+  const chainRun = `${run}${separator}${body}`
+  const name = `\\.[A-Za-z0-9]{1,8}(?![^${PATH_STOP}:])`
+  const crossed = (crossable: string): string => `(?:${crossable}[ \\t]){0,${MAX_CROSSED_RUNS}}`
+  return (
+    `(?:${crossed(run)}(?:${chainRun}${name}|${chainRun}${separator}${body})` +
+    `|${crossed(chainRun)}${run}${name})`
+  )
+}
+
+// Quoted paths keep their spaces. An unquoted path crosses a space only to reach a run that
+// continues it, which keeps emitting the marker and removing the path a single operation rather
+// than two. A run ending in a name ends the path -- a filename is the last thing in one -- and
+// sentence punctuation ends it too, so the prose after a path survives.
+const unquotedPathTail = (separator: string): string =>
+  `(?:[^${PATH_STOP}]|(?<![.,;:!?])(?<!\\.[A-Za-z0-9]{1,8})[ \\t](?=${pathContinuation(separator)}))*`
+const POSIX_TAIL = unquotedPathTail('/')
+const WINDOWS_TAIL = unquotedPathTail('\\\\')
+
 const PATH_PATTERNS = [
   /(["'`])\/[A-Za-z0-9._-]+\/(?:(?!\1)[^<>\n\r])+\1/g,
   /(["'`])[A-Za-z]:\\(?:(?!\1)[^<>\n\r])+\1/gi,
   /(["'`])\\\\[^\\\s"'`<>\n\r)]+\\(?:(?!\1)[^<>\n\r])+\1/gi,
-  /(?<![A-Za-z0-9./])\/[A-Za-z0-9._-]+\/(?:\\ |[^\s"'`<>)]*)/g,
-  /(?<![A-Za-z0-9])[A-Za-z]:\\(?:\\ |[^\s"'`<>\n\r)]*)/gi,
-  /\\\\[^\\\s"'`<>\n\r)]+\\(?:\\ |[^\s"'`<>\n\r)]*)/gi,
-  /%(?:USERPROFILE|APPDATA|LOCALAPPDATA|HOMEDRIVE|HOMEPATH)%[^\s"'`<>)]*/gi
+  new RegExp(`(?<![A-Za-z0-9./])/[A-Za-z0-9._-]+/${POSIX_TAIL}`, 'g'),
+  new RegExp(`(?<![A-Za-z0-9])[A-Za-z]:\\\\${WINDOWS_TAIL}`, 'gi'),
+  new RegExp(`\\\\\\\\[^\\\\${PATH_STOP}]+\\\\${WINDOWS_TAIL}`, 'gi'),
+  new RegExp(`%(?:USERPROFILE|APPDATA|LOCALAPPDATA|HOMEDRIVE|HOMEPATH)%${WINDOWS_TAIL}`, 'gi')
 ]
 
 export function sanitizeCrashReportString(
