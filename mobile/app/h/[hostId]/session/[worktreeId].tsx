@@ -87,7 +87,12 @@ import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSes
 import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
 import { QuickCommandsSheet } from '../../../../src/session/QuickCommandsSheet'
 import {
+  sendSessionTerminalCreateResilient,
+  supportsSessionTerminalCreateCutoverRetry
+} from '../../../../src/session/session-terminal-create-retry'
+import {
   buildMobileQuickCommandLaunch,
+  formatQuickCommandFailure,
   supportsMobileQuickCommands,
   type MobileQuickCommandLaunch
 } from '../../../../src/terminal/quick-commands'
@@ -1027,6 +1032,7 @@ export default function SessionScreen() {
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
+  const terminalCreateCutoverRetrySupportedRef = useRef(false)
   // Why: stable callbacks (handleFileTap) read the live value via this ref, since
   // the capability probe resolves after the callbacks are created.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
@@ -2417,6 +2423,7 @@ export default function SessionScreen() {
   const hostQueryReplyInputSupportedRef = useRef(false)
 
   useEffect(() => {
+    terminalCreateCutoverRetrySupportedRef.current = false
     if (!client || connState !== 'connected') {
       setBrowserScreencastSupported(null)
       setAgentSessionHistorySupported(null)
@@ -2438,6 +2445,8 @@ export default function SessionScreen() {
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
+      terminalCreateCutoverRetrySupportedRef.current =
+        supportsSessionTerminalCreateCutoverRetry(capabilities)
       // Why: hosts without this capability strip inputKind from terminal.send,
       // so a forwarded xterm reply would become floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(
@@ -3766,20 +3775,24 @@ export default function SessionScreen() {
     const clientMutationId = createMobileTerminalMutationId()
 
     try {
-      const response = await client.sendRequest('session.tabs.createTerminal', {
-        worktree: `id:${worktreeId}`,
-        afterTabId: activeSessionTabId ?? undefined,
-        clientMutationId,
-        ...(options?.startupCommand ? { command: options.startupCommand } : {}),
-        ...(options?.startupCommandDelivery
-          ? { startupCommandDelivery: options.startupCommandDelivery }
-          : {}),
-        ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
-        ...(agent ? { agent } : {}),
-        activate: false,
-        select: true,
-        navigation: 'caller'
-      })
+      const response = await sendSessionTerminalCreateResilient(
+        client,
+        {
+          worktree: `id:${worktreeId}`,
+          afterTabId: activeSessionTabId ?? undefined,
+          clientMutationId,
+          ...(options?.startupCommand ? { command: options.startupCommand } : {}),
+          ...(options?.startupCommandDelivery
+            ? { startupCommandDelivery: options.startupCommandDelivery }
+            : {}),
+          ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
+          ...(agent ? { agent } : {}),
+          activate: false,
+          select: true,
+          navigation: 'caller'
+        },
+        { supportsIdempotentCutoverRetry: terminalCreateCutoverRetrySupportedRef.current }
+      )
       if (response.ok) {
         const result = (response as RpcSuccess).result as TerminalCreateResult
         const created = result.tab
@@ -3872,19 +3885,19 @@ export default function SessionScreen() {
         }
         scheduleDelayedAction(() => void fetchSessionTabs(), 500)
       } else {
-        const message = options?.errorToast ?? 'Failed to create terminal'
+        const message = formatQuickCommandFailure(options?.errorToast, response.error.message)
         setCreateError(message)
         if (options?.errorToast) {
           triggerError()
-          showToast(message, 1800)
+          showToast(message, 2600)
         }
       }
-    } catch {
-      const message = options?.errorToast ?? 'Failed to create terminal'
+    } catch (err) {
+      const message = formatQuickCommandFailure(options?.errorToast, err)
       setCreateError(message)
       if (options?.errorToast) {
         triggerError()
-        showToast(message, 1800)
+        showToast(message, 2600)
       }
     } finally {
       creatingTerminalRef.current = false
@@ -3896,13 +3909,12 @@ export default function SessionScreen() {
   // run-quick-command-in-new-tab: agent prompts and runnable terminal commands
   // use the host's shell-ready startup path; insert-only commands stay drafts.
   function launchQuickCommand(command: TerminalQuickCommand): boolean {
-    if (
-      !client ||
-      connState !== 'connected' ||
-      creatingTerminalRef.current ||
-      creatingBrowser ||
-      creatingMarkdown
-    ) {
+    if (!client || connState !== 'connected') {
+      triggerError()
+      showToast('Not connected to desktop — try again in a moment', 1800)
+      return false
+    }
+    if (creatingTerminalRef.current || creatingBrowser || creatingMarkdown) {
       return false
     }
     const launch = buildMobileQuickCommandLaunch(command)

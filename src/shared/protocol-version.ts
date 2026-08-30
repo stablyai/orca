@@ -98,6 +98,10 @@ export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parki
 // Why: older hosts lack the targeted settings RPCs and strip agentPrompt from
 // terminal creation, so mobile must hide Quick Commands unless both are present.
 export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-commands.v1' as const
+// Why: clients may replay an interrupted session-tab create only when its
+// mutation-owned operation survives the original connection closing.
+export const SESSION_TABS_CREATE_TERMINAL_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'session.tabs.create-terminal-idempotency.v1' as const
 // Why: older hosts strip worktree.create's clientMutationId, so mobile must only
 // replay ambiguous cutovers when the host advertises idempotent create support;
 // status.worktreeCreateIdempotency carries the optional host retention policy.
@@ -212,6 +216,7 @@ export const RUNTIME_CAPABILITIES = [
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
+  SESSION_TABS_CREATE_TERMINAL_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,

@@ -2109,6 +2109,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('workspace-ports.v1')
     expect(status.capabilities).toContain('mobile.tasks.v1')
     expect(status.capabilities).toContain('terminal.quick-commands.v1')
+    expect(status.capabilities).toContain('session.tabs.create-terminal-idempotency.v1')
     expect(status.capabilities).toContain('worktree.create-idempotency.v1')
     expect(status.worktreeCreateIdempotency).toEqual({ dedupeTtlMs: 60_000 })
     expect(status.capabilities).toContain('files.mutation-ownership.v1')
@@ -35151,6 +35152,70 @@ describe('OrcaRuntimeService', () => {
     expect(createRequests).toHaveLength(1)
     expect(second).toBe(first)
     expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer' })
+  })
+
+  it('keeps mutation-keyed creates host-owned across client disconnects', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier(createMobileCreateTestNotifier(vi.fn()))
+    const abort = new AbortController()
+    const webContents = { send: vi.fn() }
+    let requestId: string | null = null
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      requestId = payload.requestId
+    })
+    webContents.send = send
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    let firstSettled = false
+    const first = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      activate: false,
+      clientMutationId: 'mutation-cutover',
+      signal: abort.signal
+    })
+    const observedFirst = first.then(
+      (value) => {
+        firstSettled = true
+        return { ok: true as const, value }
+      },
+      (error: unknown) => {
+        firstSettled = true
+        return { ok: false as const, error }
+      }
+    )
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+
+    abort.abort()
+    await Promise.resolve()
+    expect(firstSettled).toBe(false)
+
+    const replay = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      activate: false,
+      clientMutationId: 'mutation-cutover'
+    })
+    expect(send).toHaveBeenCalledTimes(1)
+
+    const leafId = '77777777-7777-4777-8777-777777777777'
+    runtime.registerPty('pty-cutover', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-cutover',
+      leafId
+    })
+    ipcMain.emit(
+      'terminal:tabCreateReply',
+      { sender: webContents },
+      { requestId, tabId: 'tab-cutover', title: 'Terminal' }
+    )
+
+    const [firstOutcome, replayed] = await Promise.all([observedFirst, replay])
+    expect(firstOutcome.ok).toBe(true)
+    if (firstOutcome.ok) {
+      expect(replayed).toBe(firstOutcome.value)
+    }
+    expect(send).toHaveBeenCalledTimes(1)
   })
 
   it('returns the settled success for a retried clientMutationId whose response was lost', async () => {

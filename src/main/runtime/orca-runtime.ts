@@ -31035,11 +31035,14 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const navigation = opts.navigation ?? 'all'
     const select = opts.select ?? opts.activate !== false
+    const mutationId = opts.clientMutationId
     const runOpts = {
       ...opts,
-      activate: select && navigationTargetsHost(navigation)
+      activate: select && navigationTargetsHost(navigation),
+      // Why: host-owned idempotent work must survive the old socket closing so
+      // a same-key cutover replay joins it instead of creating a second tab.
+      signal: mutationId ? undefined : opts.signal
     }
-    const mutationId = opts.clientMutationId
     let result: RuntimeMobileSessionCreateTerminalResult
     if (!mutationId) {
       result = await this.runCreateMobileSessionTerminal(worktreeSelector, runOpts)

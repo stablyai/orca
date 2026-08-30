@@ -84,6 +84,15 @@ export function buildMobileQuickCommandLaunch(
       }
 }
 
+// Why: the failure toast used to show only "Couldn't run <label>", masking the
+// real RPC/transport reason and making mobile launch failures undiagnosable.
+export function formatQuickCommandFailure(fallback: string | undefined, detail: unknown): string {
+  const base = fallback?.trim() || 'Failed to create terminal'
+  const raw = typeof detail === 'string' ? detail : detail instanceof Error ? detail.message : ''
+  const reason = raw.trim()
+  return reason && reason !== base ? `${base} — ${reason}` : base
+}
+
 export function getQuickCommandAgentLabel(agent: TuiAgent): string {
   return MOBILE_TUI_AGENT_LABELS[agent] ?? agent
 }

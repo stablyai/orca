@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
   buildMobileQuickCommandLaunch,
+  formatQuickCommandFailure,
   getQuickCommandDisplayPreview,
   getQuickCommandPreview,
   supportsMobileQuickCommands
@@ -85,5 +86,24 @@ describe('mobile quick-command launch', () => {
       agent: 'codex',
       options: { agentPrompt: longPrompt }
     })
+  })
+
+  it('surfaces the underlying failure reason in the launch error message', () => {
+    expect(formatQuickCommandFailure("Couldn't run codex review", 'after_tab_not_found')).toBe(
+      "Couldn't run codex review — after_tab_not_found"
+    )
+    expect(
+      formatQuickCommandFailure(
+        "Couldn't run codex review",
+        new Error('relay RPC timed out: session.tabs.createTerminal')
+      )
+    ).toBe("Couldn't run codex review — relay RPC timed out: session.tabs.createTerminal")
+    // No detail (or a detail equal to the label) keeps the plain label.
+    expect(formatQuickCommandFailure("Couldn't run codex review", undefined)).toBe(
+      "Couldn't run codex review"
+    )
+    expect(formatQuickCommandFailure("Couldn't run x", "Couldn't run x")).toBe("Couldn't run x")
+    expect(formatQuickCommandFailure(undefined, '  ')).toBe('Failed to create terminal')
+    expect(formatQuickCommandFailure(undefined, 'boom')).toBe('Failed to create terminal — boom')
   })
 })
