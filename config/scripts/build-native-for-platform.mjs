@@ -12,28 +12,10 @@ if (process.platform !== 'darwin') {
   process.exit(0)
 }
 
-runPnpmScript('build:computer-macos')
-runPnpmScript('build:keyboard-layout-macos')
-runPnpmScript('build:notification-status-macos')
+runNodeScript('config/scripts/build-computer-macos.mjs')
+runNodeScript('config/scripts/build-keyboard-layout-macos.mjs')
+runNodeScript('config/scripts/build-notification-status-macos.mjs')
 process.exit(0)
-
-function runPnpmScript(scriptName) {
-  const npmExecPath = process.env.npm_execpath
-  const command = npmExecPath
-    ? process.execPath
-    : process.platform === 'win32'
-      ? 'pnpm.cmd'
-      : 'pnpm'
-  const args = npmExecPath ? [npmExecPath, 'run', scriptName] : ['run', scriptName]
-  const result = spawnSync(command, args, { stdio: 'inherit' })
-
-  if (result.signal) {
-    process.kill(process.pid, result.signal)
-  }
-  if (result.status !== 0 || result.error) {
-    process.exit(result.status ?? 1)
-  }
-}
 
 function runNodeScript(scriptPath) {
   const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' })
