@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const headlessLinuxGuide = readFileSync('docs/reference/headless-linux-server.md', 'utf8')
+const signalCase = readFileSync('config/docker/headless-serve-shutdown/run-signal-case.sh', 'utf8')
 
 function readSystemdUnitBlocks(doc, unitName) {
   const escapedUnitName = unitName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -63,6 +64,10 @@ describe('headless serve shutdown PR gate', () => {
     expect(steps.indexOf(shutdownStep)).toBeGreaterThan(steps.indexOf(packageStep))
     expect(steps.indexOf(launcherShutdownStep)).toBeGreaterThan(steps.indexOf(shutdownStep))
     expect(steps.indexOf(appImageShutdownStep)).toBeGreaterThan(steps.indexOf(launcherShutdownStep))
+  })
+
+  it('keeps the readiness parser line-buffered', () => {
+    expect(signalCase).toContain("| sed -u -n 's/^[^{]*//p'")
   })
 
   it('keeps owned Xvfb alive during the documented systemd graceful stop', () => {

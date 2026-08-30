@@ -54,10 +54,10 @@ app_pid=$!
 app_start_ticks=$(awk '{print $22}' "/proc/$app_pid/stat")
 
 # The inner shell expands its positional parameters.
-# shellcheck disable=SC2016
+# shellcheck disable=SC1083,SC2016
 ready_line=$(timeout "$startup_timeout_seconds" bash -c '
   tail --pid="$1" -n +1 -F "$2" 2>/dev/null \
-    | sed -n 's/^[^{]*//p' \
+    | sed -u -n 's/^[^{]*//p' \
     | jq --unbuffered -Rnc '\''first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))'\''
 ' bash "$app_pid" "$stdout_log" || true)
 if [[ -z "$ready_line" ]]; then
