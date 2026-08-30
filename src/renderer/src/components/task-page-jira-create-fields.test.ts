@@ -7,6 +7,7 @@ import {
   getJiraCreateAllowedValueLabel,
   getJiraCreateOptionPayload,
   getJiraUserCreateFieldKeys,
+  isJiraScalarUserCreateField,
   isJiraUserCreateField,
   isVisibleJiraCreateField
 } from './task-page-jira-create-fields'
@@ -46,6 +47,25 @@ describe('isJiraUserCreateField', () => {
     expect(isJiraUserCreateField(field({ schema: { type: 'string' } }))).toBe(false)
     expect(isJiraUserCreateField(field({ schema: { type: 'array', items: 'option' } }))).toBe(false)
     expect(isJiraUserCreateField(field())).toBe(false)
+  })
+})
+
+describe('isJiraScalarUserCreateField', () => {
+  it('matches single-user fields the picker can hold', () => {
+    expect(isJiraScalarUserCreateField(field({ key: 'reporter', schema: { type: 'user' } }))).toBe(
+      true
+    )
+  })
+
+  it('rejects array-of-user, which the single-value picker would collapse to one member', () => {
+    expect(isJiraScalarUserCreateField(field({ schema: { type: 'array', items: 'user' } }))).toBe(
+      false
+    )
+  })
+
+  it('ignores non-user fields', () => {
+    expect(isJiraScalarUserCreateField(field({ schema: { type: 'string' } }))).toBe(false)
+    expect(isJiraScalarUserCreateField(field())).toBe(false)
   })
 })
 

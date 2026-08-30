@@ -53,6 +53,7 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined
 }
 
+/** Narrows an untrusted IPC payload to the issue-update fields the host accepts. */
 function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -84,6 +85,7 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   return input
 }
 
+/** Registers every `jira:*` IPC handler on the main process. */
 export function registerJiraHandlers(): void {
   ipcMain.handle('jira:connect', async (_event, args: JiraConnectArgs) => {
     if (

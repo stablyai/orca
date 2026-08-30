@@ -11,6 +11,7 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 const USER_SEARCH_DEBOUNCE_MS = 250
 
+/** Renders the selectable user rows inside the picker popover. */
 export function JiraUserOptionList({
   users,
   onSelect
@@ -37,8 +38,11 @@ export function JiraUserOptionList({
   )
 }
 
-// Reporter and user-picker create fields need an accountId, not the display name
-// a plain text box would collect; Jira rejects a bare string for user fields.
+/**
+ * Searchable single-user combobox for Jira user fields. These need an accountId,
+ * not the display name a plain text box would collect, since Jira rejects a bare
+ * string for user fields.
+ */
 export function JiraUserPicker({
   providerSettings,
   siteId,

@@ -264,6 +264,7 @@ export async function jiraListPriorities(
     : window.api.jira.listPriorities(siteId ? { siteId } : undefined)
 }
 
+/** Lists users assignable to an existing issue, via the active runtime. */
 export async function jiraListAssignableUsers(
   settings: RuntimeJiraSettings,
   key: string,
@@ -280,6 +281,7 @@ export async function jiraListAssignableUsers(
     : window.api.jira.listAssignableUsers(args)
 }
 
+/** Searches Jira users through the active runtime (remote RPC or local IPC). */
 export async function jiraSearchUsers(
   settings: RuntimeJiraSettings,
   query?: string,

@@ -16,6 +16,7 @@ import type {
 } from '../../../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 
+/** Builds the create payload and submits it, flagging which keys hold user ids. */
 export function useTaskPageCreateJiraSubmit({
   newJiraIssueTargetProject,
   newJiraIssueTargetType,

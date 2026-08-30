@@ -40795,6 +40795,7 @@ export class OrcaRuntimeService {
     return listJiraAssignableUsers(key, query, siteId)
   }
 
+  /** Searches all users on the site, for reporter and user-picker create fields. */
   jiraSearchUsers(query?: string, siteId?: string): ReturnType<typeof searchJiraUsers> {
     return searchJiraUsers(query, siteId)
   }

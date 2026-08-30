@@ -10,7 +10,8 @@ import {
   getJiraProjectSelectionKey
 } from '@/components/task-page-jira-project-selection'
 import {
-  isJiraUserCreateField,
+  JIRA_REPORTER_FIELD_KEY,
+  isJiraScalarUserCreateField,
   isVisibleJiraCreateField
 } from '@/components/task-page-jira-create-fields'
 import { writeNewJiraIssueDraft } from '@/components/task-page/dialogs/task-creation-draft-writers'
@@ -25,11 +26,13 @@ import type {
 } from '../../../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 
+/** Owns new-issue dialog state: project and type selection, create fields, and reporter seeding. */
 export function useTaskPageJiraCreateDialog({
   selectedJiraSiteId,
   availableJiraProjects,
   jiraConnected,
   jiraViewer,
+  jiraViewerSiteId,
   settings,
   jiraTaskSourceContext
 }: {
@@ -37,6 +40,7 @@ export function useTaskPageJiraCreateDialog({
   availableJiraProjects: JiraProject[]
   jiraConnected: boolean
   jiraViewer: JiraViewer | null
+  jiraViewerSiteId: string | null
   settings: GlobalSettings | null
   jiraTaskSourceContext: TaskSourceContext | null
 }) {
@@ -252,8 +256,25 @@ export function useTaskPageJiraCreateDialog({
         }
         setJiraCreateFields(fields)
         // Jira defaults the reporter to the authenticated user; match that so a
-        // required user field is satisfied without forcing a lookup.
+        // required reporter is satisfied without forcing a lookup. Only reporter
+        // is seeded — Jira defaults no other user field, so filling one would
+        // write a person the user never chose.
         if (!jiraViewer) {
+          return
+        }
+        // The viewer belongs to the active site; an id from another site names a
+        // different person there (or, on Server/DC, silently collides by username).
+        const targetSiteId = newJiraIssueTargetProject.siteId
+        if (targetSiteId && jiraViewerSiteId && targetSiteId !== jiraViewerSiteId) {
+          return
+        }
+        const reporterField = fields.find(
+          (field) =>
+            field.key === JIRA_REPORTER_FIELD_KEY &&
+            isVisibleJiraCreateField(field) &&
+            isJiraScalarUserCreateField(field)
+        )
+        if (!reporterField) {
           return
         }
         const seededUser: JiraUser = {
@@ -262,19 +283,12 @@ export function useTaskPageJiraCreateDialog({
           email: jiraViewer.email,
           avatarUrl: jiraViewer.avatarUrl
         }
-        const seededKeys = fields
-          .filter((field) => isVisibleJiraCreateField(field) && isJiraUserCreateField(field))
-          .filter((field) => field.schema?.type !== 'array')
-          .map((field) => field.key)
-        if (seededKeys.length === 0) {
-          return
-        }
         setNewJiraIssueCustomFieldValues((prev) => ({
-          ...Object.fromEntries(seededKeys.map((key) => [key, seededUser.accountId])),
+          [reporterField.key]: seededUser.accountId,
           ...prev
         }))
         setJiraUserFieldSelections((prev) => ({
-          ...Object.fromEntries(seededKeys.map((key) => [key, seededUser])),
+          [reporterField.key]: seededUser,
           ...prev
         }))
       })
@@ -301,6 +315,7 @@ export function useTaskPageJiraCreateDialog({
     settings,
     jiraConnected,
     jiraViewer,
+    jiraViewerSiteId,
     newJiraIssueOpen,
     newJiraIssueTargetProject,
     newJiraIssueTargetType,

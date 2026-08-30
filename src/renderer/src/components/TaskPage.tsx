@@ -1361,6 +1361,7 @@ export default function TaskPage(): React.JSX.Element {
     availableJiraProjects,
     jiraConnected,
     jiraViewer: jiraConnected ? jiraStatus.viewer : null,
+    jiraViewerSiteId: jiraConnected ? (jiraStatus.activeSiteId ?? null) : null,
     settings,
     jiraTaskSourceContext
   })

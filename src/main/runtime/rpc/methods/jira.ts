@@ -105,6 +105,7 @@ const ProjectStatusOrder = z.object({
   siteId: OptionalString
 })
 
+/** Emits a Jira result over RPC, normalizing it to the shape clients decode. */
 function emitJiraPayload(value: unknown, emit: (result: unknown) => void): void {
   const payload = JSON.stringify(value)
   if (payload.length > JIRA_PAYLOAD_MAX_CHARS) {

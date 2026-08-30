@@ -82,6 +82,7 @@ export type NewJiraIssueDialogProps = {
   submitShortcutLabel: string
 }
 
+/** Dialog for creating a Jira issue and opening a workspace for it. */
 export function NewJiraIssueDialog(props: NewJiraIssueDialogProps): React.JSX.Element {
   const {
     newJiraIssueOpen,

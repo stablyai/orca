@@ -55,6 +55,7 @@ export async function listIssueTypes(
   }
 }
 
+/** Lists the required create fields for a project and issue type. */
 export async function listCreateFields(
   projectIdOrKey: string,
   issueTypeId: string,
@@ -104,6 +105,7 @@ export async function listCreateFields(
   }
 }
 
+/** Lists the site's issue priorities. */
 export async function listPriorities(siteId?: string | null): Promise<JiraPriority[]> {
   const entry = getClients(siteId)[0]
   if (!entry) {
@@ -125,8 +127,11 @@ export async function listPriorities(siteId?: string | null): Promise<JiraPriori
   }
 }
 
-// Reporter and user-picker fields are not limited to assignable users, and no
-// issue key exists before create, so neither /user/assignable/search variant fits.
+/**
+ * Searches all users on the site. Reporter and user-picker create fields are not
+ * limited to assignable users and no issue key exists before create, so neither
+ * `/user/assignable/search` variant fits. Returns `[]` when browse-users is denied.
+ */
 export async function searchUsers(query?: string, siteId?: string | null): Promise<JiraUser[]> {
   const entry = getClients(siteId)[0]
   if (!entry) {

@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/select'
 import {
   getJiraCreateAllowedValueLabel,
-  isJiraUserCreateField
+  isJiraScalarUserCreateField
 } from '@/components/task-page-jira-create-fields'
 import { JiraUserPicker } from '@/components/jira-user-picker'
 import { translate } from '@/i18n/i18n'
@@ -18,6 +18,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import type { JiraCreateField, JiraUser } from '../../../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 
+/** Renders the required create fields, choosing a picker, select, or text input per schema. */
 export function NewJiraIssueCustomFields({
   visibleJiraCreateFields,
   newJiraIssueCustomFieldValues,
@@ -47,7 +48,7 @@ export function NewJiraIssueCustomFields({
         return (
           <div key={field.key} className="flex min-w-0 flex-col gap-1">
             <label className="text-[11px] font-medium text-muted-foreground">{field.name}</label>
-            {isJiraUserCreateField(field) && !field.allowedValues?.length ? (
+            {isJiraScalarUserCreateField(field) && !field.allowedValues?.length ? (
               <JiraUserPicker
                 providerSettings={providerSettings}
                 siteId={siteId}

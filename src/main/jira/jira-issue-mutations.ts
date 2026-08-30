@@ -11,14 +11,19 @@ import { clearToken, getClients, isAuthError } from './client'
 import { issueUrl, toBodyText } from './jira-issue-mapping'
 import type { JiraRecord } from './jira-record-pages'
 
-// Server/DC identifies users by username (`name`), not accountId;
-// mapUser stores the Server username in the accountId slot.
+/**
+ * Wraps a user id in the reference object the site expects: `{accountId}` on
+ * Cloud, `{name}` on Server/DC, which identifies users by username and whose
+ * ids `mapUser` stores in the accountId slot.
+ */
 export function userFieldRef(site: JiraSite, id: string | null): JiraRecord {
   return site.authType === 'server' ? { name: id } : { accountId: id }
 }
 
-// Jira rejects a bare string for user-typed fields (reporter, user pickers) and
-// reports the field as missing, so shape it before it reaches the create body.
+/**
+ * Shapes a user-typed create value (scalar or array) into Jira's user reference
+ * objects. Jira rejects a bare string here and reports the field as missing.
+ */
 function toUserFieldValue(site: JiraSite, value: unknown): unknown {
   if (typeof value === 'string') {
     return userFieldRef(site, value)
@@ -29,6 +34,7 @@ function toUserFieldValue(site: JiraSite, value: unknown): unknown {
   return value
 }
 
+/** Creates an issue, shaping the customFields keys named by `userFieldKeys`. */
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {
   const entry = getClients(args.siteId)[0]
   if (!entry) {
@@ -76,6 +82,7 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
   }
 }
 
+/** Applies field, assignee, and transition updates to an existing issue. */
 export async function updateIssue(
   key: string,
   updates: JiraIssueUpdate,
