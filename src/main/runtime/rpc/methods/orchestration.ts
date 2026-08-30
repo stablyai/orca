@@ -23,6 +23,8 @@ import {
   orchestrationSkillRecoveryData
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
+import { assertAskIsAnswerable } from './orchestration-ask-self-addressed'
+import { resolveAskRequestTarget } from './orchestration-ask-request'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import {
   resolveBareOrchestrationRecipient,
@@ -1801,34 +1803,23 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ?.split(',')
           .map((s) => s.trim())
           .filter(Boolean) ?? []
-      let question = params.resume ? db.getQuestion(params.resume) : undefined
-      if (params.resume) {
-        if (!question || question.dispatch_id !== activeDispatch.id) {
-          throw new OrchestrationError(
-            'question_not_found',
-            `Question ${params.resume} does not belong to this active Dispatch.`
-          )
-        }
-      } else {
-        const run = db.getRun(activeDispatch.run_id)
-        if (!run || run.legacy === 1) {
-          throw new OrchestrationError(
-            'run_not_found',
-            `Run ${activeDispatch.run_id} was not found.`
-          )
-        }
-        if (params.run && params.run !== run.id) {
-          throw new OrchestrationError(
-            'dispatch_run_mismatch',
-            `Dispatch ${activeDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
-          )
-        }
-        if (params.to && params.to !== `run:${run.id}` && params.to !== run.coordinator_handle) {
-          throw new OrchestrationError(
-            'dispatch_run_mismatch',
-            `ask from Dispatch ${activeDispatch.id} must target its owning Run ${run.id}.`
-          )
-        }
+      // Why: resolve the request first — a bad resume id or a foreign Run target has its own
+      // error code, and the answerability guard below would otherwise shadow it.
+      const target = resolveAskRequestTarget({
+        db,
+        dispatch: activeDispatch,
+        resume: params.resume,
+        run: params.run,
+        to: params.to
+      })
+      // Why: refuse before the Question exists, so a self-addressed ask applies no effects.
+      assertAskIsAnswerable({
+        db,
+        runId: activeDispatch.run_id,
+        dispatchId: activeDispatch.id,
+        callerPaneKey: paneKey
+      })
+      const openQuestion = (run: RunRow) => {
         const created = db.createQuestion({
           runId: run.id,
           dispatchId: activeDispatch.id,
@@ -1836,9 +1827,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           question: params.question as string,
           options
         })
-        question = created.question
         runtime.notifyMessageArrived(`run:${run.id}`, created.message.type)
+        return created.question
       }
+      const question = target.kind === 'resume' ? target.question : openQuestion(target.run)
 
       const questionId = question.message_id
       recordMutationReceipt?.({
