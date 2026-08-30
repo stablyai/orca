@@ -2205,6 +2205,43 @@ function retainClientPlacedMirroredTabs(args: {
   })
 }
 
+/**
+ * Why: the host only owns the relative order of its own tabs, so local tabs keep the slots the
+ * client gave them instead of being hoisted ahead of every mirrored tab on each snapshot (#13055).
+ */
+function mergeHostTabOrderIntoLocalSlots(args: {
+  currentTabOrder: readonly string[]
+  localTabOrder: readonly string[]
+  hostTabOrder: readonly string[]
+}): string[] {
+  const localTabIds = new Set(args.localTabOrder)
+  const hostTabIds = new Set(args.hostTabOrder)
+  const merged: string[] = []
+  const seen = new Set<string>()
+  const push = (tabId: string | undefined): void => {
+    if (tabId !== undefined && !seen.has(tabId)) {
+      merged.push(tabId)
+      seen.add(tabId)
+    }
+  }
+  let hostIndex = 0
+  for (const tabId of args.currentTabOrder) {
+    if (localTabIds.has(tabId)) {
+      push(tabId)
+    } else if (hostTabIds.has(tabId)) {
+      // Why: only a slot the host still owns absorbs its reorder — a retracted or regrouped tab consumes nothing.
+      push(args.hostTabOrder[hostIndex++])
+    }
+  }
+  for (const tabId of args.localTabOrder) {
+    push(tabId)
+  }
+  for (; hostIndex < args.hostTabOrder.length; hostIndex += 1) {
+    push(args.hostTabOrder[hostIndex])
+  }
+  return merged
+}
+
 function buildMirroredHostGroups({
   currentGroups,
   hostGroups,
@@ -2236,6 +2273,9 @@ function buildMirroredHostGroups({
     nextActiveUnifiedTabId
   })
   const groupsById = new Map(strippedGroups.map((group) => [group.id, group]))
+  const currentTabOrderByGroupId = new Map(
+    currentGroups.map((group) => [group.id, group.tabOrder] as const)
+  )
   const orderedGroups: TabGroup[] = []
   const seen = new Set<string>()
 
@@ -2249,17 +2289,17 @@ function buildMirroredHostGroups({
           validUnifiedTabIds.has(tabId) &&
           !clientGroupIdByLocalTabId.has(tabId)
       )
-    const localHostOrderIds = new Set(localHostOrder)
-    const hostTabOrder = [
-      ...(existing?.tabOrder.filter((tabId) => !localHostOrderIds.has(tabId)) ?? []),
-      ...localHostOrder
-    ]
+    const mergedTabOrder = mergeHostTabOrderIntoLocalSlots({
+      currentTabOrder: currentTabOrderByGroupId.get(hostGroup.id) ?? existing?.tabOrder ?? [],
+      localTabOrder: existing?.tabOrder ?? [],
+      hostTabOrder: localHostOrder
+    })
     // Why: a pending client reorder wins over a stale pre-move host order until the host echoes the move (or membership changes).
     const tabOrder = resolveWebSessionReorderedOrder(
       { environmentId },
       worktreeId,
       hostGroup.id,
-      hostTabOrder,
+      mergedTabOrder,
       now
     )
     if (tabOrder.length === 0) {
@@ -3367,12 +3407,13 @@ function applyWebSessionTabsSnapshotWithContext(
       tabOrder: [],
       recentTabIds: []
     }
-    const targetOrder = [
-      ...target.tabOrder.filter((tabId) => validUnifiedTabIds.has(tabId)),
-      ...mirroredUnifiedTabs
+    const targetOrder = mergeHostTabOrderIntoLocalSlots({
+      currentTabOrder: currentGroups.find((group) => group.id === targetGroupId)?.tabOrder ?? [],
+      localTabOrder: target.tabOrder.filter((tabId) => validUnifiedTabIds.has(tabId)),
+      hostTabOrder: mirroredUnifiedTabs
         .filter((tab) => !clientGroupIdByLocalTabId.has(tab.id))
         .map((tab) => tab.id)
-    ]
+    })
     const targetActiveTabId =
       nextActiveUnifiedTabId && targetOrder.includes(nextActiveUnifiedTabId)
         ? nextActiveUnifiedTabId
