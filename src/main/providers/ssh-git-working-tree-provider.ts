@@ -4,9 +4,18 @@ import type {
 } from '../../shared/git-diff-compare-types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { GitConflictOperation } from '../../shared/git-status-types'
+import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
 import { SshGitNoninteractiveProvider } from './ssh-git-noninteractive-provider'
+import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
+
+type SshGitRelayCapability = 'bulk-stage'
 
 export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
+  // Why: reconnecting constructs a new provider, which is the relay capability boundary.
+  private readonly relayCapabilities = new CapabilityProbeCache<SshGitRelayCapability>(
+    Number.POSITIVE_INFINITY
+  )
+
   async checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]> {
     return (await this.mux.request('git.checkIgnored', {
       worktreePath,
@@ -51,7 +60,18 @@ export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
 
   async bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void> {
     await this.runWithGitReadInvalidation(async () => {
-      await this.mux.request('git.bulkStage', { worktreePath, filePaths })
+      await this.relayCapabilities.runWithFallback(
+        'bulk-stage',
+        async () => {
+          await this.mux.request('git.bulkStage', { worktreePath, filePaths })
+        },
+        async () => {
+          for (const filePath of filePaths) {
+            await this.mux.request('git.stage', { worktreePath, filePath })
+          }
+        },
+        isJsonRpcMethodNotFoundError
+      )
     })
   }
 

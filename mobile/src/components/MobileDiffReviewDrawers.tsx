@@ -270,7 +270,7 @@ function CompletionDrawer({ controller }: Props) {
       <View style={styles.drawerButtonRow}>
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
-          disabled={controller.reviewedUnstagedCount === 0}
+          disabled={controller.reviewedUnstagedCount === 0 || controller.busyAction !== null}
           onPress={() => void controller.stageReviewedFiles()}
           accessibilityRole="button"
           accessibilityLabel="Stage reviewed files"
