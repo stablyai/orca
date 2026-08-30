@@ -116,6 +116,7 @@ function waitForForegroundChild(
   readiness: ServeReadiness
 }> {
   return new Promise((resolveWait, reject) => {
+    const forwardsHangup = process.platform === 'linux'
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
     let readyTimer: ReturnType<typeof setTimeout> | null = null
     let readiness: ServeReadiness = expected ? 'pending' : 'not-expected'
@@ -188,6 +189,9 @@ function waitForForegroundChild(
     const cleanup = (): void => {
       process.off('SIGINT', forwardSignal)
       process.off('SIGTERM', forwardSignal)
+      if (forwardsHangup) {
+        process.off('SIGHUP', forwardSignal)
+      }
       if (typeof child.off === 'function') {
         child.off('message', handleMessage)
       }
@@ -200,6 +204,9 @@ function waitForForegroundChild(
     }
     process.on('SIGINT', forwardSignal)
     process.on('SIGTERM', forwardSignal)
+    if (forwardsHangup) {
+      process.on('SIGHUP', forwardSignal)
+    }
     if (typeof child.on === 'function') {
       child.on('message', handleMessage)
     }

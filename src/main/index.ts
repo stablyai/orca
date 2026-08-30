@@ -196,8 +196,7 @@ import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
 } from './startup/dev-education-suppression'
-import { maybeRedirectAppImageCliLaunch } from './startup/appimage-cli-redirect'
-import { maybeRedirectPackagedCliEntryLaunch } from './startup/packaged-cli-entry-redirect'
+import { maybeRedirectCliLaunch } from './startup/cli-launch-redirect'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './startup/legacy-worker-renderer-recovery'
 import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
@@ -533,26 +532,14 @@ function handleCodexHomePtySpawned(args: {
 function handlePtyExit(id: string, exitSequence: number): void {
   codexSessionMigration?.finishLaunch(id, exitSequence)
 }
-// Why: on Windows a CLI launch that lost ELECTRON_RUN_AS_NODE would boot the GUI and exit silently; redirect to node mode before the lock gate below.
-// Both redirects run before the serve-argv rewrite so they still match on the launch argv verbatim.
-// It is load-bearing for the AppImage one: rewriting first replaces the `serve` positional, so its
-// command-name lookup finds a port number and strands the launch in an in-process serve. The
-// packaged-CLI one matches on the entry path instead, so order cannot affect it either way.
-const packagedCliEntryRedirect = maybeRedirectPackagedCliEntryLaunch({
+// Direct serve stays in-process so its signal handlers own all children.
+const cliLaunchRedirect = maybeRedirectCliLaunch({
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
   execPath: process.execPath
 })
-if (packagedCliEntryRedirect.redirected) {
-  app.exit(packagedCliEntryRedirect.status)
-}
-const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
-  isPackaged: app.isPackaged,
-  resourcesPath: process.resourcesPath,
-  execPath: process.execPath
-})
-if (appImageCliRedirect.redirected) {
-  app.exit(appImageCliRedirect.status)
+if (cliLaunchRedirect.redirected) {
+  app.exit(cliLaunchRedirect.status)
 }
 // Why: extracted AppRun / binary launches can land CLI-form `serve` args on the
 // Electron process without the CLI rewrite that injects `--serve` (#12677).

@@ -93,6 +93,16 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('repo')).toBe('id:abc')
   })
 
+  it('preserves a project selector before the project command', () => {
+    const parsed = parseArgs(
+      ['--project', 'github:stablyai/orca', 'project', 'setups'],
+      [['project', 'setups']]
+    )
+
+    expect(parsed.commandPath).toEqual(['project', 'setups'])
+    expect(parsed.flags.get('project')).toBe('github:stablyai/orca')
+  })
+
   it('preserves a selector value that is also a registered command', () => {
     const parsed = parseArgs(
       ['--environment', 'status', 'worktree', 'list'],

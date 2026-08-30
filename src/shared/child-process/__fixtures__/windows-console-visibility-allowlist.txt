@@ -46,9 +46,7 @@ main/rate-limits/codex-fetcher.ts
 main/runtime/orca-runtime-files.ts
 main/runtime/tls-certificate.ts
 main/ssh/ssh-connection.ts
-main/startup/appimage-cli-redirect.ts
 main/startup/ensure-virtual-display.ts
-main/startup/packaged-cli-entry-redirect.ts
 main/startup/windows-install-dir-acl-probe.ts
 main/win32-utils.ts
 main/window/clipboard-ipc-handlers.ts

@@ -141,10 +141,8 @@ src/main/ssh/system-ssh-dynamic-forward-process.ts
 src/main/ssh/system-ssh-file-transfer.ts
 src/main/ssh/system-ssh-forward-process.ts
 src/main/ssh/system-ssh-operation-lifecycle.ts
-src/main/startup/appimage-cli-redirect.ts
 src/main/startup/ensure-virtual-display.ts
 src/main/startup/hydrate-shell-path.ts
-src/main/startup/packaged-cli-entry-redirect.ts
 src/main/startup/windows-install-dir-acl-probe.ts
 src/main/startup/windows-user-data-acl.ts
 src/main/win32-utils.ts
