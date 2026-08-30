@@ -169,7 +169,7 @@
     "tweetnacl": "^1.0.3",
     "ws": "^8.21.3",
     "yaml": "^2.8.4",
-    "zod": "~4.5.0"
+    "zod": "~4.4.3"
   },
   "devDependencies": {
     "@dnd-kit/core": "^6.3.1",
