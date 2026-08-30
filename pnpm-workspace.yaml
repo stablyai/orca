@@ -5,6 +5,9 @@
 packages: []
 
 minimumReleaseAge: 4320
+# 6.3.289 was published 2026-08-29T12:48Z; it clears the 3-day gate on 2026-09-01T12:48Z.
+minimumReleaseAgeExclude:
+  - pdfjs-dist
 shamefullyHoist: true
 
 supportedArchitectures:
