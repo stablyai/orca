@@ -1,5 +1,6 @@
 import {
   keybindingMatchesAction,
+  matchesActiveNonTerminalKeybinding,
   type KeybindingInput,
   type KeybindingMatchOptions,
   type KeybindingOverrides,
@@ -28,10 +29,19 @@ export type TerminalShortcutEvent = {
   getModifierState?: (key: string) => boolean
 }
 
-// Shared close-chord predicate: the terminal pane (L3) and the floating panel's focused-terminal
-// branch (L2) both treat terminal.closePane OR a terminal-scope tab.close as "close the active
-// pane," so the two layers can't diverge. Callers pass the options each binding needs —
-// terminal.closePane is context-free; tab.close is scoped to the terminal surface.
+/**
+ * Shared close-chord predicate: the terminal pane (L3) and the floating panel's focused-terminal
+ * branch (L2) both treat terminal.closePane OR a terminal-scope tab.close as "close the active
+ * pane," so the two layers can't diverge. Callers pass the options each binding needs —
+ * terminal.closePane is context-free; tab.close is scoped to the terminal surface.
+ *
+ * @param event - The keyboard event to test.
+ * @param platform - The current platform.
+ * @param keybindings - Optional keybinding overrides.
+ * @param closePaneOptions - Options for matching terminal.closePane.
+ * @param tabCloseOptions - Options for matching tab.close.
+ * @returns True if the chord matches a pane close action.
+ */
 export function isTerminalPaneCloseChord(
   event: KeybindingInput,
   platform: NodeJS.Platform,
@@ -161,6 +171,15 @@ export function resolveTerminalShortcutAction(
     if (keybindingMatchesAction('terminal.splitDown', event, platform, keybindings)) {
       return { type: 'splitActivePane', direction: 'horizontal' }
     }
+  }
+
+  if (
+    matchesActiveNonTerminalKeybinding(event, platform, keybindings, {
+      context: 'terminal',
+      terminalShortcutPolicy
+    })
+  ) {
+    return null
   }
 
   if (
