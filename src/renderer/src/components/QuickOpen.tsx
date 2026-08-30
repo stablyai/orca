@@ -22,6 +22,7 @@ import {
   QuickOpenInstallRgGuidance
 } from '@/components/quick-open-install-rg-guidance'
 import {
+  createTabEntryAllowAbsolutePathsSelector,
   getTabEntryAllowAbsolutePaths,
   getTabEntryFileOperationContext
 } from '@/components/tab-bar/tab-create-entry-local-path'
@@ -29,6 +30,7 @@ import {
   isTabEntryAbsolutePathLike,
   validateNewTabEntryAbsolutePath
 } from '@/components/tab-bar/tab-create-entry-path-validation'
+import { TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE } from '@/components/tab-bar/tab-create-entry-classifier'
 import { openAbsoluteTabEntryFile } from '@/components/tab-bar/tab-create-entry-absolute-file'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
 
@@ -85,11 +87,14 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
       return null
     }
   }, [localPlatform, query])
-  const absolutePathAllowed = useAppStore((state) =>
-    absolutePath && activeWorktreeId
-      ? getTabEntryAllowAbsolutePaths(state, activeWorktreeId)
-      : false
+  const absolutePathAllowedSelector = useMemo(
+    () =>
+      createTabEntryAllowAbsolutePathsSelector(activeWorktreeId ?? '', {
+        skip: !absolutePath
+      }),
+    [absolutePath, activeWorktreeId]
   )
+  const absolutePathAllowed = useAppStore(absolutePathAllowedSelector)
   const { files, loading, loadError, truncated } = useRuntimeFileListForWorktree({
     enabled: visible,
     worktreeId: activeWorktreeId,
@@ -154,7 +159,6 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     try {
       const state = useAppStore.getState()
       const runtimeContext = getTabEntryFileOperationContext(state, activeWorktreeId, worktreePath)
-      skipReturnFocus()
       await openAbsoluteTabEntryFile({
         context: runtimeContext,
         groupId: activeGroupId,
@@ -173,6 +177,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         worktreeId: activeWorktreeId,
         worktreePath
       })
+      skipReturnFocus()
       closeModal()
     } catch (error) {
       setAbsolutePathError(error instanceof Error ? error.message : String(error))
@@ -227,6 +232,10 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         {absolutePathError ? (
           <div className="py-6 px-4 text-center text-sm text-muted-foreground whitespace-pre-wrap">
             {absolutePathError}
+          </div>
+        ) : isTabEntryAbsolutePathLike(query.trim()) && !absolutePathAllowed ? (
+          <div className="py-6 px-4 text-center text-sm text-muted-foreground whitespace-pre-wrap">
+            {TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE}
           </div>
         ) : absolutePathOption ? (
           <CommandItem
