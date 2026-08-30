@@ -9,6 +9,7 @@ export function createWebAgentStatusApi(): Partial<PreloadApi> {
       getSnapshot: () => Promise.resolve([]),
       inferInterrupt: () => Promise.resolve(false),
       inferQuestionAnswered: () => Promise.resolve(false),
+      onUnmanagedExtension: () => noopUnsubscribe,
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       onLegacyWorkerTerminalRecovery: () => noopUnsubscribe,

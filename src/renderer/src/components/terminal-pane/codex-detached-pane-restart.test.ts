@@ -138,6 +138,21 @@ describe('codex detached pane restart executor', () => {
     expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[NEW_PTY])).toBe(false)
   })
 
+  it('stamps a launch token so its own respawn is not read as a poster Orca did not launch', async () => {
+    // Why: the launch token is Orca's only in-band proof of authorship, and every gate keyed on
+    // it — the retired-pane fence and the unmanaged-status-extension fence alike — reads a
+    // tokenless post as foreign. A relaunch into the same pane key that omitted the token made
+    // Orca warn the user about "an extension Orca did not install" for a process Orca launched.
+    seedQueuedRestart()
+
+    await sweepUnclaimedCodexPaneRestarts()
+
+    const env = vi.mocked(window.api.pty.spawn).mock.calls[0]?.[0]?.env
+    expect(env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    )
+  })
+
   it('executes via the store subscription without a lifecycle timeout', async () => {
     const uninstall = installCodexDetachedPaneRestartExecutor()
     try {

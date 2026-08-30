@@ -5184,6 +5184,13 @@ const api = {
       ipcRenderer.invoke('agentStatus:inferInterrupt', request),
     inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest): Promise<boolean> =>
       ipcRenderer.invoke('agentStatus:inferQuestionAnswered', request),
+    /** Fires once per pane and source when a status extension Orca did not launch is posting. */
+    onUnmanagedExtension: (callback: (data: { source: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { source: string }) =>
+        callback(data)
+      ipcRenderer.on('agentStatus:unmanagedExtension', listener)
+      return () => ipcRenderer.removeListener('agentStatus:unmanagedExtension', listener)
+    },
     onMigrationUnsupported: (
       callback: (entry: MigrationUnsupportedPtyEntry) => void
     ): (() => void) => {

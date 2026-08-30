@@ -8,6 +8,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'agentStatus.onMigrationUnsupported',
   'agentStatus.onMigrationUnsupportedClear',
   'agentStatus.onSet',
+  'agentStatus.onUnmanagedExtension',
   'automations.onChanged',
   'browser.onActivateView',
   'browser.onCertificateFailureChanged',
@@ -187,6 +188,7 @@ const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'ui.onTerminalZoom',
   'agentStatus.onSet',
   'agentStatus.onClear',
+  'agentStatus.onUnmanagedExtension',
   'agentStatus.onMigrationUnsupported',
   'agentStatus.onMigrationUnsupportedClear',
   'agentStatus.onLegacyWorkerTerminalRecovery',
@@ -411,6 +413,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
       groupOrder([
         'agentStatus.onSet',
         'agentStatus.onClear',
+        'agentStatus.onUnmanagedExtension',
         'agentStatus.onMigrationUnsupported',
         'agentStatus.onMigrationUnsupportedClear',
         'agentStatus.onLegacyWorkerTerminalRecovery',
@@ -419,6 +422,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     ).toEqual([
       'agentStatus.onSet',
       'agentStatus.onClear',
+      'agentStatus.onUnmanagedExtension',
       'agentStatus.onMigrationUnsupported',
       'agentStatus.onMigrationUnsupportedClear',
       'agentStatus.onLegacyWorkerTerminalRecovery',

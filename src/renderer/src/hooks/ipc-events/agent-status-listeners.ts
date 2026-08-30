@@ -8,6 +8,7 @@ import {
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
 import { useAppStore } from '../../store'
+import { notifyUnmanagedStatusExtension } from './unmanaged-status-extension-notice'
 import { resolvePaneKey } from './agent-status-routing'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
@@ -90,6 +91,14 @@ export function registerAgentStatusListeners(args: {
   )
   if (unsubscribeAgentStatusClear) {
     unsubs.push(unsubscribeAgentStatusClear)
+  }
+  const unsubscribeUnmanagedExtension = window.api.agentStatus.onUnmanagedExtension?.(
+    ({ source }) => {
+      notifyUnmanagedStatusExtension(source)
+    }
+  )
+  if (unsubscribeUnmanagedExtension) {
+    unsubs.push(unsubscribeUnmanagedExtension)
   }
   const unsubscribeMigrationUnsupported = window.api.agentStatus.onMigrationUnsupported?.(
     (entry) => {

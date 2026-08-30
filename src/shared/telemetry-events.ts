@@ -787,6 +787,10 @@ const agentHookUnattributedSchema = z
 // nothing derived from them may reach the wire.
 const agentHookTransportBlockedSchema = z.object({ count: z.number().int().nonnegative() }).strict()
 
+// Why: a status extension Orca did not install is posting for a pane. Source only — the pane key
+// and the file's own contents are user data and must not reach the wire.
+const agentHookUnmanagedExtensionSchema = z.object({ source: z.string() }).strict()
+
 // ── Onboarding ──────────────────────────────────────────────────────────
 // Closed enums only — no raw paths/repo names/URLs/error strings (measures activation, not repo debugging).
 // Why: event names still carry legacy seven-step payloads; keep validation backward-compatible for old rows.
@@ -1451,6 +1455,7 @@ export const eventSchemas = {
   agent_hook_install_failed: agentHookInstallFailedSchema,
   agent_hook_unattributed: agentHookUnattributedSchema,
   agent_hook_transport_blocked: agentHookTransportBlockedSchema,
+  agent_hook_unmanaged_extension: agentHookUnmanagedExtensionSchema,
 
   daemon_start_failed: daemonStartFailedSchema,
   main_thread_hang_detected: mainThreadHangDetectedSchema,

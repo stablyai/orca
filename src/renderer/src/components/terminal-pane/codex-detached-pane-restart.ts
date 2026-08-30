@@ -16,6 +16,7 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -157,7 +158,12 @@ function buildPaneIdentityEnv(
       : {}),
     ORCA_PANE_KEY: makePaneKey(tabId, leafId),
     ORCA_TAB_ID: tabId,
-    ORCA_WORKTREE_ID: worktreeId
+    ORCA_WORKTREE_ID: worktreeId,
+    // Why: the launch token is Orca's proof that it started this agent, and the mounted spawn
+    // path always mints one. Without it this respawn's hook posts are indistinguishable from a
+    // poster Orca never launched, so every gate keyed on the token — the retired-pane fence and
+    // the unmanaged-extension fence alike — reads Orca's own replacement as foreign.
+    ORCA_AGENT_LAUNCH_TOKEN: createBrowserUuid()
   }
 }
 

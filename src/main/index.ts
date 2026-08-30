@@ -1697,6 +1697,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
     agentHookServer.setListener(null)
     agentHookServer.setPaneStatusClearListener(null)
+    agentHookServer.setUnmanagedStatusExtensionListener(null)
     setMigrationUnsupportedPtyListener(null)
     // Why: stop the spinner timer here — it would fire into destroyed webContents, and per-pane teardown may never run for restored-but-untorn panes.
     stopAllSyntheticTitleSpinners()
@@ -1801,6 +1802,19 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     }
     mainWindow?.webContents.send('agentStatus:clear', clear)
     getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
+  })
+  // Why: the fence drops those posts silently, and the extension file belongs to the user —
+  // Orca must not touch it, so surfacing is the whole remedy. Telemetry too, because the
+  // population carrying a stale copy is exactly the one that reports shipped fixes as broken.
+  agentHookServer.setUnmanagedStatusExtensionListener((report) => {
+    console.warn(
+      `[agent-hooks] ignoring status posts from an unmanaged ${report.source} extension on pane ${report.paneKey}; Orca did not launch it`
+    )
+    track('agent_hook_unmanaged_extension', { source: report.source })
+    if (mainWindow?.isDestroyed()) {
+      return
+    }
+    mainWindow?.webContents.send('agentStatus:unmanagedExtension', { source: report.source })
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (mainWindow?.isDestroyed()) {

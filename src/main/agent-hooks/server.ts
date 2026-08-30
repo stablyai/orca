@@ -55,6 +55,10 @@ import {
   readRequestBody
 } from '../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../shared/agent-hook-listener/source-routing'
+import {
+  UnmanagedStatusExtensionFence,
+  type UnmanagedStatusExtensionReport
+} from './unmanaged-status-extension-fence'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import {
   canAcceptClaudeCompactCompletion,
@@ -746,6 +750,7 @@ export class AgentHookServer {
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
   private restartedStatusLaunchTokenHashByPaneKey = new Map<string, string>()
+  private unmanagedExtensionFence = new UnmanagedStatusExtensionFence()
   private connectionTimestampWatermarkById = new Map<string, number>()
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
@@ -764,6 +769,21 @@ export class AgentHookServer {
     listener: ((report: HookTransportInterferenceReport) => void) | null
   ): void {
     this.onTransportInterference = listener
+  }
+
+  /**
+   * Notified once per pane and source when a status extension Orca did not launch is posting.
+   * Why: the fence silently drops those posts, and the file is a user's own — Orca must never
+   * remove it, so the only honest remedy is telling the user which agent is affected.
+   */
+  setUnmanagedStatusExtensionListener(
+    listener: ((report: UnmanagedStatusExtensionReport) => void) | null
+  ): void {
+    this.unmanagedExtensionFence.setDetectionListener(listener)
+  }
+
+  _setUnmanagedExtensionConfirmationWindowMsForTests(windowMs: number): void {
+    this.unmanagedExtensionFence.setConfirmationWindowMsForTests(windowMs)
   }
 
   setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
@@ -1175,6 +1195,8 @@ export class AgentHookServer {
       isReplay?: boolean
       hasExplicitPrompt?: boolean
       launchToken?: string
+      /** Re-delivers this post if the unmanaged-extension fence holds it and nothing supersedes it. */
+      releaseIfUnconfirmed?: () => void
     }
   ): 'accept' | 'restart' | 'suppress' {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -1184,6 +1206,24 @@ export class AgentHookServer {
     const tabId = parsePaneKey(ownerPaneKey)?.tabId
     if (tabId && this.closedAgentStatusTabIds.has(tabId)) {
       return 'suppress'
+    }
+    // Why: a second status extension loaded alongside Orca's own posts the same pane key from the
+    // same process, so only the launch token separates them. The hold is provisional in both
+    // directions — a tokenless launch is never gated until a tokened post owns the pane, and a
+    // held post is delivered anyway once the tokened poster goes silent or its owner is evicted,
+    // so no sequence of posts can strand a pane on 'working'.
+    // Replays carry no live process and are fenced by hydratedLaunchTokenHashByPaneKey instead.
+    if (event && event.isReplay !== true) {
+      if (
+        this.unmanagedExtensionFence.classify(
+          ownerPaneKey,
+          event.source,
+          event.launchToken,
+          event.releaseIfUnconfirmed
+        ) === 'held'
+      ) {
+        return 'suppress'
+      }
     }
     if (!paneRetired) {
       const tokenFence = this.restartedStatusLaunchTokenHashByPaneKey.get(ownerPaneKey)
@@ -1961,6 +2001,10 @@ export class AgentHookServer {
 
   retirePaneAuthority(paneKey: string): void {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    // Why: a reused pane key may relaunch without a launch token; keeping the old owner would
+    // gate the new process's own posts and strand the pane on 'working'.
+    this.unmanagedExtensionFence.forgetPane(paneKey)
+    this.unmanagedExtensionFence.forgetPane(ownerPaneKey)
     const paneKeys = new Set([paneKey, ownerPaneKey])
     const retiredAliases: RetiredPaneAlias[] = []
     let aliasChanged = false
@@ -2142,6 +2186,47 @@ export class AgentHookServer {
     }
     // Why: detached shells keep posting the immutable physical pane key; normalize pane and tab identity to the current owner.
     return { ...record, paneKey: stablePaneKey, tabId: parsePaneKey(stablePaneKey)?.tabId }
+  }
+
+  /**
+   * Disposition + apply for one local hook post.
+   *
+   * Why re-entrant: the unmanaged-extension fence holds a tokenless post instead of dropping it,
+   * and delivers it through this same method once nothing supersedes it — so the hold cannot skip
+   * a gate, and a lapsed hold cannot bypass one that has closed in the meantime.
+   */
+  private routeLocalHookStatus(
+    source: AgentHookSource,
+    aliasedBody: unknown,
+    normalized: NormalizedLocalHook
+  ): void {
+    const event = normalized.event
+    if (!event) {
+      return
+    }
+    const statusDisposition = this.getAgentStatusDisposition(event.paneKey, {
+      source,
+      hookEventName: event.hookEventName,
+      isReplay: event.isReplay,
+      hasExplicitPrompt: event.hasExplicitPrompt,
+      launchToken: event.launchToken,
+      releaseIfUnconfirmed: () => {
+        this.routeLocalHookStatus(source, aliasedBody, normalized)
+      }
+    })
+    if (statusDisposition === 'suppress') {
+      return
+    }
+    const applied = statusDisposition === 'restart' ? { ...event, launchToken: undefined } : event
+    if (statusDisposition === 'restart') {
+      // Why: a retired pane accepting a new turn is a different agent session behind the
+      // same key — later observations must not be ordered against the retired one.
+      this.observations.rebind(applied.paneKey)
+    }
+    this.recordCurrentAuthorityObservation(applied)
+    const enriched = this.applyNormalizedStatus(applied, normalized.onAccepted)
+    this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+    this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
   }
 
   private normalizeLocalHookPayload(source: AgentHookSource, body: unknown): NormalizedLocalHook {
@@ -2379,7 +2464,12 @@ export class AgentHookServer {
       hookEventName,
       isReplay: envelope.isReplay === true,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true,
-      launchToken: envelope.launchToken
+      launchToken: envelope.launchToken,
+      // Why re-enter rather than replay the tail: every gate below this point must be re-checked
+      // against the pane as it stands when the hold lapses, not as it stood when it was taken.
+      releaseIfUnconfirmed: () => {
+        this.ingestRemote(envelope, connectionId)
+      }
     })
     if (statusDisposition === 'suppress') {
       return
@@ -2623,31 +2713,11 @@ export class AgentHookServer {
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
         trackEmptyPaneKeyHook(hookBody)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
-        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-        const statusDisposition = normalized.event
-          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-              source,
-              hookEventName: normalized.event.hookEventName,
-              isReplay: normalized.event.isReplay,
-              hasExplicitPrompt: normalized.event.hasExplicitPrompt,
-              launchToken: normalized.event.launchToken
-            })
-          : 'suppress'
-        if (normalized.event && statusDisposition !== 'suppress') {
-          const event =
-            statusDisposition === 'restart'
-              ? { ...normalized.event, launchToken: undefined }
-              : normalized.event
-          if (statusDisposition === 'restart') {
-            // Why: a retired pane accepting a new turn is a different agent session behind the
-            // same key — later observations must not be ordered against the retired one.
-            this.observations.rebind(event.paneKey)
-          }
-          this.recordCurrentAuthorityObservation(event)
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
-          this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
-        }
+        this.routeLocalHookStatus(
+          source,
+          aliasedBody,
+          this.normalizeLocalHookPayload(source, aliasedBody)
+        )
 
         res.writeHead(204)
         res.end()
@@ -2725,6 +2795,8 @@ export class AgentHookServer {
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()
     this.restartedStatusLaunchTokenHashByPaneKey.clear()
+    // Why: a held tokenless post must not outlive the server that would deliver it.
+    this.unmanagedExtensionFence.dispose()
     this.retiredPaneFencesByKey.clear()
     this.connectionTimestampWatermarkById.clear()
     this.legacyPaneKeyAliases.clear()

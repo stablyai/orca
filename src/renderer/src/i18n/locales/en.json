@@ -1107,6 +1107,11 @@
             "docPreviewLinkFailed": "Could not open this link in Orca Browser."
           }
         }
+      },
+      "unmanagedStatusExtensionNotice": {
+        "title": "Ignoring status from an extension Orca did not install",
+        "description": "A second copy of orca-agent-status.ts is running in your {{agent}} extensions folder. Orca is ignoring what it reports, because an older copy can mark a turn finished while the agent is still working. Orca has not changed the file — remove or rename it yourself if you no longer want it.",
+        "dismiss": "Dismiss"
       }
     },
     "components": {
