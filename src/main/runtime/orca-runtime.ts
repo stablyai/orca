@@ -31919,6 +31919,11 @@ export class OrcaRuntimeService {
         continue
       }
       const expectedIncarnation = expectedIncarnations.get(ptyId)
+      if (!expectedIncarnation) {
+        // A legacy PTY cannot be distinguished from a replacement that reused its id.
+        addressedPtyReplaced ||= ptyId === addressedPtyId
+        continue
+      }
       const livePty = this.ptysById.get(ptyId)
       if (!livePty) {
         continue

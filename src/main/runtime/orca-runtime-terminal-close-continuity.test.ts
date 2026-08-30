@@ -4,6 +4,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
+type RuntimePtyRegistry = { ptysById: Map<string, { incarnationId: string | null }> }
 const REPO_ID = 'repo-close-continuity'
 const WORKTREE_PATH = '/tmp/terminal-close-continuity'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
@@ -556,6 +557,18 @@ describe('terminal close and handle incarnation continuity', () => {
 
     expect(close).toMatchObject({ ptyKilled: false, closeRefusedReason: 'incarnation_replaced' })
     expect(harness.stopAndWait).toHaveBeenCalledOnce()
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+  it('does not stop a PTY whose pre-teardown incarnation is missing', async () => {
+    const harness = createHarness()
+    const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    const runtime = harness.runtime as unknown as RuntimePtyRegistry
+    runtime.ptysById.get(PTY_ID)!.incarnationId = null
+    harness.setCloseTerminalTabAction(() => harness.retirePersistedTab())
+    expect((await harness.runtime.closeTerminal(handle)).closeRefusedReason).toBe(
+      'incarnation_replaced'
+    )
+    expect(harness.stopAndWait).not.toHaveBeenCalled()
     expect(harness.kill).not.toHaveBeenCalled()
   })
 

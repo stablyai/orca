@@ -15,6 +15,7 @@ import { orchestrationTimestampToMs } from './orchestration-worker-output'
 import {
   closeAndSettleWorkerTerminalRelease,
   summarizeWorkerTerminalArchive,
+  workerTerminalReleaseRecovery,
   type WorkerReleaseReceipt
 } from './orchestration-worker-release-settlement'
 import { workerTerminalLeaseIsCurrent } from './orchestration-worker-terminal-lease'
@@ -164,7 +165,7 @@ async function completeWorkerTerminalReleaseOnce(
       processAction: 'none',
       archive: archiveSummary(unknown),
       lastError: unknown.release_error ?? undefined,
-      recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
+      recovery: workerTerminalReleaseRecovery(dispatchId)
     }
   }
 

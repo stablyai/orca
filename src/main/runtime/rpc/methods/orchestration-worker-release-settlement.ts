@@ -82,7 +82,7 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
         processAction: 'closed_agent_terminal',
         archive: { source: archiveSource, status: archiveStatus },
         lastError: unknown.release_error ?? reason,
-        recovery: inspectRecovery(dispatchId)
+        recovery: workerTerminalReleaseRecovery(dispatchId)
       }
     }
   } catch (error) {
@@ -123,7 +123,7 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
       processAction: 'none',
       archive: { source: archiveSource, status: archiveStatus },
       lastError: unknown.release_error ?? reason,
-      recovery: inspectRecovery(dispatchId)
+      recovery: workerTerminalReleaseRecovery(dispatchId)
     }
   }
   const released = db.settleWorkerTerminalRelease(resource.id)
@@ -181,6 +181,6 @@ function retainWorkerTerminalRelease(
 }
 
 /** Operator instructions carried on receipts that could not settle. */
-function inspectRecovery(dispatchId: string): string {
-  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
+export function workerTerminalReleaseRecovery(dispatchId: string): string {
+  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — if it proves the exact process exited after this request, run a fresh worker-release without --retry-request to re-observe it. Use --retry-request only when the prior response was lost; it replays the request and does not re-measure. Never substitute a broad terminal close.`
 }

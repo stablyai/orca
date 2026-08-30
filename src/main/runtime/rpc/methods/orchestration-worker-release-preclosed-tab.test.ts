@@ -378,6 +378,8 @@ describe('orchestration worker release after its tab was already closed', () => 
           'resource-1',
           'identity_unproven'
         )
+      } else {
+        expect(revertWorkerTerminalReleaseToRetained).not.toHaveBeenCalled()
       }
     }
   )

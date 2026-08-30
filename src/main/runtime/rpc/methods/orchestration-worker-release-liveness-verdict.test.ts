@@ -74,7 +74,9 @@ describe('orchestration worker release liveness verdict', () => {
     ).resolves.toMatchObject({
       state: 'release_unknown',
       processAction: 'closed_agent_terminal',
-      lastError: `The agent terminal was closed but its process could not be confirmed stopped: ${detail}.`
+      lastError: `The agent terminal was closed but its process could not be confirmed stopped: ${detail}.`,
+      recovery:
+        'Inspect with: orca orchestration worker-show --dispatch ctx-worker --json — if it proves the exact process exited after this request, run a fresh worker-release without --retry-request to re-observe it. Use --retry-request only when the prior response was lost; it replays the request and does not re-measure. Never substitute a broad terminal close.'
     })
     expect(markWorkerTerminalReleaseUnknown).toHaveBeenCalledWith(
       'resource-1',

@@ -489,7 +489,7 @@ describe('orchestration worker release', () => {
       recovery?: string
     }
     expect(receipt.state).toBe('release_unknown')
-    expect(receipt.recovery).toContain('worker-show')
+    expect(receipt.recovery).toContain('fresh worker-release without --retry-request')
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
 
     vi.mocked(runtime.showTerminal).mockImplementation(
