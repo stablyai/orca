@@ -1,6 +1,7 @@
 import { mkdtemp, readdir, realpath, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   PLUGIN_MANIFEST_FILENAME,
@@ -315,5 +316,5 @@ async function removeResolvedPluginDirectory(rootDir: string, pluginKey: string)
   ) {
     throw new Error(`refusing to remove plugin path outside ${rootReal}`)
   }
-  await rm(resolve(rootDir, pluginKey), { recursive: true, force: true })
+  await removeTree(resolve(rootDir, pluginKey))
 }

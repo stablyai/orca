@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
+import { removeTree, removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type {
   SpeechModelManifest,
   SpeechModelState,
@@ -172,8 +173,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
     const stagingDir = `${modelDir}.partial`
     const legacyArchivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
-    // Why: resuming an unverified file left by a crashed process could preserve corrupt bytes.
-    rmSync(stagingDir, { recursive: true, force: true })
+    // Why: resuming an unverified file left by a crashed process could preserve corrupt bytes,
+    // so a Windows handle still on the last attempt's staging dir must not decide this quietly.
+    removeTreeSync(stagingDir)
     try {
       rmSync(legacyArchivePath, { force: true })
     } catch {
@@ -205,7 +207,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
         return
       }
 
-      await rm(modelDir, { recursive: true, force: true })
+      // Why the shared policy: the rename below cannot land while Windows still holds a handle
+      // on the model being replaced, and the user already waited out the whole download.
+      await removeTree(modelDir)
       await rename(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
     } catch (err) {
@@ -244,15 +248,15 @@ export class ModelManager extends SpeechModelDownloadTransport {
     this.cancelDownload(modelId)
     const modelDir = this.getModelDir(modelId)
     if (existsSync(modelDir)) {
-      await rm(modelDir, { recursive: true, force: true })
+      await removeTree(modelDir)
     }
-    await rm(`${modelDir}.partial`, { recursive: true, force: true })
+    await removeTree(`${modelDir}.partial`)
     await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
     // Why: also delete the pre-migration copy, or the next launch re-migrates it and resurrects the model.
     if (this.migrationSourceDir) {
       const sourceModelDir = this.getSafeModelDir(modelId, this.migrationSourceDir)
       if (existsSync(sourceModelDir)) {
-        await rm(sourceModelDir, { recursive: true, force: true })
+        await removeTree(sourceModelDir)
       }
     }
     this.modelStates.delete(modelId)

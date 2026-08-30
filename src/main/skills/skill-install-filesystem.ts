@@ -1,7 +1,8 @@
 import type { Dirent, Stats } from 'node:fs'
-import { lstat, readdir, realpath, rm, stat } from 'node:fs/promises'
+import { lstat, readdir, realpath, stat } from 'node:fs/promises'
 import type { SkillPackageManifestV1 } from '../../shared/skill-package-manifest'
 import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
 import {
   SKILL_PACKAGE_OBSERVATION_LIMITS,
@@ -63,7 +64,9 @@ export const nativeSkillInstallFilesystem: SkillInstallFilesystem = {
         : undefined
     ),
   rename: renameSkillPathWithWindowsRetry,
-  remove: (path) => rm(path, { recursive: true, force: true }),
+  // Why the shared policy: deleting an installed skill is a user action, and the rename above
+  // already concedes Windows holds these paths open a moment longer than the call expects.
+  remove: removeTree,
   // Why the bounded pool rather than `Promise.all`: a delete plan enumerates
   // every discovery root, and unbounded fan-out here is the same burst of
   // filesystem-metadata work discovery already learned to cap.

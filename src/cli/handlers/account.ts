@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
@@ -183,7 +184,7 @@ async function cleanupClaudeLoginArtifacts(
     }
   }
   try {
-    rmSync(configDir, { recursive: true, force: true })
+    removeTreeSync(configDir)
   } catch (error) {
     errors.push(error)
   }

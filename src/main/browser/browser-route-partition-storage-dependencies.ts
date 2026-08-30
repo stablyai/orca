@@ -1,5 +1,5 @@
 import { session } from 'electron'
-import { rm } from 'node:fs/promises'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import {
   releaseBrowserRoutePartitionStorage,
   type BrowserRoutePartitionStorageDependencies
@@ -24,7 +24,7 @@ export function browserRoutePartitionStorageDependencies(
       browserSessionRegistry.clearRoutePartitionPolicies(partition)
     },
     // Why: force ignores an already-absent directory, keeping the sweep idempotent.
-    removePartitionDirectory: (directory) => rm(directory, { recursive: true, force: true })
+    removePartitionDirectory: removeTree
   }
 }
 

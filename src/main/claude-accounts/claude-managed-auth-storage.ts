@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { toWindowsWslPath } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'
 import {
@@ -141,7 +142,7 @@ export class ClaudeManagedAuthStorage {
   async remove(accountId: string, candidatePath: string): Promise<void> {
     try {
       const managedAuthPath = await this.assertOwned(candidatePath, accountId)
-      rmSync(resolve(managedAuthPath, '..'), { recursive: true, force: true })
+      removeTreeSync(resolve(managedAuthPath, '..'))
     } catch (error) {
       console.warn('[claude-accounts] Refusing to remove untrusted managed auth:', error)
     }

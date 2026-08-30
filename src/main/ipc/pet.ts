@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { basename, extname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
 import type { CustomPet } from '../../shared/pet-types'
@@ -136,7 +137,7 @@ export function registerPetHandlers(): void {
           return
         }
         try {
-          await rm(target, { recursive: true, force: true })
+          await removeTree(target)
         } catch (error) {
           console.warn('[pet-overlay] pet:delete (bundle) failed', error)
         }
