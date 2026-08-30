@@ -1,7 +1,7 @@
 import { delimiter } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
-import { opencodeDiscoveries } from './session-scanner-opencode-sources'
+import { mimoCodeDiscoveries, opencodeDiscoveries } from './session-scanner-opencode-sources'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
@@ -16,15 +16,24 @@ export async function discoverAiVaultSessionSources(args: {
 }): Promise<SessionFileDiscovery[]> {
   const { options, limitPerAgent, issues } = args
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
+  const selectedAgents = options.agents ? new Set(options.agents) : null
+  const includes = (agent: AiVaultAgent): boolean => !selectedAgents || selectedAgents.has(agent)
 
   return Promise.all([
     // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
     // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
     // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
-    ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
-    ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...(includes('opencode')
+      ? opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
+      : []),
+    ...(includes('mimo-code')
+      ? mimoCodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
+      : []),
+    ...(includes('antigravity')
+      ? antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
+      : []),
     ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
-      source
+      source && includes(agent as AiVaultAgent)
         ? agentDiscoveries(
             agent as AiVaultAgent,
             source,

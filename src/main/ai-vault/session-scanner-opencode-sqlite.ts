@@ -1,4 +1,8 @@
-import type { AiVaultSession, AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultSession,
+  AiVaultSessionPreviewMessage
+} from '../../shared/ai-vault-types'
 import {
   addPreviewMessage,
   createAccumulator,
@@ -248,11 +252,9 @@ export async function parseOpenCodeSqliteSession(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  agent?: AiVaultAgent
 }): Promise<AiVaultSession | null> {
-  return readOpenCodeDatabase({
-    dbPath: args.dbPath,
-    read: (db) => readSession({ db, ...args })
-  })
+  return readOpenCodeDatabase({ dbPath: args.dbPath, read: (db) => readSession({ db, ...args }) })
 }
 
 // Extracted so the open wrapper owns the handle's lifetime.
@@ -261,8 +263,9 @@ function readSession(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  agent?: AiVaultAgent
 }): AiVaultSession | null {
-  const { db, dbPath, sessionId, platform } = args
+  const { db, dbPath, sessionId, platform, agent = 'opencode' } = args
   if (!canReadOpenCodeSessions(db)) {
     return null
   }
@@ -278,12 +281,8 @@ function readSession(args: {
   // Why: discovery uses a synthetic db#session path only for parser routing.
   // The UI's log open/reveal actions need a real filesystem path.
   const accumulator = createAccumulator({
-    agent: 'opencode',
-    file: {
-      path: dbPath,
-      mtimeMs,
-      modifiedAt: new Date(mtimeMs).toISOString()
-    },
+    agent,
+    file: { path: dbPath, mtimeMs, modifiedAt: new Date(mtimeMs).toISOString() },
     sessionId
   })
   accumulator.title = normalizeTitleText(row.title ?? '')

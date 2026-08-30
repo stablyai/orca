@@ -1,4 +1,5 @@
 import type {
+  AiVaultAgent,
   AiVaultListResult,
   AiVaultScanIssue,
   AiVaultSession
@@ -43,6 +44,7 @@ export async function scanRemoteAiVaultSessions(args: {
   hostPlatform: RemoteHostPlatform
   limit?: number
   unlimited?: boolean
+  agents?: readonly AiVaultAgent[]
   scopePaths?: readonly string[]
   signal?: AbortSignal
 }): Promise<AiVaultListResult> {
@@ -52,6 +54,7 @@ export async function scanRemoteAiVaultSessions(args: {
   // One ceiling for the whole scan: discovery walks, stats and transcript reads
   // all queue behind it instead of multiplying into a nested fan-out.
   const provider = limitRemoteScanFilesystemConcurrency(args.provider)
+  const selectedAgents = args.agents ? new Set(args.agents) : null
   const context: RemoteScannerContext = {
     provider,
     executionHostId: args.executionHostId,
@@ -75,7 +78,9 @@ export async function scanRemoteAiVaultSessions(args: {
   const candidates = dedupeCodexRolloutFileAliases(
     (
       await mapRemoteScanBatches(
-        remoteSessionSources(args.remoteHome, args.hostPlatform),
+        remoteSessionSources(args.remoteHome, args.hostPlatform).filter(
+          (source) => !selectedAgents || selectedAgents.has(source.agent)
+        ),
         REMOTE_SCAN_CONCURRENCY,
         (source) => discoverRemoteSourceCandidates({ source, context, issues }),
         args.signal

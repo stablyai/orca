@@ -2,7 +2,10 @@
  * Writes a startup command into a local PTY once the shell reports readiness.
  */
 import type * as pty from 'node-pty'
-import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import {
+  buildStartupCommandPayload,
+  STARTUP_COMMAND_SUBMIT_DELAY_MS
+} from '../../shared/startup-command-submission'
 
 export const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
 const POST_SHELL_READY_STARTUP_COMMAND_DELAY_MS = 30
@@ -22,6 +25,7 @@ export function writeStartupCommandWhenShellReady(
 ): void {
   let sent = false
   let postReadyTimer: ReturnType<typeof setTimeout> | null = null
+  let submitTimer: ReturnType<typeof setTimeout> | null = null
   let postReadyDataDisposable: { dispose: () => void } | null = null
 
   const cleanup = (): void => {
@@ -29,6 +33,10 @@ export function writeStartupCommandWhenShellReady(
     if (postReadyTimer !== null) {
       clearTimeout(postReadyTimer)
       postReadyTimer = null
+    }
+    if (submitTimer !== null) {
+      clearTimeout(submitTimer)
+      submitTimer = null
     }
     postReadyDataDisposable?.dispose()
     postReadyDataDisposable = null
@@ -46,15 +54,11 @@ export function writeStartupCommandWhenShellReady(
       postReadyTimer = null
     }
     // Why: run in the same interactive shell (not `shell -c`) so the session survives after the agent exits.
-    // Why CR on Windows: PSReadLine/cmd.exe submit on `\r`, not LF; POSIX treats either as Enter under ICRNL.
-    const submit = process.platform === 'win32' ? '\r' : '\n'
-    // Why: single write after the ready barrier avoids incremental-paste char drops; multiline is bracketed-paste wrapped so newlines don't submit early.
-    proc.write(
-      buildStartupCommandSubmission(startupCommand, {
-        submit,
-        bracketedPasteSafe: options.bracketedPasteSafe === true
-      })
-    )
+    proc.write(buildStartupCommandPayload(startupCommand, options.bracketedPasteSafe === true))
+    submitTimer = setTimeout(() => {
+      submitTimer = null
+      proc.write('\r')
+    }, STARTUP_COMMAND_SUBMIT_DELAY_MS)
   }
 
   const schedulePostReadyFlush = (): void => {

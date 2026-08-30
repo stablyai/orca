@@ -79,11 +79,13 @@ export async function scanAiVaultSessions(
     // the cold scan gains nothing from the cache file (#9210).
     throwIfAiVaultScanCancelled(options.signal)
     await ensureSessionParseCacheLoaded()
+    const selectedAgents = options.agents ? new Set(options.agents) : null
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
     throwIfAiVaultScanCancelled(options.signal)
 
     const candidates = dedupeCodexRolloutFileAliases(
       discoveries
+        .filter((discovery) => !selectedAgents || selectedAgents.has(discovery.agent))
         .flatMap((discovery) =>
           discovery.files.map(
             (file): SessionFileCandidate => ({
@@ -136,6 +138,7 @@ export async function scanAiVaultSessions(
       executionHostId,
       issues,
       parseStats,
+      includeClaude: !selectedAgents || selectedAgents.has('claude'),
       signal: options.signal
     })
     // Scope discovery can return without parsing anything, so an abort landing
@@ -188,9 +191,10 @@ async function scanInScopeSessions(args: {
   executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
   parseStats: SessionParseStats
+  includeClaude: boolean
   signal?: AbortSignal
 }): Promise<AiVaultSession[]> {
-  if (args.scopePaths.length === 0) {
+  if (!args.includeClaude || args.scopePaths.length === 0) {
     return []
   }
   const claudeRootDirs = args.discoveries

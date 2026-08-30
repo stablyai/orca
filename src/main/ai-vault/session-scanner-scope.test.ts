@@ -24,6 +24,7 @@ function scopedScanOptions(claudeProjectsDir: string, extra: Partial<AiVaultScan
     cursorProjectsDir: '/nonexistent/cursor',
     opencodeStorageDir: '/nonexistent/opencode',
     opencodeDbPaths: [],
+    mimoCodeDbPaths: [],
     grokSessionsDir: '/nonexistent/grok',
     devinTranscriptsDir: '/nonexistent/devin',
     hermesSessionsDir: '/nonexistent/hermes',
@@ -134,6 +135,29 @@ describe('scanAiVaultSessions scope inclusion', () => {
 
     const matches = result.sessions.filter((session) => session.sessionId === 'recent-in-scope')
     expect(matches).toHaveLength(1)
+  })
+
+  it('does not include scoped Claude sessions when Claude is filtered out', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
+    tempRoots.push(root)
+    const claudeRoot = join(root, 'claude-projects')
+
+    await writeClaudeSession({
+      claudeRoot,
+      dirName: '-repo-app',
+      sessionId: 'filtered-claude-session',
+      cwd: '/repo/app',
+      iso: '2026-06-24T00:00:00.000Z'
+    })
+
+    const result = await scanAiVaultSessions(
+      scopedScanOptions(claudeRoot, {
+        agents: ['mimo-code'],
+        scopePaths: ['/repo/app']
+      })
+    )
+
+    expect(result.sessions.map((session) => session.agent)).toEqual([])
   })
 
   it('matches WSL UNC scope paths against Linux Claude cwd values', async () => {

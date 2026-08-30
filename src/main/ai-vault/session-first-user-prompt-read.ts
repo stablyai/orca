@@ -69,20 +69,22 @@ async function parseSessionForFullFirstUserPrompt(args: {
   // Why: OpenCode SQLite sessions store filePath as the db path (not db#id).
   // Re-parse in-process under full capture so ALS applies and we can read the
   // earliest user row (worker list-scan path only joins newest messages).
-  if (args.agent === 'opencode') {
+  if (args.agent === 'opencode' || args.agent === 'mimo-code') {
     const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath)
     if (fromSynthetic) {
       return parseOpenCodeSqliteSession({
         dbPath: fromSynthetic.dbPath,
         sessionId: fromSynthetic.sessionId,
-        platform: process.platform
+        platform: process.platform,
+        agent: args.agent
       })
     }
     if (args.sessionId) {
       return parseOpenCodeSqliteSession({
         dbPath: args.filePath,
         sessionId: args.sessionId,
-        platform: process.platform
+        platform: process.platform,
+        agent: args.agent
       })
     }
   }
@@ -93,11 +95,7 @@ async function parseSessionForFullFirstUserPrompt(args: {
   }
 
   return parseAgentSessionFile(
-    {
-      agent: args.agent,
-      file,
-      codexHome: args.codexHome
-    },
+    { agent: args.agent, file, codexHome: args.codexHome },
     process.platform
   )
 }
@@ -109,12 +107,8 @@ async function fileWithMtimeForPath(
   // OpenCode SQLite candidates use a synthetic `dbPath#sessionId` path that is
   // not a real filesystem object; parsers that need it accept the path as-is.
   // `#` is legal in real filenames, so gate on the agent and the synthetic shape.
-  if (agent === 'opencode' && splitOpenCodeSqliteCandidate(filePath)) {
-    return {
-      path: filePath,
-      mtimeMs: 0,
-      modifiedAt: new Date(0).toISOString()
-    }
+  if ((agent === 'opencode' || agent === 'mimo-code') && splitOpenCodeSqliteCandidate(filePath)) {
+    return { path: filePath, mtimeMs: 0, modifiedAt: new Date(0).toISOString() }
   }
 
   try {

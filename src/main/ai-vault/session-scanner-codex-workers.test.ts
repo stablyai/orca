@@ -28,11 +28,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
         {
           timestamp: '2026-06-12T10:00:00.000Z',
           type: 'session_meta',
-          payload: {
-            id: 'user-session',
-            cwd: '/repo/app',
-            thread_source: 'user'
-          }
+          payload: { id: 'user-session', cwd: '/repo/app', thread_source: 'user' }
         },
         {
           timestamp: '2026-06-12T10:00:01.000Z',
@@ -52,11 +48,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
         {
           timestamp: '2026-06-12T10:01:00.000Z',
           type: 'session_meta',
-          payload: {
-            id: 'worker-session',
-            cwd: '/repo/app',
-            thread_source: 'subagent'
-          }
+          payload: { id: 'worker-session', cwd: '/repo/app', thread_source: 'subagent' }
         },
         {
           timestamp: '2026-06-12T10:01:01.000Z',
@@ -111,6 +103,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       cursorProjectsDir: join(root, 'cursor-projects'),
       opencodeStorageDir: join(root, 'opencode-storage'),
       opencodeDbPaths: [],
+      mimoCodeDbPaths: [],
       grokSessionsDir: join(root, 'grok-sessions'),
       devinTranscriptsDir: join(root, 'devin-transcripts'),
       hermesSessionsDir: join(root, 'hermes-sessions'),
@@ -122,6 +115,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       primeAgentSessionsDir: join(root, 'prime-agent-sessions'),
       droidSessionsDir: join(root, 'droid-sessions'),
       droidProjectsDir: join(root, 'droid-projects'),
+      clineSessionsDir: join(root, 'cline-sessions'),
       kimiSessionsDir: join(root, 'kimi-sessions'),
       platform: 'darwin'
     })

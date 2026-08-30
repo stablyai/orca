@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 
@@ -52,6 +52,7 @@ export function listOpenCodeSqliteSessionsViaWorker(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  agent?: AiVaultAgent
 }): Promise<SessionFileCandidate[]> {
   return getSharedClient().list(args)
 }
@@ -67,6 +68,7 @@ export function parseOpenCodeSqliteSessionViaWorker(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  agent?: AiVaultAgent
 }): Promise<AiVaultSession | null> {
   return getSharedClient().parse(args)
 }

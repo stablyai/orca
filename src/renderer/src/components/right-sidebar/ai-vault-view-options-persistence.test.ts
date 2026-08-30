@@ -75,6 +75,12 @@ describe('AI Vault view option persistence', () => {
     )
   })
 
+  it('preserves MiMo Code when it is disabled in the session filter', () => {
+    expect(normalizeAiVaultViewOptions({ disabledAgents: ['mimo-code'] }).disabledAgents).toEqual([
+      'mimo-code'
+    ])
+  })
+
   it('preserves a fully cleared agent selection', () => {
     const normalized = normalizeAiVaultViewOptions({
       disabledAgents: [...AI_VAULT_AGENTS],

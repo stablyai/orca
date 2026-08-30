@@ -1,4 +1,4 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 // Why: request/response shapes shared by the worker entry and the main-thread
@@ -10,6 +10,7 @@ export type OpenCodeSqliteListRequest = {
   kind: 'list'
   dbPaths: readonly string[]
   limit: number
+  agent?: AiVaultAgent
 }
 
 export type OpenCodeSqliteParseRequest = {
@@ -18,6 +19,7 @@ export type OpenCodeSqliteParseRequest = {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  agent?: AiVaultAgent
 }
 
 export type OpenCodeSqliteWorkerRequest = OpenCodeSqliteListRequest | OpenCodeSqliteParseRequest

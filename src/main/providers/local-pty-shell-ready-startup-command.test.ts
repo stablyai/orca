@@ -58,7 +58,7 @@ describe('writeStartupCommandWhenShellReady', () => {
     Object.defineProperty(process, 'platform', { value: origPlatform })
   })
 
-  it('appends LF on POSIX so bash/zsh submit the line', async () => {
+  it('writes the command before a delayed CR on POSIX', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     const proc = createMockProc()
     const ready = Promise.resolve()
@@ -69,10 +69,15 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['claude\n'])
+    expect(proc._writes).toEqual(['claude'])
+
+    vi.advanceTimersByTime(49)
+    expect(proc._writes).toEqual(['claude'])
+    vi.advanceTimersByTime(1)
+    expect(proc._writes).toEqual(['claude', '\r'])
   })
 
-  it('appends CR on Windows so PowerShell/cmd.exe submit the line', async () => {
+  it('writes the command before a delayed CR on Windows', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     const proc = createMockProc()
     const ready = Promise.resolve()
@@ -83,10 +88,12 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['claude\r'])
+    expect(proc._writes).toEqual(['claude'])
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual(['claude', '\r'])
   })
 
-  it('does not re-append a submit byte if the command already ends in CR or LF', async () => {
+  it('replaces a trailing submit byte with the delayed CR', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     const proc = createMockProc()
     const ready = Promise.resolve()
@@ -97,7 +104,9 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['claude\n'])
+    expect(proc._writes).toEqual(['claude'])
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual(['claude', '\r'])
   })
 
   it('keeps the no-prompt fallback conservative to avoid duplicate shell echo', async () => {
@@ -115,7 +124,9 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(150)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['codex\n'])
+    expect(proc._writes).toEqual(['codex'])
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual(['codex', '\r'])
   })
 
   it('uses the short settle delay when marker scan already observed post-marker bytes', async () => {
@@ -131,7 +142,9 @@ describe('writeStartupCommandWhenShellReady', () => {
 
     vi.advanceTimersByTime(1)
     await Promise.resolve()
-    expect(proc._writes).toEqual(['codex\n'])
+    expect(proc._writes).toEqual(['codex'])
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual(['codex', '\r'])
   })
 
   // Why: multiline startup commands must be bracketed-paste wrapped (ESC[200~ … ESC[201~) so shells insert them literally instead of treating each LF as Enter.
@@ -149,7 +162,9 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~\n`])
+    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~`])
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~`, '\r'])
   })
 
   it('leaves a single-line command on the raw submit path even when bracketed paste is safe', async () => {
@@ -165,7 +180,9 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['claude\n'])
+    expect(proc._writes).toEqual(['claude'])
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual(['claude', '\r'])
   })
 
   it('does not bracket-wrap a multiline command when the shell lacks bracketed paste', async () => {
@@ -181,6 +198,8 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual([`${command}\n`])
+    expect(proc._writes).toEqual([command])
+    vi.advanceTimersByTime(50)
+    expect(proc._writes).toEqual([command, '\r'])
   })
 })

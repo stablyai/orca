@@ -17,6 +17,7 @@ import type { HeadlessEmulator } from './headless-emulator'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { basename } from 'node:path'
 import type { ShellReadyState } from './types'
+import { DelayedStartupCommandWriter } from './delayed-startup-command-writer'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
 // Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
@@ -37,6 +38,10 @@ export type SessionShellReadyBarrierDeps = {
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
 }
 
+type PendingWrite =
+  | { kind: 'data'; data: string }
+  | { kind: 'startup-command'; command: string; bracketedPasteSafe: boolean }
+
 /** The startup gate every byte of PTY output passes through: it strips the shell-ready marker, holds
  *  stdin until the shell can accept it, and owns DA1 authority for as long as the gate is closed. */
 export class SessionShellReadyBarrier {
@@ -46,10 +51,12 @@ export class SessionShellReadyBarrier {
   private promptReadinessProbe: ShellPromptReadinessProbe | null = null
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
-  private preReadyStdinQueue: string[] = []
+  private preReadyStdinQueue: PendingWrite[] = []
   private readonly postReadyFlushGate: PostReadyFlushGate
+  private readonly startupCommandWriter: DelayedStartupCommandWriter
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
+    this.startupCommandWriter = new DelayedStartupCommandWriter(deps.subprocess)
     if (deps.shellReadySupported) {
       this._state = 'pending'
       this.scanState = createShellStartupOutputScanState()
@@ -101,8 +108,16 @@ export class SessionShellReadyBarrier {
     if (!this.isGatingWrites) {
       return false
     }
-    this.preReadyStdinQueue.push(data)
+    this.preReadyStdinQueue.push({ kind: 'data', data })
     return true
+  }
+
+  writeStartupCommand(command: string, bracketedPasteSafe: boolean): void {
+    if (this.isGatingWrites) {
+      this.preReadyStdinQueue.push({ kind: 'startup-command', command, bracketedPasteSafe })
+      return
+    }
+    this.startupCommandWriter.write(command, bracketedPasteSafe)
   }
 
   ingestSubprocessData(data: string): void {
@@ -164,10 +179,12 @@ export class SessionShellReadyBarrier {
   clearPendingWrites(): void {
     this.preReadyStdinQueue = []
     this.postReadyFlushGate.clear()
+    this.startupCommandWriter.clear()
   }
 
   clearFlushGate(): void {
     this.postReadyFlushGate.clear()
+    this.startupCommandWriter.clear()
   }
 
   dispose(): void {
@@ -240,8 +257,12 @@ export class SessionShellReadyBarrier {
   private flushPreReadyQueue(): void {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
-    for (const data of queued) {
-      this.deps.subprocess.write(data)
+    for (const pending of queued) {
+      if (pending.kind === 'startup-command') {
+        this.startupCommandWriter.write(pending.command, pending.bracketedPasteSafe)
+      } else {
+        this.deps.subprocess.write(pending.data)
+      }
     }
   }
 }

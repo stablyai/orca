@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   isAiVaultScanCancelledError,
+  type AiVaultAgent,
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
@@ -49,7 +50,8 @@ function isMergedAiVaultHostScope(scope: ExecutionHostScope): boolean {
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
   executionHostScope: ExecutionHostScope,
-  sessionLimit: AiVaultSessionLimit
+  sessionLimit: AiVaultSessionLimit,
+  agents: readonly AiVaultAgent[]
 ): {
   error: string | null
   loading: boolean
@@ -70,11 +72,13 @@ export function useAiVaultSessionRefresh(
   const lastAppliedScanRef = useRef<{ scopeKey: string; scannedAt: string } | null>(null)
   const mountedRef = useRef(true)
   const publicationGateRef = useRef(new AiVaultSessionPublicationGate())
-  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths)}\n${sessionLimit}`
+  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, agents)}\n${sessionLimit}`
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
   const executionHostScopeRef = useRef<ExecutionHostScope>(executionHostScope)
   executionHostScopeRef.current = executionHostScope
+  const agentsRef = useRef<readonly AiVaultAgent[]>(agents)
+  agentsRef.current = agents
   const sessionLimitRef = useRef(sessionLimit)
   // Keep render pure for React Doctor; layout effect still lands before refresh effects.
   useLayoutEffect(() => {
@@ -84,7 +88,8 @@ export function useAiVaultSessionRefresh(
     () =>
       `${aiVaultSessionResultCacheKey(
         executionHostScopeRef.current,
-        scopePathsRef.current
+        scopePathsRef.current,
+        agentsRef.current
       )}\n${sessionLimitRef.current}`,
     []
   )
@@ -93,7 +98,11 @@ export function useAiVaultSessionRefresh(
     async (args: AiVaultRefreshArgs = {}): Promise<void> => {
       const hostScope = executionHostScopeRef.current
       const selectedLimit = sessionLimitRef.current
-      const baseKey = aiVaultSessionResultCacheKey(hostScope, scopePathsRef.current)
+      const baseKey = aiVaultSessionResultCacheKey(
+        hostScope,
+        scopePathsRef.current,
+        agentsRef.current
+      )
       const cachedResult =
         args.reuseLoadedDepth === true
           ? readCachedAiVaultSessionResult({
@@ -142,6 +151,7 @@ export function useAiVaultSessionRefresh(
         const result = await window.api.aiVault.listSessions({
           limit,
           unlimited: selectedLimit === 'unlimited',
+          agents: agentsRef.current,
           scopePaths: scopePathsRef.current,
           executionHostScope: hostScope,
           force: args.force,
@@ -247,9 +257,7 @@ export function useAiVaultSessionRefresh(
       publicationGate.cancel()
       refreshIdRef.current += 1
       refreshInFlightRef.current = false
-      void window.api.aiVault.cancelListSessions({
-        requestToken
-      })
+      void window.api.aiVault.cancelListSessions({ requestToken })
       if (forcedRescanTimerRef.current !== null) {
         clearTimeout(forcedRescanTimerRef.current)
         forcedRescanTimerRef.current = null
@@ -261,9 +269,7 @@ export function useAiVaultSessionRefresh(
   useEffect(() => {
     publicationGateRef.current.cancel()
     if (refreshInFlightRef.current) {
-      void window.api.aiVault.cancelListSessions({
-        requestToken: requestTokenRef.current
-      })
+      void window.api.aiVault.cancelListSessions({ requestToken: requestTokenRef.current })
     }
     void refresh({ force: false, reuseLoadedDepth: true })
   }, [executionHostScope, refresh, scanScopeKey])

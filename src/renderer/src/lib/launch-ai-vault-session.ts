@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
@@ -68,10 +69,7 @@ export function launchAiVaultSessionInNewTab(args: {
       targetGroupId
   }
 
-  const tab = args.cwd
-    ? store.createTab(args.worktreeId, targetGroupId, undefined, { startupCwd: args.cwd })
-    : store.createTab(args.worktreeId, targetGroupId)
-  store.queueTabStartupCommand(tab.id, {
+  const pendingStartup = {
     command: args.command,
     ...(args.env ? { env: args.env } : {}),
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
@@ -82,7 +80,20 @@ export function launchAiVaultSessionInNewTab(args: {
       launch_source: 'sidebar',
       request_kind: 'resume'
     }
+  } as const
+  const tab = store.createTab(args.worktreeId, targetGroupId, undefined, {
+    ...(args.cwd ? { startupCwd: args.cwd } : {}),
+    pendingStartup
   })
+  if (args.agent === 'mimo-code') {
+    recordRendererCrashBreadcrumb('ai_vault_mimo_startup_queued', {
+      tabId: tab.id,
+      targetWasActive: store.activeWorktreeId === args.worktreeId,
+      hasCwd: Boolean(args.cwd),
+      hasLaunchConfig: Boolean(args.launchConfig),
+      hasProviderSession: Boolean(args.providerSession)
+    })
+  }
   store.setActiveTabType('terminal')
 
   const fresh = useAppStore.getState()

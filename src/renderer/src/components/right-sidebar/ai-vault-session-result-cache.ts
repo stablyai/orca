@@ -1,4 +1,4 @@
-import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultListResult } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import {
   aiVaultSessionDepthCovers,
@@ -18,10 +18,15 @@ const cachedSessionResults = new Map<string, CachedSessionResult>()
 
 export function aiVaultSessionResultCacheKey(
   executionHostScope: ExecutionHostScope,
-  scopePaths: readonly string[]
+  scopePaths: readonly string[],
+  agents: readonly AiVaultAgent[]
 ): string {
   // JSON keeps the parts unambiguous: a path may legally contain any separator.
-  return JSON.stringify([executionHostScope, ...[...new Set(scopePaths)].sort()])
+  return JSON.stringify([
+    executionHostScope,
+    [...new Set(scopePaths)].sort(),
+    [...new Set(agents)].sort()
+  ])
 }
 
 export function readCachedAiVaultSessionResult(args: {

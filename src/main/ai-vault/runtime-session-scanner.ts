@@ -19,14 +19,9 @@ import type {
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
 
-export type RuntimeAiVaultHostInfo = {
-  environmentId: string
-  executionHostId: `runtime:${string}`
-}
+export type RuntimeAiVaultHostInfo = { environmentId: string; executionHostId: `runtime:${string}` }
 
-export type RuntimeAiVaultScanOptions = {
-  timeoutMs?: number
-}
+export type RuntimeAiVaultScanOptions = { timeoutMs?: number }
 
 // Why: zod strips unknown keys, so the repin home must be declared or the
 // parent would silently drop it and resume under the wrong account's home.
@@ -59,6 +54,7 @@ export async function scanRuntimeAiVaultSessions(
       limit: args.limit,
       unlimited: args.unlimited,
       force: args.force,
+      agents: args.agents,
       // Why: cap here so the set of scanned paths is explicit on this side —
       // the RPC schema CLAMPS to the same bound anyway (older hosts had no
       // cap). Dropped paths only lose the older-than-recency-cap guarantee,
@@ -100,11 +96,7 @@ export async function scanRuntimeAiVaultSessions(
       })
     }
   }
-  return runtimeScanIssueResult({
-    executionHostId,
-    environmentId,
-    message: response.error.message
-  })
+  return runtimeScanIssueResult({ executionHostId, environmentId, message: response.error.message })
 }
 
 export async function resolveRuntimeAiVaultSessionTitles(

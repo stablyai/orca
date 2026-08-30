@@ -16,6 +16,23 @@
 // DEC 2004 bracketed-paste bracket sequences.
 const BRACKETED_PASTE_START = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
+export const STARTUP_COMMAND_SUBMIT_DELAY_MS = 50
+
+function splitTrailingTerminator(command: string): { body: string; terminator: string } {
+  const terminator = /\r\n$|\r$|\n$/.exec(command)?.[0] ?? ''
+  return {
+    body: terminator ? command.slice(0, -terminator.length) : command,
+    terminator
+  }
+}
+
+export function buildStartupCommandPayload(command: string, bracketedPasteSafe: boolean): string {
+  const { body } = splitTrailingTerminator(command)
+  if (bracketedPasteSafe && (body.includes('\n') || body.includes('\r'))) {
+    return `${BRACKETED_PASTE_START}${body}${BRACKETED_PASTE_END}`
+  }
+  return body
+}
 
 export type StartupCommandSubmissionOptions = {
   /** Byte that submits the line: CR on Windows (PSReadLine/cmd.exe), LF on
@@ -56,9 +73,8 @@ export function buildStartupCommandSubmission(
 ): string {
   // Strip a full CRLF (or lone CR/LF) terminator so a single-line command ending
   // in \r\n isn't misread as multiline by the \r/\n body check below.
-  const trailingTerminator = /\r\n$|\r$|\n$/.exec(command)?.[0] ?? ''
+  const { body, terminator: trailingTerminator } = splitTrailingTerminator(command)
   const endsWithSubmit = trailingTerminator.length > 0
-  const body = endsWithSubmit ? command.slice(0, -trailingTerminator.length) : command
   if (bracketedPasteSafe && (body.includes('\n') || body.includes('\r'))) {
     return `${BRACKETED_PASTE_START}${body}${BRACKETED_PASTE_END}${submit}`
   }

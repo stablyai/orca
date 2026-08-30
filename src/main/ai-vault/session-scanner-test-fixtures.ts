@@ -13,6 +13,7 @@ export function isolatedScanRoots(root: string) {
     // Why: prevent the SQLite scanner from picking up the real
     // ~/.local/share/opencode/opencode.db during tests.
     opencodeDbPaths: [] as readonly string[],
+    mimoCodeDbPaths: [] as readonly string[],
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
@@ -65,11 +66,7 @@ export async function writeOmpScannerFixture(sessionsDir: string): Promise<strin
       timestamp: '2026-05-01T10:08:30.000Z',
       cwd: '/tmp/omp'
     },
-    {
-      type: 'model_change',
-      model: 'gpt-5.4-mini',
-      timestamp: '2026-05-01T10:08:30.500Z'
-    },
+    { type: 'model_change', model: 'gpt-5.4-mini', timestamp: '2026-05-01T10:08:30.500Z' },
     {
       type: 'message',
       timestamp: '2026-05-01T10:08:31.000Z',

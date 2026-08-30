@@ -1,5 +1,10 @@
 import type { Worker } from 'node:worker_threads'
-import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import {
+  aiVaultAgentLabel,
+  type AiVaultAgent,
+  type AiVaultScanIssue,
+  type AiVaultSession
+} from '../../shared/ai-vault-types'
 import type {
   OpenCodeSqliteListRequest,
   OpenCodeSqliteListValue,
@@ -81,13 +86,16 @@ export class OpenCodeSqliteWorkerClient {
     dbPaths: readonly string[]
     limit: number
     issues: AiVaultScanIssue[]
+    agent?: AiVaultAgent
   }): Promise<SessionFileCandidate[]> {
     if (args.dbPaths.length === 0) {
       return []
     }
+    const agent = args.agent ?? 'opencode'
+    const label = aiVaultAgentLabel(agent)
     try {
       const value = (await this.dispatch(
-        { kind: 'list', dbPaths: args.dbPaths, limit: args.limit },
+        { kind: 'list', dbPaths: args.dbPaths, limit: args.limit, agent },
         LIST_TIMEOUT_MS
       )) as OpenCodeSqliteListValue
       args.issues.push(...value.issues)
@@ -96,21 +104,20 @@ export class OpenCodeSqliteWorkerClient {
       if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
         // Kinded: a whole source failed, not a transcript.
         args.issues.push({
-          agent: 'opencode',
+          agent,
           kind: 'scope',
           path: args.dbPaths[0] ?? 'opencode.db',
-          message:
-            'OpenCode history was skipped because its background scanner could not start; the app remains responsive.'
+          message: `${label} history was skipped because its background scanner could not start; the app remains responsive.`
         })
         return []
       }
       // Timeout/crash: this storage dir's SQLite DBs contribute no sessions this
       // scan, surfaced as one scan issue rather than an unbounded stall.
       args.issues.push({
-        agent: 'opencode',
+        agent,
         kind: 'scope',
         path: args.dbPaths[0] ?? 'opencode.db',
-        message: `OpenCode history scan did not complete: ${errorMessage(err)}`
+        message: `${label} history scan did not complete: ${errorMessage(err)}`
       })
       return []
     }
@@ -128,10 +135,17 @@ export class OpenCodeSqliteWorkerClient {
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
+    agent?: AiVaultAgent
   }): Promise<AiVaultSession | null> {
     try {
       const value = await this.dispatch(
-        { kind: 'parse', dbPath: args.dbPath, sessionId: args.sessionId, platform: args.platform },
+        {
+          kind: 'parse',
+          dbPath: args.dbPath,
+          sessionId: args.sessionId,
+          platform: args.platform,
+          agent: args.agent
+        },
         PARSE_TIMEOUT_MS
       )
       return value as AiVaultSession | null

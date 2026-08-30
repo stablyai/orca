@@ -43,7 +43,8 @@ export async function parseAgentSessionFile(
       return parseCopilotSessionFile(candidate.file, platform)
     case 'cursor':
       return parseCursorSessionFile(candidate.file, platform)
-    case 'opencode': {
+    case 'opencode':
+    case 'mimo-code': {
       // Why: OpenCode 1.17.x sessions are read from SQLite via a synthetic
       // <dbPath>#<sessionId> candidate path. Legacy file-based sessions use
       // real filesystem paths and fall through to the JSON parser.
@@ -52,7 +53,8 @@ export async function parseAgentSessionFile(
         return parseOpenCodeSqliteSessionViaWorker({
           dbPath: sqliteCandidate.dbPath,
           sessionId: sqliteCandidate.sessionId,
-          platform
+          platform,
+          agent: candidate.agent
         })
       }
       return parseOpenCodeSessionFile(candidate.file, platform)

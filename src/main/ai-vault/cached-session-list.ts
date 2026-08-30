@@ -24,9 +24,7 @@ const AI_VAULT_CACHE_TTL_MS = 60_000
 // seam (the OrcaRuntimeService deps), NOT the window-only registerCoreHandlers
 // path — `orca serve` never runs that path, so sourcing it there would silently
 // drop managed-Codex sessions from remote/SSH results.
-export type AiVaultSessionSources = {
-  getAdditionalCodexHomePaths?: () => readonly string[]
-}
+export type AiVaultSessionSources = { getAdditionalCodexHomePaths?: () => readonly string[] }
 
 type CachedAiVaultList = {
   key: string
@@ -52,8 +50,11 @@ export async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
-  // Scope paths change the result set, so they must be part of the cache key.
-  const key = JSON.stringify({ scopePaths: [...new Set(args?.scopePaths ?? [])].sort() })
+  // Scope paths and provider selection change the result set, so both belong in the cache key.
+  const key = JSON.stringify({
+    scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
+    agents: args?.agents ? [...new Set(args.agents)].sort() : undefined
+  })
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   const now = Date.now()
@@ -85,6 +86,7 @@ export async function listAiVaultSessions(
         {
           limit: args?.limit,
           unlimited: args?.unlimited,
+          agents: args?.agents,
           scopePaths: args?.scopePaths,
           additionalCodexSessionsDirs,
           wslHomeDirs: await getAiVaultWslHomeDirs(),
@@ -105,12 +107,7 @@ export async function listAiVaultSessions(
           current.expiresAt <= Date.now() ||
           !aiVaultSessionDepthCovers(current.depth, depth)
         ) {
-          cachedList = {
-            key,
-            depth,
-            result,
-            expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
-          }
+          cachedList = { key, depth, result, expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS }
         }
       }
       return result
