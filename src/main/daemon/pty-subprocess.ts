@@ -4,6 +4,7 @@ import { TerminalAttachCanceledError } from './daemon-errors'
 import { createDaemonPtyEnvironment } from './pty-subprocess/spawn-environment'
 import { createPtyShellLaunchPlan } from './pty-subprocess/shell-launch-plan'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './pty-subprocess/native-pty-spawn'
+import type { MacosTccSpawnStrategy } from '../providers/macos-tcc-spawn-attribution'
 import {
   formatPtySpawnError,
   preflightPtySpawn,
@@ -33,7 +34,7 @@ export type PtySubprocessOptions = {
   isCanceled?: () => boolean
   /** Aborts in-progress cwd validation; `isCanceled` is only polled between steps. */
   cancelSignal?: AbortSignal
-  onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
+  onMacosTccSpawnStrategy?: (strategy: MacosTccSpawnStrategy) => void
 }
 
 export async function checkPtySpawnHealth(): Promise<void> {

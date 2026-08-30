@@ -298,7 +298,10 @@ async function main(): Promise<void> {
         ...(process.platform === 'darwin'
           ? {
               onMacosTccSpawnStrategy: (strategy) =>
-                daemonLog.log('macos-tcc-pty-spawn', { strategy })
+                daemonLog.log('macos-tcc-pty-spawn', {
+                  wrapper: strategy.wrapper,
+                  attribution: strategy.attribution
+                })
             }
           : {})
       }),

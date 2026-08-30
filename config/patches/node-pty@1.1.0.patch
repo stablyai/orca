@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc835f1479ab 100644
+index 5f63978..837360b 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -1,13 +1,18 @@
@@ -8,7 +8,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
      'dependencies': [
 -      "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
 +      "<!(node -p \"require.resolve('node-addon-api/node_addon_api.gyp')\"):node_addon_api_except",
-     ],
++    ],
 +    # Orca: GCC 9 (Ubuntu 20.04 floor) accepts C++20 as gnu++2a, but rejects
 +    # the newer gnu++20 spelling emitted by Node 24's gyp flags.
 +    'cflags_cc!': [
@@ -16,7 +16,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
 +    ],
 +    'cflags_cc': [
 +      '-std=gnu++2a'
-+    ],
+     ],
      'conditions': [
        ['OS=="win"', {
 -        'msvs_configuration_attributes': {
@@ -25,7 +25,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
          'msvs_settings': {
              'VCCLCompilerTool': {
                'AdditionalOptions': [
-@@ -42,32 +39,6 @@
+@@ -42,32 +47,6 @@
              '-lshlwapi'
            ],
          },
@@ -58,7 +58,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
        ]
      }, { # OS!="win"
        'targets': [
-@@ -88,6 +85,16 @@
+@@ -88,6 +67,16 @@
                'libraries!': [
                  '-lutil'
                ]
@@ -76,7 +76,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
            ]
          }
 diff --git a/deps/winpty/src/winpty.gyp b/deps/winpty/src/winpty.gyp
-index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8360130ef 100644
+index 1ac5758..e619813 100644
 --- a/deps/winpty/src/winpty.gyp
 +++ b/deps/winpty/src/winpty.gyp
 @@ -10,7 +10,7 @@
@@ -118,7 +118,7 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
                  # Specify this setting here to override a setting from somewhere
                  # else, such as node's common.gypi.
 diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
-index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441e02a974c 100644
+index 8c4fca9..0a01730 100644
 --- a/lib/conpty_console_list_agent.js
 +++ b/lib/conpty_console_list_agent.js
 @@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
@@ -139,7 +139,7 @@ index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441
  //# sourceMappingURL=conpty_console_list_agent.js.map
 \ No newline at end of file
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f7..526a2c3 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -157,8 +157,29 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
+@@ -127,6 +131,8 @@ var UnixTerminal = /** @class */ (function (_super) {
+         _this._pid = term.pid;
+         _this._fd = term.fd;
+         _this._pty = term.pty;
++        // Orca (STA-3631): absent on unpatched builds, so readers treat undefined as "unknown".
++        _this._tccDisclaim = term.tccDisclaim;
+         _this._file = file;
+         _this._name = name;
+         _this._readable = true;
+@@ -166,6 +172,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+         enumerable: false,
+         configurable: true
+     });
++    Object.defineProperty(UnixTerminal.prototype, "tccDisclaim", {
++        get: function () { return this._tccDisclaim; },
++        enumerable: false,
++        configurable: true
++    });
+     /**
+      * openpty
+      */
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
-index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
+index 181ccab..67f31fa 100644
 --- a/src/conpty_console_list_agent.ts
 +++ b/src/conpty_console_list_agent.ts
 @@ -10,6 +10,12 @@ import { loadNativeModule } from './utils';
@@ -176,7 +197,7 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d15c4dd44 100644
+index 7b4b9e1..9193e6a 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -189,7 +210,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  #include <thread>
  
  #include <sys/types.h>
-@@ -47,6 +49,25 @@
+@@ -47,6 +49,68 @@
  #include <termios.h>
  #endif
  
@@ -212,10 +233,53 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
 +#  endif
 +#endif
 +
++/* Orca (STA-3631): macOS 26 no longer breaks TCC responsibility inheritance at
++ * an intermediate login(1) session, so every terminal child is attributed to the
++ * app bundle. Disclaim responsibility on the spawn attributes instead — the same
++ * mechanism Terminal.app and iTerm2 rely on. Resolved at runtime because the
++ * symbol is SPI and absent from the public SDK headers. */
++#if defined(__APPLE__)
++#include <dlfcn.h>
++#include <spawn.h>
++
++/* Verdict codes surfaced to JS; keep in sync with lib/unixTerminal.js. */
++#define ORCA_TCC_DISCLAIM_UNKNOWN 0
++#define ORCA_TCC_DISCLAIM_APPLIED 1
++#define ORCA_TCC_DISCLAIM_UNSUPPORTED 2
++#define ORCA_TCC_DISCLAIM_FAILED 3
++
++typedef int (*orca_tcc_setdisclaim_fn)(posix_spawnattr_t*, int);
++
++static orca_tcc_setdisclaim_fn
++orca_tcc_resolve_setdisclaim(void) {
++  static orca_tcc_setdisclaim_fn resolved = NULL;
++  static bool attempted = false;
++  if (!attempted) {
++    attempted = true;
++    resolved = (orca_tcc_setdisclaim_fn)dlsym(
++        RTLD_DEFAULT, "responsibility_spawnattrs_setdisclaim");
++  }
++  return resolved;
++}
++
++/* Returns one of the ORCA_TCC_DISCLAIM_* verdicts. Never reports APPLIED unless
++ * the SPI both resolved and returned success, so callers can say "unknown"
++ * rather than assume isolation that may not exist. */
++static int
++orca_tcc_apply_disclaim(posix_spawnattr_t* attrs) {
++  orca_tcc_setdisclaim_fn setdisclaim = orca_tcc_resolve_setdisclaim();
++  if (setdisclaim == NULL) {
++    return ORCA_TCC_DISCLAIM_UNSUPPORTED;
++  }
++  return setdisclaim(attrs, 1) == 0 ? ORCA_TCC_DISCLAIM_APPLIED
++                                    : ORCA_TCC_DISCLAIM_FAILED;
++}
++#endif
++
  /* Some platforms name VWERASE and VDISCARD differently */
  #if !defined(VWERASE) && defined(VWERSE)
  #define VWERASE	VWERSE
-@@ -237,13 +258,23 @@ pty_getproc(int, char *);
+@@ -237,13 +301,24 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -236,11 +300,12 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
                  int* master,
                  pid_t* pid,
 -                int* err);
-+                pty_spawn_error* err);
++                pty_spawn_error* err,
++                int* tcc_disclaim);
  #endif
  
  struct DelBuf {
-@@ -367,10 +398,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,10 +442,13 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -249,14 +314,26 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
 -  if (err != 0) {
 -    throw Napi::Error::New(napiEnv, "posix_spawnp failed.");
 +  pty_spawn_error spawn_error = { NULL, 0, "", "" };
-+  pty_posix_spawn(argv, env, term, &winp, &master, &pid, &spawn_error);
++  int tcc_disclaim = ORCA_TCC_DISCLAIM_UNKNOWN;
++  pty_posix_spawn(argv, env, term, &winp, &master, &pid, &spawn_error,
++                  &tcc_disclaim);
 +  if (spawn_error.errnum != 0) {
 +    std::string spawn_message = pty_format_spawn_error(spawn_error);
 +    throw Napi::Error::New(napiEnv, spawn_message);
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,15 +716,73 @@ pty_getproc(int fd, char *tty) {
+@@ -452,6 +530,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+   obj.Set("fd", Napi::Number::New(napiEnv, master));
+   obj.Set("pid", Napi::Number::New(napiEnv, pid));
+   obj.Set("pty", Napi::String::New(napiEnv, ptsname(master)));
++#if defined(__APPLE__)
++  obj.Set("tccDisclaim", Napi::Number::New(napiEnv, tcc_disclaim));
++#endif
+ 
+   // Set up process exit callback.
+   Napi::Function cb = info[10].As<Napi::Function>();
+@@ -684,15 +765,74 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -320,7 +397,8 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
                  pid_t* pid,
 -                int* err) {
 -  int low_fds[3];
-+                pty_spawn_error* err) {
++                pty_spawn_error* err,
++                int* tcc_disclaim) {
 +  int low_fds[3] = {-1, -1, -1};
    size_t count = 0;
 +  int res = -1;
@@ -332,25 +410,25 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +796,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +846,122 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
 -    return;
 +    pty_set_spawn_error(err, "posix_openpt", errno);
 +    goto done;
++  }
++
++  res = grantpt(*master);
++  if (res == -1) {
++    pty_set_spawn_error(err, "grantpt", errno);
++    goto done;
    }
  
 -  int res = grantpt(*master) || unlockpt(*master);
-+  res = grantpt(*master);
++  res = unlockpt(*master);
    if (res == -1) {
 -    return;
-+    pty_set_spawn_error(err, "grantpt", errno);
-+    goto done;
-+  }
-+
-+  res = unlockpt(*master);
-+  if (res == -1) {
 +    pty_set_spawn_error(err, "unlockpt", errno);
 +    goto done;
    }
@@ -411,14 +489,18 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
 +  res = posix_spawnattr_init(&attrs);
 +  if (res != 0) {
 +    pty_set_spawn_error(err, "posix_spawnattr_init", res);
-+    goto done;
-+  }
+     goto done;
+   }
 +  attrs_initialized = true;
 +  res = posix_spawnattr_setflags(&attrs, flags);
 +  if (res != 0) {
 +    pty_set_spawn_error(err, "posix_spawnattr_setflags", res);
-     goto done;
-   }
++    goto done;
++  }
++
++  /* Orca (STA-3631): a failed disclaim is reported, never fatal — a shell with
++   * collapsed attribution still beats no shell. */
++  *tcc_disclaim = orca_tcc_apply_disclaim(&attrs);
  
    sigset_t signal_set;
    /* Reset all signal the child to their default behavior */
@@ -475,8 +557,37 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
    }
  }
  #endif
+diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
+index 98733dc..6077b46 100644
+--- a/src/unixTerminal.ts
++++ b/src/unixTerminal.ts
+@@ -26,6 +26,7 @@ const DESTROY_SOCKET_TIMEOUT_MS = 200;
+ export class UnixTerminal extends Terminal {
+   protected _fd: number;
+   protected _pty: string;
++  protected _tccDisclaim: number | undefined;
+ 
+   protected _file: string;
+   protected _name: string;
+@@ -147,6 +148,8 @@ export class UnixTerminal extends Terminal {
+     this._pid = term.pid;
+     this._fd = term.fd;
+     this._pty = term.pty;
++    // Orca (STA-3631): absent on unpatched builds, so readers treat undefined as "unknown".
++    this._tccDisclaim = term.tccDisclaim;
+ 
+     this._file = file;
+     this._name = name;
+@@ -172,6 +175,7 @@ export class UnixTerminal extends Terminal {
+ 
+   /* Accessors */
+   get fd(): number { return this._fd; }
++  get tccDisclaim(): number | undefined { return this._tccDisclaim; }
+   get ptsName(): string { return this._pty; }
+ 
+   /**
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a6a4082ce 100644
+index 7b286d3..ec6bf39 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,6 +18,7 @@

@@ -3,6 +3,10 @@ import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
 } from '../../providers/macos-tcc-login-shell'
+import {
+  readMacosTccAttribution,
+  type MacosTccSpawnStrategy
+} from '../../providers/macos-tcc-spawn-attribution'
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 
@@ -24,7 +28,7 @@ export function spawnNativeDaemonPty(args: {
   cols: number
   rows: number
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
-  onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
+  onMacosTccSpawnStrategy?: (strategy: MacosTccSpawnStrategy) => void
 }): SpawnedDaemonPty {
   let reportsChildExitStatus = true
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
@@ -43,7 +47,12 @@ export function spawnNativeDaemonPty(args: {
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
     reportsChildExitStatus = hostReportsChildExitStatus(wrapped.file)
-    args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
+    // Why: the wrapper and the disclaim are independent — login(1) stopped isolating
+    // attribution on macOS 26, so report what each one actually achieved (STA-3631).
+    args.onMacosTccSpawnStrategy?.({
+      wrapper: wrapped.file === shellPath ? 'direct' : 'wrapped',
+      attribution: readMacosTccAttribution(proc)
+    })
     return proc
   }
 

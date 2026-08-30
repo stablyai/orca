@@ -130,7 +130,10 @@ describe('createPtySubprocess', () => {
         name: 'xterm-256color'
       })
     )
-    expect(onMacosTccSpawnStrategy).toHaveBeenCalledWith('direct')
+    expect(onMacosTccSpawnStrategy).toHaveBeenCalledWith({
+      wrapper: 'direct',
+      attribution: 'unknown'
+    })
   })
 
   it('does not spawn after cancellation wins during async cwd validation', async () => {
