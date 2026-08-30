@@ -8,6 +8,7 @@ import {
   WorkingDirectoryValidationAbortedError
 } from '../../providers/local-pty-utils'
 import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
+import { repairLaunchCwd } from '../../launch-cwd-repair'
 import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
 
@@ -41,41 +42,12 @@ function isExistingDirectory(path: string | undefined): path is string {
   }
 }
 
-function repairDaemonCwd(): string | null {
-  const candidates = [process.env.ORCA_USER_DATA_PATH]
-  try {
-    candidates.push(resolveSafePtyDefaultCwd())
-  } catch {
-    // Keep daemon cwd repair best-effort even when no user terminal cwd is safe.
-  }
-  candidates.push(process.platform === 'win32' ? 'C:\\' : '/')
-  for (const candidate of candidates) {
-    if (isExistingDirectory(candidate)) {
-      try {
-        process.chdir(candidate)
-        return candidate
-      } catch {
-        // Try the next stable cwd candidate.
-      }
-    }
-  }
-  return null
-}
-
 function preflightDaemonCwd(): void {
-  let daemonCwd = '<unavailable>'
-  try {
-    daemonCwd = process.cwd()
-    if (isExistingDirectory(daemonCwd)) {
-      return
-    }
-  } catch {
-    // Recover below; process.cwd() throws after the original cwd is deleted.
-  }
-  if (repairDaemonCwd()) {
+  const repair = repairLaunchCwd()
+  if (repair.outcome !== 'unrepaired') {
     return
   }
-  throw formatMissingDaemonPathError('cwd', daemonCwd)
+  throw formatMissingDaemonPathError('cwd', repair.from ?? '<unavailable>')
 }
 
 function preflightMacNodePtySpawnEnvironment(): void {

@@ -43,6 +43,7 @@ import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-confi
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { applyAppIcon } from './app-icon'
 import { relaunchApp } from './app-relaunch'
+import { describeLaunchCwdRepair, repairLaunchCwd } from './launch-cwd-repair'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { initSshHostKeyStoreFile } from './ssh/ssh-host-key-store'
 import { AgentSessionTransitionRecorder } from './stats/agent-session-transition-recorder'
@@ -757,6 +758,18 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
+// Why: run right after ORCA_USER_DATA_PATH is settled and before the first
+// subprocess — a launch cwd on a WSL 9P share survives its own deletion only in
+// process.cwd(), and every later spawn inherits it and dies ENOENT (#16463).
+const launchCwdRepair = repairLaunchCwd()
+const launchCwdRepairMessage = describeLaunchCwdRepair(launchCwdRepair)
+if (launchCwdRepairMessage) {
+  if (launchCwdRepair.outcome === 'relocated') {
+    console.warn(launchCwdRepairMessage)
+  } else {
+    console.error(launchCwdRepairMessage)
+  }
+}
 installServeSupervisorDisconnectQuit(isServeMode)
 
 // Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.

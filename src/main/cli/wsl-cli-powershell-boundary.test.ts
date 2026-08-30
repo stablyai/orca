@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildWslBridgeScript, buildWslLauncher } from './wsl-cli-scripts'
 
@@ -41,6 +41,7 @@ describe('WSL CLI PowerShell boundary', () => {
     expect(bridge).toContain('$ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])')
     expect(bridge).toContain('function ConvertTo-NativeCommandLineArgument')
     expect(bridge).toContain('$StartInfo.UseShellExecute = $false')
+    expect(bridge).toContain('$StartInfo.WorkingDirectory = $LauncherDirectory')
   })
 
   it.skipIf(process.platform !== 'win32')(
@@ -57,21 +58,26 @@ describe('WSL CLI PowerShell boundary', () => {
         await writeFile(bridgePath, buildWslBridgeScript(), 'utf8')
         await writeFile(
           targetPath,
-          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null }))\n',
+          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null, processCwd: process.cwd() }))\n',
           'utf8'
         )
+        // Why: the bridge must hand the launcher its own directory, not the caller's.
+        // A WSL caller stands in a worktree the distro can delete out from under a
+        // Windows process, and the inherited Win32 cwd then fails every later
+        // CreateProcessW with ENOENT for the app's whole session (issue #16463).
+        const launcherDirectory = dirname(process.execPath)
         const invocations = [
           {
             bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath, ...FORWARDED_ARGS],
-            expected: { argv: FORWARDED_ARGS, cwd: wslCwd }
+            expected: { argv: FORWARDED_ARGS, cwd: wslCwd, processCwd: launcherDirectory }
           },
           {
             bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath],
-            expected: { argv: [], cwd: wslCwd }
+            expected: { argv: [], cwd: wslCwd, processCwd: launcherDirectory }
           },
           {
             bridgeArgs: [process.execPath, targetPath, ...FORWARDED_ARGS],
-            expected: { argv: FORWARDED_ARGS, cwd: null }
+            expected: { argv: FORWARDED_ARGS, cwd: null, processCwd: launcherDirectory }
           }
         ]
         for (const { bridgeArgs, expected } of invocations) {
@@ -86,7 +92,9 @@ describe('WSL CLI PowerShell boundary', () => {
               bridgePath,
               ...bridgeArgs
             ],
-            { encoding: 'utf8', env: { ...process.env, ORCA_CLI_CWD: 'stale' } }
+            // Why a caller cwd distinct from the launcher directory: inheriting it is
+            // exactly the defect, so the assertion has to be able to observe it.
+            { encoding: 'utf8', cwd: root, env: { ...process.env, ORCA_CLI_CWD: 'stale' } }
           )
 
           expect(result.error).toBeUndefined()

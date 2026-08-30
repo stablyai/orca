@@ -340,7 +340,12 @@ describe('WslCliInstaller', () => {
     expect(bridge).toContain('$ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])')
     expect(bridge).toContain('if ([string]::IsNullOrEmpty($WslCwd))')
     expect(bridge).toContain('$env:ORCA_CLI_CWD = $WslCwd')
-    expect(bridge).toContain('Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)')
+    expect(bridge).toContain('[string]$LauncherDirectory = (Split-Path -Parent $OrcaLauncher)')
+    expect(bridge).toContain('Push-Location -LiteralPath $LauncherDirectory')
+    // Why: Push-Location only moves the provider location, so without an explicit
+    // WorkingDirectory the app inherits the caller's WSL worktree as its Win32 cwd
+    // and every later spawn dies once that worktree is removed (issue #16463).
+    expect(bridge).toContain('$StartInfo.WorkingDirectory = $LauncherDirectory')
     expect(bridge).toContain('function ConvertTo-NativeCommandLineArgument')
     expect(bridge).toContain("[void]$Quoted.Append([char]'\\', $BackslashCount * 2 + 1)")
     expect(bridge).toContain('$StartInfo.UseShellExecute = $false')

@@ -88,10 +88,18 @@ try {
   } else {
     $env:ORCA_CLI_CWD = $WslCwd
   }
-  Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
+  [string]$LauncherDirectory = (Split-Path -Parent $OrcaLauncher)
+  Push-Location -LiteralPath $LauncherDirectory
   # Why: Windows PowerShell 5.1 cannot losslessly splat strings to native argv.
   $StartInfo = [System.Diagnostics.ProcessStartInfo]::new()
   $StartInfo.FileName = $OrcaLauncher
+  # Why: Push-Location moves the PowerShell provider location, not the process's
+  # Win32 current directory, so without this the child inherits ours -- the
+  # caller's WSL worktree, as a wsl.localhost UNC path. Every subprocess Orca
+  # spawns then dies with 'spawn wsl.exe ENOENT' once that worktree is removed,
+  # because the 9P share does not lock a directory a process is standing in
+  # (issue #16463).
+  $StartInfo.WorkingDirectory = $LauncherDirectory
   $StartInfo.Arguments = (($ForwardArgs | ForEach-Object {
     ConvertTo-NativeCommandLineArgument $_
   }) -join ' ')
