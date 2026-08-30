@@ -4,6 +4,7 @@ import { useActiveWorktree } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import {
   CommandDialog,
   CommandInput,
@@ -20,6 +21,16 @@ import {
   parseQuickOpenInstallRgGuidance,
   QuickOpenInstallRgGuidance
 } from '@/components/quick-open-install-rg-guidance'
+import {
+  getTabEntryAllowAbsolutePaths,
+  getTabEntryFileOperationContext
+} from '@/components/tab-bar/tab-create-entry-local-path'
+import {
+  isTabEntryAbsolutePathLike,
+  validateNewTabEntryAbsolutePath
+} from '@/components/tab-bar/tab-create-entry-path-validation'
+import { openAbsoluteTabEntryFile } from '@/components/tab-bar/tab-create-entry-absolute-file'
+import { statRuntimePath } from '@/runtime/runtime-file-client'
 
 const QUICK_OPEN_CLOSE_LINGER_MS = 300
 
@@ -54,17 +65,39 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const openFile = useAppStore((s) => s.openFile)
+  const activeGroupId = useAppStore((s) =>
+    activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
+  )
   const activeWorktree = useActiveWorktree()
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
+  const worktreePath = activeWorktree?.path ?? null
+  const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
+  const absolutePath = useMemo(() => {
+    const trimmed = query.trim()
+    if (!isTabEntryAbsolutePathLike(trimmed)) {
+      return null
+    }
+    try {
+      return validateNewTabEntryAbsolutePath(trimmed, localPlatform)
+    } catch {
+      return null
+    }
+  }, [localPlatform, query])
+  const absolutePathAllowed = useAppStore((state) =>
+    absolutePath && activeWorktreeId
+      ? getTabEntryAllowAbsolutePaths(state, activeWorktreeId)
+      : false
+  )
   const { files, loading, loadError, truncated } = useRuntimeFileListForWorktree({
     enabled: visible,
     worktreeId: activeWorktreeId,
-    query: deferredQuery
+    query: absolutePath && absolutePathAllowed ? undefined : deferredQuery
   })
-
-  const worktreePath = activeWorktree?.path ?? null
+  const absolutePathOption = absolutePath && absolutePathAllowed ? absolutePath : null
+  const [absolutePathError, setAbsolutePathError] = useState<string | null>(null)
+  useEffect(() => setAbsolutePathError(null), [absolutePath])
 
   // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
   // the dialog (Esc / click-away) would otherwise leave the active panel
@@ -108,6 +141,54 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     [activeWorktreeId, worktreePath, openFile, closeModal, skipReturnFocus]
   )
 
+  const handleOpenAbsolutePath = useCallback(async () => {
+    if (
+      !absolutePath ||
+      !absolutePathAllowed ||
+      !activeWorktreeId ||
+      !worktreePath ||
+      !activeGroupId
+    ) {
+      return
+    }
+    try {
+      const state = useAppStore.getState()
+      const runtimeContext = getTabEntryFileOperationContext(state, activeWorktreeId, worktreePath)
+      skipReturnFocus()
+      await openAbsoluteTabEntryFile({
+        context: runtimeContext,
+        groupId: activeGroupId,
+        operations: {
+          assertAbsolutePathAllowed: () => {
+            if (!getTabEntryAllowAbsolutePaths(useAppStore.getState(), activeWorktreeId)) {
+              throw new Error('Absolute paths require a local workspace.')
+            }
+          },
+          authorizeExternalPath: window.api.fs.authorizeExternalPath,
+          openFile,
+          statRuntimePath
+        },
+        filePath: absolutePath,
+        localPlatform,
+        worktreeId: activeWorktreeId,
+        worktreePath
+      })
+      closeModal()
+    } catch (error) {
+      setAbsolutePathError(error instanceof Error ? error.message : String(error))
+    }
+  }, [
+    absolutePath,
+    absolutePathAllowed,
+    activeGroupId,
+    activeWorktreeId,
+    closeModal,
+    localPlatform,
+    openFile,
+    skipReturnFocus,
+    worktreePath
+  ])
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
@@ -143,7 +224,25 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         className="!h-9 !py-2"
       />
       <CommandList className="p-2">
-        {loading ? (
+        {absolutePathError ? (
+          <div className="py-6 px-4 text-center text-sm text-muted-foreground whitespace-pre-wrap">
+            {absolutePathError}
+          </div>
+        ) : absolutePathOption ? (
+          <CommandItem
+            value={absolutePathOption}
+            onSelect={() => void handleOpenAbsolutePath()}
+            className="min-w-0 !p-0"
+          >
+            <div className="flex w-full min-w-0 items-center gap-2 px-3 py-1">
+              {(() => {
+                const FileIcon = getFileTypeIcon(absolutePathOption)
+                return <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              })()}
+              <span className="min-w-0 truncate text-foreground">{absolutePathOption}</span>
+            </div>
+          </CommandItem>
+        ) : loading ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             {translate('auto.components.QuickOpen.722a21e1a8', 'Loading files...')}
           </div>
