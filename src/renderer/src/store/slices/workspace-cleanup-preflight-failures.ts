@@ -36,7 +36,7 @@ export function hasWorkspaceCleanupRiskEscalated(
   return (
     (shouldForceWorkspaceCleanupRemoval(candidate) &&
       !shouldForceWorkspaceCleanupRemoval(approvedCandidate)) ||
-    WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS.some(
+    WORKSPACE_CLEANUP_RECONFIRM_BLOCKERS.some(
       (blocker) =>
         candidate.blockers.includes(blocker) && !approvedCandidate.blockers.includes(blocker)
     )
@@ -104,3 +104,11 @@ export function getWorkspaceCleanupGitUnavailableFailure(
 
 // Unlike unknown-base and git-status-error, these facts prove known work is at risk.
 const WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS = ['dirty-files', 'unpushed-commits'] as const
+
+// Why 'terminal-liveness-unknown' joins them without proving risk: the confirm screen
+// names it, so a row confirmed while its terminal read idle was authorized on evidence
+// the preflight no longer has. Deleting anyway spends consent the user never gave.
+const WORKSPACE_CLEANUP_RECONFIRM_BLOCKERS = [
+  ...WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS,
+  'terminal-liveness-unknown'
+] as const

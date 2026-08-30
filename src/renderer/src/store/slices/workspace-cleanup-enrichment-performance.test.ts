@@ -301,28 +301,20 @@ describe('workspace cleanup enrichment performance', () => {
     let probeGate = deferred<void>()
     const active: Record<ProbePhase, number> = { stream: 0, final: 0 }
     const peak: Record<ProbePhase, number> = { stream: 0, final: 0 }
-    const hasChildProcesses = vi.fn(async () => {
+    const inspectProcess = vi.fn(async () => {
       const callPhase = phase
       const callGate = probeGate
       active[callPhase] += 1
       peak[callPhase] = Math.max(peak[callPhase], active[callPhase])
       await callGate.promise
       active[callPhase] -= 1
-      return false
+      return { foregroundProcess: 'zsh', hasChildProcesses: false }
     })
     ;(
       globalThis.window as unknown as {
-        api: {
-          pty: {
-            hasChildProcesses: typeof hasChildProcesses
-            getForegroundProcess: ReturnType<typeof vi.fn>
-          }
-        }
+        api: { pty: { inspectProcess: typeof inspectProcess } }
       }
-    ).api.pty = {
-      hasChildProcesses,
-      getForegroundProcess: vi.fn().mockResolvedValue('zsh')
-    }
+    ).api.pty = { inspectProcess }
     const store = createCleanupTestStore()
     store.setState({ tabsByWorktree, ptyIdsByTabId } as Partial<AppState>)
 
@@ -356,7 +348,7 @@ describe('workspace cleanup enrichment performance', () => {
     const finalScan = await scanPromise
 
     expect(peak.final).toBe(WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY)
-    expect(hasChildProcesses).toHaveBeenCalledTimes(candidateCount * 2)
+    expect(inspectProcess).toHaveBeenCalledTimes(candidateCount * 2)
     expect(finalScan.candidates.map((candidate) => candidate.worktreeId)).toEqual(
       finalCandidates.map((candidate) => candidate.worktreeId)
     )
@@ -393,26 +385,18 @@ describe('workspace cleanup enrichment performance', () => {
     const probeGate = deferred<void>()
     let active = 0
     let peak = 0
-    const hasChildProcesses = vi.fn(async () => {
+    const inspectProcess = vi.fn(async () => {
       active += 1
       peak = Math.max(peak, active)
       await probeGate.promise
       active -= 1
-      return false
+      return { foregroundProcess: 'zsh', hasChildProcesses: false }
     })
     ;(
       globalThis.window as unknown as {
-        api: {
-          pty: {
-            hasChildProcesses: typeof hasChildProcesses
-            getForegroundProcess: ReturnType<typeof vi.fn>
-          }
-        }
+        api: { pty: { inspectProcess: typeof inspectProcess } }
       }
-    ).api.pty = {
-      hasChildProcesses,
-      getForegroundProcess: vi.fn().mockResolvedValue('zsh')
-    }
+    ).api.pty = { inspectProcess }
     const store = createCleanupTestStore()
     store.setState({ tabsByWorktree, ptyIdsByTabId } as Partial<AppState>)
 
@@ -438,7 +422,7 @@ describe('workspace cleanup enrichment performance', () => {
     probeGate.resolve()
     await scanPromise
 
-    expect(hasChildProcesses).toHaveBeenCalledTimes(candidateCount)
+    expect(inspectProcess).toHaveBeenCalledTimes(candidateCount)
   })
 
   it('rebuilds focused removal enrichment from state changed after the broad scan', async () => {
@@ -450,20 +434,14 @@ describe('workspace cleanup enrichment performance', () => {
         : Promise.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
     )
     installWorkspaceCleanupApi(scan)
-    const hasChildProcesses = vi.fn().mockResolvedValue(false)
+    const inspectProcess = vi
+      .fn()
+      .mockResolvedValue({ foregroundProcess: 'zsh', hasChildProcesses: false })
     ;(
       globalThis.window as unknown as {
-        api: {
-          pty: {
-            hasChildProcesses: typeof hasChildProcesses
-            getForegroundProcess: ReturnType<typeof vi.fn>
-          }
-        }
+        api: { pty: { inspectProcess: typeof inspectProcess } }
       }
-    ).api.pty = {
-      hasChildProcesses,
-      getForegroundProcess: vi.fn().mockResolvedValue('zsh')
-    }
+    ).api.pty = { inspectProcess }
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)
 
@@ -480,6 +458,6 @@ describe('workspace cleanup enrichment performance', () => {
     focusedScan.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
 
     await expect(removal).resolves.toMatchObject({ removedIds: [candidate.worktreeId] })
-    expect(hasChildProcesses).toHaveBeenCalledWith('post-scan-pty')
+    expect(inspectProcess).toHaveBeenCalledWith('post-scan-pty')
   })
 })

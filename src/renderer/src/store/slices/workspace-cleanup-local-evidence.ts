@@ -6,6 +6,11 @@ import {
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-process-inspection'
+import {
+  hasPublishedPtyProcessInspectionEvidence,
+  readPtyProcessInspectionEvidence
+} from '../../../../shared/pty-process-inspection-evidence'
 
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
@@ -158,7 +163,7 @@ export function hasWorkingTitleAgent(
 export async function probeTerminalLiveness(
   state: AppState,
   tabs: { id: string; title: string }[]
-): Promise<'idle' | 'running' | 'unknown'> {
+): Promise<'idle' | 'running' | 'unverifiable'> {
   const ptyChecks = tabs.flatMap((tab) =>
     (state.ptyIdsByTabId[tab.id] ?? []).map((ptyId) => ({ tab, ptyId }))
   )
@@ -166,15 +171,50 @@ export async function probeTerminalLiveness(
     return 'idle'
   }
 
-  let unknown = false
+  let unverifiable = false
   for (const { tab, ptyId } of ptyChecks) {
     try {
-      const [hasChildProcesses, foregroundProcess] = await Promise.all([
-        window.api.pty.hasChildProcesses(ptyId),
-        window.api.pty.getForegroundProcess(ptyId)
-      ])
-      const processName = normalizeProcessName(foregroundProcess)
-      if (!hasChildProcesses && (!processName || SHELL_PROCESS_NAMES.has(processName))) {
+      // Why: the standalone hasChildProcesses/getForegroundProcess handlers coerce a
+      // degraded read to false/null below IPC, so an unreachable host arrived here as
+      // an idle shell and cleanup dropped its blocker. inspectProcess is the only read
+      // that carries `unavailable` across the boundary; loss of contact is never idle.
+      const inspection = await inspectRuntimeTerminalProcess(state.settings, ptyId)
+      if (inspection.unavailable === true) {
+        unverifiable = true
+        continue
+      }
+      // Why the evidence and not the legacy fields: `unavailable` only covers a
+      // handle we could not route to. A host that DID answer but whose probes
+      // failed publishes the legacy collapse (null/false, or the shell name from
+      // the stable cache) — byte-identical to an idle shell. Only processEvidence
+      // separates "observed idle" from "could not ask", and this is a delete path.
+      const evidence = readPtyProcessInspectionEvidence(inspection)
+      if (
+        evidence.foreground.verdict === 'unverifiable' ||
+        evidence.children.verdict === 'unverifiable'
+      ) {
+        unverifiable = true
+        continue
+      }
+      // Why: a host that published no evidence at all was read back through the
+      // reader's LEGACY fallback, which restates its two values as an observation.
+      // A retained pre-v27 daemon publishes `zsh` + `false` both when the pane
+      // really sits at an idle shell and when its foreground read fell back to the
+      // shell title, and it has no field to tell the two apart. Believe such a host
+      // when it reports live work — that can only add a blocker — but never let its
+      // silence stand as proof of idle on the path that deletes the workspace.
+      if (
+        !hasPublishedPtyProcessInspectionEvidence(inspection) &&
+        evidence.children.verdict !== 'live'
+      ) {
+        unverifiable = true
+        continue
+      }
+      const processName = normalizeProcessName(evidence.foreground.processName)
+      if (
+        evidence.children.verdict !== 'live' &&
+        (!processName || SHELL_PROCESS_NAMES.has(processName))
+      ) {
         continue
       }
       if (
@@ -186,11 +226,11 @@ export async function probeTerminalLiveness(
       }
       return 'running'
     } catch {
-      unknown = true
+      unverifiable = true
     }
   }
 
-  return unknown ? 'unknown' : 'idle'
+  return unverifiable ? 'unverifiable' : 'idle'
 }
 
 function hasIdleAgentTitleForPty(

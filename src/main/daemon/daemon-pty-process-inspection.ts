@@ -1,4 +1,4 @@
-import { isShellProcess } from '../../shared/agent-detection'
+import { composeLegacyPtyProcessInspection } from '../../shared/pty-process-inspection-evidence'
 import { DaemonPtyBufferSnapshots } from './daemon-pty-buffer-snapshots'
 import { parsePtySessionId } from './pty-session-id'
 import {
@@ -13,7 +13,7 @@ import type { PtyProcessInspectionEvidence } from '../../shared/pty-process-insp
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
   // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
   protected hasChildProcessesFromForeground(foregroundProcess: string | null): boolean {
-    return foregroundProcess !== null && !isShellProcess(foregroundProcess)
+    return composeLegacyPtyProcessInspection(foregroundProcess).hasChildProcesses
   }
 
   async hasChildProcesses(id: string): Promise<boolean> {
@@ -35,10 +35,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       const { foregroundProcess } = await this.client.request<{
         foregroundProcess: string | null
       }>('getForegroundProcess', { sessionId: id })
-      return {
-        foregroundProcess,
-        hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
-      }
+      return composeLegacyPtyProcessInspection(foregroundProcess)
     }
     return this.client.request<{
       foregroundProcess: string | null

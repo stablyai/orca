@@ -523,12 +523,69 @@ describe('workspace cleanup removal and protection', () => {
     expect(removeWorktree).not.toHaveBeenCalled()
   })
 
+  it('fails a confirmed removal when the preflight can no longer verify a terminal', async () => {
+    // The screen that authorizes the delete names an unverifiable terminal, so a row
+    // confirmed while it read idle must go back for review when the preflight loses
+    // that evidence — not delete on consent the user never gave for it.
+    const approvedCandidate = makeCandidate({ executionHostId: 'local', blockers: [] })
+    const scan = vi.fn().mockResolvedValue({
+      scannedAt: NOW,
+      candidates: [makeCandidate({ executionHostId: 'local', blockers: [] })],
+      errors: []
+    } satisfies WorkspaceCleanupScanResult)
+    installWorkspaceCleanupApi(scan)
+    // A host that answered but whose probes carry no evidence: the legacy fields are
+    // byte-identical to an idle shell, so only the evidence separates them.
+    ;(window as unknown as { api: Record<string, unknown> }).api.pty = {
+      hasChildProcesses: vi.fn().mockResolvedValue(false),
+      getForegroundProcess: vi.fn().mockResolvedValue(null),
+      inspectProcess: vi.fn().mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        processEvidence: {
+          foreground: { verdict: 'unverifiable', reason: 'probe timed out' },
+          children: { verdict: 'unverifiable', reason: 'probe timed out' }
+        }
+      })
+    }
+    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+    const store = createCleanupTestStore(removeWorktree)
+    store.setState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [{ id: 'tab-1', title: 'zsh' }] as AppState['tabsByWorktree'][string]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID], {
+        approvedCandidates: [approvedCandidate]
+      })
+    ).resolves.toEqual({
+      removedIds: [],
+      removedIdentities: [],
+      failures: [
+        {
+          worktreeId: WORKTREE_ID,
+          executionHostId: 'local',
+          displayName: 'old-workspace',
+          message: 'Workspace changed after confirmation. Refresh to review it before removing.'
+        }
+      ]
+    })
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
   it('protects old workspaces when an agent process is still foregrounded', async () => {
     ;(globalThis as { window: unknown }).window = {
       api: {
         pty: {
           hasChildProcesses: vi.fn().mockResolvedValue(true),
-          getForegroundProcess: vi.fn().mockResolvedValue('codex')
+          getForegroundProcess: vi.fn().mockResolvedValue('codex'),
+          inspectProcess: vi.fn().mockResolvedValue({
+            foregroundProcess: 'codex',
+            hasChildProcesses: true
+          })
         }
       }
     }
@@ -556,7 +613,11 @@ describe('workspace cleanup removal and protection', () => {
           hasChildProcesses: vi.fn(async (ptyId: string) => ptyId === 'pty-running'),
           getForegroundProcess: vi.fn(async (ptyId: string) =>
             ptyId === 'pty-running' ? 'codex' : 'zsh'
-          )
+          ),
+          inspectProcess: vi.fn(async (ptyId: string) => ({
+            foregroundProcess: ptyId === 'pty-running' ? 'codex' : 'zsh',
+            hasChildProcesses: ptyId === 'pty-running'
+          }))
         }
       }
     }

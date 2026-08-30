@@ -183,7 +183,10 @@ export const WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS: ReadonlySet<WorkspaceClean
   new Set(['dirty-files', 'unpushed-commits', 'unknown-base'])
 
 export const WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS: ReadonlySet<WorkspaceCleanupBlocker> =
-  new Set(['active-workspace', 'live-agent', 'dismissed'])
+  // Why 'terminal-liveness-unknown': a row we could not verify must not be swept up by
+  // select-all. It stays individually selectable (canQueueWorkspaceCleanupCandidate), so
+  // this withholds the bulk default without making an unverifiable workspace undeletable.
+  new Set(['active-workspace', 'live-agent', 'dismissed', 'terminal-liveness-unknown'])
 
 export function canQueueWorkspaceCleanupCandidate(
   candidate: Pick<WorkspaceCleanupCandidate, 'blockers'>

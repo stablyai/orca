@@ -241,7 +241,7 @@ async function enrichWorkspaceCleanupCandidate(
   const terminalProbe = await probeTerminalLiveness(state, tabs)
   if (terminalProbe === 'running') {
     blockers.push('running-terminal')
-  } else if (terminalProbe === 'unknown') {
+  } else if (terminalProbe === 'unverifiable') {
     blockers.push('terminal-liveness-unknown')
   }
 

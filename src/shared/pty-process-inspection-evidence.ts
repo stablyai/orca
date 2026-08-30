@@ -18,6 +18,8 @@
  * available answer.
  */
 
+import { isShellProcess } from './shell-process-detection'
+
 export type PtyForegroundProcessEvidence =
   | { verdict: 'observed'; processName: string | null }
   | { verdict: 'unverifiable'; reason: string }
@@ -52,6 +54,38 @@ export function buildPtyProcessInspectionWireResult(
     hasChildProcesses: children.verdict === 'live',
     processEvidence: { foreground, children }
   }
+}
+
+/**
+ * Compose the inspection a host that predates `processEvidence` can answer with.
+ * Pre-v27 daemons expose only `getForegroundProcess`, so the child half is
+ * inferred from the foreground name. The absent evidence is not an omission the
+ * caller may fill in: such a host has no channel to say whether it OBSERVED the
+ * pane or fell back to the shell title, and both publish these same two values.
+ */
+export function composeLegacyPtyProcessInspection(foregroundProcess: string | null): {
+  foregroundProcess: string | null
+  hasChildProcesses: boolean
+} {
+  return {
+    foregroundProcess,
+    hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess)
+  }
+}
+
+/**
+ * True when the HOST itself stated the verdicts. When it is false,
+ * `readPtyProcessInspectionEvidence` is re-reading the legacy pair under the old
+ * meaning, which cannot separate "observed an idle shell" from "the foreground
+ * read degraded to the shell title" — `composeLegacyPtyProcessInspection` emits
+ * the same bytes for both. A caller that ACTS ON ABSENCE (deleting a workspace)
+ * must read an unpublished reading as `unverifiable`; a caller that only acts on
+ * presence may keep the legacy meaning.
+ */
+export function hasPublishedPtyProcessInspectionEvidence(result: {
+  processEvidence?: PtyProcessInspectionEvidence
+}): boolean {
+  return result.processEvidence !== undefined
 }
 
 /**
