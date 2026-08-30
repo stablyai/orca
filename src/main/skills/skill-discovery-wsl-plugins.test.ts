@@ -23,16 +23,12 @@ describe('WSL Claude plugin skill discovery', () => {
   afterEach(() => vi.unstubAllEnvs())
 
   it('skips workspace roots and plugin metadata when discovery has no cwd', async () => {
-    execFileMock.mockImplementationOnce((..._args: unknown[]) => {
-      queueMicrotask(() => completeExecFileCall(0, ''))
-    })
+    runWslProcessMock.mockResolvedValueOnce(wslResult(''))
 
     const result = await discoverSkillsInWsl({ distro: 'Ubuntu', homeDir: '/home/alice' })
 
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-    const scanArgs = execFileMock.mock.calls[0]?.[1] as string[]
-    const encoded = /printf %s '([^']+)'/.exec(scanArgs[5] ?? '')?.[1]
-    const scanScript = Buffer.from(encoded ?? '', 'base64').toString('utf8')
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    const scanScript = runWslProcessMock.mock.calls[0]?.[0].script as string
     expect(scanScript.match(/'\/home\/alice\/\.agents\/skills'/g)).toHaveLength(1)
     expect(scanScript.match(/'\/home\/alice\/\.claude\/skills'/g)).toHaveLength(1)
     const expectedRoots = buildSkillDiscoverySources({
@@ -46,9 +42,7 @@ describe('WSL Claude plugin skill discovery', () => {
   })
 
   it('skips plugin metadata and unrelated roots for filtered home discovery', async () => {
-    execFileMock.mockImplementationOnce((..._args: unknown[]) => {
-      queueMicrotask(() => completeExecFileCall(0, ''))
-    })
+    runWslProcessMock.mockResolvedValueOnce(wslResult(''))
 
     const result = await discoverSkillsInWsl({
       distro: 'Ubuntu',
@@ -58,10 +52,8 @@ describe('WSL Claude plugin skill discovery', () => {
       sourceKinds: ['home']
     })
 
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-    const scanArgs = execFileMock.mock.calls[0]?.[1] as string[]
-    const encoded = /printf %s '([^']+)'/.exec(scanArgs[5] ?? '')?.[1]
-    const scanScript = Buffer.from(encoded ?? '', 'base64').toString('utf8')
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    const scanScript = runWslProcessMock.mock.calls[0]?.[0].script as string
     expect(scanScript).not.toContain('/work/orca')
     expect(scanScript).not.toContain("'/home/alice/.codex/plugins/cache'")
     const expectedRoots = buildSkillDiscoverySources({

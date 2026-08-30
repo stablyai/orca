@@ -83,9 +83,7 @@ describe('WSL skill discovery', () => {
   })
 
   it('filters requested names before reading skill payloads', () => {
-    const command = buildWslSkillDiscoveryCommand([homeRoot], ['Orchestration', 'computer-use'])
-    const encoded = /printf %s '([^']+)'/.exec(command)?.[1]
-    const script = Buffer.from(encoded!, 'base64').toString('utf8')
+    const script = buildWslSkillDiscoveryCommand([homeRoot], ['Orchestration', 'computer-use'])
 
     expect(script).toContain("'orchestration'|'computer-use') return 0")
     expect(script).toContain('local normalized_name=${1,,}')
@@ -123,10 +121,7 @@ describe('WSL skill discovery', () => {
   })
 
   it('leaves non-ASCII requested names to the TypeScript filter', () => {
-    const script = Buffer.from(
-      buildWslSkillDiscoveryCommand([homeRoot], ['orchestrátion']).split("'")[1],
-      'base64'
-    ).toString('utf8')
+    const script = buildWslSkillDiscoveryCommand([homeRoot], ['orchestrátion'])
 
     expect(script).not.toContain('matches_requested_name')
   })
