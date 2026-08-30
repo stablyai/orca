@@ -2466,10 +2466,6 @@ export default function AutomationsPage(): React.JSX.Element {
       toast.error(runViewState.statusLabel)
       return
     }
-    if (runViewState.availability === 'terminal' && !terminalTarget) {
-      toast.error(runViewState.statusLabel)
-      return
-    }
     if (terminalTarget && currentLayout) {
       store.setTabLayout(
         terminalTarget.tabId,
