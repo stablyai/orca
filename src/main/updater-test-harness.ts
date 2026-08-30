@@ -227,6 +227,10 @@ export function createUpdaterMocks(): UpdaterMocks {
 
   /** Shared `beforeEach` body: fresh module registry plus every mock back to its default. */
   const resetUpdaterMocks = () => {
+    // Why first: the outgoing instance owns real timers this registry reset cannot reach — a 45s
+    // stall guard among them. Left armed, it fires into whatever clock the next test installs and
+    // schedules an update check the next test never asked for.
+    appMock.emit('will-quit')
     vi.resetModules()
     autoUpdaterMock.reset()
     nativeUpdaterMock.on.mockReset()

@@ -149,6 +149,8 @@ let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
 // Why: a promoted background check can emit an error event before its promise catch runs; keep the promotion attached to that launch.
 let backgroundCheckPromotedToUserInitiated = false
+// Why: nothing could stop the updater once armed, so a retired instance kept re-arming checks off a clock it no longer owned.
+let updaterSchedulingStopped = false
 let updateCheckStallTimer: ReturnType<typeof setTimeout> | null = null
 let updateCheckSilentSettleTimer: ReturnType<typeof setTimeout> | null = null
 let updateCheckAttemptSequence = 0
@@ -477,6 +479,9 @@ function clearUpdateAvailableEventPending(attemptId: number | null): void {
 
 function armUpdateCheckStallTimer(attemptId: number): void {
   clearUpdateCheckStallTimer()
+  if (updaterSchedulingStopped) {
+    return
+  }
   updateCheckStallTimer = setTimeout(() => {
     updateCheckStallTimer = null
     if (!isActiveUpdateCheckAttempt(attemptId)) {
@@ -597,6 +602,9 @@ function handleSettledUpdateCheckPromise(attemptId: number): void {
     return
   }
   clearUpdateCheckSilentSettleTimer()
+  if (updaterSchedulingStopped) {
+    return
+  }
   // Why: electron-updater can resolve before the terminal event arrives; grace-period it, then unstick checks that resolved without one.
   updateCheckSilentSettleTimer = setTimeout(() => {
     updateCheckSilentSettleTimer = null
@@ -1243,6 +1251,9 @@ export function installRemoteServerUpdate(runtimeId: string): RemoteServerUpdate
 let consecutiveAutomaticRetrySchedules = 0
 
 function scheduleAutomaticUpdateCheck(delayMs: number): void {
+  if (updaterSchedulingStopped) {
+    return
+  }
   let effectiveDelayMs = delayMs
   // All retry-cadence callers pass exactly this constant, so keying backoff on it keeps one choke point instead of threading a flag through every schedule site.
   if (delayMs === AUTO_UPDATE_RETRY_INTERVAL_MS) {
@@ -2160,6 +2171,30 @@ export function dismissAvailableUpdate(): void {
   sendStatus({ state: 'idle' })
 }
 
+/**
+ * Stop every timer the updater schedules work from.
+ *
+ * Why this exists: `setupAutoUpdater` arms a daily check, a nudge poll, a 45-second stall guard
+ * and a 1-second settle grace, and nothing could cancel them. A stall guard that outlives its
+ * updater still fires, still finds `backgroundCheckLaunchPending`, and still arms an hourly retry
+ * — a check nobody asked for, driven by an instance that has already been retired.
+ *
+ * The install timers are deliberately left alone: a quit that is handing off to an installer
+ * still needs them.
+ */
+export function stopAutoUpdaterScheduling(): void {
+  updaterSchedulingStopped = true
+  clearUpdateCheckTimers()
+  if (autoUpdateCheckTimer) {
+    clearTimeout(autoUpdateCheckTimer)
+    autoUpdateCheckTimer = null
+  }
+  if (nudgeCheckTimer) {
+    clearTimeout(nudgeCheckTimer)
+    nudgeCheckTimer = null
+  }
+}
+
 export function setupAutoUpdater(
   mainWindow: BrowserWindow,
   opts?: {
@@ -2175,6 +2210,7 @@ export function setupAutoUpdater(
   }
 ): void {
   mainWindowRef = mainWindow
+  updaterSchedulingStopped = false
   onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
   persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
   _getLastUpdateCheckAt = opts?.getLastUpdateCheckAt ?? null
@@ -2303,6 +2339,9 @@ export function setupAutoUpdater(
 
   powerMonitor.on('resume', checkDailyOnWake)
   app.on('browser-window-focus', checkDailyOnWake)
+  // Why: a background check launched while the app is tearing down cannot finish, and its stall
+  // guard outlives the process it was scheduled for.
+  app.on('will-quit', stopAutoUpdaterScheduling)
 
   const lastUpdateCheckAt = opts?.getLastUpdateCheckAt?.() ?? null
   const msSinceLastCheck =
