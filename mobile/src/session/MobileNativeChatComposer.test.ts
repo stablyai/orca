@@ -77,6 +77,123 @@ describe('MobileNativeChatComposer', () => {
     ) as { props: { onPress: () => Promise<void> } }
   }
 
+  function composerInput(): {
+    props: {
+      multiline?: boolean
+      onChangeText?: (text: string) => void
+      onKeyPress?: (event: {
+        nativeEvent: { key: string; shiftKey?: boolean; isComposing?: boolean }
+      }) => void
+    }
+  } {
+    if (!renderer) {
+      throw new Error('Composer was not rendered')
+    }
+    return renderer.root.find((node) => node.type === 'TextInput') as {
+      props: {
+        multiline?: boolean
+        onChangeText?: (text: string) => void
+        onKeyPress?: (event: {
+          nativeEvent: { key: string; shiftKey?: boolean; isComposing?: boolean }
+        }) => void
+        onSelectionChange?: (event: {
+          nativeEvent: { selection: { start: number; end: number } }
+        }) => void
+      }
+    }
+  }
+
+  it('sends on hardware Enter through the existing handleSend path', async () => {
+    const onChangeText = vi.fn()
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, onChangeText)
+
+    expect(composerInput().props.multiline).toBe(true)
+    await act(async () => composerInput().props.onKeyPress?.({ nativeEvent: { key: 'Enter' } }))
+
+    expect(onSend).toHaveBeenCalledWith(' hello')
+    expect(onChangeText).not.toHaveBeenCalled()
+  })
+
+  it('keeps Shift+Enter as a newline instead of sending', async () => {
+    const onChangeText = vi.fn()
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, onChangeText)
+
+    await act(async () =>
+      composerInput().props.onKeyPress?.({ nativeEvent: { key: 'Enter', shiftKey: true } })
+    )
+    await act(async () => composerInput().props.onChangeText?.(' hello \n'))
+
+    expect(onSend).not.toHaveBeenCalled()
+    expect(onChangeText).toHaveBeenCalledWith(' hello \n')
+  })
+
+  it('does not send while IME composition is confirming', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, vi.fn())
+
+    await act(async () =>
+      composerInput().props.onKeyPress?.({ nativeEvent: { key: 'Enter', isComposing: true } })
+    )
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('does not send hardware Enter when the composer cannot send', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '   ',
+          onChangeText: vi.fn(),
+          onSend
+        })
+      )
+    })
+
+    await act(async () => composerInput().props.onKeyPress?.({ nativeEvent: { key: 'Enter' } }))
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('swallows the newline multiline TextInput inserts after a hardware submit', async () => {
+    const onChangeText = vi.fn()
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, onChangeText)
+
+    await act(async () => composerInput().props.onKeyPress?.({ nativeEvent: { key: 'Enter' } }))
+    await act(async () => composerInput().props.onChangeText?.(' hello \n'))
+
+    expect(onSend).toHaveBeenCalledWith(' hello')
+    expect(onChangeText).not.toHaveBeenCalled()
+  })
+
+  it('swallows a mid-caret newline inserted after hardware submit', async () => {
+    const onChangeText = vi.fn()
+    const onSend = vi.fn().mockResolvedValue(true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: 'hello',
+          onChangeText,
+          onSend
+        })
+      )
+    })
+
+    await act(async () =>
+      composerInput().props.onSelectionChange?.({
+        nativeEvent: { selection: { start: 2, end: 2 } }
+      })
+    )
+    await act(async () => composerInput().props.onKeyPress?.({ nativeEvent: { key: 'Enter' } }))
+    await act(async () => composerInput().props.onChangeText?.('he\nllo'))
+
+    expect(onSend).toHaveBeenCalledWith('hello')
+    expect(onChangeText).not.toHaveBeenCalled()
+  })
+
   it('reports an accepted send without owning route-scoped draft cleanup', async () => {
     const onChangeText = vi.fn()
     const onSend = vi.fn().mockResolvedValue(true)

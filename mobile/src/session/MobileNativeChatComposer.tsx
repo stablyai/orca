@@ -87,6 +87,10 @@ export function MobileNativeChatComposer({
     null
   )
   const sendingRef = useRef(false)
+  const selectionRef = useRef<{ start: number; end: number } | null>(null)
+  // Multiline Return still inserts `\n` after onKeyPress; drop that one change
+  // so a send that already cleared the draft cannot bounce it back.
+  const suppressSubmitNewlineRef = useRef<{ start: number; end: number } | null>(null)
   const [sending, setSending] = useState(false)
   const trimmed = value.trim()
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
@@ -127,6 +131,15 @@ export function MobileNativeChatComposer({
   }, [onNeedFiles, trigger?.kind, trigger?.query])
 
   const handleChange = (next: string): void => {
+    const pending = suppressSubmitNewlineRef.current
+    if (pending) {
+      suppressSubmitNewlineRef.current = null
+      // Why: mid-caret Enter inserts at the selection, not at value + '\n'.
+      const expected = `${value.slice(0, pending.start)}\n${value.slice(pending.end)}`
+      if (next === expected) {
+        return
+      }
+    }
     onChangeText(next)
   }
 
@@ -156,11 +169,26 @@ export function MobileNativeChatComposer({
       const accepted = await onSend(value)
       if (accepted) {
         setCursor(0)
+        selectionRef.current = { start: 0, end: 0 }
       }
     } finally {
       sendingRef.current = false
       setSending(false)
     }
+  }
+
+  const handleKeyPress = (event: {
+    nativeEvent: { key: string; shiftKey?: boolean; isComposing?: boolean }
+  }): void => {
+    const { key, shiftKey, isComposing } = event.nativeEvent
+    // Why: IME Enter confirms composition; submitting would send a partial draft.
+    if (key !== 'Enter' || shiftKey || isComposing || !canSend) {
+      return
+    }
+    // Why: hardware Enter sends like desktop; Shift+Enter stays a newline (#14744).
+    suppressSubmitNewlineRef.current = pendingSelection ??
+      selectionRef.current ?? { start: value.length, end: value.length }
+    void handleSend()
   }
 
   return (
@@ -203,10 +231,13 @@ export function MobileNativeChatComposer({
             style={styles.input}
             value={value}
             onChangeText={handleChange}
+            onKeyPress={handleKeyPress}
             // Controlled only transiently right after an autocomplete insert.
             selection={pendingSelection ?? undefined}
             onSelectionChange={(e) => {
-              setCursor(e.nativeEvent.selection.end)
+              const { start, end } = e.nativeEvent.selection
+              setCursor(end)
+              selectionRef.current = { start, end }
               setPendingSelection(null)
             }}
             placeholder={placeholder}
