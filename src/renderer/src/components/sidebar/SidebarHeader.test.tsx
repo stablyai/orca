@@ -64,7 +64,9 @@ afterEach(() => {
 describe('SidebarHeader', () => {
   it('keeps New workspace clickable with zero projects, since the composer adds the first one', () => {
     act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+      root.render(
+        <SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} onCreateGroup={vi.fn()} />
+      )
     })
 
     const button = newWorkspaceButton()
@@ -80,7 +82,9 @@ describe('SidebarHeader', () => {
   it('opens the composer the same way once projects exist', () => {
     mockState.repos = [{ id: 'repo-a' }]
     act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+      root.render(
+        <SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} onCreateGroup={vi.fn()} />
+      )
     })
 
     act(() => {

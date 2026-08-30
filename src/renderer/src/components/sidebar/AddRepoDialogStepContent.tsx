@@ -44,6 +44,7 @@ type AddRepoDialogStepContentProps = {
   createError: string | null
   isCreating: boolean
   hostSelector?: ReactNode
+  groupSelector?: ReactNode
   showRemoteAction?: boolean
   canCreateProject?: boolean
   actionsDisabled?: boolean
@@ -114,6 +115,7 @@ export function AddRepoDialogStepContent({
   createError,
   isCreating,
   hostSelector,
+  groupSelector,
   showRemoteAction = true,
   canCreateProject = true,
   actionsDisabled = false,
@@ -159,6 +161,7 @@ export function AddRepoDialogStepContent({
         nestedScanInProgress={nestedScanInProgress}
         nestedScanId={nestedScanId}
         hostSelector={hostSelector}
+        groupSelector={groupSelector}
         showRemoteAction={showRemoteAction}
         canCreateProject={canCreateProject}
         actionsDisabled={actionsDisabled}

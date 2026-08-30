@@ -19,6 +19,8 @@ import {
   type AddRepoDialogHostedController
 } from './use-add-repo-hosted-controller'
 import { routeAddRepoBrowse } from './add-repo-browse-authority'
+import { AddRepoGroupSelectorSlot } from './AddRepoGroupSelectorSlot'
+import { useAddRepoGroupCompletion } from './use-add-repo-group-completion'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -44,11 +46,13 @@ export default React.memo(function AddRepoDialog({
   const [step, setStep] = useState<AddRepoDialogStep>('add')
   const [isAdding, setIsAdding] = useState(false)
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
-  const completeGitRepoAdd = useCompleteGitRepoAdd({
+  const baseCompleteGitRepoAdd = useCompleteGitRepoAdd({
     closeModal,
     setHideDefaultBranchWorkspace,
     finishProjectAdd
   })
+  const { projectGroups, selectedGroupId, setSelectedGroupId, completeGitRepoAdd } =
+    useAddRepoGroupCompletion(baseCompleteGitRepoAdd)
   const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
@@ -222,6 +226,7 @@ export default React.memo(function AddRepoDialog({
     resetCreateDefaultState()
     resetCreateState()
     resetRemoteState()
+    setSelectedGroupId(null)
   }, [
     resetCloneFlow,
     resetLocalFolderFlow,
@@ -230,7 +235,8 @@ export default React.memo(function AddRepoDialog({
     resetServerPathFlow,
     resetNestedImportFlow,
     resetRemoteState,
-    resetCreateState
+    resetCreateState,
+    setSelectedGroupId
   ])
 
   const resetHostScopedState = useCallback(() => {
@@ -324,6 +330,15 @@ export default React.memo(function AddRepoDialog({
         createError={createError}
         isCreating={isCreating}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
+        groupSelector={
+          projectGroups.length > 0 ? (
+            <AddRepoGroupSelectorSlot
+              projectGroups={projectGroups}
+              selectedGroupId={selectedGroupId}
+              onGroupChange={setSelectedGroupId}
+            />
+          ) : undefined
+        }
         showRemoteAction={false}
         actionsDisabled={!hostSelection.selectedHostId}
         browseHostKind={selectedHostKind ?? 'runtime'}

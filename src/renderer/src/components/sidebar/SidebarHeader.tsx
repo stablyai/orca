@@ -1,5 +1,5 @@
 import React from 'react'
-import { FolderPlus, Plus } from 'lucide-react'
+import { FolderPlus, Layers, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -10,10 +10,12 @@ import { translate } from '@/i18n/i18n'
 
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
+  onCreateGroup: () => void
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
-  onWorkspaceBoardMenuOpenChange
+  onWorkspaceBoardMenuOpenChange,
+  onCreateGroup
 }: SidebarHeaderProps) {
   const openModal = useAppStore((s) => s.openModal)
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
@@ -35,6 +37,28 @@ const SidebarHeader = React.memo(function SidebarHeader({
           preserveWorkspaceBoardOpen
           onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
         />
+
+        {groupBy === 'repo' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground"
+                aria-label={translate(
+                  'components.sidebar.projectGroups.newGroupLabel',
+                  'New Group'
+                )}
+                onClick={onCreateGroup}
+              >
+                <Layers className="size-3.5" strokeWidth={2.25} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {translate('components.sidebar.projectGroups.newGroupLabel', 'New Group')}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         <Tooltip>
           <TooltipTrigger asChild>

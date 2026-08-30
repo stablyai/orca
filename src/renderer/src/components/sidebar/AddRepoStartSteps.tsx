@@ -67,6 +67,7 @@ type AddRepoLocalStartStepProps = {
   nestedScanInProgress: boolean
   nestedScanId: string | null
   hostSelector?: ReactNode
+  groupSelector?: ReactNode
   showRemoteAction?: boolean
   canCreateProject?: boolean
   actionsDisabled?: boolean
@@ -86,6 +87,7 @@ export function AddRepoLocalStartStep({
   nestedScanInProgress,
   nestedScanId,
   hostSelector,
+  groupSelector,
   showRemoteAction = true,
   canCreateProject = true,
   actionsDisabled = false,
@@ -125,6 +127,12 @@ export function AddRepoLocalStartStep({
   // ↑/↓ rove focus across the action buttons in visual order; focus drives the selection.
   const handleArrowNavigation = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+      return
+    }
+    if (
+      !(event.target instanceof HTMLElement) ||
+      !event.target.closest('button[data-add-repo-action]')
+    ) {
       return
     }
     const buttons = Array.from(
@@ -173,6 +181,7 @@ export function AddRepoLocalStartStep({
         onKeyDown={handleArrowNavigation}
       >
         {hostSelector}
+        {groupSelector}
         <AddRepoPrimaryStartAction
           icon={primaryAction.icon}
           title={primaryAction.title}
