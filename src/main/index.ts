@@ -305,6 +305,7 @@ import {
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
+import { installClaudePermissionDenyTranscriptWatch } from './agent-hooks/claude-permission-deny-transcript-watch'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { createHookStatusSessionTabsInvalidator } from './agent-hooks/hook-status-session-tabs-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
@@ -1156,6 +1157,9 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
         userDataPath: app.getPath('userData'),
         endpointNamespace: devAgentHookEndpointNamespace
       })
+      // Why: denying a Claude permission emits no hook; the transcript's
+      // rejected tool_result is the structural deny signal for local panes.
+      installClaudePermissionDenyTranscriptWatch(agentHookServer)
       logStartupMilestone('startup-service-done', { service: 'agent-hook-server' })
     },
     onDaemonError: (error) => {
