@@ -15,7 +15,11 @@ import type {
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
+import {
+  GRAB_BUDGET,
+  type BrowserAnnotationIntent,
+  type BrowserPageAnnotation
+} from '../../../../shared/browser-grab-types'
 import {
   clearClientHostedBrowserCloseIntents,
   isDurableClientHostedBrowserHandle,
@@ -315,6 +319,11 @@ export type BrowserSlice = {
     viewportPresetId: BrowserViewportPresetId | null
   ) => void
   addBrowserPageAnnotation: (annotation: BrowserPageAnnotation) => void
+  updateBrowserPageAnnotation: (
+    pageId: string,
+    annotationId: string,
+    patch: { comment: string; intent: BrowserAnnotationIntent }
+  ) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
   hydrateBrowserSession: (
@@ -1842,6 +1851,24 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         browserAnnotationsByPageId: {
           ...s.browserAnnotationsByPageId,
           [annotation.browserPageId]: next
+        }
+      }
+    }),
+
+  updateBrowserPageAnnotation: (pageId, annotationId, patch) =>
+    set((s) => {
+      const existing = s.browserAnnotationsByPageId[pageId] ?? []
+      const target = existing.find((annotation) => annotation.id === annotationId)
+      if (!target) {
+        return s
+      }
+      const updated = sanitizeBrowserPageAnnotation({ ...target, ...patch })
+      return {
+        browserAnnotationsByPageId: {
+          ...s.browserAnnotationsByPageId,
+          [pageId]: existing.map((annotation) =>
+            annotation.id === annotationId ? updated : annotation
+          )
         }
       }
     }),
