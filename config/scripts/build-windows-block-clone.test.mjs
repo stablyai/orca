@@ -10,17 +10,29 @@ const itWindows = process.platform === 'win32' ? it : it.skip
 describe('Windows ReFS block-clone helper', () => {
   it('uses the ReFS extent-duplication control code with bounded chunks', () => {
     const source = readFileSync(
-      join(projectRoot, 'native', 'windows-block-clone', 'OrcaBlockClone.cs'),
+      join(projectRoot, 'native', 'windows-block-clone', 'OrcaBlockClone.cpp'),
       'utf8'
     )
 
-    expect(source).toContain('FsctlDuplicateExtentsToFile = 0x00098344')
-    expect(source).toContain('MaxCloneChunk = 1024L * 1024L * 1024L')
-    expect(source).toContain('length - (length % clusterSize)')
-    expect(source).toContain('sourceStream.CopyTo(targetStream, FileBufferSize)')
+    expect(source).toContain('FSCTL_DUPLICATE_EXTENTS_TO_FILE')
+    expect(source).toContain('MaxCloneChunk = 1024LL * 1024LL * 1024LL')
+    expect(source).toContain('length.QuadPart - (length.QuadPart % clusterSize)')
+    expect(source).toContain('CopyTail(')
     expect(source).toContain('DeviceIoControl(')
-    expect(source).toContain('Directory.Move(temporary, target)')
-    expect(source).toContain('File.Move(temporary, target)')
+    expect(source).toContain('MoveFileExW(')
+  })
+
+  it('bounds directory clone concurrency by the active CPU thread count', () => {
+    const source = readFileSync(
+      join(projectRoot, 'native', 'windows-block-clone', 'OrcaBlockClone.cpp'),
+      'utf8'
+    )
+
+    expect(source).toContain('GetActiveProcessorCount(ALL_PROCESSOR_GROUPS)')
+    expect(source).toContain('std::min(itemCount, ProcessorThreadCount())')
+    expect(source).toContain('std::atomic<std::size_t> next')
+    expect(source).toContain('workers.emplace_back(worker)')
+    expect(source).toContain('RunParallel(plan.directories.size()')
   })
 
   itWindows(
