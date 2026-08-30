@@ -33,15 +33,25 @@ export function buildWslSkillDiscoveryCommand(
   const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const nameFilterHelpers: string[] = []
   const nameFilterBody: string[] = []
-  if (normalizedNames?.length && normalizedNames.every((name) => /^[\x20-\x7e]+$/.test(name))) {
-    const patterns = [...new Set(normalizedNames)].map(quoteBashString).join('|')
+  if (normalizedNames?.length) {
+    const asciiNames = [...new Set(normalizedNames.filter((name) => /^[\x20-\x7e]+$/.test(name)))]
+    const matchBody = asciiNames.length
+      ? [
+          '  case "$normalized_name" in',
+          `    ${asciiNames.map(quoteBashString).join('|')}) return 0 ;;`,
+          '    *) return 1 ;;',
+          '  esac'
+        ]
+      : ['  return 1']
     nameFilterHelpers.push(
+      'is_ascii_name() {',
+      "  local LC_ALL=C non_ascii_pattern='[^ -~]'",
+      '  if [[ "$1" =~ $non_ascii_pattern ]]; then return 1; fi',
+      '  return 0',
+      '}',
       'matches_requested_name() {',
       '  local normalized_name=${1,,}',
-      '  case "$normalized_name" in',
-      `    ${patterns}) return 0 ;;`,
-      '    *) return 1 ;;',
-      '  esac',
+      ...matchBody,
       '}',
       'read_frontmatter_name() {',
       '  metadata_name=',
@@ -90,7 +100,7 @@ export function buildWslSkillDiscoveryCommand(
     )
     nameFilterBody.push(
       '    directory_name=${directory_path##*/}',
-      '    if ! matches_requested_name "$directory_name"; then',
+      '    if is_ascii_name "$directory_name" && ! matches_requested_name "$directory_name"; then',
       '      read_frontmatter_name "$skill_file"',
       '      if [ "$metadata_name_known" -eq 1 ]; then',
       '        matches_requested_name "$metadata_name" || continue',

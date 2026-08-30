@@ -246,8 +246,11 @@ describe('installed agent skill discovery lifecycle', () => {
     expect(getRuntimeScopedSkillDiscoveryKey(remote('env-a'), target)).toBe(
       JSON.stringify(['runtime:env-a', ...normalizedFilters])
     )
+    expect(getSkillDiscoveryTargetKey(target, [], [])).toBe(
+      JSON.stringify(['repo-1:wsl:Ubuntu', ...normalizedFilters])
+    )
     expect(getSkillDiscoveryTargetKey(target, ['ORCHESTRATION'], [])).toBe(
-      JSON.stringify(['repo-1:wsl:Ubuntu', ['orchestration'], null])
+      JSON.stringify(['repo-1:wsl:Ubuntu', ['orchestration'], ['home']])
     )
   })
 

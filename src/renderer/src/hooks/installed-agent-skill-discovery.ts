@@ -54,10 +54,12 @@ function normalizeSkillDiscoveryTarget(
   names?: readonly string[],
   sourceKinds?: readonly SkillSourceKind[]
 ): SkillDiscoveryTarget | undefined {
-  const effectiveNames = [
-    ...new Set((names ?? target?.names)?.map((name) => name.trim().toLowerCase()).filter(Boolean))
+  const requestedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
+  const targetNames = target?.names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
+  const effectiveNames = [...new Set(requestedNames.length > 0 ? requestedNames : targetNames)]
+  const effectiveSourceKinds = [
+    ...new Set(sourceKinds?.length ? sourceKinds : (target?.sourceKinds ?? []))
   ]
-  const effectiveSourceKinds = [...new Set(sourceKinds ?? target?.sourceKinds ?? [])]
   const filters = {
     ...(effectiveNames?.length ? { names: [...effectiveNames] } : {}),
     ...(effectiveSourceKinds?.length ? { sourceKinds: [...effectiveSourceKinds] } : {})

@@ -120,10 +120,12 @@ describe('WSL skill discovery', () => {
     expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, [], ['   ']).skills).toHaveLength(1)
   })
 
-  it('leaves non-ASCII requested names to the TypeScript filter', () => {
-    const script = buildWslSkillDiscoveryCommand([homeRoot], ['orchestrátion'])
+  it('keeps ASCII prefiltering for mixed-locale requested names', () => {
+    const script = buildWslSkillDiscoveryCommand([homeRoot], ['orchestration', 'hébergement'])
 
-    expect(script).not.toContain('matches_requested_name')
+    expect(script).toContain("'orchestration') return 0")
+    expect(script).not.toContain('hébergement) return 0')
+    expect(script).toContain('is_ascii_name "$directory_name"')
   })
 
   it('uses the TypeScript summary parser for uncertain WSL name candidates', () => {
