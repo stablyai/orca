@@ -3,6 +3,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { i18n } from '@/i18n/i18n'
 import {
   getWorkerModelAgents,
@@ -23,15 +24,14 @@ afterEach(() => {
 })
 
 describe('OrchestrationWorkerModelSetting', () => {
-  it('routes dynamic model discovery through the runtime-aware client', async () => {
+  it('probes only the selected agent and reuses the answer on rerender', async () => {
     discoverRuntimeCommitMessageModels.mockResolvedValue({
       success: true,
       models: []
     })
-
-    render(
+    const pane = (agent: TuiAgent) => (
       <OrchestrationWorkerModelSetting
-        defaultAgent="codex"
+        defaultAgent={agent}
         disabledAgents={[]}
         models={{}}
         efforts={{}}
@@ -40,12 +40,49 @@ describe('OrchestrationWorkerModelSetting', () => {
       />
     )
 
-    await waitFor(() => expect(discoverRuntimeCommitMessageModels).toHaveBeenCalledTimes(3))
+    const view = render(pane('codex'))
+
+    await waitFor(() => expect(discoverRuntimeCommitMessageModels).toHaveBeenCalledTimes(1))
     expect(discoverRuntimeCommitMessageModels.mock.calls.map(([, agentId]) => agentId)).toEqual([
-      'claude',
-      'codex',
-      'cursor'
+      'codex'
     ])
+
+    view.rerender(pane('claude'))
+    await waitFor(() => expect(discoverRuntimeCommitMessageModels).toHaveBeenCalledTimes(2))
+    view.rerender(pane('codex'))
+    await Promise.resolve()
+    expect(discoverRuntimeCommitMessageModels.mock.calls.map(([, agentId]) => agentId)).toEqual([
+      'codex',
+      'claude'
+    ])
+  })
+
+  it('retries the selected agent after a failed probe', async () => {
+    discoverRuntimeCommitMessageModels.mockResolvedValueOnce({ success: false })
+    discoverRuntimeCommitMessageModels.mockResolvedValue({ success: true, models: [] })
+    const pane = (agent: TuiAgent) => (
+      <OrchestrationWorkerModelSetting
+        defaultAgent={agent}
+        disabledAgents={[]}
+        models={{}}
+        efforts={{}}
+        onDefaultAgentChange={() => {}}
+        onChange={() => {}}
+      />
+    )
+
+    const view = render(pane('codex'))
+    await waitFor(() => expect(discoverRuntimeCommitMessageModels).toHaveBeenCalledTimes(1))
+
+    view.rerender(pane('claude'))
+    view.rerender(pane('codex'))
+    await waitFor(() =>
+      expect(discoverRuntimeCommitMessageModels.mock.calls.map(([, agentId]) => agentId)).toEqual([
+        'codex',
+        'claude',
+        'codex'
+      ])
+    )
   })
 
   it('shows model controls only for agents with launch-time model support', () => {
@@ -109,13 +146,7 @@ describe('OrchestrationWorkerModelSetting', () => {
     }
 
     expect(effortChoices('gpt-account-model')).toEqual(['low', 'high'])
-    expect(effortChoices('gpt-unseeded-model')).toEqual([
-      'minimal',
-      'low',
-      'medium',
-      'high',
-      'xhigh'
-    ])
+    expect(effortChoices('gpt-unseeded-model')).toEqual(['low', 'medium', 'high', 'xhigh'])
   })
 
   it('validates a preserved effort against a discovered model catalog', () => {

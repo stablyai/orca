@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { CommitMessageModelCapability } from '../../../../shared/commit-message-agent-spec'
-import { getCommitMessageAgentSpec } from '../../../../shared/commit-message-agent-spec'
 import type {
   OrchestrationWorkerEfforts,
   OrchestrationWorkerModels
@@ -14,18 +12,18 @@ import {
 import {
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
-  type AgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
-import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-client'
-import { useAppStore } from '@/store'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
+import {
+  toDiscoveredCatalogModel,
+  useDiscoveredWorkerModels,
+  type DiscoveredModels
+} from './orchestration-worker-model-discovery'
 
 const AGENT_DEFAULT_MODEL = '__agent_default__'
 const AGENT_DEFAULT_EFFORT = '__agent_default_effort__'
@@ -35,55 +33,6 @@ type WorkerModelAgent = {
   id: TuiAgent
   label: string
   models: CatalogModel[]
-}
-
-type DiscoveredModels = Partial<Record<TuiAgent, CommitMessageModelCapability[]>>
-
-function getWorkerModelDiscoveryContext() {
-  const state = useAppStore.getState()
-  const worktreeId = state.activeWorktreeId
-  const worktree = worktreeId ? state.getKnownWorktreeById(worktreeId) : undefined
-  const activeRepo = state.repos.find((repo) => repo.id === state.activeRepoId)
-  const connectionId = getConnectionIdFromState(state, worktreeId) ?? activeRepo?.connectionId
-  return {
-    settings: getSettingsForWorktreeRuntimeOwner(state, worktreeId),
-    worktreeId,
-    worktreePath: worktree?.path ?? activeRepo?.path ?? '',
-    ...(connectionId ? { connectionId } : {})
-  }
-}
-
-function toDiscoveredCatalogModel(
-  catalog: AgentSessionOptionCatalog,
-  model: CommitMessageModelCapability
-): CatalogModel {
-  const fallbackOptions = catalog.unknownModelOptions ?? []
-  const fallbackEffort = fallbackOptions.find((option) => option.id === 'effort')
-  if (!model.thinkingLevels?.length || fallbackEffort?.kind.type !== 'select') {
-    return { id: model.id, label: model.label, options: fallbackOptions }
-  }
-
-  const choices = model.thinkingLevels.map(({ id, label }) => ({
-    value: id,
-    label
-  }))
-  const defaultValue =
-    (model.defaultThinkingLevel &&
-      choices.some((choice) => choice.value === model.defaultThinkingLevel) &&
-      model.defaultThinkingLevel) ||
-    (choices.some((choice) => choice.value === fallbackEffort.kind.defaultValue)
-      ? fallbackEffort.kind.defaultValue
-      : choices[0].value)
-  const discoveredEffort = {
-    ...fallbackEffort,
-    kind: { ...fallbackEffort.kind, choices, defaultValue }
-  }
-
-  return {
-    id: model.id,
-    label: model.label,
-    options: fallbackOptions.map((option) => (option.id === 'effort' ? discoveredEffort : option))
-  }
 }
 
 export function getWorkerModelAgents(discoveredModels: DiscoveredModels = {}): WorkerModelAgent[] {
@@ -153,29 +102,15 @@ export function OrchestrationWorkerModelSetting(props: {
   onDefaultAgentChange: (agent: TuiAgent | null) => void
   onChange: (models: OrchestrationWorkerModels, efforts: OrchestrationWorkerEfforts) => void
 }): React.JSX.Element {
-  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModels>({})
   const defaultWorkerAgents = useMemo(
     () => getAgentCatalog().filter((agent) => isTuiAgentEnabled(agent.id, props.disabledAgents)),
     [props.disabledAgents]
   )
-  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
-  const activeWorktreePath = useAppStore((state) => {
-    const worktreeId = state.activeWorktreeId
-    return worktreeId ? (state.getKnownWorktreeById(worktreeId)?.path ?? '') : ''
-  })
-  const activeRepoPath = useAppStore(
-    (state) => state.repos.find((repo) => repo.id === state.activeRepoId)?.path ?? ''
-  )
-  const activeConnectionId = useAppStore((state) =>
-    getConnectionIdFromState(state, state.activeWorktreeId)
-  )
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
-  )
-  const modelAgents = useMemo(() => getWorkerModelAgents(discoveredModels), [discoveredModels])
   const selectedAgent = defaultWorkerAgents.some((agent) => agent.id === props.defaultAgent)
     ? props.defaultAgent
     : null
+  const discoveredModels = useDiscoveredWorkerModels(selectedAgent ?? null)
+  const modelAgents = useMemo(() => getWorkerModelAgents(discoveredModels), [discoveredModels])
   const selectedAgentLabel =
     defaultWorkerAgents.find((agent) => agent.id === selectedAgent)?.label ??
     translate('auto.components.settings.OrchestrationWorkerModelSetting.workerLabel', 'Worker')
@@ -237,42 +172,6 @@ export function OrchestrationWorkerModelSetting(props: {
   const selectedModelLabel = selectedModel
     ? (modelAgent?.models.find((model) => model.id === selectedModel)?.label ?? selectedModel)
     : undefined
-
-  useEffect(() => {
-    let cancelled = false
-    const dynamicAgents = getWorkerModelAgents().filter(
-      (agent) => getCommitMessageAgentSpec(agent.id)?.modelSource === 'dynamic'
-    )
-    void Promise.all(
-      dynamicAgents.map(async (agent) => {
-        try {
-          const result = await discoverRuntimeCommitMessageModels(
-            getWorkerModelDiscoveryContext(),
-            agent.id
-          )
-          return result.success ? ([agent.id, result.models] as const) : null
-        } catch {
-          return null
-        }
-      })
-    ).then((results) => {
-      if (cancelled) {
-        return
-      }
-      setDiscoveredModels(
-        Object.fromEntries(results.filter((result) => result !== null)) as DiscoveredModels
-      )
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [
-    activeConnectionId,
-    activeRepoPath,
-    activeRuntimeEnvironmentId,
-    activeWorktreeId,
-    activeWorktreePath
-  ])
 
   return (
     <section className="space-y-2 rounded-md border border-border px-4 py-3">

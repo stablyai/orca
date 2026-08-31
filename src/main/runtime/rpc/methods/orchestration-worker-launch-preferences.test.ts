@@ -210,48 +210,48 @@ describe('orchestration worker launch preferences', () => {
   it.each([
     {
       model: 'gpt-5.6-sol',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-      rejected: ['future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['minimal', 'future-effort']
     },
     {
       model: 'gpt-5.6-terra',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-      rejected: ['future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['minimal', 'future-effort']
     },
     {
       model: 'gpt-5.6-luna',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-      rejected: ['ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh', 'max'],
+      rejected: ['minimal', 'ultra', 'future-effort']
     },
     {
       model: 'gpt-5.5',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['minimal', 'max', 'ultra', 'future-effort']
     },
     {
       model: 'gpt-5.2-codex',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['minimal', 'max', 'ultra', 'future-effort']
     },
     {
       model: 'gpt-5.4',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['minimal', 'max', 'ultra', 'future-effort']
     },
     {
       model: 'gpt-5.4-mini',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['minimal', 'max', 'ultra', 'future-effort']
     },
     {
       model: 'gpt-5.3-codex-spark',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['minimal', 'max', 'ultra', 'future-effort']
     },
     {
       model: 'future-codex-model',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['minimal', 'max', 'ultra', 'future-effort']
     }
   ])('enforces the Codex effort ceiling for $model', ({ model, accepted, rejected }) => {
     const catalog = getAgentSessionOptionCatalog('codex')!

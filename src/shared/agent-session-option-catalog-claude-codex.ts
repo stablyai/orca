@@ -180,8 +180,9 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   }
 }
 
+// Why: `codex debug models` reports a prefix ladder starting at low; no model
+// offers minimal, so keeping it here would advertise a level the CLI rejects.
 const CODEX_EFFORT_CHOICES = [
-  { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
