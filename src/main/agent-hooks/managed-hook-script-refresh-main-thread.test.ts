@@ -75,8 +75,29 @@ describe('managed hook script refresh stays off the main thread', () => {
       hooksDir,
       process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
     )
+    const claudeSettings = join(state.home, '.claude', 'settings.json')
     await mkdir(hooksDir, { recursive: true })
+    await mkdir(join(state.home, '.claude'), { recursive: true })
     await writeFile(claudeScript, 'stale', 'utf-8')
+    await writeFile(
+      claudeSettings,
+      JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                {
+                  type: 'command',
+                  command:
+                    'if [ -z "$HOME" ]; then :; else /bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"; fi'
+                }
+              ]
+            }
+          ]
+        }
+      }),
+      'utf-8'
+    )
     state.syncCalls = []
 
     for (const [, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {

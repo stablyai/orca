@@ -59,7 +59,16 @@ import {
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS
 } from './managed-agent-hook-registry'
+import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { ClaudeHookService } from '../claude/hook-service'
+import {
+  CLAUDE_HOOK_SETTINGS,
+  getManagedCommand,
+  getManagedLifecycleHook,
+  getManagedScriptPath,
+  getStatusLineScriptPath,
+  OPENCLAUDE_HOOK_SETTINGS
+} from '../claude/hook-settings'
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -198,6 +207,203 @@ describe('managed hook script refresh', () => {
       })
       // Why: a refresh pass on a machine with no prior installs must be a strict no-op.
       expect(readdirSync(home)).toEqual([])
+    } finally {
+      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+})
+
+function staleWindowsBranchCommand(scriptBaseName: string): string {
+  return wrapRuntimeHomeHookCommand(scriptBaseName, {
+    includeWindowsBranch: true,
+    neutralJsonWhenMissing: true
+  })
+}
+
+function makeOpenClaudeService(): ClaudeHookService {
+  return new ClaudeHookService({
+    agent: 'openclaude',
+    displayName: 'OpenClaude',
+    settings: OPENCLAUDE_HOOK_SETTINGS
+  })
+}
+
+describe('managed hook settings refresh (#17202)', () => {
+  it('rewrites stale SYSTEMROOT commands without adding events or creating scripts', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-settings-'))
+    homedirMock.mockReturnValue(home)
+    try {
+      const settingsPath = join(home, '.claude', 'settings.json')
+      mkdirSync(join(home, '.claude'), { recursive: true })
+      const stale = staleWindowsBranchCommand('claude-hook')
+      expect(stale).toMatch(/SYSTEMROOT/i)
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          env: { AWS_REGION: 'us-west-2' },
+          hooks: {
+            Stop: [
+              { hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] },
+              { hooks: [{ type: 'command', command: stale, timeout: 10 }] }
+            ]
+          }
+        })
+      )
+
+      await new ClaudeHookService().refreshManagedScripts()
+
+      const parsed = JSON.parse(readFileSync(settingsPath, 'utf8')) as {
+        env?: { AWS_REGION?: string }
+        hooks?: Record<string, { hooks: { command: string }[] }[]>
+        statusLine?: unknown
+      }
+      const expected = getManagedLifecycleHook(
+        getManagedScriptPath(CLAUDE_HOOK_SETTINGS),
+        CLAUDE_HOOK_SETTINGS
+      ).command
+      expect(parsed.env).toEqual({ AWS_REGION: 'us-west-2' })
+      expect(Object.keys(parsed.hooks ?? {})).toEqual(['Stop'])
+      const commands = (parsed.hooks?.Stop ?? []).flatMap((definition) =>
+        (definition.hooks ?? []).map((hook) => hook.command)
+      )
+      expect(commands).toContain('/usr/local/bin/user-hook')
+      expect(commands).toContain(expected)
+      expect(commands).toHaveLength(2)
+      if (process.platform !== 'win32') {
+        expect(expected).not.toMatch(/SYSTEMROOT/i)
+        expect(commands.join('\n')).not.toMatch(/SYSTEMROOT/i)
+      }
+      expect(parsed.statusLine).toBeUndefined()
+      expect(existsSync(join(home, '.orca'))).toBe(false)
+    } finally {
+      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('rewrites a stale managed statusLine and leaves user or empty slots alone', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-statusline-'))
+    homedirMock.mockReturnValue(home)
+    try {
+      const settingsPath = join(home, '.claude', 'settings.json')
+      mkdirSync(join(home, '.claude'), { recursive: true })
+      const staleStatusLine = staleWindowsBranchCommand('claude-statusline')
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          statusLine: { type: 'command', command: staleStatusLine, extra: true },
+          hooks: {
+            Stop: [
+              {
+                hooks: [
+                  {
+                    type: 'command',
+                    command: staleWindowsBranchCommand('claude-hook'),
+                    timeout: 10
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      )
+
+      await new ClaudeHookService().refreshManagedScripts()
+
+      const parsed = JSON.parse(readFileSync(settingsPath, 'utf8')) as {
+        statusLine?: { type: string; command: string; extra?: boolean }
+      }
+      expect(parsed.statusLine?.command).toBe(getManagedCommand(getStatusLineScriptPath()))
+      expect(parsed.statusLine?.extra).toBe(true)
+      if (process.platform !== 'win32') {
+        expect(parsed.statusLine?.command).not.toMatch(/SYSTEMROOT/i)
+      }
+
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          statusLine: { type: 'command', command: '/usr/local/bin/my-statusline' }
+        })
+      )
+      await new ClaudeHookService().refreshManagedScripts()
+      expect(JSON.parse(readFileSync(settingsPath, 'utf8')).statusLine).toEqual({
+        type: 'command',
+        command: '/usr/local/bin/my-statusline'
+      })
+
+      writeFileSync(settingsPath, JSON.stringify({ hooks: {} }))
+      await new ClaudeHookService().refreshManagedScripts()
+      expect(JSON.parse(readFileSync(settingsPath, 'utf8')).statusLine).toBeUndefined()
+    } finally {
+      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('rewrites existing OpenClaude managed commands without creating Claude config', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-openclaude-'))
+    homedirMock.mockReturnValue(home)
+    try {
+      const settingsPath = join(home, '.openclaude', 'settings.json')
+      mkdirSync(join(home, '.openclaude'), { recursive: true })
+      const stale = staleWindowsBranchCommand('openclaude-hook')
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          hooks: {
+            StopFailure: [{ hooks: [{ type: 'command', command: stale, timeout: 10 }] }]
+          }
+        })
+      )
+
+      await makeOpenClaudeService().refreshManagedScripts()
+
+      const parsed = JSON.parse(readFileSync(settingsPath, 'utf8')) as {
+        hooks?: Record<string, { hooks: { command: string }[] }[]>
+      }
+      const expected = getManagedLifecycleHook(
+        getManagedScriptPath(OPENCLAUDE_HOOK_SETTINGS),
+        OPENCLAUDE_HOOK_SETTINGS
+      ).command
+      expect(Object.keys(parsed.hooks ?? {})).toEqual(['StopFailure'])
+      expect(parsed.hooks?.StopFailure?.[0]?.hooks?.[0]?.command).toBe(expected)
+      if (process.platform !== 'win32') {
+        expect(expected).not.toMatch(/SYSTEMROOT/i)
+      }
+      expect(existsSync(join(home, '.claude'))).toBe(false)
+    } finally {
+      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves unreadable settings and already-current commands untouched', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-settings-skip-'))
+    homedirMock.mockReturnValue(home)
+    try {
+      const brokenPath = join(home, '.claude', 'settings.json')
+      mkdirSync(join(home, '.claude'), { recursive: true })
+      writeFileSync(brokenPath, 'not json')
+      await new ClaudeHookService().refreshManagedScripts()
+      expect(readFileSync(brokenPath, 'utf8')).toBe('not json')
+
+      const current = getManagedLifecycleHook(
+        getManagedScriptPath(OPENCLAUDE_HOOK_SETTINGS),
+        OPENCLAUDE_HOOK_SETTINGS
+      )
+      const currentPath = join(home, '.openclaude', 'settings.json')
+      mkdirSync(join(home, '.openclaude'), { recursive: true })
+      writeFileSync(
+        currentPath,
+        JSON.stringify({
+          hooks: { Stop: [{ hooks: [current] }] }
+        })
+      )
+      const fixedTime = new Date(1_000)
+      utimesSync(currentPath, fixedTime, fixedTime)
+      await makeOpenClaudeService().refreshManagedScripts()
+      expect(statSync(currentPath).mtimeMs).toBe(fixedTime.getTime())
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
       rmSync(home, { recursive: true, force: true })
