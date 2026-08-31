@@ -27,11 +27,24 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({ ChevronDown: 'ChevronDown', ChevronRight: 'ChevronRight' }))
 vi.mock('../transport/client-context', () => ({ useForceReconnect: () => vi.fn() }))
 
+// Captured at module scope: the list renders rows against Date.now() a few ms later,
+// so a 3h offset stays inside the '3h' relative-time bucket.
+const RENDER_NOW = Date.now()
+
 function historyResponse(subject: string) {
   return {
     ok: true,
     result: {
-      items: [{ id: 'commit-1', displayId: 'c0mm1t1', subject, author: 'Ada', parentIds: [] }]
+      items: [
+        {
+          id: 'commit-1',
+          displayId: 'c0mm1t1',
+          subject,
+          author: 'Ada',
+          parentIds: [],
+          timestamp: RENDER_NOW - 3 * 3_600_000
+        }
+      ]
     }
   }
 }
@@ -92,6 +105,9 @@ describe('MobileGitHistoryList', () => {
 
     await render(client, 'connected')
     expect(tree()).toContain('first load')
+    // Rows format the RPC timestamp (epoch ms); a regression to seconds-scaling
+    // renders every commit as 'just now' instead.
+    expect(tree()).toContain('3h')
 
     await update(client, 'reconnecting')
     expect(tree()).toContain('first load')

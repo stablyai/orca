@@ -108,7 +108,9 @@ describe('git history parsing', () => {
       message: 'feat: add graph\n\nbody line',
       author: 'Ada Lovelace',
       authorEmail: 'ada@example.com',
-      displayId: HEAD_OID.slice(0, 7)
+      displayId: HEAD_OID.slice(0, 7),
+      // The format feeds %at seconds; consumers get epoch milliseconds.
+      timestamp: 1_700_000_000_000
     })
     expect(item?.references?.map((ref) => [ref.id, ref.name, ref.category])).toEqual([
       ['refs/heads/feature', 'feature', 'branches'],
