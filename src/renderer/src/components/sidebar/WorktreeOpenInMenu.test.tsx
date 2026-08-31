@@ -305,7 +305,7 @@ describe('WorktreeOpenInMenu', () => {
     })
 
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'VS Code needs an SSH config alias for this host.',
+      'Your editor needs an SSH config alias for this host.',
       {
         description:
           'Add a Host alias for builder.example.com:2222 to your local SSH config, reconnect the workspace, then try again.'
