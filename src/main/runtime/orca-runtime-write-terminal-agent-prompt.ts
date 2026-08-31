@@ -99,6 +99,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         timeoutMs: effectTimeoutMs,
         signal: options.signal
       })
+      this.agentPromptAcceptedGenerationByPtyId.set(ptyId, generation)
       return { submits: 1 }
     }
     const binding = this.getTerminalPromptRequestBinding(handle)
@@ -157,6 +158,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         signal: options.signal,
         timeoutMs: options.observationTimeoutMs ?? effectTimeoutMs
       })
+      this.agentPromptAcceptedGenerationByPtyId.set(ptyId, generation)
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
       return {
         submits: 1,
