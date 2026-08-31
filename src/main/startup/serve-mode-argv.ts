@@ -26,12 +26,13 @@ const CLI_TO_SERVE_VALUE_FLAG = new Map([
  * Residual class: a flag outside this list whose space-separated value is literally `serve` would
  * read as the subcommand. Chromium switches are `--flag=value` only, so no real launch does that.
  */
-const VALUE_TAKING_FLAGS = new Set([
+export const VALUE_TAKING_FLAGS = new Set([
   ...CLI_TO_SERVE_VALUE_FLAG.keys(),
   '--serve-port',
   '--serve-pairing-address',
   '--serve-project-root',
   '--user-data-dir',
+  '--proxy-server',
   '--environment',
   '--pairing-code'
 ])

@@ -126,6 +126,31 @@ describe('CLI launch redirect: command form', () => {
     ])
   })
 
+  it.each(['--user-data-dir', '--proxy-server', '--unknown-desktop-switch'])(
+    'does not treat a value of %s as a CLI early-exit flag',
+    (flag) => {
+      expect(
+        getCliLaunchArgs([linux.execPath, flag, 'help'], linux.cliEntryPath, linuxOptions)
+      ).toBeNull()
+    }
+  )
+
+  it('does not treat a serve option value as a help request', () => {
+    expect(
+      getCliLaunchArgs(
+        [linux.execPath, 'serve', '--project-root', 'help'],
+        linux.cliEntryPath,
+        linuxOptions
+      )
+    ).toBeNull()
+  })
+
+  it('does not reinterpret help after the argument terminator', () => {
+    expect(
+      getCliLaunchArgs([linux.execPath, 'serve', '--', '--help'], linux.cliEntryPath, linuxOptions)
+    ).toBeNull()
+  })
+
   it('leaves a plain desktop launch alone', () => {
     expect(getCliLaunchArgs([linux.execPath], linux.cliEntryPath, linuxOptions)).toBeNull()
     expect(

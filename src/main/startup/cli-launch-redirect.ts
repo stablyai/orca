@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import { runProcessSync } from '../../shared/child-process/run-process'
-import { CLI_GLOBAL_VALUE_FLAGS, findCliCommandIndex } from '../../shared/cli-argument-boundary'
+import { CLI_BOOLEAN_FLAGS, findCliCommandIndex } from '../../shared/cli-argument-boundary'
 import { CLI_COMMAND_NAMES } from './cli-command-names'
+import { VALUE_TAKING_FLAGS } from './serve-mode-argv'
 
 export type CliLaunchRedirectResult = { redirected: false } | { redirected: true; status: number }
 
@@ -20,6 +21,7 @@ export type CliLaunchRedirectOptions = {
 
 const CLI_EARLY_EXIT_FLAGS = new Set(['--help', '-h', 'help', '--version', '-v'])
 const DESKTOP_FLAGS = new Set(['--no-sandbox', '--disable-gpu'])
+const CLI_LAUNCH_VALUE_FLAG_NAMES = [...VALUE_TAKING_FLAGS].map((flag) => flag.slice(2))
 
 // Fence recursion if a wrapper drops ELECTRON_RUN_AS_NODE again.
 const REDIRECT_ATTEMPT_ENV = 'ORCA_CLI_LAUNCH_REDIRECTED'
@@ -114,17 +116,59 @@ function getCommandLaunchArgs(
     return null
   }
   const commandPaths = options.commandNames.map((name) => [name])
-  const commandIndex = findCliCommandIndex(args, commandPaths, CLI_GLOBAL_VALUE_FLAGS)
+  const commandIndex = findCliCommandIndex(args, commandPaths, CLI_LAUNCH_VALUE_FLAG_NAMES)
   const cliArgs = args.filter(
     (arg, index) => (commandIndex !== -1 && index > commandIndex) || !DESKTOP_FLAGS.has(arg)
   )
-  if (cliArgs.some((arg) => CLI_EARLY_EXIT_FLAGS.has(arg))) {
-    return cliArgs
-  }
-
   const command = commandIndex === -1 ? null : args[commandIndex]
   // Keep direct serve in-process so signals reach its full child tree.
-  return command && command !== 'serve' ? cliArgs : null
+  if (command && command !== 'serve') {
+    return cliArgs
+  }
+  return hasCliEarlyExitArg(args, commandIndex) ? cliArgs : null
+}
+
+function hasCliEarlyExitArg(args: readonly string[], commandIndex: number): boolean {
+  let index = 0
+  let positionalCount = 0
+  while (index < args.length) {
+    const token = args[index]!
+    if (token === '--') {
+      return false
+    }
+    if (
+      CLI_EARLY_EXIT_FLAGS.has(token) &&
+      (token !== 'help' || positionalCount === 0 || commandIndex !== -1)
+    ) {
+      return true
+    }
+    if (!token.startsWith('-')) {
+      if (token === 'help' && (positionalCount === 0 || commandIndex !== -1)) {
+        return true
+      }
+      positionalCount += 1
+    }
+    index += 1
+    if (takesLaunchValue(token, args[index])) {
+      index += 1
+    }
+  }
+  return false
+}
+
+function takesLaunchValue(token: string, next: string | undefined): boolean {
+  if (
+    !next ||
+    next.startsWith('-') ||
+    !token.startsWith('-') ||
+    token.includes('=') ||
+    CLI_EARLY_EXIT_FLAGS.has(token) ||
+    DESKTOP_FLAGS.has(token)
+  ) {
+    return false
+  }
+  const flagName = token.startsWith('--') ? token.slice(2) : token.replace(/^-+/, '')
+  return !CLI_BOOLEAN_FLAGS.has(flagName)
 }
 
 function buildPackagedCliEntryPath(platform: NodeJS.Platform, resourcesPath: string): string {
