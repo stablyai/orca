@@ -529,6 +529,9 @@
               }
             }
           }
+        },
+        "cloneTasks": {
+          "cloneSucceeded": "Repository cloned"
         }
       }
     },
@@ -1344,7 +1347,12 @@
         "8812225174": "Reopen",
         "09d67a0f9b": "Failed to close pull request",
         "88809e79db": "Failed to reopen pull request",
-        "00f55cc17b": "Repository access is unavailable for this pull request."
+        "00f55cc17b": "Repository access is unavailable for this pull request.",
+        "d23bbb6416": "{{value0}} skipped",
+        "18f80e1329": "{{value0}} pending",
+        "b1ac991806": "{{value0}} failing",
+        "checksNeedActionChip": "{{value0}} action required",
+        "311d0cee55": "{{value0}} passing"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1846,7 +1854,12 @@
         "4b8ae7303f": "Failed to load diff.",
         "closePullRequestFailed": "Failed to close pull request",
         "reopenPullRequestFailed": "Failed to reopen pull request",
-        "diffLoadTimedOut": "Timed out loading this diff."
+        "diffLoadTimedOut": "Timed out loading this diff.",
+        "e6ad0a8d06": "{{value0}} skipped",
+        "88267924d5": "{{value0}} pending",
+        "ae2a34c7b8": "{{value0}} failing",
+        "checksNeedActionChip": "{{value0}} action required",
+        "7c5035931a": "{{value0}} passing"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -2339,7 +2352,9 @@
         "2770f02910": "Search chats, terminals, worktrees, settings, and actions",
         "paletteOpenTabBranch": "Branch name",
         "paletteOpenTabWorkspace": "Workspace name",
-        "lastActiveTime": "Last active {{value0}} ago"
+        "lastActiveTime": "Last active {{value0}} ago",
+        "1ebe225fee": "Search worktrees, settings, tabs, and actions...",
+        "4e4ff044d5": "Search worktrees, settings, tabs, and actions"
       },
       "github": {
         "pr": {
@@ -2945,6 +2960,15 @@
         },
         "sheet": {
           "1189e9fe0a": "Close"
+        },
+        "team": {
+          "multi": {
+            "combobox": {
+              "de83523bf9": "No teams match your search.",
+              "301f2a796e": "All teams",
+              "18ec58881e": "Search teams..."
+            }
+          }
         }
       },
       "terminal": {
@@ -3373,7 +3397,8 @@
             "d7d496a451": "Browser page no longer exists",
             "7726ce9970": "Mobile emulator tab no longer exists",
             "chooseAction": "Choose an action.",
-            "searchProvider": "Search {{value0}}"
+            "searchProvider": "Search {{value0}}",
+            "39676a184c": "Open any file, URL, agent, ..."
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Command",
@@ -3416,7 +3441,8 @@
                   "90eb94dc48": "Enter an http:// or https:// URL.",
                   "5553b283ce": "Enter a URL or file path.",
                   "queryTooLarge": "Search text is too large.",
-                  "absolutePathRemoteBlocked": "Absolute paths require a local workspace."
+                  "absolutePathRemoteBlocked": "Absolute paths require a local workspace.",
+                  "5a9c83c04b": "Open any file, URL, agent, ..."
                 }
               },
               "menu": {
@@ -6052,7 +6078,9 @@
           "sshConfigPickerAddAllEmpty": "Add all to Orca",
           "identityFileFromConfigHint": "Left empty on purpose: Orca uses every key ~/.ssh/config resolves for {{value0}}. Type a path to use just that key.",
           "sshConfigPickerRetry": "Try again",
-          "sshConfigPickerResolving": "Reading…"
+          "sshConfigPickerResolving": "Reading…",
+          "importing": "Importing...",
+          "importSshConfig": "Import ~/.ssh/config"
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "Reconnection failed",
@@ -6186,6 +6214,28 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "SshDisconnectedDialog": {
+          "ca4a7892af": "Connecting...",
+          "89385db176": "Dismiss",
+          "656368f3a2": "Reconnection failed",
+          "376bed88e5": "The connection to the remote host encountered an error.",
+          "4afcca1d24": "Reconnect",
+          "11552bf786": "SSH Disconnected",
+          "cb5938ae79": "Reconnecting...",
+          "disconnected": "This SSH host is not connected.",
+          "reconnecting": "Reconnecting to the remote host...",
+          "reconnectionFailed": "Reconnection to the remote host failed.",
+          "authFailed": "Authentication to the remote host failed."
+        },
+        "CloneTaskRow": {
+          "cloneFailed": "Clone failed",
+          "cloning": "Cloning",
+          "starting": "Starting clone…",
+          "cancel": "Cancel",
+          "dismiss": "Dismiss",
+          "cancelClone": "Cancel clone",
+          "dismissClone": "Dismiss clone"
         }
       },
       "shared": {
@@ -7464,7 +7514,9 @@
           "274af61bc0": "system",
           "6e6df3a09a": "Choose Custom File",
           "76e02467b8": "Change Custom File",
-          "d3756cf5bc": "disabled"
+          "d3756cf5bc": "disabled",
+          "cloneCompleteLabel": "Clone Complete",
+          "cloneCompleteDescription": "A background repository clone has finished."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -8357,7 +8409,14 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "3a72b9745e": "Choose which task providers appear in the Tasks page and sidebar shortcuts.",
+          "71644aba56": "Choose which task providers appear in the Tasks page source picker and sidebar shortcuts. At least one provider must stay visible.",
+          "93e72ef659": "Task Sources",
+          "8e1305fcc6": "Show Jira in the Tasks source picker and sidebar shortcuts.",
+          "e4170c9615": "Show Linear in the Tasks source picker and sidebar shortcuts.",
+          "dd67a1b6e1": "Show GitLab in the Tasks source picker and sidebar shortcuts.",
+          "1db47236cd": "Show GitHub in the Tasks source picker and sidebar shortcuts."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -10020,7 +10079,8 @@
             "setup": "setup",
             "apiKey": "api key",
             "skill": "skill",
-            "connect": "connect"
+            "connect": "connect",
+            "765f0c544d": "Choose which task providers appear in the Tasks page and sidebar shortcuts."
           }
         },
         "terminal": {
@@ -10489,7 +10549,8 @@
           "readyDescription": "Agents can inspect and operate app windows when you ask.",
           "permissionsTitle": "Finish setup to use local apps.",
           "permissionsRequired_one": "1 permission required before agents can operate app windows.",
-          "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
+          "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows.",
+          "permissionsRequired": "{{value0}} permission{{value1}} required before agents can operate app windows."
         },
         "providerAccountScope": {
           "remoteServer": "Remote server: {{value0}}",
@@ -10721,7 +10782,8 @@
         "ephemeralVms": {
           "search": {
             "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment.",
-            "cloudVmTitle": "Cloud VM"
+            "cloudVmTitle": "Cloud VM",
+            "title": "Per-Workspace Environments"
           }
         },
         "EphemeralVmsPane": {
@@ -10742,11 +10804,14 @@
           "cloudVmSkillTitle": "Cloud VM setup skill",
           "cloudVmRefresh": "Refresh Cloud VM recipes",
           "cloudVmTerminalTitle": "Cloud VM setup",
-          "cloudVmTerminalAriaLabel": "Cloud VM skill install terminal"
+          "cloudVmTerminalAriaLabel": "Cloud VM skill install terminal",
+          "skillTitle": "Per-Workspace Environments skill",
+          "refresh": "Refresh ephemeral VM recipes"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
-          "cloudVmToggleLabel": "Toggle Cloud VM"
+          "cloudVmToggleLabel": "Toggle Cloud VM",
+          "toggleLabel": "Toggle per-workspace environments"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",
@@ -10877,7 +10942,8 @@
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal",
           "manageConnectionHint": "Review connected Linear workspaces and API keys in",
-          "manageConnectionLink": "Integrations"
+          "manageConnectionLink": "Integrations",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca."
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -12207,7 +12273,9 @@
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
                 "b3195cba33": "Unmark author as bot",
                 "f588b46a6c": "Mark author as bot",
-                "e45324fbed": "Failed to load check details."
+                "e45324fbed": "Failed to load check details.",
+                "checkDetailsLoadFailed": "Failed to load check details.",
+                "2524d1fb83": "Log tail available in full details."
               },
               "empty": {
                 "state": {
@@ -13207,7 +13275,9 @@
         "use": {
           "onboarding": {
             "flow": {
-              "52acfbef51": "Could not save progress"
+              "52acfbef51": "Could not save progress",
+              "dce4bdce5b": "Could not open SSH settings",
+              "fd74e7558e": "Clone failed"
             }
           }
         },
@@ -13247,6 +13317,51 @@
               }
             }
           }
+        },
+        "FeatureSetupChecklist": {
+          "77f74946f5": "Agents can message each other, take tasks, and coordinate handoffs.",
+          "399cf885c0": "Agent Orchestration",
+          "c5292c409d": "Agents can inspect app windows and operate local apps when you ask.",
+          "1ecfb490ac": "Computer Use",
+          "01426f3a23": "Agents can navigate sites, inspect pages, and work through browser tasks.",
+          "ea85d9e628": "Agent Browser Use",
+          "linearTicketsTitle": "Linear agent skill",
+          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs.",
+          "linearTicketsSetupSummary": "Recommended for Linear workspaces; does not affect Linear connection setup."
+        },
+        "OnboardingTourStep": {
+          "3f9586c043": "Take the tour",
+          "60c5576353": "Exit tour"
+        },
+        "RepoStep": {
+          "e8fdb36338": "Scanning repositories. Click to stop.",
+          "b7c4da0504": "SSH? Set hosts up in Settings",
+          "c33b190ca3": "Host paths only",
+          "7b679207e4": "Workspace",
+          "24c7c8696c": "Clone into host path",
+          "7932e95f68": "Clone",
+          "955134915e": "git@github.com:org/repo.git",
+          "288d8444b7": "Paste an HTTPS or SSH URL.",
+          "132425a3e3": "Clone a repo",
+          "6558d50c69": "Want to import many repos at once? Select the parent folder.",
+          "831524961f": "Choose any local directory, git repo or not.",
+          "f4e9c8dcf8": "Browse for a folder",
+          "e8214aa632": "Open as Folder",
+          "3863747c56": "Add Git Project",
+          "2ebbc26343": "/home/user/project",
+          "466108ab89": "Enter a path that exists on the selected host.",
+          "8cab104e3c": "Open a project on this host",
+          "2d20200346": "Import repositories",
+          "27ca610db1": "Back",
+          "cecd6593fa": "Scanned folder:",
+          "c7af322fc3": "Stop scanning",
+          "c3d9d44ca2": "Stop scan",
+          "cf23006ba7": "Selected host",
+          "7ec3f48820": "/home/user",
+          "2e6438dd34": "{{value0}}Found {{value1}} {{value2}} in this folder."
+        },
+        "AgentFeatureSetupStep": {
+          "97dcdc010f": "Enable capabilities"
         }
       },
       "new": {
@@ -13333,6 +13448,10 @@
             "listLabel": "Run targets",
             "label": "Run on",
             "browse": "Browse run targets"
+          },
+          "ProjectHostSetupCombobox": {
+            "empty": "No hosts are ready for this project.",
+            "placeholder": "Choose host"
           }
         }
       },
@@ -13397,7 +13516,8 @@
           "directAddressHint": "Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.",
           "androidHelp": {
             "guide": "Install guide"
-          }
+          },
+          "901c98bb93": "Pair this"
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -14041,6 +14161,48 @@
             "0d6efe9cf4": "Recommended on macOS when projects or worktrees live in protected folders.",
             "dac08ec03e": "Opening...",
             "6e3d62b816": "Open Full Disk Access"
+          },
+          "FeatureTourPreview": {
+            "1170621527": ">",
+            "304ad0dfc1": "Thinking...",
+            "ef8b164dd1": "review src/auth",
+            "952d3ddd9a": "session started",
+            "771d8881c2": "claude",
+            "6ed43cb0e0": "dashboard.spec.ts",
+            "24fedd5a52": "login.spec.ts",
+            "8279e9d95b": "Running 12 tests",
+            "6218a9014d": "pnpm playwright test",
+            "04d54d50ec": "orca · zsh",
+            "1aa8a9a24a": "Splittable terminal",
+            "2a7cfc82c8": "Linked to GH #1842",
+            "3822d8d14b": "fix/worktree-picker-truncates",
+            "d54aefe09e": "LIN-329",
+            "40bbd92ef4": "Start",
+            "c1f28c03b2": "Worktree picker truncates",
+            "fc0cc0b267": "GH #1842",
+            "0688842445": "GH #1799",
+            "bee6b4088d": "GitHub & Linear tasks",
+            "5171768676": "orchestrating 3 agents",
+            "cebc7769cd": "redesign auth flow",
+            "e44269e97d": "Agent orchestration",
+            "ec4a73f5e6": "PR 3/3",
+            "cfdfd4d6b4": "PR 2/3",
+            "b1f17bcc74": "PR 1/3",
+            "e38112b289": "refactor billing webhook",
+            "9c812e0d7c": "speed up CI pipeline",
+            "3c4adfd821": "fix login race condition",
+            "56a0271428": "Isolated workspaces",
+            "ef737dcee1": "GitHub & Linear tasks",
+            "ac51c061e2": "codex",
+            "47f16ecf34": "Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.",
+            "70aa182266": "Hand off a goal and walk away. A coordinator agent fans out and ships parallel PRs.",
+            "f10c14dd9d": "Skip the tab-switching. Pick from your GitHub or Linear backlog and start a workspace in one click.",
+            "5d6ee181b6": "Open any workspace to return to its terminal, then split panes for tests, logs, and agents."
+          },
+          "FeatureTourWorkspaceCard": {
+            "a23ed9da7f": "codex",
+            "2f33dc932b": "claude",
+            "9220794f6a": "working"
           }
         },
         "tips": {
@@ -15456,7 +15618,10 @@
           "f0202f3a89": "Daily",
           "57e83307d0": "Weekdays",
           "837d902bba": "Weekly",
-          "ddba78647e": "Custom cron"
+          "ddba78647e": "Custom cron",
+          "b08ccb4d06": "hourly",
+          "8cc026fd73": "weekly",
+          "c3e39e17cf": "custom"
         },
         "AutomationTimeField": {
           "39ec1383f6": "AM or PM",
@@ -16209,6 +16374,153 @@
               "description": "Artifacts and Orca Relay will be unavailable until you sign in again. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
               "action": "Sign out"
+            }
+          },
+          "switcher": {
+            "cloud": {
+              "unavailable": "Orca sign-in unavailable"
+            },
+            "account": "Account",
+            "reconnect": "Reconnect profile",
+            "connect": "Connect profile",
+            "organization": "Organization",
+            "create": {
+              "profile": {
+                "for": {
+                  "org": "Create profile for org"
+                }
+              }
+            },
+            "signout": "Sign out",
+            "16e3681072": "New local profile",
+            "e3b91a3d90": "Create an empty profile for separate projects and worktrees.",
+            "f322e1f4d6": "Profile name",
+            "cfa59f8ad1": "Create and Switch",
+            "b4f9d1125d": "Local",
+            "4815f7d163": "Switch profile",
+            "d00d853e2a": "Manage profiles",
+            "c106c674fe": "New local profile",
+            "org": {
+              "members": "Organization members"
+            },
+            "signInWaiting": "Waiting for sign-in…",
+            "signInAgain": "Sign in again",
+            "signIn": "Sign in to Orca",
+            "accountTitle": "Orca account",
+            "accountSignedIn": "Signed in",
+            "accountSignInRequired": "Sign-in required",
+            "accountSignedOut": "Signed out"
+          },
+          "management": {
+            "04e7bd2a23": "Transfer",
+            "128c7dfe64": "Copy to",
+            "df8b7d876b": "Move to",
+            "9aa26347b3": "Project moved",
+            "816ce624b6": "Project copied",
+            "2c45bda8d3": "Manage profiles",
+            "2db945e4a0": "Copy or move projects from the active profile to another local profile.",
+            "8668cb2946": "No projects in this profile.",
+            "93034915ab": "Create another profile before copying projects.",
+            "projectCountSingular": "{{count}} project",
+            "projectCountPlural": "{{count}} projects"
+          },
+          "project": {
+            "transfer": {
+              "confirm": {
+                "move": {
+                  "title": "Move project?",
+                  "description": "Move {{repoName}} to {{targetName}}. Orca removes it from {{activeProfileName}}, keeps files in place, and relaunches into {{targetName}}.",
+                  "action": "Move project"
+                },
+                "copy": {
+                  "title": "Copy project?",
+                  "description": "Copy {{repoName}} to {{targetName}}. Both profiles will point at the same files with separate Orca metadata.",
+                  "action": "Copy project"
+                },
+                "live": {
+                  "work": "Live work in this project"
+                },
+                "cancel": "Cancel",
+                "terminalSingular": "{{count}} live terminal tab",
+                "terminalPlural": "{{count}} live terminal tabs",
+                "agentSingular": "{{count}} active agent",
+                "agentPlural": "{{count}} active agents",
+                "browserSingular": "{{count}} browser workspace",
+                "browserPlural": "{{count}} browser workspaces"
+              }
+            }
+          },
+          "switch": {
+            "confirm": {
+              "target": "the selected profile",
+              "title": "Switch profiles?",
+              "description": "Switching to {{targetName}} will relaunch Orca and reload the workspace for {{activeProfileName}}.",
+              "live": {
+                "work": "Live work in this profile"
+              },
+              "cancel": "Cancel",
+              "switch": "Switch profile",
+              "terminalSingular": "{{count}} live terminal tab",
+              "terminalPlural": "{{count}} live terminal tabs",
+              "agentSingular": "{{count}} active agent",
+              "agentPlural": "{{count}} active agents",
+              "browserSingular": "{{count}} browser workspace",
+              "browserPlural": "{{count}} browser workspaces"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "Role",
+                "owner": "Owner",
+                "admin": "Admin",
+                "member": "Member"
+              },
+              "not": {
+                "signed": {
+                  "in": "They haven't signed in to Orca yet."
+                }
+              },
+              "remove": {
+                "confirm": "Remove",
+                "cancel": "Cancel",
+                "label": "Remove teammate"
+              },
+              "title": "Organization members",
+              "load": {
+                "error": "Couldn't load organization members."
+              },
+              "retry": "Try again",
+              "pending": {
+                "title": "Pending invites",
+                "revoke": "Revoke"
+              },
+              "invite": {
+                "title": "Invite",
+                "placeholder": "teammate@example.com",
+                "role": "Invite role",
+                "submit": "Send"
+              },
+              "error": {
+                "forbidden": "Your role can't do that.",
+                "conflict": "Already a member or invited.",
+                "remove": {
+                  "self": "You can't remove yourself."
+                },
+                "own": {
+                  "role": "You can't change your own role."
+                },
+                "not": {
+                  "found": "That teammate is no longer in this organization."
+                },
+                "reconnect": "Reconnect your profile to manage members.",
+                "unconfigured": "Organization management is unavailable in this build.",
+                "failed": "Something went wrong. Please try again."
+              },
+              "subtitle": {
+                "named": "People in {{orgName}} who can collaborate on Orca.",
+                "default": "People in your organization who can collaborate on Orca."
+              }
             }
           }
         }

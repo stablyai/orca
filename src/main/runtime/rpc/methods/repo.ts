@@ -30,6 +30,10 @@ const RepoClone = z.object({
   destination: requiredString('Missing clone destination')
 })
 
+const RepoCloneAbort = z.object({
+  destination: requiredString('Missing clone destination')
+})
+
 const RepoSetBaseRef = z.object({
   repo: requiredString('Missing repo selector'),
   ref: requiredString('Missing base ref')
@@ -218,6 +222,13 @@ export const REPO_METHODS: RpcMethod[] = [
         await context.runtime.cloneRepo(params.url, params.destination),
         context
       )
+    })
+  }),
+  defineMethod({
+    name: 'repo.cloneAbort',
+    params: RepoCloneAbort,
+    handler: async (params, { runtime }) => ({
+      aborted: runtime.abortClone(params.destination)
     })
   }),
   defineMethod({

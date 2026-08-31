@@ -13,6 +13,10 @@ export type RuntimeClientEvent =
   | { type: 'worktreesChanged'; repoId: string }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
+  // Why: environment/runtime clones spawn git on the host, so progress can't ride
+  // the local `repos:clone-progress` IPC channel; it streams over the client-event
+  // bus keyed by clone destination (the only stable id before the repo exists).
+  | { type: 'cloneProgress'; destination: string; phase: string; percent: number }
   // Why: SSH connections live on the runtime host; paired clients have no IPC
   // channel for ssh:state-changed, so without this event their reconnect
   // overlays never learn the host connected (STA-1468).

@@ -40,6 +40,17 @@ export function buildNotificationOptions(args: NotificationDispatchRequest): {
     }
   }
 
+  if (args.source === 'clone-complete') {
+    const repoLabel = normalizeNotificationText(
+      args.repoLabel,
+      NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
+    )
+    return {
+      title: 'Repository cloned',
+      body: repoLabel ? `${repoLabel} is ready.` : 'Your repository is ready.'
+    }
+  }
+
   const richOptions = buildAgentTaskCompleteNotificationOptions(args)
   if (richOptions) {
     return richOptions

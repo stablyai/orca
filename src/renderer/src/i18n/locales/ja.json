@@ -313,6 +313,9 @@
             "f518e89aa5": "プロジェクトはそのプロファイルに既に存在します",
             "f03ae7f27b": "プロジェクトの転送に失敗しました"
           }
+        },
+        "cloneTasks": {
+          "cloneSucceeded": "Repository cloned"
         }
       }
     },
@@ -1052,7 +1055,12 @@
           "activity": "アクティビティ",
           "noActivity": "まだアクティビティはありません。"
         },
-        "checkActionRequiredHint": "マージのブロックが解除されるまでに、このチェックには GitHub 上での手動操作（例: ワークフロー実行の承認）が必要です。"
+        "checkActionRequiredHint": "マージのブロックが解除されるまでに、このチェックには GitHub 上での手動操作（例: ワークフロー実行の承認）が必要です。",
+        "d23bbb6416": "{{value0}} はスキップされました",
+        "18f80e1329": "{{value0}} 保留中",
+        "b1ac991806": "{{value0}} は失敗しました",
+        "checksNeedActionChip": "{{value0}} 件の対応が必要",
+        "311d0cee55": "{{value0}} 通過"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -1547,7 +1555,12 @@
         "4b8ae7303f": "差分の読み込みに失敗しました。",
         "closePullRequestFailed": "PR のクローズに失敗しました",
         "reopenPullRequestFailed": "PR の再オープンに失敗しました",
-        "diffLoadTimedOut": "この差分の読み込みがタイムアウトしました。"
+        "diffLoadTimedOut": "この差分の読み込みがタイムアウトしました。",
+        "e6ad0a8d06": "{{value0}} はスキップされました",
+        "88267924d5": "{{value0}} 保留中",
+        "ae2a34c7b8": "{{value0}} は失敗しました",
+        "checksNeedActionChip": "{{value0}} 件の対応が必要",
+        "7c5035931a": "{{value0}} 通過"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -2036,7 +2049,9 @@
         "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。",
         "27f10cca63": "チャット、ターミナル、ワークツリー、設定、操作を検索します…",
         "2770f02910": "チャット、ターミナル、ワークツリー、設定、操作を検索します",
-        "recentChatsTerminalsHeader": "最近のチャットとターミナル"
+        "recentChatsTerminalsHeader": "最近のチャットとターミナル",
+        "1ebe225fee": "ワークツリー、設定、タブ、操作を検索します...",
+        "4e4ff044d5": "ワークツリー、設定、タブ、操作を検索する"
       },
       "github": {
         "pr": {
@@ -2625,6 +2640,15 @@
         },
         "sheet": {
           "1189e9fe0a": "閉じる"
+        },
+        "team": {
+          "multi": {
+            "combobox": {
+              "de83523bf9": "検索に一致するチームはありません。",
+              "301f2a796e": "全チーム",
+              "18ec58881e": "チームを検索..."
+            }
+          }
         }
       },
       "terminal": {
@@ -3019,7 +3043,8 @@
             "d7d496a451": "ブラウザページは存在しません",
             "7726ce9970": "モバイルエミュレータのタブは存在しません",
             "chooseAction": "アクションを選択してください。",
-            "searchProvider": "{{value0}} で検索"
+            "searchProvider": "{{value0}} で検索",
+            "39676a184c": "任意のファイル、URL、agent などを開きます..."
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "コマンド",
@@ -3062,7 +3087,8 @@
                   "90eb94dc48": "http:// または https:// URL を入力します。",
                   "5553b283ce": "URL またはファイルパスを入力します。",
                   "queryTooLarge": "検索テキストが大きすぎます。",
-                  "absolutePathRemoteBlocked": "絶対パスにはローカルワークスペースが必要です。"
+                  "absolutePathRemoteBlocked": "絶対パスにはローカルワークスペースが必要です。",
+                  "5a9c83c04b": "任意のファイル、URL、agent などを開きます..."
                 }
               },
               "menu": {
@@ -5236,7 +5262,9 @@
           "linkDestination": "リンク先",
           "sshTunnel": "SSH トンネルを使用しています",
           "sshTunnelHelp": "それ以外の場合、このリンクはこのデバイス自身を指すため、もう一方のコンピュータを識別できません。",
-          "loopbackBlocked": "SSH トンネルの上書きを有効にするか、もう一方のホストの Tailscale または LAN アドレスを使って新規リンクを作成してください。"
+          "loopbackBlocked": "SSH トンネルの上書きを有効にするか、もう一方のホストの Tailscale または LAN アドレスを使って新規リンクを作成してください。",
+          "importing": "インポート中...",
+          "importSshConfig": "~/.ssh/config をインポートします"
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "再接続に失敗しました",
@@ -5269,6 +5297,28 @@
           "3b7ea51793": "検索をクリア",
           "7f1c2e94a5": "検索テキストが長すぎます — ボードは絞り込まれていません",
           "9a4d0f6b21": "長すぎます"
+        },
+        "SshDisconnectedDialog": {
+          "ca4a7892af": "接続中...",
+          "89385db176": "閉じる",
+          "656368f3a2": "再接続に失敗しました",
+          "376bed88e5": "リモート ホストへの接続でエラーが発生しました。",
+          "4afcca1d24": "再接続",
+          "11552bf786": "SSH が切断されました",
+          "cb5938ae79": "再接続中...",
+          "disconnected": "This remote repository is not connected.",
+          "reconnecting": "リモートホストに再接続中...",
+          "reconnectionFailed": "リモートホストへの再接続に失敗しました。",
+          "authFailed": "リモートホストへの認証に失敗しました。"
+        },
+        "CloneTaskRow": {
+          "cloneFailed": "Clone failed",
+          "cloning": "Cloning",
+          "starting": "Starting clone…",
+          "cancel": "Cancel",
+          "dismiss": "Dismiss",
+          "cancelClone": "Cancel clone",
+          "dismissClone": "Dismiss clone"
         }
       },
       "shared": {
@@ -6480,7 +6530,9 @@
           "274af61bc0": "システム",
           "6e6df3a09a": "カスタムファイルの選択",
           "76e02467b8": "カスタムファイルの変更",
-          "d3756cf5bc": "無効"
+          "d3756cf5bc": "無効",
+          "cloneCompleteLabel": "Clone Complete",
+          "cloneCompleteDescription": "A background repository clone has finished."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "キーの保存",
@@ -7347,7 +7399,14 @@
           "integrationsHint": "すべてのプロバイダーの認証情報は次の場所でも管理できます：",
           "integrationsLink": "連携",
           "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
-          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。"
+          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。",
+          "3a72b9745e": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。",
+          "71644aba56": "[タスク] ページのソース ピッカーとサイドバーのショートカットに表示するタスク プロバイダーを選択します。少なくとも 1 つのプロバイダーが表示されたままでなければなりません。",
+          "93e72ef659": "タスクソース",
+          "8e1305fcc6": "タスクのソース ピッカーとサイドバーのショートカットに Jira を表示します。",
+          "e4170c9615": "タスクのソース ピッカーとサイドバーのショートカットに Linear を表示します。",
+          "dd67a1b6e1": "タスクのソース ピッカーとサイドバーのショートカットに GitLab を表示します。",
+          "1db47236cd": "タスクのソース ピッカーとサイドバーのショートカットに GitHub を表示します。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -8996,7 +9055,8 @@
             "setup": "セットアップ",
             "apiKey": "APIキー",
             "skill": "スキル",
-            "connect": "接続"
+            "connect": "接続",
+            "765f0c544d": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。"
           }
         },
         "terminal": {
@@ -9450,7 +9510,8 @@
           "unavailableDescription": "{{value0}} のため、コンピュータ操作の権限を利用できません。",
           "readyTitle": "コンピュータ操作を利用できます。",
           "readyDescription": "指示すると、Agent がアプリのウィンドウを調べたり操作したりできます。",
-          "permissionsTitle": "ローカルアプリを使用するには、セットアップを完了してください。"
+          "permissionsTitle": "ローカルアプリを使用するには、セットアップを完了してください。",
+          "permissionsRequired": "{{value0}} permission{{value1}} required before agents can operate app windows."
         },
         "computerUseSkillRuntime": {
           "thisDevice": "このデバイス"
@@ -9691,7 +9752,8 @@
         "ephemeralVms": {
           "search": {
             "description": "リポジトリ所有のレシピが各ワークスペースに独自のオンデマンドの使い捨て環境を与える方法を学びましょう。",
-            "cloudVmTitle": "クラウド VM"
+            "cloudVmTitle": "クラウド VM",
+            "title": "ワークスペースごとの環境"
           }
         },
         "EphemeralVmsPane": {
@@ -9712,11 +9774,14 @@
           "cloudVmSkillTitle": "クラウド VM セットアップスキル",
           "cloudVmRefresh": "クラウド VM レシピを更新",
           "cloudVmTerminalTitle": "クラウド VM のセットアップ",
-          "cloudVmTerminalAriaLabel": "クラウド VM スキルインストールターミナル"
+          "cloudVmTerminalAriaLabel": "クラウド VM スキルインストールターミナル",
+          "skillTitle": "ワークスペースごとの環境スキル",
+          "refresh": "一時的な VM レシピを更新する"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "リポジトリが所有するオンデマンド環境のセットアップコントロールとワークスペース実行ターゲットを示します。",
-          "cloudVmToggleLabel": "クラウド VM を切り替える"
+          "cloudVmToggleLabel": "クラウド VM を切り替える",
+          "toggleLabel": "ワークスペースごとの環境を切り替える"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",
@@ -9846,7 +9911,8 @@
           "terminalTitle": "Linear スキルのセットアップ",
           "terminalAriaLabel": "Linear スキルのインストールターミナル",
           "manageConnectionHint": "接続済みの Linear ワークスペースと API キーは次の場所で確認できます：",
-          "manageConnectionLink": "連携"
+          "manageConnectionLink": "連携",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca."
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay はベータ版です。"
@@ -10937,7 +11003,9 @@
                 "actionRequiredHint": "マージのブロックが解除されるまでに、このチェックには GitHub 上での手動操作（例: ワークフロー実行の承認）が必要です。",
                 "b3195cba33": "作成者のボット指定を解除",
                 "f588b46a6c": "作成者をボットとして指定",
-                "e45324fbed": "チェック詳細の読み込みに失敗しました。"
+                "e45324fbed": "チェック詳細の読み込みに失敗しました。",
+                "checkDetailsLoadFailed": "チェック詳細の読み込みに失敗しました。",
+                "2524d1fb83": "ログテールで詳細を確認できます。"
               },
               "empty": {
                 "state": {
@@ -11782,7 +11850,9 @@
         "use": {
           "onboarding": {
             "flow": {
-              "52acfbef51": "進行状況を保存できませんでした"
+              "52acfbef51": "進行状況を保存できませんでした",
+              "dce4bdce5b": "SSH 設定を開けませんでした",
+              "fd74e7558e": "クローン作成に失敗しました"
             }
           }
         },
@@ -11822,6 +11892,51 @@
               }
             }
           }
+        },
+        "FeatureSetupChecklist": {
+          "77f74946f5": "Agents は相互にメッセージを送信し、タスクを実行し、引き継ぎを調整できます。",
+          "399cf885c0": "Agent オーケストレーション",
+          "c5292c409d": "Agents は、要求に応じてアプリ ウィンドウを検査し、ローカル アプリを操作できます。",
+          "1ecfb490ac": "コンピュータ操作",
+          "01426f3a23": "Agents はサイトを移動し、ページを検査し、ブラウザーのタスクを実行できます。",
+          "ea85d9e628": "Agent ブラウザの使用",
+          "linearTicketsTitle": "Linear agent スキル",
+          "linearTicketsDescription": "Agents はリンクされた Linear タスクを使って、チケットを踏まえたより詳しい引き継ぎができます。",
+          "linearTicketsSetupSummary": "Linear ワークスペースに推奨。Linear 接続設定には影響しません。"
+        },
+        "OnboardingTourStep": {
+          "3f9586c043": "ツアーに参加する",
+          "60c5576353": "出口ツアー"
+        },
+        "RepoStep": {
+          "e8fdb36338": "repos をスキャンしています。クリックして停止します。",
+          "b7c4da0504": "SSH? 「設定」でホストをセットアップする",
+          "c33b190ca3": "サーバーパスのみ",
+          "7b679207e4": "ワークスペース",
+          "24c7c8696c": "サーバーパスにクローンを作成します",
+          "7932e95f68": "クローン",
+          "955134915e": "git@github.com:org/repo.git",
+          "288d8444b7": "HTTPS または SSH URL を貼り付けます。",
+          "132425a3e3": "repo のクローンを作成する",
+          "6558d50c69": "一度に多くの repos をインポートしたいですか?親フォルダーを選択します。",
+          "831524961f": "git repo かどうかに関係なく、任意のローカル ディレクトリを選択します。",
+          "f4e9c8dcf8": "フォルダーを参照する",
+          "e8214aa632": "フォルダーとして開く",
+          "3863747c56": "Gitプロジェクトの追加",
+          "2ebbc26343": "/home/user/project",
+          "466108ab89": "ランタイムサーバー上に存在するパスを入力します。",
+          "8cab104e3c": "サーバープロジェクトを開く",
+          "2d20200346": "repos のインポート",
+          "27ca610db1": "戻る",
+          "cecd6593fa": "スキャンしたフォルダー:",
+          "c7af322fc3": "スキャンを停止する",
+          "c3d9d44ca2": "スキャンの停止",
+          "cf23006ba7": "ランタイムサーバー",
+          "7ec3f48820": "/home/user",
+          "2e6438dd34": "{{value0}}このフォルダー内で {{value1}} {{value2}} が見つかりました。"
+        },
+        "AgentFeatureSetupStep": {
+          "97dcdc010f": "CLI とスキルをインストール"
         }
       },
       "new": {
@@ -11898,6 +12013,10 @@
             "listLabel": "実行ターゲット",
             "label": "実行先",
             "browse": "実行ターゲットを参照"
+          },
+          "ProjectHostSetupCombobox": {
+            "empty": "No hosts are ready for this project.",
+            "placeholder": "Choose host"
           }
         }
       },
@@ -11950,7 +12069,8 @@
           "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。",
           "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。",
           "directAddressDisclosure": "より速いローカル経路も使う",
-          "directAddressHint": "任意。近く（同じ Wi‑Fi または Tailscale）にいるときにスマホが使うアドレスを選びます。通常は Relay より高速です。外出中は引き続き Relay が使われます。"
+          "directAddressHint": "任意。近く（同じ Wi‑Fi または Tailscale）にいるときにスマホが使うアドレスを選びます。通常は Relay より高速です。外出中は引き続き Relay が使われます。",
+          "901c98bb93": "これをペアリングします"
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -12553,6 +12673,48 @@
             "0d6efe9cf4": "プロジェクトやワークツリーが保護されたフォルダーにある場合、macOS で推奨されます。",
             "dac08ec03e": "開いています…",
             "6e3d62b816": "フルディスクアクセスを開く"
+          },
+          "FeatureTourPreview": {
+            "1170621527": ">",
+            "304ad0dfc1": "考え...",
+            "ef8b164dd1": "ソース/認証を確認する",
+            "952d3ddd9a": "セッションが開始されました",
+            "771d8881c2": "claude",
+            "6ed43cb0e0": "ダッシュボードの仕様",
+            "24fedd5a52": "ログイン.spec.ts",
+            "8279e9d95b": "12 個のテストを実行する",
+            "6218a9014d": "pnpm プレイライト テスト",
+            "04d54d50ec": "orca · zsh",
+            "1aa8a9a24a": "分割可能な terminal",
+            "2a7cfc82c8": "GH #1842 にリンク",
+            "3822d8d14b": "fix/worktree-picker-truncates",
+            "d54aefe09e": "LIN-329",
+            "40bbd92ef4": "始める",
+            "c1f28c03b2": "ワークツリーピッカーが切り捨てる",
+            "fc0cc0b267": "GH #1842",
+            "0688842445": "GH #1799",
+            "bee6b4088d": "GitHub と Linear タスク",
+            "5171768676": "3 つの agents を調整する",
+            "cebc7769cd": "認証フローを再設計する",
+            "e44269e97d": "Agent のオーケストレーション",
+            "ec4a73f5e6": "PR 3/3",
+            "cfdfd4d6b4": "PR 2/3",
+            "b1f17bcc74": "PR 1/3",
+            "e38112b289": "請求 Webhook をリファクタリングする",
+            "9c812e0d7c": "CIパイプラインを高速化する",
+            "3c4adfd821": "ログイン競合状態を修正",
+            "56a0271428": "隔離されたワークスペース",
+            "ef737dcee1": "GitHub と Linear タスク",
+            "ac51c061e2": "codex",
+            "47f16ecf34": "複数の作業を同時に進めましょう。各ワークスペースはブランチ、ターミナル、エージェントの活動をまとめます。",
+            "70aa182266": "目標を任せて離れます。コーディネーターエージェントが作業を分担し、並列でPRを出します。",
+            "f10c14dd9d": "タブ切り替えは不要。GitHubまたは Linear のバックログから選んで、ワンクリックでワークスペースを開始します。",
+            "5d6ee181b6": "ワークスペースを開いてターミナルに戻り、テスト、ログ、エージェント用にペインを分割します。"
+          },
+          "FeatureTourWorkspaceCard": {
+            "a23ed9da7f": "codex",
+            "2f33dc932b": "claude",
+            "9220794f6a": "実行中"
           }
         },
         "tips": {
@@ -13836,7 +13998,10 @@
           "f0202f3a89": "毎日",
           "57e83307d0": "平日",
           "837d902bba": "毎週",
-          "ddba78647e": "カスタム cron"
+          "ddba78647e": "カスタム cron",
+          "b08ccb4d06": "毎時",
+          "8cc026fd73": "毎週",
+          "c3e39e17cf": "カスタム"
         },
         "AutomationTimeField": {
           "39ec1383f6": "午前または午後",
@@ -14365,6 +14530,153 @@
               "description": "このデバイスで Orca からログアウトします。ローカルのプロジェクトとワークツリーには影響しません。",
               "cancel": "キャンセル",
               "action": "サインアウト"
+            }
+          },
+          "switcher": {
+            "cloud": {
+              "unavailable": "Orcaへのサインインは利用できません"
+            },
+            "reconnect": "プロファイルを再接続",
+            "connect": "プロファイルを接続",
+            "organization": "組織",
+            "create": {
+              "profile": {
+                "for": {
+                  "org": "組織用のプロフィールを作成"
+                }
+              }
+            },
+            "signout": "サインアウト",
+            "16e3681072": "新しいローカル プロファイル",
+            "e3b91a3d90": "プロジェクトとワークツリーを分けるための空のプロファイルを作成します。",
+            "f322e1f4d6": "プロファイル名",
+            "cfa59f8ad1": "作成して切り替え",
+            "b4f9d1125d": "ローカル",
+            "4815f7d163": "プロファイルを切り替え",
+            "d00d853e2a": "プロファイルを管理",
+            "c106c674fe": "新しいローカル プロファイル",
+            "account": "アカウント",
+            "org": {
+              "members": "組織メンバー"
+            },
+            "signInWaiting": "サインインを待機中…",
+            "signInAgain": "もう一度サインイン",
+            "signIn": "Orcaにサインイン",
+            "accountTitle": "Orcaアカウント",
+            "accountSignedIn": "サインイン済み",
+            "accountSignInRequired": "サインインが必要です",
+            "accountSignedOut": "サインアウト済み"
+          },
+          "management": {
+            "04e7bd2a23": "転送",
+            "128c7dfe64": "コピー先",
+            "df8b7d876b": "移動先",
+            "9aa26347b3": "プロジェクトを移動しました",
+            "816ce624b6": "プロジェクトをコピーしました",
+            "2c45bda8d3": "プロファイルを管理",
+            "2db945e4a0": "アクティブなプロファイルから別のローカル プロファイルへプロジェクトをコピーまたは移動します。",
+            "8668cb2946": "このプロファイルにはプロジェクトがありません。",
+            "93034915ab": "プロジェクトをコピーする前に、別のプロファイルを作成してください。",
+            "projectCountSingular": "{{count}} 件のプロジェクト",
+            "projectCountPlural": "{{count}} 件のプロジェクト"
+          },
+          "project": {
+            "transfer": {
+              "confirm": {
+                "move": {
+                  "title": "プロジェクトを移動しますか？",
+                  "description": "{{repoName}}を{{targetName}}に移動します。Orcaは{{activeProfileName}}から削除し、ファイルはそのまま保持し、{{targetName}}に再起動します。",
+                  "action": "プロジェクトを移動"
+                },
+                "copy": {
+                  "title": "プロジェクトをコピーしますか？",
+                  "description": "{{repoName}}を{{targetName}}にコピーします。両方のプロフィールが同じファイルを別のOrcaメタデータで参照します。",
+                  "action": "プロジェクトをコピー"
+                },
+                "live": {
+                  "work": "このプロジェクトのアクティブな作業"
+                },
+                "cancel": "キャンセル",
+                "terminalSingular": "{{count}}個のアクティブなターミナルタブ",
+                "terminalPlural": "{{count}}個のアクティブなターミナルタブ",
+                "agentSingular": "{{count}}個のアクティブなエージェント",
+                "agentPlural": "{{count}}個のアクティブなエージェント",
+                "browserSingular": "{{count}}個のブラウザワークスペース",
+                "browserPlural": "{{count}}個のブラウザワークスペース"
+              }
+            }
+          },
+          "switch": {
+            "confirm": {
+              "target": "選択されたプロフィール",
+              "title": "プロフィールを切り替えますか？",
+              "description": "{{targetName}}に切り替えると、Orcaが再起動され、{{activeProfileName}}のワークスペースが再読み込みされます。",
+              "live": {
+                "work": "このプロフィールのアクティブな作業"
+              },
+              "cancel": "キャンセル",
+              "switch": "プロフィールを切替",
+              "terminalSingular": "{{count}}個のアクティブなターミナルタブ",
+              "terminalPlural": "{{count}}個のアクティブなターミナルタブ",
+              "agentSingular": "{{count}}個のアクティブなエージェント",
+              "agentPlural": "{{count}}個のアクティブなエージェント",
+              "browserSingular": "{{count}}個のブラウザワークスペース",
+              "browserPlural": "{{count}}個のブラウザワークスペース"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "役割",
+                "owner": "オーナー",
+                "admin": "管理者",
+                "member": "メンバー"
+              },
+              "not": {
+                "signed": {
+                  "in": "まだOrcaにサインインしていません。"
+                }
+              },
+              "remove": {
+                "confirm": "削除",
+                "cancel": "キャンセル",
+                "label": "チームメンバーを削除"
+              },
+              "title": "組織メンバー",
+              "load": {
+                "error": "組織メンバーを読み込めませんでした。"
+              },
+              "retry": "再試行",
+              "pending": {
+                "title": "保留中の招待",
+                "revoke": "取り消し"
+              },
+              "invite": {
+                "title": "招待",
+                "placeholder": "teammate@example.com",
+                "role": "招待役割",
+                "submit": "送信"
+              },
+              "error": {
+                "forbidden": "この役割では実行できません。",
+                "conflict": "既にメンバーまたは招待済みです。",
+                "remove": {
+                  "self": "自分自身を削除することはできません。"
+                },
+                "own": {
+                  "role": "自分の役割を変更することはできません。"
+                },
+                "not": {
+                  "found": "そのチームメンバーはこの組織にいません。"
+                },
+                "reconnect": "メンバーを管理するには、プロフィールを再接続してください。",
+                "unconfigured": "このビルドでは組織管理が利用できません。",
+                "failed": "問題が発生しました。もう一度お試しください。"
+              },
+              "subtitle": {
+                "named": "{{orgName}}でOrcaに協力できる人々。",
+                "default": "組織でOrcaに協力できる人々。"
+              }
             }
           }
         }

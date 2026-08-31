@@ -167,6 +167,7 @@ import {
   gitSpawnAfterWindowsEnvironmentReady,
   nonInteractiveGitEnv
 } from '../git/runner'
+import { parseGitCloneProgress } from '../../shared/git-clone-progress'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
@@ -3136,7 +3137,7 @@ type ResolvedWorktreeInFlight = {
 // events after it — idempotent, no duplicate local pushes.
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
-  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin'
+  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin' | 'clone-complete'
   title: string
   body: string
   worktreeId?: string
@@ -3445,6 +3446,13 @@ export class OrcaRuntimeService {
   /** Repos whose Git-admin probe has not settled yet; caps abandoned fs work at one per repo. */
   private worktreeAdminFingerprintProbes = new Set<string>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
+  // Why: abort handles for in-flight environment clones, keyed by clone-path
+  // comparison key, so the renderer can cancel a backgrounded clone by the
+  // parent destination it passed (destinationKey), before the repo exists.
+  private activeCloneProcsByPathKey = new Map<
+    string,
+    { proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>; destinationKey: string }
+  >()
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
   private ptyForegroundProcessReads = new Map<string, PtyForegroundProcessReadEntry>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
@@ -23971,6 +23979,30 @@ export class OrcaRuntimeService {
     }
   }
 
+  /**
+   * Aborts an in-flight environment clone by its destination. SIGTERM surfaces
+   * as "Clone aborted" in cloneRepoAfterPathLock, which cleans up the partial
+   * target. No-op (returns false) if no clone is running for that destination.
+   */
+  abortClone(destination: string): boolean {
+    const trimmedDestination = destination.trim()
+    if (!trimmedDestination) {
+      return false
+    }
+    const destinationKey = getClonePathComparisonKey(trimmedDestination)
+    let aborted = false
+    // Why: the renderer knows only the parent destination it passed; match every
+    // in-flight clone whose parent destination matches (usually exactly one).
+    for (const [pathKey, entry] of this.activeCloneProcsByPathKey) {
+      if (entry.destinationKey === destinationKey) {
+        entry.proc.kill()
+        this.activeCloneProcsByPathKey.delete(pathKey)
+        aborted = true
+      }
+    }
+    return aborted
+  }
+
   private async cloneRepoAfterPathLock(
     trimmedUrl: string,
     trimmedDestination: string,
@@ -24018,8 +24050,22 @@ export class OrcaRuntimeService {
     await new Promise<void>((resolve, reject) => {
       let stderrTail = ''
       let settled = false
+      this.activeCloneProcsByPathKey.set(clonePathKey, {
+        proc,
+        destinationKey: getClonePathComparisonKey(trimmedDestination)
+      })
       proc.stderr?.on('data', (chunk: Buffer) => {
-        stderrTail = (stderrTail + chunk.toString()).slice(-4096)
+        const text = chunk.toString()
+        stderrTail = (stderrTail + text).slice(-4096)
+        // Why: environment clones can't use the local `repos:clone-progress` IPC
+        // channel — stream progress over the client-event bus keyed by destination.
+        for (const progress of parseGitCloneProgress(text)) {
+          this.emitClientEvent({
+            type: 'cloneProgress',
+            destination: trimmedDestination,
+            ...progress
+          })
+        }
       })
       const finishClone = async (
         code: number | null,
@@ -24030,6 +24076,9 @@ export class OrcaRuntimeService {
           return
         }
         settled = true
+        if (this.activeCloneProcsByPathKey.get(clonePathKey)?.proc === proc) {
+          this.activeCloneProcsByPathKey.delete(clonePathKey)
+        }
         const cloneSucceeded = !error && code === 0 && !signal
         if (!cloneSucceeded) {
           await cleanupClaimedCloneTarget(clonePath, claimedTarget)

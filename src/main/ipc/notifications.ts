@@ -111,7 +111,11 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       args: NotificationDispatchRequest
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
       // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
-      if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
+      if (
+        args.source === 'agent-task-complete' ||
+        args.source === 'terminal-bell' ||
+        args.source === 'clone-complete'
+      ) {
         const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
         if (!isMainWindowVisible(activeWindow)) {
           setTrayAttention(true)
@@ -125,7 +129,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
       if (
         (args.source === 'agent-task-complete' && !settings.agentTaskComplete) ||
-        (args.source === 'terminal-bell' && !settings.terminalBell)
+        (args.source === 'terminal-bell' && !settings.terminalBell) ||
+        (args.source === 'clone-complete' && !settings.cloneComplete)
       ) {
         return { delivered: false, reason: 'source-disabled' }
       }

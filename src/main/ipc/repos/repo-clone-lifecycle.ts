@@ -8,6 +8,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { getGitCloneFailureMessage } from '../../../shared/git-clone-failure-message'
+import { parseGitCloneProgress } from '../../../shared/git-clone-progress'
 import { gitSpawnAfterWindowsEnvironmentReady, nonInteractiveGitEnv } from '../../git/runner'
 import { getRepoName } from '../../git/repo'
 import type { ClaimedCloneTarget } from '../../git/repo-clone-path'
@@ -44,14 +45,11 @@ const latestCloneGenerationByPath = new Map<string, number>()
 const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
 
 function emitCloneProgressFromText(mainWindow: BrowserWindow, text: string): void {
-  for (const line of text.split(/[\r\n]+/)) {
-    const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-    if (match && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('repos:clone-progress', {
-        phase: match[1].trim(),
-        percent: Number.parseInt(match[2], 10)
-      })
-    }
+  if (mainWindow.isDestroyed()) {
+    return
+  }
+  for (const progress of parseGitCloneProgress(text)) {
+    mainWindow.webContents.send('repos:clone-progress', progress)
   }
 }
 

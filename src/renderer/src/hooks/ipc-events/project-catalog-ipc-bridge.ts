@@ -28,6 +28,17 @@ export function registerProjectCatalogIpcBridge(
     })
   )
 
+  // Why: local/ssh clone progress rides this IPC channel with no destination in
+  // the payload; the main process serializes those clones, so route it to the
+  // single active local-or-ssh clone task. (Environment clones use the client-event bus.)
+  // Optional-chained so a stale preload without the channel doesn't throw.
+  const cloneProgressUnsub = window.api.repos.onCloneProgress?.((progress) => {
+    useAppStore.getState().updateCloneTaskProgress({ localOrSsh: true }, progress)
+  })
+  if (cloneProgressUnsub) {
+    unsubs.push(cloneProgressUnsub)
+  }
+
   unsubs.push(
     window.api.worktrees.onChanged(
       async (data: {

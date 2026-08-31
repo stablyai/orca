@@ -6,6 +6,7 @@ import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
+import { CloneTaskList } from './CloneTaskList'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -116,6 +117,8 @@ function Sidebar({
             {/* Fixed controls */}
             <SidebarNav />
             <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
+
+            <CloneTaskList />
 
             <WorktreeList
               scrollOffsetRef={worktreeScrollOffsetRef}

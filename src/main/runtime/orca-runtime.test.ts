@@ -9288,6 +9288,98 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('emits cloneProgress client events parsed from git stderr, keyed by destination', async () => {
+    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-progress-'))
+    const clonePath = join(destination, 'orca')
+    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawn')
+    const repos: Record<string, unknown>[] = []
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+      updateRepo: () => null as never
+    }
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => {
+        // remote:-prefixed lines are ignored; client-side phases surface.
+        proc.stderr.emit('data', Buffer.from('remote: Compressing objects: 100% (9/9)\r'))
+        proc.stderr.emit('data', Buffer.from('Receiving objects:  50% (5/10)\r'))
+        mkdirSync(clonePath, { recursive: true })
+        execFileSync('git', ['init'], { cwd: clonePath, stdio: 'ignore' })
+        proc.emit('close', 0, null)
+      })
+      return proc as never
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const events: unknown[] = []
+    const unsubscribe = runtime.onClientEvent((event) => events.push(event))
+
+    try {
+      await runtime.cloneRepo('https://example.com/orca.git', destination)
+      expect(events).toContainEqual({
+        type: 'cloneProgress',
+        destination,
+        phase: 'Receiving objects',
+        percent: 50
+      })
+      // Server-side "remote:" progress never matches the anchored parser.
+      expect(events).not.toContainEqual(
+        expect.objectContaining({ type: 'cloneProgress', phase: 'Compressing objects' })
+      )
+    } finally {
+      unsubscribe()
+      spawnSpy.mockRestore()
+      await rm(destination, { recursive: true, force: true })
+    }
+  })
+
+  it('abortClone kills the in-flight clone for a destination and surfaces "Clone aborted"', async () => {
+    const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-abort-'))
+    const spawnSpy = vi.spyOn(gitRunner, 'gitSpawn')
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [] as never,
+      addRepo: () => {},
+      getRepo: () => undefined as never,
+      updateRepo: () => null as never
+    }
+    const kill = vi.fn()
+    let killProc: (() => void) | null = null
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter; kill: () => void }
+      proc.stderr = new EventEmitter()
+      proc.kill = () => {
+        kill()
+        proc.emit('close', null, 'SIGTERM')
+      }
+      // Why: hold the clone open until abortClone kills it.
+      killProc = () => proc.kill()
+      return proc as never
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      const clonePromise = runtime.cloneRepo('https://example.com/orca.git', destination)
+      await vi.waitFor(() => {
+        expect(killProc).not.toBeNull()
+      })
+      const aborted = runtime.abortClone(destination)
+      expect(aborted).toBe(true)
+      expect(kill).toHaveBeenCalledTimes(1)
+      await expect(clonePromise).rejects.toThrow('Clone aborted')
+      // A second abort with nothing in flight is a no-op.
+      expect(runtime.abortClone(destination)).toBe(false)
+    } finally {
+      spawnSpy.mockRestore()
+      await rm(destination, { recursive: true, force: true })
+    }
+  })
+
   it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const added: Record<string, unknown>[] = []
     const colorStore = {

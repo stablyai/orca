@@ -86,13 +86,41 @@ describe('subscribeRuntimeClientEvents', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 
-  it('forwards automationsChanged and still drops event types it does not know', async () => {
+
+  it('forwards cloneProgress event frames', async () => {
+
     let capturedOnResponse: ((response: unknown) => void) | undefined
     const subscribe = vi.fn(async (_args, nextCallbacks) => {
       capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
       return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     })
     const onEvent = vi.fn()
+
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+
+    await subscribeRuntimeClientEvents('env-1', onEvent)
+    if (!capturedOnResponse) {
+      throw new Error('Expected subscription callbacks')
+    }
+    const cloneProgress = {
+      type: 'cloneProgress',
+      destination: '/home/user/projects',
+      phase: 'Receiving objects',
+      percent: 42
+    }
+    capturedOnResponse({ ok: true, result: cloneProgress })
+    expect(onEvent).toHaveBeenCalledWith(cloneProgress)
+  })
+
+  it('forwards automationsChanged and still drops event types it does not know', async () => {
+
+    let capturedOnResponse: ((response: unknown) => void) | undefined
+    const subscribe = vi.fn(async (_args, nextCallbacks) => {
+      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    const onEvent = vi.fn()
+
     const onError = vi.fn()
     vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
 
@@ -108,6 +136,7 @@ describe('subscribeRuntimeClientEvents', () => {
     expect(onEvent).toHaveBeenCalledTimes(1)
     expect(onEvent).toHaveBeenCalledWith({ type: 'automationsChanged', reason: 'run' })
     expect(onError).not.toHaveBeenCalled()
+
   })
 
   it('signals a replay-tagged response so event-derived state can resync after a reconnect', async () => {
