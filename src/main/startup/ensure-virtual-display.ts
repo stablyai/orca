@@ -1,4 +1,4 @@
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
@@ -67,13 +67,6 @@ function removeStaleDisplayArtifacts(displayNumber: number): void {
       // Best effort; if removal fails, Xvfb startup below will surface the error.
     }
   }
-}
-
-function hasXvfbBinary(): boolean {
-  // Why: spawnSync `which` is cheap and avoids spawning Xvfb only to fail; a
-  // clear up-front warning beats a cryptic ENOENT mid-startup.
-  const result = spawnSync('which', ['Xvfb'], { stdio: 'ignore' })
-  return result.status === 0
 }
 
 function sleepSync(ms: number): void {
@@ -188,14 +181,6 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
     return false
   }
 
-  if (!hasXvfbBinary()) {
-    console.warn(
-      '[serve] Xvfb not found; browser panes are unavailable on this headless Linux host. ' +
-        `${XVFB_INSTALL_GUIDANCE} Set DISPLAY to enable them with an existing X server.`
-    )
-    return false
-  }
-
   // Why: reuse an existing display ONLY if a live X server actually backs it.
   // A crashed prior run can leave an orphan socket; trusting it by path alone
   // would advertise browser support that then fails at tab creation.
@@ -222,6 +207,11 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
     xvfbProcess.once('error', (error) => {
       console.warn('[serve] Xvfb failed to start:', error instanceof Error ? error.message : error)
     })
+    // PATH lookup failures emit asynchronously, but a successful spawn has a PID immediately.
+    if (xvfbProcess.pid === undefined) {
+      xvfbProcess = null
+      return false
+    }
   } catch (error) {
     console.warn(
       '[serve] Could not start Xvfb:',

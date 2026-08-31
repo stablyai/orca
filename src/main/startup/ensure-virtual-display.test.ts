@@ -1,28 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  spawnMock,
-  spawnSyncMock,
-  existsSyncMock,
-  readFileSyncMock,
-  rmSyncMock,
-  statSyncMock,
-  appMock
-} = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
-  spawnSyncMock: vi.fn(),
-  existsSyncMock: vi.fn(),
-  readFileSyncMock: vi.fn(),
-  rmSyncMock: vi.fn(),
-  statSyncMock: vi.fn(),
-  appMock: {
-    disableHardwareAcceleration: vi.fn(),
-    commandLine: { appendSwitch: vi.fn(), getSwitchValue: vi.fn() },
-    once: vi.fn()
-  }
-}))
+const { spawnMock, existsSyncMock, readFileSyncMock, rmSyncMock, statSyncMock, appMock } =
+  vi.hoisted(() => ({
+    spawnMock: vi.fn(),
+    existsSyncMock: vi.fn(),
+    readFileSyncMock: vi.fn(),
+    rmSyncMock: vi.fn(),
+    statSyncMock: vi.fn(),
+    appMock: {
+      disableHardwareAcceleration: vi.fn(),
+      commandLine: { appendSwitch: vi.fn(), getSwitchValue: vi.fn() },
+      once: vi.fn()
+    }
+  }))
 
-vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: spawnSyncMock }))
+vi.mock('child_process', () => ({ spawn: spawnMock }))
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -48,7 +40,6 @@ function mockLiveXDisplay(pid = 4321): void {
 describe('ensureVirtualDisplayForHeadlessServe', () => {
   beforeEach(() => {
     spawnMock.mockReset()
-    spawnSyncMock.mockReset()
     existsSyncMock.mockReset()
     readFileSyncMock.mockReset()
     rmSyncMock.mockReset()
@@ -105,14 +96,14 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     expect(appMock.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu')
   })
 
-  it('reports unsupported (no spawn) when Xvfb is not installed', async () => {
+  it('reports unsupported when Xvfb cannot be launched', async () => {
     setPlatform('linux')
-    spawnSyncMock.mockReturnValue({ status: 1 }) // `which Xvfb` fails
+    spawnMock.mockReturnValue({ pid: undefined, once: vi.fn(), kill: vi.fn(), killed: false })
     const { ensureVirtualDisplayForHeadlessServe, MISSING_LINUX_DISPLAY_MESSAGE } =
       await import('./ensure-virtual-display')
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(false)
-    expect(spawnMock).not.toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledWith('Xvfb', expect.any(Array), expect.any(Object))
     expect(MISSING_LINUX_DISPLAY_MESSAGE).toContain('endpoint is unavailable')
     expect(MISSING_LINUX_DISPLAY_MESSAGE).toContain('XDG_RUNTIME_DIR')
     expect(MISSING_LINUX_DISPLAY_MESSAGE).toContain('`xvfb` on Debian/Ubuntu')
@@ -130,7 +121,6 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(false)
-    expect(spawnSyncMock).not.toHaveBeenCalled()
     expect(spawnMock).not.toHaveBeenCalled()
     expect(rmSyncMock).not.toHaveBeenCalled()
     expect(process.env.DISPLAY).toBe(':77')
@@ -138,7 +128,6 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
 
   it('reuses an existing virtual display only when its X server is alive', async () => {
     setPlatform('linux')
-    spawnSyncMock.mockReturnValue({ status: 0 })
     existsSyncMock.mockReturnValue(true) // :99 socket + lock present
     readFileSyncMock.mockReturnValue('4321\n') // lock holds a PID
     const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true as never) // PID alive
@@ -154,14 +143,13 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
 
   it('treats a stale socket (dead server) as no display and starts a fresh Xvfb', async () => {
     setPlatform('linux')
-    spawnSyncMock.mockReturnValue({ status: 0 })
     existsSyncMock.mockReturnValue(true) // orphan socket + lock present
     readFileSyncMock.mockReturnValue('9999\n')
     // PID is gone: process.kill throws ESRCH.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw new Error('ESRCH')
     })
-    spawnMock.mockReturnValue({ once: vi.fn(), kill: vi.fn(), killed: false })
+    spawnMock.mockReturnValue({ pid: 1234, once: vi.fn(), kill: vi.fn(), killed: false })
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)

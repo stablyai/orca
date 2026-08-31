@@ -1015,6 +1015,11 @@ if (hasSingleInstanceLock) {
   }
   // Why: headless serve's offscreen BrowserWindows need an X display (Xvfb) on Linux; the result gates whether the offscreen backend is installed.
   headlessBrowserDisplayAvailable = ensureVirtualDisplayForHeadlessServe({ isServeMode })
+  // Why: continuing without Xvfb lets Ozone initialize without a display and SIGSEGV (#17615).
+  if (isServeMode && !headlessBrowserDisplayAvailable) {
+    process.stderr.write(`${MISSING_LINUX_DISPLAY_MESSAGE}\n`)
+    app.exit(1)
+  }
 }
 
 ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
