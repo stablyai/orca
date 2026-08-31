@@ -18,6 +18,16 @@ type PdfWheelZoomViewer = {
   updateScale: (options: { scaleFactor: number; origin: [number, number] }) => void
 }
 
+export function replacePdfZoomWheelTarget(
+  current: HTMLDivElement | null,
+  next: HTMLDivElement | null,
+  handleWheel: (event: WheelEvent) => void
+): HTMLDivElement | null {
+  current?.removeEventListener('wheel', handleWheel)
+  next?.addEventListener('wheel', handleWheel, { passive: false })
+  return next
+}
+
 export function usePdfZoomInput({
   containerRef,
   filePath,
@@ -38,7 +48,7 @@ export function usePdfZoomInput({
   zoomIn: () => void
   zoomOut: () => void
   zoomReset: () => void
-}): void {
+}): (container: HTMLDivElement | null) => void {
   const applyZoomCommand = useCallback(
     (direction: PdfZoomDirection): void => {
       if (direction === 'in') {
@@ -69,12 +79,9 @@ export function usePdfZoomInput({
     [applyZoomCommand, isActiveZoomTarget]
   )
 
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) {
-      return
-    }
-    const handleWheel = (event: WheelEvent): void => {
+  const handleWheel = useCallback(
+    (event: WheelEvent): void => {
+      // Why: direct wheel input is pointer-owned like ImageViewer; active ownership applies to global commands.
       if (!shouldHandlePdfZoomWheel(event, getShortcutPlatform())) {
         return
       }
@@ -84,12 +91,17 @@ export function usePdfZoomInput({
       if (viewer) {
         scalePreferenceRef.current = applyPdfWheelScale(viewer, event, scaleBounds)
       }
-    }
-    // Why: Chromium exposes trackpad pinch as ctrl-wheel and requires a native
-    // non-passive listener to keep the gesture out of editor/app zoom.
-    container.addEventListener('wheel', handleWheel, { passive: false })
-    return () => container.removeEventListener('wheel', handleWheel)
-  }, [containerRef, scaleBounds, scalePreferenceRef, viewerRef])
+    },
+    [scaleBounds, scalePreferenceRef, viewerRef]
+  )
+
+  const setContainerRef = useCallback(
+    (container: HTMLDivElement | null): void => {
+      // Why: callback refs detach and reattach native listeners when error/recovery replaces the DOM node.
+      containerRef.current = replacePdfZoomWheelTarget(containerRef.current, container, handleWheel)
+    },
+    [containerRef, handleWheel]
+  )
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -111,4 +123,6 @@ export function usePdfZoomInput({
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [applyZoomCommand, isActiveZoomTarget, keybindings])
+
+  return setContainerRef
 }

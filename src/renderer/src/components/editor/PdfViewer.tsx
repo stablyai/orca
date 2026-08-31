@@ -328,7 +328,7 @@ export default function PdfViewer({
     applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
   }, [])
 
-  usePdfZoomInput({
+  const setContainerRef = usePdfZoomInput({
     containerRef,
     filePath,
     keybindings,
@@ -383,7 +383,7 @@ export default function PdfViewer({
             carries positioning and background since all:revert nullifies classes. */}
         <div style={{ all: 'revert' }}>
           <div
-            ref={containerRef}
+            ref={setContainerRef}
             style={{
               position: 'absolute',
               inset: '0',
