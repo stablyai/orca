@@ -8124,6 +8124,12 @@
           "df38d612b7": "No projects added yet.",
           "3e483e256b": "No matching project settings."
         },
+        "SettingsSetupGuidePane": {
+          "checklistHiddenDescription": "The onboarding checklist is hidden. You can show it again whenever you need it.",
+          "showChecklist": "Show checklist",
+          "hideChecklist": "Hide checklist",
+          "loadingChecklist": "Loading onboarding checklist"
+        },
         "ShortcutFilterRail": {
           "28b63545bf": "Status",
           "8a1e78c14b": "Shortcut status filters",
