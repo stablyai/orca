@@ -3732,27 +3732,45 @@ function applyWebSessionTabsSnapshotWithContext(
     const defaultLeafLayout = { type: 'leaf' as const, groupId: nextActiveGroupId ?? targetGroupId }
     const hostLayoutGroupIds = collectLayoutGroupIds(hostLayout ?? undefined)
     const hostGroupIds = new Set(snapshot.tabGroups?.map((group) => group.id) ?? [])
-    const extraGroupIds = new Set(
-      nextGroups
-        .map((group) => group.id)
-        .filter((groupId) =>
-          hostLayout
-            ? !hostLayoutGroupIds.has(groupId)
-            : snapshot.tabGroups && snapshot.tabGroups.length > 0
-              ? !hostGroupIds.has(groupId)
-              : false
-        )
-    )
-    const localExtraLayout = pruneTabGroupLayout(state.layoutByWorktree[worktreeId], extraGroupIds)
-    const hostBaseLayout =
-      hostLayout ?? (snapshot.tabGroups && snapshot.tabGroups.length > 0 ? defaultLeafLayout : null)
-    const fallbackLayout =
-      appendTabGroupLayout(hostBaseLayout, localExtraLayout) ??
-      (snapshot.tabGroups && snapshot.tabGroups.length > 0
-        ? defaultLeafLayout
-        : state.layoutByWorktree[worktreeId]
-          ? null
-          : defaultLeafLayout)
+    const requiredHostGroupIds = new Set([...hostGroupIds, ...hostLayoutGroupIds])
+    // Why: remote clients own window geometry; a host ratio must not clobber a local
+    // drag when this client already lays out every host group id (#13218).
+    const localLayout = pruneTabGroupLayout(state.layoutByWorktree[worktreeId], validGroupIds)
+    const localLayoutGroupIds = collectLayoutGroupIds(localLayout ?? undefined)
+    const localCoversHostGroups =
+      Boolean(localLayout) &&
+      requiredHostGroupIds.size > 0 &&
+      [...requiredHostGroupIds].every((groupId) => localLayoutGroupIds.has(groupId))
+    let fallbackLayout: TabGroupLayoutNode | null
+    if (localCoversHostGroups) {
+      fallbackLayout = localLayout
+    } else {
+      const extraGroupIds = new Set(
+        nextGroups
+          .map((group) => group.id)
+          .filter((groupId) =>
+            hostLayout
+              ? !hostLayoutGroupIds.has(groupId)
+              : snapshot.tabGroups && snapshot.tabGroups.length > 0
+                ? !hostGroupIds.has(groupId)
+                : false
+          )
+      )
+      const localExtraLayout = pruneTabGroupLayout(
+        state.layoutByWorktree[worktreeId],
+        extraGroupIds
+      )
+      const hostBaseLayout =
+        hostLayout ??
+        (snapshot.tabGroups && snapshot.tabGroups.length > 0 ? defaultLeafLayout : null)
+      fallbackLayout =
+        appendTabGroupLayout(hostBaseLayout, localExtraLayout) ??
+        (snapshot.tabGroups && snapshot.tabGroups.length > 0
+          ? defaultLeafLayout
+          : state.layoutByWorktree[worktreeId]
+            ? null
+            : defaultLeafLayout)
+    }
     if (!fallbackLayout) {
       return state.layoutByWorktree
     }
