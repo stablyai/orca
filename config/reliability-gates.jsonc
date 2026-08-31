@@ -8189,9 +8189,7 @@
       "assertionRefs": [
         {
           "file": "tests/e2e/persisted-session-production-upgrade.spec.ts",
-          "assertions": [
-            "upgrades a legacy daemon session and keeps it stable after relaunch"
-          ]
+          "assertions": ["upgrades a legacy daemon session and keeps it stable after relaunch"]
         }
       ],
       "evidenceRuns": [
