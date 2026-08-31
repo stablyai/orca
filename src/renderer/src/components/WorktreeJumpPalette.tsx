@@ -142,6 +142,11 @@ import {
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
+import {
+  collectFolderWorkspaceHostLabels,
+  collectPaletteTabIndexWorkspaces,
+  excludePaletteFolderWorkspaces
+} from '@/components/cmd-j/palette-folder-workspace-tab-index'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import type { Repo } from '../../../shared/repo-types'
@@ -749,6 +754,7 @@ function WorktreeJumpPaletteContent({
   const revealSidebarRow = useAppStore((s) => s.revealSidebarRow)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const allWorktrees = useAllWorktrees()
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const repos = useAppStore((s) => s.repos)
   const projectGroups = useAppStore((s) => s.projectGroups)
   const projects = useAppStore((s) => s.projects)
@@ -1096,15 +1102,23 @@ function WorktreeJumpPaletteContent({
     return hasQuery && filterPredicate ? scope.filter(filterPredicate.matchesWorktree) : scope
   }, [allWorktrees, filterPredicate, hasQuery, switchableWorktreesForRows])
 
-  // Why: browser-tab search is cross-worktree, so sort all worktrees once (including archived).
+  // Why unfiltered and ungated: tab ownership is decided against every workspace that
+  // exists, not the subset the current filter renders.
+  const paletteTabIndexOwnershipWorkspaces = useMemo(
+    () => collectPaletteTabIndexWorkspaces(allWorktrees, folderWorkspaces),
+    [allWorktrees, folderWorkspaces]
+  )
+
+  // Why: tab search is cross-workspace, so sort every workspace once (including archived
+  // ones, and folder workspaces alongside worktrees so both kinds interleave by attention).
   // Gated on paletteStatusInputsActive so the closed-but-mounted palette skips the sort entirely.
-  const browserSortedWorktrees = useMemo(() => {
+  const paletteTabIndexWorkspaces = useMemo(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_SORTED_WORKTREES
     }
     const scope = filterPredicate
-      ? allWorktrees.filter(filterPredicate.matchesWorktree)
-      : allWorktrees
+      ? paletteTabIndexOwnershipWorkspaces.filter(filterPredicate.matchesWorktree)
+      : paletteTabIndexOwnershipWorkspaces
     return sortWorktreesSmart(
       scope,
       tabsByWorktree,
@@ -1117,7 +1131,7 @@ function WorktreeJumpPaletteContent({
     )
   }, [
     paletteStatusInputsActive,
-    allWorktrees,
+    paletteTabIndexOwnershipWorkspaces,
     filterPredicate,
     tabsByWorktree,
     repoMap,
@@ -1128,6 +1142,13 @@ function WorktreeJumpPaletteContent({
     terminalLayoutsByTabId
   ])
 
+  // Why derived, not a second sort: worktree rows, browser pages and simulator tabs have no
+  // folder-workspace path yet, so they read the worktree-only view of the same ordering.
+  const browserSortedWorktrees = useMemo(
+    () => excludePaletteFolderWorkspaces(paletteTabIndexWorkspaces),
+    [paletteTabIndexWorkspaces]
+  )
+
   // Why: derive typed-query sort from browserSortedWorktrees (P2-a) — both call sortWorktreesSmart
   // with the same deps, so filtering the superset avoids a redundant sort.
   const sortedWorktrees = useMemo(
@@ -1136,9 +1157,10 @@ function WorktreeJumpPaletteContent({
   )
 
   // Why browser search includes archived worktrees, so its host-qualified metadata index must too.
+  // Folder workspaces ride along so an open-tab row can resolve the workspace it belongs to.
   const paletteWorktreeIndex = useMemo(
-    () => buildPaletteWorktreeIndex(browserSortedWorktrees),
-    [browserSortedWorktrees]
+    () => buildPaletteWorktreeIndex(paletteTabIndexWorkspaces),
+    [paletteTabIndexWorkspaces]
   )
 
   const resolveWorktree = useCallback(
@@ -1150,9 +1172,12 @@ function WorktreeJumpPaletteContent({
   const worktreeOrder = useMemo(
     () =>
       new Map(
-        browserSortedWorktrees.map((worktree, index) => [getWorktreeHostIdentity(worktree), index])
+        paletteTabIndexWorkspaces.map((worktree, index) => [
+          getWorktreeHostIdentity(worktree),
+          index
+        ])
       ),
-    [browserSortedWorktrees]
+    [paletteTabIndexWorkspaces]
   )
 
   const checksReviewByWorktree = useMemo(
@@ -1180,8 +1205,16 @@ function WorktreeJumpPaletteContent({
         labels.set(getWorktreeHostIdentity(worktree), badge.label)
       }
     }
+    // Folder workspaces carry their own host stamp instead of inheriting a repo's.
+    for (const [identity, label] of collectFolderWorkspaceHostLabels(
+      folderWorkspaces,
+      hostOptions,
+      hostFilterActive
+    )) {
+      labels.set(identity, label)
+    }
     return labels
-  }, [allWorktrees, hostFilterActive, hostOptions, resolveRepoForWorktree])
+  }, [allWorktrees, folderWorkspaces, hostFilterActive, hostOptions, resolveRepoForWorktree])
 
   // Why keyed on the unsorted list: normalized documents depend only on text
   // inputs, so re-sorting for recency re-ranks without re-normalizing anything.
@@ -1313,8 +1346,10 @@ function WorktreeJumpPaletteContent({
       return EMPTY_WORKSPACE_TAB_ENTRIES
     }
     return buildSearchableWorkspaceTabs({
-      worktrees: browserSortedWorktrees,
-      ownershipWorktrees: allWorktrees,
+      // Why the combined list: a folder workspace's tabs live in the same tab maps as a
+      // worktree's, so leaving them out made every one of them unreachable from Cmd+J.
+      worktrees: paletteTabIndexWorkspaces,
+      ownershipWorktrees: paletteTabIndexOwnershipWorkspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1350,8 +1385,8 @@ function WorktreeJumpPaletteContent({
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
     agentStatusByPaneKey,
-    allWorktrees,
-    browserSortedWorktrees,
+    paletteTabIndexOwnershipWorkspaces,
+    paletteTabIndexWorkspaces,
     groupsByWorktree,
     openFiles,
     repoByHostIdentity,
@@ -2675,17 +2710,21 @@ function WorktreeJumpPaletteContent({
     (result: WorkspaceTabPaletteSearchResult) => {
       const activation = activateWorkspaceTabPaletteResult(result)
       if (activation.status === 'failed') {
-        toast.error(
-          activation.reason === 'missing-worktree'
-            ? translate(
-                'auto.components.WorktreeJumpPalette.2c38630a01',
-                'Workspace no longer exists'
-              )
-            : translate(
-                'auto.components.WorktreeJumpPalette.workspaceTabMissing',
-                'Tab no longer exists'
-              )
-        )
+        // A declined activation already explained itself (a folder workspace whose path is
+        // gone or whose host is unreachable), so a second toast would only contradict it.
+        if (activation.reason !== 'activation-declined') {
+          toast.error(
+            activation.reason === 'missing-worktree'
+              ? translate(
+                  'auto.components.WorktreeJumpPalette.2c38630a01',
+                  'Workspace no longer exists'
+                )
+              : translate(
+                  'auto.components.WorktreeJumpPalette.workspaceTabMissing',
+                  'Tab no longer exists'
+                )
+          )
+        }
         return
       }
 
@@ -3553,6 +3592,13 @@ function WorktreeJumpPaletteContent({
                   ? resolveRepoForWorktree(workspaceTabWorktree)
                   : undefined
                 const workspaceTabRepoName = workspaceTabRepo?.displayName ?? result.repoName
+                // Why only without a repo badge: a folder workspace hangs off a project group,
+                // so the host label is what tells a remote tab apart from a local one.
+                const workspaceTabHostLabel =
+                  !workspaceTabRepoName && workspaceTabWorktree
+                    ? (hostLabelByWorktreeId.get(getWorktreeHostIdentity(workspaceTabWorktree)) ??
+                      null)
+                    : null
                 const workspaceTabFallback =
                   result.contentType === 'terminal' && result.occupantAgent ? (
                     <span
@@ -3628,6 +3674,14 @@ function WorktreeJumpPaletteContent({
                                   matchRanges={result.repoRanges}
                                 />
                               </span>
+                            </span>
+                          )}
+                          {workspaceTabHostLabel && (
+                            <span
+                              data-slot="palette-open-tab-host"
+                              className="inline-block max-w-[180px] truncate rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground"
+                            >
+                              {workspaceTabHostLabel}
                             </span>
                           )}
                           <PaletteRowShortcutBadge

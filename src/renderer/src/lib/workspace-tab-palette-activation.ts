@@ -7,7 +7,7 @@ import {
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorkspace } from './worktree-activation'
 import type { WorkspaceTabPaletteSearchResult } from './workspace-tab-palette-search'
 
 export type WorkspaceTabPaletteActivationFailure =
@@ -15,6 +15,8 @@ export type WorkspaceTabPaletteActivationFailure =
   | 'missing-group'
   | 'missing-tab'
   | 'missing-file'
+  /** The workspace still exists but declined to open — it reported why itself. */
+  | 'activation-declined'
 
 export type WorkspaceTabPaletteActivationResult =
   | { status: 'activated' }
@@ -85,11 +87,13 @@ export function activateWorkspaceTabPaletteResult(
 
   const executionHostId =
     result.executionHostId ?? initialState.getKnownWorktreeById(result.worktreeId)?.hostId
+  // Why activateAndRevealWorkspace: a `folder:` id needs the folder branch, which owns the
+  // path-status gate that blocks a missing or disconnected folder (#10716).
   const activated = executionHostId
-    ? activateAndRevealWorktree(result.worktreeId, { executionHostId })
-    : activateAndRevealWorktree(result.worktreeId)
+    ? activateAndRevealWorkspace(result.worktreeId, { executionHostId })
+    : activateAndRevealWorkspace(result.worktreeId)
   if (!activated) {
-    return { status: 'failed', reason: 'missing-worktree' }
+    return { status: 'failed', reason: 'activation-declined' }
   }
 
   const state = useAppStore.getState()
