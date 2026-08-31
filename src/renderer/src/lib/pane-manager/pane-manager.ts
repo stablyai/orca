@@ -299,15 +299,16 @@ export class PaneManager {
   }
 
   scheduleRevealRepaint(): void {
-    // Why: the settled-frame callback can fire after destroy(); repainting
-    // disposed panes could throw in attach and latch the global WebGL
-    // attach backoff, downgrading unrelated new panes to the DOM renderer.
-    schedulePaneRevealRepaint(() => (this.destroyed ? [] : this.panes.values()))
+    // Why: the settled-frame callback can fire after hide/destroy; repainting
+    // hidden or disposed panes can revive WebGL contexts and latch attach
+    // backoff, downgrading unrelated new panes to the DOM renderer.
+    schedulePaneRevealRepaint(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
   }
 
   scheduleRevealPresent(): void {
-    // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases.
-    schedulePaneRevealPresent(() => (this.destroyed ? [] : this.panes.values()))
+    // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases;
+    // skip the delayed present if the surface was hidden again meanwhile.
+    schedulePaneRevealPresent(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
   }
 
   suspendRendering(): void {
