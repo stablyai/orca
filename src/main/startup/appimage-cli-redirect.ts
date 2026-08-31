@@ -1,6 +1,7 @@
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { APPIMAGE_CLI_COMMAND_NAMES } from '../../shared/appimage-cli-command-names'
 
 type RedirectResult =
   | {
@@ -25,69 +26,6 @@ type RedirectOptions = {
 const HELP_FLAGS = new Set(['--help', '-h', 'help'])
 const APPIMAGE_DESKTOP_FLAGS = new Set(['--no-sandbox'])
 const CLI_FLAGS_WITH_VALUES = new Set(['--environment', '--pairing-code'])
-// Why: the main tsconfig cannot import the CLI project, but AppImage direct
-// launches need a conservative allow-list before bypassing the GUI startup.
-const APPIMAGE_CLI_COMMAND_NAMES = [
-  'agent',
-  'automations',
-  'back',
-  'capture',
-  'check',
-  'clear',
-  'click',
-  'clipboard',
-  'computer',
-  'console',
-  'cookie',
-  'dblclick',
-  'dialog',
-  'download',
-  'drag',
-  'environment',
-  'eval',
-  'exec',
-  'file',
-  'fill',
-  'find',
-  'focus',
-  'forward',
-  'full-screenshot',
-  'geolocation',
-  'get',
-  'goto',
-  'highlight',
-  'hover',
-  'inserttext',
-  'intercept',
-  'is',
-  'keypress',
-  'mouse',
-  'network',
-  'open',
-  'orchestration',
-  'pdf',
-  'reload',
-  'repo',
-  'screenshot',
-  'scroll',
-  'scrollintoview',
-  'select',
-  'select-all',
-  'serve',
-  'set',
-  'snapshot',
-  'status',
-  'storage',
-  'tab',
-  'terminal',
-  'type',
-  'uncheck',
-  'upload',
-  'viewport',
-  'wait',
-  'worktree'
-]
-
 export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): RedirectResult {
   const argv = options.argv ?? process.argv
   const env = options.env ?? process.env
@@ -99,7 +37,9 @@ export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): R
   const cliArgs = getAppImageCliArgs(argv, env, {
     platform,
     isPackaged,
-    commandNames: options.commandNames ?? APPIMAGE_CLI_COMMAND_NAMES
+    commandNames: options.commandNames ?? APPIMAGE_CLI_COMMAND_NAMES,
+    execPath,
+    resourcesPath
   })
 
   if (!cliArgs) {
@@ -130,6 +70,32 @@ export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): R
   return { redirected: true, status: result.status ?? 1 }
 }
 
+/**
+ * Detect an AppImage layout even when AppRun left APPDIR/APPIMAGE unexported
+ * (extracted squashfs-root launches on Ubuntu 24.04 — #13004 / root of #12677).
+ */
+export function isAppImagePackagedLayout(options: {
+  env: NodeJS.ProcessEnv
+  execPath?: string
+  resourcesPath?: string
+  exists?: (path: string) => boolean
+}): boolean {
+  const env = options.env
+  if (env.APPIMAGE || env.APPDIR) {
+    return true
+  }
+  const exists = options.exists ?? existsSync
+  const candidates: string[] = []
+  if (options.resourcesPath) {
+    // resourcesPath is typically <appdir>/resources
+    candidates.push(dirname(options.resourcesPath))
+  }
+  if (options.execPath) {
+    candidates.push(dirname(options.execPath))
+  }
+  return candidates.some((dir) => exists(join(dir, 'AppRun')))
+}
+
 export function getAppImageCliArgs(
   argv: string[],
   env: NodeJS.ProcessEnv,
@@ -137,12 +103,22 @@ export function getAppImageCliArgs(
     platform: NodeJS.Platform
     isPackaged: boolean
     commandNames: readonly string[]
+    execPath?: string
+    resourcesPath?: string
+    exists?: (path: string) => boolean
   }
 ): string[] | null {
   if (options.platform !== 'linux' || !options.isPackaged) {
     return null
   }
-  if (!env.APPIMAGE && !env.APPDIR) {
+  if (
+    !isAppImagePackagedLayout({
+      env,
+      execPath: options.execPath,
+      resourcesPath: options.resourcesPath,
+      exists: options.exists
+    })
+  ) {
     return null
   }
 

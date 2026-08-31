@@ -53,6 +53,42 @@ describe('AppImage CLI redirect', () => {
     ).toBeNull()
   })
 
+  it('redirects CLI commands when AppRun left APPDIR/APPIMAGE unexported (#13004)', () => {
+    // Extracted squashfs-root: electron-builder AppRun sets APPDIR as a shell local
+    // only, so the Electron child never sees it. Detect via AppRun next to resources.
+    expect(
+      getAppImageCliArgs(
+        ['/opt/orca/squashfs-root/orca-ide', 'status', '--json'],
+        {},
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames,
+          resourcesPath: '/opt/orca/squashfs-root/resources',
+          execPath: '/opt/orca/squashfs-root/orca-ide',
+          exists: (path) => path === '/opt/orca/squashfs-root/AppRun'
+        }
+      )
+    ).toEqual(['status', '--json'])
+  })
+
+  it('does not treat a plain packaged .deb layout without AppRun as an AppImage', () => {
+    expect(
+      getAppImageCliArgs(
+        ['/opt/Orca/orca-ide', 'status', '--json'],
+        {},
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames,
+          resourcesPath: '/opt/Orca/resources',
+          execPath: '/opt/Orca/orca-ide',
+          exists: () => false
+        }
+      )
+    ).toBeNull()
+  })
+
   it('routes no-sandbox serve launches through the CLI', () => {
     expect(
       getAppImageCliArgs(
