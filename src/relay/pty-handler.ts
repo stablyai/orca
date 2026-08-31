@@ -85,6 +85,7 @@ import {
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
 import { readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
+import { chargedPtyRetainedStringBytes } from '../shared/pty-retained-string-memory'
 import {
   deleteRelayFishHistory,
   deleteRelayHistory,
@@ -204,6 +205,8 @@ type PendingPtyOutput = RelayPtySourceOutput & {
   data: string
   interactive?: boolean
   sourceChunk?: RelayPtySourceOutput
+  /** Cached producer-retention charge; kept off the wire and refreshed on data mutations. */
+  producerChargeBytes?: number
 }
 
 type ManagedStartupCommand = {
@@ -442,6 +445,7 @@ export class PtyHandler {
   private graceTimer: ReturnType<typeof setTimeout> | null = null
   private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
+  private pendingProducerBytesByPty = new Map<string, number>()
   private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
   private pausedOutputPtys = new Set<string>()
   private consumerPausedOutputPtys = new Set<string>()
@@ -1030,8 +1034,10 @@ export class PtyHandler {
   ): void {
     const queue = this.pendingOutputByPty.get(id) ?? []
     if (this.sourcePublication?.accepts(id)) {
-      queue.push({ data, ...meta })
+      const pending = this.initializePendingProducerCharge({ data, ...meta })
+      queue.push(pending)
       this.pendingOutputByPty.set(id, queue)
+      this.addPendingProducerBytes(id, pending)
       if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, data)) {
         queue[0].interactive = true
         if (this.flushPtyOutput(id)) {
@@ -1047,23 +1053,31 @@ export class PtyHandler {
     const existing = queue.at(-1)
     if (meta.transformed === true) {
       if (queue.length === 0) {
-        const transformed = { data, ...meta }
+        const transformed = this.initializePendingProducerCharge({ data, ...meta })
         if (this.publishPtyOutput(id, transformed, false)) {
           return
         }
         queue.push(transformed)
+        // Registering after direct publish preserves legacy overwrite semantics for re-entrant ingress.
+        this.replacePendingOutputQueue(id, queue, this.pendingProducerChargeForEntry(transformed))
       } else if (existing?.transformed) {
+        const previousCharge = this.pendingProducerChargeForEntry(existing)
         existing.data += data
         existing.rawLength = (existing.rawLength ?? 0) + (meta.rawLength ?? data.length)
         existing.seq = meta.seq
+        this.refreshPendingProducerCharge(id, existing, previousCharge)
       } else {
-        queue.push({ data, ...meta })
+        const transformed = this.initializePendingProducerCharge({ data, ...meta })
+        queue.push(transformed)
+        this.addPendingProducerBytes(id, transformed)
       }
       this.pendingOutputByPty.set(id, queue)
       this.pausePtyOutput(id)
       return
     }
     const pending: PendingPtyOutput = existing && !existing.transformed ? existing : { data: '' }
+    const previousCharge =
+      existing && !existing.transformed ? this.pendingProducerChargeForEntry(pending) : 0
     const previousLength = pending.data.length
     pending.data += data
     if (pending.rawLength !== undefined || meta.rawLength !== undefined) {
@@ -1073,7 +1087,11 @@ export class PtyHandler {
       pending.seq = meta.seq
     }
     if (!existing || existing.transformed) {
+      this.initializePendingProducerCharge(pending)
       queue.push(pending)
+      this.addPendingProducerBytes(id, pending)
+    } else {
+      this.refreshPendingProducerCharge(id, pending, previousCharge)
     }
     this.pendingOutputByPty.set(id, queue)
     if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, pending.data)) {
@@ -1100,18 +1118,23 @@ export class PtyHandler {
     // Why batch before the first send: a re-entrant sink must read the values a whole-map snapshot
     // would have frozen. Why the raw iterator: `for...of` would consume one entry past the limit.
     const pendingEntries = this.pendingOutputByPty[Symbol.iterator]()
-    const batch: [string, PendingPtyOutput[]][] = []
+    const batch: [string, PendingPtyOutput[], number][] = []
     while (batch.length < PTY_OUTPUT_FLUSH_MAX_WRITES) {
       const next = pendingEntries.next()
       if (next.done === true) {
         break
       }
-      batch.push([next.value[0], next.value[1].map((pending) => ({ ...pending }))])
+      const [id, queue] = next.value
+      batch.push([
+        id,
+        queue.map((pending) => ({ ...pending })),
+        this.pendingProducerBytesByPty.get(id) ?? 0
+      ])
     }
     let writes = 0
-    for (const [id, queue] of batch) {
-      this.pendingOutputByPty.delete(id)
-      if (this.flushPtyOutput(id, queue)) {
+    for (const [id, queue, chargedBytes] of batch) {
+      this.deletePendingOutput(id)
+      if (this.flushPtyOutput(id, queue, chargedBytes)) {
         writes++
       }
     }
@@ -1121,13 +1144,21 @@ export class PtyHandler {
     }
   }
 
-  private flushPtyOutput(id: string, capturedQueue?: PendingPtyOutput[]): boolean {
+  private flushPtyOutput(
+    id: string,
+    capturedQueue?: PendingPtyOutput[],
+    capturedProducerBytes?: number
+  ): boolean {
     const queue = capturedQueue ?? this.pendingOutputByPty.get(id)
     const pending = queue?.[0]
     if (!queue || !pending) {
       this.publishPendingExit(id)
       return true
     }
+    const queueWasCaptured = capturedQueue !== undefined
+    const capturedQueueBytes = queueWasCaptured
+      ? (capturedProducerBytes ?? this.pendingProducerChargeForEntry(pending))
+      : (this.pendingProducerBytesByPty.get(id) ?? this.pendingProducerChargeForEntry(pending))
     const desiredChars = pending.transformed
       ? pending.data.length
       : Math.min(pending.data.length, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
@@ -1160,7 +1191,7 @@ export class PtyHandler {
       (!sourceOnlyEmission && chunkChars <= 0) ||
       (pending.transformed && chunkChars !== pending.data.length)
     ) {
-      this.pendingOutputByPty.set(id, queue)
+      this.restorePendingOutputAfterFlush(id, queue, capturedQueueBytes, queueWasCaptured)
       this.pausePtyOutput(id)
       return false
     }
@@ -1184,30 +1215,42 @@ export class PtyHandler {
     pending.sourceChunk = sourceChunk
     const published = this.publishPtyOutput(id, sourceChunk, pending.interactive === true)
     if (!published) {
-      this.pendingOutputByPty.set(id, queue)
+      this.restorePendingOutputAfterFlush(id, queue, capturedQueueBytes, queueWasCaptured)
       this.pausePtyOutput(id)
       return false
     }
+    const queueStillTracked = !queueWasCaptured && this.pendingOutputByPty.get(id) === queue
+    const queueChargeAfterPublish = queueStillTracked
+      ? (this.pendingProducerBytesByPty.get(id) ?? capturedQueueBytes)
+      : capturedQueueBytes
+    const pendingChargeAfterPublish = this.pendingProducerChargeForEntry(pending)
     // rawLength fallback is defensive only: transformed memos always carry rawLength (ingress meta).
     const publishedRawLength = sourceChunk.rawLength ?? sourceChunk.data.length
     const remainingRawLength = pending.transformed
       ? (pending.rawLength ?? 0) - publishedRawLength
       : remaining.length
     if (remaining || (pending.transformed && remainingRawLength > 0)) {
-      queue[0] = {
+      const remainder = this.initializePendingProducerCharge({
         data: remaining,
         ...(pending.transformed ? { transformed: true } : {}),
         ...(pending.rawLength === undefined ? {} : { rawLength: remainingRawLength }),
         seq: pending.seq
-      }
+      })
+      queue[0] = remainder
+      const nextQueueBytes =
+        queueChargeAfterPublish -
+        pendingChargeAfterPublish +
+        this.pendingProducerChargeForEntry(remainder)
+      this.replacePendingOutputQueue(id, queue, nextQueueBytes)
     } else {
       queue.shift()
-    }
-    if (queue.length === 0) {
-      this.pendingOutputByPty.delete(id)
-      this.publishPendingExit(id)
-    } else {
-      this.pendingOutputByPty.set(id, queue)
+      const nextQueueBytes = queueChargeAfterPublish - pendingChargeAfterPublish
+      if (queue.length === 0) {
+        this.deletePendingOutput(id)
+        this.publishPendingExit(id)
+      } else {
+        this.replacePendingOutputQueue(id, queue, nextQueueBytes)
+      }
     }
     this.maybeResumePtyOutput(id)
     this.clearOutputFlushTimerIfIdle()
@@ -1223,7 +1266,7 @@ export class PtyHandler {
   }
 
   private clearPtyFlowState(id: string): void {
-    this.pendingOutputByPty.delete(id)
+    this.deletePendingOutput(id)
     this.pendingExitByPty.delete(id)
     this.pausedOutputPtys.delete(id)
     this.consumerPausedOutputPtys.delete(id)
@@ -1326,12 +1369,76 @@ export class PtyHandler {
     this.pendingExitByPty.delete(id)
   }
 
+  private pendingProducerCharge(data: string): number {
+    return chargedPtyRetainedStringBytes(data)
+  }
+
+  private initializePendingProducerCharge(pending: PendingPtyOutput): PendingPtyOutput {
+    pending.producerChargeBytes = this.pendingProducerCharge(pending.data)
+    return pending
+  }
+
+  private pendingProducerChargeForEntry(pending: PendingPtyOutput): number {
+    if (pending.producerChargeBytes === undefined) {
+      pending.producerChargeBytes = this.pendingProducerCharge(pending.data)
+    }
+    return pending.producerChargeBytes
+  }
+
+  private addPendingProducerBytes(id: string, pending: PendingPtyOutput): void {
+    const charge = this.pendingProducerChargeForEntry(pending)
+    this.pendingProducerBytesByPty.set(id, (this.pendingProducerBytesByPty.get(id) ?? 0) + charge)
+  }
+
+  private refreshPendingProducerCharge(
+    id: string,
+    pending: PendingPtyOutput,
+    previousCharge: number
+  ): void {
+    const nextCharge = this.pendingProducerCharge(pending.data)
+    pending.producerChargeBytes = nextCharge
+    const currentTotal = this.pendingProducerBytesByPty.get(id)
+    if (currentTotal === undefined) {
+      return
+    }
+    this.pendingProducerBytesByPty.set(id, currentTotal + nextCharge - previousCharge)
+  }
+
+  private deletePendingOutput(id: string): void {
+    this.pendingOutputByPty.delete(id)
+    this.pendingProducerBytesByPty.delete(id)
+  }
+
+  private replacePendingOutputQueue(
+    id: string,
+    queue: PendingPtyOutput[],
+    chargedBytes: number
+  ): void {
+    if (queue.length === 0) {
+      this.deletePendingOutput(id)
+      return
+    }
+    this.pendingOutputByPty.set(id, queue)
+    this.pendingProducerBytesByPty.set(id, chargedBytes)
+  }
+
+  private restorePendingOutputAfterFlush(
+    id: string,
+    queue: PendingPtyOutput[],
+    capturedBytes: number,
+    wasCaptured: boolean
+  ): void {
+    if (wasCaptured || this.pendingOutputByPty.get(id) !== queue) {
+      this.replacePendingOutputQueue(id, queue, capturedBytes)
+      return
+    }
+    // A live queue remains tracked through a failed send; ingress may have coalesced into it while
+    // the sink was called, so keep the incrementally maintained total instead of replacing it.
+    this.pendingOutputByPty.set(id, queue)
+  }
+
   private pendingProducerBytes(id: string): number {
-    return (this.pendingOutputByPty.get(id) ?? []).reduce(
-      (total, pending) =>
-        total + Math.max(Buffer.byteLength(pending.data, 'utf8'), 2 * pending.data.length) + 128,
-      0
-    )
+    return this.pendingProducerBytesByPty.get(id) ?? 0
   }
 
   private pausePtyOutput(id: string): void {
@@ -1897,7 +2004,7 @@ export class PtyHandler {
     const replay = managed.buffered.read()
     if (replay) {
       // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
-      this.pendingOutputByPty.delete(id)
+      this.deletePendingOutput(id)
       this.clearOutputFlushTimerIfIdle()
       this.maybeResumePtyOutput(id)
       if (params.suppressReplayNotification) {
@@ -2543,6 +2650,7 @@ export class PtyHandler {
       this.outputFlushTimer = null
     }
     this.pendingOutputByPty.clear()
+    this.pendingProducerBytesByPty.clear()
     this.pendingExitByPty.clear()
     this.pausedOutputPtys.clear()
     this.consumerPausedOutputPtys.clear()
