@@ -38,6 +38,50 @@ afterEach(() => {
 })
 
 describe('native managed Codex shell profile', () => {
+  describe.each(['"', "'"])('multiline array %s before environment tables', (quote) => {
+    it.each([3, 4, 5])('mirrors valid TOML after %i closing quotes', (closingQuotes) => {
+      const original = `sandbox_workspace_write.writable_roots = [${quote.repeat(3)}foo${quote.repeat(closingQuotes)}]\n[shell_environment_policy]\ninherit = "core"\n[shell_environment_policy.set]\nKEEP = "yes"\n`
+      const expected = parse(original)
+      expect(parse(prepareSystemConfigForFreshRuntimeMirror(original, system))).toEqual(expected)
+      write(system, original)
+      sync()
+      expect(parse(read(runtimeHome()))).toEqual({
+        sandbox_workspace_write: { writable_roots: [`foo${quote.repeat(closingQuotes - 3)}`] },
+        shell_environment_policy: {
+          inherit: 'core',
+          set: { KEEP: 'yes', ORCA_USER_DATA_PATH: profile }
+        }
+      })
+      const first = read(runtimeHome())
+      sync()
+      expect(read(runtimeHome())).toBe(first)
+      expect(read(system)).toBe(original)
+    })
+
+    it.each([3, 4, 5])(
+      'omits runtime identity when rebuilding missing system config after %i closing quotes',
+      (closingQuotes) => {
+        write(system, 'model = "chosen"\n')
+        sync()
+        rmSync(join(system, 'config.toml'))
+        const original = `approval_policy = "never"\nmodel = "chosen"\nsandbox_workspace_write.writable_roots = [${quote.repeat(3)}foo${quote.repeat(closingQuotes)}]\n[shell_environment_policy]\ninherit = "core"\n[shell_environment_policy.set]\nKEEP = "yes"\nORCA_USER_DATA_PATH = ${JSON.stringify(profile)}\n`
+        parse(original)
+        write(runtimeHome(), original)
+        promoteCodexRuntimeSettingsToSystem({
+          runtimeHomePath: runtimeHome(),
+          systemHomePath: system
+        })
+        expect(parse(read(system))).toEqual({
+          approval_policy: 'never',
+          model: 'chosen',
+          sandbox_workspace_write: { writable_roots: [`foo${quote.repeat(closingQuotes - 3)}`] },
+          shell_environment_policy: { inherit: 'core', set: { KEEP: 'yes' } }
+        })
+        expect(read(runtimeHome())).toBe(original)
+      }
+    )
+  })
+
   it.each(['missing', 'blank'])(
     'retains identity when the system config is %s without erasing runtime settings',
     (source) => {

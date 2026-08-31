@@ -32,23 +32,20 @@ export function updateTomlLineScanState(state: TomlLineScanState, line: string):
   let arrayDepth = state.arrayDepth
   let index = 0
   while (index < line.length) {
-    if (mode === 'basic') {
-      if (line[index] === '\\') {
+    if (mode !== null) {
+      if (mode === 'basic' && line[index] === '\\') {
         index += 2
         continue
       }
-      if (line.startsWith('"""', index)) {
+      const delimiter = mode === 'basic' ? '"""' : "'''"
+      if (line.startsWith(delimiter, index)) {
+        const closingLimit = index + 5
         mode = null
         index += 3
-        continue
-      }
-      index += 1
-      continue
-    }
-    if (mode === 'literal') {
-      if (line.startsWith("'''", index)) {
-        mode = null
-        index += 3
+        // Four/five closing quotes include content quotes, not a new string.
+        while (index < closingLimit && line[index] === delimiter[0]) {
+          index += 1
+        }
         continue
       }
       index += 1
