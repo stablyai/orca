@@ -343,6 +343,67 @@ describe('pty input write queue', () => {
     }
   })
 
+  it.each([
+    ['one write', ['\x1b[7;1H\x1b]11;?\x1b\\\x1b[6n']],
+    // Tears the color query itself, so xterm resumes its OSC parse across chunks; both replies
+    // still come from one parse turn. A tear BETWEEN the two queries is strictly weaker, not an
+    // upgrade: a hold shorter than the inter-chunk gap flushes inside the gap and that shape stays
+    // green, while this one reds on a hold of any length.
+    ['a query torn across output chunks', ['\x1b[7;1H\x1b]11;', '?\x1b\\\x1b[6n']]
+  ] as const)(
+    'keeps xterm OSC 11 ahead of the following CPR at the PTY host (%s)',
+    async (_name, outputChunks) => {
+      const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+      term.options.theme = { background: '#00131a' }
+      const ptyWrites: string[] = []
+      const generatedReplies: string[] = []
+      const ingress = new PtyStartupIngress({
+        ownerBackend: 'posix-pty',
+        write: (data) => ptyWrites.push(data),
+        onEmission: () => {}
+      })
+      const queue = createPtyInputWriteQueue({
+        isWritable: () => true,
+        write: (_id, data) => {
+          if (ingress.answerLiveQueryReply(data)) {
+            return
+          }
+          ptyWrites.push(data)
+        },
+        yieldBetweenWrites: () => Promise.resolve()
+      })
+      const enqueueReply = (data: string): boolean => {
+        generatedReplies.push(data)
+        return queue.enqueueQueryReply('pty-1', data)
+      }
+      const capabilityReplies = installTerminalCapabilityReplyHandlers({
+        terminal: { cols: term.cols, rows: term.rows, element: undefined, options: term.options },
+        parser: term.parser,
+        sendInput: enqueueReply,
+        isReplaying: () => false
+      })
+      const xtermReplies = term.onData(enqueueReply)
+
+      try {
+        for (const chunk of outputChunks) {
+          await writeTerminal(term, chunk)
+        }
+        await queue.waitForDrain()
+
+        const oscReply = '\x1b]11;rgb:0000/1313/1a1a\x1b\\'
+        const cprReply = '\x1b[7;1R'
+        expect(generatedReplies).toEqual([oscReply, cprReply])
+        // Not joined: the array also pins the OSC reply as its own atomic write (#13892).
+        expect(ptyWrites).toEqual([oscReply, cprReply])
+      } finally {
+        xtermReplies.dispose()
+        capabilityReplies.dispose()
+        ingress.drainAndClose()
+        term.dispose()
+      }
+    }
+  )
+
   it('rejects one reply larger than the total reply retention budget', async () => {
     const { writes, queue } = createRecordingQueue()
     const prefix = '\x1b]10;'
