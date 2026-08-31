@@ -1,5 +1,12 @@
 import type { BaseRefSearchResult } from '../../shared/repo-types'
 import { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
+import {
+  clampRepoSearchRefsLimit,
+  clampRepoSearchRefsScanLimit,
+  REPO_SEARCH_REFS_DEFAULT_LIMIT,
+  isRepoSearchRefsRequestLimit,
+  isRepoSearchRefsScanLimit
+} from '../../shared/repo-search-limits'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import { isRemoteHeadRef } from '../../shared/hosted-review-refs'
 import { getLocalGitCapabilityCache } from './git-capability-state'
@@ -16,7 +23,7 @@ function getRefSearchTokens(normalizedQuery: string): string[] {
 }
 
 function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean): number {
-  if (!Number.isInteger(limit) || limit <= 0) {
+  if (!isRepoSearchRefsScanLimit(limit)) {
     throw new Error('invalid_limit')
   }
   const baseCount = limit * REF_SEARCH_CANDIDATE_MULTIPLIER
@@ -55,7 +62,10 @@ export function buildSearchBaseRefsArgv(
   } = {}
 ): string[] {
   const excludeRemoteHead = options.excludeRemoteHead ?? true
-  const candidateCount = getRefSearchCandidateCount(limit, excludeRemoteHead)
+  // A caller may ask for more rows than the retained-result cap. Keep that
+  // request useful while bounding the Git command to the safe probe window.
+  const boundedScanLimit = clampRepoSearchRefsScanLimit(limit)
+  const candidateCount = getRefSearchCandidateCount(boundedScanLimit, excludeRemoteHead)
   const base = [
     'for-each-ref',
     '--format=%(refname)%00%(refname:short)',
@@ -151,18 +161,27 @@ export function mergeBaseRefSearchResultGroups(
   return merged
 }
 
-export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
-  return (await searchBaseRefDetails(path, query, limit)).map((entry) => entry.refName)
+export async function searchBaseRefs(
+  path: string,
+  query: string,
+  limit = REPO_SEARCH_REFS_DEFAULT_LIMIT
+): Promise<string[]> {
+  if (!isRepoSearchRefsRequestLimit(limit)) {
+    return []
+  }
+  const boundedLimit = clampRepoSearchRefsLimit(limit)
+  return (await searchBaseRefDetails(path, query, boundedLimit)).map((entry) => entry.refName)
 }
 
 export async function searchBaseRefDetails(
   path: string,
   query: string,
-  limit = 25
+  limit = REPO_SEARCH_REFS_DEFAULT_LIMIT
 ): Promise<BaseRefSearchResult[]> {
-  if (!Number.isInteger(limit) || limit <= 0) {
+  if (!isRepoSearchRefsRequestLimit(limit)) {
     return []
   }
+  const boundedScanLimit = clampRepoSearchRefsScanLimit(limit)
   const normalizedQuery = normalizeRefSearchQuery(query)
 
   try {
@@ -170,25 +189,27 @@ export async function searchBaseRefDetails(
     const tokens = getRefSearchTokens(normalizedQuery)
     if (tokens.length > 1) {
       const results = await Promise.all([
-        runSearchBaseRefsGit(path, normalizedQuery, limit, {
+        runSearchBaseRefsGit(path, normalizedQuery, boundedScanLimit, {
           remoteNames: remotes,
           patternGroup: 'segmented'
         }),
-        runSearchBaseRefsGit(path, normalizedQuery, limit, {
+        runSearchBaseRefsGit(path, normalizedQuery, boundedScanLimit, {
           remoteNames: remotes,
           patternGroup: 'branchRoot'
         })
       ])
       return mergeBaseRefSearchResultGroups(
-        results.map((entry) => parseAndFilterSearchRefDetails(entry.stdout, limit, remotes)),
-        limit
+        results.map((entry) =>
+          parseAndFilterSearchRefDetails(entry.stdout, boundedScanLimit, remotes)
+        ),
+        boundedScanLimit
       )
     }
 
-    const result = await runSearchBaseRefsGit(path, normalizedQuery, limit, {
+    const result = await runSearchBaseRefsGit(path, normalizedQuery, boundedScanLimit, {
       remoteNames: remotes
     })
-    return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+    return parseAndFilterSearchRefDetails(result.stdout, boundedScanLimit, remotes)
   } catch (err) {
     console.warn('[searchBaseRefs] for-each-ref failed', { path, err })
     return []

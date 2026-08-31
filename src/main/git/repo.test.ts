@@ -14,6 +14,10 @@ import {
   searchBaseRefDetails,
   searchBaseRefs
 } from './repo'
+import {
+  REPO_SEARCH_REFS_MAX_LIMIT,
+  REPO_SEARCH_REFS_MAX_SCAN_LIMIT
+} from '../../shared/repo-search-limits'
 
 // Why: use real git state (not mocked) because the bug is in the for-each-ref glob shape a mock would miss.
 
@@ -346,9 +350,24 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(argv).toContain('--count=2400')
   })
 
-  it('returns [] for invalid search limits instead of running an uncapped search', async () => {
+  it('clamps oversized limits before constructing an unbounded Git count', () => {
+    expect(buildSearchBaseRefsArgv('', REPO_SEARCH_REFS_MAX_LIMIT)).toContain('--count=4000')
+    expect(buildSearchBaseRefsArgv('', REPO_SEARCH_REFS_MAX_SCAN_LIMIT)).toContain('--count=4004')
+    expect(buildSearchBaseRefsArgv('', REPO_SEARCH_REFS_MAX_SCAN_LIMIT + 1)).toContain(
+      '--count=4004'
+    )
+    expect(buildSearchBaseRefsArgv('', Number.MAX_SAFE_INTEGER)).toContain('--count=4004')
+    expect(() => buildSearchBaseRefsArgv('', Number.MAX_VALUE)).toThrow('invalid_limit')
+  })
+
+  it('rejects malformed limits instead of running an uncapped search', async () => {
     await expect(searchBaseRefs(tmpDir, '', 0.5)).resolves.toEqual([])
     await expect(searchBaseRefs(tmpDir, '', Number.NaN)).resolves.toEqual([])
+    await expect(
+      searchBaseRefs(tmpDir, '', REPO_SEARCH_REFS_MAX_SCAN_LIMIT + 1)
+    ).resolves.toContain('main')
+    await expect(searchBaseRefs(tmpDir, '', Number.MAX_SAFE_INTEGER)).resolves.toContain('main')
+    await expect(searchBaseRefs(tmpDir, '', Number.MAX_VALUE)).resolves.toEqual([])
   })
 
   // Why: users retype the displayed `<remote>/<branch>` format, so a slashed query must still match.

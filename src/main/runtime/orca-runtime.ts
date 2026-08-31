@@ -19,6 +19,12 @@ import {
   isAgentSkillSharingEnabled
 } from '../../shared/agent-skill-sharing-gate'
 import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
+import {
+  clampRepoSearchRefsLimit,
+  REPO_SEARCH_REFS_DEFAULT_LIMIT,
+  getRepoSearchRefsProbeLimit,
+  isRepoSearchRefsRequestLimit
+} from '../../shared/repo-search-limits'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -23850,9 +23856,11 @@ export class OrcaRuntimeService {
     query: string,
     limit = DEFAULT_REPO_SEARCH_REFS_LIMIT
   ): Promise<RuntimeRepoSearchRefs> {
-    if (!Number.isInteger(limit) || limit <= 0) {
+    if (!isRepoSearchRefsRequestLimit(limit)) {
       throw new Error('invalid_limit')
     }
+    const effectiveLimit = clampRepoSearchRefsLimit(limit)
+    const probeLimit = getRepoSearchRefsProbeLimit(effectiveLimit)
     const repo = await this.resolveRepoSelector(repoSelector)
     if (isFolderRepo(repo)) {
       return {
@@ -23861,12 +23869,15 @@ export class OrcaRuntimeService {
       }
     }
     const refDetails = repo.connectionId
-      ? await this.searchRemoteRepoRefs(repo, query, limit + 1)
-      : await searchBaseRefDetails(repo.path, query, limit + 1)
+      ? await this.searchRemoteRepoRefs(repo, query, probeLimit)
+      : await searchBaseRefDetails(repo.path, query, probeLimit)
     return {
-      refs: refDetails.slice(0, limit).map((entry) => entry.refName),
-      refDetails: refDetails.slice(0, limit),
-      truncated: refDetails.length > limit
+      refs: refDetails.slice(0, effectiveLimit).map((entry) => entry.refName),
+      refDetails: refDetails.slice(0, effectiveLimit),
+      // An oversized request is intentionally reported as truncated even when
+      // this repo has fewer refs: the execution cap prevented fulfilling the
+      // requested page size.
+      truncated: limit > effectiveLimit || refDetails.length > effectiveLimit
     }
   }
 
@@ -41385,7 +41396,7 @@ const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
   working: 3,
   permission: 4
 }
-const DEFAULT_REPO_SEARCH_REFS_LIMIT = 25
+const DEFAULT_REPO_SEARCH_REFS_LIMIT = REPO_SEARCH_REFS_DEFAULT_LIMIT
 const DEFAULT_TERMINAL_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_PS_LIMIT = 200
