@@ -240,3 +240,69 @@ describe('normalizeNativeChatUserText control bytes', () => {
     expect(normalizeNativeChatUserText('run\tthe\r\ntests')).toBe('run the tests')
   })
 })
+
+// Why: Claude writes one record per SEND, not per image, so a two-image send arrives as a single
+// user turn carrying one `[Image: source: …]` text block per image. Matching only a one-block turn
+// meant every multi-image send lost its attachments and leaked the raw markers as prose.
+function userTexts(id: string, texts: string[]): NativeChatMessage {
+  return {
+    id,
+    role: 'user',
+    blocks: texts.map((text) => ({ type: 'text', text })),
+    timestamp: 1,
+    source: 'transcript'
+  }
+}
+
+describe('normalizeImageTranscriptMessages with multi-image sends', () => {
+  it('merges a multi-marker source turn into the prompt that follows it', () => {
+    const out = normalizeImageTranscriptMessages([
+      userTexts('a', ['[Image: source: /tmp/a.png]', '[Image: source: /tmp/b.png]']),
+      userText('b', '[Image #1] [Image #2] describe these')
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'text', text: 'describe these' }
+    ])
+  })
+
+  it('keeps every path when a multi-marker turn stands alone', () => {
+    const out = normalizeImageTranscriptMessages([
+      userTexts('a', [
+        '[Image: source: /tmp/a.png]',
+        '[Image: source: /tmp/b.png]',
+        '[Image: source: /tmp/c.png]'
+      ])
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'image-ref', path: '/tmp/c.png' }
+    ])
+  })
+
+  // Why: a turn that also carries real prose is the user's message, not a marker record. Treating
+  // it as one would delete what they wrote.
+  it('leaves a turn that mixes markers with prose untouched', () => {
+    const mixed = userTexts('a', ['[Image: source: /tmp/a.png]', 'and here is my question'])
+    const out = normalizeImageTranscriptMessages([mixed])
+
+    expect(out[0]!.blocks).toEqual(mixed.blocks)
+  })
+
+  it('reports a multi-marker turn as an image-source turn', () => {
+    expect(
+      isImageSourceUserTurn(
+        userTexts('a', ['[Image: source: /tmp/a.png]', '[Image: source: /tmp/b.png]'])
+      )
+    ).toBe(true)
+    expect(
+      isImageSourceUserTurn(userTexts('b', ['[Image: source: /tmp/a.png]', 'my question']))
+    ).toBe(false)
+  })
+})
