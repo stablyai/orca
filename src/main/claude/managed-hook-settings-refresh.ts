@@ -29,6 +29,9 @@ function isManagedHookEntry(
   hook: HookCommandConfig,
   isManagedCommand: (command: string | undefined) => boolean
 ): boolean {
+  if (!isPlainObject(hook)) {
+    return false
+  }
   const args = Array.isArray(hook.args) ? hook.args : []
   return (
     isManagedCommand(hook.command) ||
@@ -70,6 +73,9 @@ function reconcileDefinition(
   hook: HookCommandConfig,
   isManagedCommand: (command: string | undefined) => boolean
 ): HookDefinition {
+  if (!isPlainObject(definition)) {
+    return definition
+  }
   let changed = false
   const next: HookDefinition = { ...definition }
   for (const key of DIRECT_COMMAND_KEYS) {

@@ -409,4 +409,68 @@ describe('managed hook settings refresh (#17202)', () => {
       rmSync(home, { recursive: true, force: true })
     }
   })
+
+  it('preserves null and primitive hook records and writes only when a managed command changed', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-settings-nonplain-'))
+    homedirMock.mockReturnValue(home)
+    try {
+      const settingsPath = join(home, '.claude', 'settings.json')
+      mkdirSync(join(home, '.claude'), { recursive: true })
+      // Why: Stop:[null]|primitive and nested hooks:[null] must not throw or rewrite.
+      const junkOnly = JSON.stringify({
+        hooks: { Stop: [null, 'primitive', { hooks: [null] }] }
+      })
+      writeFileSync(settingsPath, junkOnly)
+      const fixedTime = new Date(1_000)
+      utimesSync(settingsPath, fixedTime, fixedTime)
+      await expect(new ClaudeHookService().refreshManagedScripts()).resolves.toBeUndefined()
+      expect(readFileSync(settingsPath, 'utf8')).toBe(junkOnly)
+      expect(statSync(settingsPath).mtimeMs).toBe(fixedTime.getTime())
+
+      const stale = staleWindowsBranchCommand('claude-hook')
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          env: { AWS_REGION: 'us-west-2' },
+          hooks: {
+            Stop: [
+              null,
+              'primitive',
+              { hooks: [null] },
+              { hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] },
+              { hooks: [{ type: 'command', command: stale, timeout: 10 }] }
+            ]
+          }
+        })
+      )
+
+      await expect(new ClaudeHookService().refreshManagedScripts()).resolves.toBeUndefined()
+
+      const parsed = JSON.parse(readFileSync(settingsPath, 'utf8')) as {
+        env?: { AWS_REGION?: string }
+        hooks?: Record<string, unknown[]>
+      }
+      const expected = getManagedLifecycleHook(
+        getManagedScriptPath(CLAUDE_HOOK_SETTINGS),
+        CLAUDE_HOOK_SETTINGS
+      ).command
+      expect(parsed.env).toEqual({ AWS_REGION: 'us-west-2' })
+      expect(Object.keys(parsed.hooks ?? {})).toEqual(['Stop'])
+      const stop = parsed.hooks?.Stop ?? []
+      expect(stop).toHaveLength(5)
+      expect(stop[0]).toBeNull()
+      expect(stop[1]).toBe('primitive')
+      expect(stop[2]).toEqual({ hooks: [null] })
+      expect(stop[3]).toEqual({
+        hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }]
+      })
+      expect(stop[4]).toEqual({
+        hooks: [{ type: 'command', command: expected, timeout: 10 }]
+      })
+      expect(existsSync(join(home, '.orca'))).toBe(false)
+    } finally {
+      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
 })
