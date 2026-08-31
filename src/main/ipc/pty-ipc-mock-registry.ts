@@ -31,6 +31,7 @@ export const buildAgentHookEnvMock: Mock = vi.fn()
 export const clearAgentHookPaneStateMock: Mock = vi.fn()
 export const registerPaneKeyAliasMock: Mock = vi.fn()
 export const piBuildPtyEnvMock: Mock = vi.fn()
+export const piBuildOmpPromptReadinessEnvMock: Mock = vi.fn(() => ({}))
 export const piClearPtyMock: Mock = vi.fn()
 export const trackMock: Mock = vi.fn()
 export const classifyErrorMock: Mock = vi.fn()
@@ -129,6 +130,7 @@ export const agentHookServerModuleMock = () => ({
 export const piTitlebarExtensionModuleMock = () => ({
   piTitlebarExtensionService: {
     buildPtyEnv: piBuildPtyEnvMock,
+    buildOmpPromptReadinessEnv: piBuildOmpPromptReadinessEnvMock,
     clearPty: piClearPtyMock
   }
 })

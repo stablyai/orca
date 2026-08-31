@@ -9,6 +9,8 @@ import {
 } from './orca-runtime-core'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import {
+  AGENT_PROMPT_BRACKETED_PASTE_END,
+  AGENT_PROMPT_BRACKETED_PASTE_START,
   AGENT_PROMPT_SUBMIT,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
@@ -19,6 +21,8 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import { createHash } from 'node:crypto'
+import { normalizeOmpPromptInput } from './omp-prompt-readiness'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -32,6 +36,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
+    await this.waitForOmpPromptReadiness(handle, ptyId, generation, options.signal)
+    this.assertAgentPromptPermissionSafe(
+      permissionBaseline,
+      this.getAgentPromptActivity(handle, ptyId)
+    )
     const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
@@ -48,6 +57,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         this.getAgentPromptActivity(handle, ptyId)
       )
       agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
+      this.assertOmpPromptReadiness(ptyId)
       // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
@@ -87,15 +97,30 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const waitTextCache: AgentPromptWaitTextCache = {}
     const baseline = this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
+    this.assertOmpPromptReadiness(ptyId)
     agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
       throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
     }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
+    const expectedOmpPromptFingerprint =
+      this.getPtyAgent(ptyId) === 'omp'
+        ? createHash('sha256')
+            .update(
+              normalizeOmpPromptInput(
+                pastePayload.slice(
+                  AGENT_PROMPT_BRACKETED_PASTE_START.length,
+                  -AGENT_PROMPT_BRACKETED_PASTE_END.length
+                )
+              )
+            )
+            .digest('hex')
+        : undefined
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
         baseline,
         readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+        expectedOmpPromptFingerprint,
         timeoutMs: effectTimeoutMs,
         signal: options.signal
       })
@@ -111,74 +136,64 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         ? launchAgent
         : null
     const inputAccepted: RuntimeTerminalPromptDelivery = {
-      requestId: options.requestId,
-      stages: ['input_accepted'],
-      provider: settlementAgent ?? 'unsupported',
-      observation: settlementAgent ? 'supported' : 'unsupported',
-      processIncarnation: binding.processIncarnation,
-      generation,
-      baselineWorkingSequence: baseline.workingSequence,
-      baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
-      baselinePermissionSequence: baseline.permissionSequence
+      requestId: options.requestId, stages: ['input_accepted'], provider: settlementAgent ?? 'unsupported',
+      observation: settlementAgent ? 'supported' : 'unsupported', processIncarnation: binding.processIncarnation,
+      generation, baselineWorkingSequence: baseline.workingSequence,
+      baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt, baselinePermissionSequence: baseline.permissionSequence
     }
     const checkpoint: RuntimeTerminalSend = {
-      handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
-      prompt: inputAccepted
+      handle, accepted: true, bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1, prompt: inputAccepted
     }
     options.onInputAccepted?.(checkpoint)
-    // Providers without a lifecycle verifier still get an honest accepted
-    // receipt; they must not fail a Dispatch merely because Orca cannot prove
-    // submission through hooks.
-    if (!settlementAgent) {
-      return { submits: 1, prompt: inputAccepted }
-    }
-    this.registerAgentPromptRequest(
-      ptyId,
-      generation,
-      options.requestId,
-      baseline.workingSequence,
-      baseline.explicitWorkingStartedAt
-    )
+    if (!settlementAgent) return { submits: 1, prompt: inputAccepted }
+    this.registerAgentPromptRequest(ptyId, generation, options.requestId, baseline.workingSequence, baseline.explicitWorkingStartedAt)
     try {
       await verifyAgentPromptSubmission({
-        baseline,
-        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-        acceptTurnStart: (evidence) =>
-          this.acceptAgentPromptTurnStart(
-            ptyId,
-            generation,
-            options.requestId!,
-            baseline.workingSequence,
-            baseline.explicitWorkingStartedAt,
-            evidence
-          ),
-        allowOutputEvidence: false,
-        signal: options.signal,
+        baseline, readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+        acceptTurnStart: (evidence) => this.acceptAgentPromptTurnStart(ptyId, generation, options.requestId!, baseline.workingSequence, baseline.explicitWorkingStartedAt, evidence),
+        allowOutputEvidence: false, expectedOmpPromptFingerprint, signal: options.signal,
         timeoutMs: options.observationTimeoutMs ?? effectTimeoutMs
       })
       this.agentPromptAcceptedGenerationByPtyId.set(ptyId, generation)
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
-      return {
-        submits: 1,
-        prompt: {
-          ...inputAccepted,
-          stages: ['input_accepted', 'turn_started']
-        }
-      }
+      return { submits: 1, prompt: { ...inputAccepted, stages: ['input_accepted', 'turn_started'] } }
     } catch (error) {
-      if (error instanceof Error && error.message === 'agent_prompt_stalled') {
-        return { submits: 1, prompt: inputAccepted }
-      }
+      if (error instanceof Error && error.message === 'agent_prompt_stalled') return { submits: 1, prompt: inputAccepted }
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
-        return {
-          submits: 1,
-          prompt: { ...inputAccepted, observation: 'permission' }
-        }
+        return { submits: 1, prompt: { ...inputAccepted, observation: 'permission' } }
       }
       throw error
+    }
+  }
+
+  private async waitForOmpPromptReadiness(
+    handle: string,
+    ptyId: string,
+    generation: number,
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (this.getPtyAgent(ptyId) !== 'omp') {
+      return
+    }
+    const baseline = this.getAgentPromptActivity(handle, ptyId)
+    const deadline = Date.now() + 60_000
+    while (!this.ompPromptReadinessByPtyId.get(ptyId)?.ready) {
+      assertAgentPromptRequestActive(signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      this.assertAgentPromptPermissionSafe(baseline, this.getAgentPromptActivity(handle, ptyId))
+      if (Date.now() >= deadline) {
+        throw new Error('agent_prompt_not_ready')
+      }
+      await waitForAgentPromptDelay(50, signal)
+    }
+    assertAgentPromptRequestActive(signal)
+    this.assertAgentPromptGeneration(ptyId, generation)
+  }
+
+  private assertOmpPromptReadiness(ptyId: string): void {
+    if (this.getPtyAgent(ptyId) === 'omp' && !this.ompPromptReadinessByPtyId.get(ptyId)?.ready) {
+      throw new Error('agent_prompt_not_ready')
     }
   }
 }

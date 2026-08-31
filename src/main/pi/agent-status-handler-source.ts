@@ -1,5 +1,6 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
+import { getOmpPromptReadinessSourceLines } from './omp-prompt-readiness-source'
 
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
@@ -61,6 +62,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
         ]
 
   return [
+    ...(kind === 'omp' ? getOmpPromptReadinessSourceLines() : []),
     '// Why: pi assistant messages carry content as an array of parts',
     "// ({ type: 'text', text } / tool_use / tool_result / reasoning). We only",
     "// surface the concatenated text parts as the visible 'last assistant",
@@ -114,6 +116,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid && isStatusOwnerAlive(ownerPid)) return',
     `  process.env.${ownerEnv} = selfPid`,
+    ...(kind === 'omp' ? ['  if (process.env.ORCA_PANE_KEY) installOmpPromptReadiness(pi)'] : []),
     ...sessionStartHandler,
     `  pi.on('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,

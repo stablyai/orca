@@ -14,6 +14,7 @@ import {
   tailGainedNewerBlockedReason
 } from './terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { OmpPromptReadiness } from './omp-prompt-readiness'
 
 export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   onPtyData(
@@ -35,6 +36,12 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
     const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
+    let ompReadiness = this.ompPromptReadinessByPtyId.get(ptyId)
+    if (!ompReadiness) {
+      ompReadiness = new OmpPromptReadiness()
+      this.ompPromptReadinessByPtyId.set(ptyId, ompReadiness)
+    }
+    ompReadiness.ingest(data)
     this.recordAgentPromptTerminalEvidence(ptyId, normalizeTerminalChunk(data, '').text)
     this.recordRecentPtyOutputForPathProvenance(ptyId, data)
     // Why: watch terminal output for advertised dev-server URLs (e.g. Vite's

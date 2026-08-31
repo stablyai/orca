@@ -15,6 +15,9 @@ export type AgentPromptActivity = Readonly<{
   generation: number
   permissionSequence: number
   workingSequence: number
+  /** OMP receipts bind a real interactive input to the same agent-start prompt. */
+  ompInputSequence?: number
+  ompInputFingerprint?: string | null
   /** When the hook's current `working` turn began; reaches the runtime with no window and no
    *  title coverage. Pinned across same-state pings, so a refresh alone cannot move it. */
   explicitWorkingStartedAt: number | null
@@ -44,6 +47,7 @@ type AgentPromptVerificationOptions = {
   allowOutputEvidence?: boolean
   signal?: AbortSignal
   timeoutMs?: number
+  expectedOmpPromptFingerprint?: string
 }
 
 export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undefined): number {
@@ -102,7 +106,8 @@ export async function verifyAgentPromptSubmission(
         current,
         options.acceptTurnStart,
         options.allowHookEvidence,
-        options.allowOutputEvidence
+        options.allowOutputEvidence,
+        options.expectedOmpPromptFingerprint
       )
     ) {
       return
@@ -119,7 +124,8 @@ export async function verifyAgentPromptSubmission(
       current,
       options.acceptTurnStart,
       options.allowHookEvidence,
-      options.allowOutputEvidence
+      options.allowOutputEvidence,
+      options.expectedOmpPromptFingerprint
     )
   ) {
     return
@@ -132,8 +138,18 @@ function agentPromptEffectAccepted(
   current: AgentPromptActivity,
   acceptTurnStart?: (evidence: AgentPromptTurnStartEvidence) => boolean,
   allowHookEvidence = true,
-  allowOutputEvidence = true
+  allowOutputEvidence = true,
+  expectedOmpPromptFingerprint?: string
 ): boolean {
+  // Why: autonomous OMP turns also emit working titles/status/before_agent_start.
+  // Only a fresh receipt for this exact interactive prompt proves our input landed.
+  if (baseline.agent === 'omp' || current.agent === 'omp') {
+    return (
+      expectedOmpPromptFingerprint !== undefined &&
+      current.ompInputFingerprint === expectedOmpPromptFingerprint &&
+      (current.ompInputSequence ?? 0) > (baseline.ompInputSequence ?? 0)
+    )
+  }
   if (baseline.agent === 'codex' || current.agent === 'codex') {
     return current.terminalWorkingSequence > baseline.terminalWorkingSequence
   }

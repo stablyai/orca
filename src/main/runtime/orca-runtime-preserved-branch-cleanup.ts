@@ -43,6 +43,7 @@ import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-c
 import { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
+import { OmpPromptReadiness } from './omp-prompt-readiness'
 
 export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
   protected readonly preservedBranchCleanup = new RuntimePreservedBranchCleanup(() =>
@@ -129,6 +130,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly agentPromptTerminalWorkingSequenceByPtyId = new Map<string, number>()
 
   protected readonly agentPromptTerminalEvidenceCarryByPtyId = new Map<string, string>()
+
+  protected readonly ompPromptReadinessByPtyId = new Map<string, OmpPromptReadiness>()
 
   protected readonly agentPromptAcceptedGenerationByPtyId = new Map<string, number>()
 
