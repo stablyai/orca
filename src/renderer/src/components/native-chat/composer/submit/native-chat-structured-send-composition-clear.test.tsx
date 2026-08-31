@@ -78,7 +78,13 @@ vi.mock('../../telemetry/native-chat-telemetry', () => ({
   emitNativeChatSendClassified: vi.fn()
 }))
 vi.mock('../pickers/use-native-chat-skills', () => ({
-  useNativeChatSkills: () => ({ status: 'ready', skills: [], error: null, retry: () => {} })
+  useNativeChatSkills: () => ({
+    status: 'ready',
+    skills: [],
+    commands: [],
+    error: null,
+    retry: () => {}
+  })
 }))
 vi.mock('../../../dictation/dictation-control-events', () => ({
   dispatchDictationControl: vi.fn()

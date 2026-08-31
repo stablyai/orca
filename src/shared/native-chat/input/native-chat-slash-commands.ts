@@ -2,6 +2,11 @@
 
 import type { AgentSessionSlashCommand } from '../../agent-session/agent-session-wire'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import {
+  isCustomSlashCommandToken,
+  sanitizeCustomSlashCommandDescription,
+  type DiscoveredSlashCommand
+} from '../../custom-slash-commands'
 
 /** Terminal replies: composer answers locally without sending; transcript surfaces an agent-written row; absent means terminal/effect-only feedback. */
 export type NativeChatCommandReply = 'composer' | 'transcript'
@@ -131,6 +136,28 @@ const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggesti
  *  `/` menu is never empty for a recognized agent. */
 export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return COMMANDS_BY_AGENT[agent] ?? COMMON_COMMANDS
+}
+
+/** Fold discovered `.claude/commands` into the catalog so picker, send classification and dispatch read one list.
+ *  Built-ins win collisions (the TUI resolves them first); filesystem names are validated here. */
+export function mergeDiscoveredSlashCommands(
+  builtins: readonly SlashCommandSuggestion[],
+  discovered: readonly DiscoveredSlashCommand[]
+): readonly SlashCommandSuggestion[] {
+  if (discovered.length === 0) {
+    return builtins
+  }
+  const seen = new Set(builtins.map((command) => command.name))
+  const merged = [...builtins]
+  for (const command of discovered) {
+    if (seen.has(command.name) || !isCustomSlashCommandToken(command.name)) {
+      continue
+    }
+    seen.add(command.name)
+    const description = sanitizeCustomSlashCommandDescription(command.description)
+    merged.push({ name: command.name, ...(description ? { description } : {}) })
+  }
+  return merged
 }
 
 /** Session reports own command presence/descriptions; curated rows fill missing prose. Exclude skills into their own picker group. */

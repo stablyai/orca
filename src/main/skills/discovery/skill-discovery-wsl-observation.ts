@@ -1,5 +1,6 @@
 import { posix as pathPosix } from 'node:path'
 import { summarizeSkillMarkdown } from '../../../shared/skill-metadata'
+import type { DiscoveredSlashCommand } from '../../../shared/custom-slash-commands'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
@@ -22,6 +23,7 @@ export type WslSkillDiscoveryObservation = {
   rows: { canonicalSkillFilePath: string; skill: DiscoveredSkill }[]
   sources: SkillDiscoverySource[]
   scannedAt: number
+  commands?: DiscoveredSlashCommand[]
 }
 
 function readProtocolField(fields: string[], index: number): string {
@@ -166,7 +168,8 @@ export function projectWslSkillDiscovery(
     sources: observation.sources
       .filter((source) => rootMayContainSourceKind(source, sourceKinds))
       .map((source) => ({ ...source, providers: [...source.providers] })),
-    scannedAt: observation.scannedAt
+    scannedAt: observation.scannedAt,
+    ...(observation.commands ? { commands: observation.commands } : {})
   }
 }
 
