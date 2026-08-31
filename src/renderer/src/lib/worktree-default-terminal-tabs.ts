@@ -28,7 +28,6 @@ export function applyDefaultTerminalTabs(
   setup: WorktreeSetupLaunch | undefined,
   issueCommand: IssueCommandLaunch | undefined,
   defaultTabs: WorktreeDefaultTabsLaunch | undefined,
-  wrappedSetupCommandStr: string | undefined,
   opts: InitialTerminalOptions | undefined
 ): string | null {
   if (!defaultTabs || store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
@@ -99,14 +98,6 @@ export function applyDefaultTerminalTabs(
     }
     store.queueTabStartupCommand(firstTabId, startup)
   }
-  queueSetupAndIssueCommands(
-    store,
-    worktreeId,
-    firstTabId,
-    setup,
-    issueCommand,
-    wrappedSetupCommandStr,
-    opts
-  )
+  queueSetupAndIssueCommands(store, worktreeId, firstTabId, setup, issueCommand, opts)
   return firstTabId
 }

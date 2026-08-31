@@ -14,7 +14,7 @@ import {
   enforceLocalPtySpawnEnvironmentOverrides
 } from './local-pty-spawn-environment'
 import { awaitCancelableLocalPtySpawn, reattachLocalPty } from './local-pty-spawn-state'
-import { spawnShellWithFallback } from './local-pty-utils'
+import { spawnDirectPty, spawnShellWithFallback } from './local-pty-utils'
 import { updateHistoryEnvForFallback, type HistoryInjectionResult } from '../terminal-history'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
 
@@ -58,8 +58,12 @@ export async function spawnLocalPty(
     env: finalEnv
   })
 
-  // Why: the async macOS capability probe runs before node-pty exists.
-  await awaitCancelableLocalPtySpawn(id, prepareMacosTccLoginShell())
+  // Why: the async macOS capability probe runs before node-pty exists. Direct executable
+  // launches intentionally bypass the login-shell/TCC wrapper so the provider owns the child
+  // process whose exit status it reports.
+  if (!args.directExec) {
+    await awaitCancelableLocalPtySpawn(id, prepareMacosTccLoginShell())
+  }
   if (args.signal?.aborted) {
     throw new Error('client_disconnected')
   }
@@ -68,24 +72,39 @@ export async function spawnLocalPty(
   if (concurrentWinner) {
     return concurrentWinner
   }
-  const spawnResult = spawnShellWithFallback({
-    shellPath: plan.shellPath,
-    shellArgs: plan.shellArgs,
-    cols: args.cols,
-    rows: args.rows,
-    cwd: plan.effectiveCwd,
-    env: finalEnv,
-    termName: finalEnv.TERM,
-    ptySpawn: pty.spawn,
-    getShellReadyConfig: plan.getFallbackShellReadyConfig,
-    launchEnvKeys: plan.primaryLaunchEnvKeys,
-    // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
-    onBeforeFallbackSpawn: historyResult?.historyDir
-      ? (env, fallbackShell) =>
-          updateHistoryEnvForFallback(env, fallbackShell, historyResult as HistoryInjectionResult)
-      : undefined,
-    windowsFallbackAttempts: plan.windowsFallbackAttempts
-  })
+  const spawnResult = args.directExec
+    ? spawnDirectPty({
+        executable: args.directExec.executable,
+        argv: args.directExec.argv,
+        cols: args.cols,
+        rows: args.rows,
+        cwd: plan.effectiveCwd,
+        env: finalEnv,
+        termName: finalEnv.TERM,
+        ptySpawn: pty.spawn
+      })
+    : spawnShellWithFallback({
+        shellPath: plan.shellPath,
+        shellArgs: plan.shellArgs,
+        cols: args.cols,
+        rows: args.rows,
+        cwd: plan.effectiveCwd,
+        env: finalEnv,
+        termName: finalEnv.TERM,
+        ptySpawn: pty.spawn,
+        getShellReadyConfig: plan.getFallbackShellReadyConfig,
+        launchEnvKeys: plan.primaryLaunchEnvKeys,
+        // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
+        onBeforeFallbackSpawn: historyResult?.historyDir
+          ? (env, fallbackShell) =>
+              updateHistoryEnvForFallback(
+                env,
+                fallbackShell,
+                historyResult as HistoryInjectionResult
+              )
+          : undefined,
+        windowsFallbackAttempts: plan.windowsFallbackAttempts
+      })
   args.onPtySpawnCommitted?.()
   plan.shellPath = spawnResult.shellPath
   // Why: a Windows fallback embeds its startup command in argv; honor the winning shell's delivery flag to avoid a double write.

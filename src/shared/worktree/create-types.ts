@@ -142,9 +142,15 @@ export type CreateWorktreeResult = {
     requested: 'run' | 'skip' | 'inherit'
     hookFound: boolean
     startupPolicy: 'start-immediately' | 'wait-for-setup'
-    state: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
+    state: 'running' | 'succeeded' | 'failed' | 'skipped' | 'not_configured' | 'spawn_failed'
+    /** Additive host-owned operation metadata; older clients may ignore it. */
+    operation?: 'host-owned-setup'
+    /** Provider exit evidence for wait-for-setup creates when available. */
+    exitCode?: number
     terminalHandle?: string
   }
+  /** True when a requested wait-for-setup operation could not be proven; callers must not launch. */
+  startupBlocked?: boolean
   defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
   baseFallback?: WorktreeCreateBaseFallback

@@ -8,6 +8,7 @@ export type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
   PtyDataEvent,
+  PtyExitPayload,
   PtyProcessInfo,
   PtyProviderBufferSnapshot,
   PtySpawnOptions,

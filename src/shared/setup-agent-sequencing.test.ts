@@ -7,10 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getDefaultRepoHookSettings } from './constants'
 import {
+  applySequencedSetupLaunch,
   createSequencedSetupAgentCommands,
   createSetupAgentSequenceNonce,
   getSetupAgentSequenceShellForTests,
   resolveSetupAgentSequenceLaunchCommand,
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from './setup-agent-sequencing'
@@ -20,6 +22,9 @@ import {
 } from './setup-agent-startup-policy'
 
 const TEMP_DIRS: string[] = []
+// Why: TTYHOG, the canonical-mode input queue a PTY applies before the shell's line editor
+// takes over. macOS and the BSDs use 1024; anything longer loses its submit byte.
+const POSIX_CANONICAL_INPUT_FLOOR_BYTES = 1024
 const WINDOWS_PROCESS_TEST_TIMEOUT_MS = 30_000
 
 afterEach(() => {
@@ -61,13 +66,16 @@ describe('createSequencedSetupAgentCommands', () => {
       waitTimeoutSeconds: 9
     })
 
+    const setupScript = result.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]
     expect(result.setupCommand).toMatch(/^bash -lc /)
+    // Why: the command stays short enough to survive a PTY's canonical input cap; the gate that
+    // records setup's outcome rides in the env, with the bare runner as the inline fallback.
     expect(result.setupCommand).toContain('bash /repo/.git/orca/setup-runner.sh')
-    expect(result.setupCommand).toContain('printf')
-    expect(result.setupCommand).toContain('nonce-123 "$status"')
-    expect(result.setupCommand).toContain(
-      'mv -f /repo/.git/orca/setup-runner.sh.nonce-123.done.tmp'
-    )
+    expect(setupScript).toContain('printf')
+    expect(setupScript).toContain('orca_record_setup_status "$?"\' EXIT')
+    expect(setupScript).toContain('nonce-123 "$1"')
+    expect(setupScript).toContain('mv -f /repo/.git/orca/setup-runner.sh.nonce-123.done.tmp')
+    expect(setupScript).toContain('/repo/.git/orca/setup-runner.sh.nonce-123.done.started')
     const startupScript = result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
     expect(result.startupCommand).toBe(
       `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`
@@ -118,16 +126,18 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'second-launch'
     })
 
-    expect(first.setupCommand).toContain('/repo/.git/orca/setup-runner.sh.first-launch.done')
+    const firstSetupScript = first.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]
+    const secondSetupScript = second.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]
+    expect(firstSetupScript).toContain('/repo/.git/orca/setup-runner.sh.first-launch.done')
     expect(first.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
       '/repo/.git/orca/setup-runner.sh.first-launch.done'
     )
-    expect(second.setupCommand).toContain('/repo/.git/orca/setup-runner.sh.second-launch.done')
+    expect(secondSetupScript).toContain('/repo/.git/orca/setup-runner.sh.second-launch.done')
     expect(second.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
       '/repo/.git/orca/setup-runner.sh.second-launch.done'
     )
-    expect(first.setupCommand).not.toContain('/repo/.git/orca/setup-runner.sh.second-launch.done')
-    expect(second.setupCommand).not.toContain('/repo/.git/orca/setup-runner.sh.first-launch.done')
+    expect(firstSetupScript).not.toContain('/repo/.git/orca/setup-runner.sh.second-launch.done')
+    expect(secondSetupScript).not.toContain('/repo/.git/orca/setup-runner.sh.first-launch.done')
   })
 
   it('keeps simple POSIX startup commands eligible for exec when quoted text has separators', () => {
@@ -172,7 +182,7 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.setupCommand).toContain(
       'bash /home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh'
     )
-    expect(result.setupCommand).toContain(
+    expect(result.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(
       '/home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh.nonce-wsl.done'
     )
     expect(result.setupCommand).not.toContain('wsl.localhost')
@@ -204,7 +214,7 @@ describe('createSequencedSetupAgentCommands', () => {
     })
 
     expect(result.setupCommand).toContain('bash /mnt/c/repo/.git/orca/setup-runner.sh')
-    expect(result.setupCommand).toContain(
+    expect(result.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(
       '/mnt/c/repo/.git/orca/setup-runner.sh.nonce-wsl-shell.done'
     )
     expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
@@ -237,7 +247,7 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(startupPowerShell).toContain('Timed out waiting for setup before starting agent.')
     expect(startupPowerShell).toContain('Setup failed; skipping agent startup.')
     expect(startupPowerShell).toContain(
-      'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue'
+      'Remove-Item -LiteralPath $marker, $tmp, $started -Force -ErrorAction SilentlyContinue'
     )
     expect(result.startupCommand).not.toContain('%ERRORLEVEL%')
     expect(startupPowerShell).toContain('Invoke-Expression')
@@ -275,7 +285,7 @@ describe('createSequencedSetupAgentCommands', () => {
       'eval "$ORCA_SEQUENCED_STARTUP_COMMAND"'
     )
     // Why: bash writes and reads the marker here, so it needs the /c/... form of the path.
-    expect(result.setupCommand).toContain(
+    expect(result.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(
       '/c/repo/.git/orca/setup-runner.cmd.nonce-gitbash-cmd.done'
     )
     expect(result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]).toContain(
@@ -378,7 +388,10 @@ describe('createSequencedSetupAgentCommands', () => {
       expect(readFileSync(markerPath, 'utf8')).toBe('stale:0\n')
 
       const setupExit = await waitForExit(
-        spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.setupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.setupEnv }
+        })
       )
       expect(setupExit.code).toBe(0)
 
@@ -412,7 +425,10 @@ describe('createSequencedSetupAgentCommands', () => {
       })
 
       const setupExitPromise = waitForExit(
-        spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.setupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.setupEnv }
+        })
       )
       const startupExit = await waitForExit(
         spawn('bash', ['-lc', commands.startupCommand], {
@@ -462,7 +478,10 @@ describe('createSequencedSetupAgentCommands', () => {
       })
 
       const setupExitPromise = waitForExit(
-        spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
+        spawn('bash', ['-lc', commands.setupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.setupEnv }
+        })
       )
       const startupExit = await waitForExit(
         spawn('bash', ['-lc', commands.startupCommand], {
@@ -593,3 +612,296 @@ function waitForExit(
     })
   })
 }
+
+describe('setup outcome recording', () => {
+  it('keeps the POSIX setup submission below the canonical input floor', () => {
+    // Regression: the gated setup command inlined the runner path three times plus the nonce.
+    // For an ordinary worktree that is 1033 bytes, past the 1024-byte canonical input cap a PTY
+    // applies before the shell's line editor takes over, so the submit byte was dropped and the
+    // marker the agent gate polls was never written — a two-hour silent wait.
+    const result = createSequencedSetupAgentCommands({
+      runnerScriptPath:
+        '/Users/exampleuser12/orca/orca/.git/worktrees/fix-agent-hooks-post-posix-payloads-as-json/orca/setup-runner.sh',
+      startupCommand: 'claude',
+      platform: 'posix',
+      nonce: 'b3f1c0de-1234-4abc-9def-0123456789ab'
+    })
+
+    expect(result.setupCommand.length).toBeLessThan(POSIX_CANONICAL_INPUT_FLOOR_BYTES)
+    expect(result.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(
+      'fix-agent-hooks-post-posix-payloads-as-json'
+    )
+  })
+
+  it('pairs the gated setup command with the env that carries its script', () => {
+    const sequenced = createSequencedSetupAgentCommands({
+      runnerScriptPath: '/repo/.git/orca/setup-runner.sh',
+      startupCommand: 'claude',
+      platform: 'posix',
+      nonce: 'paired-nonce'
+    })
+    const launch = applySequencedSetupLaunch(
+      {
+        runnerScriptPath: '/repo/.git/orca/setup-runner.sh',
+        envVars: { ORCA_WORKSPACE_PATH: '/repo' },
+        waitForAgentStartup: true
+      },
+      sequenced
+    )
+
+    expect(launch.command).toBe(sequenced.setupCommand)
+    expect(launch.envVars).toEqual({
+      ORCA_WORKSPACE_PATH: '/repo',
+      [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]:
+        sequenced.setupEnv?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]
+    })
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'records a non-zero setup status so the agent gate reports the failure',
+    async () => {
+      const tempDir = makeTempDir()
+      const runnerScriptPath = join(tempDir, 'setup-runner.sh')
+      const logPath = join(tempDir, 'sequence.log')
+
+      writeExecutable(runnerScriptPath, '#!/bin/sh\nexit 7\n')
+
+      const commands = createSequencedSetupAgentCommands({
+        runnerScriptPath,
+        startupCommand: `printf 'agent-start\\n' >> ${quoteSh(logPath)}`,
+        platform: 'posix',
+        nonce: 'failing-setup',
+        waitTimeoutSeconds: 30,
+        startGraceSeconds: 25
+      })
+
+      const startupExitPromise = waitForExit(
+        spawn('bash', ['-lc', commands.startupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.startupEnv }
+        })
+      )
+      const setupExit = await waitForExit(
+        spawn('bash', ['-lc', commands.setupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.setupEnv }
+        })
+      )
+      const startupExit = await startupExitPromise
+
+      expect(setupExit.code).toBe(7)
+      expect(startupExit.code).toBe(7)
+      expect(startupExit.stderr).toContain('Setup failed; skipping agent startup.')
+      expect(startupExit.stderr).toContain('Setup exited with status 7')
+      expect(readIfExists(logPath)).toBe('')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'records an outcome when the setup pane is torn down mid-run',
+    async () => {
+      const tempDir = makeTempDir()
+      const runnerScriptPath = join(tempDir, 'setup-runner.sh')
+      const markerPath = `${runnerScriptPath}.killed-setup.done`
+
+      writeExecutable(runnerScriptPath, '#!/bin/sh\nsleep 30\n')
+
+      const commands = createSequencedSetupAgentCommands({
+        runnerScriptPath,
+        startupCommand: 'printf ready',
+        platform: 'posix',
+        nonce: 'killed-setup'
+      })
+
+      // Why: closing a Setup tab signals the pane's whole process group, not just the gate, so
+      // the teardown is reproduced that way — signalling the gate alone leaves it blocked in its
+      // foreground child and bash defers the trap until that child returns.
+      const setup = spawn('bash', ['-lc', commands.setupCommand], {
+        stdio: 'pipe',
+        detached: true,
+        env: { ...process.env, ...commands.setupEnv }
+      })
+      const setupExitPromise = waitForExit(setup)
+      for (let attempt = 0; attempt < 60 && !readIfExists(`${markerPath}.started`); attempt += 1) {
+        await sleep(50)
+      }
+      expect(readIfExists(`${markerPath}.started`)).toContain('killed-setup')
+      process.kill(-(setup.pid as number), 'SIGTERM')
+      await setupExitPromise
+
+      expect(readIfExists(markerPath)).toBe('killed-setup:143\n')
+    },
+    15_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'records an outcome when the setup runner cannot be executed at all',
+    async () => {
+      const tempDir = makeTempDir()
+      const runnerScriptPath = join(tempDir, 'setup-runner.sh')
+      const markerPath = `${runnerScriptPath}.missing-runner.done`
+      const logPath = join(tempDir, 'sequence.log')
+
+      // The runner file is never written, so the gate's own launch of it fails.
+      const commands = createSequencedSetupAgentCommands({
+        runnerScriptPath,
+        startupCommand: `printf 'agent-start\\n' >> ${quoteSh(logPath)}`,
+        platform: 'posix',
+        nonce: 'missing-runner',
+        waitTimeoutSeconds: 30,
+        startGraceSeconds: 25
+      })
+
+      const startupExitPromise = waitForExit(
+        spawn('bash', ['-lc', commands.startupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.startupEnv }
+        })
+      )
+      const setupExit = await waitForExit(
+        spawn('bash', ['-lc', commands.setupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.setupEnv }
+        })
+      )
+      const startupExit = await startupExitPromise
+
+      expect(setupExit.code).toBe(127)
+      expect(readIfExists(markerPath)).toBe('')
+      expect(startupExit.code).toBe(127)
+      expect(startupExit.stderr).toContain('Setup exited with status 127')
+      expect(readIfExists(logPath)).toBe('')
+    },
+    15_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'fails closed when setup is never started at all',
+    async () => {
+      const tempDir = makeTempDir()
+      const runnerScriptPath = join(tempDir, 'setup-runner.sh')
+      const logPath = join(tempDir, 'sequence.log')
+
+      writeExecutable(runnerScriptPath, '#!/bin/sh\nexit 0\n')
+
+      const commands = createSequencedSetupAgentCommands({
+        runnerScriptPath,
+        startupCommand: `printf 'agent-start\\n' >> ${quoteSh(logPath)}`,
+        platform: 'posix',
+        nonce: 'never-started',
+        waitTimeoutSeconds: 120,
+        startGraceSeconds: 1
+      })
+
+      // No setup process is ever launched, so nothing will write the marker.
+      const startupExit = await waitForExit(
+        spawn('bash', ['-lc', commands.startupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.startupEnv }
+        })
+      )
+
+      expect(startupExit.code).toBe(125)
+      expect(startupExit.stderr).toContain(
+        'Setup never reported starting within 1s; the agent was not started'
+      )
+      expect(readIfExists(logPath)).toBe('')
+    },
+    15_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'still records an outcome when the setup script env never reaches the setup terminal',
+    async () => {
+      const tempDir = makeTempDir()
+      const runnerScriptPath = join(tempDir, 'setup-runner.sh')
+      const setupLogPath = join(tempDir, 'setup.log')
+      const logPath = join(tempDir, 'sequence.log')
+
+      writeExecutable(
+        runnerScriptPath,
+        ['#!/bin/sh', `printf 'setup-ran\\n' >> ${quoteSh(setupLogPath)}`].join('\n')
+      )
+
+      const commands = createSequencedSetupAgentCommands({
+        runnerScriptPath,
+        startupCommand: `printf 'agent-start\\n' >> ${quoteSh(logPath)}`,
+        platform: 'posix',
+        nonce: 'missing-setup-env',
+        waitTimeoutSeconds: 120,
+        startGraceSeconds: 2
+      })
+
+      const startupExitPromise = waitForExit(
+        spawn('bash', ['-lc', commands.startupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.startupEnv }
+        })
+      )
+      // The wrapped launch record was dropped on the way to the setup terminal, so the gated
+      // script is absent from its env. Setup may still run, but the agent must fail closed because
+      // no authoritative setup result was recorded.
+      const setupExit = await waitForExit(
+        spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe', env: { ...process.env } })
+      )
+      const startupExit = await startupExitPromise
+
+      expect(setupExit.code).toBe(0)
+      expect(readFileSync(setupLogPath, 'utf8')).toBe('setup-ran\n')
+      expect(startupExit.code).toBe(125)
+      expect(startupExit.stderr).toContain(
+        'Setup never reported starting within 2s; the agent was not started'
+      )
+      expect(readIfExists(logPath)).toBe('')
+    },
+    15_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'reports progress instead of waiting silently',
+    async () => {
+      const tempDir = makeTempDir()
+      const runnerScriptPath = join(tempDir, 'setup-runner.sh')
+
+      writeExecutable(runnerScriptPath, '#!/bin/sh\nexit 0\n')
+
+      const commands = createSequencedSetupAgentCommands({
+        runnerScriptPath,
+        startupCommand: 'printf ready',
+        platform: 'posix',
+        nonce: 'progress-sequence',
+        waitTimeoutSeconds: 4,
+        startGraceSeconds: 120,
+        progressIntervalSeconds: 1
+      })
+
+      const startupExit = await waitForExit(
+        spawn('bash', ['-lc', commands.startupCommand], {
+          stdio: 'pipe',
+          env: { ...process.env, ...commands.startupEnv }
+        })
+      )
+
+      expect(startupExit.code).toBe(124)
+      expect(startupExit.stderr).toContain(
+        'Still waiting for setup to finish before starting agent'
+      )
+      expect(startupExit.stderr).toContain('Waited 4s without a result')
+    },
+    15_000
+  )
+
+  it('bounds the default wait well under the two-hour silent timeout it replaced', () => {
+    const result = createSequencedSetupAgentCommands({
+      runnerScriptPath: '/repo/.git/orca/setup-runner.sh',
+      startupCommand: 'claude',
+      platform: 'posix',
+      nonce: 'default-bound'
+    })
+    const startupScript = result.startupEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV] ?? ''
+
+    expect(startupScript).toContain('deadline=$((SECONDS + 1800))')
+    expect(startupScript).toContain('start_deadline=$((SECONDS + 45))')
+    expect(startupScript).toContain('next_report=$((SECONDS + 15))')
+  })
+})

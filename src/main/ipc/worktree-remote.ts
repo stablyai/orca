@@ -127,7 +127,6 @@ import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
 } from '../../shared/setup-runner-command'
-import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
 import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
 import {
@@ -175,6 +174,9 @@ type StagedStartupResult = {
   startupTerminal?: CreateWorktreeResult['startupTerminal']
   activationSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
+  setupTerminalHandle?: string
+  setupExitCode?: number
+  setupSequencingFailed?: boolean
   warning?: string
 }
 
@@ -345,7 +347,7 @@ function countNonEmptyGitOutputLines(output: string): number {
   return output.split(/\r?\n/).filter((line) => line.trim().length > 0).length
 }
 
-async function spawnLocalStartupAndSetupTerminals(args: {
+async function spawnHostStartupAndSetupTerminals(args: {
   runtime: OrcaRuntimeService | undefined
   worktree: Pick<Worktree, 'id' | 'path'>
   startup: CreateWorktreeArgs['startup']
@@ -355,33 +357,73 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
 }): Promise<StagedStartupResult> {
   const { runtime, worktree, startup, setup, defaultTabs, settings, createdWithAgent } = args
-  if (!runtime || !startup || defaultTabs?.tabs.length) {
+  if (!runtime || !startup || (defaultTabs?.tabs.length && setup?.waitForAgentStartup !== true)) {
     return { didSpawnSetup: false }
   }
 
   let warning: string | undefined
+  let didSpawnSetup = false
+  let setupTerminalHandle: string | undefined
+  let setupExitCode: number | undefined
+  const requiresHostSequencing = setup?.waitForAgentStartup === true
   let startupTerminalHandle: string | null = null
   let startupTerminal: CreateWorktreeResult['startupTerminal']
 
-  let sequencedStartup = startup
-  let wrappedSetupCommandStr: string | undefined
-  if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForLaunch(
-      setup,
-      process.platform === 'win32' ? 'windows' : 'posix'
-    )
-    const sequenced = createSequencedSetupAgentCommands({
-      runnerScriptPath: setup.runnerScriptPath,
-      startupCommand: startup.command,
-      platform,
-      shell: setup.shell
-    })
-    sequencedStartup = {
-      ...startup,
-      command: sequenced.startupCommand,
-      ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
+  // Setup sequencing is host-owned. Without the host capability, fail closed instead of
+  // launching an agent that can race setup or cause the setup hook to run twice.
+  if (
+    requiresHostSequencing &&
+    (typeof runtime.provisionManagedWorktreeTerminals !== 'function' ||
+      typeof runtime.waitForSetupTerminalEvidence !== 'function')
+  ) {
+    return {
+      didSpawnSetup: false,
+      setupSequencingFailed: true,
+      warning: `Setup sequencing is unavailable for ${worktree.path}; the agent was not started.`
     }
-    wrappedSetupCommandStr = sequenced.setupCommand
+  }
+
+  const sequencedStartup = startup
+
+  if (requiresHostSequencing) {
+    try {
+      const provisioned = await runtime.provisionManagedWorktreeTerminals({
+        worktreeSelector: `id:${worktree.id}`,
+        worktreeId: worktree.id,
+        worktreePath: worktree.path,
+        setup,
+        hasStartupTerminal: false,
+        reservePrimaryTerminal: false,
+        setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(
+          setup!,
+          process.platform === 'win32' ? 'windows' : 'posix'
+        ),
+        observeSetupCompletion: false
+      })
+      if (!provisioned.setupTerminalHandle) {
+        throw new Error('setup_spawn_failed')
+      }
+      setupTerminalHandle = provisioned.setupTerminalHandle
+      const evidence = await runtime.waitForSetupTerminalEvidence(provisioned.setupTerminalHandle)
+      setupExitCode = evidence.exitCode
+      if (
+        evidence.cause.kind !== 'exited' ||
+        evidence.cause.exitCode !== 0 ||
+        evidence.exitCode !== 0
+      ) {
+        throw new Error(`setup_exit_${evidence.exitCode}`)
+      }
+      didSpawnSetup = true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        didSpawnSetup: false,
+        setupSequencingFailed: true,
+        ...(setupTerminalHandle ? { setupTerminalHandle } : {}),
+        ...(setupExitCode !== undefined ? { setupExitCode } : {}),
+        warning: `Setup did not complete successfully for ${worktree.path}; the agent was not started (${message}).`
+      }
+    }
   }
 
   try {
@@ -420,14 +462,48 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     const message = error instanceof Error ? error.message : String(error)
     warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
     console.warn(`[worktree-create] ${warning}`)
-    return { didSpawnSetup: false, warning }
+    return {
+      didSpawnSetup,
+      ...(setupTerminalHandle ? { setupTerminalHandle } : {}),
+      ...(setupExitCode !== undefined ? { setupExitCode } : {}),
+      warning
+    }
   }
 
-  let didSpawnSetup = false
+  if (setup?.waitForAgentStartup === true && didSpawnSetup) {
+    // The gated branch above already started setup and waited for normal provider exit.
+    if (defaultTabs?.tabs.length && startupTerminalHandle) {
+      try {
+        await runtime.provisionManagedWorktreeTerminals({
+          worktreeSelector: `id:${worktree.id}`,
+          worktreeId: worktree.id,
+          worktreePath: worktree.path,
+          defaultTabs,
+          primaryTerminalHandle: startupTerminalHandle,
+          hasStartupTerminal: true,
+          setupCommandPlatform: process.platform === 'win32' ? 'windows' : 'posix',
+          surfaceOwner: false
+        })
+      } catch (error) {
+        warning = appendWorktreeCreateWarning(
+          warning,
+          `failed to create default terminals for ${worktree.path}: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    }
+    return {
+      ...(startupTerminal ? { startupTerminal } : {}),
+      didSpawnSetup: true,
+      ...(setupTerminalHandle ? { setupTerminalHandle } : {}),
+      ...(setupExitCode !== undefined ? { setupExitCode } : {}),
+      ...(warning ? { warning } : {})
+    }
+  }
   if (setup) {
     try {
+      const setupLaunch = setup
       const setupCommand =
-        wrappedSetupCommandStr ??
+        setupLaunch.command ??
         buildSetupRunnerCommand(
           setup.runnerScriptPath,
           getSetupRunnerCommandPlatformForLaunch(
@@ -446,14 +522,14 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         await runtime.splitTerminal(startupTerminalHandle, {
           direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
           command: setupCommand,
-          env: setup.envVars,
+          env: setupLaunch.envVars,
           activate: false
         })
       } else {
         await runtime.createTerminal(`id:${worktree.id}`, {
           title: 'Setup',
           command: setupCommand,
-          env: setup.envVars,
+          env: setupLaunch.envVars,
           activate: false
         })
       }
@@ -467,18 +543,11 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   }
 
   return {
-    ...(setup && !didSpawnSetup
-      ? {
-          activationSetup: {
-            ...setup,
-            ...(startupTerminalHandle && wrappedSetupCommandStr
-              ? { command: wrappedSetupCommandStr }
-              : {})
-          }
-        }
-      : {}),
+    ...(setup && !didSpawnSetup && !requiresHostSequencing ? { activationSetup: setup } : {}),
     ...(startupTerminal ? { startupTerminal } : {}),
     didSpawnSetup,
+    ...(setupTerminalHandle ? { setupTerminalHandle } : {}),
+    ...(setupExitCode !== undefined ? { setupExitCode } : {}),
     ...(warning ? { warning } : {})
   }
 }
@@ -1535,7 +1604,8 @@ export async function createRemoteWorktree(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
   const provider = requireSshGitProvider(repo.connectionId!)
@@ -1972,6 +2042,18 @@ export async function createRemoteWorktree(
     })
   }
 
+  const stagedStartup = await timing.time('spawn_startup_terminal', () =>
+    spawnHostStartupAndSetupTerminals({
+      runtime,
+      worktree: { id: worktree.id, path: created.path },
+      startup: args.startup,
+      setup,
+      defaultTabs,
+      settings,
+      createdWithAgent: args.createdWithAgent
+    })
+  )
+
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree: {
@@ -1983,11 +2065,43 @@ export async function createRemoteWorktree(
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
-    ...(setup ? { setup } : {}),
+    ...(stagedStartup.activationSetup && !stagedStartup.setupSequencingFailed
+      ? { setup: stagedStartup.activationSetup }
+      : setup && !stagedStartup.didSpawnSetup && !stagedStartup.setupSequencingFailed
+        ? { setup }
+        : {}),
+    ...(stagedStartup.setupSequencingFailed ? { startupBlocked: true } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
+    ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
+    setupReceipt: {
+      requested: args.setupDecision ?? 'inherit',
+      hookFound: Boolean(setup),
+      startupPolicy: setup?.waitForAgentStartup
+        ? ('wait-for-setup' as const)
+        : ('start-immediately' as const),
+      state: !setup
+        ? ('not_configured' as const)
+        : args.setupDecision === 'skip'
+          ? ('skipped' as const)
+          : stagedStartup.setupExitCode !== undefined
+            ? stagedStartup.setupExitCode === 0
+              ? ('succeeded' as const)
+              : ('failed' as const)
+            : stagedStartup.didSpawnSetup
+              ? ('running' as const)
+              : ('spawn_failed' as const),
+      ...(stagedStartup.setupExitCode !== undefined
+        ? { exitCode: stagedStartup.setupExitCode }
+        : {}),
+      ...(stagedStartup.setupTerminalHandle
+        ? { terminalHandle: stagedStartup.setupTerminalHandle }
+        : {}),
+      ...(setup?.waitForAgentStartup === true ? { operation: 'host-owned-setup' as const } : {})
+    },
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {}),
     ...(baseFallback ? { baseFallback } : {}),
+    ...(stagedStartup.warning ? { warning: stagedStartup.warning } : {}),
     timing: timing.finish()
   }
 }
@@ -2699,7 +2813,7 @@ export async function createLocalWorktree(
   })
 
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
-    spawnLocalStartupAndSetupTerminals({
+    spawnHostStartupAndSetupTerminals({
       runtime,
       worktree,
       startup: args.startup,
@@ -2721,11 +2835,12 @@ export async function createLocalWorktree(
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
-    ...(stagedStartup.activationSetup
+    ...(stagedStartup.activationSetup && !stagedStartup.setupSequencingFailed
       ? { setup: stagedStartup.activationSetup }
-      : setup && !stagedStartup.didSpawnSetup
+      : setup && !stagedStartup.didSpawnSetup && !stagedStartup.setupSequencingFailed
         ? { setup }
         : {}),
+    ...(stagedStartup.setupSequencingFailed ? { startupBlocked: true } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
@@ -2734,6 +2849,31 @@ export async function createLocalWorktree(
       ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
+    setupReceipt: {
+      requested: args.setupDecision ?? 'inherit',
+      hookFound: Boolean(setup),
+      startupPolicy: setup?.waitForAgentStartup
+        ? ('wait-for-setup' as const)
+        : ('start-immediately' as const),
+      state: !setup
+        ? ('not_configured' as const)
+        : args.setupDecision === 'skip'
+          ? ('skipped' as const)
+          : stagedStartup.setupExitCode !== undefined
+            ? stagedStartup.setupExitCode === 0
+              ? ('succeeded' as const)
+              : ('failed' as const)
+            : stagedStartup.didSpawnSetup
+              ? ('running' as const)
+              : ('spawn_failed' as const),
+      ...(stagedStartup.setupExitCode !== undefined
+        ? { exitCode: stagedStartup.setupExitCode }
+        : {}),
+      ...(stagedStartup.setupTerminalHandle
+        ? { terminalHandle: stagedStartup.setupTerminalHandle }
+        : {}),
+      ...(setup?.waitForAgentStartup === true ? { operation: 'host-owned-setup' as const } : {})
+    },
     ...(baseFallback ? { baseFallback } : {}),
     ...(stagedStartup.warning
       ? { warning: appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning) }

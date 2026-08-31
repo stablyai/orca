@@ -17,17 +17,15 @@ export function queueSetupAndIssueCommands(
   terminalTabId: string,
   setup: WorktreeSetupLaunch | undefined,
   issueCommand: IssueCommandLaunch | undefined,
-  wrappedSetupCommandStr: string | undefined,
   opts: InitialTerminalOptions | undefined
 ): void {
   // Why: setup launch location is user-configurable — 'new-tab' keeps setup output off the primary pane; splits keep it adjacent.
   if (setup) {
     const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
+    // Why: `command` and `envVars` arrive as one sequenced launch record, so the gated command
+    // and the env carrying its script cannot be separated by a caller that forgets one of them.
     const setupCommand = {
-      command:
-        wrappedSetupCommandStr ??
-        setup.command ??
-        buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
+      command: setup.command ?? buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
       env: setup.envVars
     }
     if (mode === 'new-tab') {

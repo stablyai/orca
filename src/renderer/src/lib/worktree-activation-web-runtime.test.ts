@@ -85,12 +85,10 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh')
       })
     )
-    expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-2',
-      expect.objectContaining({
-        command: expect.stringContaining('printf')
-      })
-    )
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
+      command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+      env: { ORCA_ROOT_PATH: '/tmp/repo' }
+    })
   })
 
   it('holds the issue command for the first mirrored web runtime tab when none exists yet', () => {

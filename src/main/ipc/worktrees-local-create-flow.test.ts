@@ -697,7 +697,7 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('returns the wrapped setup command when startup spawned but setup creation failed', async () => {
+  it('blocks startup when host-owned setup creation fails', async () => {
     addWorktreeMock.mockResolvedValue({})
     listWorktreesMock.mockResolvedValueOnce([
       {
@@ -738,15 +738,11 @@ describe('registerWorktreeHandlers', () => {
           request_kind: 'new'
         }
       }
-    })) as { setup?: { command?: string; runnerScriptPath: string } }
+    })) as { setup?: unknown; startupBlocked?: boolean; warning?: string }
 
-    expect(result.setup).toEqual(
-      expect.objectContaining({
-        runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
-        command: expect.stringContaining('bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh')
-      })
-    )
-    expect(result.setup?.command).toContain('printf')
+    expect(result.setup).toBeUndefined()
+    expect(result.startupBlocked).toBe(true)
+    expect(result.warning).toContain('agent was not started')
   })
 
   it('rejects ask-policy creates before mutating git state when setup decision is missing', async () => {

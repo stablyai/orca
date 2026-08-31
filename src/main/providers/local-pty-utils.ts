@@ -157,6 +157,29 @@ export type ShellSpawnResult = {
   startupCommandDeliveredInShellArgs?: boolean
 }
 
+/** Spawn a PTY process without inserting a shell or macOS login wrapper. */
+export function spawnDirectPty(params: {
+  executable: string
+  argv: string[]
+  termName?: string
+  cols: number
+  rows: number
+  cwd: string
+  env: Record<string, string>
+  ptySpawn: typeof pty.spawn
+}): ShellSpawnResult {
+  const { executable, argv, termName = 'xterm-256color', cols, rows, cwd, env, ptySpawn } = params
+  const process_ = ptySpawn(executable, [...argv], {
+    name: termName,
+    cols,
+    rows,
+    cwd,
+    env,
+    ...windowsConptyDllOptions()
+  })
+  return { process: process_, shellPath: executable, reportsChildExitStatus: true }
+}
+
 /**
  * Walk the Windows PowerShell -> Windows PowerShell -> cmd.exe fallback chain.
  *

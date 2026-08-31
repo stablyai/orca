@@ -36,6 +36,7 @@ vi.mock('./macos-tcc-login-shell', () => ({
 
 import {
   resolveUnixShellPath,
+  spawnDirectPty,
   spawnShellWithFallback,
   validateWorkingDirectory
 } from './local-pty-utils'
@@ -308,5 +309,34 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
     expect(env.BASH_ENV).toBeUndefined()
     expect(env.ZDOTDIR).toBeUndefined()
     expect(env.HOME).toBe('/home/jin')
+  })
+})
+
+describe('spawnDirectPty', () => {
+  beforeEach(() => {
+    wrapSpawnMock.mockReset()
+  })
+
+  it('passes the executable and argv through without shell or login wrapping', () => {
+    const ptySpawn = vi.fn().mockReturnValue({ pid: 42 })
+
+    const result = spawnDirectPty({
+      executable: '/usr/bin/env',
+      argv: ['-i', 'VAR=value', 'sh', '-c', 'exit 0'],
+      cols: 80,
+      rows: 24,
+      cwd: '/worktree',
+      env: { TERM: 'xterm-256color' },
+      ptySpawn: ptySpawn as never
+    })
+
+    expect(ptySpawn).toHaveBeenCalledWith(
+      '/usr/bin/env',
+      ['-i', 'VAR=value', 'sh', '-c', 'exit 0'],
+      expect.objectContaining({ cwd: '/worktree', cols: 80, rows: 24 })
+    )
+    expect(wrapSpawnMock).not.toHaveBeenCalled()
+    expect(result.shellPath).toBe('/usr/bin/env')
+    expect(result.reportsChildExitStatus).toBe(true)
   })
 })

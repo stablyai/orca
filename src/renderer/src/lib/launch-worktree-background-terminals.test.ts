@@ -153,6 +153,25 @@ describe('launchWorktreeBackgroundTerminals', () => {
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledTimes(2)
   })
 
+  // Why: a sequenced launch's command carries the gate that records setup's outcome. Rebuilding the
+  // bare runner instead runs setup but records nothing, and the gated agent terminal then waits out
+  // its full two-hour bound with no signal.
+  it('runs the sequenced gated command rather than rebuilding the bare runner', async () => {
+    const { launchWorktreeBackgroundTerminals } =
+      await import('./launch-worktree-background-terminals')
+
+    await launchWorktreeBackgroundTerminals({
+      worktreeId: 'wt-1',
+      setup: { ...setupLaunch, command: 'bash /tmp/setup-gate.sh' }
+    })
+
+    const setupSpawn = mockSpawn.mock.calls.find(
+      (call) => typeof call[0]?.command === 'string' && call[0].command.includes('setup')
+    )
+    expect(setupSpawn?.[0].command).toBe('bash /tmp/setup-gate.sh')
+    expect(setupSpawn?.[0].command).not.toBe('bash /tmp/setup.sh')
+  })
+
   it('spawns setup in a split when setup launch mode requests a split', async () => {
     state.settings = { activeRuntimeEnvironmentId: null, setupScriptLaunchMode: 'split-horizontal' }
     const { launchWorktreeBackgroundTerminals } =

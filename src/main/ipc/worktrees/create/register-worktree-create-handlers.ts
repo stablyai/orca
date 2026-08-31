@@ -62,7 +62,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           result = isFolderRepo(repo)
             ? createFolderWorkspace(createArgs, repo, store)
             : repo.connectionId
-              ? await createRemoteWorktree(createArgs, repo, store, mainWindow)
+              ? await createRemoteWorktree(createArgs, repo, store, mainWindow, runtime)
               : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)

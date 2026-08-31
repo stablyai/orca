@@ -156,7 +156,9 @@ export async function executeWorktreeCreation(
     // startup, so both halves of the handoff share one renderer-session token.
     preparedRequest.startupPlan.launchToken = createBrowserUuid()
   }
-  const startupOpt = buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
+  const startupOpt = result.startupBlocked
+    ? undefined
+    : buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
 
   if (worktree.path) {
     const repoConnectionId =
@@ -215,7 +217,7 @@ export async function executeWorktreeCreation(
     startupTerminalTabId: result.startupTerminal?.tabId,
     backendSpawned
   })
-  if (preparedRequest.startupPlan && !backendSpawned) {
+  if (preparedRequest.startupPlan && !backendSpawned && !result.startupBlocked) {
     void ensureAgentStartupInTerminal({
       worktreeId: worktree.id,
       primaryTabId,

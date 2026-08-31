@@ -3,8 +3,6 @@ import type {
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
-import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
@@ -28,13 +26,6 @@ import {
 } from '@/lib/worktree-setup-issue-command-queue'
 import { applyDefaultTerminalTabs } from '@/lib/worktree-default-terminal-tabs'
 
-function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
-  return getSetupRunnerCommandPlatformForPath(
-    setup.runnerScriptPath,
-    navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
-  )
-}
-
 export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,
@@ -50,24 +41,9 @@ export function ensureWorktreeHasInitialTerminal(
     store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
       ? store
       : useAppStore.getState()
-  let sequencedStartup = startup
-  let wrappedSetupCommandStr: string | undefined
-
-  if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForLaunch(setup)
-    const sequenced = createSequencedSetupAgentCommands({
-      runnerScriptPath: setup.runnerScriptPath,
-      startupCommand: startup.command,
-      platform,
-      shell: setup.shell
-    })
-    sequencedStartup = {
-      ...startup,
-      command: sequenced.startupCommand,
-      ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
-    }
-    wrappedSetupCommandStr = sequenced.setupCommand
-  }
+  // Setup sequencing is host-owned; renderer activation only materializes the plain setup runner.
+  const sequencedStartup = startup
+  const sequencedSetup = setup
 
   const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
   const hostAuthority = resolveWorkspaceTerminalHostAuthority(ownerState, worktreeId)
@@ -79,9 +55,8 @@ export function ensureWorktreeHasInitialTerminal(
         store,
         worktreeId,
         existingTerminalTabId,
-        setup,
+        sequencedSetup,
         issueCommand,
-        wrappedSetupCommandStr,
         opts
       )
       return existingTerminalTabId
@@ -98,9 +73,8 @@ export function ensureWorktreeHasInitialTerminal(
             state,
             worktreeId,
             firstTerminalTabId,
-            setup,
+            sequencedSetup,
             issueCommand,
-            wrappedSetupCommandStr,
             opts
           )
       })
@@ -136,9 +110,8 @@ export function ensureWorktreeHasInitialTerminal(
         store,
         worktreeId,
         existingTerminalTabId,
-        setup,
+        sequencedSetup,
         issueCommand,
-        wrappedSetupCommandStr,
         opts
       )
       return existingTerminalTabId
@@ -150,10 +123,9 @@ export function ensureWorktreeHasInitialTerminal(
     store,
     worktreeId,
     sequencedStartup,
-    setup,
+    sequencedSetup,
     issueCommand,
     defaultTabs,
-    wrappedSetupCommandStr,
     opts
   )
   if (templatedTabId) {
@@ -200,15 +172,7 @@ export function ensureWorktreeHasInitialTerminal(
     }
     store.queueTabStartupCommand(terminalTab.id, sequencedStartup)
   }
-  queueSetupAndIssueCommands(
-    store,
-    worktreeId,
-    terminalTab.id,
-    setup,
-    issueCommand,
-    wrappedSetupCommandStr,
-    opts
-  )
+  queueSetupAndIssueCommands(store, worktreeId, terminalTab.id, sequencedSetup, issueCommand, opts)
 
   return terminalTab.id
 }

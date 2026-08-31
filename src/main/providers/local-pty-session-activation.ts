@@ -160,6 +160,7 @@ export function activateLocalPtySession(args: {
     plan.shellReadyLaunch?.env[POSIX_SHELL_STARTUP_COMMAND_ENV] === spawn.command
   if (
     spawn.command &&
+    !spawn.directExec &&
     !plan.startupCommandDeliveredInShellArgs &&
     !startupCommandDeliveredByWrapper
   ) {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { isSuccessfulSetupExitEvidence, OrcaRuntimeService } from './orca-runtime'
 
 type RuntimeInternals = {
   recordPtyWorktree: (ptyId: string, worktreeId: string, state?: { connected?: boolean }) => unknown
@@ -16,6 +16,21 @@ function registerLivePty(runtime: OrcaRuntimeService): void {
 }
 
 describe('PTY exit subscription', () => {
+  it.each([
+    [{ exitCode: 0, cause: { kind: 'exited', exitCode: 0 } }, true],
+    [{ exitCode: 1, cause: { kind: 'exited', exitCode: 1 } }, false],
+    [{ exitCode: 0, cause: { kind: 'signaled', signal: 9 } }, false],
+    [{ exitCode: -1, cause: { kind: 'unknown', reason: 'transport_lost' } }, false]
+  ])('admits only an explicit normal zero exit as setup success', (partial, expected) => {
+    expect(
+      isSuccessfulSetupExitEvidence({
+        ptyId: 'pty-1',
+        incarnationId: 'incarnation-1',
+        ...(partial as { exitCode: number; cause: never })
+      })
+    ).toBe(expected)
+  })
+
   it('fires on the backing PTY exit', () => {
     const runtime = new OrcaRuntimeService()
     registerLivePty(runtime)
@@ -29,6 +44,25 @@ describe('PTY exit subscription', () => {
 
     expect(listener).toHaveBeenCalledOnce()
     expect(internals(runtime).ptyExitListenersByPtyId.has('pty-1')).toBe(false)
+  })
+
+  it('delivers provider exit evidence instead of requiring a mutable record read', () => {
+    const runtime = new OrcaRuntimeService()
+    registerLivePty(runtime)
+    const listener = vi.fn()
+
+    runtime.subscribeToPtyExit('pty-1', listener)
+    runtime.onPtyExit('pty-1', 0, 'incarnation-1', {
+      providerExitObserved: true,
+      cause: { kind: 'exited', exitCode: 0 }
+    })
+
+    expect(listener).toHaveBeenCalledWith({
+      ptyId: 'pty-1',
+      exitCode: 0,
+      incarnationId: 'incarnation-1',
+      cause: { kind: 'exited', exitCode: 0 }
+    })
   })
 
   it('does not retain listeners across subscription churn', () => {
@@ -108,5 +142,24 @@ describe('PTY exit subscription demands proof of exit, not loss of connection', 
     runtime.subscribeToPtyExit('pty-1', listener)
 
     expect(listener).toHaveBeenCalledOnce()
+  })
+
+  it('replays the recorded cause for late subscribers', () => {
+    const runtime = new OrcaRuntimeService()
+    registerLivePty(runtime)
+    runtime.onPtyExit('pty-1', 0, 'incarnation-1', {
+      providerExitObserved: true,
+      cause: { kind: 'signaled', signal: 9 }
+    })
+    const listener = vi.fn()
+
+    runtime.subscribeToPtyExit('pty-1', listener)
+
+    expect(listener).toHaveBeenCalledWith({
+      ptyId: 'pty-1',
+      exitCode: 0,
+      incarnationId: expect.stringMatching(/^runtime:/),
+      cause: { kind: 'signaled', signal: 9 }
+    })
   })
 })
