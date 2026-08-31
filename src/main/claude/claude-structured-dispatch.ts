@@ -1,10 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import { extname } from 'node:path'
 import { open } from 'node:fs/promises'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeSession } from './claude-structured-session-state'
-import { readClaudeFrameString } from './claude-structured-init-proof'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_IMAGE_COUNT = 20
@@ -48,30 +48,6 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp'
-}
-
-export function resolveClaudeReplayWaiter(
-  session: ClaudeSession,
-  message: Record<string, unknown>
-): void {
-  const isUserReplay = message.type === 'user' && message.parent_tool_use_id === null
-  const isCompletedCommand = message.type === 'result'
-  if (
-    (!isUserReplay && !isCompletedCommand) ||
-    readClaudeFrameString(message, 'session_id') !== session.providerSessionId
-  ) {
-    return
-  }
-  const uuid = readClaudeFrameString(message, 'uuid')
-  const current = session.dispatchWaiters[0]
-  if (isCompletedCommand && !current?.acceptsResult) {
-    return
-  }
-  const waiter = uuid ? session.dispatchWaiters.shift() : undefined
-  if (waiter && uuid) {
-    clearTimeout(waiter.timer)
-    waiter.resolve(uuid)
-  }
 }
 
 async function imageContent(
@@ -126,63 +102,115 @@ async function messageContent(body: AgentJournalMessageItem): Promise<unknown[]>
   return content
 }
 
-function waitForReplay(
+type DispatchRace<T> =
+  | { kind: 'completed'; value: T }
+  | { kind: 'failed'; error: Error }
+  | { kind: 'terminal' }
+
+function raceWithSessionTerminal<T>(
   session: ClaudeSession,
-  timeoutMs: number,
-  acceptsResult: boolean
-): Promise<string | null> {
-  return new Promise((resolve) => {
-    const waiter = {
-      acceptsResult,
-      resolve,
-      timer: setTimeout(() => {
-        const index = session.dispatchWaiters.indexOf(waiter)
-        if (index !== -1) {
-          session.dispatchWaiters.splice(index, 1)
-        }
-        resolve(null)
-      }, timeoutMs)
+  work: Promise<T>
+): Promise<DispatchRace<T>> {
+  return Promise.race([
+    work.then(
+      (value): DispatchRace<T> => ({ kind: 'completed', value }),
+      (error: unknown): DispatchRace<T> => ({ kind: 'failed', error: error as Error })
+    ),
+    session.terminal.signal.then<DispatchRace<T>>(() => ({ kind: 'terminal' }))
+  ])
+}
+
+function acceptedDispatch(session: ClaudeSession, sentUuid: string): AgentSessionDispatchOutcome {
+  return {
+    state: 'accepted',
+    providerIdentity: {
+      provider: 'claude',
+      sessionId: session.providerSessionId,
+      uuid: sentUuid
     }
-    waiter.timer.unref?.()
-    session.dispatchWaiters.push(waiter)
+  }
+}
+
+async function acquireDispatchLane(session: ClaudeSession): Promise<() => void> {
+  const predecessor = session.dispatchLane
+  let release = (): void => {}
+  const turn = new Promise<void>((resolve) => {
+    release = resolve
   })
+  session.dispatchLane = predecessor.then(() => turn)
+  const admission = await Promise.race([
+    predecessor.then(() => true),
+    session.terminal.signal.then(() => false)
+  ])
+  if (!admission) {
+    release()
+    throw new Error('claude structured session closed before dispatch')
+  }
+  return release
 }
 
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId: string; body: AgentJournalMessageItem },
-  timeoutMs: number
+  input: { clientMessageId: string; body: AgentJournalMessageItem }
 ): Promise<AgentSessionDispatchOutcome> {
-  let content: unknown[]
+  let releaseLane: () => void
   try {
-    content = await messageContent(input.body)
+    releaseLane = await acquireDispatchLane(session)
   } catch (error) {
     return { state: 'rejected', reason: (error as Error).message }
   }
-  const acceptsResult = input.body.blocks.some(
-    (block) => block.type === 'text' && block.text.trimStart().startsWith('/')
-  )
-  const replayed = waitForReplay(session, timeoutMs, acceptsResult)
   try {
-    await session.connection.send({
-      type: 'user',
-      message: { role: 'user', content },
-      parent_tool_use_id: null,
-      session_id: session.providerSessionId
-    })
-  } catch (error) {
-    const waiter = session.dispatchWaiters.shift()
-    if (waiter) {
-      clearTimeout(waiter.timer)
-      waiter.resolve(null)
+    if (session.terminal.closed) {
+      return { state: 'rejected', reason: 'claude structured session closed before dispatch' }
     }
-    return { state: 'unknown', reason: (error as Error).message }
-  }
-  const uuid = await replayed
-  return uuid
-    ? {
-        state: 'accepted',
-        providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+    if (session.dispatchFenced) {
+      return {
+        state: 'unknown',
+        reason: 'claude delivery is uncertain until the session reconnects'
       }
-    : { state: 'unknown', reason: 'claude accepted a message but did not replay its uuid in time' }
+    }
+    const materialized = await raceWithSessionTerminal(session, messageContent(input.body))
+    if (materialized.kind === 'terminal') {
+      return { state: 'rejected', reason: 'claude structured session closed before dispatch' }
+    }
+    if (materialized.kind === 'failed') {
+      return { state: 'rejected', reason: materialized.error.message }
+    }
+    if (session.terminal.closed) {
+      return { state: 'rejected', reason: 'claude structured session closed before dispatch' }
+    }
+    const sentUuid = randomUUID()
+    const sequence = session.sentUserUuidSequence.size
+    session.sentUserUuidSequence.set(sentUuid, sequence)
+    session.translator?.registerOwnedTurn(session.providerSessionId, sentUuid, sequence)
+    const write = await raceWithSessionTerminal(
+      session,
+      session.connection.send({
+        type: 'user',
+        uuid: sentUuid,
+        message: { role: 'user', content: materialized.value },
+        parent_tool_use_id: null,
+        session_id: session.providerSessionId
+      })
+    )
+    if (write.kind === 'completed') {
+      if (!session.terminal.closed) {
+        session.translator?.confirmOwnedTurn(sentUuid)
+      }
+      return acceptedDispatch(session, sentUuid)
+    }
+    if (session.deliveryEvidenceUuids.has(sentUuid)) {
+      return acceptedDispatch(session, sentUuid)
+    }
+    if (write.kind === 'terminal') {
+      return { state: 'unknown', reason: 'claude session closed while delivery was pending' }
+    }
+    if (!session.terminal.closed) {
+      session.dispatchFenced = true
+      session.translator?.abandonOwnedTurn(sentUuid)
+    }
+    return { state: 'unknown', reason: write.error.message }
+  } finally {
+    releaseLane()
+  }
 }

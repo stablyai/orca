@@ -43,7 +43,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
   now?: () => number
   requestTimeoutMs?: number
   initTimeoutMs?: number
-  dispatchAckTimeoutMs?: number
   persistHandle?: (input: {
     sessionId: string
     providerSessionId: string
@@ -52,23 +51,46 @@ export type ClaudeStructuredSessionAdapterDeps = {
   }) => Promise<void>
 }
 
-export type ClaudeDispatchWaiter = {
-  resolve: (uuid: string | null) => void
-  timer: ReturnType<typeof setTimeout>
-  acceptsResult: boolean
-}
-
 export type ClaudeSession = {
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   leafUuid: string | null
   fence: number
   prompts: ClaudePromptRegistry
-  dispatchWaiters: ClaudeDispatchWaiter[]
+  generation: object
+  sentUserUuidSequence: Map<string, number>
+  deliveryEvidenceUuids: Set<string>
+  dispatchLane: Promise<void>
+  dispatchFenced: boolean
+  terminal: ClaudeSessionTerminal
   options: Map<string, string>
   reportedOptions: { model?: string; effort?: string }
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
+}
+
+export type ClaudeSessionTerminal = {
+  closed: boolean
+  signal: Promise<void>
+  close: () => void
+}
+
+export function createClaudeSessionTerminal(): ClaudeSessionTerminal {
+  let close = (): void => {}
+  const terminal: ClaudeSessionTerminal = {
+    closed: false,
+    signal: new Promise<void>((resolve) => {
+      close = resolve
+    }),
+    close: () => {
+      if (terminal.closed) {
+        return
+      }
+      terminal.closed = true
+      close()
+    }
+  }
+  return terminal
 }
 
 export type ClaudeAcquisitionAttempt = {

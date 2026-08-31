@@ -1,187 +1,23 @@
-import { describe, expect, it } from 'vitest'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import { describe, expect, it, vi } from 'vitest'
+import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type {
-  ClaudeStreamJsonConnection,
-  ClaudeStreamJsonConnectionHandlers,
-  ClaudeStreamJsonLaunch,
-  openClaudeStreamJsonConnection
-} from './claude-stream-json-connection'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import {
+  acquired,
+  adapterFor,
+  deferred,
+  fakeClaude,
+  identityFor,
+  PROVIDER_SESSION_ID,
+  USER_MESSAGE
+} from './claude-structured-adapter-fake-connection'
 import { CLAUDE_SPAWN_TOKEN_ENV } from './claude-structured-owner-identity'
 import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies'
 import {
   CLAUDE_STRUCTURED_INIT_TIMEOUT_MS,
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredLaunch,
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
-
-const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
-
-const USER_MESSAGE: AgentJournalMessageItem = {
-  kind: 'message',
-  role: 'user',
-  blocks: [{ type: 'text', text: 'ship it' }]
-}
-
-function identityFor(sessionId = 'session-1'): AgentSessionJournalIdentity {
-  return {
-    sessionId,
-    workspaceId: 'workspace-1',
-    hostId: 'host-1',
-    agent: 'claude',
-    providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
-  }
-}
-
-type Route = (params: Record<string, unknown> | undefined) => unknown
-
-type FakeConnection = Omit<ClaudeStreamJsonConnection, 'closed'> & {
-  closed: boolean
-  launch: ClaudeStreamJsonLaunch
-  handlers: ClaudeStreamJsonConnectionHandlers
-  calls: { subtype: string; params?: Record<string, unknown> }[]
-  sent: Record<string, unknown>[]
-  replies: { requestId: string; response?: unknown; error?: string }[]
-  closeCount: number
-}
-
-function fakeClaude(
-  options: {
-    initSessionId?: string
-    initUuid?: string
-    initModel?: string
-    initEffort?: string
-    initProof?: 'init' | 'session-start' | 'none'
-    initAccount?: unknown
-    exitBeforeInit?: string
-    settings?: unknown
-    replayUuid?: string | null
-    routes?: Record<string, Route>
-  } = {}
-): {
-  connections: FakeConnection[]
-  openConnection: typeof openClaudeStreamJsonConnection
-  routes: Record<string, Route>
-} {
-  const connections: FakeConnection[] = []
-  const routes = options.routes ?? {}
-  const openConnection = (async (launch, handlers = {}) => {
-    const connection: FakeConnection = {
-      launch,
-      handlers,
-      calls: [],
-      sent: [],
-      replies: [],
-      closeCount: 0,
-      pid: 4321,
-      closed: false,
-      request: async (subtype, params) => {
-        connection.calls.push({ subtype, params })
-        if (subtype === 'initialize') {
-          if (options.exitBeforeInit) {
-            handlers.onExit?.(new Error(options.exitBeforeInit))
-            return { models: [] }
-          }
-          if (options.initProof === 'session-start') {
-            handlers.onMessage?.({
-              type: 'system',
-              subtype: 'hook_started',
-              hook_name: 'SessionStart:startup',
-              session_id: options.initSessionId ?? PROVIDER_SESSION_ID,
-              uuid: options.initUuid ?? 'init-uuid'
-            })
-          } else if (options.initProof !== 'none') {
-            handlers.onMessage?.({
-              type: 'system',
-              subtype: 'init',
-              session_id: options.initSessionId ?? PROVIDER_SESSION_ID,
-              uuid: options.initUuid ?? 'init-uuid',
-              model: options.initModel ?? 'claude-sonnet-5',
-              effortLevel: options.initEffort ?? 'high',
-              apiKeySource: 'none'
-            })
-          }
-          return {
-            models: [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
-            ...(options.initAccount === undefined ? {} : { account: options.initAccount })
-          }
-        }
-        if (subtype === 'get_settings') {
-          return options.settings ?? { env: {} }
-        }
-        const route = routes[subtype]
-        return route ? route(params) : {}
-      },
-      send: async (message) => {
-        connection.sent.push(message)
-        if (message.type === 'user' && options.replayUuid !== null) {
-          handlers.onMessage?.({
-            ...message,
-            uuid: options.replayUuid ?? 'user-uuid'
-          })
-        }
-      },
-      respond: async (requestId, response) => {
-        connection.replies.push({ requestId, response })
-      },
-      respondWithError: async (requestId, error) => {
-        connection.replies.push({ requestId, error })
-      },
-      close: async () => {
-        connection.closeCount += 1
-        connection.closed = true
-      }
-    }
-    connections.push(connection)
-    return connection
-  }) as typeof openClaudeStreamJsonConnection
-  return { connections, openConnection, routes }
-}
-
-function adapterFor(
-  claude: ReturnType<typeof fakeClaude>,
-  launch: Partial<ClaudeStructuredLaunch> = {},
-  events: ClaudeStructuredSessionEvent[] = [],
-  persistedHandles: unknown[] = [],
-  initTimeoutMs?: number
-): ClaudeStructuredSessionAdapter {
-  return new ClaudeStructuredSessionAdapter({
-    resolveLaunch: async () => ({
-      command: 'claude',
-      args: ['-p'],
-      cwd: '/work/repo',
-      claudeConfigDir: '/accounts/claude',
-      providerSessionId: PROVIDER_SESSION_ID,
-      resumeLeafUuid: null,
-      resumed: false,
-      ...launch
-    }),
-    onEvent: (event) => events.push(event),
-    openConnection: claude.openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000,
-    now: () => 1_700_000_000_500,
-    ...(initTimeoutMs === undefined ? {} : { initTimeoutMs }),
-    dispatchAckTimeoutMs: 10,
-    persistHandle: async (handle) => {
-      persistedHandles.push(handle)
-    }
-  })
-}
-
-async function acquired(
-  claude: ReturnType<typeof fakeClaude>,
-  launch: Partial<ClaudeStructuredLaunch> = {},
-  events: ClaudeStructuredSessionEvent[] = []
-): Promise<ClaudeStructuredSessionAdapter> {
-  const adapter = adapterFor(claude, launch, events)
-  await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
-  return adapter
-}
 
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
   it('finishes its startup deadline before the paired mobile request deadline', () => {
@@ -387,8 +223,8 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
 })
 
 describe('ClaudeStructuredSessionAdapter turns and controls', () => {
-  it('accepts a dispatch only after Claude replays its provider uuid', async () => {
-    const claude = fakeClaude({ replayUuid: 'user-provider-uuid' })
+  it('accepts a dispatch under the caller UUID written to Claude', async () => {
+    const claude = fakeClaude()
     const adapter = await acquired(claude)
 
     const result = await adapter.dispatch({
@@ -398,12 +234,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       fence: 7
     })
 
+    const sentUuid = claude.connections[0].sent[0]!.uuid
     expect(result).toEqual({
       state: 'accepted',
       providerIdentity: {
         provider: 'claude',
         sessionId: PROVIDER_SESSION_ID,
-        uuid: 'user-provider-uuid'
+        uuid: sentUuid
       }
     })
     expect(claude.connections[0].sent[0]).toMatchObject({
@@ -413,7 +250,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     })
   })
 
-  it('leaves delivery unconfirmed when no replay uuid arrives', async () => {
+  it('accepts a successful write when no replay arrives', async () => {
     const adapter = await acquired(fakeClaude({ replayUuid: null }))
     await expect(
       adapter.dispatch({
@@ -422,7 +259,263 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toMatchObject({ state: 'unknown' })
+    ).resolves.toMatchObject({ state: 'accepted' })
+  })
+
+  it('accepts when the exact echo arrives before the write rejects', async () => {
+    const claude = fakeClaude({ sendErrorAfterReplay: new Error('flush failed') })
+    const adapter = await acquired(claude)
+
+    const result = await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+
+    expect(result).toMatchObject({
+      state: 'accepted',
+      providerIdentity: { uuid: claude.connections[0].sent[0]!.uuid }
+    })
+  })
+
+  it('suppresses a late exact echo after an unobserved write failure', async () => {
+    const claude = fakeClaude({ replayUuid: null, sendError: new Error('broken pipe') })
+    const bodies: AgentJournalItemBody[] = []
+    const events: ClaudeStructuredSessionEvent[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: (_identity, body) => bodies.push(body),
+      appendTombstone: () => undefined,
+      publish: () => undefined
+    }
+    const adapter = adapterFor(claude, {}, events)
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: sink
+    })
+
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'client-1',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toEqual({ state: 'unknown', reason: 'broken pipe' })
+    const sent = claude.connections[0].sent[0]!
+    claude.connections[0].handlers.onMessage?.({ ...sent, isReplay: true })
+
+    expect(bodies.filter((body) => body.kind === 'message' && body.role === 'user')).toEqual([])
+    expect(events.at(-1)).toMatchObject({ type: 'message', message: { uuid: sent.uuid } })
+  })
+
+  it('settles only exact owned lifecycle and result identities', async () => {
+    const claude = fakeClaude({ replayUuid: null })
+    const tombstones: string[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: () => undefined,
+      appendTombstone: (identity) => {
+        if (identity.provider === 'legacy') {
+          tombstones.push(identity.recordId)
+        }
+      },
+      publish: () => undefined
+    }
+    const adapter = adapterFor(claude)
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: sink
+    })
+    for (const clientMessageId of ['a', 'b', 'c', 'd']) {
+      await adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId,
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    }
+    const [turnA, turnB, turnC, turnD] = claude.connections[0].sent.map(
+      (frame) => frame.uuid as string
+    )
+    const emit = (message: Record<string, unknown>): void =>
+      claude.connections[0].handlers.onMessage?.(message)
+
+    emit({
+      type: 'command_lifecycle',
+      command_uuid: turnA,
+      state: 'future-state',
+      session_id: PROVIDER_SESSION_ID
+    })
+    emit({
+      type: 'command_lifecycle',
+      command_uuid: turnB,
+      state: 'completed',
+      session_id: 'another-session'
+    })
+    emit({ type: 'result', user_message_uuid: 'unknown', session_id: PROVIDER_SESSION_ID })
+    expect(tombstones).toEqual([])
+
+    emit({
+      type: 'command_lifecycle',
+      command_uuid: turnB,
+      state: 'completed',
+      session_id: PROVIDER_SESSION_ID
+    })
+    emit({
+      type: 'command_lifecycle',
+      command_uuid: turnC,
+      state: 'cancelled',
+      session_id: PROVIDER_SESSION_ID
+    })
+    emit({
+      type: 'command_lifecycle',
+      command_uuid: turnD,
+      state: 'discarded',
+      session_id: PROVIDER_SESSION_ID
+    })
+    emit({
+      type: 'result',
+      user_message_uuid: turnA,
+      session_id: PROVIDER_SESSION_ID
+    })
+
+    expect(tombstones).toEqual([
+      `turn-lifecycle:${turnB}`,
+      `turn-lifecycle:${turnC}`,
+      `turn-lifecycle:${turnD}`,
+      `turn-lifecycle:${turnA}`
+    ])
+  })
+
+  it.each(['queued', 'started'])('%s proves delivery without a journal sink', async (state) => {
+    const claude = fakeClaude({
+      replayUuid: null,
+      onSend: (message, handlers) => {
+        handlers.onMessage?.({
+          type: 'command_lifecycle',
+          command_uuid: message.uuid,
+          state,
+          session_id: PROVIDER_SESSION_ID
+        })
+        throw new Error('flush failed')
+      }
+    })
+    const adapter = await acquired(claude)
+
+    const result = await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    expect(result).toMatchObject({
+      state: 'accepted',
+      providerIdentity: { uuid: claude.connections[0].sent[0]?.uuid }
+    })
+  })
+
+  it('isolates callbacks and owned UUIDs across same-provider-session reacquisition', async () => {
+    const claude = fakeClaude({ replayUuid: null })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const persistedHandles: unknown[] = []
+    const bodies: AgentJournalItemBody[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: (_identity, body) => bodies.push(body),
+      appendTombstone: () => undefined,
+      publish: () => undefined
+    }
+    const adapter = adapterFor(claude, {}, events, persistedHandles)
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: sink
+    })
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'old-client',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    const oldConnection = claude.connections[0]
+    const oldFrame = oldConnection.sent[0]!
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 8,
+      spawnToken: 'spawn-10',
+      events: sink
+    })
+    const eventCount = events.length
+    oldConnection.handlers.onMessage?.({ ...oldFrame, isReplay: true })
+    expect(events).toHaveLength(eventCount)
+
+    claude.connections[1].handlers.onMessage?.({ ...oldFrame, isReplay: true })
+    expect(bodies.filter((body) => body.kind === 'message' && body.role === 'user')).toHaveLength(1)
+    await adapter.closeSession('session-1')
+    expect(persistedHandles.at(-1)).toMatchObject({ leafUuid: 'init-uuid', fence: 8 })
+  })
+
+  it.each(['close', 'exit'] as const)(
+    'wakes active and queued dispatches on session %s',
+    async (termination) => {
+      const pendingWrite = deferred()
+      const claude = fakeClaude({ replayUuid: null, onSend: () => pendingWrite.promise })
+      const adapter = await acquired(claude)
+      const first = adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'client-1',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+      await vi.waitFor(() => expect(claude.connections[0].sent).toHaveLength(1))
+      const second = adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'client-2',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+
+      if (termination === 'close') {
+        await adapter.closeSession('session-1')
+      } else {
+        claude.connections[0].handlers.onExit?.(new Error('provider exited'))
+      }
+
+      await expect(first).resolves.toMatchObject({ state: 'unknown' })
+      await expect(second).resolves.toMatchObject({ state: 'rejected' })
+      expect(claude.connections[0].sent).toHaveLength(1)
+      pendingWrite.resolve()
+    }
+  )
+
+  it('marks the session terminal before graceful-close persistence finishes', async () => {
+    const pendingWrite = deferred()
+    const pendingPersistence = deferred()
+    const claude = fakeClaude({ replayUuid: null, onSend: () => pendingWrite.promise })
+    const adapter = adapterFor(claude, {}, [], [], undefined, () => pendingPersistence.promise)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const dispatch = adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    await vi.waitFor(() => expect(claude.connections[0].sent).toHaveLength(1))
+    let closeFinished = false
+    const close = adapter.closeSession('session-1').then(() => {
+      closeFinished = true
+    })
+
+    await expect(dispatch).resolves.toMatchObject({ state: 'unknown' })
+    expect(closeFinished).toBe(false)
+    pendingPersistence.resolve()
+    await close
+    pendingWrite.resolve()
   })
 
   it('requires an acknowledged interrupt and supports controlled options', async () => {

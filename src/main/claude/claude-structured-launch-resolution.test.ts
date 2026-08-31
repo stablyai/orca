@@ -60,6 +60,8 @@ describe('claude structured launch resolution', () => {
     expect(first.args).toContain('--setting-sources')
     expect(first.args).toContain(CLAUDE_DEFAULT_SETTING_SOURCES.join(','))
     expect(CLAUDE_STRUCTURED_BASE_ARGS).toContain('--verbose')
+    // Exact echoes advance the durable leaf used by the next resume.
+    expect(CLAUDE_STRUCTURED_BASE_ARGS).toContain('--replay-user-messages')
   })
 
   it('resumes the session and leaf at the durable chain head', async () => {

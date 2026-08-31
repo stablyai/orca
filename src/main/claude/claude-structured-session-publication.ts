@@ -3,7 +3,7 @@ import { readClaudeFrameString, type ClaudeInitObservation } from './claude-stru
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeSession } from './claude-structured-session-state'
+import { createClaudeSessionTerminal, type ClaudeSession } from './claude-structured-session-state'
 
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
@@ -12,6 +12,7 @@ export function createClaudeSessionPublication(input: {
   fence: number
   resumed: boolean
   prompts: ClaudePromptRegistry
+  generation: object
   translator: ClaudeJournalTranslator | null
   events: ClaudeSession['events']
   process: AgentSessionAcquisition['process']
@@ -39,7 +40,12 @@ export function createClaudeSessionPublication(input: {
       leafUuid: input.leafUuid,
       fence: input.fence,
       prompts: input.prompts,
-      dispatchWaiters: [],
+      generation: input.generation,
+      sentUserUuidSequence: new Map(),
+      deliveryEvidenceUuids: new Set(),
+      dispatchLane: Promise.resolve(),
+      dispatchFenced: false,
+      terminal: createClaudeSessionTerminal(),
       options: new Map(input.options),
       reportedOptions: {
         ...(model ? { model } : {}),

@@ -1,16 +1,13 @@
 import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 
-export function settleClaudeDispatchWaiters(session: ClaudeSession): void {
-  for (const waiter of session.dispatchWaiters.splice(0)) {
-    clearTimeout(waiter.timer)
-    waiter.resolve(null)
-  }
-}
-
 export function settleClaudeExitedSession(session: ClaudeSession): void {
-  settleClaudeDispatchWaiters(session)
   session.prompts.clear()
   session.translator?.dispose()
+}
+
+export function markClaudeSessionTerminal(session: ClaudeSession): void {
+  session.dispatchFenced = true
+  session.terminal.close()
 }
 
 export async function closeClaudePublishedSession(input: {
@@ -28,8 +25,13 @@ export async function closeClaudePublishedSession(input: {
   if (!session) {
     return
   }
+  markClaudeSessionTerminal(session)
   input.sessions.delete(input.sessionId)
-  settleClaudeDispatchWaiters(session)
+  session.translator?.handle({
+    type: 'ended',
+    sessionId: input.sessionId,
+    reason: 'claude session closed'
+  })
   const pending = session.prompts.clear()
   await Promise.allSettled(
     pending.map((prompt) =>
@@ -64,7 +66,6 @@ export async function closeClaudePublishedSession(input: {
       sessionId: input.sessionId,
       reason: 'claude session closed'
     } as const
-    session.translator?.handle(ended)
     input.onEvent?.(ended)
     session.translator?.dispose()
     await session.connection.close()

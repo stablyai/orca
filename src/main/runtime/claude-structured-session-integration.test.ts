@@ -52,6 +52,7 @@ type FakeClaudeConnection = Omit<ClaudeStreamJsonConnection, 'closed'> & {
 function fakeClaude() {
   const connections: FakeClaudeConnection[] = []
   let initializeAccount: unknown
+  let nextSendError: Error | null = null
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeClaudeConnection = {
       launch,
@@ -81,8 +82,13 @@ function fakeClaude() {
       },
       send: async (message) => {
         connection.sent.push(message)
+        if (nextSendError) {
+          const error = nextSendError
+          nextSendError = null
+          throw error
+        }
         if (message.type === 'user') {
-          handlers.onMessage?.({ ...message, uuid: 'user-1' })
+          handlers.onMessage?.({ ...message, isReplay: true })
         }
       },
       respond: async (requestId, response) => {
@@ -109,6 +115,9 @@ function fakeClaude() {
     live,
     setInitializeAccount: (account: unknown) => {
       initializeAccount = account
+    },
+    failNextSend: (error: Error) => {
+      nextSendError = error
     }
   }
 }
@@ -400,10 +409,13 @@ describe('a structured Claude session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, created.fence),
       body
     })
+    const sentUuid = claude.live().sent[0]!.uuid as string
     expect(sent.submission).toMatchObject({
       dispatchState: 'accepted',
-      providerItemId: `claude:${PROVIDER_SESSION}:user-1`
+      providerItemId: `claude:${PROVIDER_SESSION}:${sentUuid}`
     })
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    expect(itemsOf(stream).filter((item) => textOf(item) === 'List files')).toHaveLength(1)
 
     claude.live().handlers.onMessage?.({
       type: 'stream_event',
@@ -479,6 +491,72 @@ describe('a structured Claude session over agentSession.*', () => {
       },
       origin: 'resumed'
     })
+  })
+
+  it('does not duplicate a late exact echo after an unknown write', async () => {
+    const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const stream = await subscribe()
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Queued' }] }
+    claude.failNextSend(new Error('broken pipe'))
+
+    const sent = await ok<{ submission: { dispatchState: string } }>('agentSession.send', {
+      envelope: envelope('agentSession.send', { body }, created.fence),
+      body
+    })
+    expect(sent.submission.dispatchState).toBe('unknown')
+    const frame = claude.live().sent[0]!
+    claude.live().handlers.onMessage?.({ ...frame, isReplay: true })
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+
+    expect(itemsOf(stream).filter((item) => textOf(item) === 'Queued')).toHaveLength(1)
+  })
+
+  it('settles a queued command and root result by their exact owned identities', async () => {
+    const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const stream = await subscribe()
+    const send = async (text: string): Promise<void> => {
+      const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+      await ok('agentSession.send', {
+        envelope: envelope('agentSession.send', { body }, created.fence),
+        body
+      })
+    }
+    await send('Root command')
+    await send('Queued command')
+    const [turnA, turnB] = claude.live().sent.map((frame) => frame.uuid as string)
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    const removedIds = (): string[] =>
+      stream.flatMap((frame) => (frame.type === 'batch' ? frame.batch.removedItemIds : []))
+
+    for (const state of ['queued', 'started']) {
+      claude.live().handlers.onMessage?.({
+        type: 'command_lifecycle',
+        command_uuid: turnB,
+        state,
+        session_id: PROVIDER_SESSION
+      })
+    }
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    expect(removedIds()).toEqual([])
+
+    claude.live().handlers.onMessage?.({
+      type: 'command_lifecycle',
+      command_uuid: turnB,
+      state: 'completed',
+      session_id: PROVIDER_SESSION
+    })
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    expect(removedIds()).toHaveLength(1)
+    expect(removedIds()[0]).toContain(encodeURIComponent(turnB))
+
+    claude.live().handlers.onMessage?.({
+      type: 'result',
+      user_message_uuid: turnA,
+      session_id: PROVIDER_SESSION
+    })
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    expect(removedIds()).toHaveLength(2)
+    expect(removedIds()[1]).toContain(encodeURIComponent(turnA))
   })
 
   it('completes a scripted native to TUI to native cycle with provider-history rehydration', async () => {

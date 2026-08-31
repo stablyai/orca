@@ -97,6 +97,8 @@ describe('Claude structured journal translation', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
 
+    translator.registerOwnedTurn('claude-session', 'user-1', 0)
+    translator.confirmOwnedTurn('user-1')
     translator.handle(message('user', 'user-1', [{ type: 'text', text: 'List files' }]))
     translator.handle(
       message('assistant', 'assistant-tool', [
@@ -134,8 +136,14 @@ describe('Claude structured journal translation', () => {
     translator.handle({
       type: 'message',
       sessionId: 'orca-session',
-      message: { type: 'result', session_id: 'claude-session', uuid: 'result-1' }
+      message: {
+        type: 'result',
+        session_id: 'claude-session',
+        uuid: 'result-1',
+        user_message_uuid: 'user-1'
+      }
     })
+    translator.settleOwnedTurn('user-1')
     expect(state.tombstones.at(-1)).toMatchObject({
       provider: 'legacy',
       agent: 'claude',
@@ -156,21 +164,103 @@ describe('Claude structured journal translation', () => {
     })
   })
 
-  it('starts a cancellable lifecycle for image-only root user replays', () => {
+  it('starts a cancellable lifecycle for an owned image-only send', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
 
-    translator.handle(
-      message('user', 'user-image', [
-        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AA==' } }
-      ])
-    )
+    translator.registerOwnedTurn('claude-session', 'user-image', 0)
+    translator.confirmOwnedTurn('user-image')
 
     expect(state.items.at(-1)?.body).toEqual({
       kind: 'status',
       text: 'Claude is working…',
       turnLifecycle: { turnId: 'user-image', state: 'running' }
     })
+  })
+
+  it('settles only the named owned turn and ignores repeated settled echoes', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    translator.registerOwnedTurn('claude-session', 'turn-a', 0)
+    translator.confirmOwnedTurn('turn-a')
+    translator.registerOwnedTurn('claude-session', 'turn-b', 1)
+    translator.confirmOwnedTurn('turn-b')
+    translator.handle(
+      message(
+        'user',
+        'tool-result',
+        [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'done' }],
+        null
+      )
+    )
+    translator.handle(message('user', 'injected', [{ type: 'text', text: '<local-command>' }]))
+    translator.confirmOwnedTurn('turn-b')
+
+    translator.settleOwnedTurn('turn-b')
+    expect(
+      state.tombstones.map((identity) =>
+        identity.provider === 'legacy' ? identity.recordId : undefined
+      )
+    ).toEqual(['turn-lifecycle:turn-b'])
+    expect(
+      state.items.filter(
+        (item) => item.body.kind === 'status' && item.body.turnLifecycle?.turnId === 'turn-a'
+      )
+    ).toHaveLength(1)
+    translator.confirmOwnedTurn('turn-b')
+    expect(
+      state.items.filter(
+        (item) => item.body.kind === 'status' && item.body.turnLifecycle?.turnId === 'turn-b'
+      )
+    ).toHaveLength(1)
+
+    translator.settleOwnedTurn('turn-a')
+    expect(state.tombstones.at(-1)).toMatchObject({ recordId: 'turn-lifecycle:turn-a' })
+    translator.confirmOwnedTurn('turn-a')
+    expect(
+      state.items.filter(
+        (item) => item.body.kind === 'status' && item.body.turnLifecycle?.turnId === 'turn-a'
+      )
+    ).toHaveLength(1)
+
+    translator.registerOwnedTurn('claude-session', 'turn-c', 2)
+    translator.confirmOwnedTurn('turn-c')
+    translator.handle({ type: 'ended', sessionId: 'orca-session', reason: 'closed' })
+    translator.registerOwnedTurn('claude-session', 'turn-after-exit', 3)
+    translator.confirmOwnedTurn('turn-after-exit')
+    translator.settleOwnedTurn('turn-after-exit')
+    expect(
+      state.tombstones.map((identity) =>
+        identity.provider === 'legacy' ? identity.recordId : undefined
+      )
+    ).toEqual(['turn-lifecycle:turn-b', 'turn-lifecycle:turn-a', 'turn-lifecycle:turn-c'])
+    expect(
+      state.items.some(
+        (item) =>
+          item.body.kind === 'status' && item.body.turnLifecycle?.turnId === 'turn-after-exit'
+      )
+    ).toBe(false)
+  })
+
+  it('does not let results beat provisional or abandoned turn slots', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    translator.registerOwnedTurn('claude-session', 'before-write-resolves', 0)
+    translator.settleOwnedTurn('before-write-resolves')
+    translator.confirmOwnedTurn('before-write-resolves')
+
+    translator.registerOwnedTurn('claude-session', 'failed-write', 1)
+    translator.abandonOwnedTurn('failed-write')
+    translator.settleOwnedTurn('failed-write')
+    translator.confirmOwnedTurn('failed-write')
+
+    expect(
+      state.items.filter(
+        (item) => item.body.kind === 'status' && item.body.turnLifecycle !== undefined
+      )
+    ).toEqual([])
   })
 
   it('renders empty user frames through the provider fallback', () => {

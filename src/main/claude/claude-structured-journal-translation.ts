@@ -36,6 +36,7 @@ import {
   createClaudeProviderFrameFallback,
   isModeledClaudeContent
 } from './claude-structured-provider-fallback'
+import { createClaudeOwnedTurnLifecycle } from './claude-owned-turn-lifecycle'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
@@ -46,6 +47,10 @@ export type ClaudeJournalTranslatorDeps = {
 
 export type ClaudeJournalTranslator = {
   handle: (event: ClaudeStructuredSessionEvent) => void
+  registerOwnedTurn: (sessionId: string, turnId: string, sequence: number) => void
+  confirmOwnedTurn: (turnId: string) => void
+  settleOwnedTurn: (turnId: string) => void
+  abandonOwnedTurn: (turnId: string) => void
   flush: () => void
   dispose: () => void
 }
@@ -95,8 +100,8 @@ export function createClaudeJournalTranslator(
   const streamIdentities = new Map<string, AgentJournalItemIdentity>()
   const latestStreamText = new Map<string, string>()
   const checkpointLengths = new Map<string, number>()
-  let currentTurn: { sessionId: string; turnId: string } | null = null
   const providerFallback = createClaudeProviderFrameFallback(deps.sink)
+  let terminal = false
 
   const publishLifecycle = (sessionId: string, turnId: string, running: boolean): void => {
     const identity = lifecycleIdentity(sessionId, turnId)
@@ -111,6 +116,8 @@ export function createClaudeJournalTranslator(
     }
     deps.sink.publish()
   }
+
+  const ownedTurns = createClaudeOwnedTurnLifecycle(publishLifecycle)
 
   const persistStream = (key: string, text: string, force: boolean): void => {
     latestStreamText.set(key, text)
@@ -211,17 +218,6 @@ export function createClaudeJournalTranslator(
       providerFallback.append(`message:${envelope.role}:empty`, message)
       changed = true
     }
-    if (
-      envelope.role === 'user' &&
-      envelope.content.length > 0 &&
-      message.parent_tool_use_id === null
-    ) {
-      if (currentTurn) {
-        publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
-      }
-      currentTurn = { sessionId: envelope.sessionId, turnId: envelope.uuid }
-      publishLifecycle(envelope.sessionId, envelope.uuid, true)
-    }
     if (changed) {
       deps.sink.publish()
     }
@@ -253,13 +249,20 @@ export function createClaudeJournalTranslator(
   }
 
   return {
+    registerOwnedTurn: (sessionId, turnId, sequence) => {
+      ownedTurns.register(sessionId, turnId, sequence)
+    },
+    confirmOwnedTurn: ownedTurns.confirm,
+    settleOwnedTurn: ownedTurns.settle,
+    abandonOwnedTurn: ownedTurns.abandon,
     handle: (event) => {
+      if (terminal) {
+        return
+      }
       if (event.type === 'ended') {
         flushStreams()
-        if (currentTurn) {
-          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
-          currentTurn = null
-        }
+        ownedTurns.end()
+        terminal = true
         return
       }
       if (event.type === 'message' && handleStream(event.message)) {
@@ -275,10 +278,6 @@ export function createClaudeJournalTranslator(
         promptItems.delete(event.promptKey)
         deps.sink.publish()
       } else if (event.type === 'message' && event.message.type === 'result') {
-        if (currentTurn) {
-          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
-          currentTurn = null
-        }
         providerFallback.append(claudeProviderFrameKind(event.message), event.message)
       } else if (event.type === 'message') {
         if (!handleMessage(event.message)) {
@@ -290,12 +289,14 @@ export function createClaudeJournalTranslator(
     },
     flush: flushStreams,
     dispose: () => {
+      terminal = true
       coalescer.dispose()
       tools.clear()
       promptItems.clear()
       streamIdentities.clear()
       latestStreamText.clear()
       checkpointLengths.clear()
+      ownedTurns.dispose()
     }
   }
 }
