@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import {
+  markRendererOwnedAgentStatusWrite,
+  registerRendererOwnedAgentStatusPane
+} from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -66,9 +72,160 @@ describe('applyWebSessionTabsSnapshot', () => {
       providerSession: { key: 'session_id', id: 'session-1' },
       terminalTitle: 'codex [working]'
     })
+    expect(patch.agentStatusByPaneKey?.[mirroredPaneKey]?.updatedAt).toBe(NOW - 100)
+    expect(patch.agentStatusByPaneKey?.[mirroredPaneKey]?.localReceiptAt).toBe(NOW)
     expect(patch.agentStatusByPaneKey?.[hostPaneKey]).toBeUndefined()
     expect(patch.agentStatusEpoch).toBe(1)
     expect(patch.sortEpoch).toBe(1)
+  })
+
+  it.each([10 * 60_000, -10 * 60_000])(
+    'decays a mirrored host row from local receipt despite a %sms host clock skew',
+    (skewMs) => {
+      const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+      const hostUpdatedAt = NOW + skewMs
+      const patch = applyWebSessionTabsSnapshot(
+        makeState(),
+        makeSnapshot([
+          {
+            type: 'terminal',
+            id: HOST_SURFACE_ID,
+            title: 'codex [working]',
+            parentTabId: 'host-tab-1',
+            leafId: LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-1',
+            agentStatus: {
+              state: 'working',
+              prompt: 'fix web parity',
+              updatedAt: hostUpdatedAt,
+              stateStartedAt: hostUpdatedAt,
+              paneKey: hostPaneKey,
+              stateHistory: [],
+              // A peer must not be able to choose the renderer's receipt clock.
+              localReceiptAt: hostUpdatedAt
+            }
+          }
+        ]),
+        ENV,
+        NOW
+      ) as Partial<WebSessionTabsSyncState>
+      const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+      const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
+      const entry = patch.agentStatusByPaneKey?.[mirroredPaneKey]
+
+      expect(entry?.updatedAt).toBe(hostUpdatedAt)
+      expect(entry?.localReceiptAt).toBe(NOW)
+      expect(isExplicitAgentStatusFresh(entry!, NOW, 30 * 60_000)).toBe(true)
+      expect(isExplicitAgentStatusFresh(entry!, NOW + 30 * 60_000 + 1, 30 * 60_000)).toBe(false)
+    }
+  )
+
+  it('preserves receipt time for an identical host replay to prevent stale-cache immortality', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const snapshot = makeSnapshot([
+      {
+        type: 'terminal',
+        id: HOST_SURFACE_ID,
+        title: 'codex [working]',
+        parentTabId: 'host-tab-1',
+        leafId: LEAF_ID,
+        isActive: true,
+        status: 'ready',
+        terminal: 'terminal-1',
+        agentStatus: {
+          state: 'working',
+          prompt: 'fix web parity',
+          updatedAt: NOW - 10 * 60_000,
+          stateStartedAt: NOW - 10 * 60_000,
+          paneKey: hostPaneKey,
+          stateHistory: []
+        }
+      }
+    ])
+    const firstPatch = applyWebSessionTabsSnapshot(
+      makeState(),
+      snapshot,
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const firstState = { ...makeState(), ...firstPatch }
+    const secondNow = NOW + 1_000
+    const secondPatch = applyWebSessionTabsSnapshot(
+      firstState,
+      { ...snapshot, snapshotVersion: 2 },
+      ENV,
+      secondNow
+    ) as Partial<WebSessionTabsSyncState>
+    const mirroredPaneKey = Object.keys(firstPatch.agentStatusByPaneKey ?? {})[0]!
+    const repeated = secondPatch.agentStatusByPaneKey?.[mirroredPaneKey]
+
+    expect(repeated?.updatedAt).toBe(NOW - 10 * 60_000)
+    expect(repeated?.localReceiptAt).toBe(NOW)
+  })
+
+  it('does not refresh or invent a receipt when a client-owned host surface has no status', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const initial = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'codex [working]',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1',
+          agentStatus: {
+            state: 'working',
+            prompt: 'fix web parity',
+            updatedAt: NOW - 10 * 60_000,
+            stateStartedAt: NOW - 10 * 60_000,
+            paneKey: hostPaneKey,
+            stateHistory: []
+          }
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const initialState = { ...makeState(), ...initial }
+    const release = registerRendererOwnedAgentStatusPane(
+      makePaneKey(toWebTerminalSurfaceTabId('host-tab-1'), LEAF_ID),
+      ENV
+    )
+    try {
+      const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
+      markRendererOwnedAgentStatusWrite(mirroredPaneKey)
+      const before = initialState.agentStatusByPaneKey[mirroredPaneKey]
+      const patch = applyWebSessionTabsSnapshot(
+        initialState,
+        makeSnapshot(
+          [
+            {
+              type: 'terminal',
+              id: HOST_SURFACE_ID,
+              title: 'codex [working]',
+              parentTabId: 'host-tab-1',
+              leafId: LEAF_ID,
+              isActive: true,
+              status: 'ready',
+              terminal: 'terminal-1'
+            }
+          ],
+          { snapshotVersion: 2 }
+        ),
+        ENV,
+        NOW + 1_000
+      ) as Partial<WebSessionTabsSyncState>
+
+      expect(patch.agentStatusByPaneKey?.[mirroredPaneKey]).toEqual(before)
+    } finally {
+      release()
+    }
   })
 
   it('applies a marker-only host restart degradation to mirrored agent status', () => {

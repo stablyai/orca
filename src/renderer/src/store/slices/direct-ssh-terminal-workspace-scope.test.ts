@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { resolveDirectSshTerminalWorkspaceKeys } from './direct-ssh-terminal-workspace-scope'
 
 function tab(worktreeId: string, ptyId: string): TerminalTab {
@@ -125,6 +126,33 @@ describe('resolveDirectSshTerminalWorkspaceKeys', () => {
         {
           'contradictory-worktree': [tab('contradictory-worktree', 'ssh:target-a@@pty-1')]
         }
+      )
+    ).toEqual(new Set())
+  })
+
+  it('applies explicit owner checks to canonical worktree session keys', () => {
+    const rawWorktreeId = 'repo::/remote/worktree'
+    const workspaceKey = worktreeWorkspaceKey(rawWorktreeId)
+    expect(
+      resolveDirectSshTerminalWorkspaceKeys(
+        {
+          targetId: 'target-a',
+          catalogRevision: 1,
+          repos: [],
+          worktreesByRepo: {
+            repo: [{ id: rawWorktreeId, repoId: 'repo', hostId: 'ssh:target-b' }]
+          }
+        },
+        { [workspaceKey]: [tab(workspaceKey, 'ssh:target-a@@pty-1')] }
+      )
+    ).toEqual(new Set())
+  })
+
+  it('fails closed for malformed canonical worktree session keys', () => {
+    expect(
+      resolveDirectSshTerminalWorkspaceKeys(
+        { targetId: 'target-a', catalogRevision: 1, repos: [] },
+        { 'worktree:repo': [tab('worktree:repo', 'ssh:target-a@@pty-1')] }
       )
     ).toEqual(new Set())
   })

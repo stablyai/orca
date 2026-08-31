@@ -525,6 +525,49 @@ describe('getConnectionIdFromState', () => {
     expect(getConnectionIdFromState(state, 'repo-ssh::/home/neil/repo-feature')).toBe('ssh-2')
   })
 
+  it('resolves SSH repo provenance from a canonical worktree session key', () => {
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-canonical' })],
+      worktreesByRepo: {}
+    }
+
+    expect(getConnectionIdFromState(state, 'worktree:repo-ssh::/home/neil/repo-feature')).toBe(
+      'ssh-canonical'
+    )
+  })
+
+  it.each(['worktree:repo-ssh', 'worktree:repo-ssh::'])(
+    'fails closed for malformed canonical worktree key %s',
+    (malformedKey) => {
+      const state: ConnectionContextState = {
+        folderWorkspaces: [],
+        projectGroups: [],
+        repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-canonical' })],
+        worktreesByRepo: {}
+      }
+
+      expect(getConnectionIdFromState(state, malformedKey)).toBeUndefined()
+    }
+  )
+
+  it('fails closed when a canonical worktree id has colliding local and SSH repo owners', () => {
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({ id: 'repo-collision', connectionId: null, executionHostId: 'local' }),
+        makeRepo({ id: 'repo-collision', connectionId: 'ssh-collision' })
+      ],
+      worktreesByRepo: {}
+    }
+
+    expect(
+      getConnectionIdFromState(state, 'worktree:repo-collision::/remote/cold-start-worktree')
+    ).toBeUndefined()
+  })
+
   it('indexes immutable worktree and repo snapshots once across repeated selector calls', () => {
     let worktreeIdReads = 0
     let repoIdReads = 0

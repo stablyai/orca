@@ -71,6 +71,26 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
     expect(collectWorktreeHydrationRepoIdsFromSession(session)).toEqual(['repo-a'])
   })
 
+  it.each(['worktree:repo-a', 'worktree:repo-a::'])(
+    'ignores malformed canonical key %s even when its raw alias is present',
+    (malformedKey) => {
+      const session = {
+        activeRepoId: null,
+        activeWorktreeId: null,
+        activeTabId: null,
+        tabsByWorktree: {
+          [malformedKey]: [{ ptyId: 'pty-a' }]
+        }
+      } as unknown as WorkspaceSessionState
+
+      expect(
+        collectWorktreeHydrationRepoIdsFromSession(session, {
+          'repo-a': 'local'
+        })
+      ).toEqual([])
+    }
+  )
+
   it('excludes runtime-owned session worktrees for raw and canonical owner keys', () => {
     const rawWorktreeId = 'repo-a::/remote/worktree'
     const canonicalWorktreeKey = `worktree:${rawWorktreeId}`

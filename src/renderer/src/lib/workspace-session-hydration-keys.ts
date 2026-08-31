@@ -2,8 +2,9 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { normalizeWorktreeLookupId } from './worktree-runtime-owner-index'
 
 export type WorkspaceSessionHydrationOptions = {
   additionalValidWorkspaceKeys?: readonly WorkspaceKey[]
@@ -132,11 +133,10 @@ export function collectWorktreeHydrationRepoIdsFromSession(
     if (typeof value !== 'string') {
       return
     }
-    const scope = parseWorkspaceKey(value)
-    if (scope?.type === 'folder') {
+    const rawWorktreeId = normalizeWorktreeLookupId(value)
+    if (rawWorktreeId === null) {
       return
     }
-    const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : value
     const isRuntimeOwned = [value, rawWorktreeId].some(
       (key) => parseExecutionHostId(runtimeHostIdByWorkspaceSessionKey?.[key])?.kind === 'runtime'
     )

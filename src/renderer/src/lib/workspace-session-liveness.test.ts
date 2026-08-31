@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildWorkspaceSessionPayload, type WorkspaceSessionSnapshot } from './workspace-session'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 
 function createSnapshot(
   overrides: Partial<WorkspaceSessionSnapshot> = {}
@@ -134,6 +135,301 @@ describe('workspace session live PTY persistence', () => {
       'tab-ssh': 'ssh:conn-1@@pty-42'
     })
     expect(payload.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
+  })
+
+  it('resolves canonical worktree session keys when persisting SSH PTYs', () => {
+    const rawWorktreeId = 'repo-ssh::/remote/canonical-worktree'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [worktreeWorkspaceKey(rawWorktreeId)]: [
+            {
+              id: 'tab-ssh-canonical',
+              title: 'remote',
+              ptyId: null,
+              worktreeId: rawWorktreeId
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ssh-canonical': [] },
+        lastKnownRelayPtyIdByTabId: {
+          'tab-ssh-canonical': 'ssh:conn-1@@pty-canonical'
+        },
+        sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
+        repos: [
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'SSH',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'conn-1'
+          }
+        ],
+        worktreesByRepo: {
+          'repo-ssh': [{ id: rawWorktreeId, repoId: 'repo-ssh' } as never]
+        }
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toEqual({
+      'tab-ssh-canonical': 'ssh:conn-1@@pty-canonical'
+    })
+    expect(payload.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
+  })
+
+  it('classifies a canonical SSH session from its repo id when the worktree catalog is cold', () => {
+    const rawWorktreeId = 'repo-ssh::/remote/cold-start-worktree'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [worktreeWorkspaceKey(rawWorktreeId)]: [
+            {
+              id: 'tab-ssh-cold-start',
+              title: 'remote',
+              ptyId: null,
+              worktreeId: rawWorktreeId
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ssh-cold-start': [] },
+        lastKnownRelayPtyIdByTabId: {
+          'tab-ssh-cold-start': 'ssh:conn-1@@pty-cold-start'
+        },
+        sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
+        repos: [
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'SSH',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'conn-1'
+          }
+        ],
+        // Deliberately empty: a cold-start SSH catalog may not have fetched
+        // worktrees before the renderer persists during shutdown.
+        worktreesByRepo: {}
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toEqual({
+      'tab-ssh-cold-start': 'ssh:conn-1@@pty-cold-start'
+    })
+    expect(payload.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
+  })
+
+  it('normalizes an encoded repo connection id before validating a persisted SSH PTY', () => {
+    const rawWorktreeId = 'repo-ssh::/remote/encoded-target'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [rawWorktreeId]: [
+            {
+              id: 'tab-ssh-encoded-target',
+              title: 'remote',
+              ptyId: null,
+              worktreeId: rawWorktreeId
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ssh-encoded-target': [] },
+        lastKnownRelayPtyIdByTabId: {
+          'tab-ssh-encoded-target': 'ssh:target%20with%20spaces@@pty-encoded'
+        },
+        sshConnectionStates: new Map([['target with spaces', { status: 'reconnecting' } as never]]),
+        repos: [
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'SSH',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'ssh:target%20with%20spaces'
+          }
+        ],
+        worktreesByRepo: {
+          'repo-ssh': [{ id: rawWorktreeId, repoId: 'repo-ssh' } as never]
+        }
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toEqual({
+      'tab-ssh-encoded-target': 'ssh:target%20with%20spaces@@pty-encoded'
+    })
+    expect(payload.activeConnectionIdsAtShutdown).toEqual(['target with spaces'])
+  })
+
+  it('classifies an SSH session from executionHostId when connectionId is absent', () => {
+    const rawWorktreeId = 'repo-ssh::/remote/execution-host-only'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [rawWorktreeId]: [
+            {
+              id: 'tab-ssh-execution-host-only',
+              title: 'remote',
+              ptyId: null,
+              worktreeId: rawWorktreeId
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ssh-execution-host-only': [] },
+        lastKnownRelayPtyIdByTabId: {
+          'tab-ssh-execution-host-only': 'ssh:target%20with%20spaces@@pty-host-only'
+        },
+        sshConnectionStates: new Map([['target with spaces', { status: 'reconnecting' } as never]]),
+        repos: [
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'SSH',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: null,
+            executionHostId: 'ssh:target%20with%20spaces'
+          }
+        ],
+        worktreesByRepo: {
+          'repo-ssh': [{ id: rawWorktreeId, repoId: 'repo-ssh' } as never]
+        }
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toEqual({
+      'tab-ssh-execution-host-only': 'ssh:target%20with%20spaces@@pty-host-only'
+    })
+    expect(payload.activeConnectionIdsAtShutdown).toEqual(['target with spaces'])
+  })
+
+  it('drops a persisted SSH session whose embedded target disagrees with its worktree owner', () => {
+    const worktreeId = 'repo-ssh::/remote/mismatched-target'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [worktreeId]: [
+            {
+              id: 'tab-ssh-mismatch',
+              title: 'remote',
+              ptyId: null,
+              worktreeId
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ssh-mismatch': [] },
+        lastKnownRelayPtyIdByTabId: {
+          'tab-ssh-mismatch': 'ssh:ssh-target-b@@pty-mismatch'
+        },
+        sshConnectionStates: new Map([
+          ['ssh-target-a', { status: 'reconnecting' } as never],
+          ['ssh-target-b', { status: 'reconnecting' } as never]
+        ]),
+        repos: [
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'SSH',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'ssh-target-a'
+          }
+        ],
+        worktreesByRepo: {
+          'repo-ssh': [
+            {
+              id: worktreeId,
+              repoId: 'repo-ssh',
+              hostId: 'ssh:ssh-target-a'
+            } as never
+          ]
+        }
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toBeUndefined()
+    expect(payload.activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it.each(['worktree:repo-ssh', 'worktree:repo-ssh::'])(
+    'does not persist relay sessions for malformed canonical key %s',
+    (malformedKey) => {
+      const payload = buildWorkspaceSessionPayload(
+        createSnapshot({
+          tabsByWorktree: {
+            [malformedKey]: [
+              {
+                id: 'tab-malformed-canonical',
+                title: 'remote',
+                ptyId: null,
+                worktreeId: malformedKey
+              } as never
+            ]
+          },
+          ptyIdsByTabId: { 'tab-malformed-canonical': [] },
+          lastKnownRelayPtyIdByTabId: {
+            'tab-malformed-canonical': 'ssh:conn-1@@pty-malformed'
+          },
+          sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
+          repos: [
+            {
+              id: 'repo-ssh',
+              path: '/repo-ssh',
+              displayName: 'SSH',
+              badgeColor: '#fff',
+              addedAt: 1,
+              connectionId: 'conn-1'
+            }
+          ],
+          worktreesByRepo: {}
+        })
+      )
+
+      expect(payload.remoteSessionIdsByTabId).toBeUndefined()
+      expect(payload.activeConnectionIdsAtShutdown).toBeUndefined()
+    }
+  )
+
+  it('does not guess a remote owner when a cold catalog has colliding local and SSH repos', () => {
+    const rawWorktreeId = 'repo-collision::/remote/cold-start-worktree'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [worktreeWorkspaceKey(rawWorktreeId)]: [
+            {
+              id: 'tab-ambiguous',
+              title: 'remote',
+              ptyId: null,
+              worktreeId: rawWorktreeId
+            } as never
+          ]
+        },
+        ptyIdsByTabId: { 'tab-ambiguous': [] },
+        lastKnownRelayPtyIdByTabId: { 'tab-ambiguous': 'relay-session-ambiguous' },
+        sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
+        repos: [
+          {
+            id: 'repo-collision',
+            path: '/local/repo-collision',
+            displayName: 'Local collision',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: null
+          },
+          {
+            id: 'repo-collision',
+            path: '/remote/repo-collision',
+            displayName: 'SSH collision',
+            badgeColor: '#fff',
+            addedAt: 1,
+            connectionId: 'conn-1'
+          }
+        ],
+        worktreesByRepo: {}
+      })
+    )
+
+    expect(payload.remoteSessionIdsByTabId).toBeUndefined()
+    expect(payload.activeConnectionIdsAtShutdown).toBeUndefined()
   })
 
   it('keeps explicitly disconnected hosts out of the startup reconnect list', () => {

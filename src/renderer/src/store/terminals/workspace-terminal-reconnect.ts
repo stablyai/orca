@@ -1,9 +1,38 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { isCurrentDirectSshAuthority } from './terminal-pty-identities'
+import {
+  buildWorkspaceTerminalReconnectOwnerResolver,
+  type WorkspaceTerminalReconnectOwnerResolution
+} from './workspace-terminal-reconnect-owner'
+
+/** Explicit app SSH ids must name the owner we are about to reattach. Legacy
+ * relay ids without the `ssh:` envelope remain valid and are checked by the
+ * connection selected by the caller. */
+function persistedSshPtyMatchesTarget(
+  ptyId: string | null | undefined,
+  targetId: string | null | undefined,
+  requireExplicitTarget = false
+): boolean {
+  if (requireExplicitTarget) {
+    const parsed = parseAppSshPtyId(ptyId ?? '')
+    return parsed !== null && targetId != null && parsed.connectionId === targetId
+  }
+  if (!ptyId || !ptyId.startsWith('ssh:')) {
+    return true
+  }
+  const parsed = parseAppSshPtyId(ptyId)
+  return parsed !== null && targetId != null && parsed.connectionId === targetId
+}
+
+/** A scoped pull may use its explicit authority only while the loaded owner agrees. */
+function resolvedOwnerMatchesDirectSshTarget(
+  owner: WorkspaceTerminalReconnectOwnerResolution,
+  targetId: string
+): boolean {
+  return owner.kind !== 'resolved' || owner.sshTargetId === targetId
+}
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,
@@ -46,23 +75,38 @@ export function createWorkspaceTerminalReconnectActions(
       let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
       // Why indexed: the loop neither sets state nor awaits, so one index over the
       // whole store snapshot serves every iteration.
-      const worktreeById = buildWorktreeByIdIndex(get().worktreesByRepo)
-      const repoById = buildByIdIndex(get().repos)
-      for (const worktreeId of ids) {
-        const tabs = tabsByWorktree[worktreeId] ?? []
-        const worktree = worktreeById.get(worktreeId)
-        const repo = worktree ? (repoById.get(worktree.repoId) ?? null) : null
+      const resolveOwner = buildWorkspaceTerminalReconnectOwnerResolver(
+        get().repos,
+        get().worktreesByRepo
+      )
+      for (const workspaceSessionKey of ids) {
+        const tabs = tabsByWorktree[workspaceSessionKey] ?? []
+        const owner = resolveOwner(workspaceSessionKey)
+        if (
+          options &&
+          !resolvedOwnerMatchesDirectSshTarget(owner, options.directSshAuthority.targetId)
+        ) {
+          // The catalog may have changed after direct scope selection. Do not
+          // let a stale authority reattach a PTY under a newly different owner.
+          continue
+        }
+        // Without an explicit direct-SSH scope, a cold-catalog collision cannot
+        // identify which daemon owns the persisted PTY. Fail closed.
+        if (owner.kind === 'ambiguous' && !options) {
+          continue
+        }
+        const connectionId = owner.kind === 'resolved' ? (owner.connectionId ?? null) : null
+        const ownerSshTargetId =
+          owner.kind === 'resolved' ? (owner.sshTargetId ?? connectionId) : null
         // Why: only allow deferred reattach when the SSH connection is active; reattaching to a not-yet-connected relay (deferred/passphrase targets) would fail.
-        const sshTargetId = options?.directSshAuthority.targetId ?? repo?.connectionId ?? null
+        const sshTargetId = options?.directSshAuthority.targetId ?? ownerSshTargetId
         const sshState = sshTargetId ? get().sshConnectionStates.get(sshTargetId) : null
         const sshConnected = sshTargetId != null && sshState?.status === 'connected'
-        const supportsDeferredReattach = options
-          ? sshConnected
-          : !repo?.connectionId || sshConnected
+        const supportsDeferredReattach = options ? sshConnected : !connectionId || sshConnected
         console.debug(
-          `[reconnect-terminals] worktree=${worktreeId} connectionId=${repo?.connectionId} sshStatus=${sshState?.status} supportsDeferredReattach=${supportsDeferredReattach}`
+          `[reconnect-terminals] worktree=${workspaceSessionKey} connectionId=${connectionId} sshStatus=${sshState?.status} supportsDeferredReattach=${supportsDeferredReattach}`
         )
-        const targetTabIds = pendingReconnectTabByWorktree[worktreeId] ?? []
+        const targetTabIds = pendingReconnectTabByWorktree[workspaceSessionKey] ?? []
         const tabsToReconnect: TerminalTab[] =
           targetTabIds.length > 0
             ? targetTabIds
@@ -77,12 +121,14 @@ export function createWorkspaceTerminalReconnectActions(
           const layout = terminalLayoutsByTabId[tabId]
           const leafPtyMap = layout?.ptyIdsByLeafId ?? {}
           const pendingPtyId = pendingReconnectPtyIdByTabId[tabId]
-          const tabLevelPtyId =
-            options &&
-            parseAppSshPtyId(pendingPtyId ?? '')?.connectionId !==
-              options.directSshAuthority.targetId
-              ? undefined
-              : pendingPtyId
+          const expectedSshTargetId = options?.directSshAuthority.targetId ?? ownerSshTargetId
+          const tabLevelPtyId = persistedSshPtyMatchesTarget(
+            pendingPtyId,
+            expectedSshTargetId,
+            Boolean(options)
+          )
+            ? pendingPtyId
+            : undefined
           const hasLeafMappings = Object.keys(leafPtyMap).length > 0
           // Why: publish live PTY hints before mount; pty-connection reattaches later.
           console.debug(
@@ -91,7 +137,11 @@ export function createWorkspaceTerminalReconnectActions(
           // Why: populate ptyIdsByTabId so the sessions status segment maps daemon IDs to tabs; otherwise all sessions look like orphans until the pane mounts.
           // A row whose tab.ptyId went to the canonical row has no tab-level id left, but its own leaf PTYs still need advertising.
           const allPtyIds = hasLeafMappings
-            ? (Object.values(leafPtyMap).filter(Boolean) as string[])
+            ? (Object.values(leafPtyMap).filter(
+                (ptyId): ptyId is string =>
+                  Boolean(ptyId) &&
+                  persistedSshPtyMatchesTarget(ptyId, expectedSshTargetId, Boolean(options))
+              ) as string[])
             : tabLevelPtyId
               ? [tabLevelPtyId]
               : []
@@ -102,11 +152,11 @@ export function createWorkspaceTerminalReconnectActions(
           }
           if (tabLevelPtyId) {
             reconnectedTabsByWorktree ??= { ...tabsByWorktree }
-            const nextTabs = reconnectedTabsByWorktree[worktreeId]
+            const nextTabs = reconnectedTabsByWorktree[workspaceSessionKey]
             if (!nextTabs) {
               continue
             }
-            reconnectedTabsByWorktree[worktreeId] = nextTabs.map((t) =>
+            reconnectedTabsByWorktree[workspaceSessionKey] = nextTabs.map((t) =>
               t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
             )
           }
@@ -125,12 +175,21 @@ export function createWorkspaceTerminalReconnectActions(
             )
           )
         : {}
-      for (const worktreeId of ids) {
-        const worktree = worktreeById.get(worktreeId)
-        // Why: SSH worktrees aren't in worktreesByRepo at cold start; fall back to the repo id in the composite worktree id so sessions still reach the deferred map.
-        const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-        const repo = repoId ? (repoById.get(repoId) ?? null) : null
-        const connectionId = options?.directSshAuthority.targetId ?? repo?.connectionId
+      for (const workspaceSessionKey of ids) {
+        const owner = resolveOwner(workspaceSessionKey)
+        if (
+          options &&
+          !resolvedOwnerMatchesDirectSshTarget(owner, options.directSshAuthority.targetId)
+        ) {
+          continue
+        }
+        // A direct-SSH snapshot carries its own authoritative target even while
+        // the catalog is cold or has colliding repo ids.
+        const connectionId =
+          options?.directSshAuthority.targetId ??
+          (owner.kind === 'resolved'
+            ? (owner.sshTargetId ?? owner.connectionId ?? undefined)
+            : undefined)
         if (!connectionId) {
           continue
         }
@@ -147,12 +206,12 @@ export function createWorkspaceTerminalReconnectActions(
         if (sshConnected) {
           continue
         }
-        const tabs = tabsByWorktree[worktreeId] ?? []
+        const tabs = tabsByWorktree[workspaceSessionKey] ?? []
         for (const tab of tabs) {
           const sessionId = pendingReconnectPtyIdByTabId[tab.id]
           if (
             sessionId &&
-            (!options || parseAppSshPtyId(sessionId)?.connectionId === connectionId)
+            persistedSshPtyMatchesTarget(sessionId, connectionId, Boolean(options))
           ) {
             deferredSshSessionIdsByTabId[tab.id] = sessionId
           }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getExecutionHostIdForWorktree,
@@ -607,6 +608,78 @@ describe('active workspace host selection', () => {
   it('keeps the selected host authoritative for the active worktree', () => {
     expect(getExecutionHostIdForWorktree(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe(
       'ssh:hub-private-target'
+    )
+  })
+})
+
+describe('canonical worktree workspace keys', () => {
+  const rawWorktreeId = 'runtime-repo::/srv/runtime-worktree'
+  const canonicalKey = worktreeWorkspaceKey(rawWorktreeId)
+  const canonicalState: WorktreeRuntimeOwnerState = {
+    settings: { activeRuntimeEnvironmentId: 'other-env' },
+    repos: [{ id: 'runtime-repo', connectionId: null, executionHostId: 'runtime:owner-env' }],
+    worktreesByRepo: {
+      'runtime-repo': [
+        {
+          id: rawWorktreeId,
+          repoId: 'runtime-repo',
+          hostId: 'runtime:owner-env'
+        }
+      ]
+    }
+  }
+
+  it('resolves canonical keys against raw worktree owner records', () => {
+    expect(getRuntimeEnvironmentIdForWorktree(canonicalState, canonicalKey)).toBe('owner-env')
+    expect(getExplicitRuntimeEnvironmentIdForWorktree(canonicalState, canonicalKey)).toBe(
+      'owner-env'
+    )
+    expect(getExecutionHostIdForWorktree(canonicalState, canonicalKey)).toBe('runtime:owner-env')
+  })
+
+  it('applies the selected host when active state stores the raw id', () => {
+    const state: WorktreeRuntimeOwnerState = {
+      ...canonicalState,
+      activeWorktreeId: rawWorktreeId,
+      activeWorkspaceExecutionHostId: 'ssh:hub-target'
+    }
+    expect(getExecutionHostIdForWorktree(state, canonicalKey)).toBe('ssh:hub-target')
+  })
+
+  it('ignores malformed scoped keys', () => {
+    expect(getRuntimeEnvironmentIdForWorktree(canonicalState, 'worktree:runtime-repo')).toBeNull()
+    expect(
+      getExplicitRuntimeEnvironmentIdForWorktree(canonicalState, 'worktree:runtime-repo')
+    ).toBeNull()
+  })
+
+  it('marks an identical malformed active key as unresolved instead of local', () => {
+    const malformedKey = 'worktree:runtime-repo'
+    const malformedState: WorktreeRuntimeOwnerState = {
+      ...canonicalState,
+      activeWorktreeId: malformedKey,
+      activeWorkspaceExecutionHostId: 'ssh:unexpected-target'
+    }
+
+    expect(getExecutionHostIdForWorktree(malformedState, malformedKey)).toBe(
+      'runtime:unresolved-owner'
+    )
+  })
+
+  it('marks colliding worktree owners as unresolved instead of falling back to local', () => {
+    const collidingState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [{ id: 'repo', connectionId: null, executionHostId: 'local' }],
+      worktreesByRepo: {
+        repo: [
+          { id: 'repo::/same-path', repoId: 'repo', hostId: 'local' },
+          { id: 'repo::/same-path', repoId: 'repo', hostId: 'ssh:target-a' }
+        ]
+      }
+    }
+
+    expect(getExecutionHostIdForWorktree(collidingState, 'repo::/same-path')).toBe(
+      'runtime:unresolved-owner'
     )
   })
 })

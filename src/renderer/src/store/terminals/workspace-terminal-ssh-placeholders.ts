@@ -2,6 +2,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
+  normalizeWorktreeLookupId,
+  resolveIndexedRepoOwner
+} from '@/lib/worktree-runtime-owner-index'
+import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../../shared/worktree/id'
@@ -11,11 +15,16 @@ export function addHydratedSshWorktreePlaceholders(
   sourceWorktreesByRepo: Record<string, Worktree[]>,
   tabsByWorktree: Record<string, TerminalTab[]>
 ): Record<string, Worktree[]> {
-  const sshRepoIds = new Set(repos.filter((repo) => repo.connectionId).map((repo) => repo.id))
   const worktreesByRepo = { ...sourceWorktreesByRepo }
-  for (const worktreeId of Object.keys(tabsByWorktree)) {
+  for (const workspaceSessionKey of Object.keys(tabsByWorktree)) {
+    const worktreeId = normalizeWorktreeLookupId(workspaceSessionKey)
+    if (worktreeId === null) {
+      continue
+    }
     const repoId = getRepoIdFromWorktreeId(worktreeId)
-    if (!sshRepoIds.has(repoId)) {
+    // A duplicate id across local and SSH catalogs has no safe synthetic owner.
+    const repoOwner = resolveIndexedRepoOwner(repos, repoId)
+    if (repoOwner.kind !== 'resolved' || !repoOwner.owner.connectionId) {
       continue
     }
     if ((worktreesByRepo[repoId] ?? []).some((worktree) => worktree.id === worktreeId)) {

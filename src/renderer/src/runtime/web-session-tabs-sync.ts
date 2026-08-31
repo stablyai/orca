@@ -10,6 +10,7 @@ import {
   pickParsedAgentStatusPayload,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
+import { agentStatusFreshnessAt } from '../../../shared/agent-status-observation'
 import { agentEntryCompletionAt } from '../../../shared/agent-completion-time'
 import { normalizeTurnCompletedAtField } from '../../../shared/agent-status-field-normalization'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
@@ -1553,7 +1554,8 @@ function toMirroredPaneKey(surface: TerminalSurface, leafId = surface.leafId): s
 /** Normalises and mirrors agent status updates from the host payload, preserving ownership metadata. */
 function remapHostAgentStatus(
   surface: TerminalSurface,
-  retainedSurface?: TerminalSurface
+  retainedSurface?: TerminalSurface,
+  localReceiptAt?: number
 ): AgentStatusEntry | null {
   if (!surface.agentStatus) {
     return null
@@ -1566,12 +1568,16 @@ function remapHostAgentStatus(
     launchAgent: retainedSurface?.launchAgent ?? surface.launchAgent,
     hookAgent: surface.agentStatus.agentType
   })
+  const { localReceiptAt: _hostLocalReceiptAt, ...hostStatus } = surface.agentStatus
   return {
-    ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerRecord?.agent, {
+    ...normalizeCompatibleAgentStatusEntryForOwner(hostStatus, ownerRecord?.agent, {
       ownerIsLaunch: ownerRecord?.ownerIsLaunch === true
     }),
     paneKey,
-    tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
+    tabId: toWebTerminalSurfaceTabId(surface.parentTabId),
+    ...(typeof localReceiptAt === 'number' && Number.isFinite(localReceiptAt)
+      ? { localReceiptAt }
+      : {})
   }
 }
 
@@ -1763,24 +1769,38 @@ function buildMirroredAgentStatusPatch(
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
-    const entry = remapHostAgentStatus(surface, retainedSurface)
-    if (!entry) {
+    const remappedEntry = remapHostAgentStatus(surface, retainedSurface)
+    if (!remappedEntry) {
       continue
     }
-    const existing = nextByPaneKey.get(entry.paneKey) ?? state.agentStatusByPaneKey[entry.paneKey]
+    const existing =
+      nextByPaneKey.get(remappedEntry.paneKey) ?? state.agentStatusByPaneKey[remappedEntry.paneKey]
     // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
     const hostIdentityPredatesCurrentTurn =
       existing !== undefined &&
-      entry.state === 'done' &&
+      remappedEntry.state === 'done' &&
       existing.state !== 'done' &&
-      existing.stateStartedAt > entry.stateStartedAt
+      existing.stateStartedAt > remappedEntry.stateStartedAt
     // Why: cross-machine wall clocks are not comparable, so the host frame could
     // outrank live client status forever; a proven client writer keeps its own
     // state (still adopting the host's identity fields below) unless the host
     // carries a state class the client's bytes can never see.
     const clientOwnsEntry =
-      isFencedClientAgentStatus(entry.paneKey, existing, now) &&
-      !hostAgentStatusPiercesClientAuthority(entry)
+      isFencedClientAgentStatus(remappedEntry.paneKey, existing, now) &&
+      !hostAgentStatusPiercesClientAuthority(remappedEntry)
+    const hostEntryAccepted =
+      existing === undefined || (!clientOwnsEntry && existing.updatedAt <= remappedEntry.updatedAt)
+    // An identical snapshot replay is not a new status observation. Preserve
+    // its receipt so unrelated host publishes cannot keep a stale row alive.
+    const entry =
+      hostEntryAccepted &&
+      (!existing ||
+        !agentStatusEntryEqual(existing, remappedEntry) ||
+        existing.localReceiptAt === undefined)
+        ? { ...remappedEntry, localReceiptAt: now }
+        : existing?.localReceiptAt !== undefined
+          ? { ...remappedEntry, localReceiptAt: existing.localReceiptAt }
+          : remappedEntry
     const nextEntry =
       existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
         ? {
@@ -1843,7 +1863,10 @@ function buildMirroredAgentStatusPatch(
 
   for (const [paneKey, entry] of nextByPaneKey) {
     const existing = nextAgentStatusByPaneKey[paneKey]
-    if (agentStatusEntryEqual(existing, entry)) {
+    // Receipt time is local freshness state; compare it separately from host
+    // fields so a newly accepted row is retained even when those fields match.
+    const localReceiptChanged = existing?.localReceiptAt !== entry.localReceiptAt
+    if (agentStatusEntryEqual(existing, entry) && !localReceiptChanged) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
@@ -2653,10 +2676,13 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
 }
 
 function isAgentStatusFresh(
-  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed'>,
+  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed' | 'localReceiptAt'>,
   now: number
 ): boolean {
-  return entry.restoredUnconfirmed !== true && now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+  return (
+    entry.restoredUnconfirmed !== true &&
+    now - agentStatusFreshnessAt(entry) <= AGENT_STATUS_STALE_AFTER_MS
+  )
 }
 
 function isMirroredCommandCodeTurnBump(

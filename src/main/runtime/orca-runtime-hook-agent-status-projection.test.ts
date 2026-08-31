@@ -6,6 +6,10 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../shared/runtime-types'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -116,6 +120,57 @@ function lastOscTitleEpochMs(runtime: OrcaRuntimeService): number {
 }
 
 describe('headless hook agent-status projection (#11761)', () => {
+  it('strips renderer-local status facets from the client projection', () => {
+    const runtime = new OrcaRuntimeService(null)
+    const snapshot: RuntimeMobileSessionTabsSnapshot = {
+      worktree: WORKTREE_ID,
+      publicationEpoch: 'headless:test',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: [
+        {
+          type: 'terminal',
+          id: `${TAB_ID}::${LEAF_ID}`,
+          title: 'Terminal',
+          parentTabId: TAB_ID,
+          leafId: LEAF_ID,
+          isActive: false,
+          agentStatus: {
+            state: 'working',
+            prompt: 'private facets',
+            updatedAt: 1_000,
+            stateStartedAt: 1_000,
+            paneKey: PANE_KEY,
+            stateHistory: [],
+            acceptedStatusSeq: 2,
+            localReceiptAt: 2_000,
+            observation: {
+              origin: 'osc',
+              authorityId: 'renderer:test',
+              incarnation: 0,
+              revision: 1,
+              observedAt: 1_000
+            }
+          }
+        }
+      ]
+    }
+    const result = (
+      runtime as unknown as {
+        toMobileSessionTabsResult: (
+          value: RuntimeMobileSessionTabsSnapshot
+        ) => RuntimeMobileSessionTabsResult
+      }
+    ).toMobileSessionTabsResult(snapshot)
+    const status = result.tabs[0]?.type === 'terminal' ? result.tabs[0].agentStatus : undefined
+
+    expect(status).not.toHaveProperty('localReceiptAt')
+    expect(status).not.toHaveProperty('acceptedStatusSeq')
+    expect(status).not.toHaveProperty('observation')
+  })
+
   it('ranks a completed hook below present launch evidence in terminal identity', async () => {
     const runtime = await createRuntimeWithHookRows([
       hookRow({

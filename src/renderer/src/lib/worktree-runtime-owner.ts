@@ -9,6 +9,7 @@ import {
   findIndexedRepoOwner as findRepoRecord,
   findIndexedWorktreeOwner as findWorktreeRecord,
   hasIndexedDetectedWorktree,
+  normalizeWorktreeLookupId,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
@@ -26,6 +27,9 @@ import {
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
+
+// Why: callers must distinguish an unresolved/contested owner from a local host.
+const UNRESOLVED_WORKTREE_EXECUTION_HOST_ID: ExecutionHostId = 'runtime:unresolved-owner'
 
 function getExplicitRuntimeEnvironmentIdFromHost(
   executionHostId: string | null | undefined
@@ -50,9 +54,30 @@ function getActiveWorkspaceExecutionHostId(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string
 ): ExecutionHostId | null {
-  return state.activeWorktreeId === worktreeId
+  return workspaceIdsMatch(state.activeWorktreeId, worktreeId)
     ? (state.activeWorkspaceExecutionHostId ?? null)
     : null
+}
+
+/** Active worktree state is usually raw while persisted/session callers may use
+ * `worktree:<repo::path>`. Compare the two identity forms without accepting
+ * malformed scoped keys as raw ids. */
+function workspaceIdsMatch(left: string | null | undefined, right: string): boolean {
+  if (!left) {
+    return false
+  }
+  const leftScope = parseWorkspaceKey(left)
+  const rightScope = parseWorkspaceKey(right)
+  if (leftScope?.type === 'folder' || rightScope?.type === 'folder') {
+    return (
+      leftScope?.type === 'folder' &&
+      rightScope?.type === 'folder' &&
+      leftScope.folderWorkspaceId === rightScope.folderWorkspaceId
+    )
+  }
+  const leftRaw = normalizeWorktreeLookupId(left)
+  const rightRaw = normalizeWorktreeLookupId(right)
+  return leftRaw !== null && rightRaw !== null && leftRaw === rightRaw
 }
 
 export function getRuntimeEnvironmentIdForWorktree(
@@ -73,7 +98,11 @@ export function getRuntimeEnvironmentIdForWorktree(
   if (workspaceScope?.type === 'folder') {
     return getRuntimeEnvironmentIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
   }
-  const indexedOwner = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return null
+  }
+  const indexedOwner = resolveIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId)
   if (indexedOwner.kind === 'ambiguous') {
     return null
   }
@@ -81,7 +110,10 @@ export function getRuntimeEnvironmentIdForWorktree(
     const owner = indexedOwner.owner
     const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(owner)
     const parsedHost = parseExecutionHostId(owner.hostId)
-    const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
+    const hasDetectedOwner = hasIndexedDetectedWorktree(
+      state.detectedWorktreesByRepo,
+      rawWorktreeId
+    )
     if (!hasDetectedOwner && (projectedRuntimeOwner || parsedHost)) {
       return (
         projectedRuntimeOwner || (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
@@ -103,7 +135,7 @@ export function getRuntimeEnvironmentIdForWorktree(
       }
     }
   }
-  const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
+  const resolution = resolveWorktreeOperationRouteResult(state, rawWorktreeId)
   return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : null
 }
 
@@ -125,17 +157,21 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
       workspaceScope.folderWorkspaceId
     )
   }
-  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return null
+  }
+  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, rawWorktreeId)
   if (hasDetectedOwner) {
     // Why: detected-only rows are selectable before the primary catalog lands; use the same
     // ambiguity-aware explicit provenance as filesystem and terminal operations.
-    const resolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
+    const resolution = resolveExplicitWorktreeOperationRouteResult(state, rawWorktreeId)
     return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : null
   }
-  if (resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind === 'ambiguous') {
+  if (resolveIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId).kind === 'ambiguous') {
     return null
   }
-  const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
+  const worktree = findWorktreeRecord(state.worktreesByRepo, rawWorktreeId)
   const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(worktree)
   if (projectedRuntimeOwner) {
     return projectedRuntimeOwner
@@ -147,7 +183,7 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   if (parsedWorktreeHost?.kind === 'local') {
     return null
   }
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(rawWorktreeId)
   const repo = findRepoRecord(state.repos, repoId)
   if (!repo) {
     return null
@@ -175,9 +211,19 @@ export function getExecutionHostIdForWorktree(
   if (workspaceScope?.type === 'folder') {
     return getExecutionHostIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
   }
-  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return UNRESOLVED_WORKTREE_EXECUTION_HOST_ID
+  }
+  const indexedOwner = resolveIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId)
+  // A duplicate id across physical hosts has no safe local fallback. Returning the
+  // unresolved runtime sentinel keeps host-authority consumers fail-closed.
+  if (indexedOwner.kind === 'ambiguous') {
+    return UNRESOLVED_WORKTREE_EXECUTION_HOST_ID
+  }
+  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, rawWorktreeId)
   if (hasDetectedOwner) {
-    const resolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
+    const resolution = resolveExplicitWorktreeOperationRouteResult(state, rawWorktreeId)
     if (resolution.kind === 'resolved') {
       return (
         resolution.route.executionHostId ??
@@ -185,17 +231,21 @@ export function getExecutionHostIdForWorktree(
       )
     }
     // Why: conflicting detected publications must never enable paired-client-local PTY behavior.
-    return 'runtime:unresolved-owner'
+    return UNRESOLVED_WORKTREE_EXECUTION_HOST_ID
   }
-  const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
+  const worktree = indexedOwner.kind === 'resolved' ? indexedOwner.owner : null
   const worktreeHostId = getExecutionHostIdFromWorktreeHost(worktree?.hostId)
   if (worktreeHostId) {
     // Why: per-worktree host ownership is more specific than the repo host
     // default, especially when local and runtime checkouts share a project.
     return worktreeHostId
   }
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = findRepoRecord(state.repos, repoId)
+  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(rawWorktreeId)
+  const repoResolution = resolveIndexedRepoOwner(state.repos, repoId)
+  if (repoResolution.kind === 'ambiguous') {
+    return UNRESOLVED_WORKTREE_EXECUTION_HOST_ID
+  }
+  const repo = repoResolution.kind === 'resolved' ? repoResolution.owner : null
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
   if (repo && hasExplicitOwner) {
     return getRepoExecutionHostId(repo)

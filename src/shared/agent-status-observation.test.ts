@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AgentStatusObservationSequencer,
+  agentStatusFreshnessAt,
   createAgentStatusAuthorityId
 } from './agent-status-observation'
 
@@ -120,5 +121,21 @@ describe('AgentStatusObservationSequencer', () => {
 
     expect(first).not.toBe(second)
     expect(first.startsWith('main-agent-hooks:')).toBe(true)
+  })
+})
+
+describe('agentStatusFreshnessAt', () => {
+  const NOW = 1_700_000_000_000
+
+  it('uses a finite local receipt timestamp for mirrored rows', () => {
+    expect(agentStatusFreshnessAt({ updatedAt: NOW + 10 * 60_000, localReceiptAt: NOW })).toBe(NOW)
+    expect(agentStatusFreshnessAt({ updatedAt: NOW - 10 * 60_000, localReceiptAt: NOW })).toBe(NOW)
+  })
+
+  it('falls back to the host timestamp when no valid receipt exists', () => {
+    expect(agentStatusFreshnessAt({ updatedAt: NOW - 1_000 })).toBe(NOW - 1_000)
+    expect(agentStatusFreshnessAt({ updatedAt: NOW + 1_000, localReceiptAt: Number.NaN })).toBe(
+      NOW + 1_000
+    )
   })
 })

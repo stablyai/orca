@@ -12,7 +12,10 @@ import {
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
-import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
+import {
+  agentStatusFreshnessAt,
+  type AgentStatusObservation
+} from '../../../../shared/agent-status-observation'
 import { rendererAgentStatusObservations } from '../../lib/renderer-agent-status-observations'
 import {
   agentProviderSessionsEqual,
@@ -407,7 +410,8 @@ function capLiveAgentStatusesInPlace(
   }
   // Prefer rows that are provably dead or too stale to represent a live agent.
   sweep(
-    (liveness, entry) => liveness === 'dead' || now - entry.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+    (liveness, entry) =>
+      liveness === 'dead' || now - agentStatusFreshnessAt(entry) > AGENT_STATUS_STALE_AFTER_MS
   )
   // Shed fresh unprovable rows only when needed; rooted live panes make this a soft cap.
   if (overflow > 0) {

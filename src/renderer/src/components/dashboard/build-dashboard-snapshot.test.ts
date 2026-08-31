@@ -201,6 +201,20 @@ describe('buildDashboardSnapshot', () => {
     expect(card.unseen).toBe(true)
   })
 
+  it('uses a mirrored row receipt for dashboard freshness metadata', () => {
+    const hostUpdatedAt = NOW + 10 * 60_000
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ updatedAt: hostUpdatedAt, localReceiptAt: NOW })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0]?.statusUpdatedAt).toBe(NOW)
+  })
+
   it('keeps monitoring in the working bucket with a passive dot state', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({

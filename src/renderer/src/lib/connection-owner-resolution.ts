@@ -1,5 +1,4 @@
 import type { AppState } from '@/store/types'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -11,6 +10,11 @@ import {
   getFolderWorkspaceCandidateRepos,
   getFolderWorkspaceConnectionId
 } from './folder-workspace-connection'
+import {
+  normalizeWorktreeLookupId,
+  resolveIndexedRepoOwner,
+  resolveIndexedWorktreeOwner
+} from './worktree-runtime-owner-index'
 
 type ConnectionOwnerState = Pick<
   AppState,
@@ -58,12 +62,27 @@ export function getConnectionIdFromState(
   if (parsedWorkspaceKey?.type === 'folder') {
     return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId)
   }
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return undefined
+  }
   // Why: owner resolution runs from retained Zustand selectors, so unrelated
   // store writes must not flatten every worktree or scan every repository.
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = getIndexedRepoMap(state.repos).get(repoId)
-  return repo ? (repo.connectionId ?? null) : undefined
+  // Ambiguous ids are intentionally unresolved: a local and SSH workspace can
+  // share the same path-derived id, and guessing would route file operations to
+  // the wrong host.
+  const worktreeResolution = resolveIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId)
+  if (worktreeResolution.kind === 'ambiguous') {
+    return undefined
+  }
+  const repoId =
+    worktreeResolution.kind === 'resolved'
+      ? worktreeResolution.owner.repoId
+      : getRepoIdFromWorktreeId(rawWorktreeId)
+  const repoResolution = resolveIndexedRepoOwner(state.repos, repoId)
+  return repoResolution.kind === 'resolved'
+    ? (repoResolution.owner.connectionId ?? null)
+    : undefined
 }
 
 export function getConnectionIdForFileFromState(

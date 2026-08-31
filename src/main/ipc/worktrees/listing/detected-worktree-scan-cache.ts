@@ -3,7 +3,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listRepoWorktrees } from '../../../repo-worktrees'
+import { listLocalRepoWorktreesStrict, listRepoWorktrees } from '../../../repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
@@ -125,7 +125,9 @@ export async function listDetectedGitWorktrees(
     : store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listRepoWorktrees(repo, localWorktreeGitOptions),
+    // A forgiving scan maps Git failures to []; that must never become an authoritative
+    // empty catalog or refresh the success cache. Local detection owns the strict boundary.
+    promise: listLocalRepoWorktreesStrict(repo, localWorktreeGitOptions),
     sideEffectToken: { generation, authorizedRootsRevision },
     ...(metadataPruneExpectation
       ? {

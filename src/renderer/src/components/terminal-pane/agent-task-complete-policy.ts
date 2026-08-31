@@ -8,6 +8,7 @@
  * consumers can use it.
  */
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { agentStatusFreshnessAt } from '../../../../shared/agent-status-observation'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 /** Delay before BEL/completion OS notifications so the richer
@@ -46,7 +47,8 @@ export function isAgentTaskCompleteTrackingEnabledFromState(
 export function hasAgentNotificationDetail(entry: AgentStatusEntry | undefined): boolean {
   return Boolean(
     entry &&
-    Date.now() - entry.updatedAt <= AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS &&
+    Date.now() - agentStatusFreshnessAt(entry) <=
+      AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS &&
     (entry.lastAssistantMessage || entry.toolName || entry.toolInput)
   )
 }

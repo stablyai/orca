@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
-import { resolveWorktreeOperationRouteResult } from './worktree-operation-route'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  resolveWorktreeOperationRouteResult,
+  resolveWorktreeOperationRouteResultForHost
+} from './worktree-operation-route'
 
 const WORKTREE_ID = 'repo-1::/srv/worktree'
 
@@ -32,6 +36,76 @@ describe('resolveWorktreeOperationRouteResult', () => {
         runtimeEnvironmentId: 'hub-a'
       }
     })
+  })
+
+  it('resolves a canonical worktree key against raw owner metadata', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          worktreesByRepo: {
+            'repo-1': [worktree('runtime:hub-a')]
+          }
+        },
+        worktreeWorkspaceKey(WORKTREE_ID)
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+    })
+  })
+
+  it('recovers a paired HUB owner when active state stores the raw id', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          activeWorktreeId: WORKTREE_ID,
+          activeWorkspaceExecutionHostId: 'ssh:hub-private-target',
+          worktreesByRepo: {
+            'repo-1': [worktree('ssh:hub-private-target', 'hub-a')]
+          }
+        },
+        worktreeWorkspaceKey(WORKTREE_ID)
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: {
+        executionHostId: 'ssh:hub-private-target',
+        runtimeEnvironmentId: 'hub-a'
+      }
+    })
+  })
+
+  it('fails malformed scoped worktree keys closed', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        { worktreesByRepo: { 'repo-1': [worktree('local')] } },
+        'worktree:repo-1'
+      )
+    ).toEqual({ kind: 'missing' })
+  })
+
+  it('does not let an identical malformed active key bypass scoped-key validation', () => {
+    const malformedKey = 'worktree:repo-1'
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          activeWorktreeId: malformedKey,
+          activeWorkspaceExecutionHostId: 'ssh:unexpected-target',
+          worktreesByRepo: { 'repo-1': [worktree('local')] }
+        },
+        malformedKey
+      )
+    ).toEqual({ kind: 'missing' })
+  })
+
+  it('fails the host-qualified resolver closed for malformed scoped keys', () => {
+    expect(
+      resolveWorktreeOperationRouteResultForHost(
+        { worktreesByRepo: { 'repo-1': [worktree('local')] } },
+        'worktree:repo-1',
+        'local'
+      )
+    ).toEqual({ kind: 'missing' })
   })
 
   it('recovers the HUB owner from its repo for a mixed-version SSH publication', () => {

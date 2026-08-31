@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
 
@@ -41,6 +42,28 @@ describe('getResolvedExecutionHostIdForWorktree', () => {
     expect(getResolvedExecutionHostIdForWorktree(remoteState, 'same-repo::/remote/worktree')).toBe(
       'ssh:target-1'
     )
+  })
+
+  it('resolves canonical worktree keys against raw catalog rows', () => {
+    const rawWorktreeId = 'remote-repo::/remote/worktree'
+    const state: WorktreeRuntimeOwnerState = {
+      repos: [{ id: 'remote-repo', connectionId: null, executionHostId: 'runtime:env-1' }],
+      worktreesByRepo: {
+        'remote-repo': [{ id: rawWorktreeId, repoId: 'remote-repo', hostId: 'runtime:env-1' }]
+      }
+    }
+    expect(getResolvedExecutionHostIdForWorktree(state, worktreeWorkspaceKey(rawWorktreeId))).toBe(
+      'runtime:env-1'
+    )
+  })
+
+  it('fails closed for malformed scoped worktree keys', () => {
+    const state: WorktreeRuntimeOwnerState = {
+      worktreesByRepo: {
+        'remote-repo': [{ id: 'remote-repo', repoId: 'remote-repo', hostId: 'local' }]
+      }
+    }
+    expect(getResolvedExecutionHostIdForWorktree(state, 'worktree:remote-repo')).toBeNull()
   })
 
   it('keeps missing folder catalogs unresolved but honors restored runtime ownership', () => {

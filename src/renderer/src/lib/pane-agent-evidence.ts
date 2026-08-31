@@ -8,6 +8,7 @@ import {
   type AgentStatusState,
   type AgentType
 } from '../../../shared/agent-status-types'
+import { agentStatusFreshnessAt } from '../../../shared/agent-status-observation'
 
 // Why: explicit agent status entries (from hook-based reports) can go stale if
 // the agent process exits without sending a final update. This helper lets
@@ -15,12 +16,12 @@ import {
 // (Moved here from agent-status.ts so the evidence resolvers below and the
 // aggregate consumers share one gate without an import cycle.)
 export function isExplicitAgentStatusFresh(
-  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed'>,
+  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed' | 'localReceiptAt'>,
   now: number,
   staleAfterMs: number
 ): boolean {
   // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
-  return entry.restoredUnconfirmed !== true && now - entry.updatedAt <= staleAfterMs
+  return entry.restoredUnconfirmed !== true && now - agentStatusFreshnessAt(entry) <= staleAfterMs
 }
 
 /**

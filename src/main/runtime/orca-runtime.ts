@@ -36978,8 +36978,13 @@ export class OrcaRuntimeService {
       const projectedStatusEntry = projectedAgentStatus.agentStatus as
         | (AgentStatusEntry & { turnCompletedAt?: number })
         | undefined
-      const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
-        projectedStatusEntry ?? {}
+      const {
+        turnCompletedAt: projectedTurnCompletedAt,
+        observation: _observation,
+        acceptedStatusSeq: _acceptedStatusSeq,
+        localReceiptAt: _localReceiptAt,
+        ...clientStatusFields
+      } = projectedStatusEntry ?? {}
       const clientAgentStatus = projectedStatusEntry
         ? { agentStatus: clientStatusFields as AgentStatusEntry }
         : {}

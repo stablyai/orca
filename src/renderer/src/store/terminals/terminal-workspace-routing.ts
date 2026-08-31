@@ -7,6 +7,11 @@ import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shar
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  normalizeWorktreeLookupId,
+  resolveIndexedRepoOwner,
+  resolveIndexedWorktreeOwner
+} from '@/lib/worktree-runtime-owner-index'
 
 export function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
@@ -61,10 +66,14 @@ export function worktreeUsesWslPath(
     )
     return folderWorkspace ? isWslUncPath(folderWorkspace.folderPath) : false
   }
-  const worktree = Object.values(state.worktreesByRepo)
-    .flat()
-    .find((entry) => entry.id === worktreeId)
-  return worktree ? isWslUncPath(worktree.path) : false
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return false
+  }
+  const resolution = resolveIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId)
+  return resolution.kind === 'resolved' && typeof resolution.owner.path === 'string'
+    ? isWslUncPath(resolution.owner.path)
+    : false
 }
 
 export function worktreeUsesRemoteConnection(
@@ -75,16 +84,18 @@ export function worktreeUsesRemoteConnection(
   if (parsedWorkspaceKey?.type === 'folder') {
     return Boolean(getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId))
   }
-  const directRepoId = getRepoIdFromWorktreeId(worktreeId)
-  const directRepo = state.repos.find((repo) => repo.id === directRepoId)
-  if (directRepo) {
-    return Boolean(directRepo.connectionId)
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return false
   }
-  const worktree = Object.values(state.worktreesByRepo)
-    .flat()
-    .find((entry) => entry.id === worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
-  return Boolean(repo?.connectionId)
+  const worktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId)
+  if (worktree.kind === 'ambiguous') {
+    return false
+  }
+  const repoId =
+    worktree.kind === 'resolved' ? worktree.owner.repoId : getRepoIdFromWorktreeId(rawWorktreeId)
+  const repo = resolveIndexedRepoOwner(state.repos, repoId)
+  return repo.kind === 'resolved' && Boolean(repo.owner.connectionId)
 }
 
 export function getRemoteConnectionIdForWorktree(
@@ -95,16 +106,18 @@ export function getRemoteConnectionIdForWorktree(
   if (parsedWorkspaceKey?.type === 'folder') {
     return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId) ?? null
   }
-  const directRepoId = getRepoIdFromWorktreeId(worktreeId)
-  const directRepo = state.repos.find((repo) => repo.id === directRepoId)
-  if (directRepo) {
-    return directRepo.connectionId?.trim() || null
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return null
   }
-  const worktree = Object.values(state.worktreesByRepo)
-    .flat()
-    .find((entry) => entry.id === worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
-  return repo?.connectionId?.trim() || null
+  const worktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId)
+  if (worktree.kind === 'ambiguous') {
+    return null
+  }
+  const repoId =
+    worktree.kind === 'resolved' ? worktree.owner.repoId : getRepoIdFromWorktreeId(rawWorktreeId)
+  const repo = resolveIndexedRepoOwner(state.repos, repoId)
+  return repo.kind === 'resolved' ? repo.owner.connectionId?.trim() || null : null
 }
 
 export function resolveTerminalStopRuntimeEnvironmentId(

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { findIndexedWorktreeOwnerForHost } from './worktree-runtime-owner-index'
+import {
+  findIndexedDetectedWorktrees,
+  findIndexedWorktreeOwnerForHost,
+  resolveIndexedRepoOwner,
+  resolveIndexedWorktreeOwner
+} from './worktree-runtime-owner-index'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 
 describe('worktree runtime owner index', () => {
   it('indexes paired worktrees by both runtime owner and physical host', () => {
@@ -28,6 +34,36 @@ describe('worktree runtime owner index', () => {
     expect(
       findIndexedWorktreeOwnerForHost(worktreesByRepo, directSsh.id, 'runtime:hub-a')
     ).toBeNull()
+  })
+
+  it('unwraps canonical workspace keys before owner lookup', () => {
+    const owner = {
+      id: 'repo-1::same-id',
+      repoId: 'repo-1',
+      hostId: 'runtime:hub-a' as const
+    }
+    const worktreesByRepo = { 'repo-1': [owner] }
+    const canonicalKey = worktreeWorkspaceKey(owner.id)
+
+    expect(resolveIndexedWorktreeOwner(worktreesByRepo, canonicalKey)).toEqual({
+      kind: 'resolved',
+      owner
+    })
+    expect(findIndexedWorktreeOwnerForHost(worktreesByRepo, canonicalKey, 'runtime:hub-a')).toBe(
+      owner
+    )
+  })
+
+  it('fails closed for malformed scoped keys', () => {
+    const owner = { id: 'repo-1', repoId: 'repo-1', hostId: 'local' as const }
+    const worktreesByRepo = { 'repo-1': [owner] }
+    const detectedWorktreesByRepo = { 'repo-1': { worktrees: [owner] } }
+
+    expect(resolveIndexedWorktreeOwner(worktreesByRepo, 'worktree:repo-1')).toEqual({
+      kind: 'missing'
+    })
+    expect(findIndexedWorktreeOwnerForHost(worktreesByRepo, 'folder:repo-1', 'local')).toBeNull()
+    expect(findIndexedDetectedWorktrees(detectedWorktreesByRepo, 'worktree:repo-1')).toEqual([])
   })
 
   it('fails closed when direct and paired worktrees share a physical host alias', () => {
@@ -86,5 +122,37 @@ describe('worktree runtime owner index', () => {
         pairedB
       )
     }
+  })
+
+  it('treats inferred and explicit equivalent SSH repo owners as one owner', () => {
+    const inferred = { id: 'repo-ssh', connectionId: 'ssh-1', executionHostId: null } as const
+    const explicit = {
+      id: 'repo-ssh',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1'
+    } as const
+
+    expect(resolveIndexedRepoOwner([inferred, explicit], 'repo-ssh')).toEqual({
+      kind: 'resolved',
+      owner: inferred
+    })
+  })
+
+  it('treats omitted and runtime-stamped equivalent worktree owners as one owner', () => {
+    const omitted = {
+      id: 'repo-runtime::/same-path',
+      repoId: 'repo-runtime',
+      runtimeOwnerEnvironmentId: 'hub-a'
+    } as const
+    const stamped = {
+      ...omitted,
+      hostId: 'runtime:hub-a' as const
+    }
+    const worktreesByRepo = { 'repo-runtime': [omitted, stamped] }
+
+    expect(resolveIndexedWorktreeOwner(worktreesByRepo, omitted.id)).toEqual({
+      kind: 'resolved',
+      owner: omitted
+    })
   })
 })

@@ -12,7 +12,8 @@ import {
   findIndexedRepoOwner,
   findIndexedRepoOwnerForHost,
   findIndexedWorktreeOwner,
-  findIndexedWorktreeOwnerForHost
+  findIndexedWorktreeOwnerForHost,
+  normalizeWorktreeLookupId
 } from './worktree-runtime-owner-index'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
 
@@ -67,13 +68,20 @@ export function getResolvedExecutionHostIdForWorktree(
   if (scope?.type === 'folder') {
     return getResolvedFolderHost(state, scope.folderWorkspaceId)
   }
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return null
+  }
   const preferredHostId =
-    state.activeWorktreeId === worktreeId
+    state.activeWorktreeId === worktreeId ||
+    (state.activeWorktreeId !== null &&
+      state.activeWorktreeId !== undefined &&
+      normalizeWorktreeLookupId(state.activeWorktreeId) === rawWorktreeId)
       ? (state.activeWorkspaceExecutionHostId ?? undefined)
       : undefined
   const worktree = preferredHostId
-    ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, preferredHostId)
-    : findIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+    ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, rawWorktreeId, preferredHostId)
+    : findIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId)
   const worktreeHost = parseExecutionHostId(worktree?.hostId)
   if (worktreeHost) {
     return worktreeHost.id

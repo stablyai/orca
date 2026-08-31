@@ -55,11 +55,11 @@ export type AgentStatusObservation = {
   kind?: AgentStatusObservationKind
 }
 
-/** The observation facet, mixed into every row shape that carries one. Optional and read by
- *  nothing yet (STA-4293): rows from old hosts, persisted rehydration, and any ingress not yet
- *  stamped carry none, so consumers must keep working without it. Deliberately NOT mixed into
- *  `AgentStatusPayload` — the ingress stamps it and it is never read back out of the reported
- *  body, so a hook or OSC writer cannot declare its own provenance. */
+/** The observation facet, mixed into every row shape that carries one. Optional because rows
+ *  from old hosts, persisted rehydration, and any ingress not yet stamped carry none, so
+ *  consumers must keep working without it. Deliberately NOT mixed into `AgentStatusPayload` —
+ *  the ingress stamps it and it is never read back out of the reported body, so a hook or OSC
+ *  writer cannot declare its own provenance. */
 export type WithAgentStatusObservation = { observation?: AgentStatusObservation }
 
 /** Renderer-local count of ACCEPTED status writes this pane's row has taken. Incremented only by
@@ -71,7 +71,24 @@ export type WithAgentStatusObservation = { observation?: AgentStatusObservation 
  *
  *  Declared here beside the observation facet because both are per-write facets mixed into
  *  `AgentStatusEntry` rather than fields a reporter supplies. */
-export type AgentStatusRowFacets = WithAgentStatusObservation & { acceptedStatusSeq?: number }
+export type AgentStatusRowFacets = WithAgentStatusObservation & {
+  acceptedStatusSeq?: number
+  /** Renderer-local receipt time for a mirrored host row; never sent over the wire. */
+  localReceiptAt?: number
+}
+
+/**
+ * Returns the clock a replica should use when deciding whether a status row is fresh.
+ * Host timestamps remain the ordering/tiebreak clock; mirrored rows decay from local receipt.
+ */
+export function agentStatusFreshnessAt(entry: {
+  updatedAt: number
+  localReceiptAt?: number
+}): number {
+  return typeof entry.localReceiptAt === 'number' && Number.isFinite(entry.localReceiptAt)
+    ? entry.localReceiptAt
+    : entry.updatedAt
+}
 
 // ─── THE ORDERING RULE ──────────────────────────────────────────────────────
 // `(authorityId, incarnation, revision)` is a total order ONLY within one authorityId.
@@ -92,8 +109,8 @@ export type AgentStatusRowFacets = WithAgentStatusObservation & { acceptedStatus
 // subtraction, not in the tiebreak. A replica must either receive the authority's own
 // freshness verdict, or stamp its own receipt time and decay against that.
 //
-// This PR does not fix it. It records the contract at the type so the PR that moves the
-// first consumer has something to be correct against.
+// Mirrored rows now carry a renderer-local receipt and consumers use it when present; rows
+// without the facet retain the legacy `updatedAt` fallback.
 
 /** Bounds the per-pane incarnation map. Panes are created for the life of the process;
  *  eviction is safe because `incarnation` is floored by an authority-wide counter (below). */

@@ -46,6 +46,26 @@ describe('isExplicitAgentStatusFresh', () => {
       )
     ).toBe(false)
   })
+
+  it.each([10 * 60_000, -10 * 60_000])(
+    'uses local receipt time when the host clock is skewed by %sms',
+    (skewMs) => {
+      const mirrored = entry({ updatedAt: NOW + skewMs, localReceiptAt: NOW })
+      expect(isExplicitAgentStatusFresh(mirrored, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
+      expect(
+        isExplicitAgentStatusFresh(
+          mirrored,
+          NOW + AGENT_STATUS_STALE_AFTER_MS + 1,
+          AGENT_STATUS_STALE_AFTER_MS
+        )
+      ).toBe(false)
+    }
+  )
+
+  it('keeps legacy freshness behavior when no local receipt is present', () => {
+    const legacy = entry({ updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1 })
+    expect(isExplicitAgentStatusFresh(legacy, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(false)
+  })
 })
 
 describe('classifyTitleActivity', () => {

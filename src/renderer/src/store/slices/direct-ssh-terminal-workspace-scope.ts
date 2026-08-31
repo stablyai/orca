@@ -7,7 +7,13 @@ import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  getRawWorktreeIdFromWorkspaceSessionKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
+import { splitWorktreeId } from '../../../../shared/worktree/id'
 import {
   resolveDirectSshTargetScope,
   type DirectSshTargetScopeInput
@@ -26,8 +32,20 @@ function isExplicitContradictoryHost(
 
 function worktreeHasContradictoryOwner(
   input: DirectSshTargetScopeInput,
-  worktreeId: string
+  workspaceSessionKey: string
 ): boolean {
+  const worktreeId = getRawWorktreeIdFromWorkspaceSessionKey(workspaceSessionKey)
+  // A malformed scoped key is never evidence for a direct-SSH reconnect.
+  if (worktreeId === null) {
+    return true
+  }
+  const scope = parseWorkspaceKey(workspaceSessionKey)
+  if (scope?.type === 'worktree') {
+    const parsed = splitWorktreeId(worktreeId)
+    if (!parsed?.repoId || !parsed.worktreePath) {
+      return true
+    }
+  }
   const rows = [
     ...Object.values(input.worktreesByRepo ?? {}).flat(),
     ...Object.values(input.detectedWorktreesByRepo ?? {}).flatMap((entry) => entry.worktrees)
@@ -48,7 +66,9 @@ function worktreeHasContradictoryOwner(
   const restored = input.restoredRuntimeHostIdByWorkspaceSessionKey
   return (
     isExplicitContradictoryHost(restored?.[worktreeId], expectedHostId) ||
-    isExplicitContradictoryHost(restored?.[worktreeWorkspaceKey(worktreeId)], expectedHostId)
+    isExplicitContradictoryHost(restored?.[worktreeWorkspaceKey(worktreeId)], expectedHostId) ||
+    (workspaceSessionKey !== worktreeId &&
+      isExplicitContradictoryHost(restored?.[workspaceSessionKey], expectedHostId))
   )
 }
 
@@ -95,8 +115,12 @@ function workspaceHasContradictoryOwner(
   input: DirectSshTargetScopeInput,
   workspaceKey: string
 ): boolean {
+  const scope = parseWorkspaceKey(workspaceKey)
+  if (scope?.type === 'folder') {
+    return folderHasContradictoryOwner(input, scope.folderWorkspaceId)
+  }
   if (workspaceKey.startsWith('folder:')) {
-    return folderHasContradictoryOwner(input, workspaceKey.slice('folder:'.length))
+    return true
   }
   return worktreeHasContradictoryOwner(input, workspaceKey)
 }

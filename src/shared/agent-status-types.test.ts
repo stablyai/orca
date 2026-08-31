@@ -38,6 +38,23 @@ describe('isFreshNonDoneAgentStatus', () => {
     expect(isFreshNonDoneAgentStatus({ state: 'done', updatedAt: 2_000 }, 2_000)).toBe(false)
     expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 0 }, 10_000, 5_000)).toBe(false)
   })
+
+  it('uses a mirrored row receipt clock instead of a skewed host timestamp', () => {
+    expect(
+      isFreshNonDoneAgentStatus(
+        { state: 'working', updatedAt: 11_000, localReceiptAt: 1_000 },
+        1_000,
+        5_000
+      )
+    ).toBe(true)
+    expect(
+      isFreshNonDoneAgentStatus(
+        { state: 'working', updatedAt: -9_000, localReceiptAt: 1_000 },
+        6_001,
+        5_000
+      )
+    ).toBe(false)
+  })
 })
 
 describe('parseAgentStatusPayload', () => {

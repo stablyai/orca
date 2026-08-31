@@ -8,6 +8,7 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  normalizeWorktreeLookupId,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 // Type-only, so routing's shared vocabulary stays in one place without a runtime cycle.
@@ -26,9 +27,13 @@ export function resolveExplicitWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return { kind: 'missing' }
+  }
   const exactRoutes = new Map<string, WorktreeOperationRoute>()
   const exactRepoIds = new Set<string>()
-  const indexedWorktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  const indexedWorktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, rawWorktreeId)
   if (indexedWorktree.kind === 'ambiguous') {
     return { kind: 'ambiguous' }
   }
@@ -42,7 +47,10 @@ export function resolveExplicitWorktreeOperationRouteResult(
       addRoute(exactRoutes, resolution.route)
     }
   }
-  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+  for (const worktree of findIndexedDetectedWorktrees(
+    state.detectedWorktreesByRepo,
+    rawWorktreeId
+  )) {
     exactRepoIds.add(worktree.repoId)
     const resolution = resolveExactWorktreeRoute(state, worktree)
     if (resolution.kind === 'ambiguous') {
@@ -57,7 +65,7 @@ export function resolveExplicitWorktreeOperationRouteResult(
     return exactRoutes.size === 1 && route ? { kind: 'resolved', route } : { kind: 'ambiguous' }
   }
   if (exactRepoIds.size === 0) {
-    exactRepoIds.add(getRepoIdFromWorktreeId(worktreeId))
+    exactRepoIds.add(getRepoIdFromWorktreeId(rawWorktreeId))
   }
   const repoRoutes = new Map<string, WorktreeOperationRoute>()
   for (const repoId of exactRepoIds) {

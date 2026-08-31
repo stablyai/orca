@@ -10,6 +10,7 @@ import {
   isFreshNonDoneAgentStatus,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { agentStatusFreshnessAt } from '../../../../shared/agent-status-observation'
 import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
 import type {
   AgentCompletionDispatchMeta,
@@ -89,7 +90,8 @@ export function dispatchTerminalNotification(
       : undefined
   const freshStoredAgentStatus =
     storedAgentStatus &&
-    Date.now() - storedAgentStatus.updatedAt <= AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS &&
+    Date.now() - agentStatusFreshnessAt(storedAgentStatus) <=
+      AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS &&
     agentSnapshotMatchesExplicitTitle(storedAgentStatus, explicitTitleAgentType)
       ? storedAgentStatus
       : undefined

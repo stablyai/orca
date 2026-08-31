@@ -394,23 +394,34 @@ describe('buildMobileSessionTabSnapshots', () => {
           agentType: 'codex',
           paneKey,
           terminalTitle: 'codex [working]',
-          stateHistory: []
+          stateHistory: [],
+          acceptedStatusSeq: 4,
+          localReceiptAt: 1_700_000_000_123,
+          observation: {
+            origin: 'osc',
+            authorityId: 'renderer:test',
+            incarnation: 0,
+            revision: 1,
+            observedAt: 1_700_000_000_000
+          }
         }
       }
     })
 
-    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toMatchObject([
-      {
-        type: 'terminal',
-        id: `term-1::${leafId}`,
-        agentStatus: {
-          state: 'working',
-          prompt: 'fix parity',
-          agentType: 'codex',
-          paneKey
-        }
+    const tab = buildMobileSessionTabSnapshots(state)[0]?.tabs[0]
+    expect(tab).toMatchObject({
+      type: 'terminal',
+      id: `term-1::${leafId}`,
+      agentStatus: {
+        state: 'working',
+        prompt: 'fix parity',
+        agentType: 'codex',
+        paneKey
       }
-    ])
+    })
+    expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('localReceiptAt')
+    expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('acceptedStatusSeq')
+    expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('observation')
   })
 
   it('does not publish terminal pane agent status for the Claude agents screen behind a custom title', () => {

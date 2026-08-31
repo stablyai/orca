@@ -6,6 +6,7 @@ import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   hasIndexedDetectedWorktree,
+  normalizeWorktreeLookupId,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
@@ -36,6 +37,7 @@ export type WorktreeOperationOwnerRecord = {
 
 // settings/runtimeEnvironments come from FolderWorkspaceRuntimeOwnerState's legacy-owner base.
 export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
+  activeWorkspaceKey?: string | null
   repos?: readonly Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'>[]
   worktreesByRepo?: Record<string, readonly WorktreeOperationOwnerRecord[]>
   detectedWorktreesByRepo?: Record<string, { worktrees: readonly WorktreeOperationOwnerRecord[] }>
@@ -48,23 +50,57 @@ function ownerRecordsOnHost(
   worktreeId: string,
   executionHostId: ExecutionHostId
 ): WorktreeOperationOwnerRecord[] {
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return []
+  }
   const owners: WorktreeOperationOwnerRecord[] = []
   for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
     for (const worktree of worktrees) {
       if (
-        worktree.id === worktreeId &&
+        worktree.id === rawWorktreeId &&
         parseExecutionHostId(worktree.hostId)?.id === executionHostId
       ) {
         owners.push(worktree)
       }
     }
   }
-  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+  for (const worktree of findIndexedDetectedWorktrees(
+    state.detectedWorktreesByRepo,
+    rawWorktreeId
+  )) {
     if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
       owners.push(worktree)
     }
   }
   return owners
+}
+
+/** Active state stores raw worktree ids while session maps may use canonical
+ * `worktree:<repo::path>` keys. Keep folder identity scoped separately. */
+function workspaceIdsMatch(left: string | null | undefined, right: string): boolean {
+  if (!left) {
+    return false
+  }
+  const leftScope = parseWorkspaceKey(left)
+  const rightScope = parseWorkspaceKey(right)
+  if (leftScope?.type === 'folder' || rightScope?.type === 'folder') {
+    return (
+      leftScope?.type === 'folder' &&
+      rightScope?.type === 'folder' &&
+      leftScope.folderWorkspaceId === rightScope.folderWorkspaceId
+    )
+  }
+  const leftRaw = normalizeWorktreeLookupId(left)
+  const rightRaw = normalizeWorktreeLookupId(right)
+  return leftRaw !== null && rightRaw !== null && leftRaw === rightRaw
+}
+
+function activeWorkspaceMatches(state: WorktreeOperationRouteState, worktreeId: string): boolean {
+  return (
+    workspaceIdsMatch(state.activeWorktreeId, worktreeId) ||
+    workspaceIdsMatch(state.activeWorkspaceKey, worktreeId)
+  )
 }
 
 /**
@@ -76,10 +112,9 @@ export function resolveActiveWorkspaceRoute(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRoute | null {
-  const activeHost =
-    state.activeWorktreeId === worktreeId
-      ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
-      : null
+  const activeHost = activeWorkspaceMatches(state, worktreeId)
+    ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
+    : null
   return activeHost ? resolveSelectedHostRoute(state, worktreeId, activeHost) : null
 }
 
@@ -95,9 +130,10 @@ export function resolveWorktreeOperationRouteResultForHost(
   executionHostId: ExecutionHostId
 ): WorktreeOperationRouteResolution {
   const host = parseExecutionHostId(executionHostId)
-  // Why: an unparseable qualifier is not evidence of an owner — fail closed.
-  return host
-    ? { kind: 'resolved', route: resolveSelectedHostRoute(state, worktreeId, host) }
+  // Why: an unparseable qualifier or workspace key is not evidence of an owner — fail closed.
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  return host && rawWorktreeId !== null
+    ? { kind: 'resolved', route: resolveSelectedHostRoute(state, rawWorktreeId, host) }
     : { kind: 'missing' }
 }
 
@@ -146,16 +182,24 @@ export function getWorktreeOperationOwnerHostIds(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): ExecutionHostId[] {
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return []
+  }
   const hostIds = new Set<ExecutionHostId>()
   for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
     for (const worktree of worktrees) {
-      const hostId = worktree.id === worktreeId ? parseExecutionHostId(worktree.hostId)?.id : null
+      const hostId =
+        worktree.id === rawWorktreeId ? parseExecutionHostId(worktree.hostId)?.id : null
       if (hostId) {
         hostIds.add(hostId)
       }
     }
   }
-  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+  for (const worktree of findIndexedDetectedWorktrees(
+    state.detectedWorktreesByRepo,
+    rawWorktreeId
+  )) {
     const hostId = parseExecutionHostId(worktree.hostId)?.id
     if (hostId) {
       hostIds.add(hostId)
@@ -187,6 +231,10 @@ export function resolveWorktreeOperationRouteResult(
   if (workspaceScope?.type === 'folder') {
     return resolveFolderWorkspaceOperationRoute(state, workspaceScope.folderWorkspaceId)
   }
+  const rawWorktreeId = normalizeWorktreeLookupId(worktreeId)
+  if (rawWorktreeId === null) {
+    return { kind: 'missing' }
+  }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind !== 'missing') {
     return explicitResolution
@@ -196,7 +244,7 @@ export function resolveWorktreeOperationRouteResult(
   const hasKnownWorktree =
     resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
     hasDetectedWorktree
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const repoId = getRepoIdFromWorktreeId(rawWorktreeId)
   const hasKnownRepo = state.repos?.some((repo) => repo.id === repoId) === true
   if (!hasKnownWorktree && !hasKnownRepo) {
     return { kind: 'missing' }

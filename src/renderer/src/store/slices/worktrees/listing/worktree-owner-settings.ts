@@ -27,11 +27,62 @@ export function replaceWorktreeInRepoLists(
   if (!current) {
     return worktreesByRepo
   }
+  // Worktree ids are path-derived and can repeat across physical hosts. Keep both
+  // host and logical runtime namespaces so two SSH targets projected by one HUB do
+  // not overwrite one another (#10287, #11163).
+  type OwnerIdentity = {
+    physicalHostId: string
+    runtimeEnvironmentId: string | null
+    hostKind: 'local' | 'ssh' | 'runtime' | null
+  }
+  const ownerIdentity = (worktree: Worktree): OwnerIdentity => {
+    const parsedHost = parseExecutionHostId(worktree.hostId)
+    const runtimeEnvironmentId =
+      worktree.runtimeOwnerEnvironmentId?.trim() ||
+      (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
+    return {
+      // A runtime host is a logical owner rather than a physical SSH target. Keep
+      // it as a distinct namespace and only bridge it to one physical row below.
+      physicalHostId:
+        parsedHost?.kind === 'runtime' ? 'runtime' : (parsedHost?.id ?? worktree.hostId ?? 'local'),
+      runtimeEnvironmentId: runtimeEnvironmentId || null,
+      hostKind: parsedHost?.kind ?? null
+    }
+  }
+  const updatedOwnerIdentity = ownerIdentity(updatedWorktree)
+  const identitiesEqual = (left: OwnerIdentity, right: OwnerIdentity): boolean =>
+    left.physicalHostId === right.physicalHostId &&
+    left.runtimeEnvironmentId === right.runtimeEnvironmentId
+  const isRuntimePhysicalAlias = (left: OwnerIdentity, right: OwnerIdentity): boolean =>
+    left.runtimeEnvironmentId !== null &&
+    left.runtimeEnvironmentId === right.runtimeEnvironmentId &&
+    ((left.hostKind === 'runtime' && right.hostKind !== 'runtime') ||
+      (right.hostKind === 'runtime' && left.hostKind !== 'runtime'))
+  const exactMatchExists = current.some(
+    (worktree) =>
+      worktree.id === updatedWorktree.id &&
+      identitiesEqual(ownerIdentity(worktree), updatedOwnerIdentity)
+  )
+  const runtimeAliasCandidates = current.filter(
+    (worktree) =>
+      worktree.id === updatedWorktree.id &&
+      isRuntimePhysicalAlias(ownerIdentity(worktree), updatedOwnerIdentity)
+  )
+  // Legacy runtime refreshes can omit the physical SSH stamp. Bridge that form
+  // only when exactly one physical row is eligible; rival targets remain intact.
+  const useRuntimeAlias = !exactMatchExists && runtimeAliasCandidates.length === 1
   return {
     ...worktreesByRepo,
-    [repoId]: current.map((worktree) =>
-      worktree.id === updatedWorktree.id ? updatedWorktree : worktree
-    )
+    [repoId]: current.map((worktree) => {
+      if (worktree.id !== updatedWorktree.id) {
+        return worktree
+      }
+      const identity = ownerIdentity(worktree)
+      return identitiesEqual(identity, updatedOwnerIdentity) ||
+        (useRuntimeAlias && isRuntimePhysicalAlias(identity, updatedOwnerIdentity))
+        ? updatedWorktree
+        : worktree
+    })
   }
 }
 

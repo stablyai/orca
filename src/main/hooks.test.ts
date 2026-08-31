@@ -1,6 +1,6 @@
 import type * as GitRunner from './git/runner'
 
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeHookTestRepo } from './hooks-test-fixtures'
 
 // Mock fs used by loadHooks
@@ -13,10 +13,18 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn()
 }))
 
-const { execMock, runWslProcessMock, gitExecFileSyncMock } = vi.hoisted(() => ({
+const {
+  execMock,
+  runWslProcessMock,
+  gitExecFileSyncMock,
+  hydrateShellPathMock,
+  mergePathSegmentsMock
+} = vi.hoisted(() => ({
   execMock: vi.fn(),
   runWslProcessMock: vi.fn(),
-  gitExecFileSyncMock: vi.fn()
+  gitExecFileSyncMock: vi.fn(),
+  hydrateShellPathMock: vi.fn(),
+  mergePathSegmentsMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
@@ -30,6 +38,11 @@ vi.mock('./wsl/wsl-runner', () => ({
   runWslProcess: runWslProcessMock
 }))
 
+vi.mock('./startup/hydrate-shell-path', () => ({
+  hydrateShellPath: hydrateShellPathMock,
+  mergePathSegments: mergePathSegmentsMock
+}))
+
 vi.mock('./git/runner', async () => ({
   ...(await vi.importActual<typeof GitRunner>('./git/runner')),
   gitExecFileSync: gitExecFileSyncMock
@@ -41,6 +54,58 @@ describe('runHook', () => {
     setupRunPolicy?: 'ask' | 'run-by-default' | 'skip-by-default'
     scripts?: { setup: string; archive: string }
   }) => makeHookTestRepo(hookSettings)
+
+  beforeEach(() => {
+    hydrateShellPathMock.mockReset()
+    hydrateShellPathMock.mockResolvedValue({
+      ok: false,
+      segments: [],
+      failureReason: 'empty_path'
+    })
+    mergePathSegmentsMock.mockReset()
+  })
+
+  it('hydrates the login-shell PATH before running a local hook', async () => {
+    execMock.mockReset()
+    execMock.mockImplementation((_script, _options, callback) => {
+      callback?.(null, '', '')
+      return {} as never
+    })
+    hydrateShellPathMock.mockResolvedValue({
+      ok: true,
+      segments: ['/home/alice/.local/bin', '/usr/bin'],
+      failureReason: 'none'
+    })
+    mergePathSegmentsMock.mockImplementation((segments: string[]) => {
+      process.env.PATH = segments.join(':')
+      return segments
+    })
+
+    const fs = await import('node:fs')
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    pnpm install\n')
+
+    const originalPlatform = process.platform
+    const originalPath = process.env.PATH
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      const { runHook } = await import('./hooks')
+      await runHook('setup', '/repo/worktree', makeRepo())
+
+      expect(hydrateShellPathMock).toHaveBeenCalledOnce()
+      expect(mergePathSegmentsMock).toHaveBeenCalledWith(['/home/alice/.local/bin', '/usr/bin'])
+      expect(execMock).toHaveBeenCalledOnce()
+      const options = execMock.mock.calls[0]?.[1] as { env?: NodeJS.ProcessEnv } | undefined
+      expect(options?.env?.PATH).toBe('/home/alice/.local/bin:/usr/bin')
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      if (originalPath === undefined) {
+        delete process.env.PATH
+      } else {
+        process.env.PATH = originalPath
+      }
+    }
+  })
 
   it('uses the Windows command shell when running hooks', async () => {
     execMock.mockImplementation((_script, _options, callback) => {

@@ -8,7 +8,8 @@ const SSH_PTY_ID_SEPARATOR = '@@'
 // target id that app PTY ids embed. Both name the same connection, so collapse
 // to the bare id before comparing/encoding — otherwise a valid reattach throws a
 // spurious "belongs to SSH connection" error at the user.
-function normalizeConnectionId(connectionId: string): string {
+/** Collapse an execution-host envelope to the bare SSH target used in PTY ids. */
+export function normalizeSshConnectionId(connectionId: string): string {
   const parsed = parseExecutionHostId(connectionId)
   return parsed?.kind === 'ssh' ? parsed.targetId : connectionId
 }
@@ -44,7 +45,7 @@ export function parseAppSshPtyId(ptyId: string): ParsedSshPtyId | null {
 }
 
 export function toAppSshPtyId(connectionId: string, relayPtyId: string): string {
-  const normalizedConnectionId = normalizeConnectionId(connectionId)
+  const normalizedConnectionId = normalizeSshConnectionId(connectionId)
   const parsed = parseAppSshPtyId(relayPtyId)
   if (parsed) {
     if (parsed.connectionId !== normalizedConnectionId) {
@@ -60,7 +61,7 @@ export function toRelaySshPtyId(connectionId: string, ptyId: string): string {
   if (!parsed) {
     return ptyId
   }
-  if (parsed.connectionId !== normalizeConnectionId(connectionId)) {
+  if (parsed.connectionId !== normalizeSshConnectionId(connectionId)) {
     throw new Error(`PTY ${ptyId} belongs to SSH connection "${parsed.connectionId}"`)
   }
   return parsed.relayPtyId

@@ -8,12 +8,15 @@ import { setPlatform, listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta } from './worktrees-test-fixtures'
 
+const strictListWorktreesMock = vi.hoisted(() => vi.fn())
+
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../git/worktree', async () =>
-  (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
-)
+vi.mock('../git/worktree', async () => ({
+  ...(await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock(),
+  listWorktreesStrict: strictListWorktreesMock
+}))
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
@@ -93,6 +96,31 @@ vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).pty
 describe('registerWorktreeHandlers', () => {
   beforeEach(() => {
     setupWorktreeHandlers()
+    strictListWorktreesMock.mockReset()
+    strictListWorktreesMock.mockImplementation((repoPath: string, options?: unknown) =>
+      options === undefined ? listWorktreesMock(repoPath) : listWorktreesMock(repoPath, options)
+    )
+  })
+
+  it('keeps a failed local scan non-authoritative and out of the success cache', async () => {
+    listWorktreesMock.mockResolvedValue([])
+    strictListWorktreesMock.mockRejectedValue(new Error('git worktree list timed out'))
+
+    const result = (await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1'
+    })) as { authoritative: boolean; worktrees: Worktree[] }
+
+    expect(result).toEqual({
+      repoId: 'repo-1',
+      authoritative: false,
+      source: 'metadata-fallback',
+      worktrees: []
+    })
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 0,
+      inFlightSize: 0
+    })
+    expect(strictListWorktreesMock).toHaveBeenCalledWith('/workspace/repo')
   })
 
   it('does not reuse host detected worktree scans for a selected WSL runtime', async () => {

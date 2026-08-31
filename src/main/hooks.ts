@@ -11,6 +11,7 @@ import { promptGuardShellEnv } from './git/runner'
 import { dropIncoherentCondaActivationEnv } from './pty/conda-activation-env'
 import { toLinuxPath } from './wsl'
 import { runWslProcess } from './wsl/wsl-runner'
+import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../shared/orca-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
@@ -115,7 +116,7 @@ export function getSetupCommandSource(
 /**
  * Run a named hook script in the given working directory.
  */
-export function runHook(
+export async function runHook(
   hookName: 'setup' | 'archive',
   cwd: string,
   repo: Repo,
@@ -126,7 +127,7 @@ export function runHook(
   const script = hooks?.scripts[hookName]
 
   if (!script) {
-    return Promise.resolve({ success: true, output: '' })
+    return { success: true, output: '' }
   }
 
   const runtimeTarget = getHookRuntimeTarget(projectRuntime)
@@ -188,6 +189,11 @@ export function runHook(
       })
   }
 
+  // Hooks can run before startup hydration settles, so refresh PATH first.
+  const hydration = await hydrateShellPath().catch(() => null)
+  if (hydration?.ok) {
+    mergePathSegments(hydration.segments)
+  }
   const shellHookEnv: NodeJS.ProcessEnv = { ...process.env, ...getSetupEnvVars(repo, cwd) }
   dropIncoherentCondaActivationEnv(shellHookEnv)
 

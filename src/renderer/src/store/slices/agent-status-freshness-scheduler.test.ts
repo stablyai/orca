@@ -140,6 +140,25 @@ describe('freshness scheduler completion deadlines', () => {
 
     scheduler.dispose()
   })
+  it('schedules mirrored hook expiry from local receipt, not host updatedAt', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const { bumpEpochs, scheduler } = setup([
+      doneEntry({
+        state: 'working',
+        updatedAt: NOW + 10 * 60_000,
+        localReceiptAt: NOW
+      })
+    ])
+
+    scheduler.schedule()
+    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
+    expect(bumpEpochs).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(bumpEpochs).toHaveBeenCalledTimes(1)
+
+    scheduler.dispose()
+  })
 
   it('coalesces pending deferred scans while preserving each queue slot', async () => {
     vi.useFakeTimers()

@@ -3,7 +3,8 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { AgentStatusRowFacets } from './agent-status-observation'
+import { agentStatusFreshnessAt, type AgentStatusRowFacets } from './agent-status-observation'
+export { agentStatusFreshnessAt } from './agent-status-observation'
 import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -250,7 +251,9 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 
 export function isFreshNonDoneAgentStatus(
-  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'restoredUnconfirmed'> | undefined,
+  entry:
+    | Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'restoredUnconfirmed' | 'localReceiptAt'>
+    | undefined,
   now = Date.now(),
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
@@ -259,7 +262,7 @@ export function isFreshNonDoneAgentStatus(
     entry &&
     entry.state !== 'done' &&
     entry.restoredUnconfirmed !== true &&
-    now - entry.updatedAt <= staleAfterMs
+    now - agentStatusFreshnessAt(entry) <= staleAfterMs
   )
 }
 

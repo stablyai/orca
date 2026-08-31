@@ -15,8 +15,10 @@ import { buildPersistedClosedTerminalTabTombstones } from './workspace-session-c
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
+import { buildTerminalSessionData } from './workspace-session-terminal-data'
 
 export { buildActiveConnectionIdsAtShutdown }
+export { buildTerminalSessionData } from './workspace-session-terminal-data'
 
 /** Why (issue #1158): require both flags so a hydration failure can't overwrite orca-data.json with empty error-path state. */
 export function shouldPersistWorkspaceSession(
@@ -209,58 +211,6 @@ export function buildSanitizedTabsByWorktree(
       })
     ])
   )
-}
-
-export function buildTerminalSessionData(
-  snapshot: WorkspaceSessionSnapshot
-): Pick<WorkspaceSessionState, 'activeWorktreeIdsOnShutdown' | 'remoteSessionIdsByTabId'> {
-  const tabsByWorktree = snapshot.tabsByWorktree
-
-  // Why: use ptyIdsByTabId (live PTYs), not tab.ptyId, which sleep preserves as a wake hint and would revive slept worktrees as active.
-  const ptyIdsByTabId = snapshot.ptyIdsByTabId
-  const hasLivePty = (tabId: string): boolean => (ptyIdsByTabId[tabId]?.length ?? 0) > 0
-
-  // Why: relay reconnect keeps lastKnown but clears tab.ptyId; the !tab.ptyId guard excludes slept tabs (which keep ptyId as a wake hint).
-  const lastKnown = snapshot.lastKnownRelayPtyIdByTabId
-  const hasReconnectableSession = (tab: { id: string; ptyId: string | null }): boolean =>
-    hasLivePty(tab.id) || (!tab.ptyId && Boolean(lastKnown[tab.id]))
-
-  const activeWorktreeIdsOnShutdown = Object.entries(tabsByWorktree)
-    .filter(([, tabs]) => tabs.some(hasReconnectableSession))
-    .map(([worktreeId]) => worktreeId)
-
-  const worktreeById = new Map(
-    Object.values(snapshot.worktreesByRepo)
-      .flat()
-      .map((worktree) => [worktree.id, worktree])
-  )
-  const repoById = new Map(snapshot.repos.map((repo) => [repo.id, repo]))
-
-  // Why: derive here to avoid a fragile sync IPC round-trip during beforeunload (Chromium can drop it under shutdown pressure).
-  // Why: pre-indexed above so large workspaces don't rescan every repo/worktree per terminal tab while the renderer is quitting.
-  const remoteSessionIdsByTabId: Record<string, string> = {}
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const worktree = worktreeById.get(worktreeId)
-    const repo = worktree ? repoById.get(worktree.repoId) : null
-    if (!repo?.connectionId) {
-      continue
-    }
-    for (const tab of tabs) {
-      if (!hasReconnectableSession(tab)) {
-        continue
-      }
-      const sessionId = tab.ptyId || lastKnown[tab.id]
-      if (sessionId) {
-        remoteSessionIdsByTabId[tab.id] = sessionId
-      }
-    }
-  }
-
-  return {
-    activeWorktreeIdsOnShutdown,
-    remoteSessionIdsByTabId:
-      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined
-  }
 }
 
 export function buildWorkspaceSessionPayload(

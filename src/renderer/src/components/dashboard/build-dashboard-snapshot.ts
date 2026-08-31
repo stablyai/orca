@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { agentStatusFreshnessAt } from '../../../../shared/agent-status-observation'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState
@@ -252,7 +253,9 @@ export function buildDashboardSnapshot(
         startedAt: row.startedAt,
         finishedAt,
         stateChangedAt: row.entry.stateStartedAt || row.startedAt,
-        statusUpdatedAt: row.entry.updatedAt,
+        // Host timestamps are ordering metadata; dashboard freshness runs on
+        // the local receipt clock for mirrored rows.
+        statusUpdatedAt: agentStatusFreshnessAt(row.entry),
         // Same derivation as WorktreeCardAgents' unvisitedByPaneKey, so the
         // board and the sidebar bold/mute the same agents at the same time.
         unseen,

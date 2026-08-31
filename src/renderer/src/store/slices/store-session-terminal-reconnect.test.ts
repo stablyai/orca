@@ -4,6 +4,7 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
 import { computeVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
 
@@ -150,6 +151,238 @@ describe('reconnectPersistedTerminals', () => {
     const s = store.getState()
     expect(s.tabsByWorktree[wt1][0].ptyId).toBeNull()
     expect(s.ptyIdsByTabId.tab1).toEqual([])
+  })
+
+  it('routes canonical-key SSH sessions to the deferred relay map', async () => {
+    const store = createTestStore()
+    const rawWorktreeId = 'repo1::/remote/wt1'
+    const workspaceKey = worktreeWorkspaceKey(rawWorktreeId)
+    const remoteSessionId = 'ssh:ssh-1@@old-remote-pty'
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: rawWorktreeId, repoId: 'repo1', path: '/remote/wt1' })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: workspaceKey,
+      activeWorkspaceKey: workspaceKey,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [workspaceKey]: [makeTab({ id: 'tab1', worktreeId: workspaceKey, ptyId: null })]
+      },
+      terminalLayoutsByTabId: { tab1: makeLayout() },
+      activeWorktreeIdsOnShutdown: [workspaceKey],
+      remoteSessionIdsByTabId: { tab1: remoteSessionId }
+    })
+
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([workspaceKey])
+    await store.getState().reconnectPersistedTerminals()
+
+    expect(store.getState().deferredSshSessionIdsByTabId).toEqual({ tab1: remoteSessionId })
+  })
+
+  it('fails closed for a canonical cold-catalog key with colliding local and SSH repos', async () => {
+    const store = createTestStore()
+    const rawWorktreeId = 'repo-collision::/remote/not-listed-yet'
+    const workspaceKey = worktreeWorkspaceKey(rawWorktreeId)
+    const remoteSessionId = 'ssh:ssh-1@@pty-ambiguous'
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-collision',
+          path: '/local/repo-collision',
+          displayName: 'Local collision',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: null
+        },
+        {
+          id: 'repo-collision',
+          path: '/remote/repo-collision',
+          displayName: 'SSH collision',
+          badgeColor: '#fff',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {},
+      tabsByWorktree: {
+        [workspaceKey]: [makeTab({ id: 'tab-collision', worktreeId: workspaceKey, ptyId: null })]
+      },
+      terminalLayoutsByTabId: { 'tab-collision': makeLayout() },
+      ptyIdsByTabId: { 'tab-collision': [] },
+      pendingReconnectWorktreeIds: [workspaceKey],
+      pendingReconnectTabByWorktree: { [workspaceKey]: ['tab-collision'] },
+      pendingReconnectPtyIdByTabId: { 'tab-collision': remoteSessionId },
+      deferredSshSessionIdsByTabId: {},
+      workspaceSessionReady: false
+    })
+
+    await store.getState().reconnectPersistedTerminals()
+
+    const state = store.getState()
+    expect(state.tabsByWorktree[workspaceKey][0].ptyId).toBeNull()
+    expect(state.ptyIdsByTabId['tab-collision']).toEqual([])
+    expect(state.deferredSshSessionIdsByTabId).toEqual({})
+    expect(state.workspaceSessionReady).toBe(true)
+  })
+
+  it('uses the unique SSH repo owner for deferred reconnect when the worktree catalog is cold', async () => {
+    const store = createTestStore()
+    const rawWorktreeId = 'repo-ssh::/remote/not-listed-yet'
+    const workspaceKey = worktreeWorkspaceKey(rawWorktreeId)
+    const remoteSessionId = 'ssh:ssh-1@@pty-cold'
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/remote/repo-ssh',
+          displayName: 'SSH repo',
+          badgeColor: '#fff',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {},
+      tabsByWorktree: {
+        [workspaceKey]: [makeTab({ id: 'tab-cold', worktreeId: workspaceKey, ptyId: null })]
+      },
+      terminalLayoutsByTabId: { 'tab-cold': makeLayout() },
+      ptyIdsByTabId: { 'tab-cold': [] },
+      pendingReconnectWorktreeIds: [workspaceKey],
+      pendingReconnectTabByWorktree: { [workspaceKey]: ['tab-cold'] },
+      pendingReconnectPtyIdByTabId: { 'tab-cold': remoteSessionId },
+      deferredSshSessionIdsByTabId: {},
+      workspaceSessionReady: false
+    })
+
+    await store.getState().reconnectPersistedTerminals()
+
+    expect(store.getState().deferredSshSessionIdsByTabId).toEqual({
+      'tab-cold': remoteSessionId
+    })
+  })
+
+  it('drops a persisted SSH PTY whose target disagrees with the worktree owner', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/remote/mismatched-target'
+    const mismatchedPtyId = 'ssh:ssh-target-b@@pty-mismatch'
+
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/repo-ssh',
+          displayName: 'SSH repo',
+          badgeColor: '#fff',
+          addedAt: 0,
+          connectionId: 'ssh-target-a'
+        }
+      ],
+      worktreesByRepo: {
+        'repo-ssh': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-ssh',
+            path: '/remote/mismatched-target',
+            hostId: 'ssh:ssh-target-a'
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-mismatch', worktreeId, ptyId: null })]
+      },
+      terminalLayoutsByTabId: { 'tab-mismatch': makeLayout() },
+      ptyIdsByTabId: { 'tab-mismatch': [] },
+      pendingReconnectWorktreeIds: [worktreeId],
+      pendingReconnectTabByWorktree: { [worktreeId]: ['tab-mismatch'] },
+      pendingReconnectPtyIdByTabId: { 'tab-mismatch': mismatchedPtyId },
+      deferredSshSessionIdsByTabId: {},
+      workspaceSessionReady: false,
+      sshConnectionStates: new Map([
+        ['ssh-target-a', { status: 'reconnecting' } as never],
+        ['ssh-target-b', { status: 'reconnecting' } as never]
+      ])
+    })
+
+    await store.getState().reconnectPersistedTerminals()
+
+    const state = store.getState()
+    expect(state.tabsByWorktree[worktreeId][0].ptyId).toBeNull()
+    expect(state.ptyIdsByTabId['tab-mismatch']).toEqual([])
+    expect(state.deferredSshSessionIdsByTabId).toEqual({})
+  })
+
+  it('does not let scoped direct SSH reconnect override a loaded owner', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/remote/owner-rotated'
+    const authority: DirectSshAuthority = {
+      targetId: 'ssh-target-a',
+      providerEpoch: 'epoch-a' as SshProviderEpoch,
+      connectionGeneration: 1
+    }
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/repo-ssh',
+          displayName: 'SSH repo',
+          badgeColor: '#fff',
+          addedAt: 0,
+          connectionId: 'ssh-target-b'
+        }
+      ],
+      worktreesByRepo: {
+        'repo-ssh': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-ssh',
+            path: '/remote/owner-rotated',
+            hostId: 'ssh:ssh-target-b'
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-owner-rotated', worktreeId, ptyId: null })]
+      },
+      terminalLayoutsByTabId: { 'tab-owner-rotated': makeLayout() },
+      ptyIdsByTabId: { 'tab-owner-rotated': [] },
+      pendingReconnectWorktreeIds: [worktreeId],
+      pendingReconnectTabByWorktree: { [worktreeId]: ['tab-owner-rotated'] },
+      pendingReconnectPtyIdByTabId: {
+        'tab-owner-rotated': 'ssh:ssh-target-a@@pty-stale-owner'
+      },
+      deferredSshSessionIdsByTabId: {},
+      sshConnectionStates: new Map([
+        [authority.targetId, { status: 'connected' } as never],
+        ['ssh-target-b', { status: 'connected' } as never]
+      ])
+    })
+
+    await store.getState().reconnectPersistedTerminals(undefined, {
+      directSshAuthority: authority,
+      workspaceKeys: [worktreeId]
+    })
+
+    const state = store.getState()
+    expect(state.tabsByWorktree[worktreeId][0]?.ptyId).toBeNull()
+    expect(state.ptyIdsByTabId['tab-owner-rotated']).toEqual([])
+    expect(state.deferredSshSessionIdsByTabId).toEqual({})
   })
 
   it('sets workspaceSessionReady even with no pending worktrees', async () => {

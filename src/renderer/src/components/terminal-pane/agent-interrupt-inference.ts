@@ -2,6 +2,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { agentStatusFreshnessAt } from '../../../../shared/agent-status-observation'
 import {
   AGENT_INTERRUPT_SETTLE_MS,
   type AgentInterruptInferenceRequest,
@@ -31,6 +32,7 @@ type AgentInterruptInferenceDeps = {
 
 type CapturedInterruptBaseline = {
   updatedAt: number
+  localReceiptAt?: number
   stateStartedAt: number
   prompt: string
   agentType: AgentStatusEntry['agentType']
@@ -158,6 +160,7 @@ export function createAgentInterruptInference({
     }
     return {
       updatedAt: entry.updatedAt,
+      ...(entry.localReceiptAt !== undefined ? { localReceiptAt: entry.localReceiptAt } : {}),
       stateStartedAt: entry.stateStartedAt,
       prompt: entry.prompt,
       agentType,
@@ -188,7 +191,7 @@ export function createAgentInterruptInference({
     ) {
       return false
     }
-    if (!entry && now() - baseline.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+    if (!entry && now() - agentStatusFreshnessAt(baseline) > AGENT_STATUS_STALE_AFTER_MS) {
       return false
     }
 

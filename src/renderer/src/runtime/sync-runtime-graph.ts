@@ -2078,6 +2078,19 @@ function buildMobileTerminalSurfaceTabs(
       paneKey && !isClaudeManagementTitle(agentStatusTitle)
         ? inputs.agentStatusByPaneKey.get(paneKey)
         : undefined
+    // Renderer-only status facets are local bookkeeping and must not cross the
+    // runtime boundary (a paired host would otherwise echo its receipt clock).
+    const wireAgentStatus = agentStatus
+      ? (() => {
+          const {
+            observation: _observation,
+            acceptedStatusSeq: _acceptedStatusSeq,
+            localReceiptAt: _localReceiptAt,
+            ...status
+          } = agentStatus
+          return status
+        })()
+      : undefined
     const launchAgent = nativeChatLaunchAgentForLeaf({
       launchAgent: terminal.launchAgent,
       launchAgentLeafId,
@@ -2100,7 +2113,7 @@ function buildMobileTerminalSurfaceTabs(
       leafId,
       ptyId,
       ...(terminalTheme ? { terminalTheme } : {}),
-      ...(agentStatus ? { agentStatus } : {}),
+      ...(wireAgentStatus ? { agentStatus: wireAgentStatus } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       // Launch context that exists only as an unsent TUI-input draft; mobile
       // prefills its chat composer from it (desktop keeps its own seed store).

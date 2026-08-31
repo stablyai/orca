@@ -1,7 +1,9 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { normalizeWorktreeLookupId } from '@/lib/worktree-runtime-owner-index'
+import { buildWorkspaceTerminalReconnectOwnerResolver } from './workspace-terminal-reconnect-owner'
 
 export type WorkspaceTerminalReconnectPlan = {
   pendingReconnectPtyIdByTabId: Record<string, string>
@@ -32,7 +34,20 @@ export function buildWorkspaceTerminalReconnectPlan({
     Object.entries(session.tabsByWorktree)
       .filter(([, tabs]) => tabs.some((tab) => tab.ptyId))
       .map(([worktreeId]) => worktreeId)
-  const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))
+  const isValidWorkspaceSessionKey = (workspaceSessionKey: string): boolean => {
+    const parsedWorkspaceKey = parseWorkspaceKey(workspaceSessionKey)
+    const rawWorktreeId = normalizeWorktreeLookupId(workspaceSessionKey)
+    // Folder keys are valid workspace rows but have no worktree alias. Every
+    // other scoped key must carry a complete repo::path worktree id.
+    if (parsedWorkspaceKey?.type === 'folder') {
+      return validWorktreeIds.has(workspaceSessionKey)
+    }
+    if (rawWorktreeId === null) {
+      return false
+    }
+    return validWorktreeIds.has(workspaceSessionKey) || validWorktreeIds.has(rawWorktreeId)
+  }
+  const pendingReconnectWorktreeIds = shutdownIds.filter(isValidWorkspaceSessionKey)
   const remoteSessionIds = session.remoteSessionIdsByTabId ?? {}
   const pendingReconnectTabByWorktree: Record<string, string[]> = {}
   for (const worktreeId of pendingReconnectWorktreeIds) {
@@ -49,16 +64,18 @@ export function buildWorkspaceTerminalReconnectPlan({
   }
 
   const pendingReconnectPtyIdByTabId: Record<string, string> = {}
-  const worktreeById = buildWorktreeByIdIndex(worktreesByRepo)
-  const repoById = buildByIdIndex(repos)
-  for (const worktreeId of pendingReconnectWorktreeIds) {
-    const worktree = worktreeById.get(worktreeId)
-    const repo = worktree ? repoById.get(worktree.repoId) : null
-    // SSH sessions reconnect through their relay rather than the local daemon.
-    if (repo?.connectionId) {
+  const resolveOwner = buildWorkspaceTerminalReconnectOwnerResolver(repos, worktreesByRepo)
+  for (const workspaceSessionKey of pendingReconnectWorktreeIds) {
+    const owner = resolveOwner(workspaceSessionKey)
+    // A cold-catalog collision cannot identify a daemon owner safely.
+    if (owner.kind === 'ambiguous') {
       continue
     }
-    for (const tab of session.tabsByWorktree[worktreeId] ?? []) {
+    // SSH sessions reconnect through their relay rather than the local daemon.
+    if (owner.kind === 'resolved' && owner.connectionId) {
+      continue
+    }
+    for (const tab of session.tabsByWorktree[workspaceSessionKey] ?? []) {
       if (
         tab.ptyId &&
         validTabIds.has(tab.id) &&
