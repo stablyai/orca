@@ -54,6 +54,16 @@ describe('CLI launch redirect: entry-path form', () => {
       )
     ).toEqual(['status'])
   })
+
+  it('does not treat a later positional entrypoint path as the launcher', () => {
+    expect(
+      getCliLaunchArgs(
+        [linux.execPath, 'file', 'open', '--path', linux.cliEntryPath],
+        linux.cliEntryPath,
+        linuxOptions
+      )
+    ).toBeNull()
+  })
 })
 
 describe('CLI launch redirect: command form', () => {
@@ -107,6 +117,12 @@ describe('CLI launch redirect: command form', () => {
   it('treats help as a CLI launch even without a command', () => {
     expect(getCliLaunchArgs([linux.execPath, '--help'], linux.cliEntryPath, linuxOptions)).toEqual([
       '--help'
+    ])
+  })
+
+  it.each(['--version', '-v'])('treats %s as a CLI launch even without a command', (flag) => {
+    expect(getCliLaunchArgs([linux.execPath, flag], linux.cliEntryPath, linuxOptions)).toEqual([
+      flag
     ])
   })
 

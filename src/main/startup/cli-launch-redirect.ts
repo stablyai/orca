@@ -18,7 +18,7 @@ export type CliLaunchRedirectOptions = {
   run?: typeof runProcessSync
 }
 
-const HELP_FLAGS = new Set(['--help', '-h', 'help'])
+const CLI_EARLY_EXIT_FLAGS = new Set(['--help', '-h', 'help', '--version', '-v'])
 const DESKTOP_FLAGS = new Set(['--no-sandbox', '--disable-gpu'])
 
 // Fence recursion if a wrapper drops ELECTRON_RUN_AS_NODE again.
@@ -95,10 +95,11 @@ function getEntryPathLaunchArgs(
   platform: NodeJS.Platform
 ): string[] | null {
   const expectedCliPath = normalizePathForPlatform(cliEntryPath, platform)
-  const cliEntryIndex = argv.findIndex(
-    (arg, index) => index > 0 && normalizePathForPlatform(arg, platform) === expectedCliPath
-  )
-  return cliEntryIndex === -1 ? null : argv.slice(cliEntryIndex + 1)
+  // The packaged launcher always passes the entrypoint as Electron's first argument.
+  // Matching later positional arguments can mistake a normal desktop launch for the CLI.
+  return argv[1] && normalizePathForPlatform(argv[1], platform) === expectedCliPath
+    ? argv.slice(2)
+    : null
 }
 
 function getCommandLaunchArgs(
@@ -117,7 +118,7 @@ function getCommandLaunchArgs(
   const cliArgs = args.filter(
     (arg, index) => (commandIndex !== -1 && index > commandIndex) || !DESKTOP_FLAGS.has(arg)
   )
-  if (cliArgs.some((arg) => HELP_FLAGS.has(arg))) {
+  if (cliArgs.some((arg) => CLI_EARLY_EXIT_FLAGS.has(arg))) {
     return cliArgs
   }
 
