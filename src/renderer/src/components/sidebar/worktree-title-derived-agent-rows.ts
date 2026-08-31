@@ -22,7 +22,7 @@ import {
   resolveCompatibleAgentTypeForOwner,
   type CompatibleAgentOwnerOptions
 } from '../../../../shared/agent-title-owner'
-import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
+import { collectLeafIds } from '@/components/terminal-pane/terminal-pane-layout-tree'
 import {
   resolveTitleDerivedAgentType,
   resolveTitleDerivedPaneAgent,
@@ -31,6 +31,10 @@ import {
 } from './title-derived-pane-agent-identity'
 import { translate } from '@/i18n/i18n'
 import { buildTitleDerivedIdleAgentRow } from './worktree-title-derived-agent-idle-row'
+import {
+  resolveLaunchAgentOwnerLeafId,
+  resolveTitleDerivedPaneOwner
+} from './worktree-title-derived-agent-owner'
 
 /** Title snapshots use one restart-stable authority; revisions are comparable only within it, never across authorities. */
 export const TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID = 'renderer-title-projection'
@@ -65,7 +69,7 @@ export function buildTitleDerivedAgentRows(args: {
     // Why: launchAgent is tab-scoped. Idle fallback may only bind to the sole
     // launch-owning leaf — multi-leaf tabs must not mint Idle rows for every
     // neutral sibling shell (#10130 / CodeRabbit on #10178).
-    const launchAgentOwnerLeafId = layoutLeafIds.length === 1 ? layoutLeafIds[0] : null
+    const launchAgentOwnerLeafId = resolveLaunchAgentOwnerLeafId(tab, layout, layoutLeafIds)
     const paneTitles = runtimePaneTitlesByTabId[tab.id]
     const paneTitleEntries =
       paneTitles && Object.keys(paneTitles).length > 0
@@ -95,7 +99,9 @@ export function buildTitleDerivedAgentRows(args: {
           liveSlotIds,
           liveSlotsAreDense,
           paneId: Number(paneId),
-          title
+          title,
+          fallbackLeafId: launchAgentOwnerLeafId,
+          paneTitleCount: paneTitleEntries.length
         })
         if (!leafId) {
           continue
@@ -104,7 +110,7 @@ export function buildTitleDerivedAgentRows(args: {
           tab,
           leafId,
           title,
-          ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
+          ownerAgentType: resolveTitleDerivedPaneOwner({ tab, layout, layoutLeafIds, leafId }),
           paneForegroundAgentByPaneKey,
           now: args.now,
           allowLaunchAgentIdleFallback: launchAgentOwnerLeafId === leafId,
@@ -119,20 +125,20 @@ export function buildTitleDerivedAgentRows(args: {
       continue
     }
 
-    const leafId = layout?.activeLeafId ?? collectRuntimePaneLeafIds(layout?.root ?? null)[0]
+    // Why: tab-wide title metadata belongs to its retained launch owner even when a split's active leaf or the layout snapshot is unavailable.
+    const leafId =
+      launchAgentOwnerLeafId ??
+      layout?.activeLeafId ??
+      collectRuntimePaneLeafIds(layout?.root ?? null)[0]
     if (!leafId) {
       continue
     }
-    // Why: tab-title path emits at most one row; allow when that leaf is the
-    // sole owner, or topology is unknown (no layout leaves) so single-pane
-    // SSH idle still surfaces without a hydrated layout snapshot.
-    const allowLaunchAgentIdleFallback =
-      launchAgentOwnerLeafId === leafId || layoutLeafIds.length === 0
+    const allowLaunchAgentIdleFallback = launchAgentOwnerLeafId === leafId
     const row = buildTitleDerivedAgentRow({
       tab,
       leafId,
       title: tab.title,
-      ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
+      ownerAgentType: resolveTitleDerivedPaneOwner({ tab, layout, layoutLeafIds, leafId }),
       paneForegroundAgentByPaneKey,
       now: args.now,
       allowLaunchAgentIdleFallback,
@@ -262,18 +268,6 @@ function buildTitleDerivedAgentRow(args: {
   }
 }
 
-function resolveTitleDerivedPaneOwner(
-  tab: TerminalTab,
-  layout: TerminalLayoutSnapshot | undefined,
-  leafId: string
-): AgentType | null {
-  // Tab-scoped launch ownership applies only to a single leaf; a split must not let one pane brand its sibling.
-  if (layout?.root?.type !== 'leaf' || layout.root.leafId !== leafId) {
-    return null
-  }
-  return resolvePaneAgentOwner({ launchAgent: tab.launchAgent })
-}
-
 /** Normalize title agent identity to a compatible authoritative owner when supplied. */
 export function resolveAgentTypeFromTerminalTitle(
   title: string | null | undefined,
@@ -315,6 +309,8 @@ function resolveLeafIdForTitleFallback(args: {
   liveSlotsAreDense: boolean
   paneId: number
   title: string
+  fallbackLeafId: string | null
+  paneTitleCount: number
 }): string | null {
   if (args.leafIds.length === 1) {
     return args.leafIds[0]
@@ -351,6 +347,9 @@ function resolveLeafIdForTitleFallback(args: {
     return matchingTitleLeafIds[0]
   }
 
+  if (!args.layout?.root && args.fallbackLeafId && args.paneTitleCount === 1) {
+    return args.fallbackLeafId
+  }
   // Fallback indexing uses only live slots; parked slots belong to a separate ID space.
   const paneIndex = args.liveSlotIds.indexOf(args.paneId)
   return paneIndex !== -1 ? (args.leafIds[paneIndex] ?? null) : null

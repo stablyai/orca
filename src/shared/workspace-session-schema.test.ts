@@ -182,7 +182,9 @@ describe('parseWorkspaceSession', () => {
             customTitle: null,
             color: null,
             sortOrder: 0,
-            createdAt: 0
+            createdAt: 0,
+            launchAgent: 'codex',
+            launchAgentLeafId: '77777777-7777-4777-8777-777777777777'
           }
         ]
       },
@@ -216,6 +218,10 @@ describe('parseWorkspaceSession', () => {
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
       expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+      expect(result.value.tabsByWorktree.wt[0].launchAgent).toBe('codex')
+      expect(result.value.tabsByWorktree.wt[0].launchAgentLeafId).toBe(
+        '77777777-7777-4777-8777-777777777777'
+      )
       expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
       expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
       expect(result.value.unifiedTabs?.wt[0].executionHostId).toBe('runtime:host-b')

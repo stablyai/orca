@@ -615,6 +615,26 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows.map((row) => [row.agentType, row.state])).toEqual([['codex', 'idle']])
   })
 
+  it('keeps an Idle row when the layout snapshot is temporarily unavailable', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [
+        makeTab('tab-1', {
+          title: 'demo-repo',
+          launchAgent: 'codex',
+          launchAgentLeafId: LEAF_ID_1
+        })
+      ],
+      entries: [],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-codex-remote-idle'] },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'codex', 'idle']
+    ])
+  })
+
   it('does not invent an Idle row for a neutral title without launch identity', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
