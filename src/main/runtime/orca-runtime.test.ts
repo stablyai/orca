@@ -17660,6 +17660,117 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  // Why (#9976): Claude (and other launchAgent-backed TUIs) can sit quiet for
+  // several seconds during cold start before the first OSC/hook signal. Bare
+  // non-shell quiescence would report tui-idle and lose orchestration injects.
+  it('does not resolve tui-idle via quiet non-shell foreground for launchAgent-backed terminals before status', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => 'claude'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'claude',
+        launchAgent: 'claude',
+        title: 'Claude'
+      })
+      // Quiet startup output only — no OSC title / agent-status / ready prompt.
+      runtime.onPtyData('pty-bg', 'starting…\n', Date.now())
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 8_000
+      })
+      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      await timeoutAssertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('returns a blocked wait when the Claude trust gate appears during launchAgent startup', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => 'claude'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'claude',
+        launchAgent: 'claude',
+        title: 'Claude'
+      })
+      runtime.onPtyData('pty-bg', 'starting…\n', Date.now())
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 8_000
+      })
+
+      // Why (#9976): the trust screen can arrive after the cold-start silence;
+      // launchAgent readiness must not be satisfied by the earlier quiescence.
+      await vi.advanceTimersByTimeAsync(4_000)
+      runtime.onPtyData(
+        'pty-bg',
+        [
+          'Accessing workspace:',
+          'C:\\scratchpad\\trusttest-fresh',
+          'Quick safety check: Is this a project you created or one you trust? ...',
+          "Claude Code'll be able to read, edit, and execute files here.",
+          '❯ 1. Yes, I trust this folder'
+        ].join('\n'),
+        Date.now()
+      )
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      await expect(waitPromise).resolves.toMatchObject({
+        handle,
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'running',
+        blockedReason: 'codex-trust-workspace'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still resolves tui-idle for launchAgent-backed terminals once agent status is idle', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'claude'
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude',
+      launchAgent: 'claude',
+      title: 'Claude'
+    })
+    // Explicit idle OSC title evidence for Claude (✳ prefix).
+    runtime.onPtyData('pty-bg', '\x1b]0;✳ Claude Code\x07', Date.now())
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running'
+    })
+  })
+
   it('splits text and enter writes for background terminal handles', async () => {
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(store)

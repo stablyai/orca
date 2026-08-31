@@ -38169,8 +38169,15 @@ export class OrcaRuntimeService {
           return
         }
         // Foreground fallback: a reported non-shell process with quiet output is treated as idle.
+        // Why: status-backed launches (Claude, etc.) can stay quiet for seconds during cold start
+        // before the first OSC/hook signal — quiescence alone false-positives tui-idle and loses
+        // injected dispatches (#9976). Only use bare quiescence when we never expected status.
+        const leafLaunchAgent = leaf.ptyId
+          ? (this.ptysById.get(leaf.ptyId)?.launchAgent ?? null)
+          : null
         if (
           leaf.lastAgentStatus === null &&
+          leafLaunchAgent == null &&
           leaf.ptyId &&
           this.ptyController &&
           !foregroundPollInFlight
@@ -38252,7 +38259,14 @@ export class OrcaRuntimeService {
           this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        if (pty.lastAgentStatus === null && this.ptyController && !foregroundPollInFlight) {
+        // Why: same cold-start guard as the leaf poll — launchAgent set ⇒ wait for
+        // status/ready evidence, not bare non-shell quiet (#9976).
+        if (
+          pty.lastAgentStatus === null &&
+          pty.launchAgent == null &&
+          this.ptyController &&
+          !foregroundPollInFlight
+        ) {
           foregroundPollInFlight = true
           startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
