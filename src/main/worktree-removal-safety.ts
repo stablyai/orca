@@ -44,6 +44,8 @@ export const ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
   'Worktree is no longer registered with Git but its directory remains.'
 export const UNREGISTERED_MISSING_WORKTREE_MESSAGE =
   'Worktree is no longer registered with Git and its directory is already gone.'
+export const UNPROVEN_ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
+  'Worktree is no longer registered with Git, but Orca could not prove that its directory is safe to delete. The directory remains; verify the path and remove it manually.'
 
 function getPathOps(...paths: string[]): PathOps {
   // Why: forward-slash UNC roots need win32 ops; POSIX joins collapse `//Server` to `/Server`.

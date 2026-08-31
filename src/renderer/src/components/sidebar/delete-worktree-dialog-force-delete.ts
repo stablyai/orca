@@ -1,5 +1,3 @@
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   toWorktreeRemovalTarget,
@@ -9,13 +7,15 @@ import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-opti
 import type { RendererRemoveWorktreeResult } from '@/store/slices/renderer-remove-worktree-result'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
+import { settleForceDeleteRetry } from './force-delete-retry-toast'
 
 /**
  * The dialog's explicit "Force Delete" retry.
  *
- * Runs the destructive retry directly rather than through the shared toast
- * wrapper, preserving the legacy button behaviour, and closes immediately
- * because the workspace cards already show the deleting state.
+ * Runs the destructive retry itself rather than through `runWorktreeDeleteWithToast`,
+ * preserving the legacy button behaviour, and closes immediately because the workspace
+ * cards already show the deleting state. Its failures still report through the shared
+ * copy funnel (STA-4895).
  */
 export function runDialogForceDelete(args: {
   worktreeId: string
@@ -29,10 +29,8 @@ export function runDialogForceDelete(args: {
   onDeleted: ((deleted: WorktreeRemovalTarget[]) => void) | null | undefined
 }): void {
   const { worktreeId, currentWorktrees, removeWorktree, closeModal, onDeleted } = args
-  // Why: this branch preserves the legacy "Force Delete" button behavior
-  // inside the dialog — it runs the destructive retry directly without
-  // the shared toast wrapper. Close immediately because workspace cards
-  // already show the deleting state while the retry runs.
+  // Why: this branch preserves the legacy "Force Delete" button behavior inside the
+  // dialog. Close immediately because workspace cards already show the deleting state.
   // Why the lookup (STA-4343): the confirmed row carries the host the
   // removal must land on; a bare id would let force delete another host's
   // checkout at the same path.
@@ -51,32 +49,11 @@ export function runDialogForceDelete(args: {
     allowUnverifiedPtyStop: true
   })
   closeModal()
-  deletePromise
-    .then((result) => {
-      if (!result.ok) {
-        toast.error(
-          translate(
-            'auto.components.sidebar.DeleteWorktreeDialog.42e610d6cf',
-            'Force delete failed'
-          ),
-          {
-            description: result.error
-          }
-        )
-        return
-      }
+  void settleForceDeleteRetry(deletePromise, {
+    worktreeName: forceTarget.displayName,
+    onDeleted: () => {
       commitFocus()
       onDeleted?.([toWorktreeRemovalTarget(forceTarget)])
-    })
-    .catch((err: unknown) => {
-      toast.error(
-        translate(
-          'auto.components.sidebar.DeleteWorktreeDialog.4f6750ca7b',
-          'Failed to delete workspace'
-        ),
-        {
-          description: err instanceof Error ? err.message : String(err)
-        }
-      )
-    })
+    }
+  })
 }

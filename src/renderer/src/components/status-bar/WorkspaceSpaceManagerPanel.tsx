@@ -68,7 +68,7 @@ import {
 import { runWorktreeBatchDelete } from '../sidebar/delete-worktree-flow'
 import { toWorktreeDeleteIdentities } from '../sidebar/worktree-delete-request'
 import { showWorkspaceListChangedToast } from '../sidebar/stale-workspace-list-toast'
-import { prepareActiveWorktreeFocusAfterDelete } from '../sidebar/active-worktree-focus-after-delete'
+import { runWorkspaceSpaceForceDelete } from './workspace-space-force-delete'
 import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -1802,49 +1802,11 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
 
   const forceDeleteWorktree = useCallback(
     (worktree: WorkspaceSpaceWorktree): void => {
-      // Why: Space keeps normal deletes non-force so uncommitted work is not
-      // discarded silently; a failed row gets this explicit recovery path.
-      const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktree.worktreeId)
-      // Why (#11960): explicit force recovery, so it may also waive PTY-stop proof.
-      // Why the host (STA-4343): the Space scan lists one row per host, so a bare
-      // id would let this force delete another host's checkout at the same path.
-      void removeWorktree(
-        { id: worktree.worktreeId, executionHostId: worktree.executionHostId ?? null },
-        true,
-        { allowUnverifiedPtyStop: true }
-      )
-        .then((result) => {
-          if (!result.ok) {
-            toast.error(
-              translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.2965415393',
-                'Force delete failed'
-              ),
-              {
-                description: result.error
-              }
-            )
-            return
-          }
-          commitFocus()
-          handleDeletedWorktrees([
-            {
-              id: worktree.worktreeId,
-              executionHostId: worktree.executionHostId ?? null
-            }
-          ])
-        })
-        .catch((error: unknown) => {
-          toast.error(
-            translate(
-              'auto.components.status.bar.WorkspaceSpaceManagerPanel.2965415393',
-              'Force delete failed'
-            ),
-            {
-              description: error instanceof Error ? error.message : String(error)
-            }
-          )
-        })
+      runWorkspaceSpaceForceDelete({
+        worktree,
+        removeWorktree,
+        onDeleted: (target) => handleDeletedWorktrees([target])
+      })
     },
     [handleDeletedWorktrees, removeWorktree]
   )

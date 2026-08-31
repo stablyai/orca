@@ -21,6 +21,11 @@ import {
   isOrphanedWorktreeError,
   areWorktreePathsEqual
 } from './worktree-logic'
+import {
+  isUnprovenOrphanedWorktreeDirectoryError,
+  WORKSPACE_DIRECTORY_HELD_HINT
+} from '../../shared/worktree/removal'
+import { UNPROVEN_ORPHANED_WORKTREE_DIRECTORY_MESSAGE } from '../worktree-removal-safety'
 
 describe('sanitizeWorktreeName', () => {
   it('replaces spaces with hyphens', () => {
@@ -596,9 +601,9 @@ describe('parseWorktreeId', () => {
 describe('formatWorktreeRemovalError', () => {
   const path = '/workspaces/feature'
 
-  it('returns fallback for non-Error input', () => {
+  it('includes raw string errors', () => {
     expect(formatWorktreeRemovalError('oops', path, false)).toBe(
-      `Failed to delete worktree at ${path}.`
+      `Failed to delete worktree at ${path}. oops`
     )
   })
 
@@ -618,7 +623,7 @@ describe('formatWorktreeRemovalError', () => {
 
   it('uses force text when force is true', () => {
     expect(formatWorktreeRemovalError('oops', path, true)).toBe(
-      `Failed to force delete worktree at ${path}.`
+      `Failed to force delete worktree at ${path}. oops`
     )
   })
 
@@ -628,6 +633,100 @@ describe('formatWorktreeRemovalError', () => {
     expect(formatWorktreeRemovalError(error, path, false)).toBe(
       `Failed to delete worktree at ${path}.`
     )
+  })
+
+  // STA-4895: the reported toast was a bare `EBUSY ... rmdir '<workspace>'` with nothing the
+  // user could act on. These pin the diagnosis onto exactly the root-held shape and no other.
+  describe('Windows workspace directory still held open', () => {
+    const windowsPath = 'C:/_Data/Projects/worktrees/WowApps-clientadmin-compact-sidebar'
+    const nativePath = 'C:\\_Data\\Projects\\worktrees\\WowApps-clientadmin-compact-sidebar'
+
+    function heldRootError(code: string, removalPath: string): Error {
+      return Object.assign(new Error(`${code}: resource busy or locked, rmdir '${removalPath}'`), {
+        code,
+        syscall: 'rmdir',
+        path: removalPath
+      })
+    }
+
+    it('explains an EBUSY rmdir that failed on the workspace directory itself', () => {
+      expect(
+        formatWorktreeRemovalError(heldRootError('EBUSY', nativePath), windowsPath, false)
+      ).toBe(
+        `Failed to delete worktree at ${windowsPath}. EBUSY: resource busy or locked, rmdir '${nativePath}' ${WORKSPACE_DIRECTORY_HELD_HINT}`
+      )
+    })
+
+    it('matches the extended-length path Orca actually passes to the delete', () => {
+      const namespaced = `\\\\?\\${nativePath}`
+      expect(
+        formatWorktreeRemovalError(heldRootError('EPERM', namespaced), windowsPath, true)
+      ).toContain(WORKSPACE_DIRECTORY_HELD_HINT)
+    })
+
+    it('explains the failure when it arrives as prose with no error code', () => {
+      const message = `EBUSY: resource busy or locked, rmdir '${nativePath}'`
+      expect(formatWorktreeRemovalError(new Error(message), windowsPath, false)).toBe(
+        `Failed to delete worktree at ${windowsPath}. ${message} ${WORKSPACE_DIRECTORY_HELD_HINT}`
+      )
+    })
+
+    it('explains a raw string failure from the workspace directory itself', () => {
+      const message = `EBUSY: resource busy or locked, rmdir '${nativePath}'`
+      expect(formatWorktreeRemovalError(message, windowsPath, false)).toBe(
+        `Failed to delete worktree at ${windowsPath}. ${message} ${WORKSPACE_DIRECTORY_HELD_HINT}`
+      )
+    })
+
+    // The negative half of the raw-string arm: reported, but not misdiagnosed.
+    it('reports a raw string failure for a child path without claiming the folder is held', () => {
+      const message = `EBUSY: resource busy or locked, rmdir '${nativePath}\\node_modules'`
+      expect(formatWorktreeRemovalError(message, windowsPath, false)).toBe(
+        `Failed to delete worktree at ${windowsPath}. ${message}`
+      )
+    })
+
+    it('stays silent when a file inside the workspace is what failed', () => {
+      const child = `${nativePath}\\node_modules\\.vite\\deps`
+      expect(
+        formatWorktreeRemovalError(heldRootError('EBUSY', child), windowsPath, false)
+      ).not.toContain(WORKSPACE_DIRECTORY_HELD_HINT)
+    })
+
+    it('stays silent for a POSIX workspace root that reports the same code', () => {
+      const posixRoot = '/workspaces/feature'
+      expect(
+        formatWorktreeRemovalError(heldRootError('EBUSY', posixRoot), posixRoot, false)
+      ).not.toContain(WORKSPACE_DIRECTORY_HELD_HINT)
+    })
+
+    it('does not repeat the hint when an already-formatted message is reformatted', () => {
+      const formatted = formatWorktreeRemovalError(
+        heldRootError('EBUSY', nativePath),
+        windowsPath,
+        false
+      )
+      const reformatted = formatWorktreeRemovalError(new Error(formatted), windowsPath, false)
+      expect(reformatted.split(WORKSPACE_DIRECTORY_HELD_HINT)).toHaveLength(2)
+    })
+
+    // Why (STA-4895): the toast picks this failure out of the raw-error branch by matching a
+    // clause of the message. Reword either side alone and the toast silently goes back to
+    // rendering this English sentence verbatim, so the two are pinned together here.
+    it('keeps the refused-orphan message matchable after the removal funnel formats it', () => {
+      expect(
+        isUnprovenOrphanedWorktreeDirectoryError(UNPROVEN_ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+      ).toBe(true)
+      expect(
+        isUnprovenOrphanedWorktreeDirectoryError(
+          formatWorktreeRemovalError(
+            new Error(UNPROVEN_ORPHANED_WORKTREE_DIRECTORY_MESSAGE),
+            windowsPath,
+            false
+          )
+        )
+      ).toBe(true)
+    })
   })
 })
 

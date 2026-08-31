@@ -50223,6 +50223,107 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  // STA-4895: mirrors the IPC guard -- a delete the filesystem refused must not read as removal.
+  it('keeps the runtime workspace when orphan cleanup cannot delete the directory', async () => {
+    const removeWorktreeMeta = vi.fn()
+    const runtime = createWorktreeRemovalRuntime({ ...store, removeWorktreeMeta })
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
+      })
+    )
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+    const adminDir = join(TEST_REPO_PATH, '.git', 'worktrees', basename(TEST_WORKTREE_PATH))
+    await mkdir(adminDir, { recursive: true })
+    await mkdir(TEST_WORKTREE_PATH, { recursive: true })
+    await writeFile(join(adminDir, 'gitdir'), `${join(TEST_WORKTREE_PATH, '.git')}\n`)
+    await writeFile(join(TEST_WORKTREE_PATH, '.git'), `gitdir: ${adminDir}\n`)
+    const removePathSpy = vi
+      .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
+      .mockRejectedValue(
+        Object.assign(new Error(`EBUSY: resource busy or locked, rmdir '${TEST_WORKTREE_PATH}'`), {
+          code: 'EBUSY',
+          syscall: 'rmdir',
+          path: TEST_WORKTREE_PATH
+        })
+      )
+
+    try {
+      await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+        `Failed to delete worktree at ${TEST_WORKTREE_PATH}. EBUSY: resource busy or locked, rmdir '${TEST_WORKTREE_PATH}'`
+      )
+      expect(removePathSpy).toHaveBeenCalledWith(TEST_WORKTREE_PATH, {})
+      expect(removeWorktreeMeta).not.toHaveBeenCalled()
+    } finally {
+      removePathSpy.mockRestore()
+      gitSpy.mockRestore()
+      await rm(TEST_WORKTREE_PATH, { recursive: true, force: true })
+      await rm(join(TEST_REPO_PATH, '.git'), { recursive: true, force: true })
+    }
+  })
+
+  it('keeps an existing runtime orphan directory when its ownership cannot be proven', async () => {
+    const removeWorktreeMeta = vi.fn()
+    const runtime = createWorktreeRemovalRuntime({ ...store, removeWorktreeMeta })
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
+      })
+    )
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+    await mkdir(join(TEST_WORKTREE_PATH, '.git'), { recursive: true })
+    const removePathSpy = vi.spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
+
+    try {
+      await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+        'Orca could not prove that its directory is safe to delete'
+      )
+      await expect(lstat(TEST_WORKTREE_PATH)).resolves.toBeTruthy()
+      expect(removePathSpy).not.toHaveBeenCalled()
+      expect(removeWorktreeMeta).not.toHaveBeenCalled()
+    } finally {
+      removePathSpy.mockRestore()
+      gitSpy.mockRestore()
+      await rm(TEST_WORKTREE_PATH, { recursive: true, force: true })
+    }
+  })
+
+  // The mirror of the guard above: nothing is left on disk, so forgetting the row IS the
+  // honest outcome. Without this, a guard that refused unconditionally would read as correct.
+  it('forgets the runtime workspace when a refused orphan cleanup left nothing on disk', async () => {
+    const removeWorktreeMeta = vi.fn()
+    const runtime = createWorktreeRemovalRuntime({ ...store, removeWorktreeMeta })
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
+      })
+    )
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+    await rm(TEST_WORKTREE_PATH, { recursive: true, force: true })
+    const removePathSpy = vi.spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
+
+    try {
+      await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
+      expect(removePathSpy).not.toHaveBeenCalled()
+      expect(removeWorktreeMeta).toHaveBeenCalled()
+    } finally {
+      removePathSpy.mockRestore()
+      gitSpy.mockRestore()
+    }
+  })
+
   it('refuses runtime Windows recovery while Git still reports the row and keeps metadata', async () => {
     setPlatform('win32')
     const removeWorktreeMeta = vi.fn()

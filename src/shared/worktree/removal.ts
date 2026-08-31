@@ -1,3 +1,7 @@
+import {
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison
+} from '../cross-platform-path'
 import type { ExecutionHostId } from '../execution-host'
 import type { GitWorktreeInfo, Worktree } from './types'
 
@@ -44,6 +48,90 @@ export function isProvenLivePtyRemovalError(error: string): boolean {
     isUnstoppedPtyRemovalError(error) &&
     error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${UNSTOPPED_PTY_LIVE_DETAIL_PREFIX}`)
   )
+}
+
+// Why (STA-4895): Windows refuses `rmdir` on a directory any process still has open, and
+// a process's own current directory counts — so a shell or dev server left sitting in the
+// workspace makes it undeletable. The raw `EBUSY: resource busy or locked, rmdir '<path>'`
+// names the folder but not the cause, and no retry can clear it, so the delete just fails
+// again. Hint and matcher stay together for the same reason the force hint does.
+export const WORKSPACE_DIRECTORY_HELD_HINT =
+  'Windows would not delete the workspace folder because a program may still have it open or access was denied. Close any terminal, editor, or dev server whose current folder is the workspace, then delete it again; if nothing is using it, check the folder permissions.'
+
+export function isHeldWorkspaceDirectoryRemovalError(error: string): boolean {
+  return error.includes(WORKSPACE_DIRECTORY_HELD_HINT)
+}
+
+// Why (STA-4895): a refused orphan cleanup matches no force-delete reason, so the toast falls to
+// its raw-error branch and renders the main process's English sentence. The clause is the wire
+// anchor -- distinctive enough not to collide with the sibling "directory remains" message that
+// classifyWorktreeForceDeleteReason already matches -- and the copy the user reads is localized.
+const UNPROVEN_ORPHANED_DIRECTORY_ANCHOR =
+  'Orca could not prove that its directory is safe to delete'
+
+export function isUnprovenOrphanedWorktreeDirectoryError(error: string): boolean {
+  return error.includes(UNPROVEN_ORPHANED_DIRECTORY_ANCHOR)
+}
+
+// EPERM/EACCES join EBUSY because libuv maps Windows sharing and access violations onto all three.
+const HELD_DIRECTORY_ERROR_CODES = new Set(['EBUSY', 'EPERM', 'EACCES'])
+
+// `EBUSY: resource busy or locked, rmdir 'C:\\...'` — the shape once the error is only prose.
+const HELD_DIRECTORY_MESSAGE_PATTERN = /\b(?:EBUSY|EPERM|EACCES)\b[^\n]*?,\s*rmdir\s+'([^']+)'/
+
+/** Undo `path.win32.toNamespacedPath` so a namespaced delete target compares to the plain workspace path. */
+function stripExtendedLengthPrefix(value: string): string {
+  const uncPath = /^\\\\\?\\UNC\\([\s\S]+)$/i.exec(value)
+  if (uncPath) {
+    return `\\\\${uncPath[1]}`
+  }
+  return value.replace(/^\\\\\?\\/, '')
+}
+
+function isSameWorkspaceDirectory(removalPath: string, workspacePath: string): boolean {
+  return (
+    normalizeRuntimePathForComparison(stripExtendedLengthPrefix(removalPath)) ===
+    normalizeRuntimePathForComparison(workspacePath)
+  )
+}
+
+/**
+ * True only when the delete failed on the workspace directory ITSELF, not on something inside it.
+ *
+ * Why that distinction: a child that fails is an ordinary busy file, but the root failing means a
+ * handle is open on the folder — on Windows, the classic one being a process whose current
+ * directory it is. Decided by path syntax, never `process.platform`, so a Windows workspace driven
+ * from another client still classifies.
+ */
+export function isHeldWorkspaceDirectoryRemovalFailure(
+  error: unknown,
+  workspacePath: string
+): boolean {
+  if (!isWindowsAbsolutePathLike(workspacePath)) {
+    return false
+  }
+  if (typeof error === 'object' && error !== null) {
+    const { code, syscall, path } = error as {
+      code?: unknown
+      syscall?: unknown
+      path?: unknown
+    }
+    if (
+      typeof code === 'string' &&
+      HELD_DIRECTORY_ERROR_CODES.has(code) &&
+      syscall === 'rmdir' &&
+      typeof path === 'string' &&
+      isSameWorkspaceDirectory(path, workspacePath)
+    ) {
+      return true
+    }
+  }
+  // Why also prose: the same failure reaches some callers only as a formatted message, and a
+  // structural-only matcher would leave exactly the reported toast unclassified.
+  const message =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : undefined
+  const quotedPath = message ? HELD_DIRECTORY_MESSAGE_PATTERN.exec(message)?.[1] : undefined
+  return quotedPath !== undefined && isSameWorkspaceDirectory(quotedPath, workspacePath)
 }
 
 export function createLockedWorktreeRemovalError(lockReason?: string): Error {

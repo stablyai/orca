@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
-import { classifyWorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
+import {
+  classifyWorktreeForceDeleteReason,
+  isUnprovenOrphanedWorktreeDirectoryError,
+  WORKSPACE_DIRECTORY_HELD_HINT
+} from '../../../../shared/worktree/removal'
+import { translate } from '@/i18n/i18n'
 
 // Why: production never hands this function a literal reason — the store derives it from
 // classifyWorktreeForceDeleteReason (store/slices/worktrees.ts). Passing one in would let a
@@ -142,5 +147,47 @@ describe('getDeleteWorktreeToastCopy', () => {
         'This workspace is locked by Git. Git reported: active agent session. Run git worktree unlock <worktree-path> from its repository, then retry deletion.',
       isDestructive: false
     })
+  })
+  // Why (STA-4895): the held-directory failure matches no force-delete reason, so it falls to
+  // the raw-error branch and the main process's English hint would be rendered verbatim. The
+  // hint stays as the wire anchor; what the user reads has to come from the catalog.
+  it('renders localized copy for a workspace directory Windows would not release', () => {
+    const error = `Failed to delete worktree at C:\\ws\\feature. EBUSY: resource busy or locked, rmdir 'C:\\ws\\feature' ${WORKSPACE_DIRECTORY_HELD_HINT}`
+    expect(classifyWorktreeForceDeleteReason(error)).toBeNull()
+    const copy = getDeleteWorktreeToastCopy('feature/foo', null, error) as {
+      description?: string
+    }
+    expect(copy.description).toBe(
+      translate('auto.components.sidebar.delete.worktree.toast.workspaceDirectoryHeld', 'MISSING')
+    )
+    expect(copy.description).not.toContain('EBUSY')
+    expect(copy.description).not.toContain('C:\\ws\\feature')
+  })
+
+  // Why (STA-4895): the refused-orphan failure matches no force-delete reason either, so it lands
+  // on the same raw-error branch and would render the main process's English sentence verbatim.
+  it('renders localized copy when Orca refused to delete an unproven orphan directory', () => {
+    const error =
+      'Failed to delete worktree at C:\\ws\\feature. Worktree is no longer registered with Git, but Orca could not prove that its directory is safe to delete. The directory remains; verify the path and remove it manually.'
+    expect(classifyWorktreeForceDeleteReason(error)).toBeNull()
+    const copy = getDeleteWorktreeToastCopy('feature/foo', null, error) as {
+      description?: string
+    }
+    expect(copy.description).toBe(
+      translate('auto.components.sidebar.delete.worktree.toast.unprovenOrphanDirectory', 'MISSING')
+    )
+    expect(copy.description).not.toContain('could not prove')
+    expect(copy.description).not.toContain('C:\\ws\\feature')
+  })
+
+  // The other half: an over-broad anchor would swallow the two orphan messages that DO have a
+  // classifier, replacing their Force Delete copy with a dead end.
+  it('leaves the classified orphan messages to their own force-delete copy', () => {
+    for (const sibling of [
+      'Worktree is no longer registered with Git but its directory remains.',
+      'Worktree is no longer registered with Git and its directory is already gone.'
+    ]) {
+      expect(isUnprovenOrphanedWorktreeDirectoryError(sibling)).toBe(false)
+    }
   })
 })

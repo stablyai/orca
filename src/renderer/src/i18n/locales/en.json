@@ -5701,7 +5701,9 @@
               "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
-              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold."
+              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.",
+              "workspaceDirectoryHeld": "Windows would not delete the workspace folder because a program may still have it open or access was denied. Close any terminal, editor, or dev server whose current folder is the workspace, then delete it again; if nothing is using it, check the folder permissions.",
+              "unprovenOrphanDirectory": "Git no longer tracks this workspace, but Orca could not confirm its folder was safe to delete, so it left the files on disk. Check the folder yourself and remove it once you are sure it is no longer needed."
             }
           }
         },

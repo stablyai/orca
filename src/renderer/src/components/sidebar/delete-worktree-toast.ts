@@ -1,7 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import {
+  isHeldWorkspaceDirectoryRemovalError,
   isLockedWorktreeRemovalError,
   isProvenLivePtyRemovalError,
+  isUnprovenOrphanedWorktreeDirectoryError,
   type WorktreeForceDeleteReason
 } from '../../../../shared/worktree/removal'
 export type DeleteWorktreeToastCopy = {
@@ -34,6 +36,24 @@ export function getDeleteWorktreeToastCopy(
             'This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.'
           ),
       isDestructive: false
+    }
+  }
+
+  // Why (STA-4895): this failure matches no force-delete reason, so it would otherwise fall to
+  // the raw-error branch and render the main process's English hint verbatim. That hint stays
+  // put as the wire anchor the classifier matches on; the copy the user reads comes from here.
+  if (isHeldWorkspaceDirectoryRemovalError(error)) {
+    return {
+      title: translate(
+        'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+        'Failed to delete workspace {{value0}}',
+        { value0: worktreeName }
+      ),
+      description: translate(
+        'auto.components.sidebar.delete.worktree.toast.workspaceDirectoryHeld',
+        'Windows would not delete the workspace folder because a program may still have it open or access was denied. Close any terminal, editor, or dev server whose current folder is the workspace, then delete it again; if nothing is using it, check the folder permissions.'
+      ),
+      isDestructive: true
     }
   }
 
@@ -103,6 +123,24 @@ export function getDeleteWorktreeToastCopy(
       // made a normal cleanup step look like an Orca bug, so this common case
       // gets a concise explanation plus the force-delete path instead.
       isDestructive: false
+    }
+  }
+
+  // Why (STA-4895): Orca refusing an unproven orphan cleanup matches no force-delete reason, so
+  // without this it reaches the raw branch below and the main process's English sentence is what
+  // the user reads. Placed after the force-delete arms so it can never shadow an affordance's copy.
+  if (isUnprovenOrphanedWorktreeDirectoryError(error)) {
+    return {
+      title: translate(
+        'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+        'Failed to delete workspace {{value0}}',
+        { value0: worktreeName }
+      ),
+      description: translate(
+        'auto.components.sidebar.delete.worktree.toast.unprovenOrphanDirectory',
+        'Git no longer tracks this workspace, but Orca could not confirm its folder was safe to delete, so it left the files on disk. Check the folder yourself and remove it once you are sure it is no longer needed.'
+      ),
+      isDestructive: true
     }
   }
 
