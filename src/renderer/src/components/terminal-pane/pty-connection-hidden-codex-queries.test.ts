@@ -1,8 +1,10 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  POST_REPLAY_DEAD_TUI_RESET,
   POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
-  POST_REPLAY_LIVE_SNAPSHOT_RESET
+  POST_REPLAY_LIVE_SNAPSHOT_RESET,
+  POST_REPLAY_REATTACH_RESET
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
@@ -481,7 +483,8 @@ describe('connectPanePty', () => {
     getMainBufferSnapshot.mockResolvedValue({
       data: 'agent-frame\x1b[?25l',
       cols: 100,
-      rows: 30
+      rows: 30,
+      alternateScreen: true
     })
     const paneKey = makePaneKey('tab-1', LEAF_1)
     const now = Date.now()
@@ -524,12 +527,75 @@ describe('connectPanePty', () => {
         POST_REPLAY_LIVE_SNAPSHOT_RESET,
         expect.any(Function)
       )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_DEAD_TUI_RESET,
+        expect.any(Function)
+      )
     } finally {
       binding.dispose()
     }
   })
 
-  it('resets cursor and focus modes on hidden-to-visible snapshot restore without a live agent', async () => {
+  it('lets fresh host shell proof outrank stale live-agent metadata on reveal', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'stale-agent-frame\x1b[?25l',
+      cols: 100,
+      rows: 30,
+      alternateScreen: true,
+      terminalOwner: 'shell'
+    })
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const now = Date.now()
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'working',
+      prompt: '',
+      agentType: 'codex',
+      paneKey,
+      terminalTitle: 'codex',
+      updatedAt: now,
+      stateStartedAt: now,
+      stateHistory: []
+    }
+
+    const isVisibleRef = { current: false }
+    const pane = createPane(1)
+    const binding = connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({ isVisibleRef, startup: { command: 'codex' } }) as never
+    )
+    try {
+      await flushAsyncTicks(6)
+      capturedDataCallback.current?.('\x1b[6')
+      isVisibleRef.current = true
+      capturedDataCallback.current?.('n')
+      await flushAsyncTicks(20)
+
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_DEAD_TUI_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
+        expect.any(Function)
+      )
+    } finally {
+      binding.dispose()
+    }
+  })
+
+  it('preserves current behavior when a snapshot has no host ownership proof', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -544,7 +610,8 @@ describe('connectPanePty', () => {
     getMainBufferSnapshot.mockResolvedValue({
       data: 'shell-frame\x1b[?25l',
       cols: 100,
-      rows: 30
+      rows: 30,
+      alternateScreen: false
     })
 
     const isVisibleRef = { current: false }
@@ -570,6 +637,116 @@ describe('connectPanePty', () => {
         POST_REPLAY_LIVE_SNAPSHOT_RESET,
         expect.any(Function)
       )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_REATTACH_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_DEAD_TUI_RESET,
+        expect.any(Function)
+      )
+    } finally {
+      binding.dispose()
+    }
+  })
+
+  it('keeps a live alternate-screen pane interactive when a legacy snapshot omits its mode flag', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'legacy-tui-frame',
+      cols: 100,
+      rows: 30
+    })
+
+    const isVisibleRef = { current: false }
+    const pane = createPane(1)
+    pane.terminal.buffer.active.type = 'alternate'
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        isVisibleRef,
+        startup: { command: 'codex' }
+      }) as never
+    )
+    try {
+      await flushAsyncTicks(6)
+
+      capturedDataCallback.current?.('\x1b[6')
+      isVisibleRef.current = true
+      capturedDataCallback.current?.('n')
+      await flushAsyncTicks(20)
+
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_SNAPSHOT_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_REATTACH_RESET,
+        expect.any(Function)
+      )
+    } finally {
+      binding.dispose()
+    }
+  })
+
+  it('grounds a stale alternate-screen snapshot when the host proves shell ownership', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'stale-tui-frame',
+      cols: 100,
+      rows: 30,
+      alternateScreen: true,
+      terminalOwner: 'shell'
+    })
+
+    const isVisibleRef = { current: false }
+    const pane = createPane(1)
+    pane.terminal.buffer.active.type = 'alternate'
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({ isVisibleRef, startup: { command: 'codex' } }) as never
+    )
+    try {
+      await flushAsyncTicks(6)
+
+      capturedDataCallback.current?.('\x1b[6')
+      isVisibleRef.current = true
+      capturedDataCallback.current?.('n')
+      await flushAsyncTicks(20)
+
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_DEAD_TUI_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_SNAPSHOT_RESET,
+        expect.any(Function)
+      )
+      expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()
     } finally {
       binding.dispose()
     }

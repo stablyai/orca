@@ -660,6 +660,19 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: firstPtyId, generation: 7 }]
       },
       ptyIdsByTabId: { 'tab-1': [firstPtyId, siblingPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: LEAF_1 },
+            second: { type: 'leaf', leafId: LEAF_2 }
+          },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: restoredPtyIdByLeafId
+        }
+      },
       repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
       sshConnectionStates: new Map([
         [
@@ -709,6 +722,10 @@ describe('connectPanePty', () => {
       siblingPtyId,
       undefined,
       pendingRetry.attemptId
+    )
+    expect(mockStoreState.ptyIdsByTabId?.['tab-1']).toEqual([firstPtyId, siblingPtyId])
+    expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual(
+      restoredPtyIdByLeafId
     )
   })
 

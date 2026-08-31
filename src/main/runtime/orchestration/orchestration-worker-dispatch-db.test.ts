@@ -17,6 +17,8 @@ describe('OrchestrationDb worker Dispatch state', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'worker' })
     const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: { topology: 'current', agent: 'codex' }
     })
@@ -57,7 +59,12 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('retains an active supervised worker terminal', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'retain active worker' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -81,6 +88,8 @@ describe('OrchestrationDb worker Dispatch state', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'recover missing worker' })
     const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: { topology: 'current', agent: 'codex' }
     })
@@ -125,6 +134,8 @@ describe('OrchestrationDb worker Dispatch state', () => {
     }
 
     const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: { topology: 'current' },
       mutationReceipt
@@ -146,6 +157,8 @@ describe('OrchestrationDb worker Dispatch state', () => {
 
     expect(() =>
       d.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: 'task_missing',
         startOptions: {},
         mutationReceipt: {
@@ -162,7 +175,12 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('fails a composed start without losing residual resource receipts', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'worker' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     d.recordWorkerStage({
       dispatchId: started.dispatch.id,
       stage: 'terminal_created',
@@ -182,9 +200,16 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('allows retry only from the Task current terminal Dispatch', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'retry current' })
-    const first = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const first = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
     const second = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       retryOf: first.dispatch.id,
       startOptions: {}
@@ -193,6 +218,8 @@ describe('OrchestrationDb worker Dispatch state', () => {
 
     expect(() =>
       d.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         retryOf: first.dispatch.id,
         startOptions: {}
@@ -200,6 +227,8 @@ describe('OrchestrationDb worker Dispatch state', () => {
     ).toThrow('cannot retry')
     expect(
       d.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         retryOf: second.dispatch.id,
         startOptions: {}
@@ -210,9 +239,16 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('treats abandon of a superseded Dispatch as a no-op', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'stale abandon' })
-    const first = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const first = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
     const second = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       retryOf: first.dispatch.id,
       startOptions: {}
@@ -248,7 +284,12 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('lets the stop fence win before a late worker completion', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -276,7 +317,12 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('allows explicit stop recovery from uncertain local and remote starts', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'uncertain local start' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     d.markWorkerStartUnknown(started.dispatch.id, 'agent_readiness', 'connection lost')
 
     expect(d.beginWorkerStop(started.dispatch.id, 'runtime_test')).toMatchObject({
@@ -359,7 +405,12 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('returns already-settled when completion wins before stop', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })
-    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',

@@ -97,8 +97,8 @@ describe('browser WebAuthn profile deletion', () => {
   })
 
   it('leaves another session pending when a profile is deleted', async () => {
-    const firstProfile = browserSessionRegistry.createProfile('isolated', 'First')
-    const secondProfile = browserSessionRegistry.createProfile('isolated', 'Second')
+    const firstProfile = await browserSessionRegistry.createProfile('isolated', 'First')
+    const secondProfile = await browserSessionRegistry.createProfile('isolated', 'Second')
     expect(firstProfile).not.toBeNull()
     expect(secondProfile).not.toBeNull()
 

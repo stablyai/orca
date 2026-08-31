@@ -1,5 +1,6 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalModes } from './terminal-modes'
+import type { TerminalOwner } from '../../shared/terminal-owner'
 
 export type TerminalSnapshot = {
   snapshotAnsi: string
@@ -19,4 +20,6 @@ export type TerminalSnapshot = {
   lastTitle?: string
   /** Optional because persisted snapshots and older v19 daemons lack it. */
   outputSequence?: number
+  /** Ordered shell lifecycle evidence captured at this snapshot boundary. */
+  terminalOwner?: TerminalOwner
 }

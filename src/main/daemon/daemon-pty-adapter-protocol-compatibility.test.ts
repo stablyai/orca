@@ -577,6 +577,128 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('attach applied-size compatibility', () => {
+    function mockAttachRequest(args: {
+      sessionId: string
+      cols: number
+      rows: number
+      protocolVersion: number
+      getSizeError?: Error
+      getSizeResponse?: { size: { cols: number; rows: number } | null }
+    }): {
+      request: ReturnType<typeof vi.spyOn>
+      ensureConnected: ReturnType<typeof vi.spyOn>
+      adapter: DaemonPtyAdapter
+    } {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) => {
+          if (type === 'getSize') {
+            if (args.getSizeError) {
+              throw args.getSizeError
+            }
+            return (args.getSizeResponse ?? { size: null }) as never
+          }
+          if (type === 'listSessions') {
+            return {
+              sessions: [
+                {
+                  sessionId: args.sessionId,
+                  isAlive: true,
+                  cols: args.cols,
+                  rows: args.rows
+                }
+              ]
+            } as never
+          }
+          if (type === 'createOrAttach') {
+            return {
+              isNew: false,
+              snapshot: null,
+              pid: 4321,
+              shellState: 'unsupported',
+              incarnationId: 'compat-attach-incarnation'
+            } as never
+          }
+          return {} as never
+        })
+      const adapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion: args.protocolVersion
+      })
+      return { request, ensureConnected, adapter }
+    }
+
+    it('uses inventory dimensions when attaching to a pre-getSize daemon', async () => {
+      const sessionId = 'legacy-v17-session'
+      const rig = mockAttachRequest({
+        sessionId,
+        cols: 137,
+        rows: 41,
+        protocolVersion: GET_SIZE_PROTOCOL_VERSION - 1
+      })
+      try {
+        await expect(rig.adapter.attach(sessionId)).resolves.toBeUndefined()
+        expect(rig.request).not.toHaveBeenCalledWith('getSize', expect.anything())
+        expect(rig.request).toHaveBeenCalledWith('listSessions', undefined)
+        expect(rig.request).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({ sessionId, cols: 137, rows: 41 })
+        )
+      } finally {
+        rig.adapter.dispose()
+        rig.request.mockRestore()
+        rig.ensureConnected.mockRestore()
+      }
+    })
+
+    it('falls back to inventory when a versioned daemon rejects getSize', async () => {
+      const sessionId = 'ambiguous-get-size-session'
+      const rig = mockAttachRequest({
+        sessionId,
+        cols: 120,
+        rows: 30,
+        protocolVersion: GET_SIZE_PROTOCOL_VERSION,
+        getSizeError: new Error('Unknown request type: getSize')
+      })
+      try {
+        await expect(rig.adapter.attach(sessionId)).resolves.toBeUndefined()
+        expect(rig.request).toHaveBeenCalledWith('listSessions', undefined)
+        expect(rig.request).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({ sessionId, cols: 120, rows: 30 })
+        )
+      } finally {
+        rig.adapter.dispose()
+        rig.request.mockRestore()
+        rig.ensureConnected.mockRestore()
+      }
+    })
+
+    it('preserves a size-probe transport failure as unverifiable', async () => {
+      const transportError = new Error('Connection lost')
+      const rig = mockAttachRequest({
+        sessionId: 'disconnected-attach-session',
+        cols: 80,
+        rows: 24,
+        protocolVersion: GET_SIZE_PROTOCOL_VERSION,
+        getSizeError: transportError
+      })
+      try {
+        await expect(rig.adapter.attach('disconnected-attach-session')).rejects.toBe(transportError)
+        expect(rig.request).not.toHaveBeenCalledWith('createOrAttach', expect.anything())
+      } finally {
+        rig.adapter.dispose()
+        rig.request.mockRestore()
+        rig.ensureConnected.mockRestore()
+      }
+    })
+  })
+
   describe('inspectProcess on pre-inspection daemon protocols', () => {
     type ClientInternals = {
       client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }

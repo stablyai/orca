@@ -56,11 +56,14 @@ const BATCH_SCRIPT_INSTALLERS = [
   { agent: 'grok', install: () => new GrokHookService().install() }
 ] as const
 
-function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+// Why: the Codex installer awaits an app-server trust-grant session, so the
+// override has to stay pinned across the await instead of being restored by a
+// synchronous `finally` while the install is still running.
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   try {
-    return run()
+    return await run()
   } finally {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
@@ -93,10 +96,10 @@ describe('Windows managed hook post interpreter', () => {
     home = ''
   })
 
-  it('posts through curl.exe from every managed batch script, spawning no interpreter', () => {
-    const scripts = withPlatform('win32', () => {
+  it('posts through curl.exe from every managed batch script, spawning no interpreter', async () => {
+    const scripts = await withPlatform('win32', async () => {
       for (const entry of BATCH_SCRIPT_INSTALLERS) {
-        expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
+        expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
       }
       const hooksDir = join(home, '.orca', 'agent-hooks')
       return readdirSync(hooksDir)

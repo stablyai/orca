@@ -363,6 +363,39 @@ describe('web GitLab preload API', () => {
     ])
   })
 
+  it('does not send the ready semantic field to an older paired host', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: method === 'status.get' ? { capabilities: [] } : { ok: true },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const result = await globals.window.api.gl.updateMR({
+      repoPath: '/workspace/repo',
+      iid: 8,
+      updates: { readyForReview: true }
+    })
+
+    expect(result).toMatchObject({ ok: false })
+    expect(runtimeCalls).toEqual([{ method: 'status.get', params: undefined }])
+  })
+
   it('exposes the GitLab task methods used by the shared Tasks page', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({

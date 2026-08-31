@@ -3,7 +3,10 @@ import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { resolveCliCommand } from '../codex-cli/command'
 import { wslAwareSpawn } from '../git/runner'
 import { getSpawnArgsForWindows } from '../win32-utils'
-import type { SpawnSourceControlAgent } from './source-control-text-generation-types'
+import type {
+  SpawnedSourceControlAgentProcess,
+  SpawnSourceControlAgent
+} from './source-control-text-generation-types'
 
 const WSL_LAUNCHER_ENV_KEYS = [
   'ComSpec',
@@ -36,6 +39,7 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
 export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   const spawnEnv = input.env ?? process.env
   if (process.platform === 'win32' && input.wslDistro) {
+    // Same contract as spawnProcess: stdout/stderr are piped; stdin matches stdinMode.
     return wslAwareSpawn(input.binary, input.args, {
       cwd: input.cwd,
       env: buildWslLauncherEnv(input.env),
@@ -43,7 +47,7 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
       windowsHide: true,
       wslDistro: input.wslDistro,
       useWslLoginShell: true
-    })
+    }) as SpawnedSourceControlAgentProcess
   }
   const resolvedBinary =
     process.platform === 'win32'

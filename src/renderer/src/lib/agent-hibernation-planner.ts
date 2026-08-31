@@ -1,36 +1,18 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
-  getAgentResumeArgv,
-  isResumableTuiAgent,
-  type SleepingAgentSessionRecord
-} from '../../../shared/agent-session-resume'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
-import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from './pi-compatible-live-recovery-record'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+  getEligiblePane,
+  getEntryTabId,
+  toRuntimePtyId,
+  type EligiblePane
+} from './agent-hibernation-pane-eligibility'
+import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
+
+export type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 
 export const DEFAULT_AGENT_HIBERNATION_IDLE_MS = 30 * 60 * 1000
 export const MIN_AGENT_HIBERNATION_IDLE_MS = 60 * 1000
 export const MAX_AGENT_HIBERNATION_IDLE_MS = 24 * 60 * 60 * 1000
-
-export type AgentHibernationPlannerSnapshot = {
-  settings: Pick<GlobalSettings, 'experimentalAgentHibernation' | 'agentHibernationIdleMs'> | null
-  activeWorktreeId: string | null
-  foregroundTerminalTabIds: string[]
-  tabsByWorktree: Record<string, TerminalTab[]>
-  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
-  ptyIdsByTabId: Record<string, string[] | undefined>
-  runtimeLivePtyIdsByWorktreeId?: Record<string, string[] | undefined>
-  runtimeLivenessRequiredWorktreeIds?: string[]
-  mobileLockedPtyIds: string[]
-  agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
-  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
-  lastTerminalInputAtByPaneKey: Record<string, number | undefined>
-  foregroundTerminalLastSeenAtByTabId: Record<string, number | undefined>
-  now: number
-}
 
 export type AgentHibernationCandidate = {
   id: string
@@ -42,23 +24,6 @@ export type AgentHibernationCandidate = {
   targetPtyIds: string[]
   expectedRuntimePtyIds: string[]
   signature: string
-}
-
-type EligiblePane = {
-  paneKey: string
-  tabId: string
-  leafId: string
-  ptyId: string
-  runtimePtyId: string
-  providerSessionId: string
-  state: AgentStatusEntry['state']
-  updatedAt: number
-  effectiveIdleStart: number
-  inputAt: number
-}
-
-function toRuntimePtyId(ptyId: string): string {
-  return parseRemoteRuntimePtyId(ptyId)?.handle ?? ptyId
 }
 
 export function getEffectiveAgentHibernationIdleMs(value: unknown): number {
@@ -92,132 +57,16 @@ function getLivePtyIdsForTab(
   return [...ids]
 }
 
-function getPaneLivePtyId(
-  entry: AgentStatusEntry,
-  layout: TerminalLayoutSnapshot | undefined
-): { leafId: string; ptyId: string } | null {
-  const parsed = parsePaneKey(entry.paneKey)
-  if (!parsed || (entry.tabId && parsed.tabId !== entry.tabId)) {
-    return null
-  }
-  const ptyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
-  return ptyId ? { leafId: parsed.leafId, ptyId } : null
-}
-
-function getEntryTabId(entry: AgentStatusEntry): string | null {
-  if (entry.tabId) {
-    return entry.tabId
-  }
-  return parsePaneKey(entry.paneKey)?.tabId ?? null
-}
-
-// Why: provider done hooks can fire mid-Dispatch; only runtime-confirmed settlement makes sleep safe.
-const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boolean =>
-  orchestration
-    ? !['completed', 'failed', 'circuit_broken'].includes(orchestration.dispatchStatus ?? '')
-    : false
-
-function getEligiblePane(args: {
-  entry: AgentStatusEntry
-  tab: TerminalTab
-  layout: TerminalLayoutSnapshot | undefined
-  livePtyIds: Set<string>
-  sleepingAgentSessionsByPaneKey: AgentHibernationPlannerSnapshot['sleepingAgentSessionsByPaneKey']
-  lastTerminalInputAtByPaneKey: AgentHibernationPlannerSnapshot['lastTerminalInputAtByPaneKey']
-  foregroundTerminalLastSeenAtByTabId: AgentHibernationPlannerSnapshot['foregroundTerminalLastSeenAtByTabId']
-  mobileLockedPtyIds: Set<string>
-  now: number
-  idleMs: number
-}): EligiblePane | null {
-  const {
-    entry,
-    tab,
-    layout,
-    livePtyIds,
-    sleepingAgentSessionsByPaneKey,
-    lastTerminalInputAtByPaneKey,
-    foregroundTerminalLastSeenAtByTabId,
-    mobileLockedPtyIds
-  } = args
-  const sleepingRecord = sleepingAgentSessionsByPaneKey[entry.paneKey]
-  // Why: a Pi-compatible done hook ends a turn, not its TUI. Its live
-  // recovery checkpoint must not make the pane look already hibernated.
-  const hasOnlyLivePiCompatibleRecoveryIdentity =
-    isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, sleepingRecord, tab.worktreeId)
-  if (
-    entry.state !== 'done' ||
-    entry.interrupted === true ||
-    Boolean(entry.subagents?.length) ||
-    hasUnsettledOrUnknownDispatch(entry) ||
-    (sleepingRecord && !hasOnlyLivePiCompatibleRecoveryIdentity)
-  ) {
-    return null
-  }
-  if (
-    getEntryTabId(entry) !== tab.id ||
-    (entry.worktreeId && entry.worktreeId !== tab.worktreeId)
-  ) {
-    return null
-  }
-  if (!entry.agentType || !isResumableTuiAgent(entry.agentType) || !entry.providerSession) {
-    return null
-  }
-  if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
-    return null
-  }
-  // Why: returning to the containing terminal tab should restart sleep even
-  // without pane input; sibling tabs in the worktree should keep their age.
-  const foregroundLastSeenAt = foregroundTerminalLastSeenAtByTabId[tab.id]
-  const effectiveIdleStart = Math.max(
-    entry.updatedAt,
-    typeof foregroundLastSeenAt === 'number' && Number.isFinite(foregroundLastSeenAt)
-      ? foregroundLastSeenAt
-      : 0
-  )
-  if (args.now - effectiveIdleStart < args.idleMs) {
-    return null
-  }
-  const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
-  // Why: killing the PTY discards the TUI composer's draft and any queued
-  // messages. The old input-after-done compare missed drafts typed while the
-  // agent was still working — the class that lost a user's draft in prod.
-  if (
-    typeof inputAt === 'number' &&
-    Number.isFinite(inputAt) &&
-    lastInputBlocksHibernation(entry, inputAt)
-  ) {
-    return null
-  }
-  const livePane = getPaneLivePtyId(entry, layout)
-  if (!livePane) {
-    return null
-  }
-  const { leafId, ptyId } = livePane
-  const runtimePtyId = toRuntimePtyId(ptyId)
-  if (!livePtyIds.has(runtimePtyId) || mobileLockedPtyIds.has(runtimePtyId)) {
-    return null
-  }
-  return {
-    paneKey: entry.paneKey,
-    tabId: tab.id,
-    leafId,
-    ptyId,
-    runtimePtyId,
-    providerSessionId: entry.providerSession.id,
-    state: entry.state,
-    updatedAt: entry.updatedAt,
-    effectiveIdleStart,
-    inputAt: typeof inputAt === 'number' && Number.isFinite(inputAt) ? inputAt : 0
-  }
-}
-
 function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
   const parts = panes
     .slice()
     .sort((a, b) => a.paneKey.localeCompare(b.paneKey))
     .map(
       (pane) =>
-        `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.providerSessionId}:${pane.state}:${pane.updatedAt}:${pane.effectiveIdleStart}:${pane.inputAt}`
+        // `updatedAt` is deliberately absent: same-state repaints advance it and would
+        // stop two consecutive ticks ever matching. Agent kind and full resume identity
+        // replace the change detection it incidentally provided.
+        `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.agentType}:${pane.providerSessionKey}:${pane.providerSessionId}:${pane.providerTranscriptPath}:${pane.state}:${pane.stateStartedAt}:${pane.effectiveIdleStart}:${pane.inputAt}`
     )
   return `${worktreeId}|${parts.join('|')}`
 }
@@ -263,7 +112,11 @@ export function planAgentHibernationCandidates(
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
   const candidates: AgentHibernationCandidate[] = []
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
-    if (!worktreeId || worktreeId === snapshot.activeWorktreeId || tabs.length === 0) {
+    // Why: the tab on screen is `foregroundTerminalTabIds` below, and a tab just left is held by
+    // the `foregroundTerminalLastSeenAtByTabId` floor in getEligiblePane. Skipping the whole active
+    // worktree on top of that parked nothing in the tree a user actually works in — where a 16 GB
+    // host accumulates its idle agents (#16211).
+    if (!worktreeId || tabs.length === 0) {
       continue
     }
     if (
@@ -295,6 +148,8 @@ export function planAgentHibernationCandidates(
           sleepingAgentSessionsByPaneKey: snapshot.sleepingAgentSessionsByPaneKey,
           lastTerminalInputAtByPaneKey: snapshot.lastTerminalInputAtByPaneKey,
           foregroundTerminalLastSeenAtByTabId: snapshot.foregroundTerminalLastSeenAtByTabId,
+          ptyBindingFirstSeenAtByPaneKey: snapshot.ptyBindingFirstSeenAtByPaneKey ?? {},
+          boundaryResolvedAtByPaneKey: snapshot.boundaryResolvedAtByPaneKey ?? {},
           mobileLockedPtyIds,
           now: snapshot.now,
           idleMs

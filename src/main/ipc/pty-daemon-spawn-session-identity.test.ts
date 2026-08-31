@@ -462,7 +462,8 @@ describe('registerPtyHandlers', () => {
           throw new Error('SSH_SESSION_EXPIRED: remote-pty')
         })
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,
@@ -514,7 +515,8 @@ describe('registerPtyHandlers', () => {
           throw new Error('SSH_SESSION_EXPIRED: remote-pty')
         })
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,

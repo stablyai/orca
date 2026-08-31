@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, createElement } from 'react'
+import { act, createElement, Fragment } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -59,6 +59,21 @@ function HookProbe({
   return null
 }
 
+function HookList({ count }: { count: number }): React.JSX.Element {
+  return createElement(
+    Fragment,
+    null,
+    Array.from({ length: count }, (_value, index) =>
+      createElement(HookProbe, {
+        key: index,
+        filePath: `/repo/image-${index}.png`,
+        onRender: () => {},
+        src: `/repo/image-${index}.png`
+      })
+    )
+  )
+}
+
 beforeEach(() => {
   resetLocalImageSrcStateForTests()
   vi.spyOn(URL, 'createObjectURL').mockReset()
@@ -111,6 +126,24 @@ describe('loadLocalImageSrc', () => {
       'blob:local-image'
     ])
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not revoke blob URLs still used by mounted previews during eviction', async () => {
+    const readFile = vi.fn().mockResolvedValue(binaryPreview())
+    let nextUrl = 0
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:image-${++nextUrl}`)
+    setReadFile(readFile)
+
+    const container = document.createElement('div')
+    const root: Root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(HookList, { count: 101 }))
+      await flushPromises()
+    })
+
+    expect(readFile).toHaveBeenCalledTimes(101)
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:image-1')
+    root.unmount()
   })
 
   it('clears failed in-flight reads so a later retry can succeed', async () => {

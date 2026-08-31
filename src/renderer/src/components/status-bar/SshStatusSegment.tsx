@@ -260,6 +260,7 @@ export function SshStatusSegment({
             label={host.label}
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl)}
+            diagnostics={host.remoteControl}
             onConnect={() => connectRuntimeHost(host.id)}
             onDisconnect={() => disconnectRuntimeHost(host.id)}
           />
@@ -279,6 +280,7 @@ export function SshStatusSegment({
             label={host.label}
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl)}
+            diagnostics={host.remoteControl}
             onConnect={() => connectRuntimeHost(host.id)}
             onDisconnect={() => disconnectRuntimeHost(host.id)}
           />

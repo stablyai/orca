@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
 
@@ -43,6 +43,10 @@ function findAnimatedRowContaining(text: string): HTMLElement {
 }
 
 describe('TerminalQuickCommandDialog animation structure', () => {
+  beforeEach(() => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+  })
+
   afterEach(async () => {
     await act(async () => {
       for (const root of mountedRoots.splice(0)) {
@@ -50,6 +54,44 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       }
     })
     document.body.innerHTML = ''
+    vi.unstubAllGlobals()
+  })
+
+  it('selects all text in editable fields with Cmd+A', async () => {
+    await renderDialog({
+      id: 'qc-select-all',
+      label: 'Start dev server',
+      action: 'terminal-command',
+      command: 'npm run dev',
+      appendEnter: true,
+      scope: { type: 'global' }
+    })
+
+    const fields = [
+      document.body.querySelector<HTMLInputElement>('input'),
+      document.body.querySelector<HTMLTextAreaElement>('textarea[aria-label="Command"]')
+    ]
+
+    for (const field of fields) {
+      expect(field).not.toBeNull()
+      if (!field) {
+        continue
+      }
+      field.setSelectionRange(field.value.length, field.value.length)
+      await act(async () => {
+        field.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'a',
+            code: 'KeyA',
+            metaKey: true,
+            bubbles: true,
+            cancelable: true
+          })
+        )
+      })
+
+      expect([field.selectionStart, field.selectionEnd]).toEqual([0, field.value.length])
+    }
   })
 
   it('keeps agent-only fields mounted as collapsed animated rows in terminal mode', async () => {

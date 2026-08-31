@@ -30,7 +30,10 @@ export class RelayAgentHookRuntime {
   ) {
     this.hookServer = new RelayAgentHookServer({
       endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
-      forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
+      forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
+      // Why: the PTY handler is the only component that knows which panes still have a client
+      // surface, so it — not the client — decides whether a hook post describes a live pane.
+      isPaneSurfaceRetired: (paneKey) => ptyHandler.isPaneSurfaceRetired(paneKey)
     })
   }
 
@@ -62,6 +65,12 @@ export class RelayAgentHookRuntime {
         this.hookServer.clearPaneState(paneKey)
       }
       this.pluginOverlay.clearOverlay(paneKey ?? id)
+    })
+    // Why: the exit listener above only fires on proof of process death, which a shell that
+    // survives teardown never produces. Drop the pane's cached status the moment its tab goes, so a
+    // reconnecting client cannot be handed a replay of an agent nobody owns.
+    this.ptyHandler.setSurfaceRetiredListener(({ paneKey }) => {
+      this.hookServer.clearPaneState(paneKey)
     })
   }
 

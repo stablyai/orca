@@ -14,6 +14,8 @@ import {
   resetTerminalLinkifierHoverState
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import { focusActivePane } from './pane-helpers'
+import { useAppStore } from '@/store'
+import { auditPaneWeightParity } from './terminal-render-desync-weight-probe'
 import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
 import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
 import { presentPaneViewport } from '@/lib/pane-manager/pane-webgl-renderer'
@@ -83,6 +85,7 @@ export function resumeTerminalVisibility({
         // change that landed while this tab was hidden has no other repair point.
         repairPaneWebglCanvasDprMismatch(pane)
       }
+      auditPaneWeightParity(manager.getPanes(), useAppStore.getState().settings)
       // Why: intra-worktree tab switches only toggle the overlay. Keeping
       // synchronous drain and atlas rebuilds off this path avoids racing the
       // overlay's delayed geometry fit. Still request hidden-output recovery:
@@ -103,6 +106,7 @@ export function resumeTerminalVisibility({
     }
     enforceTerminalViewportIntents(manager)
     if (!shouldUseLightTabResume) {
+      auditPaneWeightParity(manager.getPanes(), useAppStore.getState().settings)
       // Why: this clear wipes the glyph atlas shared with other same-config
       // terminals; refresh after reset so rebuilt atlases repaint from xterm.
       resetAndRefreshAllTerminalWebglAtlases('visibility-resume')

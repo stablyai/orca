@@ -70,6 +70,7 @@ import {
 } from './host-session-mirror-hydration'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session'
 import {
+  clearWebSessionTabsTrackingForEnvironment,
   useWebSessionTabsSync,
   WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS
 } from './web-session-tabs-sync'
@@ -277,6 +278,36 @@ describe('the eager post-create list answers for its worktree', () => {
 
     expect(useAppStore.getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
     expect(hasHostSessionMirrorHydrated(ENV, FLOATING_TERMINAL_WORKTREE_ID)).toBe(false)
+  })
+
+  it('does not let a pre-reset eager list settle in the new tracking epoch', async () => {
+    let resolveList!: (response: unknown) => void
+    runtimeCall.mockImplementation((request: { method: string }) =>
+      request.method === 'session.tabs.list'
+        ? new Promise((resolve) => {
+            resolveList = resolve
+          })
+        : new Promise(() => {})
+    )
+    const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-eager-old-tracking')
+    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
+
+    const refresh = refreshWebRuntimeSessionTabsSnapshot(ENV, WT)
+    await act(settle)
+    clearWebSessionTabsTrackingForEnvironment(ENV)
+    resolveList({
+      id: 'list',
+      ok: true as const,
+      result: makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID),
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    await act(async () => {
+      await refresh
+      await settle()
+    })
+
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(hasHostSessionMirrorHydrated(ENV, WT)).toBe(false)
   })
 })
 

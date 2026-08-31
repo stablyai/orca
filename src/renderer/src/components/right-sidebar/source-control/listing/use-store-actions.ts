@@ -15,6 +15,7 @@ export function useSourceControlStoreActions() {
   const createHostedReview = useAppStore((s) => s.createHostedReview)
   const createStackedHostedReview = useAppStore((s) => s.createStackedHostedReview)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const openModal = useAppStore((s) => s.openModal)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
   const updateRepo = useAppStore((s) => s.updateRepo)
@@ -76,6 +77,7 @@ export function useSourceControlStoreActions() {
     openAllDiffs,
     openBranchAllDiffs,
     openConflictReview,
+    openModal,
     openSettingsPage,
     openSettingsTarget,
     prGenerationRecords,

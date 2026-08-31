@@ -171,6 +171,7 @@ export function BrowserPagePane({
   useBrowserPageWebviewLifecycle({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
+    browserTabLoading: browserTab.loading,
     browserTabLoadError: browserTab.loadError,
     workspaceId,
     worktreeId,
@@ -231,6 +232,7 @@ export function BrowserPagePane({
   const reload = useBrowserPageReloadActions({
     browserTab,
     webviewRef,
+    trackNextLoadingEventRef,
     retryGuestRecoveryRef,
     onUpdatePageStateRef
   })

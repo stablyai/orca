@@ -338,3 +338,45 @@ describe('a tab id local state already holds under two worktrees', () => {
     expect(merged.tabsByWorktree[OTHER_WORKTREE]?.map((tab) => tab.id)).toEqual(['build'])
   })
 })
+
+describe('local rows the snapshot carries no answer for', () => {
+  it('keeps the explicit empty row that records a closed last terminal', () => {
+    // initial-terminal.ts: a missing row means never initialized, an explicit empty row means the
+    // user closed the last terminal. Dropping the key downgrades the second into the first, so the
+    // seeding pass re-creates the terminal the user just closed on every reconnect.
+    const current = sessionState({ tabsByWorktree: { [WORKTREE]: [] } })
+    const remote = sessionState({ activeWorktreeId: null, tabsByWorktree: {} })
+
+    const merged = merge(current, remote, { [WORKTREE]: [] })
+
+    expect(Object.hasOwn(merged.tabsByWorktree, WORKTREE), 'tombstone erased').toBe(true)
+    expect(merged.tabsByWorktree[WORKTREE]).toEqual([])
+  })
+
+  it('invents no row for a worktree neither side has one for', () => {
+    // The counterweight: presence has to come from a real local row, not from membership in the
+    // replace set, or a never-initialized workspace gets a tombstone it never earned.
+    const current = sessionState({ tabsByWorktree: {} })
+    const remote = sessionState({ activeWorktreeId: null, tabsByWorktree: {} })
+
+    const merged = merge(current, remote, {})
+
+    expect(Object.hasOwn(merged.tabsByWorktree, WORKTREE)).toBe(false)
+  })
+
+  it('keeps the default-terminal-tabs marker the snapshot does not carry', () => {
+    // The marker is write-once and is the only guard on applyDefaultTerminalTabs. A snapshot that
+    // omits it is a host that was never told, not a host reporting the tabs were never applied —
+    // and taking it literally re-applies the whole template on top of the user's tabs.
+    const agent = terminalTab('agent')
+    const current = sessionState({
+      tabsByWorktree: { [WORKTREE]: [agent] },
+      defaultTerminalTabsAppliedByWorktreeId: { [WORKTREE]: true }
+    })
+    const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [agent] } })
+
+    const merged = merge(current, remote, { [WORKTREE]: [agent] })
+
+    expect(merged.defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE]).toBe(true)
+  })
+})

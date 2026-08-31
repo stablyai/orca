@@ -1,6 +1,9 @@
 import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
-import { resolveLocalProjectRuntimeForRepo } from './local-project-runtime-resolution'
+import {
+  resolveLocalProjectRuntimeForRepo,
+  type ProjectRuntimeResolutionStore
+} from './local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 
 export {
@@ -63,4 +66,22 @@ export function getLocalProjectWorktreeGitOptionsForRuntime(
   // every project once per repo on a polling path.
   const { wslDistro } = getLocalProjectGitExecOptionsForRuntime(repo, projectRuntime)
   return wslDistro ? { wslDistro } : {}
+}
+
+/**
+ * Distro whose filesystem this repo's worktrees belong on, or undefined.
+ *
+ * Deliberately non-throwing where `getLocalProjectGitExecOptions` throws: a
+ * runtime that needs repair must not block creating a worktree, it just falls
+ * back to the Windows-side placement that has always been used.
+ */
+export function getWorktreeMirrorDistro(
+  store: ProjectRuntimeResolutionStore,
+  repo: Repo
+): string | undefined {
+  const projectRuntime = resolveLocalProjectRuntimeForRepo(store, repo)
+  if (!projectRuntime || projectRuntime.status !== 'resolved') {
+    return undefined
+  }
+  return projectRuntime.runtime.kind === 'wsl' ? projectRuntime.runtime.distro : undefined
 }

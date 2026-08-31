@@ -94,7 +94,12 @@ describe('runtime environment browser client host handler', () => {
     await expect(
       prepare(null, { selector: 'environment-a', expectedPairingRevision: 7 })
     ).resolves.toEqual({ kind: 'client', browserHostClientId: 'browser-client-a' })
-    expect(getRuntimeEnvironmentStatusMock).toHaveBeenCalledWith('/profile', 'environment-a')
+    expect(getRuntimeEnvironmentStatusMock).toHaveBeenCalledWith(
+      '/profile',
+      'environment-a',
+      undefined,
+      { observeOnly: true }
+    )
     expect(startHostMock).toHaveBeenCalledWith({
       environment: expect.objectContaining({ id: 'environment-a', pairingRevision: 7 }),
       authorityRuntimeId: 'runtime-a'

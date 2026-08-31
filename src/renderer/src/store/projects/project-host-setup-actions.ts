@@ -16,6 +16,7 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
 import { repoWithFetchedOwner } from '../repos/owner-routing'
+import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 import {
   assertProjectHostSetupMutationRuntimeCapabilities,
   getProjectSetupRuntimeTarget,
@@ -57,6 +58,7 @@ export function createProjectHostSetupActions(
         const repo = repoWithFetchedOwner(result.repo, target)
         const repoHostId = getRepoExecutionHostId(repo)
         const setup = setupWithFetchedOwner(result.setup, target)
+        const project = normalizeProjectRow(result.project)
         set((s) => {
           const nextRepos = s.repos.some((entry) =>
             repoMatchesHostIdentity(entry, repo.id, repoHostId)
@@ -65,9 +67,9 @@ export function createProjectHostSetupActions(
                 repoMatchesHostIdentity(entry, repo.id, repoHostId) ? repo : entry
               )
             : [...s.repos, repo]
-          const nextProjects = s.projects.some((entry) => entry.id === result.project.id)
-            ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
-            : [...s.projects, result.project]
+          const nextProjects = s.projects.some((entry) => entry.id === project.id)
+            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
+            : [...s.projects, project]
           const nextSetups = s.projectHostSetups.some((entry) => entry.id === setup.id)
             ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
             : [...s.projectHostSetups, setup]
@@ -80,7 +82,7 @@ export function createProjectHostSetupActions(
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
           description: repo.displayName
         })
-        return { ...result, repo, setup }
+        return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to set up project on host:', err)
         const message = err instanceof Error ? err.message : String(err)
@@ -108,15 +110,16 @@ export function createProjectHostSetupActions(
                 )
               ).result
         const setup = setupWithFetchedOwner(result.setup, target)
+        const project = normalizeProjectRow(result.project)
         set((s) => ({
-          projects: s.projects.some((entry) => entry.id === result.project.id)
-            ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
-            : [...s.projects, result.project],
+          projects: s.projects.some((entry) => entry.id === project.id)
+            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
+            : [...s.projects, project],
           projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
             ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
             : [...s.projectHostSetups, setup]
         }))
-        return { project: result.project, setup }
+        return { project, setup }
       } catch (err) {
         console.error('Failed to create project host setup:', err)
         const message = err instanceof Error ? err.message : String(err)
@@ -147,6 +150,7 @@ export function createProjectHostSetupActions(
                 )
               ).result
         const setup = setupWithFetchedOwner(result.setup, target)
+        const project = normalizeProjectRow(result.project)
         const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
         const repoHostId = repo ? getRepoExecutionHostId(repo) : null
         set((s) => ({
@@ -157,14 +161,14 @@ export function createProjectHostSetupActions(
                 )
               : [...s.repos, repo]
             : s.repos,
-          projects: s.projects.some((entry) => entry.id === result.project.id)
-            ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
-            : [...s.projects, result.project],
+          projects: s.projects.some((entry) => entry.id === project.id)
+            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
+            : [...s.projects, project],
           projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
             ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
             : [...s.projectHostSetups, setup]
         }))
-        return { ...result, repo, setup }
+        return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to update project host setup:', err)
         const message = err instanceof Error ? err.message : String(err)

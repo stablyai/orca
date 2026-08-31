@@ -4,7 +4,6 @@ import { getSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import type { DetectedWorktreeListResult, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
-import { pruneLineageForMissingRepoWorktrees } from '../../../worktree-lineage-pruning'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
 import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
 import type { ListDesktopLineageForHostArgs } from '../../../../shared/host-lineage-contract'
@@ -20,10 +19,14 @@ import {
 import { isFolderWorkspaceIdForRepo } from '../folder-workspace-model'
 import { hasConflictingStoredWorktreeOwner } from './worktree-host-ownership'
 import {
+  applyFreshDetectedWorktreeScanSideEffects,
   listDetectedGitWorktrees,
-  rememberLocalWorktreeRoots
+  type DetectedWorktreeMetadataPrune,
+  type DetectedWorktreeSideEffectToken
 } from './detected-worktree-scan-cache'
 import { loggedWorktreeListFailures, warnOnce } from './worktree-listing-diagnostics'
+import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -36,13 +39,18 @@ export async function listDetectedWorktreesForCapturedRepo(
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)
       : undefined
+  const allMeta = isFolderRepo(repo)
+    ? undefined
+    : readAllWorktreeMetaForHost(store, getRepoExecutionHostId(repo))
   const sshWorktreeMetaIndex = repo.connectionId
-    ? createSshWorktreeMetaIndex(Object.entries(store.getAllWorktreeMeta()))
+    ? createSshWorktreeMetaIndex(Object.entries(allMeta ?? {}))
     : new Map()
 
   try {
     let gitWorktrees: GitWorktreeInfo[]
     let freshScan = true
+    let sideEffectToken: DetectedWorktreeSideEffectToken | undefined
+    let metadataPrune: DetectedWorktreeMetadataPrune | undefined
     if (isFolderRepo(repo)) {
       if (!isCurrent()) {
         return null
@@ -92,6 +100,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       const scan = await listDetectedGitWorktrees(store, repo)
       gitWorktrees = scan.gitWorktrees
       freshScan = scan.fresh
+      sideEffectToken = scan.sideEffectToken
+      metadataPrune = scan.metadataPrune
     }
     const aborted = abortedResult()
     if (aborted) {
@@ -110,15 +120,25 @@ export async function listDetectedWorktreesForCapturedRepo(
       }
     }
     if (freshScan) {
-      rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-      pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+      await applyFreshDetectedWorktreeScanSideEffects(store, repo, gitWorktrees, metadataPrune, {
+        isCurrent: () => isCurrent() && !providerAbort?.signal.aborted,
+        sideEffectToken,
+        signal: providerAbort?.signal
+      })
+      const aborted = abortedResult()
+      if (aborted) {
+        return aborted
+      }
+      if (!isCurrent()) {
+        return null
+      }
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     return {
       repoId: repo.id,
       authoritative: true,
       source: 'git',
-      worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees)
+      worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
     }
   } catch (err) {
     const aborted = abortedResult()

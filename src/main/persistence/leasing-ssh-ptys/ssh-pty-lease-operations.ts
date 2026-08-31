@@ -1,14 +1,92 @@
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 export type SshPtyLeaseOperations = {
   state: PersistedState
   toStoredPtyId: (targetId: string, ptyId: string) => string
+  toComparablePtyId: (targetId: string, ptyId: string) => string
   clearBindingsForTarget: (targetId: string) => void
   clearBindingsForLeases: (targetId: string, leases: SshRemotePtyLease[]) => boolean
   flush: () => void
   flushDurableStateOrThrowAsync: () => Promise<void>
+}
+
+/**
+ * The PTY a pane is durably bound to, keyed on the leaf alone — the only remint-stable half of a
+ * pane key, since `detachTerminalPaneToTab` moves a live pane and leaves its lease naming the tab
+ * it left.
+ *
+ * Reads both partitions deliberately. Main writes some SSH pane bindings to `ssh:<target>` and
+ * some to `local`, so a reader that consulted one would see "unbound" for a live pane and expire
+ * its lease. Reading both makes this fence correct whichever partition the binding landed in.
+ */
+function durablyBoundPtyIdForPane(
+  operations: SshPtyLeaseOperations,
+  targetId: string,
+  leafId: string
+): string | undefined {
+  const findLeafBinding = (session: WorkspaceSessionState | undefined): string | undefined =>
+    Object.values(session?.terminalLayoutsByTabId ?? {}).find(
+      (layout) => layout?.ptyIdsByLeafId?.[leafId]
+    )?.ptyIdsByLeafId?.[leafId]
+  const boundPtyId =
+    findLeafBinding(operations.state.workspaceSession) ??
+    findLeafBinding(operations.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)])
+  return boundPtyId ? operations.toComparablePtyId(targetId, boundPtyId) : undefined
+}
+
+/**
+ * One pane owns at most one live remote PTY. Lease identity is `(targetId, ptyId)` alone, so a
+ * pane re-leasing under a new relay id leaves its predecessor live with nothing to retire it and
+ * the next reattach fans out over both — the reported 2 -> 19 -> 20 across three reconnects.
+ *
+ * Superseded leases are marked `expired`, never `terminated`: losing a lease is not evidence the
+ * shell died, so the remote process is deliberately left running.
+ */
+function supersedeSiblingLeasesForPane(
+  operations: SshPtyLeaseOperations,
+  winner: SshRemotePtyLease,
+  now: number
+): void {
+  if (!winner.worktreeId || !winner.leafId) {
+    return
+  }
+  if (winner.state === 'terminated' || winner.state === 'expired') {
+    return
+  }
+  // At upsert time the arriving lease may not be the one the pane is bound to yet. Expiring the
+  // bound predecessor would detach a live pane, so leave both live and let reattach arbitrate
+  // with the binding in hand.
+  const boundPtyId = durablyBoundPtyIdForPane(operations, winner.targetId, winner.leafId)
+  if (boundPtyId && boundPtyId !== winner.ptyId) {
+    return
+  }
+  const superseded: SshRemotePtyLease[] = []
+  for (const lease of operations.state.sshRemotePtyLeases ?? []) {
+    if (
+      lease.ptyId === winner.ptyId ||
+      lease.targetId !== winner.targetId ||
+      lease.worktreeId !== winner.worktreeId ||
+      // Leaf only: a lease freezes its tabId, so a pane broken out into a new tab would otherwise
+      // never compete with its own predecessor — which is the reported cardinality growth.
+      lease.leafId !== winner.leafId ||
+      lease.state === 'terminated' ||
+      lease.state === 'expired'
+    ) {
+      continue
+    }
+    lease.state = 'expired'
+    lease.updatedAt = now
+    superseded.push(lease)
+  }
+  if (superseded.length > 0) {
+    // Why: matching on lease ptyId first means this scrubs only the predecessor's stale binding —
+    // the winner's own binding cannot match and is left intact.
+    operations.clearBindingsForLeases(winner.targetId, superseded)
+  }
 }
 
 export function getSshRemotePtyLeases(
@@ -37,6 +115,11 @@ export function upsertSshRemotePtyLease(
   )
   const existing =
     existingIndex !== -1 ? operations.state.sshRemotePtyLeases[existingIndex] : undefined
+  // NOTE: a relay numbers its PTYs from `pty-1` on every start, so after a relay restart this
+  // match can be an id RECYCLED onto a different shell rather than the same lease. When the
+  // caller names its own pane the merge below overwrites the stale identity; when it omits those
+  // fields (both spawn callers do, conditionally) the stale pane survives. Distinguishing the two
+  // needs a relay-start identity the lease does not carry — see STA-3077 notes before adding one.
   // Why: callers pass optional fields as explicit `undefined`, which would blank the stored tabId/leafId
   // (and friends) when re-upserting an existing lease.
   const definedLease = Object.fromEntries(
@@ -53,6 +136,7 @@ export function upsertSshRemotePtyLease(
   } else {
     operations.state.sshRemotePtyLeases.push(next)
   }
+  supersedeSiblingLeasesForPane(operations, next, now)
   operations.flush()
 }
 

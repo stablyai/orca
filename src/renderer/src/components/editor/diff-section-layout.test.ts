@@ -3,7 +3,8 @@ import {
   getDiffSectionBodyHeight,
   getLargeDiffFallbackBodyHeight,
   getDiffSectionEstimatedHeight,
-  isIntrinsicHeightImageDiff
+  isIntrinsicHeightImageDiff,
+  usesLargeDiffFallbackHeight
 } from './diff-section-layout'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 
@@ -21,6 +22,20 @@ describe('diff section layout', () => {
 
   it('uses a bounded fallback height for oversized diffs before measurement', () => {
     expect(getLargeDiffFallbackBodyHeight()).toBe(160)
+  })
+
+  it('uses the bounded fallback height for an on-demand diff', () => {
+    expect(
+      getDiffSectionEstimatedHeight({
+        collapsed: false,
+        measuredContentHeight: undefined,
+        originalContent: '',
+        modifiedContent: '',
+        changedLineCount: 60_000,
+        useIntrinsicImageHeight: false,
+        isLoadOnDemand: true
+      })
+    ).toBe(188)
   })
 
   it('falls back to line-count height before Monaco has mounted', () => {
@@ -211,6 +226,24 @@ describe('diff section layout', () => {
         isLargeDiffLimited: true
       })
     ).toBe(188)
+  })
+
+  it('keeps the deferred fallback height while a loaded-on-demand diff fetches', () => {
+    const section = {
+      path: 'big.txt',
+      added: 50_000,
+      removed: 0,
+      largeDiffRenderLimit: null
+    }
+    expect(usesLargeDiffFallbackHeight({ ...section, loading: false, loadOnDemand: true })).toBe(
+      true
+    )
+    expect(usesLargeDiffFallbackHeight({ ...section, loading: true, loadOnDemand: false })).toBe(
+      true
+    )
+    expect(
+      usesLargeDiffFallbackHeight({ ...section, added: 3, loading: true, loadOnDemand: false })
+    ).toBe(false)
   })
 
   it('estimates collapsed virtualized sections as header-only rows', () => {

@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { stripOrcaProvenanceMetaUpdates } from '../../../worktree-removal-safety'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type {
@@ -16,10 +17,23 @@ import type { WorktreeIpcContext } from '../worktree-ipc-context'
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context
-
   ipcMain.handle(
     'worktrees:updateMeta',
-    (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
+    (
+      _event,
+      args: {
+        worktreeId: string
+        executionHostId?: string
+        updates: Partial<WorktreeMeta>
+      }
+    ) => {
+      const executionHostId =
+        args.executionHostId === undefined
+          ? undefined
+          : parseExecutionHostId(args.executionHostId)?.id
+      if (args.executionHostId !== undefined && !executionHostId) {
+        throw new Error('Invalid execution host identity.')
+      }
       const validatedUpdates = normalizeLinkedWorkItemFields(args.updates)
       const updates =
         validatedUpdates.displayName !== undefined
@@ -29,7 +43,10 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
               firstAgentMessageRenameError: null
             }
           : validatedUpdates
-      const meta = store.setWorktreeMeta(args.worktreeId, stripOrcaProvenanceMetaUpdates(updates))
+      const sanitizedUpdates = stripOrcaProvenanceMetaUpdates(updates)
+      const meta = executionHostId
+        ? store.setWorktreeMetaForHost(args.worktreeId, executionHostId, sanitizedUpdates)
+        : store.setWorktreeMeta(args.worktreeId, sanitizedUpdates)
       // Do NOT notify here: renderer already applied this optimistically; a notification would re-sort the sidebar (bug PR #209).
       if (args.updates.displayName !== undefined) {
         // Why: remote clients have no optimistic rename and stopped polling titles, so push a remote-only invalidation; gate on displayName so per-click isUnread updates stay event-free.

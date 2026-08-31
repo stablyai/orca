@@ -151,6 +151,36 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
   })
 
+  it('supports prepared worktree creation and finalization', async () => {
+    await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-prepared', 'HEAD'])
+    await runGit(['-C', 'compat-prepared', 'reset', '--hard', 'HEAD'])
+    await runGit([
+      'worktree',
+      'lock',
+      '--reason',
+      'orca-create-preparation:v1:compat',
+      'compat-prepared'
+    ])
+    // Why: `-f -f` moves a locked preparation while preserving its lock reason (Git >=2.25).
+    await runGit(['worktree', 'move', '-f', '-f', 'compat-prepared', 'compat-final'])
+    await runGit([
+      '-C',
+      'compat-final',
+      'checkout',
+      '--no-track',
+      '-b',
+      'compat-prepared-final',
+      'HEAD'
+    ])
+
+    await expect(runGit(['-C', 'compat-final', 'branch', '--show-current'])).resolves.toMatchObject(
+      { stdout: 'compat-prepared-final\n' }
+    )
+    await runGit(['worktree', 'unlock', 'compat-final'])
+    await runGit(['worktree', 'remove', '--force', 'compat-final'])
+    await runGit(['branch', '-D', 'compat-prepared-final'])
+  })
+
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
     const fetchHeadPath = join(repoPath, '.git', 'FETCH_HEAD')
     await writeFile(fetchHeadPath, 'sentinel\n')

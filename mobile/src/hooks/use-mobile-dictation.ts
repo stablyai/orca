@@ -26,7 +26,7 @@ export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   const { client, enabled, onTranscript, onError } = options
-  const keepAwakeOwner = useMemo(createMobileDictationKeepAwakeOwner, [])
+  const keepAwakeOwner = useMemo(() => createMobileDictationKeepAwakeOwner(), [])
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const activeIdRef = useRef<string | null>(null)

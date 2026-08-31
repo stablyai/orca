@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { LEGACY_RUN_ID, OrchestrationDb } from './db'
 import type { MessageType } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 // Overwrites the datetime('now')-seeded timestamps with explicit fixture values
 // so stale-detection assertions stay deterministic (no wall clock).
@@ -255,7 +256,7 @@ describe('OrchestrationDb', () => {
     it('completing a task frees its active dispatch context', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'do it' })
-      d.createDispatchContext(task.id, 'term_a')
+      createRootDispatch(d, task.id, 'term_a')
 
       d.updateTaskStatus(task.id, 'completed')
 
@@ -285,7 +286,7 @@ describe('OrchestrationDb', () => {
       const d = createDb()
       const ready = d.createTask({ spec: 'ready task' })
       const dispatched = d.createTask({ spec: 'active task' })
-      const ctx = d.createDispatchContext(dispatched.id, 'term_worker')
+      const ctx = createRootDispatch(d, dispatched.id, 'term_worker')
 
       const rows = d.listTasksWithDispatch()
       const readyRow = rows.find((r) => r.id === ready.id)
@@ -300,7 +301,7 @@ describe('OrchestrationDb', () => {
     it('listTasksWithDispatch does not surface completed dispatches', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'work' })
-      d.createDispatchContext(task.id, 'term_worker')
+      createRootDispatch(d, task.id, 'term_worker')
       d.updateTaskStatus(task.id, 'completed')
 
       const rows = d.listTasksWithDispatch()
@@ -323,7 +324,7 @@ describe('OrchestrationDb', () => {
     it('creates a dispatch context and marks task as dispatched', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'work' })
-      const ctx = d.createDispatchContext(task.id, 'term_worker')
+      const ctx = createRootDispatch(d, task.id, 'term_worker')
 
       expect(ctx.id).toMatch(/^ctx_/)
       expect(ctx.task_id).toBe(task.id)
@@ -337,7 +338,7 @@ describe('OrchestrationDb', () => {
       const parent = d.createTask({ spec: 'parent' })
       const child = d.createTask({ spec: 'child', deps: [parent.id] })
 
-      expect(() => d.createDispatchContext(child.id, 'term_worker')).toThrow(
+      expect(() => createRootDispatch(d, child.id, 'term_worker')).toThrow(
         /only ready tasks can be dispatched/
       )
     })
@@ -346,9 +347,9 @@ describe('OrchestrationDb', () => {
       const d = createDb()
       const t1 = d.createTask({ spec: 'first' })
       const t2 = d.createTask({ spec: 'second' })
-      d.createDispatchContext(t1.id, 'term_worker')
+      createRootDispatch(d, t1.id, 'term_worker')
 
-      expect(() => d.createDispatchContext(t2.id, 'term_worker')).toThrow(
+      expect(() => createRootDispatch(d, t2.id, 'term_worker')).toThrow(
         /already has an active dispatch/
       )
     })
@@ -362,9 +363,9 @@ describe('OrchestrationDb', () => {
       const d = createDb()
       const t1 = d.createTask({ spec: 'first' })
       const t2 = d.createTask({ spec: 'second' })
-      d.createDispatchContext(t1.id, 'term_old', `tab_1:${LEAF_A}`)
+      createRootDispatch(d, t1.id, 'term_old', `tab_1:${LEAF_A}`)
 
-      expect(() => d.createDispatchContext(t2.id, 'term_new', `tab_1:${LEAF_A}`)).toThrow(
+      expect(() => createRootDispatch(d, t2.id, 'term_new', `tab_1:${LEAF_A}`)).toThrow(
         /already has an active dispatch/
       )
     })
@@ -373,9 +374,9 @@ describe('OrchestrationDb', () => {
       const d = createDb()
       const t1 = d.createTask({ spec: 'first' })
       const t2 = d.createTask({ spec: 'second' })
-      d.createDispatchContext(t1.id, 'term_old', `tab_1:${LEAF_A}`)
+      createRootDispatch(d, t1.id, 'term_old', `tab_1:${LEAF_A}`)
 
-      expect(() => d.createDispatchContext(t2.id, 'term_new', `tab_2:${LEAF_A}`)).toThrow(
+      expect(() => createRootDispatch(d, t2.id, 'term_new', `tab_2:${LEAF_A}`)).toThrow(
         /already has an active dispatch/
       )
     })
@@ -384,37 +385,37 @@ describe('OrchestrationDb', () => {
       const d = createDb()
       const t1 = d.createTask({ spec: 'first' })
       const t2 = d.createTask({ spec: 'second' })
-      d.createDispatchContext(t1.id, 'term_a', `tab_1:${LEAF_A}`)
+      createRootDispatch(d, t1.id, 'term_a', `tab_1:${LEAF_A}`)
 
-      expect(() => d.createDispatchContext(t2.id, 'term_b', `tab_1:${LEAF_B}`)).not.toThrow()
+      expect(() => createRootDispatch(d, t2.id, 'term_b', `tab_1:${LEAF_B}`)).not.toThrow()
     })
 
     it('falls back to handle lock when pane keys are missing', () => {
       const d = createDb()
       const t1 = d.createTask({ spec: 'first' })
       const t2 = d.createTask({ spec: 'second' })
-      d.createDispatchContext(t1.id, 'term_worker')
+      createRootDispatch(d, t1.id, 'term_worker')
 
       // New dispatch has a pane key but the active row is legacy (no pane key):
       // only handle identity can lock; a different handle is free.
-      expect(() => d.createDispatchContext(t2.id, 'term_other', `tab_1:${LEAF_A}`)).not.toThrow()
+      expect(() => createRootDispatch(d, t2.id, 'term_other', `tab_1:${LEAF_A}`)).not.toThrow()
     })
 
     it('allows dispatch to a terminal after previous dispatch completes', () => {
       const d = createDb()
       const t1 = d.createTask({ spec: 'first' })
       const t2 = d.createTask({ spec: 'second' })
-      const ctx1 = d.createDispatchContext(t1.id, 'term_worker')
+      const ctx1 = createRootDispatch(d, t1.id, 'term_worker')
 
       d.completeDispatch(ctx1.id)
 
-      expect(() => d.createDispatchContext(t2.id, 'term_worker')).not.toThrow()
+      expect(() => createRootDispatch(d, t2.id, 'term_worker')).not.toThrow()
     })
 
     it('getDispatchContext returns latest for a task', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'work' })
-      const ctx = d.createDispatchContext(task.id, 'term_a')
+      const ctx = createRootDispatch(d, task.id, 'term_a')
       const found = d.getDispatchContext(task.id)
       expect(found?.id).toBe(ctx.id)
     })
@@ -422,9 +423,9 @@ describe('OrchestrationDb', () => {
     it('getDispatchContext uses insertion order when timestamps tie', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'work' })
-      const ctx1 = d.createDispatchContext(task.id, 'term_a')
+      const ctx1 = createRootDispatch(d, task.id, 'term_a')
       d.failDispatch(ctx1.id, 'retry')
-      const ctx2 = d.createDispatchContext(task.id, 'term_a')
+      const ctx2 = createRootDispatch(d, task.id, 'term_a')
 
       expect(d.getDispatchContext(task.id)?.id).toBe(ctx2.id)
     })
@@ -432,7 +433,7 @@ describe('OrchestrationDb', () => {
     it('getActiveDispatchForTerminal returns active dispatch', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'work' })
-      d.createDispatchContext(task.id, 'term_a')
+      createRootDispatch(d, task.id, 'term_a')
 
       const active = d.getActiveDispatchForTerminal('term_a')
       expect(active?.task_id).toBe(task.id)
@@ -442,10 +443,10 @@ describe('OrchestrationDb', () => {
     it('getLatestDispatchForTerminal returns the most recent completed dispatch', () => {
       const d = createDb()
       const firstTask = d.createTask({ spec: 'first' })
-      const first = d.createDispatchContext(firstTask.id, 'term_a')
+      const first = createRootDispatch(d, firstTask.id, 'term_a')
       d.completeDispatch(first.id)
       const secondTask = d.createTask({ spec: 'second' })
-      const second = d.createDispatchContext(secondTask.id, 'term_a')
+      const second = createRootDispatch(d, secondTask.id, 'term_a')
       d.completeDispatch(second.id)
 
       const latest = d.getLatestDispatchForTerminal('term_a')
@@ -457,19 +458,19 @@ describe('OrchestrationDb', () => {
     it('circuit breaker trips after 3 failures', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'flaky' })
-      const ctx = d.createDispatchContext(task.id, 'term_a')
+      const ctx = createRootDispatch(d, task.id, 'term_a')
 
       const after1 = d.failDispatch(ctx.id, 'timeout')
       expect(after1?.failure_count).toBe(1)
       expect(after1?.status).toBe('failed')
       expect(d.getTask(task.id)?.status).toBe('ready')
 
-      const ctx2 = d.createDispatchContext(task.id, 'term_a')
+      const ctx2 = createRootDispatch(d, task.id, 'term_a')
       const after2 = d.failDispatch(ctx2.id, 'timeout')
       expect(after2?.failure_count).toBe(2)
       expect(after2?.status).toBe('failed')
 
-      const ctx3 = d.createDispatchContext(task.id, 'term_a')
+      const ctx3 = createRootDispatch(d, task.id, 'term_a')
       const after3 = d.failDispatch(ctx3.id, 'timeout')
       expect(after3?.failure_count).toBe(3)
       expect(after3?.status).toBe('circuit_broken')
@@ -480,7 +481,7 @@ describe('OrchestrationDb', () => {
     it('completeDispatch sets completed_at', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'work' })
-      const ctx = d.createDispatchContext(task.id, 'term_a')
+      const ctx = createRootDispatch(d, task.id, 'term_a')
       d.completeDispatch(ctx.id)
 
       const updated = d.getDispatchContext(task.id)
@@ -493,7 +494,7 @@ describe('OrchestrationDb', () => {
     it('creates a gate and blocks the task', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'needs approval' })
-      d.createDispatchContext(task.id, 'term_a')
+      createRootDispatch(d, task.id, 'term_a')
       const gate = d.createGate({
         taskId: task.id,
         question: 'Proceed?',
@@ -622,7 +623,7 @@ describe('OrchestrationDb', () => {
       const d = createDb()
       d.insertMessage({ from: 'a', to: 'b', subject: 'test' })
       const task = d.createTask({ spec: 'work' })
-      d.createDispatchContext(task.id, 'term_a')
+      createRootDispatch(d, task.id, 'term_a')
 
       d.resetTasks()
 
@@ -647,7 +648,7 @@ describe('OrchestrationDb', () => {
     it('recordHeartbeat updates last_heartbeat_at on dispatched rows', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'work' })
-      const ctx = d.createDispatchContext(task.id, 'term_a')
+      const ctx = createRootDispatch(d, task.id, 'term_a')
 
       d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
       const after = d.getDispatchContext(task.id)
@@ -665,10 +666,10 @@ describe('OrchestrationDb', () => {
       const taskB = d.createTask({ spec: 'b' })
       const taskC = d.createTask({ spec: 'c' })
       const taskD = d.createTask({ spec: 'd' })
-      const ctxA = d.createDispatchContext(taskA.id, 'term_a')
-      const ctxB = d.createDispatchContext(taskB.id, 'term_b')
-      const ctxC = d.createDispatchContext(taskC.id, 'term_c')
-      const ctxD = d.createDispatchContext(taskD.id, 'term_d')
+      const ctxA = createRootDispatch(d, taskA.id, 'term_a')
+      const ctxB = createRootDispatch(d, taskB.id, 'term_b')
+      const ctxC = createRootDispatch(d, taskC.id, 'term_c')
+      const ctxD = createRootDispatch(d, taskD.id, 'term_d')
       d.completeDispatch(ctxD.id)
 
       const now = Date.now()
@@ -709,15 +710,15 @@ describe('OrchestrationDb', () => {
 
       // Fresh worker: dispatched 12:00, heartbeat 12:05 (space-format), both
       // after the 11:55 threshold → NOT stale.
-      const fresh = d.createDispatchContext(d.createTask({ spec: 'fresh' }).id, 'term_fresh')
+      const fresh = createRootDispatch(d, d.createTask({ spec: 'fresh' }).id, 'term_fresh')
       setDispatchTimes(d, fresh.id, '2026-07-12 12:00:00', '2026-07-12 12:05:00')
 
       // Legacy ISO-format fresh row (mixed-format table) stays fresh too.
-      const legacy = d.createDispatchContext(d.createTask({ spec: 'legacy' }).id, 'term_legacy')
+      const legacy = createRootDispatch(d, d.createTask({ spec: 'legacy' }).id, 'term_legacy')
       setDispatchTimes(d, legacy.id, '2026-07-12T12:00:00.000Z', '2026-07-12T12:05:00.000Z')
 
       // Genuinely hung: dispatched + heartbeated at 10:00, ~2h before threshold.
-      const hung = d.createDispatchContext(d.createTask({ spec: 'hung' }).id, 'term_hung')
+      const hung = createRootDispatch(d, d.createTask({ spec: 'hung' }).id, 'term_hung')
       setDispatchTimes(d, hung.id, '2026-07-12 10:00:00', '2026-07-12 10:00:00')
 
       const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
@@ -729,7 +730,7 @@ describe('OrchestrationDb', () => {
 
       // Space-format dispatched_at one minute after the threshold, no heartbeat
       // yet → still inside the grace window, must not be flagged.
-      const ctx = d.createDispatchContext(d.createTask({ spec: 'x' }).id, 'term_x')
+      const ctx = createRootDispatch(d, d.createTask({ spec: 'x' }).id, 'term_x')
       setDispatchTimes(d, ctx.id, '2026-07-12 12:00:00')
 
       const stale = d.getStaleDispatches('2026-07-12T11:59:00.000Z')
@@ -741,7 +742,7 @@ describe('OrchestrationDb', () => {
     it('getStaleDispatches keeps a fresh row just after a UTC-midnight threshold (#8452)', () => {
       const d = createDb()
 
-      const ctx = d.createDispatchContext(d.createTask({ spec: 'midnight' }).id, 'term_midnight')
+      const ctx = createRootDispatch(d, d.createTask({ spec: 'midnight' }).id, 'term_midnight')
       setDispatchTimes(d, ctx.id, '2026-05-04 00:04:00')
 
       const stale = d.getStaleDispatches('2026-05-04T00:00:00.000Z')
@@ -754,7 +755,7 @@ describe('OrchestrationDb', () => {
     it('getStaleDispatches keeps a live worker with a fresh space-format heartbeat (#8452)', () => {
       const d = createDb()
 
-      const ctx = d.createDispatchContext(d.createTask({ spec: 'live' }).id, 'term_live')
+      const ctx = createRootDispatch(d, d.createTask({ spec: 'live' }).id, 'term_live')
       setDispatchTimes(d, ctx.id, '2026-07-12 10:00:00', '2026-07-12 11:59:00')
 
       const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
@@ -911,7 +912,7 @@ describe('OrchestrationDb', () => {
 
       // (b) last_heartbeat_at column exists on dispatch_contexts
       const task = d.createTask({ spec: 'work' })
-      const ctx = d.createDispatchContext(task.id, 'term_a')
+      const ctx = createRootDispatch(d, task.id, 'term_a')
       d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
       expect(d.getDispatchContext(task.id)?.last_heartbeat_at).toBe('2026-05-04T00:00:00.000Z')
       expect(d.getTask(task.id)?.task_title).toBe('work')
@@ -942,7 +943,7 @@ describe('OrchestrationDb', () => {
       db = d
 
       const task = d.createTask({ spec: 'work' })
-      const ctx = d.createDispatchContext(task.id, 'term_a', 'tab_1:leaf_1')
+      const ctx = createRootDispatch(d, task.id, 'term_a', 'tab_1:leaf_1')
       expect(d.getDispatchContextById(ctx.id)?.assignee_pane_key).toBe('tab_1:leaf_1')
 
       const msg = d.insertMessage({

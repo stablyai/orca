@@ -1,6 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalSlice } from '../terminals/terminal-state'
+
+export type { TerminalSlice } from '../terminals/terminal-state'
 import { createTerminalEphemeralActions } from '../terminals/terminal-ephemeral-state'
 import { createTerminalTabCreationActions } from '../terminals/terminal-tab-creation'
 import { createActiveWorkspaceTerminalActions } from '../terminals/terminal-active-workspace-creation'
@@ -10,6 +12,7 @@ import { createTerminalTabPresentationActions } from '../terminals/terminal-tab-
 import { createTerminalTabAttentionActions } from '../terminals/terminal-tab-attention'
 import { createTerminalPtyBindingActions } from '../terminals/terminal-pty-bindings'
 import { createTerminalPtyReleaseActions } from '../terminals/terminal-pty-release'
+import { createTerminalUnverifiedPtyLossActions } from '../terminals/terminal-unverified-pty-loss'
 import { createTerminalPaneHibernationActions } from '../terminals/terminal-pane-hibernation'
 import { createDirectSshTerminalBindingActions } from '../terminals/direct-ssh-terminal-bindings'
 import { createTerminalShutdownActions } from '../terminals/terminal-shutdown'
@@ -47,13 +50,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   nativeChatLaunchDraftByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
+  terminalStartupRestorationReady: false,
+  setTerminalStartupRestorationReady: (value) => {
+    set({ terminalStartupRestorationReady: value })
+  },
   restoredRuntimeHostIdByWorkspaceSessionKey: {},
   defaultTerminalTabsAppliedByWorktreeId: {},
+  closedTerminalTabTombstonesByTabId: {},
   hydrationSucceeded: false,
   pendingReconnectWorktreeIds: [],
   pendingReconnectTabByWorktree: {},
   pendingReconnectPtyIdByTabId: {},
   lastKnownRelayPtyIdByTabId: {},
+  unverifiedPtyLossTabIds: {},
   pendingSnapshotByPtyId: {},
   pendingColdRestoreByPtyId: {},
   deferredSshReconnectTargets: [],
@@ -70,6 +79,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   ...createTerminalTabAttentionActions(set, get),
   ...createTerminalPtyBindingActions(set, get),
   ...createTerminalPtyReleaseActions(set, get),
+  ...createTerminalUnverifiedPtyLossActions(set),
   ...createTerminalPaneHibernationActions(set, get),
   ...createDirectSshTerminalBindingActions(set, get),
   ...createTerminalShutdownActions(set, get),

@@ -85,6 +85,7 @@ function createService(
     linuxAssertion,
     macosAssertion,
     now,
+    platform: 'linux',
     powerMonitor,
     logger: {
       debug: vi.fn(),

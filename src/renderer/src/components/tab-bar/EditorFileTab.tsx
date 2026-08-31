@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -132,7 +132,6 @@ export default function EditorFileTab({
 
   const commitRename = (): void => {
     if (renameCancelledRef.current) {
-      renameCancelledRef.current = false
       setIsRenaming(false)
       return
     }
@@ -142,6 +141,9 @@ export default function EditorFileTab({
       return
     }
     const newName = input.value.trim()
+    // onBlur follows Enter when the input unmounts; consume that trailing event
+    // so one user action cannot start a second rename against the old path.
+    renameCancelledRef.current = true
     setIsRenaming(false)
     if (!newName) {
       return
@@ -279,9 +281,9 @@ export default function EditorFileTab({
           className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : (
-        <FileIcon
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
+        createElement(FileIcon, {
+          className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
+        })
       )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">

@@ -75,6 +75,8 @@ export type RemoteRuntimeSharedConnectionDiagnostics = {
 export type RemoteRuntimeSharedControlConnectionOptions = {
   environmentId?: string
   clientCapabilities?: readonly RuntimeCapability[]
+  isManuallyDisconnected?: () => boolean
+  isCapabilityPaused?: () => boolean
   reconnectStableResetMs?: number
   liveness?: RemoteRuntimeSocketLivenessOptions
 }

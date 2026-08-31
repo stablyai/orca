@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
+import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
@@ -40,6 +41,7 @@ import {
 
 export type SettingsMutationOperations = {
   state: PersistedState
+  bumpLocalWorktreeScanGeneration: (repoId: string) => void
   removeRetainedBlob: (
     slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
   ) => void
@@ -72,6 +74,11 @@ export function updateSettings(
   }
   if ('agentSkillSharingEnabled' in updates) {
     sanitizedUpdates.agentSkillSharingEnabled = updates.agentSkillSharingEnabled === true
+  }
+  if ('nestedWorkerMaxDepth' in updates) {
+    sanitizedUpdates.nestedWorkerMaxDepth = resolveNestedWorkerMaxDepth({
+      nestedWorkerMaxDepth: updates.nestedWorkerMaxDepth
+    })
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
@@ -235,6 +242,16 @@ export function updateSettings(
       ...sanitizedUpdates.notifications
     }),
     ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
+  }
+  if (
+    !Object.is(
+      previousSettings.localWindowsRuntimeDefault,
+      operations.state.settings.localWindowsRuntimeDefault
+    )
+  ) {
+    for (const repoId of new Set(operations.state.repos.map(({ id }) => id))) {
+      operations.bumpLocalWorktreeScanGeneration(repoId)
+    }
   }
   operations.scheduleSave()
   const changedUpdates = {} as Partial<GlobalSettings> & Record<string, unknown>

@@ -8,25 +8,14 @@ import { relayArtifactFilenames } from '../../src/shared/relay-artifacts.ts'
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
 const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtime-node-modules.cjs')
-const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
+const readProject = (file) => readFileSync(join(projectDir, file), 'utf8')
+const packageJson = JSON.parse(readProject('package.json'))
+const pnpmWorkspace = parse(readProject('pnpm-workspace.yaml'))
 
 describe('Electron runtime package contract', () => {
-  it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
-    const patch = readFileSync(
-      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
-      'utf8'
-    )
-
-    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
-    expect(patch).toContain('readonly clearModelGeneration: number')
-    expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
-    expect(patch).toContain('this.clearModelGeneration++')
-    expect(patch).toContain('this._atlas._clearModelGeneration||0')
-  })
-
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
+    expect(pnpmWorkspace.allowBuilds).not.toHaveProperty('electron')
   })
 
   it('keeps the native Windows registry addon optional and platform-gated', () => {
@@ -41,7 +30,7 @@ describe('Electron runtime package contract', () => {
     expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
     // Why: pnpm installs optional target architectures on every host; the root
     // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('windows-native-registry')
+    expect(pnpmWorkspace.allowBuilds['windows-native-registry']).toBe(false)
     // Why assert the guard and the member separately: the list now carries more
     // than one addon, so pinning the whole literal only tested its formatting.
     expect(rebuildScript).toContain("rebuildPlatform === 'win32'")
@@ -80,14 +69,14 @@ describe('Electron runtime package contract', () => {
     expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
     // Why: same rule as the registry addon -- pnpm installs optional deps on
     // every host, so macOS/Linux must never run node-gyp for a Windows addon.
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('@vscode/windows-process-tree')
+    expect(pnpmWorkspace.allowBuilds['@vscode/windows-process-tree']).toBe(false)
     expect(rebuildScript).toContain("'@vscode/windows-process-tree'")
     expect(ensureScript).toContain("'@vscode/windows-process-tree'")
     // Why pin the patch: the upstream binding.gyp requires Spectre-mitigated
     // libraries our build agents do not carry, and the enumeration stops after
     // 1024 processes -- on a busy host that silently hides the very descendants
     // teardown is looking for.
-    expect(packageJson.pnpm.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
+    expect(pnpmWorkspace.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
       'config/patches/@vscode__windows-process-tree@0.8.0.patch'
     )
     const packageTargets = {
@@ -467,10 +456,11 @@ describe('Electron runtime package contract', () => {
     expect(copyStep.run).toContain('git add "$CASK_PATH"')
   })
 
-  it('installs the Electron package binary in PR checks without changing native module ABI', () => {
-    const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
-    const parsedWorkflow = parse(prWorkflow)
-    const installStep = parsedWorkflow.jobs.test.steps.find(
+  it('installs the Electron package binary in the shared unit-test workflow', () => {
+    const unitTestWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/unit-tests.yml'), 'utf8')
+    )
+    const installStep = unitTestWorkflow.jobs.test.steps.find(
       (step) => step.name === 'Install Electron package binary for tests'
     )
 

@@ -41,9 +41,11 @@ import type { Tab, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
+import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
 import BrowserPane from './browser-pane/BrowserPane'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
+import StructuredAgentSessionPaneOverlayLayer from './native-chat/StructuredAgentSessionPaneOverlayLayer'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import {
   onBrowserGuestPaintRetentionChange,
@@ -79,6 +81,7 @@ import {
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
 import { useActiveTerminalRepair } from './terminal/use-active-terminal-repair'
 import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
@@ -137,7 +140,11 @@ import {
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
-import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
+import {
+  runWithWindowCloseCheckpointScope,
+  setWindowCloseRequestHandler
+} from './window-close-request-coordinator'
+import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
 import {
   findActivityTerminalPortal,
   useActivityTerminalPortals,
@@ -152,10 +159,12 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { listBoundAgentTabActions, resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
 import { terminalProviderHasAuthoritativeSnapshot } from './terminal/terminal-provider-snapshot-capability'
 import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
+import { useWorktreeFiles } from './terminal/use-worktree-files'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
@@ -369,6 +378,7 @@ function Terminal(): React.JSX.Element | null {
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+  const terminalStartupRestorationReady = useAppStore((s) => s.terminalStartupRestorationReady)
   const hydrationSucceeded = useAppStore((s) => s.hydrationSucceeded)
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -452,9 +462,7 @@ function Terminal(): React.JSX.Element | null {
   }, [activeWorktreeId, ensureWorktreeRootGroup])
 
   // Filter editor files to only show those belonging to the active worktree
-  const worktreeFiles = renderedActiveWorktreeId
-    ? openFiles.filter((f) => f.worktreeId === renderedActiveWorktreeId)
-    : []
+  const worktreeFiles = useWorktreeFiles(openFiles, renderedActiveWorktreeId)
   const worktreeBrowserTabs = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
     : []
@@ -523,8 +531,14 @@ function Terminal(): React.JSX.Element | null {
   const confirmNativeWindowClose = useCallback(() => {
     // Why: capture only after every close guard has committed. A canceled child-
     // process prompt must not consume App's synthetic/native unload guard.
-    const accepted = window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
+    const accepted = runWithWindowCloseCheckpointScope(() =>
+      window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
+    )
     if (!accepted) {
+      // Why: a checkpoint-vetoed quit used to die here with no dialog and no log,
+      // leaving SIGKILL as the only exit (#15352). The dirty-file veto publishes
+      // no reason — its deferred dialog flow already gives the user a surface.
+      showShutdownCheckpointFailureToast()
       return
     }
     window.api.ui.confirmWindowClose()
@@ -1343,7 +1357,7 @@ function Terminal(): React.JSX.Element | null {
         deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
         worktreeId: renderedActiveWorktreeId,
         allTabIds: worktreeTabs.map((tab) => tab.id),
-        isTabLive: hasRegisteredRuntimeTerminalTab,
+        isTabLive: (tabId, worktreeId) => hasRegisteredRuntimeTerminalTab(tabId, worktreeId),
         // Why the coverage gate: parked byte watchers own an unmounted tab's bells/titles/completions, so a tab they can't cover must mount immediately.
         isTabDeferrable: (tabId) => {
           const tab = tabById.get(tabId)
@@ -1500,35 +1514,61 @@ function Terminal(): React.JSX.Element | null {
   ])
   // Why: on host unmount no reconciliation effect runs again, so dispose every remaining parked watcher.
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
-  // Auto-create first tab when worktree activates
+  const startupActivationGateWorktreeIdsRef = useRef(new Set<string>())
+  // Why (main): a missing row means never initialized, an explicit empty row means the user
+  // closed the last terminal — so the gate must not re-seed one in the second case.
   const activeWorktreeHasTerminalState = activeWorktreeId
     ? Object.hasOwn(tabsByWorktree, activeWorktreeId)
     : false
+  // Why a store subscription rather than a read inside the effects: the verdict flips to `none` the
+  // moment the execution host answers, and that transition is what re-runs the passes below.
+  // Why the retained selector: resolution walks the owner catalogs, so recomputing it on every store
+  // write would be the STA-3363 render-path multiplier again.
+  const hostAuthoritySelector = useMemo(
+    () => createWorkspaceTerminalHostAuthoritySelector(activeWorktreeId),
+    [activeWorktreeId]
+  )
+  const activeWorktreeHostAuthority = useAppStore(hostAuthoritySelector)
   useEffect(() => {
-    if (!workspaceSessionReady) {
+    if (!workspaceSessionReady || !terminalStartupRestorationReady || !activeWorktreeId) {
       return
     }
-    if (!activeWorktreeId) {
+    // Why: the execution host owns terminal creation, and a host that has not answered is not a host
+    // with no terminals — seeding into that gap duplicates its tabs on every launch (STA-4658).
+    if (activeWorktreeHostAuthority !== 'none') {
       return
     }
-    // Why: host session-tabs are authoritative in the paired web client; a local fallback races the host's initial terminal and duplicates tabs.
-    if (isWebRuntimeSessionActive(getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId))) {
+    if (startupActivationGateWorktreeIdsRef.current.has(activeWorktreeId)) {
       return
     }
-
-    // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
-    const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-    if (!shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
-      return
+    startupActivationGateWorktreeIdsRef.current.add(activeWorktreeId)
+    let cancelled = false
+    void gateWorktreeAgentActivation(activeWorktreeId).then((outcome) => {
+      if (
+        cancelled ||
+        outcome !== 'empty' ||
+        useAppStore.getState().activeWorktreeId !== activeWorktreeId
+      ) {
+        return
+      }
+      // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
+      const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
+      if (shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
+        // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
+        createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
+      }
+    })
+    return () => {
+      cancelled = true
     }
-    // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
-    createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
   }, [
-    workspaceSessionReady,
     activeWorktreeId,
     activeWorktreeHasTerminalState,
+    activeWorktreeHostAuthority,
     createTab,
-    reconcileWorktreeTabModel
+    reconcileWorktreeTabModel,
+    terminalStartupRestorationReady,
+    workspaceSessionReady
   ])
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
@@ -1539,10 +1579,15 @@ function Terminal(): React.JSX.Element | null {
     if (startupResumeWorktreeIdsRef.current.has(activeWorktreeId)) {
       return
     }
+    // Why not consume the one-shot here: the sweep declines outright while the host is unanswered,
+    // so marking it done would strand every sleeping agent on the workspace for the session.
+    if (activeWorktreeHostAuthority === 'unverifiable') {
+      return
+    }
     startupResumeWorktreeIdsRef.current.add(activeWorktreeId)
     // Why: startup hydration restores the worktree without activateAndRevealWorktree, so orphaned live/quit records need a terminal-surface pass after cold restore.
     resumeSleepingAgentSessionsForWorktree(activeWorktreeId)
-  }, [activeWorktreeId, hydrationSucceeded, workspaceSessionReady])
+  }, [activeWorktreeId, activeWorktreeHostAuthority, hydrationSucceeded, workspaceSessionReady])
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
@@ -1815,8 +1860,14 @@ function Terminal(): React.JSX.Element | null {
   )
 
   const handlePtyExit = useCallback(
-    (tabId: string, ptyId: string) => {
+    (tabId: string, ptyId: string, exitCode?: number) => {
       if (consumeSuppressedPtyExit(ptyId)) {
+        return
+      }
+      // A negative code is the host-loss sentinel, not proof that the remote
+      // process exited. Keep the mounted tab for reconnect/reveal to recover.
+      if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
+        useAppStore.getState().markUnverifiedPtyLoss(tabId)
         return
       }
       // Why: a parked multi-leaf tab has no PaneManager to promote split siblings, so closing here would kill them; reveal-remount handles dead PTYs per leaf.
@@ -2659,7 +2710,7 @@ function Terminal(): React.JSX.Element | null {
                             isWorktreeActive={isVisible || isActivityPortalTab}
                             // Why: isolate the portaled Activity leaf so split siblings stay hidden; workspace renders pass null.
                             isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
-                            onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
+                            onPtyExit={(ptyId, exitCode) => handlePtyExit(tab.id, ptyId, exitCode)}
                             onCloseTab={() => handleCloseTab(tab.id)}
                           />
                         )
@@ -2899,6 +2950,10 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       {isVisible || backgroundMountTabIds === null ? (
         <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       ) : null}
+      <StructuredAgentSessionPaneOverlayLayer
+        worktreeId={worktreeId}
+        isWorktreeActive={isVisible}
+      />
       <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </div>
   )

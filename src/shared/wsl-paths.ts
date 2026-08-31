@@ -118,3 +118,44 @@ export function foldWslUncPathCaseInsensitiveParts(path: string): string | null 
     : parsed.linuxPath
   return `//wsl.localhost/${parsed.distro.toLowerCase()}${linuxPath === '/' ? '' : linuxPath}`
 }
+
+/**
+ * The spelling a WSL-hosted tool answers in for `path`. Git-in-the-distro resolves relative output
+ * against the Linux path, not the caller's UNC spelling, and realpath cannot bridge the two spaces.
+ */
+export function toWslExecutionSpace(path: string): string {
+  return parseWslUncPath(path)?.linuxPath ?? path
+}
+
+/** The drvfs automount is literally lowercase `/mnt/<letter>`; `/MNT` is an ordinary Linux dir. */
+const DRVFS_LINUX_PATH = /^\/mnt\/[a-z](?:\/|$)/
+
+/** True for a Linux path that is really a Windows drive reached through drvfs. */
+export function isDrvfsLinuxPath(linuxPath: string): boolean {
+  return DRVFS_LINUX_PATH.test(linuxPath)
+}
+
+/**
+ * The distro whose git would reach `projectPath` across the 9p/drvfs boundary, or null when it
+ * would not.
+ *
+ * Two shapes cross it. A Windows drive path (`C:\...`) crosses it whenever the project's runtime is
+ * WSL. The UNC spelling of a distro's own drvfs mount (`\\wsl.localhost\Ubuntu\mnt\c\...`) crosses
+ * it however the runtime is set, because the bytes sit on the Windows drive either way.
+ *
+ * Everything else returns null: a real Linux path inside the distro, a drive path under Windows-host
+ * git, a plain UNC share (not mounted in the distro at all), and any POSIX or SSH path.
+ */
+export function getWslFilesystemBoundaryDistro(args: {
+  projectPath: string
+  wslRuntimeDistro?: string | null
+}): string | null {
+  const wsl = parseWslUncPath(args.projectPath)
+  if (wsl) {
+    return isDrvfsLinuxPath(wsl.linuxPath) ? wsl.distro : null
+  }
+  if (!/^[A-Za-z]:[\\/]/.test(args.projectPath)) {
+    return null
+  }
+  return args.wslRuntimeDistro || null
+}

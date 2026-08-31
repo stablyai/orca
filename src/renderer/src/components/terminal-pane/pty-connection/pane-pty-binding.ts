@@ -22,4 +22,9 @@ export type PanePtyBinding = IDisposable & {
   markShortcutTerminalInputSent: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
+  /** This session fresh-spawned the PTY (onPtySpawn fired for it) and never
+   *  sent terminal input — the sole-newborn diagnostic case pty-exit-hibernate
+   *  preserves on exit. Read at unmount so the parked sidecar can carry the
+   *  fact as a plain value instead of a session reference. */
+  isUntouchedFreshSpawnPty: (ptyId: string) => boolean
 }

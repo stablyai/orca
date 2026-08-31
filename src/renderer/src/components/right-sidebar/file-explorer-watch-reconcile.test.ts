@@ -6,16 +6,14 @@ import { useAppStore } from '@/store'
 
 function cacheWithChildren(paths: string[]): DirCache {
   return {
-    children: paths.map(
-      (path): TreeNode => ({
-        name: path.split(/[\\/]/).at(-1) ?? path,
-        path,
-        relativePath: path,
-        isDirectory: false,
-        depth: 0,
-        operationOwner: { kind: 'local' }
-      })
-    ),
+    children: paths.map((path): TreeNode => ({
+      name: path.split(/[\\/]/).at(-1) ?? path,
+      path,
+      relativePath: path,
+      isDirectory: false,
+      depth: 0,
+      operationOwner: { kind: 'local' }
+    })),
     loading: false,
     operationOwner: { kind: 'local' }
   }

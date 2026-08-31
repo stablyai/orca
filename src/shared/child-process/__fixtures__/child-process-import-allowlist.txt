@@ -14,10 +14,15 @@
 # `detached: true` for a process-group kill, a synchronous taskkill, and an stdio shape other
 # than all-pipes (a long-lived `ssh -N` must not be handed a stdin pipe nobody closes).
 # Migrating them means teaching run-process.ts those options first.
+# codex-app-server-posix-supervisor.ts requires child_process only inside its
+# dependency-free POSIX supervisor script, never in Orca's process.
 #
 # The src/main/git/command-runner/* entries are the seven spawn sites that used
 # to live in the single line src/main/git/runner.ts; splitting that file moved
 # them, it did not add any.
+#
+# daemon-launched-child.ts holds daemon-init.ts's fork() site; splitting that
+# file moved the import, it did not add one.
 src/cli/handlers/account.ts
 src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
@@ -35,7 +40,6 @@ src/main/ai-vault/session-scanner-service-client.ts
 src/main/ai-vault/session-scanner-service-spawn.ts
 src/main/ai-vault/session-scanner-service-test-child.ts
 src/main/app-icon.ts
-src/main/automations/external-manager.ts
 src/main/automations/precheck-runner.ts
 src/main/browser/agent-browser-bridge.ts
 src/main/browser/browser-cookie-import.ts
@@ -45,10 +49,9 @@ src/main/claude-accounts/keychain.ts
 src/main/codex-accounts/runtime-home-service.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-client.ts
-src/main/codex/codex-app-server-grant-bridge.ts
+src/main/codex/codex-app-server-posix-supervisor.ts
 src/main/codex/codex-app-server-session.ts
 src/main/codex/codex-state-db-backfill-recovery.ts
-src/main/codex/codex-trust-grant-host.ts
 src/main/codex/codex-wsl-hook-install-plan.ts
 src/main/computer/desktop-script-provider-bridge.ts
 src/main/computer/macos-computer-use-permission-status.ts
@@ -56,7 +59,7 @@ src/main/computer/macos-computer-use-permissions.ts
 src/main/computer/macos-native-provider-transport.ts
 src/main/computer/sidecar-client.ts
 src/main/daemon/daemon-bash-wrapper-osc133-fixture.ts
-src/main/daemon/daemon-init.ts
+src/main/daemon/daemon-launched-child.ts
 src/main/daemon/daemon-process-identity-query.ts
 src/main/daemon/daemon-process-inspection.ts
 src/main/daemon/daemon-process-start-time.ts
@@ -118,7 +121,7 @@ src/main/plugins/plugin-host-process.ts
 src/main/ports/port-scan-command-execution.ts
 src/main/providers/macos-login-session-pty-probe.ts
 src/main/providers/process-cwd.ts
-src/main/providers/windows-conpty-process-membership.ts
+src/main/providers/windows-console-attached-processes.ts
 src/main/pty-descendant-termination.ts
 src/main/pty/posix-pty-foreground-group.ts
 src/main/pty/posix-pty-process-groups.ts

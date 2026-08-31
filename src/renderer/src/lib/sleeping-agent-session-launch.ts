@@ -100,29 +100,29 @@ export function launchSleepingAgentSession(
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
     launchAgent: record.agent,
+    pendingStartup: {
+      command: startupPlan.launchCommand,
+      ...(startupPlan.env ? { env: startupPlan.env } : {}),
+      launchConfig: startupPlan.launchConfig,
+      resumeProviderSession: record.providerSession,
+      launchAgent: record.agent,
+      ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
+      ...(startupPlan.startupCommandDelivery
+        ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+        : {}),
+      showSessionRestoredBanner: true,
+      telemetry: {
+        agent_kind: tuiAgentToAgentKind(record.agent),
+        launch_source: 'sidebar',
+        request_kind: 'resume'
+      }
+    },
+    automaticResumeClaim: {
+      worktreeId: record.worktreeId,
+      launchAgent: record.agent,
+      providerSession: record.providerSession
+    },
     ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
-  })
-  state.queueTabStartupCommand(tab.id, {
-    command: startupPlan.launchCommand,
-    ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
-    resumeProviderSession: record.providerSession,
-    launchAgent: record.agent,
-    ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
-    ...(startupPlan.startupCommandDelivery
-      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-      : {}),
-    showSessionRestoredBanner: true,
-    telemetry: {
-      agent_kind: tuiAgentToAgentKind(record.agent),
-      launch_source: 'sidebar',
-      request_kind: 'resume'
-    }
-  })
-  state.claimAutomaticAgentResume(tab.id, {
-    worktreeId: record.worktreeId,
-    launchAgent: record.agent,
-    providerSession: record.providerSession
   })
   state.clearSleepingAgentSession(record.paneKey)
   if (!options?.suppressNavigation) {

@@ -264,7 +264,10 @@
           "3b57982bf6": "ワークスペース\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "runtimeScopeForbiddenTitle": "この接続は制限付き（モバイル）アクセスです",
-          "runtimeScopeForbiddenDescription": "モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。"
+          "runtimeScopeForbiddenDescription": "モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。",
+          "createdWithoutParentNesting": "「{{value0}}」の配下にネストせずに作成しました",
+          "createdWithoutParentNestingUnnamed": "選択した親ワークツリーの配下にネストせずに作成しました",
+          "createdWithoutParentNestingDetail": "親ワークスペースは利用できなくなりました。ワークスペースメニューから設定できます。"
         },
         "repos": {
           "2975400634": "Orca サーバーを更新して、このランタイムで Git 以外のフォルダーを開くようにします。",
@@ -3502,7 +3505,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",
+                "workingSetDescription": "合計ワーキングセット(WS): 現在 RAM に常駐しているページです。共有ページが複数のプロセスに表示されることがあり、Windows がページアウトしたメモリはここには含まれません。",
+                "privateBytesDescription": "合計プライベートバイト: これらのプロセスがコミットしたメモリで、常駐中かページアウト済みかを問わず計上されます。ホストがコミット制限に対して計上する値であるため、ページングによって上のワーキングセットが縮小しても増え続けます。",
                 "rssDescription": "合計レジデントセットサイズ(RSS)。共有またはエイリアスされたページが複数のプロセスに表示されることがあります。"
               }
             },
@@ -3877,6 +3881,97 @@
         }
       },
       "skills": {
+        "SkillsPage": {
+          "cb142070b4": "更新",
+          "a68dee6a32": "スキルを検索",
+          "f43ad6edf3": "スキル",
+          "ea72d6185b": "スキルをスキャンできませんでした",
+          "dc4c3328ee": "ファイルを表示",
+          "9963dff6d3": "説明が見つかりません。",
+          "995fde8337": "スキルファイルを表示できませんでした",
+          "4acd6d68ec": "スキルが見つかりません",
+          "6a62a0168c": "一致する項目はありません",
+          "08a321a984": "現在の検索条件とフィルターに一致するスキルはありません。",
+          "cd7893fbc1": "スキルをスキャン中",
+          "35b9a724a0": "利用可能",
+          "c13b82793c": "インストールを管理",
+          "aee7b99cc6": "リンクからインストール",
+          "filterProvider": "Agent で絞り込み",
+          "filterSource": "ソースで絞り込み",
+          "allSources": "すべて",
+          "clearFilters": "フィルターをクリア",
+          "closeSkills": "スキルを閉じる",
+          "closeTooltip": "閉じる · Esc",
+          "moreActions": "その他の操作",
+          "sharedLinks": "共有リンク",
+          "emptyCopy": "スキャンしたスキルフォルダーは空です。共有バンドルをインストールするか、スキルを追加後に更新してください。",
+          "retry": "再試行",
+          "remoteShareNotice": "これらのスキルは {{host}} にあります。共有するには、そのマシンでスキルを開いてください。",
+          "viewSwitch": "表示",
+          "searchLinks": "リンクを検索",
+          "deleteSkills": "スキルを削除…"
+        },
+        "SkillShareSelectionControls": {
+          "01c5a15e02": "スキルを共有"
+        },
+        "SkillRow": {
+          "updatedUnknown": "日付なし",
+          "pathCopied": "パスをコピーしました",
+          "copyPath": "パスをコピー",
+          "detailPath": "パス",
+          "skillActions": "{{value0}} の操作",
+          "viewDetails": "詳細を表示",
+          "deleteSkill": "削除…"
+        },
+        "SkillsList": {
+          "listLabel": "スキル"
+        },
+        "sourceStatus": {
+          "missing": "フォルダーが見つかりません",
+          "remoteRepo": "リモートリポジトリ — 未スキャン",
+          "unavailable": "未スキャン"
+        },
+        "sources": {
+          "heading": "スキルフォルダー"
+        },
+        "sourceKind": {
+          "home": "ホーム",
+          "workspace": "ワークスペース",
+          "bundled": "バンドル済み",
+          "plugin": "プラグイン"
+        },
+        "count": {
+          "skillOne": "{{count}} 件のスキル",
+          "skillOther": "{{count}} 件のスキル",
+          "sourceOne": "{{count}} 件のソース",
+          "sourceOther": "{{count}} 件のソース",
+          "fileOne": "{{count}} 個のファイル",
+          "fileOther": "{{count}} 個のファイル",
+          "resultOne": "{{count}} 件の結果",
+          "resultOther": "{{count}} 件の結果",
+          "selected": "{{count}} 件を選択",
+          "shareOne": "{{count}} 件のスキルを共有",
+          "shareOther": "{{count}} 件のスキルを共有",
+          "linkOne": "{{count}} 件のリンク",
+          "linkOther": "{{count}} 件のリンク"
+        },
+        "filter": {
+          "allAgents": "すべての Agent",
+          "sharedAgent": "共有 (.agents)"
+        },
+        "SkillsSelectionHeader": {
+          "exit": "選択を終了",
+          "exitTooltip": "選択を終了 · Esc",
+          "title": "共有するスキルを選択",
+          "selectAll": "対象の {{count}} 件をすべて選択",
+          "clear": "クリア",
+          "deleteTitle": "削除するスキルを選択"
+        },
+        "SkillDetailDialog": {
+          "agents": "Agent",
+          "updated": "更新日",
+          "copy": "コピー"
+        },
         "SkillFreshnessNudge": {
           "titleOne": "インストール済みの Orca スキルが古くなっています",
           "titleMany": "インストール済みの Orca スキル {{value0}} 件が古くなっています",
@@ -6108,10 +6203,9 @@
           "compareBaseBranchUpstream": "ブランチの upstream"
         },
         "HiddenExperimentalGroup": {
-          "d0f914a528": "プレースホルダーの切り替え",
-          "1014ddbfaf": "今日は何もしません。隠された実験的機能オプションの最初のスロットとして予約されています。",
-          "232cf83de8": "内部テスト用の非公開トグル。ここでは何もサポートされていません。",
-          "3e9e827ca5": "隠された実験的機能"
+          "7c4e18d2f6": "このマシンで太字グリッチのキャプチャジェスチャーを有効にします。{{samplingShortcut}} でサンプリングバーストを開始し、{{captureShortcut}} でペインの証拠をディスクに保存します。",
+          "b09f24a51d": "ターミナル描画診断",
+          "f2c81d904a": "隠された実験的機能の設定"
         },
         "InputPane": {
           "db15068196": "Linux および macOS ではデフォルトで有効になっています。 Linux はシステム選択クリップボードを使用します。他のプラットフォームはプライベートバッファを使用します。",
@@ -10600,6 +10694,8 @@
             "7a09d7f9d2": "ベース",
             "383cf92c73": "木",
             "d7ae61269b": "コミット先のブランチ",
+            "branchFilesChangedVsBaseOne": "{{ref}} と比べて 1 ファイルが変更されています",
+            "branchFilesChangedVsBaseOther": "{{ref}} と比べて {{count}} ファイルが変更されています",
             "48a003c1b1": "ステージ済みの変更",
             "d4ef4bafc5": "変更点",
             "522f44dce5": "追跡されていないファイル",
@@ -10674,10 +10770,10 @@
             "b3c8f1a902": "ファイル名でフィルター",
             "d4f8c2a901": "フィルターをクリアして閉じる",
             "e8a1c4b203": "vs",
-            "f9b2441bb6": "{{value0}} より 1 コミット進んでいます",
-            "b715ef615b": "{{value1}}より{{value0}}コミット進んでいます",
-            "c1a8f3e204": "{{value0}} より 1 コミット遅れています",
-            "d2b9g4f315": "{{value1}}より{{value0}}コミット遅れています",
+            "compareBaseCommitsAheadOne": "{{ref}} より 1 コミット進んでいます",
+            "compareBaseCommitsAheadOther": "{{ref}}より{{count}}コミット進んでいます",
+            "compareBaseCommitsBehindOne": "{{ref}} より 1 コミット遅れています",
+            "compareBaseCommitsBehindOther": "{{ref}}より{{count}}コミット遅れています",
             "4b4a7de138": "ブラウザでレビューページを開く",
             "createPrIntentCommitBlockedSummary": "コミットがブロックされました：{{value0}} Issue を修正して、PR 作成を再試行してください。",
             "pushRecovery": {
@@ -10700,7 +10796,6 @@
             "a4e93c21d7": "現在のブランチ: {{value0}}",
             "c7d4e2f801": "ベース ref を変更: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "生成されたレビューの詳細に説明が含まれていませんでした。PR の作成を再試行してください。",
             "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PR の作成を再試行してください。"
           },
           "SourceControlAgentActionDialog": {
@@ -12683,8 +12778,9 @@
           "7e7ca60816": "変更されたファイル",
           "b6c3b84476": "ファイルツリーを表示",
           "39f8007549": "競合をレビューする",
-          "39e73e7181": "はこの差分ビューから除外されました。",
-          "689b99f8ad": "未解決の競合",
+          "skippedConflictsExcluded": "未解決の競合 {{count}} 件がこの差分ビューから除外されました。",
+          "skippedConflictsExcluded_one": "未解決の競合 {{count}} 件がこの差分ビューから除外されました。",
+          "skippedConflictsExcluded_other": "未解決の競合 {{count}} 件がこの差分ビューから除外されました。",
           "820ec01f24": "競合したファイルは個別にレビューされます",
           "fd8892b120": "表示に変更はありません",
           "eb5f40e49c": "通常の双方向 diff パイプラインは競合に対して安全ではないため、この diff ビューでは未解決の競合が除外されます。",
@@ -13649,6 +13745,7 @@
           "showMore": "さらに表示"
         },
         "AutomationDetail": {
+          "host": "ホスト",
           "007c8ad874": "プロンプト",
           "a1d52c2189": "使用範囲",
           "449fc83bf7": "トークン",
@@ -13812,6 +13909,9 @@
           "b11170a008": "オートメーションを保存できませんでした。",
           "2a20596d6b": "オートメーションが保存されました。",
           "244727e655": "自動化が更新されました。",
+          "moved": "自動化を {host} に移動しました。",
+          "moveOriginalKept": "{host} に作成しましたが、元の自動化を削除できませんでした。元のホストで削除してください。",
+          "moveOriginalUnverified": "{host} に作成しましたが、元の自動化の削除を確認できませんでした。再試行する前に元のホストを確認してください。",
           "77b81bc4ac": "Hermes オートメーションが作成されました。",
           "08efc3ae12": "Hermes オートメーションが更新されました。",
           "e431bb85d4": "この Hermes オートメーションと同じホスト上のワークスペースを選択します。",
@@ -13855,6 +13955,7 @@
           "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
+          "tableHost": "ホスト",
           "tableStatus": "ステータス",
           "tableActions": "操作",
           "newAutomation": "新しい自動化",
@@ -14007,6 +14108,19 @@
           "filters": "フィルター",
           "clear": "フィルターをクリア",
           "removeFilter": "{{value0}} フィルターを解除"
+        },
+        "createDestination": {
+          "label": "ホスト",
+          "placeholder": "ホストを選択",
+          "storedOn": "{authority} が保存してスケジュールします。",
+          "unselected": "この自動化を保存してスケジュールするホストを選択します。",
+          "orphan": "ホストのない自動化は新しい自動化を保持できません。この自動化を作成するホストを選択してください。",
+          "unavailable": "そのホストはまだ新しい自動化を保持できません。これを作成する別のホストを選択してください。",
+          "stale": "このフォームを開いている間に {host} が変更されました。保存する前にもう一度選択してください。",
+          "projectMismatch": "そのプロジェクトは {host} にありません。そのホスト上のプロジェクト、または別のホストを選択してください。",
+          "noProjects": "{host} にはプロジェクトが設定されていません。そこに追加するか、別のホストを選択してください。",
+          "updateRequired": "{hosts} の Orca サーバーを更新すると、そこに自動化を保存できます。",
+          "move": "保存すると、この自動化は {host} に作成され、元の自動化と実行履歴は削除されます。"
         }
       },
       "agent": {
@@ -14357,6 +14471,13 @@
           "deleteDescription": "「{{name}}」は公開リンクで利用できなくなります。",
           "delete": "削除"
         }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "親ワークツリー",
+        "noParent": "親なし",
+        "description": "このワークスペースをサイドバー内の別のワークスペースの配下にネストします。ベースブランチは変更されません。",
+        "searchPlaceholder": "ワークスペースを検索...",
+        "noMatches": "一致する項目がありません。"
       }
     },
     "i18n": {

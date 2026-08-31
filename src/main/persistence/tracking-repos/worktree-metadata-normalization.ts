@@ -15,6 +15,11 @@ import {
 } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  pruneUnreferencedWorktreeIdentityMeta,
+  removeWorktreeMetadataForHost
+} from '../loading-store/worktree-identity-metadata'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
@@ -75,9 +80,33 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     delete state.worktreeMeta[key]
     delete state.worktreeLineageById[key]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
+    // Identity rows are companions too: a surviving alias would re-attach this dead metadata to a
+    // worktree later created at the same repoId::path, and nothing else ever reclaims them.
+    removeWorktreeMetadataForHost(state, key, LOCAL_EXECUTION_HOST_ID)
     removed++
   }
   return removed
+}
+
+function normalizeLinkedMetadata(meta: WorktreeMeta): boolean {
+  const linkedWorkItem = normalizeWorkspaceLinkedItem(meta.linkedWorkItem)
+  const sourceContext = normalizeStoredTaskSourceContext(meta.linkedTaskSourceContext)
+  const linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
+    linkedWorkItem,
+    sourceContext
+  )
+    ? sourceContext
+    : null
+  let changed = false
+  if (!areWorkspaceLinkedItemsEqual(meta.linkedWorkItem, linkedWorkItem)) {
+    meta.linkedWorkItem = linkedWorkItem
+    changed = true
+  }
+  if (!areTaskSourceContextsEqual(meta.linkedTaskSourceContext, linkedTaskSourceContext)) {
+    meta.linkedTaskSourceContext = linkedTaskSourceContext
+    changed = true
+  }
+  return changed
 }
 
 export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): boolean {
@@ -98,8 +127,7 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
       Object.keys(state.worktreeLineageById).length > 0 ||
       Object.keys(state.workspaceLineageByChildKey).length > 0
     state.worktreeMeta = {}
-    // Companions go with the discarded map; a stranded lineage row would otherwise re-attach to a
-    // worktree recreated at the same repoId::path.
+    // Legacy lineage belongs to the discarded locator projection; canonical host state does not.
     state.worktreeLineageById = {}
     state.workspaceLineageByChildKey = {}
     changed ||= rawWorktreeMeta !== undefined || hadLineage
@@ -109,29 +137,74 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
     // keeps timestamp-less keys forever and every downstream consumer trusts the Record<string, WorktreeMeta> type.
     if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) {
       delete state.worktreeMeta[key]
-      // Companions go with it, matching gcStaleWorktreeMeta/removeWorktreeMeta; a stranded lineage row would
-      // otherwise re-attach to a worktree recreated at the same repoId::path.
+      // Legacy lineage belongs to this corrupt locator row; canonical host state is independent.
       delete state.worktreeLineageById[key]
       delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
       changed = true
       continue
     }
-    const linkedWorkItem = normalizeWorkspaceLinkedItem(meta.linkedWorkItem)
-    const sourceContext = normalizeStoredTaskSourceContext(meta.linkedTaskSourceContext)
-    const linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
-      linkedWorkItem,
-      sourceContext
-    )
-      ? sourceContext
-      : null
-    if (!areWorkspaceLinkedItemsEqual(meta.linkedWorkItem, linkedWorkItem)) {
-      meta.linkedWorkItem = linkedWorkItem
+    changed = normalizeLinkedMetadata(meta) || changed
+  }
+  const rawIdentityMetadata = state.worktreeMetaByIdentity as unknown
+  if (
+    rawIdentityMetadata !== undefined &&
+    (typeof rawIdentityMetadata !== 'object' ||
+      rawIdentityMetadata === null ||
+      Array.isArray(rawIdentityMetadata))
+  ) {
+    state.worktreeMetaByIdentity = {}
+    changed = true
+  }
+  for (const [identityKey, meta] of Object.entries(state.worktreeMetaByIdentity ?? {})) {
+    if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) {
+      delete state.worktreeMetaByIdentity?.[identityKey]
+      changed = true
+      continue
+    }
+    changed = normalizeLinkedMetadata(meta) || changed
+  }
+
+  const rawAliases = state.worktreeIdentityAliases as unknown
+  const aliasesAreObject =
+    typeof rawAliases === 'object' && rawAliases !== null && !Array.isArray(rawAliases)
+  const aliasesAreMalformed = rawAliases !== undefined && !aliasesAreObject
+  const aliasesCanProveReachability = aliasesAreObject && Object.keys(rawAliases).length > 0
+  if (aliasesAreMalformed) {
+    state.worktreeIdentityAliases = {}
+    changed = true
+  }
+  for (const [alias, rawIdentityKeys] of Object.entries(state.worktreeIdentityAliases ?? {})) {
+    if (!Array.isArray(rawIdentityKeys)) {
+      delete state.worktreeIdentityAliases?.[alias]
+      changed = true
+      continue
+    }
+    // Drop keys with no backing row: a dangling key is what turns the next write into an
+    // ambiguous alias, and nothing downstream can resolve it anyway.
+    const identityKeys = [
+      ...new Set(
+        rawIdentityKeys.filter(
+          (key): key is string =>
+            typeof key === 'string' &&
+            key.length > 0 &&
+            Boolean(state.worktreeMetaByIdentity?.[key])
+        )
+      )
+    ]
+    if (identityKeys.length === 0) {
+      delete state.worktreeIdentityAliases?.[alias]
+      changed = true
+    } else if (
+      identityKeys.length !== rawIdentityKeys.length ||
+      identityKeys.some((key, index) => key !== rawIdentityKeys[index])
+    ) {
+      state.worktreeIdentityAliases ??= {}
+      state.worktreeIdentityAliases[alias] = identityKeys
       changed = true
     }
-    if (!areTaskSourceContextsEqual(meta.linkedTaskSourceContext, linkedTaskSourceContext)) {
-      meta.linkedTaskSourceContext = linkedTaskSourceContext
-      changed = true
-    }
+  }
+  if (aliasesCanProveReachability) {
+    changed = pruneUnreferencedWorktreeIdentityMeta(state) || changed
   }
   return changed
 }

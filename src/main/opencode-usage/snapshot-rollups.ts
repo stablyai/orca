@@ -150,25 +150,23 @@ export function buildOpenCodeUsageRecentSessions(
   filteredSessions: OpenCodeUsageSession[],
   limit = 10
 ): OpenCodeUsageSessionRow[] {
-  return filteredSessions.slice(0, limit).map(
-    (session): OpenCodeUsageSessionRow => ({
-      sessionId: session.sessionId,
-      lastActiveAt: session.lastTimestamp,
-      durationMinutes: Math.max(
-        0,
-        Math.round(
-          (new Date(session.lastTimestamp).getTime() - new Date(session.firstTimestamp).getTime()) /
-            60_000
-        )
-      ),
-      projectLabel: session.primaryProjectLabel,
-      model: session.primaryModel,
-      events: session.eventCount,
-      inputTokens: session.totalInputTokens,
-      cachedInputTokens: session.totalCachedInputTokens,
-      outputTokens: session.totalOutputTokens,
-      reasoningOutputTokens: session.totalReasoningOutputTokens,
-      totalTokens: session.totalTokens
-    })
-  )
+  return filteredSessions.slice(0, limit).map((session): OpenCodeUsageSessionRow => ({
+    sessionId: session.sessionId,
+    lastActiveAt: session.lastTimestamp,
+    durationMinutes: Math.max(
+      0,
+      Math.round(
+        (new Date(session.lastTimestamp).getTime() - new Date(session.firstTimestamp).getTime()) /
+          60_000
+      )
+    ),
+    projectLabel: session.primaryProjectLabel,
+    model: session.primaryModel,
+    events: session.eventCount,
+    inputTokens: session.totalInputTokens,
+    cachedInputTokens: session.totalCachedInputTokens,
+    outputTokens: session.totalOutputTokens,
+    reasoningOutputTokens: session.totalReasoningOutputTokens,
+    totalTokens: session.totalTokens
+  }))
 }

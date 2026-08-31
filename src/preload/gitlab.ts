@@ -56,8 +56,9 @@ export const glApi = {
       state?: 'opened' | 'closed' | 'all'
       assignee?: string
       limit?: number
+      page?: number
     }
-  ): Promise<{ items: unknown[]; error?: unknown }> =>
+  ): Promise<{ items: unknown[]; totalPages?: number; error?: unknown }> =>
     ipcRenderer.invoke('gitlab:listIssues', args),
 
   createIssue: (

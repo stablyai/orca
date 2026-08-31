@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type {
   BrowserLoadError,
   BrowserPage as BrowserPageState
 } from '../../../../shared/browser-workspace-types'
-import { redactKagiSessionToken, toHttpsRecoveryUrl } from '../../../../shared/browser-url'
+import { toHttpsRecoveryUrl } from '../../../../shared/browser-url'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
 import { readBrowserClientPageGuestMetadata } from './browser-client-page-guest-metadata'
 import {
@@ -21,6 +21,7 @@ import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-un
 import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
 import BrowserFind from './assemble-chrome/BrowserFind'
 import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
+import BrowserAddressBar from './assemble-chrome/BrowserAddressBar'
 import { BrowserPageContextMenu } from './assemble-chrome/browser-page-context-menu'
 import { useBrowserPageChromeFocus } from './assemble-chrome/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from './assemble-chrome/use-browser-address-bar-edit-session'
@@ -32,14 +33,12 @@ import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-we
 import { useClientHostedGuestActivationFocus } from './host-guest/use-client-hosted-guest-activation-focus'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { BrowserLoadFailureOverlay } from './navigate/browser-load-failure-overlay'
-import { resolveBrowserAddressBarSubmission } from './navigate/browser-address-bar-navigation'
+import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
 import { resolveBrowserWebviewLoadFailure } from './navigate/browser-webview-load-failure'
 import { resolveActiveBrowserLoadFailure } from './navigate/browser-load-failure-for-url'
-import {
-  consumeBrowserPageDeferredNavigation,
-  deferBrowserPageNavigation
-} from './navigate/browser-page-deferred-navigation'
+import { consumeBrowserPageDeferredNavigation } from './navigate/browser-page-deferred-navigation'
 import {
   getBrowserDisplayTitle,
   getOpenableExternalUrl,
@@ -163,36 +162,14 @@ export function ClientHostedBrowserPagePane({
     reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest
   })
 
-  const navigateToUrl = useCallback(
-    (value: string) => {
-      const submission = resolveBrowserAddressBarSubmission(value)
-      if (submission.status === 'invalid') {
-        onUpdatePageState(browserTab.id, { loadError: submission.loadError })
-        return
-      }
-      const webview = webviewRef.current
-      if (!webview) {
-        // Why: the page is still an optimistic stage, so park the URL for the attach effect to
-        // replay rather than dropping what the user just typed.
-        deferBrowserPageNavigation(browserTab.id, submission.url)
-        setAddressBarValue(toDisplayUrl(redactKagiSessionToken(submission.url)))
-        return
-      }
-      // Why: the store and the address bar must never hold a Kagi session token, and an optimistic
-      // title keeps the tab from reading "New Tab" until the guest reports one — as local does.
-      const browserModelUrl = redactKagiSessionToken(submission.url)
-      activeLoadFailureRef.current = null
-      setAddressBarValue(toDisplayUrl(browserModelUrl))
-      onUpdatePageState(browserTab.id, {
-        loading: true,
-        loadError: null,
-        title: getBrowserDisplayTitle(browserModelUrl, browserModelUrl)
-      })
-      // Why: loadURL rejects on any failed navigation; did-fail-load owns error reporting.
-      void webview.loadURL(submission.url).catch(() => {})
-    },
-    [browserTab.id, onUpdatePageState, setAddressBarValue]
-  )
+  const navigateToUrl = useClientHostedPageUrlSubmission({
+    browserTabId: browserTab.id,
+    worktreeId,
+    webviewRef,
+    activeLoadFailureRef,
+    onUpdatePageState,
+    setAddressBarValue
+  })
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
 
   useLayoutEffect(() => {
@@ -367,18 +344,26 @@ export function ClientHostedBrowserPagePane({
             reload: () => reload.runReloadTrigger('button'),
             navigate: navigateToUrl
           }}
-          addressBarValue={addressBarValue}
-          onAddressBarChange={setAddressBarValue}
-          onSubmitAddressBar={() => navigateToUrl(addressBarValue)}
-          addressBarInputRef={addressBarInputRef}
-          addressBarEditSession={addressBarEditSession}
-          reloadLabel={reload.reloadButtonLabel}
-          addressBarLeadingIcon={
-            <RemoteRuntimeEgressIndicator
-              runtimeEnvironmentId={runtimeEnvironmentId}
-              presentation="client-hosted"
+          addressSlot={
+            <BrowserAddressBar
+              value={addressBarValue}
+              onChange={setAddressBarValue}
+              onSubmit={() => navigateToUrl(addressBarValue)}
+              onNavigate={navigateToUrl}
+              onOpenWorkspaceDoc={(docLocation) =>
+                convertBrowserPageToWorkspaceDoc(browserTab.id, docLocation)
+              }
+              inputRef={addressBarInputRef}
+              editSession={addressBarEditSession}
+              leadingIcon={
+                <RemoteRuntimeEgressIndicator
+                  runtimeEnvironmentId={runtimeEnvironmentId}
+                  presentation="client-hosted"
+                />
+              }
             />
           }
+          reloadLabel={reload.reloadButtonLabel}
         />
       </div>
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">

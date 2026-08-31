@@ -26,6 +26,8 @@ export type CoordinatorRuntime = {
   probeWorktreeDrift(worktreeSelector: string): Promise<WorktreeDrift>
   // Why: pane-only fallback preserves reservation identity for lightweight runtime fakes.
   getTerminalPaneKey?(handle: string): string | null
+  // Why optional: lightweight fakes omit it and get the fail-closed default.
+  getNestedWorkerMaxDepth?(): number
   // Why: automatic dispatch persists the same authenticated pane/process tuple as manual dispatch.
   getOrchestrationDispatchAuthority?(handle: string): {
     paneKey: string | null

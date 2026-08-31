@@ -3,20 +3,20 @@
 // and the sentinel wait that turns a wsl.exe child's stdio into a
 // MultiplexerTransport. Kept separate from the manager so the state machine
 // stays readable. See docs/agent-status-over-wsl.md (STA-1515).
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
-  decodeWslText,
   MAX_STARTUP_BUFFER_BYTES,
   type waitForWslRelaySentinel,
   type WslRelayStartupFailure
 } from './wsl-hook-relay-sentinel'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { listRunningWslDistrosAsync } from '../wsl'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
   WSL_HOOK_RELAY_DIR,
@@ -149,27 +149,10 @@ export function spawnWslRelayProcess(
  *  (the next WSL PTY spawn re-ensures), and a wsl.exe too wedged to list
  *  distros would not have launched the relay anyway. */
 export function isWslDistroRunning(distro: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile(
-      'wsl.exe',
-      ['--list', '--running', '--quiet'],
-      // Why: WSL_UTF8=1 forces UTF-8 output; without it wsl.exe emits
-      // UTF-16LE that reads as NUL-riddled text.
-      { env: { ...process.env, WSL_UTF8: '1' }, timeout: 10_000, windowsHide: true },
-      (err, stdout) => {
-        if (err) {
-          resolve(false)
-          return
-        }
-        const wanted = distro.trim().toLowerCase()
-        const running = decodeWslText(String(stdout))
-          .split(/\r?\n/)
-          .map((line) => line.trim().toLowerCase())
-          .filter(Boolean)
-        resolve(running.includes(wanted))
-      }
-    )
-  })
+  const wanted = distro.trim().toLowerCase()
+  return listRunningWslDistrosAsync().then((running) =>
+    running.some((candidate) => candidate.toLowerCase() === wanted)
+  )
 }
 
 export async function runWslInstallProcess(

@@ -22,6 +22,25 @@ export type PendingClientHostedBrowserClose = {
 }
 
 /**
+ * Whether an unheard close of this page would resurrect it — the qualification for a durable
+ * intent. Only client-hosted pages qualify: a server-placed page dies with the runtime that ran
+ * it, so there is nothing left to resurrect; a staged handle names a page the host never minted,
+ * so replaying a close at it would be answered as unknown forever.
+ */
+export function isDurableClientHostedBrowserHandle(handle: {
+  environmentId?: string
+  staged?: boolean
+  placement?: { kind?: string } | null
+  restoredClientHosted?: boolean
+}): boolean {
+  return (
+    (handle.environmentId?.trim().length ?? 0) > 0 &&
+    handle.staged !== true &&
+    (handle.placement?.kind === 'client' || handle.restoredClientHosted === true)
+  )
+}
+
+/**
  * The client-hosted pages a workspace close leaves unaccounted for on their host.
  *
  * Only client-hosted pages qualify: a server-placed page dies with the runtime that ran it, so
@@ -44,10 +63,7 @@ export function collectPendingClientHostedBrowserCloses(
       !handle ||
       !environmentId ||
       !environmentIds.has(environmentId) ||
-      // Why staged is excluded: the host was never told the page exists, so it has nothing to
-      // forget, and replaying a close at an id it never minted would be answered as unknown forever.
-      handle.staged === true ||
-      !(handle.placement?.kind === 'client' || handle.restoredClientHosted === true)
+      !isDurableClientHostedBrowserHandle(handle)
     ) {
       return []
     }

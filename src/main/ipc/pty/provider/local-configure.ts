@@ -38,7 +38,7 @@ export function configureLocalPtyProvider(args: {
     getWindowsPowerShellImplementation: () =>
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),
-    buildSpawnEnv: (id, baseEnv, ctx) => {
+    buildSpawnEnv: async (id, baseEnv, ctx) => {
       const codexSelectionTarget: CodexAccountSelectionTarget =
         ctx?.isWsl === true
           ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
@@ -47,10 +47,10 @@ export function configureLocalPtyProvider(args: {
         codexSelectionTarget,
         ctx?.codexHomePathOverride
           ? ctx.codexHomePathOverride.value
-          : (getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+          : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
               workspacePath: ctx?.cwd,
               launchAgent: ctx?.launchAgent
-            }) ?? null)
+            })) ?? null)
       )
       const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
       const ptySettings = getSettings?.()
@@ -72,7 +72,8 @@ export function configureLocalPtyProvider(args: {
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
-        networkProxySettings: ptySettings
+        networkProxySettings: ptySettings,
+        routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
       })
       // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
       const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE

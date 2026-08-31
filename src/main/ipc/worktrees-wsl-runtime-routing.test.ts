@@ -369,6 +369,7 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'pnpm worktree:setup',
       { wslDistro: 'Ubuntu' },
+      undefined,
       undefined
     )
     expect(addWorktreeMock).toHaveBeenCalledWith(

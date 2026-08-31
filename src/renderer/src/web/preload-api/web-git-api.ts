@@ -2,6 +2,7 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime-environment-call'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
+import { createGitBlameApi } from './web-git-blame-api'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
@@ -41,9 +42,11 @@ export async function callAbortableRuntimeStatus<TResult>(
 
 export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
+    ...createGitBlameApi(),
     status: async ({
       worktreePath,
       includeIgnored,
+      includeLineStats,
       bypassEffectiveUpstreamNegativeCache,
       reuseLineStats,
       branchLineTotalMergeBase,
@@ -53,6 +56,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const params = {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         includeIgnored,
+        includeLineStats,
         bypassEffectiveUpstreamNegativeCache,
         reuseLineStats,
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
@@ -120,26 +124,12 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         compareAgainstHead
       })
     },
-    fileBlame: async ({ worktreePath, filePath }) => {
-      const file = await resolveRuntimeFilePath(filePath, worktreePath)
-      return callRuntimeResult('git.fileBlame', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        filePath: file.relativePath
-      })
-    },
-    lineBlame: async ({ worktreePath, filePath, line }) => {
-      const file = await resolveRuntimeFilePath(filePath, worktreePath)
-      return callRuntimeResult('git.lineBlame', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        filePath: file.relativePath,
-        line
-      })
-    },
-    branchCompare: async ({ worktreePath, baseRef }) => {
+    branchCompare: async ({ worktreePath, baseRef, admissionTier }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.branchCompare', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
-        baseRef
+        baseRef,
+        ...(admissionTier ? { admissionTier } : {})
       })
     },
     commitCompare: async ({ worktreePath, commitId }) => {

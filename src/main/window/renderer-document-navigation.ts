@@ -1,6 +1,12 @@
 import type { WebContents } from 'electron'
 
-function isRendererDocumentNavigation(currentUrl: string, nextUrl: string): boolean {
+/**
+ * True when the target stays inside the window's own privileged document: for `file:`
+ * the exact same host+path (query/hash may differ, as a reload keeps them), for http(s)
+ * the same origin. Also gates preload privilege in installPrivilegedWindowNavigationPolicy,
+ * so loosening it past a same-origin document hands a foreign page the Orca bridge.
+ */
+export function isRendererDocumentNavigation(currentUrl: string, nextUrl: string): boolean {
   try {
     const current = new URL(currentUrl)
     const next = new URL(nextUrl)
@@ -13,6 +19,7 @@ function isRendererDocumentNavigation(currentUrl: string, nextUrl: string): bool
     }
     return (
       (current.protocol === 'http:' || current.protocol === 'https:') &&
+      (next.protocol === 'http:' || next.protocol === 'https:') &&
       next.origin === current.origin
     )
   } catch {

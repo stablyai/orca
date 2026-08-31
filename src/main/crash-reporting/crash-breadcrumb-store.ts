@@ -6,8 +6,8 @@ import {
 } from '../../shared/crash-reporting'
 
 const MAX_BREADCRUMBS = 30
-// Why: retain two thresholds for each renderer surface without growing the ring.
-const MAX_RETAINED_BREADCRUMBS = 4
+// Two threshold ladders, two marks each, across both renderer surfaces.
+const MAX_RETAINED_BREADCRUMBS = 8
 // Why: coalesceKey embeds an open-string agentType (length-trimmed only, never
 // enum-checked), so the key space is unbounded over a long multi-agent/SSH session.
 // Bound the coalesce map the same way ProcessGoneDedupe bounds its key map.
@@ -42,8 +42,14 @@ function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null
     return null
   }
   const surface = breadcrumb.data?.rendererSurface
-  const threshold = breadcrumb.data?.thresholdPct
-  return `${breadcrumb.name}:${String(surface)}:${String(threshold)}:${breadcrumb.origin ?? 'global'}`
+  // Why both: the heap-ratio marks and the private-footprint marks are separate
+  // one-shot ladders. Keying only on `thresholdPct` collapses every footprint
+  // crumb onto one `undefined` slot, so the second mark evicts the first.
+  const threshold =
+    breadcrumb.data?.thresholdPct !== undefined
+      ? `pct${String(breadcrumb.data.thresholdPct)}`
+      : `privMB${String(breadcrumb.data?.thresholdPrivateMB)}`
+  return `${breadcrumb.name}:${String(surface)}:${threshold}:${breadcrumb.origin ?? 'global'}`
 }
 
 /** Returns the stored breadcrumb so coalescing can refresh the entry it owns. */

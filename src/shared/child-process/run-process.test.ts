@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
@@ -189,12 +189,15 @@ describe('a signal that is already aborted', () => {
     const controller = new AbortController()
     controller.abort()
     const startedAt = Date.now()
+    const onChildTerminated = vi.fn()
     const result = await runProcess({
       program: path.join(tmpdir(), 'orca-must-not-spawn'),
       timeoutMs: 30_000,
-      signal: controller.signal
+      signal: controller.signal,
+      onChildTerminated
     })
     expect(result.timedOut).toBe(false)
+    expect(onChildTerminated).toHaveBeenCalledOnce()
     expect(Date.now() - startedAt).toBeLessThan(10_000)
   }, 20_000)
 })

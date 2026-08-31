@@ -1,4 +1,4 @@
-import WebSocket from 'ws'
+import type WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
@@ -30,9 +30,11 @@ export class RemoteRuntimeSharedControlConnection {
   private readonly reconnect = new SharedControlReconnectScheduler()
   private readonly readyStableReset: SharedControlReadyStableResetTimer
   private intentionallyClosed = false
-  private lastConnectedAt: number | null = null
-  private lastClose: { code: number; reason: string } | null = null
-  private lastError: string | null = null
+  private readonly diag = {
+    lastConnectedAt: null as number | null,
+    lastClose: null as { code: number; reason: string } | null,
+    lastError: null as string | null
+  }
   private readonly pendingRequests = new Map<string, PendingRequest>()
   private readonly subscriptions = new Map<string, LogicalSubscription>()
   private readonly retiredRequestIds = new SharedControlRetiredRequestIds()
@@ -99,6 +101,12 @@ export class RemoteRuntimeSharedControlConnection {
 
   readonly retryNow = (): boolean => this.reconnect.retryNow()
 
+  pauseStandingRetry(): void {
+    if (this.subscriptions.size === 0) {
+      this.reconnect.clear()
+    }
+  }
+
   getDiagnostics(): SharedControlTypes.RemoteRuntimeSharedConnectionDiagnostics {
     return sharedControlState.buildSharedControlDiagnostics({
       state: this.state,
@@ -106,9 +114,7 @@ export class RemoteRuntimeSharedControlConnection {
       pendingRequestCount: this.pendingRequests.size,
       subscriptionCount: this.subscriptions.size,
       reconnectAttempt: this.reconnect.attemptCount,
-      lastConnectedAt: this.lastConnectedAt,
-      lastClose: this.lastClose,
-      lastError: this.lastError
+      diag: this.diag
     })
   }
 
@@ -134,15 +140,7 @@ export class RemoteRuntimeSharedControlConnection {
       readyWaiters: this.readyWaiters,
       timeoutMs,
       signal,
-      open: () => {
-        if (
-          !this.ws ||
-          this.ws.readyState === WebSocket.CLOSED ||
-          this.ws.readyState === WebSocket.CLOSING
-        ) {
-          this.open()
-        }
-      }
+      open: () => sharedControlReady.openIfSocketClosed(this.ws, () => this.open())
     })
   }
 
@@ -168,7 +166,7 @@ export class RemoteRuntimeSharedControlConnection {
       getCurrentSocket: () => this.ws,
       onClose: (close, error) => {
         if (this.socketGeneration.isCurrent(socketGeneration)) {
-          this.lastClose = close
+          this.diag.lastClose = close
         }
         this.handleSocketClosed(error, socketGeneration)
       },
@@ -210,7 +208,11 @@ export class RemoteRuntimeSharedControlConnection {
       handleSocketClosed: (error) => this.handleSocketClosed(error, socketGeneration),
       sendEncrypted: (payload) => this.sendEncrypted(payload),
       markReady: () => {
-        this.lastConnectedAt = Date.now()
+        this.diag.lastConnectedAt = Date.now()
+        // Why cleared here: these describe the attempt that just succeeded's predecessor.
+        // Left set, a recovered host reads "Connected" next to a stale failure forever.
+        this.diag.lastError = null
+        this.diag.lastClose = null
         this.readyStableReset.schedule({
           getState: () => this.state,
           getSocket: () => this.ws,
@@ -263,7 +265,6 @@ export class RemoteRuntimeSharedControlConnection {
       deviceToken: this.pairing.deviceToken,
       send: (payload) => this.sendEncrypted(payload)
     })
-    this.reconnect.clearWhenIdle(this.subscriptions.size === 0 && this.state === 'closed')
   }
 
   private sendEncrypted(payload: unknown): boolean {
@@ -287,10 +288,14 @@ export class RemoteRuntimeSharedControlConnection {
     ) {
       return
     }
-    this.lastError = error.message
-    if (this.subscriptions.size > 0 && !this.intentionallyClosed) {
-      this.reconnect.scheduleWithDefaultBackoff(this.intentionallyClosed, () => this.open())
-    }
+    this.diag.lastError = error.message
+    this.reconnect.scheduleAfterSocketClose({
+      intentionallyClosed: this.intentionallyClosed,
+      manuallyDisconnected: this.options.isManuallyDisconnected?.() ?? false,
+      capabilityPaused: this.options.isCapabilityPaused?.() ?? false,
+      subscriptionCount: this.subscriptions.size,
+      open: () => this.open()
+    })
   }
 
   private closeSocket(error?: Error, preserveReadyWaitersAndPendingRequests = false): void {
@@ -300,7 +305,7 @@ export class RemoteRuntimeSharedControlConnection {
       pendingRequests: this.pendingRequests,
       subscriptions: this.subscriptions,
       readyWaiters: this.readyWaiters,
-      lastClose: this.lastClose,
+      lastClose: this.diag.lastClose,
       socketCleanup: this.socketCleanup,
       ws: this.ws,
       error,

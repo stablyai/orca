@@ -146,6 +146,7 @@ export function createAgentCompletionProcessMonitor({
     const pendingTitleIdAtRequest = priority === 'pending-title' ? pendingTitle.get()?.id : null
     enqueueAgentProcessInspection({
       priority,
+      canRun: () => !state.disposed,
       run: async () => {
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false

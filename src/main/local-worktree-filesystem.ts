@@ -5,7 +5,7 @@ import { removeHostTree } from './host-tree-removal'
 import { toLinuxPath } from './wsl'
 import type { ReadPath, StatPath } from './worktree-orphan-gitdir-proof'
 
-export { toHostRemovalPath } from './host-tree-removal'
+export { toHostFilesystemPath, toHostRemovalPath } from './host-tree-removal'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string

@@ -14,7 +14,9 @@ export type TerminalLinkStoreState = {
   setPendingEditorReveal: Mock
   setMarkdownViewMode: Mock
   activeFileIdByWorktree: Record<string, string | null>
+  openFiles: { filePath: string; worktreeId: string }[]
   worktreesByRepo: Record<string, { id: string; path: string }[]>
+  folderWorkspaces: []
 }
 
 export type TerminalLinkTestDoubles = {
@@ -60,7 +62,9 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     setPendingEditorReveal: setPendingEditorRevealMock,
     setMarkdownViewMode: setMarkdownViewModeMock,
     activeFileIdByWorktree: {} as Record<string, string | null>,
-    worktreesByRepo: {} as Record<string, { id: string; path: string }[]>
+    openFiles: [] as { filePath: string; worktreeId: string }[],
+    worktreesByRepo: {} as Record<string, { id: string; path: string }[]>,
+    folderWorkspaces: [] as []
   }
 
   return {

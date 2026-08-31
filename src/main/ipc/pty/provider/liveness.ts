@@ -3,7 +3,10 @@ import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-
 import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent-pty-owner'
 import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
 import type { Store } from '../../../persistence'
-import { isSshPtyNotFoundError } from '../../../providers/ssh-pty-errors'
+import {
+  isSshPtyAbsentFromRelayError,
+  isSshPtyNotFoundError
+} from '../../../providers/ssh-pty-errors'
 import type { IPtyProvider } from '../../../providers/types'
 import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { ptyIncarnationById, ptyOwnership } from './ownership-state'
@@ -54,7 +57,13 @@ export function normalizeNodePtySpawnError(err: unknown): Error {
 
 export function isPtyAlreadyGoneError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
-  return isSshPtyNotFoundError(err) || /Session not found/i.test(message)
+  return (
+    isSshPtyNotFoundError(err) ||
+    // Why: the reattach path rewrites the relay's wording to SSH_SESSION_EXPIRED and only this
+    // class preserves that the relay itself answered "absent" rather than the link dropping.
+    isSshPtyAbsentFromRelayError(err) ||
+    /Session not found/i.test(message)
+  )
 }
 
 export function delay(ms: number): Promise<void> {
@@ -134,6 +143,10 @@ export function finishPtyShutdown(
   const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
   if (connectionId) {
+    // Deliberately does NOT retire a recorded undelivered stop. Some callers reach here having
+    // asked the host and some having never asked it, so retiring from this one place would be a
+    // contract every call site has to know about — and the one that forgot would silently drop a
+    // kill order. Retirement is left to the replay, which only acts on host evidence.
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
   ptyOwnership.delete(id)
