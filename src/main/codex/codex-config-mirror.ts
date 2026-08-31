@@ -18,6 +18,7 @@ import {
 import { readCodexSettingsBaseline } from './config-settings-baseline'
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
+import { applyManagedCodexShellProfile } from './codex-managed-shell-profile'
 import {
   deduplicateProjectTomlSections,
   getProjectTrustLevel,
@@ -175,10 +176,21 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   const runtimeConfigExists = runtimeConfigObservation.kind === 'present'
   const rawSystemConfig =
     systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
+  const applyProfile = (content: string) =>
+    applyManagedCodexShellProfile(content, {
+      runtimeHomePath,
+      systemHomePath,
+      systemConfigDir
+    })
   // Why: a missing or blank source is not an authoritative empty config. Merging
   // it would erase every ordinary setting from an existing managed runtime, and
   // a 0-byte file is what a half-written or unhydrated cloud-synced home shows.
   if (rawSystemConfig.trim() === '') {
+    const runtimeContent = runtimeConfigExists ? runtimeConfigObservation.value : ''
+    const nextContent = applyProfile(runtimeContent)
+    if (nextContent !== runtimeContent) {
+      writeFileAtomically(runtimeConfigPath, nextContent)
+    }
     return runtimeConfigExists
       ? { status: 'skipped-missing-source' }
       : { status: 'mirrored', preservedConflictKeys: new Set() }
@@ -188,7 +200,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
-      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+      applyProfile(prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir))
     )
     return { status: 'mirrored', preservedConflictKeys: new Set() }
   }
@@ -201,8 +213,9 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig),
     promotionPlan.runtimeValuesToPreserve
   )
-  if (preserved.content !== runtimeConfig) {
-    writeFileAtomically(runtimeConfigPath, preserved.content)
+  const nextContent = applyProfile(preserved.content)
+  if (nextContent !== runtimeConfig) {
+    writeFileAtomically(runtimeConfigPath, nextContent)
   }
   return { status: 'mirrored', preservedConflictKeys: preserved.keys }
 }
