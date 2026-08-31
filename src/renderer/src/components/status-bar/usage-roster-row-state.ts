@@ -35,7 +35,11 @@ export function getUsageRosterRowState(
   hasUsage: boolean
 ): UsageRosterRowState {
   if (hasUsage) {
-    return { kind: 'usage', statusLabel: null }
+    return {
+      kind: 'usage',
+      // Why: stale values remain useful, but assistive technology must expose the refresh failure.
+      statusLabel: provider.status === 'error' ? getProviderUsageStatusLabel(provider) : null
+    }
   }
   if (provider.status === 'idle' || provider.status === 'fetching') {
     return {

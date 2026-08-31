@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronRight, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
@@ -154,17 +154,33 @@ export function UsageRow({
             ) : null}
           </>
         ) : tightest ? (
-          <span className="ml-auto">
+          <span className="ml-auto flex items-center gap-1">
             <UsageMetric
               section={tightest}
               label={tightest.label}
               display={display}
               showBar={false}
             />
+            {state.statusLabel ? (
+              <>
+                <span className="sr-only">{state.statusLabel}</span>
+                <AlertTriangle aria-hidden className="size-3 shrink-0 text-muted-foreground/80" />
+              </>
+            ) : null}
           </span>
-        ) : reset ? (
-          <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
-        ) : null}
+        ) : (
+          <>
+            {reset ? (
+              <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
+            ) : null}
+            {state.statusLabel ? (
+              <>
+                <span className="sr-only">{state.statusLabel}</span>
+                <AlertTriangle aria-hidden className="size-3 shrink-0 text-muted-foreground/80" />
+              </>
+            ) : null}
+          </>
+        )}
       </div>
       {hasUsage && mode === 'verbose' ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">

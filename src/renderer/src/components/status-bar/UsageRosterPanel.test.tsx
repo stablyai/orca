@@ -87,6 +87,29 @@ describe('UsageRow', () => {
     expect(markup).not.toContain('width:25%')
   })
 
+  it('exposes stale usage to assistive technology', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          ...signedOutCodex,
+          session: {
+            usedPercent: 25,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          }
+        }}
+        display="used"
+        state={{ kind: 'usage', statusLabel: 'Refresh failed' }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain('Refresh failed')
+    expect(markup).toContain('aria-hidden="true"')
+  })
+
   it('uses one shared clock for live reset labels across the roster', () => {
     const sessionReset = mocks.now + 2 * 60_000
     const weeklyReset = mocks.now + 7 * 24 * 60 * 60_000

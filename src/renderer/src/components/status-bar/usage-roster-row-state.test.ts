@@ -98,7 +98,7 @@ describe('getUsageRosterRowState', () => {
   it('lets real usage data win over a stale error status', () => {
     expect(getUsageRosterRowState(provider({ status: 'error' }), true)).toEqual({
       kind: 'usage',
-      statusLabel: null
+      statusLabel: 'Refresh failed'
     })
   })
 })
