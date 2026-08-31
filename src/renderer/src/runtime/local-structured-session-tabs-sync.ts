@@ -10,6 +10,7 @@ import {
   decideWebSessionTabsSnapshot
 } from './web-session-tabs-sync'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { resolvePublishedActiveGroupId } from './mobile-session-published-active-group'
 
 export const LOCAL_STRUCTURED_SESSION_OWNER = 'local-structured-session'
 let localStructuredSessionTabsRestorePromise: Promise<void> | null = null
@@ -42,11 +43,7 @@ export function projectLocalStructuredSessionTabs(
     activeTabId: visibleIds.has(snapshot.activeTabId ?? '') ? snapshot.activeTabId : null,
     activeTabType:
       snapshot.activeTabId && visibleIds.has(snapshot.activeTabId) ? snapshot.activeTabType : null,
-    activeGroupId:
-      snapshot.activeGroupId &&
-      projectedTabGroups?.some((group) => group.id === snapshot.activeGroupId)
-        ? snapshot.activeGroupId
-        : (projectedTabGroups?.[0]?.id ?? null),
+    activeGroupId: resolvePublishedActiveGroupId(snapshot.activeGroupId, projectedTabGroups),
     tabs: snapshot.tabs.filter((tab) => visibleIds.has(tab.id)),
     tabGroups: projectedTabGroups,
     // Why: group membership locates chats; the renderer's split tree remains locally authoritative.

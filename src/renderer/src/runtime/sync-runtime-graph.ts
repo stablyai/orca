@@ -29,6 +29,7 @@ import type {
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { isClaudeManagementTitle } from '../../../shared/agent-detection'
+import { resolvePublishedActiveGroupId } from './mobile-session-published-active-group'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type {
@@ -1515,15 +1516,18 @@ export function buildMobileSessionTabSnapshots(
       fallbackEditorTabs,
       active?.id ?? null
     )
-    const tabGroupLayout =
-      tabGroups && tabGroups.length > 0
-        ? pruneTabGroupLayout(inputs.tabGroupLayout, new Set(tabGroups.map((group) => group.id)))
-        : groupProjection.tabGroupLayout
+    const publishedGroups = tabGroups && tabGroups.length > 0 ? tabGroups : undefined
+    const tabGroupLayout = publishedGroups
+      ? pruneTabGroupLayout(
+          inputs.tabGroupLayout,
+          new Set(publishedGroups.map((group) => group.id))
+        )
+      : groupProjection.tabGroupLayout
     const content = {
-      activeGroupId,
+      activeGroupId: resolvePublishedActiveGroupId(activeGroupId, publishedGroups),
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
-      ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),
+      ...(publishedGroups ? { tabGroups: publishedGroups } : {}),
       ...(tabGroupLayout ? { tabGroupLayout } : {}),
       tabs
     }

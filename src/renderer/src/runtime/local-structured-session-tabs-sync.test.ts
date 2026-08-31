@@ -208,6 +208,65 @@ describe('local structured session tab projection', () => {
       tabGroupLayout: undefined,
       tabs: [expect.objectContaining({ type: 'agent-session', agent: 'codex' })]
     })
+    // The surviving group is still the active one, so the pointer passes through untouched.
+    expect(projectLocalStructuredSessionTabs(snapshot).activeGroupId).toBe('structured-group')
+  })
+
+  // Same invariant as the mobile snapshot publisher: this projection drops every group with no
+  // visible structured tab, so an active-group pointer at a dropped one would name a group the
+  // caller never receives.
+  it('does not keep an active-group pointer at a group it dropped', () => {
+    const base = {
+      worktree: 'workspace-1',
+      publicationEpoch: 'epoch-1',
+      snapshotVersion: 1,
+      activeGroupId: 'terminal-group',
+      activeTabId: 'terminal-1',
+      activeTabType: 'terminal',
+      tabGroups: [
+        { id: 'terminal-group', activeTabId: 'terminal-1', tabOrder: ['terminal-1'] },
+        {
+          id: 'structured-group',
+          activeTabId: 'agent-session:codex-1',
+          tabOrder: ['agent-session:codex-1']
+        }
+      ],
+      tabs: [
+        {
+          type: 'terminal',
+          id: 'terminal-1',
+          parentTabId: 'terminal-1',
+          leafId: 'leaf-1',
+          title: 'Terminal',
+          status: 'ready',
+          terminal: 'term-1',
+          ptyId: 'pty-1',
+          isActive: true
+        },
+        {
+          type: 'agent-session',
+          id: 'agent-session:codex-1',
+          title: 'Codex Chat',
+          sessionId: 'codex-1',
+          agent: 'codex',
+          isActive: false
+        }
+      ]
+    } satisfies RuntimeMobileSessionTabsResult
+
+    const projected = projectLocalStructuredSessionTabs(base)
+
+    // The presence half: the structured group does survive, so an empty projection fails here.
+    expect(projected.tabGroups?.map((group) => group.id)).toEqual(['structured-group'])
+    expect(projected.activeGroupId).toBe('structured-group')
+
+    // And with nothing left to point at, the pointer goes to null rather than a dropped group.
+    const structuredDropped = projectLocalStructuredSessionTabs({
+      ...base,
+      tabs: base.tabs.filter((tab) => tab.type !== 'agent-session')
+    } satisfies RuntimeMobileSessionTabsResult)
+    expect(structuredDropped.tabGroups).toEqual([])
+    expect(structuredDropped.activeGroupId).toBeNull()
   })
 
   it('preserves the exact local split through apply, persistence, and hydration', () => {
