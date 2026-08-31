@@ -133,6 +133,7 @@ import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
+import { MEDIA_FILE_MIME_TYPES, isMediaPreviewMimeType } from '../../shared/media-file-extensions'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { registerLocalLogTailHandlers } from './local-log-tail'
 import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
@@ -154,6 +155,8 @@ const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 const QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT = 33
 // Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
 const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
+// Why: screen recordings and clips routinely exceed the image cap; local IPC has no frame limit, so media gets its own ceiling.
+const MAX_PREVIEWABLE_MEDIA_SIZE = 100 * 1024 * 1024 // 100MB
 const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -163,7 +166,8 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  ...MEDIA_FILE_MIME_TYPES
 }
 async function readLocalLogSnapshot(filePath: string): Promise<{
   content: string
@@ -590,7 +594,11 @@ export function registerFilesystemHandlers(
       }
       const stats = await stat(filePath)
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-      const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+      const sizeLimit = mimeType
+        ? isMediaPreviewMimeType(mimeType)
+          ? MAX_PREVIEWABLE_MEDIA_SIZE
+          : MAX_PREVIEWABLE_BINARY_SIZE
+        : MAX_TEXT_FILE_SIZE
       if (stats.size > sizeLimit) {
         throw new Error(
           `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`

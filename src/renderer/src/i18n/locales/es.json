@@ -12981,6 +12981,10 @@
           "7b458e0b7f": "Elija una plantilla de Markdown.",
           "1829437fce": "Nuevo Markdown"
         },
+        "MediaViewer": {
+          "21f58fc57c": "Cargando vista previa...",
+          "90b3c48af5": "No se pudo cargar la vista previa del archivo"
+        },
         "MermaidBlock": {
           "dcc132e691": "Error de diagrama:"
         },

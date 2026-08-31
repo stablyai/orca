@@ -13024,6 +13024,10 @@
           "7b458e0b7f": "选择 Markdown 模板。",
           "1829437fce": "新 Markdown"
         },
+        "MediaViewer": {
+          "21f58fc57c": "正在加载预览...",
+          "90b3c48af5": "无法加载文件预览"
+        },
         "MermaidBlock": {
           "dcc132e691": "图表错误："
         },

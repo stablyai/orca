@@ -2,12 +2,14 @@ import { translate } from '@/i18n/i18n'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import { isMediaPreviewMimeType } from '../../../../shared/media-file-extensions'
 import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {
   CsvViewer,
   ImageViewer,
   IpynbViewer,
+  MediaViewer,
   MermaidViewer,
   MonacoEditor
 } from './editor-lazy-views'
@@ -107,6 +109,15 @@ export function EditorEditFileSurface({
   }
   if (fileContent.isBinary) {
     if (fileContent.isImage) {
+      if (fileContent.mimeType && isMediaPreviewMimeType(fileContent.mimeType)) {
+        return (
+          <MediaViewer
+            content={fileContent.content}
+            filePath={activeFile.filePath}
+            mimeType={fileContent.mimeType}
+          />
+        )
+      }
       return (
         <ImageViewer
           content={fileContent.content}

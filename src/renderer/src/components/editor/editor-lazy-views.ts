@@ -10,6 +10,7 @@ export const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'), {
 })
 export const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 export const ImageViewer = lazy(() => import('./ImageViewer'))
+export const MediaViewer = lazy(() => import('./MediaViewer'))
 export const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 export const MermaidViewer = lazy(() => import('./MermaidViewer'))
 export const CsvViewer = lazy(() => import('./CsvViewer'))
