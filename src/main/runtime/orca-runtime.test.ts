@@ -41874,7 +41874,7 @@ describe('OrcaRuntimeService', () => {
     })
     expect(provider.exec).toHaveBeenCalledWith(
       expect.arrayContaining([
-        '--exclude=refs/remotes/**/HEAD',
+        '--exclude=refs/remotes/*/HEAD',
         '--count=12',
         'refs/heads/**/**',
         'refs/heads/**/**/**',
@@ -41905,7 +41905,7 @@ describe('OrcaRuntimeService', () => {
         if (argv[0] === 'remote') {
           return Promise.resolve({ stdout: 'origin\n', stderr: '' })
         }
-        if (argv.includes('--exclude=refs/remotes/**/HEAD')) {
+        if (argv.some((arg) => arg.startsWith('--exclude=refs/remotes/'))) {
           return Promise.reject(
             Object.assign(new Error("unknown option `exclude'"), {
               stderr: "error: unknown option `exclude'"
@@ -41938,10 +41938,16 @@ describe('OrcaRuntimeService', () => {
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
     expect(forEachRefCalls).toHaveLength(3)
-    expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
-    expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(
+      (forEachRefCalls[0][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(true)
+    expect(
+      (forEachRefCalls[1][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(false)
     expect(forEachRefCalls[1][0]).toContain('--count=108')
-    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(
+      (forEachRefCalls[2][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(false)
   })
 
   it('resolves SSH worktrees when manually updating lineage', async () => {

@@ -1,5 +1,7 @@
 import type { BaseRefSearchResult } from '../../shared/repo-types'
 import { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
+import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { isRemoteHeadRef } from '../../shared/hosted-review-refs'
 import { getLocalGitCapabilityCache } from './git-capability-state'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './runner'
@@ -21,6 +23,27 @@ function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean):
   return excludesRemoteHead ? baseCount : baseCount + REF_SEARCH_LEGACY_HEADROOM
 }
 
+/** Build excludes for the symbolic `<remote>/HEAD` slot without hiding
+ * nested branch names such as `<remote>/feature/HEAD`. */
+function getRemoteHeadExcludes(remoteNames: readonly string[] | undefined): string[] {
+  if (remoteNames && remoteNames.length > 0) {
+    // A single-component wildcard covers the overwhelmingly common remote
+    // shape. Keep exact excludes only for slash-containing remote names, where
+    // that wildcard cannot reach the direct `<remote>/HEAD` slot without also
+    // hiding legal nested branches such as `<remote>/feature/HEAD`.
+    const slashRemotes = [...new Set(remoteNames)].filter(
+      (remote) => remote.includes('/') && isSafeGitRefName(`refs/remotes/${remote}/HEAD`)
+    )
+    return [
+      '--exclude=refs/remotes/*/HEAD',
+      ...slashRemotes.map((remote) => `--exclude=refs/remotes/${remote}/HEAD`)
+    ]
+  }
+  // `*` does not cross `/`, unlike `**`; this keeps unknown nested remotes
+  // eligible for the parser's branch-name matching.
+  return ['--exclude=refs/remotes/*/HEAD']
+}
+
 /** Build the bounded `for-each-ref` argv shared by local and remote searches. */
 export function buildSearchBaseRefsArgv(
   normalizedQuery: string,
@@ -37,7 +60,7 @@ export function buildSearchBaseRefsArgv(
     'for-each-ref',
     '--format=%(refname)%00%(refname:short)',
     '--sort=-committerdate',
-    ...(excludeRemoteHead ? ['--exclude=refs/remotes/**/HEAD'] : []),
+    ...(excludeRemoteHead ? getRemoteHeadExcludes(options.remoteNames) : []),
     `--count=${candidateCount}`
   ]
   const tokens = getRefSearchTokens(normalizedQuery)
@@ -194,16 +217,37 @@ export function parseAndFilterSearchRefDetails(
 ): BaseRefSearchResult[] {
   const seen = new Set<string>()
   const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
+
+  const canonicalShortRef = (fullRef: string, gitShortRef: string): string => {
+    // Git's refname:short DWIM rule can strip a trailing `/HEAD` (for example,
+    // `refs/remotes/origin/feature/HEAD` becomes `origin/feature`). Derive the
+    // display name only for that case; otherwise Git's disambiguation prefixes
+    // (such as `heads/` and `remotes/`) are significant and must be retained.
+    if (
+      fullRef.startsWith('refs/remotes/') &&
+      fullRef.endsWith('/HEAD') &&
+      !gitShortRef.endsWith('/HEAD')
+    ) {
+      return fullRef.slice('refs/remotes/'.length)
+    }
+    return gitShortRef
+  }
+
   return stdout
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map((line) => {
       const nul = line.indexOf('\0')
-      return nul === -1 ? null : { full: line.slice(0, nul), short: line.slice(nul + 1) }
+      if (nul === -1) {
+        return null
+      }
+      const full = line.slice(0, nul)
+      const gitShort = line.slice(nul + 1)
+      return { full, short: canonicalShortRef(full, gitShort) }
     })
     .filter((entry): entry is { full: string; short: string } => entry !== null)
-    .filter(({ full }) => !/^refs\/remotes\/.+\/HEAD$/.test(full))
+    .filter(({ full }) => !isRemoteHeadRef(full, sortedRemotes))
     .filter(({ short }) => {
       if (seen.has(short)) {
         return false

@@ -282,7 +282,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv.some((arg: string) => arg.startsWith('--exclude=refs/remotes/'))).toBe(true)
     expect(argv).toContain('--count=100')
     expect(argv).toContain('refs/heads/**/**')
     expect(argv).toContain('refs/heads/**/**/**')
@@ -308,7 +308,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv.some((arg: string) => arg.startsWith('--exclude=refs/remotes/'))).toBe(true)
     expect(argv).toContain('--count=100')
     expect(argv).toContain('refs/heads/**/**')
     expect(argv).toContain('refs/heads/**/**/**')
@@ -343,7 +343,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       if (argv[0] === 'remote') {
         return Promise.resolve({ stdout: 'origin\n', stderr: '' })
       }
-      if (argv.includes('--exclude=refs/remotes/**/HEAD')) {
+      if (argv.some((arg) => arg.startsWith('--exclude=refs/remotes/'))) {
         return Promise.reject(
           Object.assign(new Error("unknown option `exclude'"), {
             stderr: "error: unknown option `exclude'"
@@ -376,10 +376,16 @@ describe('repos:searchBaseRefs SSH relay', () => {
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
     expect(forEachRefCalls).toHaveLength(3)
-    expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
-    expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(
+      (forEachRefCalls[0][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(true)
+    expect(
+      (forEachRefCalls[1][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(false)
     expect(forEachRefCalls[1][0]).toContain('--count=104')
-    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(
+      (forEachRefCalls[2][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(false)
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {

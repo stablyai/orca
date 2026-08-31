@@ -6,7 +6,7 @@ export {
 } from './worktree-add'
 export { forceDeleteLocalBranch } from './worktree-branch-removal'
 export { parseWorktreeList } from './worktree-list-parser'
-export { describeCreatedWorktree, listWorktreeGraph, listWorktreesStrict } from './worktree-listing'
+export { describeCreatedWorktree } from './worktree-listing'
 export { moveWorktree } from './worktree-move'
 export {
   WORKTREE_ADD_TIMEOUT_MAX_MS,
@@ -27,8 +27,10 @@ export { removeWorktree } from './worktree-removal'
 export {
   _getWorktreeScanCacheSizesForTests,
   _resetWorktreeScanCacheForTests,
+  listWorktreeGraph,
   listWorktrees,
-  listWorktreesSharedStrict
+  listWorktreesSharedStrict,
+  listWorktreesSharedStrict as listWorktreesStrict
 } from './worktree-scan-cache'
 export { bumpWorktreeScanGeneration as notifyPreparedWorktreeMutation } from './worktree-scan-cache'
 export { addSparseWorktree } from './worktree-sparse-add'

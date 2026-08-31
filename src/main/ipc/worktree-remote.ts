@@ -854,7 +854,10 @@ export function getSshBranchConflictKind(
   allowedBaseRef: string
 ): Promise<'local' | 'remote' | null> {
   return getBranchConflictKindViaExec(
-    (argv) => provider.exec(argv, repoPath),
+    (argv, commandOptions) =>
+      commandOptions?.timeoutMs === undefined
+        ? provider.exec(argv, repoPath)
+        : provider.exec(argv, repoPath, { timeoutMs: commandOptions.timeoutMs }),
     branchName,
     allowedBaseRef
   )

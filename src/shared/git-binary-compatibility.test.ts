@@ -216,6 +216,26 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
+  it('supports exact show-ref probes', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    const originRef = 'refs/remotes/origin/compat-exact'
+    const missingRef = 'refs/remotes/missing/compat-exact'
+    await runGit(['update-ref', originRef, head])
+
+    await expect(
+      runGit(['show-ref', '--verify', '--quiet', '--', originRef])
+    ).resolves.toBeDefined()
+    await expect(
+      runGit(['show-ref', '--verify', '--quiet', '--', missingRef])
+    ).rejects.toMatchObject({ code: 1 })
+
+    const nestedRef = 'refs/remotes/origin/compat-parent/nested'
+    await runGit(['update-ref', nestedRef, head])
+    await expect(
+      runGit(['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/compat-parent'])
+    ).rejects.toMatchObject({ code: 1 })
+  })
+
   it('fetches hosted review heads into dedicated refs', async () => {
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     await runGit(['update-ref', 'refs/pull/42/head', head])
