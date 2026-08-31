@@ -336,6 +336,42 @@ describe('Store', () => {
     expect(store.getUI().setupGuideBrowserMilestoneLegacyComplete).toBe(false)
   })
 
+  it('migrates a previously dismissed onboarding checklist to the Settings preference', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: { dismissed: true }
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSettingsDismissed).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).ui?.setupGuideSettingsDismissed).toBe(true)
+  })
+
+  it('preserves an explicit Settings preference over the legacy checklist dismissal', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: { dismissed: true }
+      },
+      ui: { setupGuideSettingsDismissed: false }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSettingsDismissed).toBe(false)
+  })
+
   it('persists the existing-user onboarding backfill back to disk', async () => {
     // Why: the upgrade-cohort backfill is derived at load; assert it round-trips through a write intact (load-time scheduleSave via loadNeedsSave, no manual flush).
     writeDataFile({
