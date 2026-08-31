@@ -1,4 +1,6 @@
 scripts:
   setup: |
     node config/scripts/run-internal-dev-setup.mjs
+    node config/scripts/link-shared-electron-dist.mjs --prepare-install
     pnpm install
+    node config/scripts/link-shared-electron-dist.mjs

@@ -14,7 +14,9 @@ const pnpmWorkspace = parse(readProject('pnpm-workspace.yaml'))
 
 describe('Electron runtime package contract', () => {
   it('keeps root postinstall as the single Electron binary install owner', () => {
-    expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
+    expect(packageJson.scripts.postinstall).toBe(
+      'node config/scripts/rebuild-native-deps.mjs && node config/scripts/link-shared-electron-dist.mjs'
+    )
     expect(pnpmWorkspace.allowBuilds).not.toHaveProperty('electron')
   })
 
