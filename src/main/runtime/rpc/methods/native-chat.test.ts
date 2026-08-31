@@ -21,7 +21,10 @@ const cachedResult = vi.hoisted(() => ({
     }
   }
 }))
-const tailRead = vi.hoisted(() => ({ signal: undefined as AbortSignal | undefined }))
+const tailRead = vi.hoisted(() => ({
+  signal: undefined as AbortSignal | undefined,
+  args: undefined as { includeQueuedPrompts?: boolean } | undefined
+}))
 const watcher = vi.hoisted(() => ({
   args: null as null | {
     onInitialSnapshot?: (
@@ -53,6 +56,7 @@ const watcher = vi.hoisted(() => ({
         timestamp: number | null
       }
     ) => void
+    includeQueuedPrompts?: boolean
     onTranscriptPending?: () => void
   },
   watching: true,
@@ -64,12 +68,16 @@ const watcher = vi.hoisted(() => ({
   unsubscribe: vi.fn()
 }))
 vi.mock('../../../native-chat/transcript-watch', () => ({
-  readNativeChatTranscriptTail: ({ limit }: { limit: number }, signal?: AbortSignal) => {
+  readNativeChatTranscriptTail: (
+    args: { limit: number; includeQueuedPrompts?: boolean },
+    signal?: AbortSignal
+  ) => {
     tailRead.signal = signal
+    tailRead.args = args
     const messages = cachedResult.value.messages
     return Promise.resolve({
-      messages: messages.slice(-limit),
-      hasMore: messages.length > limit,
+      messages: messages.slice(-args.limit),
+      hasMore: messages.length > args.limit,
       beforeOffset: 123,
       ...(cachedResult.value.lifecycle ? { lifecycle: cachedResult.value.lifecycle } : {})
     })
@@ -158,6 +166,17 @@ function activeWatcherArgs(): NonNullable<typeof watcher.args> {
 }
 
 describe('nativeChat.readSession clientKind truncation gating', () => {
+  it('enables queued prompts only for order-preserving clients', async () => {
+    await readSessionHandler()(
+      { agent: 'claude', sessionId: 's', preservesTranscriptOrder: true },
+      ctxWith('runtime')
+    )
+    expect(tailRead.args?.includeQueuedPrompts).toBe(true)
+
+    await readSessionHandler()({ agent: 'claude', sessionId: 's' }, ctxWith('runtime'))
+    expect(tailRead.args?.includeQueuedPrompts).toBe(false)
+  })
+
   it('passes request cancellation to transcript resolution', async () => {
     const controller = new AbortController()
     const context = { ...ctxWith('runtime'), signal: controller.signal }
@@ -417,6 +436,19 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 })
 
 describe('nativeChat.subscribe initial snapshot', () => {
+  it('enables queued prompts only for order-preserving streams', async () => {
+    const context = streamingContext('runtime')
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's', preservesTranscriptOrder: true },
+      context,
+      vi.fn()
+    )
+    expect(activeWatcherArgs().includeQueuedPrompts).toBe(true)
+
+    await subscribeHandler()({ agent: 'claude', sessionId: 'legacy' }, context, vi.fn())
+    expect(activeWatcherArgs().includeQueuedPrompts).toBe(false)
+  })
+
   it('preserves long assistant text across mobile stream frame types', async () => {
     watcher.watching = true
     watcher.args = null

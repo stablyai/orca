@@ -29,6 +29,7 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
     lifecycle?: NativeChatTurnLifecycle
   ) => void
   initialLimit?: number
+  includeQueuedPrompts?: boolean
   filePath?: string
   debounceMs?: number
   /** Test-only override for the production resolve-poll backoff. */

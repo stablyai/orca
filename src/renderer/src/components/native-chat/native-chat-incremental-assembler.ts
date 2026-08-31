@@ -13,7 +13,8 @@
 // base ++ all-appends for every prefix (locked by the oracle differential test).
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { compareMessages, mergeOne } from './native-chat-session-assembler'
+import { nativeChatMessageSortRank, orderNativeChatMessages } from './native-chat-message-order'
+import { mergeOne } from './native-chat-session-assembler'
 
 export type IncrementalChatAssembler = {
   byId: Map<string, NativeChatMessage>
@@ -37,14 +38,14 @@ export function reset(
   for (const message of base) {
     mergeOne(assembler.byId, assembler.byTurn, message)
   }
-  assembler.messages = Array.from(assembler.byId.values()).sort(compareMessages)
+  assembler.messages = orderNativeChatMessages(Array.from(assembler.byId.values()))
   return assembler.messages
 }
 
 /** Fold a live append batch through the same merge rule as the full rebuild.
  *  Fast path: when every incoming message is a brand-new id, has a brand-new
  *  turnKey-free identity (no merge/removal), and sorts at/after the current
- *  tail, splice the batch in (O(k log k)). Any ambiguity → full re-sort of the
+ *  transcript tail, splice the batch in (O(k)). Any ambiguity → full re-sort of the
  *  whole map (still correct, just O(n log n) for that one rare batch). */
 export function applyAppends(
   assembler: IncrementalChatAssembler,
@@ -63,38 +64,48 @@ export function applyAppends(
   // size — some incoming id/turn collided with or superseded an existing entry,
   // which can change an existing entry's sort position. Fall back to re-sort.
   const grewByBatch = assembler.byId.size === sizeBefore + incoming.length
-  if (grewByBatch && isTailAppend(assembler.messages, incoming)) {
-    // Every incoming message is new and sorts at/after the tail: splice the
-    // batch in its own sorted order without touching the existing prefix.
-    const tail = [...incoming].sort(compareMessages)
-    assembler.messages = [...assembler.messages, ...tail]
+  if (grewByBatch && isTranscriptTailAppend(assembler.messages, incoming)) {
+    const deferredAt = assembler.messages.findIndex((message) => nativeChatMessageSortRank(message))
+    const insertAt = deferredAt === -1 ? assembler.messages.length : deferredAt
+    assembler.messages = [
+      ...assembler.messages.slice(0, insertAt),
+      ...incoming,
+      ...assembler.messages.slice(insertAt)
+    ]
     return assembler.messages
   }
 
-  assembler.messages = Array.from(assembler.byId.values()).sort(compareMessages)
+  assembler.messages = orderNativeChatMessages(Array.from(assembler.byId.values()))
   return assembler.messages
 }
 
-/** True when the whole batch sorts strictly at/after the current last message
- *  AND is internally unambiguous to splice. A null timestamp in the batch sorts
- *  before any real timestamp, so it can never be a pure tail append — bail to
- *  the full re-sort. */
-function isTailAppend(
+/** True when file-order semantics put the whole batch after current transcript content. */
+function isTranscriptTailAppend(
   current: readonly NativeChatMessage[],
   incoming: readonly NativeChatMessage[]
 ): boolean {
-  const last = current.at(-1)
-  if (!last) {
-    return true
+  if (
+    !current.every(
+      (message) =>
+        nativeChatMessageSortRank(message) > 0 ||
+        (message.source === 'transcript' && nativeChatMessageSortRank(message) === 0)
+    )
+  ) {
+    return false
   }
+  let latestTime = current.reduce(
+    (latest, message) => Math.max(latest, message.timestamp ?? Number.NEGATIVE_INFINITY),
+    Number.NEGATIVE_INFINITY
+  )
   for (const message of incoming) {
-    // Null timestamp (sorts to the front) can never be a tail append.
-    if (message.timestamp === null) {
+    if (message.source !== 'transcript' || nativeChatMessageSortRank(message) !== 0) {
       return false
     }
-    if (compareMessages(message, last) < 0) {
+    const timestamp = message.timestamp ?? Number.NEGATIVE_INFINITY
+    if (!message.queued && timestamp < latestTime) {
       return false
     }
+    latestTime = Math.max(latestTime, timestamp)
   }
   return true
 }

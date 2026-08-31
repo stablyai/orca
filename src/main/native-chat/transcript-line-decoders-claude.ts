@@ -22,6 +22,9 @@ export function decodeClaudeTranscriptLine(
   if (!record) {
     return null
   }
+  if (record.type === 'attachment') {
+    return decodeQueuedPrompt(record, fallbackId)
+  }
   const role = record.type
   if (role !== 'user' && role !== 'assistant') {
     return null
@@ -62,6 +65,28 @@ export function decodeClaudeTranscriptLine(
     blocks,
     timestamp,
     source: 'transcript'
+  }
+}
+
+function decodeQueuedPrompt(
+  record: Record<string, unknown>,
+  fallbackId: string
+): NativeChatMessage | null {
+  const attachment = asRecord(record.attachment)
+  if (attachment?.type !== 'queued_command' || attachment.commandMode !== 'prompt') {
+    return null
+  }
+  const blocks = claudeContentBlocks(attachment.prompt)
+  if (blocks.length === 0) {
+    return null
+  }
+  return {
+    id: extractString(record.uuid) ?? fallbackId,
+    role: 'user',
+    blocks,
+    timestamp: parseTimestamp(record.timestamp ?? attachment.timestamp),
+    source: 'transcript',
+    queued: true
   }
 }
 

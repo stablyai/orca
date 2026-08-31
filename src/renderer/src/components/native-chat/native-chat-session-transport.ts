@@ -57,7 +57,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath },
+          { agent, sessionId, limit, transcriptPath, preservesTranscriptOrder: true },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -111,7 +111,8 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 sessionId,
                 transcriptPath,
                 limit,
-                capabilities: { transcriptPending: 1 }
+                capabilities: { transcriptPending: 1 },
+                preservesTranscriptOrder: true
               },
               timeoutMs: 15_000
             },

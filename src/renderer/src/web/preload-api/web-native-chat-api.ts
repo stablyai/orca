@@ -16,7 +16,8 @@ export function createWebNativeChatApi(): NativeChatApi {
           agent,
           sessionId,
           limit,
-          transcriptPath
+          transcriptPath,
+          preservesTranscriptOrder: true
         })
       ),
     subscribe: (args, onFrame) => {
@@ -46,7 +47,8 @@ export function createWebNativeChatApi(): NativeChatApi {
             subscriptionId: args.subscriptionId,
             transcriptPath: args.transcriptPath,
             limit: args.limit,
-            capabilities: { transcriptPending: 1 }
+            capabilities: { transcriptPending: 1 },
+            preservesTranscriptOrder: true
           },
           {
             onResponse: (response) => {

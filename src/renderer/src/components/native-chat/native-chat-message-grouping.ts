@@ -1,9 +1,7 @@
 // Pure grouping logic for the native chat message list. Kept out of the .tsx so
 // the pairing/ordering rules are unit-testable without rendering. Two jobs:
-//   1. Order messages stably (timestamp then id; null timestamps sort first as
-//      the shared model documents) — the assembler already sorts, but the list
-//      re-sorts defensively so a caller passing unordered fixtures still reads
-//      correctly.
+//   1. Apply the shared stable order, including queued transcript position —
+//      the assembler already sorts, but the list re-sorts defensively.
 //   2. Within an assistant turn, pair each tool-call block with the tool-result
 //      that answers it so the view can render one collapsible step instead of
 //      two disconnected rows.
@@ -16,7 +14,7 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
-import { compareMessages } from './native-chat-session-assembler'
+import { orderNativeChatMessages as orderMessages } from './native-chat-message-order'
 
 /** A tool-call block paired with the result that answered it, when one exists.
  *  `result` is null while the call is still in flight (no result yet). */
@@ -45,11 +43,9 @@ export type NativeChatRenderItem =
       step: NativeChatToolStep
     }
 
-/** Order messages stably: null timestamps first (model rule), then ascending
- *  timestamp, ties broken by id. Shares the assembler's comparator so both
- *  paths order identically. */
+/** Apply the same collection-level order used by the session assemblers. */
 export function orderNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
-  return [...messages].sort(compareMessages)
+  return orderMessages(messages)
 }
 
 /** Collect every tool-result across the whole conversation in document order so

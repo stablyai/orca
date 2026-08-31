@@ -222,6 +222,20 @@ function advancedGlueTranscript(row: string): NativeChatMessage[] {
 }
 
 describe('glued rapid sends', () => {
+  it('hides and retires an echo when its queued transcript row lands', () => {
+    const pending = [gluePending('p1', 'queued prompt')]
+    const queued = {
+      ...userMessage('queued', 'queued prompt', GLUE_SENT_AT),
+      queued: true as const
+    }
+    const transcript = [GLUE_BOUNDARY, queued]
+
+    expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
+    expect(
+      prunePendingSends(pending, [...transcript, assistantMessage('answer', 'done', 6000)])
+    ).toEqual([])
+  })
+
   it('retires both echoes when a lost Enter glued the pair into one row', () => {
     const pending = [gluePending('p1', 'tell me a joke'), gluePending('p2', 'continue')]
 

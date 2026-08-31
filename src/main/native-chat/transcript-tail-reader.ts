@@ -33,10 +33,19 @@ export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
 export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
-export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
+export function nativeChatLineDecoderForAgent(
+  agent: AgentType,
+  includeQueuedPrompts = true
+): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'claude') {
-    return decodeClaudeTranscriptLine
+    if (includeQueuedPrompts) {
+      return decodeClaudeTranscriptLine
+    }
+    return (line, fallbackId) => {
+      const message = decodeClaudeTranscriptLine(line, fallbackId)
+      return message?.queued ? null : message
+    }
   }
   if (transcriptAgent === 'codex') {
     return decodeCodexTranscriptLine
@@ -219,6 +228,7 @@ export async function readNativeChatTranscriptTail(
     filePath?: string
     limit: number
     beforeOffset?: number
+    includeQueuedPrompts?: boolean
   },
   signal?: AbortSignal
 ): Promise<
@@ -230,7 +240,7 @@ export async function readNativeChatTranscriptTail(
     }
   | { error: string; notFound?: true }
 > {
-  const decode = nativeChatLineDecoderForAgent(args.agent)
+  const decode = nativeChatLineDecoderForAgent(args.agent, args.includeQueuedPrompts)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
   if (!decode) {
     return { error: 'Transcript unavailable' }

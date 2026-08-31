@@ -41,6 +41,24 @@ describe('orderNativeChatMessages', () => {
     ])
     expect(ordered.map((m) => m.id)).toEqual(['real-user', 'streaming', 'pending:abc'])
   })
+
+  it('keeps a queued prompt after its transcript predecessor despite its older timestamp', () => {
+    const ordered = orderNativeChatMessages([
+      msg({ id: 'z-predecessor', timestamp: 10 }),
+      msg({ id: 'a-queued', role: 'user', timestamp: 5, queued: true }),
+      msg({ id: 'final', timestamp: 20 })
+    ])
+    expect(ordered.map((message) => message.id)).toEqual(['z-predecessor', 'a-queued', 'final'])
+  })
+
+  it('keeps the legacy null-first rule outside queued ordering groups', () => {
+    const ordered = orderNativeChatMessages([
+      msg({ id: 'finite', timestamp: 10 }),
+      msg({ id: 'ordinary-null', timestamp: null }),
+      msg({ id: 'queued-null', role: 'user', timestamp: null, queued: true })
+    ])
+    expect(ordered.map((message) => message.id)).toEqual(['ordinary-null', 'finite', 'queued-null'])
+  })
 })
 
 describe('buildNativeChatRenderItems', () => {
@@ -51,6 +69,24 @@ describe('buildNativeChatRenderItems', () => {
     ])
     expect(items.map((i) => i.id)).toEqual(['u', 'a'])
     expect(items[0]?.kind).toBe('message')
+  })
+
+  it('renders the queued-prompt fixture in transcript order', () => {
+    const items = buildNativeChatRenderItems([
+      msg({
+        id: 'z-predecessor',
+        timestamp: 10,
+        blocks: [{ type: 'text', text: 'first reply' }]
+      }),
+      msg({
+        id: 'a-queued',
+        role: 'user',
+        timestamp: 5,
+        queued: true,
+        blocks: [{ type: 'text', text: 'queued prompt' }]
+      })
+    ])
+    expect(items.map((item) => item.id)).toEqual(['z-predecessor', 'a-queued'])
   })
 
   it('pairs a tool-call with its tool-result into one step', () => {

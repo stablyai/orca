@@ -121,4 +121,16 @@ describe('incremental assembler — oracle differential', () => {
     const out = assembler.messages
     expect(applyAppends(assembler, [])).toBe(out)
   })
+
+  it('fast-appends a queued prompt after the active reply', () => {
+    const predecessor = msg({ id: 'z-predecessor', timestamp: 10 })
+    const queued = msg({ id: 'a-queued', role: 'user', timestamp: 5, queued: true })
+    const assembler = createIncrementalAssembler()
+    reset(assembler, [predecessor])
+
+    expect(applyAppends(assembler, [queued]).map((message) => message.id)).toEqual([
+      'z-predecessor',
+      'a-queued'
+    ])
+  })
 })

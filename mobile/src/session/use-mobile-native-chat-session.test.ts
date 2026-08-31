@@ -49,6 +49,17 @@ describe('useMobileNativeChatSession', () => {
     })
   }
 
+  it('advertises transcript-order support on the stream', async () => {
+    const subscribe = vi.fn(() => () => {})
+    await mount({ sendRequest: vi.fn(), subscribe } as unknown as RpcClient)
+
+    expect(subscribe).toHaveBeenCalledWith(
+      'nativeChat.subscribe',
+      expect.objectContaining({ preservesTranscriptOrder: true }),
+      expect.any(Function)
+    )
+  })
+
   it('drops an older-page response captured before transcript replacement', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
     const sendRequest = vi.fn(
@@ -161,7 +172,8 @@ describe('useMobileNativeChatSession', () => {
         agent: 'claude',
         sessionId: 'session',
         limit: 60,
-        beforeOffset: 500
+        beforeOffset: 500,
+        preservesTranscriptOrder: true
       })
     }
   )
@@ -239,7 +251,8 @@ describe('useMobileNativeChatSession', () => {
     expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
       agent: 'claude',
       sessionId: 'session',
-      limit: 100
+      limit: 100,
+      preservesTranscriptOrder: true
     })
   })
 
@@ -299,7 +312,8 @@ describe('useMobileNativeChatSession', () => {
     expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
       agent: 'claude',
       sessionId: 'session',
-      limit: 100
+      limit: 100,
+      preservesTranscriptOrder: true
     })
   })
 
@@ -420,7 +434,8 @@ describe('useMobileNativeChatSession', () => {
     expect(sendRequest).toHaveBeenLastCalledWith('nativeChat.readSession', {
       agent: 'claude',
       sessionId: 'session',
-      limit: 100
+      limit: 100,
+      preservesTranscriptOrder: true
     })
     expect(state?.messages.map((entry) => entry.id)).toEqual(['fresh-growing-tail'])
   })

@@ -2,7 +2,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { isTextBlock, type NativeChatMessage } from '../../shared/native-chat-types'
 import { readNativeChatTranscript } from './transcript-reader'
+import { readIncrementalTranscriptMessages } from './transcript-incremental-reader'
 import {
   nativeChatLineDecoderForAgent,
   readNativeChatTranscriptTail,
@@ -29,6 +31,68 @@ async function writeFixture(prefix: string, records: unknown[]): Promise<string>
 }
 
 describe('readNativeChatTranscript (claude)', () => {
+  it('renders a queued prompt once at its transcript position', async () => {
+    const filePath = await writeFixture('orca-native-chat-queued-', [
+      {
+        type: 'user',
+        uuid: 'u1',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        message: { role: 'user', content: 'first prompt' }
+      },
+      {
+        type: 'assistant',
+        uuid: 'z-predecessor',
+        timestamp: '2026-06-01T10:00:10.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'first reply' }] }
+      },
+      {
+        type: 'attachment',
+        uuid: 'a-queued',
+        timestamp: '2026-06-01T10:00:05.000Z',
+        attachment: {
+          type: 'queued_command',
+          commandMode: 'prompt',
+          prompt: 'queued prompt',
+          timestamp: '2026-06-01T10:00:05.000Z'
+        }
+      },
+      {
+        type: 'assistant',
+        uuid: 'a2',
+        timestamp: '2026-06-01T10:00:20.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'final reply' }] }
+      }
+    ])
+
+    const result = await readNativeChatTranscript('claude', 'sess', { filePath })
+    expect('messages' in result).toBe(true)
+    if (!('messages' in result)) {
+      return
+    }
+    const assemblerUrl = new URL(
+      '../../renderer/src/components/native-chat/native-chat-session-assembler.ts',
+      import.meta.url
+    ).href
+    const assembler = (await import(/* @vite-ignore */ assemblerUrl)) as {
+      assembleNativeChatSession: (input: {
+        sources: { transcript: NativeChatMessage[] }
+        sessionId: string
+        agent: 'claude'
+      }) => { messages: NativeChatMessage[] }
+    }
+    const session = assembler.assembleNativeChatSession({
+      sources: { transcript: result.messages },
+      sessionId: 'sess',
+      agent: 'claude'
+    })
+    const visibleText = session.messages.flatMap((message) =>
+      message.blocks.filter(isTextBlock).map((block) => block.text)
+    )
+
+    expect(visibleText).toEqual(['first prompt', 'first reply', 'queued prompt', 'final reply'])
+    expect(visibleText.filter((text) => text === 'queued prompt')).toHaveLength(1)
+  })
+
   it('decodes OpenClaude with the Claude transcript format', async () => {
     const filePath = await writeFixture('orca-native-chat-openclaude-', [
       {
@@ -41,6 +105,85 @@ describe('readNativeChatTranscript (claude)', () => {
     await expect(
       readNativeChatTranscript('openclaude', 'session', { filePath })
     ).resolves.toMatchObject({ messages: [{ id: 'openclaude-assistant' }] })
+  })
+
+  it('does not let a hidden queued row consume a legacy tail-window slot', async () => {
+    const filePath = await writeFixture('orca-native-chat-legacy-window-', [
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'one' }] }
+      },
+      {
+        type: 'assistant',
+        uuid: 'a2',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'two' }] }
+      },
+      {
+        type: 'attachment',
+        uuid: 'queued',
+        attachment: { type: 'queued_command', commandMode: 'prompt', prompt: 'queued' }
+      },
+      {
+        type: 'assistant',
+        uuid: 'a3',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'three' }] }
+      }
+    ])
+
+    const result = await readNativeChatTranscriptTail({
+      agent: 'claude',
+      sessionId: 'sess',
+      filePath,
+      limit: 2,
+      includeQueuedPrompts: false
+    })
+
+    expect(result).toMatchObject({ messages: [{ id: 'a2' }, { id: 'a3' }], hasMore: true })
+  })
+
+  it('does not let a hidden queued row consume an incremental batch slot', async () => {
+    const records: unknown[] = Array.from({ length: 39 }, (_unused, index) => ({
+      type: 'assistant',
+      uuid: `a-${index}`,
+      message: { role: 'assistant', content: [{ type: 'text', text: `${index}` }] }
+    }))
+    records.push(
+      {
+        type: 'attachment',
+        uuid: 'queued',
+        attachment: { type: 'queued_command', commandMode: 'prompt', prompt: 'queued' }
+      },
+      ...[39, 40, 41].map((index) => ({
+        type: 'assistant',
+        uuid: `a-${index}`,
+        message: { role: 'assistant', content: [{ type: 'text', text: `${index}` }] }
+      }))
+    )
+    const filePath = await writeFixture('orca-native-chat-legacy-batch-', records)
+    const decode = nativeChatLineDecoderForAgent('claude', false)
+    expect(decode).not.toBeNull()
+    if (!decode) {
+      return
+    }
+    const batches: NativeChatMessage[][] = []
+    const remaining = await readIncrementalTranscriptMessages(
+      filePath,
+      {
+        offset: 0,
+        pendingChunks: [],
+        pendingStart: 0,
+        pendingBytes: 0,
+        droppingOversizedRecord: false
+      },
+      decode,
+      (messages) => batches.push(messages)
+    )
+
+    expect(batches).toHaveLength(1)
+    expect(batches[0]).toHaveLength(40)
+    expect(remaining).toHaveLength(1)
+    expect([...batches[0]!, ...remaining].some((message) => message.queued)).toBe(false)
   })
 
   it('returns ordered user/assistant/tool messages with no 5-message cap', async () => {

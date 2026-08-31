@@ -264,7 +264,7 @@ export async function subscribeNativeChatTranscript(
   setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
-  const decode = nativeChatLineDecoderForAgent(args.agent)
+  const decode = nativeChatLineDecoderForAgent(args.agent, args.includeQueuedPrompts)
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
     // unsubscribe without null-checks.

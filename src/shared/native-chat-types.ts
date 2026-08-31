@@ -85,6 +85,8 @@ export type NativeChatMessage = {
    *  supply one (e.g. some scrape segments). Null sorts before any timestamp. */
   timestamp: number | null
   source: NativeChatSource
+  /** Claude persisted this prompt after the turn that was active when it was queued. */
+  queued?: true
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
