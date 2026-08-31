@@ -467,6 +467,9 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.13.1(typescript@7.0.2)
+      smol-toml:
+        specifier: 1.6.1
+        version: 1.6.1
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

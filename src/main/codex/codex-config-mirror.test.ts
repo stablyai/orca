@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
+import { parse } from 'smol-toml'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -278,7 +279,10 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
     syncSystemConfigIntoManagedCodexHome()
 
-    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toBe(runtimeConfig)
+    expect(parse(readFileSync(getRuntimeConfigPath(), 'utf-8'))).toEqual({
+      ...parse(runtimeConfig),
+      shell_environment_policy: { set: { ORCA_USER_DATA_PATH: userDataDir } }
+    })
     expect(existsSync(getSystemConfigPath())).toBe(false)
   })
 
@@ -294,7 +298,10 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
     syncSystemConfigIntoManagedCodexHome()
 
-    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toBe(runtimeConfig)
+    expect(parse(readFileSync(getRuntimeConfigPath(), 'utf-8'))).toEqual({
+      ...parse(runtimeConfig),
+      shell_environment_policy: { set: { ORCA_USER_DATA_PATH: userDataDir } }
+    })
   })
 
   it('mirrors system config updates while preserving runtime-owned trust sections', () => {
@@ -743,10 +750,13 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain('trusted_hash = "sha256:system"')
   })
 
-  it('does not create a runtime config when neither system nor runtime config exists', () => {
+  it('seeds only runtime profile identity when neither config exists', () => {
     syncSystemConfigIntoManagedCodexHome()
 
-    expect(existsSync(getRuntimeConfigPath())).toBe(false)
+    expect(parse(readFileSync(getRuntimeConfigPath(), 'utf-8'))).toEqual({
+      shell_environment_policy: { set: { ORCA_USER_DATA_PATH: userDataDir } }
+    })
+    expect(existsSync(getSystemConfigPath())).toBe(false)
   })
 })
 
