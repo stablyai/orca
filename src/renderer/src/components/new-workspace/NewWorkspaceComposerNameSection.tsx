@@ -3,6 +3,8 @@ import { AlertTriangle, Check } from 'lucide-react'
 import SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { shouldShowComposerBaseRefPicker } from './base-ref-picker-visibility'
+import { ComposerBaseRefPicker } from './ComposerBaseRefPicker'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
 type NewWorkspaceComposerNameSectionProps = Pick<
@@ -35,6 +37,9 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'canReuseSelectedBranch'
   | 'reuseSelectedBranch'
   | 'onReuseSelectedBranchChange'
+  | 'baseBranch'
+  | 'onBaseBranchChange'
+  | 'startFromResetHint'
 > & {
   onNamePlainEnter: () => void
 }
@@ -68,8 +73,18 @@ export function NewWorkspaceComposerNameSection({
   forkPushWarning,
   canReuseSelectedBranch,
   reuseSelectedBranch,
-  onReuseSelectedBranchChange
+  onReuseSelectedBranchChange,
+  baseBranch,
+  onBaseBranchChange,
+  startFromResetHint
 }: NewWorkspaceComposerNameSectionProps): React.JSX.Element {
+  const showBaseRefPicker =
+    Boolean(onBaseBranchChange) &&
+    shouldShowComposerBaseRefPicker({
+      selectedRepoIsGit,
+      branchesEnabled,
+      smartNameSelectionKind: smartNameSelection?.kind ?? null
+    })
   return (
     <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-name">
       <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
@@ -119,6 +134,14 @@ export function NewWorkspaceComposerNameSection({
           <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
           <span>{forkPushWarning}</span>
         </p>
+      ) : null}
+      {showBaseRefPicker && onBaseBranchChange ? (
+        <ComposerBaseRefPicker
+          repoId={repoId}
+          baseBranch={baseBranch}
+          onBaseBranchChange={onBaseBranchChange}
+          resetHint={startFromResetHint}
+        />
       ) : null}
       <div
         className={cn(
