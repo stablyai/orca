@@ -45,9 +45,12 @@ export function formatTimeAgo(ts: number): string {
   return `${hours}h ago`
 }
 
-export function formatRateLimitResetLabel(window: RateLimitWindow): string | null {
+export function formatRateLimitResetLabel(
+  window: RateLimitWindow,
+  now: number = Date.now()
+): string | null {
   if (window.resetsAt) {
-    return formatResetCountdown(window.resetsAt - Date.now())
+    return formatResetCountdown(window.resetsAt - now)
   }
   if (window.resetDescription) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(window.resetDescription)) {
@@ -239,7 +242,7 @@ function ProviderRateLimitWindowSection({
   }
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = formatRateLimitResetLabel(window)
+  const resetLabel = formatRateLimitResetLabel(window, now)
 
   return (
     <div className="space-y-1">
