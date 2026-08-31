@@ -15,7 +15,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
-  const [checklistDismissed, setChecklistDismissed] = useState(false)
+  const [checklistHidden, setChecklistHidden] = useState(false)
   const [checklistVisibilityLoaded, setChecklistVisibilityLoaded] = useState(false)
   const [checklistVisibilityLoadFailed, setChecklistVisibilityLoadFailed] = useState(false)
   const [checklistVisibilityLoadAttempt, setChecklistVisibilityLoadAttempt] = useState(0)
@@ -33,11 +33,11 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
 
   useEffect(() => {
     let mounted = true
-    void window.api.onboarding
+    void window.api.ui
       .get()
       .then((onboarding) => {
         if (mounted && dismissalIntentRef.current === null) {
-          setChecklistDismissed(onboarding.checklist.dismissed)
+          setChecklistHidden(onboarding.setupGuideSettingsDismissed === true)
           setChecklistVisibilityLoadFailed(false)
           setChecklistVisibilityLoaded(true)
         }
@@ -80,8 +80,8 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
     dismissalIntentRef.current = dismissed
     setDismissalUpdating(true)
     try {
-      const onboarding = await window.api.onboarding.update({ checklist: { dismissed } })
-      setChecklistDismissed(onboarding.checklist.dismissed)
+      await window.api.ui.set({ setupGuideSettingsDismissed: dismissed })
+      setChecklistHidden(dismissed)
       setChecklistVisibilityLoaded(true)
     } catch (error) {
       console.error('Failed to update onboarding checklist visibility:', error)
@@ -90,7 +90,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
     }
   }
 
-  if (checklistDismissed) {
+  if (checklistHidden) {
     return (
       <div className="flex h-[min(740px,calc(100vh-14rem))] min-h-[540px] items-center justify-center px-7 py-6">
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
@@ -123,6 +123,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
     return (
       <div
         className="h-[min(740px,calc(100vh-14rem))] min-h-[540px]"
+        role="status"
         aria-busy="true"
         aria-label={translate(
           'auto.components.settings.SettingsSetupGuidePane.loadingChecklist',

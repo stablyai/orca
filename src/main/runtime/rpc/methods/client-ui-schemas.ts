@@ -196,6 +196,7 @@ const UiUpdateFields = z
     // Why: one-shot dismissals the renderer writes through ui.set; each was a
     // whole-payload rejection for paired clients while unlisted.
     setupGuideSidebarDismissed: z.boolean().optional(),
+    setupGuideSettingsDismissed: z.boolean().optional(),
     setupGuideBrowserMilestoneMigrated: z.boolean().optional(),
     setupGuideBrowserMilestoneLegacyComplete: z.boolean().optional(),
     browserImportHintHidden: z.boolean().optional(),

@@ -122,6 +122,8 @@ export type PersistedUIState = {
   acknowledgedAgentsByPaneKey?: Record<string, number>
   /** User-hidden setup-guide sidebar entry; a reversible declutter pref (Help menu stays available), not completion. */
   setupGuideSidebarDismissed?: boolean
+  /** User-hidden onboarding checklist in Settings; independent from first-run onboarding completion. */
+  setupGuideSettingsDismissed?: boolean
   /** One-shot marker for the browser setup-guide milestone; profiles missing it are evaluated once in the renderer (completion needs runtime probes). */
   setupGuideBrowserMilestoneMigrated?: boolean
   /** Existing users who completed/dismissed the pre-browser checklist stay complete after the browser milestone is added. */
