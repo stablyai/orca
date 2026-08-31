@@ -6,6 +6,7 @@ import type { TerminalWebViewHandle } from './TerminalWebView'
 import {
   TERMINAL_FOREGROUND_RECOVERY_DELAY_MS,
   recoverActiveTerminalAfterForeground,
+  shouldKickIosTouchesOnSessionMount,
   shouldRecoverTerminalOnAppStateChange
 } from './terminal-foreground-recovery'
 
@@ -172,5 +173,33 @@ describe('terminal foreground recovery', () => {
     )
     expect(reconnectRetry).toContain('pendingForegroundRecoveryRef.current = false')
     expect(reconnectRetry).toContain("AppState.currentState !== 'active'")
+  })
+
+  it('kicks iOS touches when a session mounts after AppState is already active', () => {
+    expect(shouldKickIosTouchesOnSessionMount('ios', 'active')).toBe(true)
+    expect(shouldKickIosTouchesOnSessionMount('ios', 'background')).toBe(false)
+    expect(shouldKickIosTouchesOnSessionMount('ios', 'inactive')).toBe(false)
+    expect(shouldKickIosTouchesOnSessionMount('android', 'active')).toBe(false)
+  })
+
+  it('arms missed foreground recovery and a native touch kick on iOS session mount', () => {
+    expect(sessionSource).toContain('shouldKickIosTouchesOnSessionMount(')
+    expect(sessionSource).toContain('kickIosForegroundTouches()')
+    const mountKick = sliceSessionSource(
+      'shouldKickIosTouchesOnSessionMount(',
+      'pendingForegroundRecoveryRef.current = true'
+    )
+    expect(mountKick).toContain('Platform.OS')
+    expect(mountKick).toContain('AppState.currentState')
+    expect(sessionSource).toContain('foregroundTouchEpoch')
+    expect(sessionSource).toContain('touchEpoch={foregroundTouchEpoch}')
+  })
+
+  it('re-commits pane pointerEvents on the same AppState edge as stream recovery', () => {
+    const appStateRecover = sliceSessionSource(
+      'const shouldRecover = shouldRecoverTerminalOnAppStateChange(',
+      'terminalRef.prepareForForegroundRecovery()'
+    )
+    expect(appStateRecover).toContain('kickIosForegroundTouches()')
   })
 })
