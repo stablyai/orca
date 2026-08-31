@@ -74,9 +74,27 @@ export function applyActiveGitStatusRefBinding(watch: GitStatusRefWatchTarget): 
   }
 }
 
+// Why: at most one worktree holds a selected upstream ref at a time, so every
+// other repo's ref poll would wake only to stat nothing. Publishing the
+// transition lets those pollers stay unscheduled until they actually have a ref,
+// with no detection delay — rebinding is an in-process event, not a timer.
+const bindingChangeListeners = new Set<() => void>()
+
+export function onActiveGitStatusRefBindingChanged(listener: () => void): () => void {
+  bindingChangeListeners.add(listener)
+  return () => {
+    bindingChangeListeners.delete(listener)
+  }
+}
+
 function applyBindingToWatches(watches: Iterable<GitStatusRefWatchTarget>): void {
   for (const watch of watches) {
     applyActiveGitStatusRefBinding(watch)
+  }
+  // Snapshot first: a listener may unsubscribe while being notified.
+  const listeners = Array.from(bindingChangeListeners)
+  for (const listener of listeners) {
+    listener()
   }
 }
 

@@ -15,6 +15,7 @@ export type ClaudeUsageLocationBreakdown = {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  cacheWrite1hTokens: number
 }
 
 export type ClaudeUsageSession = {
@@ -31,6 +32,7 @@ export type ClaudeUsageSession = {
   totalOutputTokens: number
   totalCacheReadTokens: number
   totalCacheWriteTokens: number
+  totalCacheWrite1hTokens: number
   locationBreakdown: ClaudeUsageLocationBreakdown[]
 }
 
@@ -47,6 +49,7 @@ export type ClaudeUsageDailyAggregate = {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  cacheWrite1hTokens: number
 }
 
 export type ClaudeUsagePersistedState = {
@@ -86,6 +89,8 @@ export type ClaudeUsageParsedTurn = {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  /** 1-hour-TTL subset of `cacheWriteTokens`; billed at 2x base input. */
+  cacheWrite1hTokens: number
 }
 
 export type ClaudeUsageAttributedTurn = ClaudeUsageParsedTurn & {

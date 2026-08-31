@@ -234,7 +234,7 @@ export function useRichMarkdownSearch({
   }, [editor])
 
   useEffect(() => {
-    if (!editor) {
+    if (!editor || !isSearchOpen) {
       return
     }
 
@@ -242,7 +242,7 @@ export function useRichMarkdownSearch({
     return () => {
       editor.off('update', handleEditorUpdate)
     }
-  }, [editor, handleEditorUpdate])
+  }, [editor, handleEditorUpdate, isSearchOpen])
 
   useEffect(() => {
     if (!isSearchOpen) {

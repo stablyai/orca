@@ -28,7 +28,9 @@ type NativeChatFileLinkState = Pick<
   | 'settings'
   | 'tabsByWorktree'
   | 'worktreesByRepo'
->
+> & {
+  unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
+}
 
 export function findTerminalTabWorktreeId(
   tabsByWorktree: NativeChatFileLinkState['tabsByWorktree'],
@@ -38,6 +40,18 @@ export function findTerminalTabWorktreeId(
     // Why: tabsByWorktree stores TerminalTab records; unified tabs carry
     // entityId, but the terminal owner lookup must use the backing tab id.
     if (tabs.some((tab) => tab.id === terminalTabId)) {
+      return worktreeId
+    }
+  }
+  return null
+}
+
+function findStructuredTabWorktreeId(
+  unifiedTabsByWorktree: NativeChatFileLinkState['unifiedTabsByWorktree'],
+  tabId: string
+): string | null {
+  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
+    if (tabs.some((tab) => tab.id === tabId && tab.contentType === 'agent-session')) {
       return worktreeId
     }
   }
@@ -61,7 +75,9 @@ export function resolveNativeChatFileLinkContext(
   state: NativeChatFileLinkState,
   terminalTabId: string
 ): NativeChatFileLinkContext | null {
-  const worktreeId = findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId)
+  const worktreeId =
+    findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId) ??
+    findStructuredTabWorktreeId(state.unifiedTabsByWorktree, terminalTabId)
   if (!worktreeId) {
     return null
   }

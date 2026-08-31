@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ChildProcess } from 'node:child_process'
 
-const { execFileMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn()
+const { runWslProcessMock } = vi.hoisted(() => ({
+  runWslProcessMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  execFile: execFileMock
+vi.mock('../wsl/wsl-runner', () => ({
+  runWslProcess: runWslProcessMock
 }))
 
 import {
@@ -16,27 +15,23 @@ import {
   syncWslCodexSessionsIntoManagedHome
 } from './wsl-codex-session-bridge'
 
-function mockExecFileSuccess(stdout = '{"scannedFiles":2,"linkedFiles":1}\n'): void {
-  execFileMock.mockImplementation(
-    (
-      _command: string,
-      _args: string[],
-      _options: unknown,
-      callback: (error: Error | null, stdout: string, stderr: string) => void
-    ): ChildProcess => {
-      callback(null, stdout, '')
-      return {} as ChildProcess
-    }
-  )
+function mockRunWslProcessSuccess(stdout = '{"scannedFiles":2,"linkedFiles":1}\n'): void {
+  runWslProcessMock.mockResolvedValue({
+    environmentResolved: true,
+    code: 0,
+    stdout,
+    stderr: '',
+    timedOut: false
+  })
 }
 
 beforeEach(() => {
-  execFileMock.mockReset()
+  runWslProcessMock.mockReset()
 })
 
 describe('syncWslCodexSessionsIntoManagedHome', () => {
   it('runs a WSL hardlink bridge from the WSL system sessions into the managed home', async () => {
-    mockExecFileSuccess()
+    mockRunWslProcessSuccess()
 
     const summary = await syncWslCodexSessionsIntoManagedHome({
       distro: 'Ubuntu',
@@ -46,28 +41,27 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
     })
 
     expect(summary).toEqual({ scannedFiles: 2, linkedFiles: 1 })
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-    const firstCall = execFileMock.mock.calls[0]
-    expect(firstCall).toBeDefined()
-    const [command, args, options] = firstCall as [
-      string,
-      string[],
-      { timeout?: number; windowsHide?: boolean }
-    ]
-    expect(command).toBe('wsl.exe')
-    expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'bash', '-lc'])
-    expect(args).toHaveLength(6)
-    expect(options.timeout).toBe(30_000)
-    expect(options.windowsHide).toBe(true)
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    const spec = runWslProcessMock.mock.calls[0]?.[0] as {
+      distro: string
+      loginPath: string
+      shell?: string
+      script: string
+      timeoutMs: number
+    }
+    expect(spec.distro).toBe('Ubuntu')
+    expect(spec.loginPath).toBe('none')
+    expect(spec.shell).toBe('bash')
+    expect(spec.timeoutMs).toBe(30_000)
 
-    const shellCommand = args[5]
+    const shellCommand = spec.script
     expect(shellCommand).toContain("source_sessions_root='/home/alice/.codex/sessions'")
     expect(shellCommand).toContain(
       "managed_sessions_root='/home/alice/.local/share/orca/codex-runtime-home/home/sessions'"
     )
-    expect(shellCommand).toContain(`find "\\$source_sessions_root" -type f -name '*.jsonl' -print0`)
-    expect(shellCommand).toContain('ln -- "\\$source_file" "\\$target_file"')
-    expect(shellCommand).toContain('if [ -e "\\$target_file" ] || [ -L "\\$target_file" ]; then')
+    expect(shellCommand).toContain(`find "$source_sessions_root" -type f -name '*.jsonl' -print0`)
+    expect(shellCommand).toContain('ln -- "$source_file" "$target_file"')
+    expect(shellCommand).toContain('if [ -e "$target_file" ] || [ -L "$target_file" ]; then')
     expect(shellCommand).not.toContain('ln -s')
     expect(shellCommand).not.toContain('cp ')
     expect(shellCommand).not.toContain('sqlite')
@@ -81,11 +75,13 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
     })
 
     expect(summary).toEqual({ scannedFiles: 0, linkedFiles: 0 })
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runWslProcessMock).not.toHaveBeenCalled()
   })
 
-  it('parses the summary after WSL profile stdout', async () => {
-    mockExecFileSuccess('Welcome to Ubuntu\nprofile output\n{"scannedFiles":4,"linkedFiles":3}\n')
+  it('parses the summary after leading stdout noise', async () => {
+    mockRunWslProcessSuccess(
+      'Welcome to Ubuntu\nprofile output\n{"scannedFiles":4,"linkedFiles":3}\n'
+    )
 
     const summary = await syncWslCodexSessionsIntoManagedHome({
       distro: 'Ubuntu',
@@ -97,8 +93,27 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
     expect(summary).toEqual({ scannedFiles: 4, linkedFiles: 3 })
   })
 
+  it('throws on a non-zero exit so the background wrapper logs and swallows it', async () => {
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 1,
+      stdout: '',
+      stderr: 'boom',
+      timedOut: false
+    })
+
+    await expect(
+      syncWslCodexSessionsIntoManagedHome({
+        distro: 'Ubuntu',
+        systemCodexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
+        managedCodexHomePath:
+          '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
+      })
+    ).rejects.toThrow('WSL codex session bridge failed')
+  })
+
   it('coalesces duplicate background bridges for the same WSL target', async () => {
-    mockExecFileSuccess()
+    mockRunWslProcessSuccess()
     const target = {
       distro: 'Ubuntu',
       systemCodexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
@@ -111,7 +126,7 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
 
     expect(firstTask).toBe(secondTask)
     await firstTask
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -155,14 +170,14 @@ describe('buildWslCodexSessionBridgeShellCommand', () => {
     expect(shellCommand).not.toContain('.sqlite')
   })
 
-  it('escapes Linux-side shell variable expansion for wsl.exe argv', () => {
+  it('keeps Linux-side shell variable expansion intact for the guest shell', () => {
     const shellCommand = buildWslCodexSessionBridgeShellCommand({
       systemSessionsRoot: '/home/alice/.codex/sessions',
       managedSessionsRoot: '/home/alice/.local/share/orca/codex-runtime-home/home/sessions'
     })
 
-    expect(shellCommand).toContain('\\$source_sessions_root')
-    expect(shellCommand).toContain('\\$source_file')
-    expect(shellCommand).toContain('\\$((scanned_files + 1))')
+    expect(shellCommand).toContain('$source_sessions_root')
+    expect(shellCommand).toContain('$source_file')
+    expect(shellCommand).toContain('$((scanned_files + 1))')
   })
 })

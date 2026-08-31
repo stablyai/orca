@@ -21,6 +21,7 @@ import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
 import { writeMainThreadDiagnosticMarker } from './diagnostics/main-thread-churn-probe'
+import { runWithLaunchPath } from './startup/hydrate-shell-path'
 import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
@@ -74,9 +75,12 @@ import {
 import type { LocalBuildFeed } from './local-builds/local-build-feed-server'
 import { listReleaseBuilds, resolveTargetBuild } from './updater-release-builds'
 import {
+  DEV_CHANNEL_PLATFORM_LABEL,
+  getVersionChannel,
   hasDedicatedReleaseRepo,
   isChannelSupportedOnPlatform,
   RELEASE_CHANNEL_LABELS,
+  requiresManualDevChannelInstall,
   type ReleaseBuild,
   type ReleaseChannel
 } from '../shared/release-channel'
@@ -785,7 +789,9 @@ async function performQuitAndInstall(): Promise<void> {
       // Why: BaseUpdater logs child stderr but drops it from the 'error' event, so retain it for the span of this call.
       beginLinuxPackageInstallDiagnosticCapture(getTrackedLinuxPackageArtifact()?.path ?? null)
       try {
-        getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
+        runWithLaunchPath(() =>
+          getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
+        )
       } finally {
         const diagnostic = endLinuxPackageInstallDiagnosticCapture()
         // Why: a synchronous 'error' already consumed and reset this attempt; re-stashing would leak it into the next one.
@@ -1737,11 +1743,29 @@ async function checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promis
     return
   }
   // Why here as well as in the picker: the renderer disables the option, but IPC
-  // is reachable regardless, and there is no artifact to install off-macOS.
+  // is reachable regardless, and there is no artifact to install on a platform
+  // the dev workflows do not build for.
   if (!isChannelSupportedOnPlatform(channel, process.platform)) {
     sendStatus({
       state: 'error',
-      message: `${RELEASE_CHANNEL_LABELS[channel]} builds are produced only for macOS.`,
+      message: `${RELEASE_CHANNEL_LABELS[channel]} builds are produced only for ${DEV_CHANNEL_PLATFORM_LABEL}.`,
+      userInitiated: true
+    })
+    return
+  }
+  // Why: electron-updater would otherwise take this all the way to a download
+  // and fail it with a raw ERR_UPDATER_INVALID_SIGNATURE. Say what to do instead
+  // — the installer is run by hand once, and in-app updates work from there on.
+  if (
+    requiresManualDevChannelInstall({
+      platform: process.platform,
+      runningChannel: getVersionChannel(app.getVersion()),
+      targetChannel: channel
+    })
+  ) {
+    sendStatus({
+      state: 'error',
+      message: `${RELEASE_CHANNEL_LABELS[channel]} builds are unsigned, and this signed build only installs updates signed by Orca's publisher. Download the installer from the release page and run it once — updates work normally from there, including back to Stable.`,
       userInitiated: true
     })
     return

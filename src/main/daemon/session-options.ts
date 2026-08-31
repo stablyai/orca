@@ -12,6 +12,9 @@ export type SessionOptions = {
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
+  /** Reports a readiness outcome worth diagnosing to the daemon's file log.
+   *  Why not console: the detached daemon runs with stdio 'ignore'. */
+  reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
   historySeedChunks?: readonly string[]
   scrollback?: number
   wslDistro?: string

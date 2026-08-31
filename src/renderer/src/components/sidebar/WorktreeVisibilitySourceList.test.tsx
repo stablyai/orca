@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
+import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import WorktreeVisibilitySourceList from './WorktreeVisibilitySourceList'
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -28,6 +29,43 @@ afterEach(() => {
 })
 
 describe('WorktreeVisibilitySourceList', () => {
+  it('counts a configured built-in base as another external location', () => {
+    const repo: Repo = {
+      id: 'repo-1',
+      path: '/repo',
+      displayName: 'orca',
+      badgeColor: '#000000',
+      addedAt: 0,
+      worktreeBasePath: '.claude/worktrees'
+    }
+    const worktrees = [
+      {
+        path: '/repo/.claude/worktrees/review',
+        selectedCheckout: false,
+        ownership: 'external'
+      },
+      { path: '/outside/review', selectedCheckout: false, ownership: 'external' }
+    ] as DetectedWorktree[]
+
+    act(() => {
+      root.render(
+        <WorktreeVisibilitySourceList
+          repo={repo}
+          worktrees={worktrees}
+          disabled={false}
+          onAdd={async () => 'added'}
+          onRemove={async () => {}}
+          onToggle={async () => {}}
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-source-row="built-in:claude"]')?.textContent).toContain(
+      '0 found'
+    )
+    expect(container.querySelector('[data-source-row="other"]')?.textContent).toContain('2 found')
+  })
+
   it('offers a reset when a project override already matches the global value', async () => {
     const onUseDefault = vi.fn()
     const repo: Repo = {

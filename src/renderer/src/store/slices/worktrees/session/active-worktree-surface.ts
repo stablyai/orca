@@ -1,6 +1,6 @@
 import type { AppState } from '../../../types'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
-import { toVisibleTabType } from '../listing/worktree-catalog-visibility'
+import { toVisibleTabType } from '../../../../../../shared/tab-types'
 
 export function resolveActivatedWorktreeSurface(
   s: AppState,

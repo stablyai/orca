@@ -4,7 +4,10 @@ import { normalizePaletteText } from './normalized-text'
 export const PALETTE_QUERY_MAX_TOKENS = 16
 
 const DIGIT = /\p{N}/u
-const ALPHANUMERIC = /[\p{L}\p{N}]/u
+// Why symbols count as content: an emoji is \p{So} and an arrow is \p{Sm}, so a
+// letters-and-digits test would classify `🚀` as punctuation and drop the token —
+// and the palette input expands `:rocket:` into exactly that.
+const ALPHANUMERIC = /[\p{L}\p{N}\p{S}\p{Extended_Pictographic}]/u
 const LETTERS_ONLY = /^\p{L}+$/u
 const LATIN_OR_DIGIT = /^[\p{Script=Latin}\p{Nd}]$/u
 const IDENTIFIER_PUNCTUATION = /[./#!_-]/
@@ -79,7 +82,11 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (isWorktreePaletteQueryTooLarge(query)) {
     return { state: 'invalid', reason: 'too-large' }
   }
-  const normalized = normalizePaletteText(query).normalized.trim()
+  // Why collapse runs: field text is always single-spaced, so an uncollapsed double
+  // space can never satisfy the whole-query equality/prefix tier and the exact-name
+  // match silently loses its rank. Safe here — this string feeds only scoreWholeQuery
+  // and carries no offset mapping back into the source text.
+  const normalized = normalizePaletteText(query).normalized.replace(/ +/g, ' ').trim()
   if (!normalized) {
     return { state: 'empty' }
   }

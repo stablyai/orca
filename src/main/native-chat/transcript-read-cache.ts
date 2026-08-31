@@ -3,11 +3,10 @@ import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
 import { wslGatedStat } from './wsl-transcript-fs-access'
 import {
-  WSL_TRANSCRIPT_FS_CAPACITY_MESSAGE,
-  WSL_TRANSCRIPT_FS_SLOW_MESSAGE,
+  isWslTranscriptFsRefusalMessage,
   WslTranscriptFsError,
   wslTranscriptFsRefusal
-} from './wsl-transcript-fs-gate'
+} from './wsl-transcript-fs-error'
 
 // Why: both the desktop IPC handler and the runtime RPC handler read the same
 // host-filesystem transcript, so a single process-global cache keyed by the
@@ -150,11 +149,7 @@ export async function readNativeChatTranscriptCached(
 // The reader flattens a refusal into its message, so that is the only handle
 // this layer has on one.
 function isGateRefusal(result: ReadTranscriptResult): boolean {
-  return (
-    'error' in result &&
-    (result.error === WSL_TRANSCRIPT_FS_SLOW_MESSAGE ||
-      result.error === WSL_TRANSCRIPT_FS_CAPACITY_MESSAGE)
-  )
+  return 'error' in result && isWslTranscriptFsRefusalMessage(result.error)
 }
 
 /** Test-only: drop the transcript parse cache between runs. */

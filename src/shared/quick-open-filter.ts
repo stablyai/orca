@@ -6,7 +6,7 @@
  * Centralized to stop local/relay listFiles from drifting on blocklist, ignores, exclusions,
  * timeouts, and buffering. See docs/design/share-quick-open-file-listing.md.
  */
-import { posix, win32 } from 'node:path'
+import { relativePathInsideRoot } from './cross-platform-path'
 
 // ─── Hidden-dir blocklist ────────────────────────────────────────────
 
@@ -73,21 +73,6 @@ export function shouldIncludeQuickOpenPath(path: string): boolean {
   return true
 }
 
-// ─── Path flavor detection ───────────────────────────────────────────
-
-// Why: local-OS path.relative is wrong for remote roots (app OS vs relay OS); pick win32 vs posix by root shape.
-function pathFlavor(rootPath: string): typeof posix | typeof win32 {
-  // Drive letter like C:\ or C:/
-  if (/^[a-zA-Z]:[\\/]/.test(rootPath)) {
-    return win32
-  }
-  // UNC \\server\share or //server/share
-  if (rootPath.startsWith('\\\\') || rootPath.startsWith('//')) {
-    return win32
-  }
-  return posix
-}
-
 // ─── Exclude-path normalization ──────────────────────────────────────
 
 /**
@@ -99,26 +84,16 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
   if (!Array.isArray(excludePaths)) {
     return []
   }
-  const flavor = pathFlavor(rootPath)
-  // Trim trailing separators so comparison is stable.
-  const trimmedRoot = rootPath.replace(/[\\/]+$/, '')
-  const normalizedRoot = `${trimmedRoot.replace(/\\/g, '/')}/`
   const out: string[] = []
   for (const raw of excludePaths) {
     if (typeof raw !== 'string' || raw.length === 0) {
       continue
     }
-    // Fast path: input already under the root with the same separator shape.
-    const rawFwd = raw.replace(/\\/g, '/')
-    let rel: string
-    if (rawFwd === normalizedRoot.slice(0, -1)) {
-      // Root-equal — refuse to exclude the whole tree.
+    const relativePath = relativePathInsideRoot(rootPath, raw)
+    if (relativePath === null) {
       continue
     }
-    rel = rawFwd.startsWith(normalizedRoot)
-      ? rawFwd.slice(normalizedRoot.length)
-      : // Fall back to path-flavor relative so remote paths don't get local-OS semantics.
-        flavor.relative(trimmedRoot, raw).replace(/\\/g, '/')
+    let rel = relativePath.replace(/\\/g, '/')
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }

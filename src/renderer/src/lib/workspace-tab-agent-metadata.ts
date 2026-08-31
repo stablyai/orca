@@ -6,6 +6,18 @@ export type AgentMetadata = {
   paneKey: string
   textParts: string[]
   snippetCandidates: string[]
+  lastActivityAt: number
+}
+
+/** Latest agent activity across a tab's panes, or null if it has none. */
+export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number | null {
+  let max: number | null = null
+  for (const entry of metadata) {
+    if (entry.lastActivityAt > 0 && (max === null || entry.lastActivityAt > max)) {
+      max = entry.lastActivityAt
+    }
+  }
+  return max
 }
 
 export type WorkspaceTabAgentMetadataState = {
@@ -68,7 +80,7 @@ function agentRecordMatchesTab({
 
 function collectLiveMetadata(
   entry: AgentStatusEntry
-): Pick<AgentMetadata, 'snippetCandidates' | 'textParts'> {
+): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
   const textParts: string[] = []
   const snippetCandidates: string[] = []
   addText(textParts, entry.orchestration?.displayName)
@@ -86,12 +98,12 @@ function collectLiveMetadata(
     addText(textParts, historyEntry.prompt)
     addText(snippetCandidates, historyEntry.prompt)
   }
-  return { textParts, snippetCandidates }
+  return { textParts, snippetCandidates, lastActivityAt: entry.updatedAt }
 }
 
 function collectSleepingMetadata(
   record: SleepingAgentSessionRecord
-): Pick<AgentMetadata, 'snippetCandidates' | 'textParts'> {
+): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
   const textParts: string[] = []
   const snippetCandidates: string[] = []
   addText(textParts, record.prompt)
@@ -101,7 +113,7 @@ function collectSleepingMetadata(
   addText(textParts, record.terminalTitle)
   addText(snippetCandidates, record.terminalTitle)
   addProviderSession(textParts, record.providerSession)
-  return { textParts, snippetCandidates }
+  return { textParts, snippetCandidates, lastActivityAt: record.updatedAt }
 }
 
 export function collectAgentMetadataForTerminal({

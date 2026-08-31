@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
+import {
+  AGENT_PROMPT_BRACKETED_PASTE_END,
+  buildAgentPromptPasteBytes,
+  getAgentPromptSubmitDelayMs
+} from '../../shared/agent-prompt-injection'
+import {
+  AGENT_PROMPT_TEST_WORKTREE_PATH,
+  createAgentPromptSubmissionRuntime
+} from './agent-prompt-submission-runtime-test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
-const WORKTREE_PATH = '/tmp/worktree-a'
+const createPromptRuntime = createAgentPromptSubmissionRuntime
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -26,37 +34,18 @@ vi.mock('../git/worktree', () => ({
   ])
 }))
 
-async function createPromptRuntime(
-  onWrite: (runtime: OrcaRuntimeService, data: string, writeIndex: number) => void
-): Promise<{ runtime: OrcaRuntimeService; handle: string; writes: string[] }> {
-  const runtime = new OrcaRuntimeService(makeStore() as never)
-  const writes: string[] = []
-  runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
-    write: (_ptyId, data) => {
-      writes.push(data)
-      onWrite(runtime, data, writes.length)
-      return true
-    },
-    kill: () => true,
-    getForegroundProcess: async () => null
-  })
-  const terminal = await runtime.createTerminal(`path:${WORKTREE_PATH}`, {
-    launchAgent: 'aider'
-  })
-  return { runtime, handle: terminal.handle, writes }
-}
-
 describe('agent prompt submission runtime', () => {
   afterEach(() => vi.useRealTimers())
 
   it('submits exactly once after an observed lifecycle transition', async () => {
     vi.useFakeTimers()
-    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
-      if (data === '\r') {
-        runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      (runtime, data) => {
+        if (data === '\r') {
+          runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+        }
       }
-    })
+    )
 
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     await vi.runAllTimersAsync()
@@ -371,8 +360,11 @@ describe('agent prompt submission runtime', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    handle = (await runtime.createTerminal(`path:${WORKTREE_PATH}`, { launchAgent: 'aider' }))
-      .handle
+    handle = (
+      await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
+        launchAgent: 'aider'
+      })
+    ).handle
     runtime.onPtyData(
       'pty-prompt',
       'Permission required\nAllow once\nAllow always\nReject\n' +
@@ -411,15 +403,7 @@ describe('agent prompt submission runtime', () => {
   it('does not treat an unchanged newer working status as submission evidence', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
-    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
-      if (data === '\r') {
-        runtime.onPtyData(
-          'pty-prompt',
-          '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
-          Date.now()
-        )
-      }
-    })
+    const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
     vi.setSystemTime(2_000)
     runtime.onPtyData(
@@ -427,6 +411,114 @@ describe('agent prompt submission runtime', () => {
       '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
       Date.now()
     )
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  // Why (#16095): a still-working agent can never produce a `→working` edge, so the old predicate
+  // was unsatisfiable for every follow-up prompt; pane output after Enter is the evidence left.
+  it('accepts pane output after Enter while the agent is already working', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data === '\r') {
+        runtime.onPtyData('pty-prompt', 'queued for the current turn', Date.now())
+      }
+    })
+    runtime.onPtyData(
+      'pty-prompt',
+      '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
+      Date.now()
+    )
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  // Why: hook rows reach the runtime through this provider, which has no window and no OSC title —
+  // the same path a headless `orca serve` host and a minimized desktop window take.
+  async function createHookOnlyPromptRuntime(hook: {
+    state: 'done' | 'working'
+    stateStartedAt: number
+  }): Promise<{ runtime: OrcaRuntimeService; handle: string; writes: string[] }> {
+    let handle = ''
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'prompt-pane',
+          terminalHandle: handle,
+          state: hook.state,
+          prompt: '',
+          agentType: 'kimi',
+          connectionId: null,
+          // Why: every hook ping refreshes receivedAt, including same-state tool pings.
+          receivedAt: Date.now(),
+          stateStartedAt: hook.stateStartedAt
+        }
+      ]
+    })
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    handle = (
+      await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
+        launchAgent: 'kimi'
+      })
+    ).handle
+    return { runtime, handle, writes }
+  }
+
+  it('accepts a hook working status with no window and no title coverage', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const hook = { state: 'done' as 'done' | 'working', stateStartedAt: 1_000 }
+    const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        if (data === '\r') {
+          vi.setSystemTime(3_000)
+          hook.state = 'working'
+          hook.stateStartedAt = 3_000
+        }
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  // Why: same-state pings keep refreshing receivedAt on a turn that started before the prompt;
+  // only the pinned stateStartedAt separates that from a turn this prompt started.
+  it('does not accept a hook row refreshed without a new working turn', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const { runtime, handle, writes } = await createHookOnlyPromptRuntime({
+      state: 'working',
+      stateStartedAt: 1_000
+    })
 
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
@@ -673,7 +765,16 @@ describe('agent prompt submission runtime', () => {
     })
     const rejected = expect(submission).rejects.toThrow('request_aborted')
 
-    await vi.advanceTimersByTimeAsync(500)
+    // Why compute it: the submit delay now follows the payload size and the executing host,
+    // so a hardcoded number aborts before the Enter on some lanes.
+    await vi.advanceTimersByTimeAsync(
+      getAgentPromptSubmitDelayMs(
+        process.platform,
+        Buffer.byteLength(buildAgentPromptPasteBytes('review this'), 'utf8')
+      )
+    )
+    // Why: pin the phase boundary so drift fails here instead of as an empty post-abort array.
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
     controller.abort()
     await vi.runAllTimersAsync()
 

@@ -41,14 +41,18 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { PtyHandler } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import type { PtyHandler } from './pty-handler'
 import {
   beginPtyHandlerTest,
   createMockDispatcher,
+  createTestPtyHandler,
+  testPtyId,
   endPtyHandlerTest
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
+
+const PTY_1 = testPtyId(1)
+const PTY_2 = testPtyId(2)
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -89,6 +93,84 @@ describe('PtyHandler', () => {
     expect(spawnOptions.env.PATH).toBe(expectedEnv.PATH)
   })
 
+  describe('half-activated conda env (#14195)', () => {
+    const CONDA_KEYS = [
+      'CONDA_SHLVL',
+      'CONDA_PREFIX',
+      'CONDA_DEFAULT_ENV',
+      'CONDA_PROMPT_MODIFIER',
+      'CONDA_EXE'
+    ] as const
+
+    const withRelayCondaEnv = async (
+      relayEnv: Partial<Record<(typeof CONDA_KEYS)[number], string>>,
+      spawnParams: Record<string, unknown>
+    ): Promise<Record<string, string>> => {
+      const saved = Object.fromEntries(CONDA_KEYS.map((key) => [key, process.env[key]]))
+      try {
+        for (const key of CONDA_KEYS) {
+          delete process.env[key]
+        }
+        Object.assign(process.env, relayEnv)
+        await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, ...spawnParams })
+      } finally {
+        for (const key of CONDA_KEYS) {
+          const value = saved[key]
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+      return (mockPtySpawn.mock.calls.at(-1)![2] as { env: Record<string, string> }).env
+    }
+
+    it('drops the sentinel the remote relay inherited without a prefix', async () => {
+      // Why the relay owns this: the execution host composes its own env, so a
+      // remote relay launched from a half-activated login shell would otherwise
+      // hand the broken pair to every SSH terminal.
+      const env = await withRelayCondaEnv(
+        {
+          CONDA_SHLVL: '1',
+          CONDA_DEFAULT_ENV: 'base',
+          CONDA_PROMPT_MODIFIER: '(base) ',
+          CONDA_EXE: '/opt/miniconda3/bin/conda'
+        },
+        {}
+      )
+
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+      expect(env.CONDA_PROMPT_MODIFIER).toBeUndefined()
+      expect(env.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
+    })
+
+    it('keeps activation state a client explicitly repaired', async () => {
+      const env = await withRelayCondaEnv(
+        { CONDA_SHLVL: '1', CONDA_DEFAULT_ENV: 'base' },
+        { env: { CONDA_PREFIX: '/opt/miniconda3' } }
+      )
+
+      expect(env.CONDA_PREFIX).toBe('/opt/miniconda3')
+      expect(env.CONDA_SHLVL).toBe('1')
+      expect(env.CONDA_DEFAULT_ENV).toBe('base')
+    })
+
+    it('drops the sentinel when the client deletes CONDA_PREFIX', async () => {
+      // Why: the relay's other inherited-env scrubbers run BEFORE envToDelete,
+      // so anchoring the coherence pass beside them would re-create the crash.
+      const env = await withRelayCondaEnv(
+        { CONDA_SHLVL: '1', CONDA_PREFIX: '/opt/miniconda3', CONDA_DEFAULT_ENV: 'base' },
+        { envToDelete: ['CONDA_PREFIX'] }
+      )
+
+      expect(env.CONDA_PREFIX).toBeUndefined()
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+    })
+  })
+
   it('does not inherit legacy attribution state from the relay process', async () => {
     const keys = ['ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_ATTRIBUTION_SHIM_DIR', 'PATH'] as const
     const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
@@ -106,12 +188,12 @@ describe('PtyHandler', () => {
       expect(spawnedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
 
       const state = (await dispatcher.callRequest('pty.serialize', {
-        ids: ['pty-1']
+        ids: [PTY_1]
       })) as string
       await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
       dispatcher = createMockDispatcher()
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler = createTestPtyHandler(dispatcher)
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
       try {
         await dispatcher.callRequest('pty.revive', { state })
@@ -186,6 +268,82 @@ describe('PtyHandler', () => {
 
       const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
       expect(spawnEnv.fish_history).toBe(expected)
+    })
+
+    it.each([
+      [
+        'a relay-minted path',
+        `${process.env.HOME ?? ''}/.orca-remote/terminal-history/aabbccddeeff0011-zsh_history`,
+        undefined
+      ],
+      [
+        'a desktop-minted path',
+        '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history',
+        undefined
+      ],
+      ['a user value', '/home/me/.zsh_history', '/home/me/.zsh_history']
+    ])(
+      '%s inherited as HISTFILE from the relay process env',
+      async (_kind, inherited, expected) => {
+        const previous = process.env.HISTFILE
+        process.env.HISTFILE = inherited
+        try {
+          await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.HISTFILE
+          } else {
+            process.env.HISTFILE = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.HISTFILE).toBe(expected)
+      }
+    )
+
+    // Why unconditionally, not only with isolation on: injectRelayHistoryEnv is
+    // what normally mints (and first clears) ORCA_HISTFILE, and it runs only
+    // with isolation on. An inherited one — the relay can be launched from an
+    // Orca pane — would otherwise reach the remote wrapper on the disabled and
+    // revive paths, re-exporting another worktree's history path (#11146) and
+    // wrapping a zsh pane nothing asked to wrap.
+    it.each([
+      [
+        'a relay-minted path',
+        `${process.env.HOME ?? ''}/.orca-remote/terminal-history/aabbccddeeff0011-zsh_history`
+      ],
+      ['a desktop-minted path', '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history'],
+      ['a user value', '/home/me/.zsh_history']
+    ])(
+      'drops %s inherited as ORCA_HISTFILE from the relay process env',
+      async (_kind, inherited) => {
+        const previous = process.env.ORCA_HISTFILE
+        process.env.ORCA_HISTFILE = inherited
+        try {
+          await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.ORCA_HISTFILE
+          } else {
+            process.env.ORCA_HISTFILE = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.ORCA_HISTFILE).toBeUndefined()
+      }
+    )
+
+    it('drops an ORCA_HISTFILE handed over in the client env', async () => {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_HISTFILE: '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history' }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.ORCA_HISTFILE).toBeUndefined()
     })
 
     it('drops a desktop-minted session handed over in the client env', async () => {
@@ -344,7 +502,7 @@ describe('PtyHandler', () => {
       expect(userEnv.GIT_CONFIG_COUNT).toBe('1')
       expect(userEnv.GIT_CONFIG_KEY_0).toBe('core.quotePath')
       expect(userEnv.GIT_CONFIG_KEY_1).toBeUndefined()
-      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
       expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(false)
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -403,14 +561,14 @@ describe('PtyHandler', () => {
     const firstEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     const secondEnv = mockPtySpawn.mock.calls[1][2] as { env: Record<string, string> }
     expect(seenContexts[0]).toMatchObject({
-      id: 'pty-1',
+      id: PTY_1,
       paneKey: 'tab-context:0',
       launchAgent: 'pi',
       env: { ORCA_PANE_KEY: 'tab-context:0' }
     })
-    expect(seenContexts[1]).toMatchObject({ id: 'pty-2', paneKey: undefined })
+    expect(seenContexts[1]).toMatchObject({ id: PTY_2, paneKey: undefined })
     expect(firstEnv.env.OVERLAY_ID).toBe('tab-context:0')
-    expect(secondEnv.env.OVERLAY_ID).toBe('pty-2')
+    expect(secondEnv.env.OVERLAY_ID).toBe(PTY_2)
   })
 
   it('passes process and renderer env to env augmenters before augmenter overrides are applied', async () => {

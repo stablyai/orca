@@ -272,3 +272,25 @@ export function filterMobileDiffReviewQueue(
       return [...queue]
   }
 }
+
+export type MobileDiffReviewQueueSummary = {
+  reviewedCount: number
+  reviewedUnstagedCount: number
+}
+
+export function summarizeMobileDiffReviewQueue(
+  queue: readonly MobileDiffReviewQueueItem[]
+): MobileDiffReviewQueueSummary {
+  let reviewedCount = 0
+  let reviewedUnstagedCount = 0
+  for (const item of queue) {
+    if (!item.isReviewed) {
+      continue
+    }
+    reviewedCount += 1
+    if (item.scope === 'unstaged' && item.canStage) {
+      reviewedUnstagedCount += 1
+    }
+  }
+  return { reviewedCount, reviewedUnstagedCount }
+}

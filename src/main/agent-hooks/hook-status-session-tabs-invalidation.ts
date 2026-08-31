@@ -1,4 +1,4 @@
-import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 
 type KnownStatus = {
@@ -33,6 +33,7 @@ export function createHookStatusSessionTabsInvalidator(): {
     return (
       !previous ||
       previous.payload.state !== next.state ||
+      previous.payload.workingMode !== next.workingMode ||
       previous.payload.prompt !== next.prompt ||
       (previous.payload.agentType ?? null) !== (next.agentType ?? null) ||
       (previous.payload.toolName ?? null) !== (next.toolName ?? null) ||

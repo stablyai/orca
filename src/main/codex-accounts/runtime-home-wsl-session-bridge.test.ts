@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type * as WslPaths from '../../shared/wsl-paths'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createManagedAuth,
@@ -55,7 +56,7 @@ describe('CodexRuntimeHomeService', () => {
       expect(firstCall).toBeDefined()
       const [command, args] = firstCall as [string, string[]]
       expect(command).toBe('wsl.exe')
-      expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'bash', '-lc'])
+      expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'bash', '-lc'])
       expect(args).toHaveLength(6)
 
       const shellCommand = args[5]
@@ -281,15 +282,19 @@ describe('CodexRuntimeHomeService', () => {
       getDefaultWslDistro: () => null,
       getWslHome: (distro: string) => (distro === 'Debian' ? wslHome : null)
     }))
-    vi.doMock('../../shared/wsl-paths', () => ({
-      parseWslUncPath: (candidate: string) =>
-        candidate === wslRuntimeHomePath
-          ? {
-              distro: 'Debian',
-              linuxPath: '/home/alice/.local/share/orca/codex-runtime-home/home'
-            }
-          : null
-    }))
+    vi.doMock('../../shared/wsl-paths', async (importOriginal) => {
+      const actual = await importOriginal<typeof WslPaths>()
+      return {
+        ...actual,
+        parseWslUncPath: (candidate: string) =>
+          candidate === wslRuntimeHomePath
+            ? {
+                distro: 'Debian',
+                linuxPath: '/home/alice/.local/share/orca/codex-runtime-home/home'
+              }
+            : null
+      }
+    })
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'debian-account',

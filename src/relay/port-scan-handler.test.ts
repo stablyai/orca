@@ -16,6 +16,19 @@ vi.mock('node:fs/promises', () => ({
 import { parseHexAddress, PortScanHandler } from './port-scan-handler'
 import { parseWindowsNetstatOutput, parseWindowsPowerShellPortRows } from './windows-port-scan'
 
+// The scanner skips any pid matching the relay process or its parent, so a fixture pid
+// range that covers the vitest worker's own pid silently drops the row and the assertion
+// sees no ports. Shift the whole range past a colliding pid so the walk stays hermetic.
+const MAX_FIXTURE_PIDS = 1_000
+
+const PID_BASE = (() => {
+  let base = 1_000
+  while ([process.pid, process.ppid].some((pid) => pid >= base && pid < base + MAX_FIXTURE_PIDS)) {
+    base += MAX_FIXTURE_PIDS
+  }
+  return base
+})()
+
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
 
 beforeEach(() => {
@@ -83,7 +96,7 @@ function mockLinuxProcScan({
     throw new Error(`unexpected readFile: ${path}`)
   })
 
-  const pids = Array.from({ length: pidCount }, (_, index) => String(1_000 + index))
+  const pids = Array.from({ length: pidCount }, (_, index) => String(PID_BASE + index))
   const fds = Array.from({ length: fdCount }, (_, index) => String(index))
   readdirMock.mockImplementation(async (path: string) => {
     if (path === '/proc') {
@@ -133,9 +146,9 @@ describe('PortScanHandler Linux cancellation', () => {
     await expect(scan).rejects.toMatchObject({ name: 'AbortError' })
     expect(readdirMock).toHaveBeenCalledTimes(2)
     expect(readdirMock).toHaveBeenNthCalledWith(1, '/proc')
-    expect(readdirMock).toHaveBeenNthCalledWith(2, '/proc/1000/fd')
+    expect(readdirMock).toHaveBeenNthCalledWith(2, `/proc/${PID_BASE}/fd`)
     expect(readlinkMock).toHaveBeenCalledTimes(1)
-    expect(readlinkMock).toHaveBeenCalledWith('/proc/1000/fd/0')
+    expect(readlinkMock).toHaveBeenCalledWith(`/proc/${PID_BASE}/fd/0`)
   })
 
   it('preserves detected port results when the request stays live', async () => {
@@ -144,7 +157,7 @@ describe('PortScanHandler Linux cancellation', () => {
     await expect(
       capturePortDetectHandler()({}, requestContext(new AbortController().signal))
     ).resolves.toEqual({
-      ports: [{ host: '127.0.0.1', port: 3000, pid: 1_000, processName: 'node' }],
+      ports: [{ host: '127.0.0.1', port: 3000, pid: PID_BASE, processName: 'node' }],
       platform: 'linux'
     })
   })

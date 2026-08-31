@@ -78,6 +78,12 @@ export function beginHostQualifiedRemoval(
     resolveHostQualifiedRemovalRoute(get, worktreeId, requiredExecutionHostId)
   const removalRoute = resolveRemovalRoute()
   if (!removalRoute && (!forgetLocalOnly || !requiredExecutionHostId)) {
+    // Why: callers mark rows deleting up front for immediate sidebar feedback
+    // (worktree-delete-execution.ts), and a refusal returns before the try/catch that
+    // would otherwise clear it. The failure toast auto-dismisses after 10s, so without
+    // this the workspace sits on a "Deleting…" spinner forever with no explanation left
+    // on screen.
+    get().clearWorktreeDeleteState(worktreeId)
     return { ok: false, error: WORKTREE_REMOVAL_AMBIGUOUS_ERROR }
   }
   // Fail closed rather than delete on a host the caller never confirmed.
@@ -86,6 +92,7 @@ export function beginHostQualifiedRemoval(
     removalRoute &&
     removalRoute.executionHostId !== requiredExecutionHostId
   ) {
+    get().clearWorktreeDeleteState(worktreeId)
     return { ok: false, error: WORKTREE_REMOVAL_HOST_CHANGED_ERROR }
   }
   const sameIdSurvivingHostId = resolveSameIdSurvivingHostId(

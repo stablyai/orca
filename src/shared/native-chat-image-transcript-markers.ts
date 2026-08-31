@@ -1,3 +1,7 @@
+import {
+  stripAnsiEscapeSequences,
+  TERMINAL_CONTROL_CHARACTER_PATTERN
+} from './ansi-escape-sequences'
 import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from './native-chat-types'
 
 const IMAGE_SOURCE_MARKER = /^\[Image:\s*source:\s*(.+?)\]\s*$/
@@ -36,8 +40,14 @@ export function stripImagePromptMarker(text: string): string {
   return result
 }
 
+/** Normalizes PTY-backed user text into the pending-echo comparison key. */
 export function normalizeNativeChatUserText(text: string): string {
-  return stripImagePromptMarker(text).trim().replace(/\s+/g, ' ')
+  // Strip sequences first so their printable tails cannot survive a lone-control pass.
+  return stripImagePromptMarker(
+    stripAnsiEscapeSequences(text).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
+  )
+    .trim()
+    .replace(/\s+/g, ' ')
 }
 
 export function normalizedNativeChatUserMessageText(message: NativeChatMessage): string | null {

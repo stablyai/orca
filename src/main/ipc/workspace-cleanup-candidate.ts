@@ -192,11 +192,16 @@ function shouldReadWorkspaceCleanupGitEvidence(args: {
   if ((skipGit && !forceGitCheck) || repoIsFolder || worktree.isMainWorktree) {
     return false
   }
-  if (
-    blockers.includes('pinned') ||
-    blockers.includes('main-worktree') ||
-    blockers.includes('folder-repo')
-  ) {
+  // Why pinned sits with the cost skips and not the refusals: a pinned workspace is
+  // still queueable (`pinned` is not a queue blocker), so it can reach removal -- and
+  // removal forces whenever git is unknown. Skipping its git read on a broad scan is a
+  // fair saving; skipping it on the confirm-time forced read meant deleting with no
+  // evidence ever obtained. main-worktree and folder-repo stay unconditional: those are
+  // refused before removal, so reading git for them is pure cost.
+  if (blockers.includes('pinned') && !forceGitCheck) {
+    return false
+  }
+  if (blockers.includes('main-worktree') || blockers.includes('folder-repo')) {
     return false
   }
 

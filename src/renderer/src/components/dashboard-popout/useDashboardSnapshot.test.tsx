@@ -4,9 +4,10 @@ import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
-import type {
-  AgentStatusClearIpcPayload,
-  AgentStatusIpcPayload
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusClearIpcPayload,
+  type AgentStatusIpcPayload
 } from '../../../../shared/agent-status-types'
 import { useDashboardSnapshot } from './useDashboardSnapshot'
 
@@ -235,6 +236,33 @@ describe('useDashboardSnapshot', () => {
     expect(requestSnapshot).not.toHaveBeenCalled()
 
     act(() => vi.advanceTimersByTime(200))
+    expect(requestSnapshot).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('refreshes when a monitoring card crosses the stale boundary', () => {
+    vi.useFakeTimers()
+    const statusUpdatedAt = 1_000
+    vi.setSystemTime(statusUpdatedAt)
+    renderHook(() => useDashboardSnapshot())
+    act(() =>
+      apply(
+        snapshot([
+          card({
+            dotState: 'working',
+            workingMode: 'monitoring',
+            statusUpdatedAt
+          })
+        ])
+      )
+    )
+    requestSnapshot.mockClear()
+
+    act(() => vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS))
+    expect(requestSnapshot).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(250))
+    expect(requestSnapshot).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(1))
     expect(requestSnapshot).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })

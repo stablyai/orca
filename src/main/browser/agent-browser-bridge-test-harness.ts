@@ -18,6 +18,14 @@ export function mockBrowserManager(
 ): BrowserManager {
   return {
     getWebContentsIdByTabId: () => tabs,
+    getTabIdForWebContentsId: (webContentsId: number) => {
+      for (const [tabId, tabWebContentsId] of tabs) {
+        if (tabWebContentsId === webContentsId) {
+          return tabId
+        }
+      }
+      return null
+    },
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
     getBrowserPageLoadError: vi.fn(() => null),

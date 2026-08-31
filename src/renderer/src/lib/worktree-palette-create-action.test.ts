@@ -182,7 +182,7 @@ describe('worktree-palette-create-action', () => {
     })
   })
 
-  it('derives selection ids from rendered entries while skipping headers and hints', () => {
+  it('derives selection ids from rendered entries while skipping headers', () => {
     expect(
       getWorktreePaletteSelectionItemIds([
         { id: '__header_worktrees__', type: 'section-header' },
@@ -198,10 +198,27 @@ describe('worktree-palette-create-action', () => {
     ).toEqual([
       'worktree:one',
       CREATE_WORKTREE_ITEM_ID,
+      '__hint_worktree_cap__',
       'settings:ai-provider-accounts',
       'quick-action:new-terminal',
       'browser-page:one'
     ])
+  })
+
+  it('names the rendered render key so a duplicate row is reachable by keyboard', () => {
+    // Why: rows render under de-duplicated keys, and cmdk selects by that rendered value.
+    // Naming the bare id here left the duplicate absent from the allow-list, so arrowing
+    // onto it failed the `includes` check and snapped the highlight back to the top.
+    expect(
+      getWorktreePaletteSelectionItemIds(
+        [
+          { id: '__header_worktrees__', type: 'section-header' },
+          { id: 'worktree:shared', type: 'worktree' },
+          { id: 'worktree:shared', type: 'worktree' }
+        ],
+        ['__header_worktrees__', 'worktree:shared', 'worktree:shared#dup1']
+      )
+    ).toEqual(['worktree:shared', 'worktree:shared#dup1'])
   })
 
   it('falls back deterministically when the selected row disappears', () => {
@@ -215,27 +232,35 @@ describe('worktree-palette-create-action', () => {
     ).toBe('browser-page:first')
   })
 
-  it('leaves create unarmed for free text until the user moves the selection', () => {
-    // Why: cmdk auto-selects the first row once the controlled value empties, so
-    // with Create alone on screen Enter would fire without any user gesture.
+  it('allows Enter for a typed create name without requiring arrow navigation', () => {
     expect(
       isWorktreePaletteCreateActivationAllowed({
         hasTaskUrlIntent: false,
+        hasCreateName: true,
         selectionMovedByUser: false
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       isWorktreePaletteCreateActivationAllowed({
         hasTaskUrlIntent: false,
+        hasCreateName: false,
         selectionMovedByUser: true
       })
     ).toBe(true)
     expect(
       isWorktreePaletteCreateActivationAllowed({
         hasTaskUrlIntent: true,
+        hasCreateName: false,
         selectionMovedByUser: false
       })
     ).toBe(true)
+    expect(
+      isWorktreePaletteCreateActivationAllowed({
+        hasTaskUrlIntent: false,
+        hasCreateName: false,
+        selectionMovedByUser: false
+      })
+    ).toBe(false)
   })
 
   it('counts only navigation keys as a user selection move', () => {

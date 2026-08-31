@@ -104,3 +104,58 @@ test('cancelled renderer reload restores the surviving graph authority', async (
     )
   ).toBe('alive')
 })
+
+test('beforeunload cancellation never retires the surviving graph authority', async ({
+  electronApp,
+  orcaPage
+}) => {
+  await waitForSessionReady(orcaPage)
+  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  const client = new RuntimeClient(userDataDir, 30_000, null, null)
+  const before = (await client.call<RuntimeStatus>('status.get')).result
+  await orcaPage.evaluate(() => {
+    ;(window as unknown as { __preventedUnloadCanary: string }).__preventedUnloadCanary = 'alive'
+    window.addEventListener(
+      'beforeunload',
+      (event) => {
+        event.preventDefault()
+        event.returnValue = ''
+      },
+      { once: true }
+    )
+  })
+  // Electron prevents the unload before Playwright can dismiss the transient dialog.
+  orcaPage.once('dialog', (dialog) => void dialog.dismiss().catch(() => undefined))
+
+  const navigationEvents = await electronApp.evaluate(async ({ BrowserWindow }) => {
+    const contents = BrowserWindow.getAllWindows()[0]!.webContents
+    const events: string[] = []
+    contents.on('will-navigate', () => events.push('will-navigate'))
+    contents.on('did-start-navigation', () => events.push('did-start-navigation'))
+    contents.on('will-prevent-unload', () => events.push('will-prevent-unload'))
+    contents.on('did-fail-provisional-load', () => events.push('did-fail-provisional-load'))
+    contents.on('did-fail-load', () => events.push('did-fail-load'))
+    contents.on('did-frame-navigate', () => events.push('did-frame-navigate'))
+    const url = new URL(contents.getURL())
+    url.searchParams.set('prevented-unload', '1')
+    await contents.loadURL(url.href).catch(() => undefined)
+    return events
+  })
+
+  expect(navigationEvents).toEqual(['will-prevent-unload', 'did-fail-load'])
+  const after = (await client.call<RuntimeStatus>('status.get')).result
+  expect({
+    graphStatus: after.graphStatus,
+    rendererGraphEpoch: after.rendererGraphEpoch,
+    authoritativeWindowId: after.authoritativeWindowId
+  }).toEqual({
+    graphStatus: 'ready',
+    rendererGraphEpoch: before.rendererGraphEpoch,
+    authoritativeWindowId: before.authoritativeWindowId
+  })
+  expect(
+    await orcaPage.evaluate(
+      () => (window as unknown as { __preventedUnloadCanary?: string }).__preventedUnloadCanary
+    )
+  ).toBe('alive')
+})

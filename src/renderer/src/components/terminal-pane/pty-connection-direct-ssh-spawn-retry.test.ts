@@ -6,6 +6,10 @@ import { createMockTransport, createPane, createManager } from './pty-connection
 import { buildPaneConnectionDeps, buildDirectSshSplitRetryCommit } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+import {
+  pendingSpawnByPaneKey,
+  pendingSpawnGenerationByPaneKey
+} from './pty-connection/pty-connect-limits'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
@@ -139,6 +143,8 @@ describe('connectPanePty', () => {
   })
 
   afterEach(async () => {
+    pendingSpawnByPaneKey.clear()
+    pendingSpawnGenerationByPaneKey.clear()
     await restoreTerminalTestGlobals()
   })
 
@@ -160,6 +166,42 @@ describe('connectPanePty', () => {
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('[pty-connect]'))
     logSpy.mockRestore()
   }, 30_000)
+
+  it('does not hold a successor behind a canceled spawn serializer declaration', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const declaration = createDeferred<number>()
+    const spawn = createDeferred<null>()
+    const transport = createMockTransport()
+    transport.connect.mockReturnValueOnce(spawn.promise)
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+    vi.mocked(window.api.pty.declarePendingPaneSerializer).mockReturnValueOnce(declaration.promise)
+
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    await flushAsyncTicks(12)
+    binding.dispose()
+    spawn.resolve(null)
+    await flushAsyncTicks(12)
+
+    expect(pendingSpawnByPaneKey.size).toBe(0)
+    expect(window.api.pty.clearPendingPaneSerializer).not.toHaveBeenCalled()
+
+    declaration.resolve(7)
+    await flushAsyncTicks(12)
+
+    expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledExactlyOnceWith(
+      expect.any(String),
+      7
+    )
+  })
 
   it.each(['rejects', 'resolves empty'] as const)(
     'settles the exact direct SSH retry when its fresh spawn %s',

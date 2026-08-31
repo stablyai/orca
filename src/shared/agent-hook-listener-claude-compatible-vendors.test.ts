@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createHookListenerState,
-  normalizeHookPayload,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import { normalizeAndAccept, PANE_KEY } from './agent-hook-listener-test-harness'
 
@@ -216,6 +216,15 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+    const sessionStart = normalizeHookPayload(
+      state,
+      'mimo-code',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', sessionID: 'mimo-session' }
+      },
+      'production'
+    )
 
     expect(message?.payload).toMatchObject({
       agentType: 'mimo-code',
@@ -226,6 +235,7 @@ describe('shared agent-hook-listener', () => {
     expect(message?.providerSession).toMatchObject({ key: 'session_id', id: 'mimo-session' })
     expect(tool?.payload).toMatchObject({ agentType: 'mimo-code', state: 'working' })
     expect(idle?.payload).toMatchObject({ agentType: 'mimo-code', state: 'done' })
+    expect(sessionStart).toBeNull()
   })
 
   it('maps Kimi AskUserQuestion PreToolUse to waiting, then back to working on answer', () => {

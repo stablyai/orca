@@ -72,6 +72,7 @@ export function getAutomationTargetAvailability({
   if (!repo) {
     return unavailable('missing-project', 'The target project is no longer available.')
   }
+
   if (automation.runContext) {
     const parsedHost = parseExecutionHostId(automation.runContext.hostId)
     if (parsedHost?.kind === 'runtime') {
@@ -264,7 +265,7 @@ function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider'
   }
 }
 
-function getRuntimeAutomationAvailability(
+export function getRuntimeAutomationAvailability(
   environmentId: string,
   runtimeStatusByEnvironmentId:
     | ReadonlyMap<string, { status: RuntimeStatus | null; checkedAt: number }>

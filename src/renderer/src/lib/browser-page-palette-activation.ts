@@ -1,9 +1,13 @@
 import { useAppStore } from '@/store'
+import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isBlankBrowserUrl } from './browser-palette-search'
 import { activateAndRevealWorktree } from './worktree-activation'
 
-export type BrowserPagePaletteActivationFailure = 'missing-page' | 'missing-worktree'
+export type BrowserPagePaletteActivationFailure =
+  | 'missing-page'
+  | 'missing-tab'
+  | 'missing-worktree'
 
 export type BrowserPageFocusTarget = 'address-bar' | 'webview'
 
@@ -56,8 +60,16 @@ export function activateBrowserPagePaletteResult({
     return { status: 'failed', reason: 'missing-worktree' }
   }
 
-  const state = useAppStore.getState()
-  state.setActiveBrowserTab(workspace.id)
-  state.setActiveBrowserPage(workspace.id, pageId)
+  // Why the failure and not a bare activation: without a unified tab the browser state would go
+  // active behind a tab that never shows the page.
+  if (
+    !activateBrowserWorkspaceTab({
+      worktreeId: worktree.id,
+      workspaceId: workspace.id,
+      pageId
+    })
+  ) {
+    return { status: 'failed', reason: 'missing-tab' }
+  }
   return { status: 'activated', pageId, focusTarget }
 }

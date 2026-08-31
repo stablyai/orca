@@ -197,6 +197,7 @@ describe('workspace cleanup scan', () => {
     const result = await scanWorkspaceCleanup(makeStore())
 
     expect(getStatusMock).toHaveBeenCalledWith('/repo-feature', {
+      includeLineStats: false,
       signal: expect.any(AbortSignal),
       sharedLinkPaths: ['node_modules']
     })
@@ -322,6 +323,7 @@ describe('workspace cleanup scan', () => {
       {
         repoId: 'repo-1',
         repoName: 'Repo',
+        executionHostId: 'local',
         message: 'Git could not list worktrees.'
       }
     ])
@@ -344,6 +346,7 @@ describe('workspace cleanup scan', () => {
         {
           repoId: 'repo-1',
           repoName: 'Repo',
+          executionHostId: 'local',
           message: 'Timed out listing worktrees.'
         }
       ]
@@ -454,6 +457,7 @@ describe('workspace cleanup scan', () => {
       signal: expect.any(AbortSignal)
     })
     expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo-feature', {
+      includeLineStats: false,
       signal: expect.any(AbortSignal)
     })
     expect(result.errors).toEqual([])
@@ -765,18 +769,15 @@ describe('workspace cleanup scan', () => {
   })
 
   it('summarizes large diff-note lists without hitting argument limits', async () => {
-    const diffComments = Array.from(
-      { length: 150_000 },
-      (_, index): DiffComment => ({
-        id: `comment-${index}`,
-        worktreeId: 'repo-1::/repo-feature',
-        filePath: 'src/file.ts',
-        lineNumber: 12,
-        body: 'Follow up before deleting',
-        createdAt: NOW - index,
-        side: 'modified'
-      })
-    )
+    const diffComments = Array.from({ length: 150_000 }, (_, index): DiffComment => ({
+      id: `comment-${index}`,
+      worktreeId: 'repo-1::/repo-feature',
+      filePath: 'src/file.ts',
+      lineNumber: 12,
+      body: 'Follow up before deleting',
+      createdAt: NOW - index,
+      side: 'modified'
+    }))
 
     const result = await scanWorkspaceCleanup(
       makeStore({

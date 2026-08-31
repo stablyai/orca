@@ -9,6 +9,7 @@ import type {
 } from '../../shared/remote-workspace-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { parseExecutionHostId } from '../../shared/execution-host'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
 import { CLIENT_ID } from './remote-workspace-client-identity'
@@ -55,7 +56,15 @@ function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
   return new Set(value)
 }
 
-function targetForWorktree(store: Store, worktreeId: string): string | null {
+function targetForWorktree(
+  store: Store,
+  worktreeId: string,
+  executionHostId?: string
+): string | null {
+  const parsedHostId = parseExecutionHostId(executionHostId)
+  if (parsedHostId?.kind === 'ssh') {
+    return parsedHostId.targetId
+  }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   return store.getRepo(repoId)?.connectionId ?? null
 }
@@ -66,7 +75,8 @@ function exportSessionForTarget(
   session: WorkspaceSessionState
 ): RemoteWorkspaceSession {
   return exportRemoteWorkspaceSession(session, {
-    isTargetWorktree: (worktreeId) => targetForWorktree(store, worktreeId) === targetId
+    isTargetWorktree: (worktreeId, executionHostId) =>
+      targetForWorktree(store, worktreeId, executionHostId) === targetId
   })
 }
 

@@ -2,7 +2,8 @@
 // entirely in unit-test harness. Pi's titlebar extension emits OSC 0 titles of
 // the form `\x1b]0;⠋ π - cwd\x07` (working frames) and `\x1b]0;π - cwd\x07`
 // (idle). The electron-level verification showed these chunks reach `pty:data`
-// but the store's runtimePaneTitlesByTabId never flips to "⠋ Pi". This file
+// but the store's runtimePaneTitlesByTabId never flips to the canonicalized
+// "⠋ π - cwd" working title. This file
 // pins the transport-level contract: `onTitleChange` must fire for working
 // frames, in the normalized form the store consumes.
 
@@ -71,12 +72,12 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     await flushPtySideEffects()
 
     const normalized = onTitleChange.mock.calls.map((c) => c[0])
-    // The store only stores the normalized label, which is what the worktree
+    // The store only stores the normalized title, which is what the worktree
     // card feeds back into detectAgentStatusFromTitle. The working→idle cycle
-    // must surface at least one "⠋ Pi" so the card can classify the pane as
-    // 'working' (detectAgentStatusFromTitle('⠋ Pi') === 'working').
-    expect(normalized).toContain('⠋ Pi')
-    expect(normalized).toContain('Pi')
+    // must surface at least one "⠋ π - cwd" so the card can classify the pane as
+    // 'working' (detectAgentStatusFromTitle('⠋ π - cwd') === 'working').
+    expect(normalized).toContain('⠋ π - cwd')
+    expect(normalized).toContain('π - cwd')
 
     transport.disconnect()
   })
@@ -99,7 +100,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     await flushPtySideEffects()
 
     const calls = onTitleChange.mock.calls.map((c) => c[0])
-    expect(calls).toContain('⠋ Pi')
+    expect(calls).toContain('⠋ π - cwd')
 
     transport.disconnect()
   })
@@ -112,7 +113,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     // last working frame), the working frames in between must not be the only
     // signal the transport ever saw. The important guarantee is that during
     // an actual working period (before agent_end) at least one chunk's last
-    // title is a working frame, and that produces a "⠋ Pi" onTitleChange.
+    // title is a working frame, and that produces a "⠋ π - cwd" onTitleChange.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 
@@ -124,7 +125,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
     await flushPtySideEffects()
 
     const calls = onTitleChange.mock.calls.map((c) => c[0])
-    expect(calls).toContain('⠋ Pi')
+    expect(calls).toContain('⠋ π - cwd')
 
     transport.disconnect()
   })

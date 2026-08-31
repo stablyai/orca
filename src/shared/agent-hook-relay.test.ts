@@ -27,6 +27,7 @@ describe('agent-hook-relay wire shape', () => {
       compactTrigger: 'manual',
       payload: {
         state: 'working',
+        workingMode: 'monitoring',
         prompt: 'roundtrip',
         agentType: 'claude'
       }
@@ -36,6 +37,7 @@ describe('agent-hook-relay wire shape', () => {
     expect(decoded).toEqual(envelope)
     expect(decoded.connectionId).toBeNull()
     expect(decoded.payload.prompt).toBe('roundtrip')
+    expect(decoded.payload.workingMode).toBe('monitoring')
   })
 
   it('exposes stable JSON-RPC method names', () => {

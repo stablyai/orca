@@ -10,6 +10,7 @@ import {
   isCommandCodeIdlePromptCandidate
 } from './command-code-prompt-text'
 import { stripTerminalControl } from './terminal-control-stripping'
+import { escapeRegex } from './string-utils'
 
 export { stripTerminalControl } from './terminal-control-stripping'
 
@@ -100,11 +101,7 @@ const COMMAND_CODE_LLM_STATUS_WORDS = [
   'Razzmatazzing'
 ] as const
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-const LLM_STATUS_WORDS_RE_SOURCE = COMMAND_CODE_LLM_STATUS_WORDS.map(escapeRegExp).join('|')
+const LLM_STATUS_WORDS_RE_SOURCE = COMMAND_CODE_LLM_STATUS_WORDS.map(escapeRegex).join('|')
 const ACTIVE_LLM_STATUS_RE = new RegExp(
   `(?:^|[\\r\\n])\\s*(?:${COMMAND_CODE_STATUS_GLYPH_RE_SOURCE}\\s*)?(?:${LLM_STATUS_WORDS_RE_SOURCE})\\b(?:…|\\.\\.\\.)`
 )

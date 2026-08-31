@@ -16,10 +16,17 @@ import {
   getLegacyGitHubPRCacheKey
 } from '../../../../store/slices/github-cache-key'
 import { translate } from '@/i18n/i18n'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
 export const PR_GROUP_ORDER: PRGroupKey[] = ['done', 'in-review', 'in-progress', 'closed']
+
+/** Section key for a PR lane. Shared so worktree and folder-workspace bucketing
+ *  cannot drift onto different prefixes. */
+export function getPRLaneKey(prGroup: PRGroupKey): string {
+  return `pr:${prGroup}`
+}
 
 export const PR_GROUP_META: Record<
   PRGroupKey,
@@ -127,18 +134,24 @@ export function getPRGroupKey(
   // still exist from persisted cache, but must not override fresher repo data.
   const prEntry = prCache
     ? ((repoScopedCacheKey
-        ? (prCache[repoScopedCacheKey] as { data?: { state?: string } } | undefined)
+        ? (prCache[repoScopedCacheKey] as
+            | { data?: { number?: number; state?: string } }
+            | undefined)
         : undefined) ??
       (legacyRepoScopedCacheKey
-        ? (prCache[legacyRepoScopedCacheKey] as { data?: { state?: string } } | undefined)
+        ? (prCache[legacyRepoScopedCacheKey] as
+            | { data?: { number?: number; state?: string } }
+            | undefined)
         : undefined) ??
       (legacyPathScopedCacheKey
-        ? (prCache[legacyPathScopedCacheKey] as { data?: { state?: string } } | undefined)
+        ? (prCache[legacyPathScopedCacheKey] as
+            | { data?: { number?: number; state?: string } }
+            | undefined)
         : undefined))
     : undefined
   const pr = prEntry?.data
 
-  if (!pr) {
+  if (!pr || (typeof pr.number === 'number' && isGitHubPRSuppressed(worktree, pr.number))) {
     return 'in-progress'
   }
   if (pr.state === 'merged') {

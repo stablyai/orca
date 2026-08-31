@@ -23,6 +23,8 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     browserPagesByWorkspace: true,
     activeBrowserTabIdByWorktree: true,
     browserUrlHistory: true,
+    workspaceDocHistory: true,
+    remoteBrowserPageHandlesByPageId: true,
     unifiedTabsByWorktree: true,
     groupsByWorktree: true,
     layoutByWorktree: true,
@@ -33,7 +35,9 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     lastKnownRelayPtyIdByTabId: true,
     lastVisitedAtByWorktreeId: true,
     defaultTerminalTabsAppliedByWorktreeId: true,
-    sleepingAgentSessionsByPaneKey: true
+    closedTerminalTabTombstonesByTabId: true,
+    sleepingAgentSessionsByPaneKey: true,
+    clientHostedBrowserCloseIntentsByEnvironment: true
   }
 
   it('contains every key of WorkspaceSessionSnapshot', () => {

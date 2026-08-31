@@ -58,9 +58,10 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
-  const { files, loading, loadError } = useRuntimeFileListForWorktree({
+  const { files, loading, loadError, truncated } = useRuntimeFileListForWorktree({
     enabled: visible,
-    worktreeId: activeWorktreeId
+    worktreeId: activeWorktreeId,
+    query: deferredQuery
   })
 
   const worktreePath = activeWorktree?.path ?? null
@@ -199,6 +200,14 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
             )
           })
         )}
+        {truncated && !loading && !loadError ? (
+          <div className="px-3 py-2 text-center text-xs text-muted-foreground">
+            {translate(
+              'quickOpen.moreMatchesAvailable',
+              'More matches may be available. Refine your search to narrow the results.'
+            )}
+          </div>
+        ) : null}
       </CommandList>
       <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
         <div className="flex items-center gap-2">

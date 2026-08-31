@@ -53,6 +53,7 @@ try {
 }
 
 async function main() {
+  repairElectronPathFile()
   if (electronPackageIsUsable()) {
     return
   }
@@ -61,7 +62,6 @@ async function main() {
   // Node. Install only Electron's npm package binary here; do not run the full
   // Electron native-module rebuild path, which would undo the Node ABI rebuild.
   console.log('[electron-package] Electron package binary is missing; running Electron install.')
-  resetPartialElectronInstall()
   await installElectronPackageBinary()
 
   repairElectronPathFile()
@@ -75,15 +75,22 @@ async function main() {
 
 function electronPackageIsUsable() {
   try {
+    const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+    return (
+      electronDistMatchesPackage(getElectronExecutablePath()) &&
+      installedPlatformPath === platformPath
+    )
+  } catch {
+    return false
+  }
+}
+
+function electronDistMatchesPackage(electronExecutable) {
+  try {
     const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
       .trim()
       .replace(/^v/, '')
-    const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
-    return (
-      installedVersion === electronVersion &&
-      installedPlatformPath === platformPath &&
-      existsSync(getElectronExecutablePath())
-    )
+    return installedVersion === electronVersion && existsSync(electronExecutable)
   } catch {
     return false
   }
@@ -95,14 +102,9 @@ function getElectronExecutablePath() {
     : resolve(electronPackageDir, 'dist', platformPath)
 }
 
-function resetPartialElectronInstall() {
-  rmSync(resolve(electronPackageDir, 'dist'), { recursive: true, force: true })
-  rmSync(resolve(electronPackageDir, 'path.txt'), { force: true })
-}
-
 function repairElectronPathFile() {
   const electronExecutable = resolve(electronPackageDir, 'dist', platformPath)
-  if (!existsSync(electronExecutable)) {
+  if (!electronDistMatchesPackage(electronExecutable)) {
     return
   }
 
@@ -123,7 +125,9 @@ function repairElectronPathFile() {
 async function installElectronPackageBinary() {
   const electronDistDir = resolve(electronPackageDir, 'dist')
   const tempDir = mkdtempSync(resolve(tmpdir(), 'orca-electron-'))
-  const cacheRoot = join(tempDir, 'cache')
+  const persistentCacheRoot =
+    process.env.ORCA_ELECTRON_PACKAGE_CACHE_ROOT || process.env.ELECTRON_CACHE || null
+  const cacheRoot = persistentCacheRoot ?? join(tempDir, 'cache')
   const extractDir = join(tempDir, 'extract')
 
   try {
@@ -133,11 +137,13 @@ async function installElectronPackageBinary() {
       platform: targetPlatform,
       arch: targetArch,
       cacheRoot,
-      force: true,
+      force: !persistentCacheRoot,
       tempDirectory: tempDir,
       ...(shouldUseRemoteChecksums() ? {} : { checksums: electronRequire('./checksums.json') })
     }
-    const zipPath = await downloadElectronArtifactWithRetry(downloadOptions)
+    const zipPath = await downloadElectronArtifactWithRetry(downloadOptions, {
+      cacheRootIsPersistent: Boolean(persistentCacheRoot)
+    })
 
     // Why: CI has observed partial extracts directly under node_modules/electron
     // that leave only dist/locales. Verify in temp before replacing package dist.
@@ -152,17 +158,12 @@ async function installElectronPackageBinary() {
     }
 
     moveExtractedElectronDist(extractDir, electronDistDir)
-
-    const srcTypeDefPath = resolve(electronDistDir, 'electron.d.ts')
-    if (existsSync(srcTypeDefPath)) {
-      renameSync(srcTypeDefPath, resolve(electronPackageDir, 'electron.d.ts'))
-    }
   } finally {
     rmSync(tempDir, { recursive: true, force: true })
   }
 }
 
-async function downloadElectronArtifactWithRetry(downloadOptions) {
+async function downloadElectronArtifactWithRetry(downloadOptions, { cacheRootIsPersistent }) {
   const retryDelays = getDownloadRetryDelays()
 
   for (let attempt = 0; ; attempt += 1) {
@@ -178,7 +179,9 @@ async function downloadElectronArtifactWithRetry(downloadOptions) {
         `[electron-package] Transient Electron download failure (${formatDownloadError(error)}); ` +
           `retrying in ${retryDelay}ms (${attempt + 2}/${retryDelays.length + 1}).`
       )
-      rmSync(downloadOptions.cacheRoot, { recursive: true, force: true })
+      if (!cacheRootIsPersistent) {
+        rmSync(downloadOptions.cacheRoot, { recursive: true, force: true })
+      }
       await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelay))
     }
   }
@@ -266,16 +269,85 @@ function extractElectronArchive(zipPath, extractDir) {
 }
 
 function moveExtractedElectronDist(extractDir, electronDistDir) {
-  rmSync(electronDistDir, { recursive: true, force: true })
+  const transactionDir = mkdtempSync(resolve(electronPackageDir, '.dist-install-'))
+  const nextDistDir = join(transactionDir, 'next')
+  const previousDistDir = join(transactionDir, 'previous')
+  const packageTypeDefPath = resolve(electronPackageDir, 'electron.d.ts')
+  const previousTypeDefPath = join(transactionDir, 'previous-electron.d.ts')
+  let previousMoved = false
+  let previousTypeDefMoved = false
+  let nextPublished = false
+  let cleanupTransaction = true
+
+  try {
+    stageExtractedElectronDist(extractDir, nextDistDir)
+    const hasNextTypeDef = existsSync(resolve(nextDistDir, 'electron.d.ts'))
+    try {
+      if (existsSync(electronDistDir)) {
+        renameSync(electronDistDir, previousDistDir)
+        previousMoved = true
+      }
+      if (hasNextTypeDef && existsSync(packageTypeDefPath)) {
+        renameSync(packageTypeDefPath, previousTypeDefPath)
+        previousTypeDefMoved = true
+      }
+      renameSync(nextDistDir, electronDistDir)
+      nextPublished = true
+      if (hasNextTypeDef) {
+        renameSync(resolve(electronDistDir, 'electron.d.ts'), packageTypeDefPath)
+      }
+    } catch (publishError) {
+      const rollbackErrors = []
+      for (const [shouldMove, source, target] of [
+        [nextPublished, electronDistDir, nextDistDir],
+        [previousMoved, previousDistDir, electronDistDir],
+        [previousTypeDefMoved, previousTypeDefPath, packageTypeDefPath]
+      ]) {
+        if (!shouldMove) {
+          continue
+        }
+        try {
+          renameSync(source, target)
+        } catch (rollbackError) {
+          rollbackErrors.push(rollbackError)
+        }
+      }
+      if (rollbackErrors.length > 0) {
+        cleanupTransaction = false
+        throw new AggregateError(
+          [publishError, ...rollbackErrors],
+          `Electron install publish failed; previous files remain at ${transactionDir}`
+        )
+      }
+      throw publishError
+    }
+  } finally {
+    if (cleanupTransaction) {
+      // Why: the discarded tree can hold an executable another process still has
+      // open on Windows. Never fail a published install, or mask a publish error,
+      // on leftover-temp cleanup.
+      try {
+        rmSync(transactionDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+      } catch (cleanupError) {
+        console.warn(
+          `[electron-package] Could not remove install transaction dir ${transactionDir}: ` +
+            `${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`
+        )
+      }
+    }
+  }
+}
+
+function stageExtractedElectronDist(extractDir, nextDistDir) {
   try {
     // Why: macOS Electron archives rely on framework symlinks. Moving the
     // verified tree preserves them exactly; copying has broken them in CI.
-    renameSync(extractDir, electronDistDir)
+    renameSync(extractDir, nextDistDir)
   } catch (/** @type {any} */ err) {
     if (err?.code !== 'EXDEV') {
       throw err
     }
-    cpSync(extractDir, electronDistDir, {
+    cpSync(extractDir, nextDistDir, {
       recursive: true,
       dereference: false,
       verbatimSymlinks: true

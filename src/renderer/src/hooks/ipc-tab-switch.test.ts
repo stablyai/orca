@@ -186,11 +186,12 @@ describe('handleSwitchTab', () => {
       { type: 'terminal', id: 'term-1' },
       { type: 'editor', id: 'file-1', tabId: 'tab-editor-1' },
       { type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' },
-      { type: 'terminal', id: 'term-2' }
+      { type: 'terminal', id: 'term-2', tabId: 'tab-terminal-2' }
     ])
 
     expect(handleSwitchTab(1)).toBe(true)
     expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+    expect(store.activateTab).toHaveBeenCalledWith('tab-terminal-2')
     expect(store.setActiveFile).not.toHaveBeenCalled()
     expect(store.setActiveBrowserTab).not.toHaveBeenCalled()
     expect(store.setActiveTabType).toHaveBeenCalledWith('terminal')

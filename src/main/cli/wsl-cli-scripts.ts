@@ -152,7 +152,9 @@ export function buildManagedLegacyRemoveCommand(quotedLegacyCommandPath: string)
 export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: string): string {
   const bridgePath = getBridgePathFromCommandPath(commandPath)
   return [
-    'set -euo pipefail',
+    // Why -eu not -euo pipefail: this script runs via runWslProcess's `sh -s`,
+    // and no pipe here needs pipefail -- dash on Ubuntu 20.04 lacks the option.
+    'set -eu',
     buildRegistrationLockPrelude(commandPath),
     buildSafeReplaceGuard(commandPath, MANAGED_MARKER),
     buildSafeReplaceGuard(bridgePath, BRIDGE_MANAGED_MARKER),

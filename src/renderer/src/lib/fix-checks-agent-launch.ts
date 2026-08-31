@@ -186,7 +186,8 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       toast.error(agentArgsPlan.error)
       return false
     }
-    if (!activateAndRevealWorktree(targetWorktreeId)) {
+    // launchAgentInNewTab below creates the surface; seeding here would add a stray shell.
+    if (!activateAndRevealWorktree(targetWorktreeId, { providesInitialSurface: true })) {
       toast.error(
         translate(
           'auto.lib.fix.checks.agent.launch.03c1d61f83',

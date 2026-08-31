@@ -8,6 +8,8 @@ import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
@@ -56,8 +58,8 @@ export type SectionHeaderRowContext = {
   }) => FolderWorkspacePathStatus | null
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   projectActions: RepoHeaderProjectActions
-  onRenameProjectGroup: (groupId: string, currentName: string) => void
-  onDeleteProjectGroup: (groupId: string, groupName: string) => void
+  onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
+  onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
   onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
   onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
@@ -91,6 +93,11 @@ export function renderWorktreeSectionHeaderRow(args: {
   const projectGroupIdForHeader =
     isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
       ? row.projectGroup.id
+      : undefined
+  // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
+  const projectGroupHostIdForHeader =
+    row.projectGroup && 'createdFrom' in row.projectGroup
+      ? getProjectGroupHostId(row.projectGroup)
       : undefined
   const repoHeaderIndex =
     projectIdForHeader !== undefined
@@ -353,6 +360,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (
             <ProjectGroupHeaderMenu
               groupId={projectGroupIdForHeader}
+              hostId={projectGroupHostIdForHeader}
               label={row.label}
               onRename={ctx.onRenameProjectGroup}
               onDelete={ctx.onDeleteProjectGroup}

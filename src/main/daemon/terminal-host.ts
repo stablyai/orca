@@ -51,6 +51,7 @@ export class TerminalHost {
   private killedTombstones: TerminalHostTombstones
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
+  private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
   private maxTombstones: number
   private creationFenced = false
@@ -61,6 +62,7 @@ export class TerminalHost {
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
     this.onSessionReaped = opts.onSessionReaped
+    this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
     this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
@@ -110,6 +112,9 @@ export class TerminalHost {
             onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
             onSessionCreated: (sessionId, generation, isAlive) =>
               this.agentSessionGenerations.remember(sessionId, generation, isAlive),
+            ...(this.reportReadinessEvent
+              ? { reportReadinessEvent: this.reportReadinessEvent }
+              : {}),
             onSessionExit: (sessionId, generation) => {
               this.agentSessionOwners.release(sessionId, generation)
               this.agentSessionGenerations.forget(sessionId, generation)
@@ -228,6 +233,17 @@ export class TerminalHost {
     return session.confirmForegroundProcess()
   }
 
+  async confirmShellForeground(sessionId: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId)
+    if (session?.isAlive !== true) {
+      return false
+    }
+    const confirmed = await session.confirmShellForeground()
+    // Why the recheck: proof for a session that exited or was replaced during
+    // the await is stale; the caller would bind it to the successor's stream.
+    return confirmed && this.sessions.get(sessionId) === session && session.isAlive
+  }
+
   clearScrollback(sessionId: string): void {
     this.getAliveSession(sessionId).clearScrollback()
   }
@@ -238,6 +254,21 @@ export class TerminalHost {
     if (!session || !session.isAlive) {
       return null
     }
+    return session.getSnapshot(opts)
+  }
+
+  async getSettledSnapshot(
+    sessionId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<TerminalSnapshot | null> {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    await session.settleShellOwnershipConfirmation()
+    // Why no liveness recheck: the sync path returned the pre-exit snapshot when
+    // a session died a beat after the call; a disposal during the settle yields
+    // null naturally from the plane's own guard.
     return session.getSnapshot(opts)
   }
 

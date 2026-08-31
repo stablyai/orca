@@ -14,7 +14,10 @@ export async function stubHeadlessReact(): Promise<Record<string, unknown>> {
     useState: <T>(initial: T | (() => T)) => {
       const value = typeof initial === 'function' ? (initial as () => T)() : initial
       return [value, vi.fn()] as const
-    }
+    },
+    // Why: module-level external stores (client-hosted browser rows) read through this; without a
+    // stub the real hook looks for a dispatcher these headless renders never install.
+    useSyncExternalStore: <T>(_subscribe: unknown, getSnapshot: () => T) => getSnapshot()
   }
 }
 

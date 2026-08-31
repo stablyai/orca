@@ -179,6 +179,101 @@ test('keeps two paired browser clients and the host on independent worktrees', a
   }
 })
 
+test('keeps a paired client workspace create-with-agent off the other client and the host', async ({
+  orcaPage,
+  electronApp,
+  testRepoPath
+}) => {
+  const suffix = randomUUID().slice(0, 8)
+  const branchA = `e2e-create-a-${suffix}`
+  const branchB = `e2e-create-b-${suffix}`
+  addGitWorktree(testRepoPath, branchA)
+  addGitWorktree(testRepoPath, branchB)
+
+  await expect
+    .poll(() => loadTestWorktreeIds(orcaPage, branchA, branchB), {
+      timeout: 30_000,
+      message: 'Expected host plus client-selectable worktrees'
+    })
+    .not.toBeNull()
+  const ids = await loadTestWorktreeIds(orcaPage, branchA, branchB)
+  if (!ids) {
+    throw new Error('Test worktrees disappeared after discovery')
+  }
+
+  await selectWorktree(orcaPage, ids.host)
+
+  let clientA: Page | null = null
+  let clientB: Page | null = null
+  try {
+    const offerA = await createPairingOffer(orcaPage)
+    clientA = await openPairedClient(electronApp, offerA, ids.clientA)
+    await selectWorktree(clientA, ids.clientA)
+
+    const offerB = await createPairingOffer(orcaPage)
+    clientB = await openPairedClient(electronApp, offerB, ids.clientB)
+    await selectWorktree(clientB, ids.clientB)
+
+    // Client A creates a workspace with a startup command, which is the only remote
+    // create shape the renderer sends `activate: true` for (STA-2802's field trigger).
+    const createdWorktreeId = await clientA.evaluate(async (name) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('paired client store unavailable')
+      }
+      const state = store.getState()
+      const repoId = state
+        .allWorktrees()
+        .find((worktree) => worktree.id === state.activeWorktreeId)?.repoId
+      if (!repoId) {
+        throw new Error('active worktree has no repo')
+      }
+      const result = await state.createWorktree(
+        repoId,
+        name,
+        undefined,
+        'skip',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { command: 'echo sta-2802-startup' }
+      )
+      return result.worktree.id
+    }, `e2e-created-${suffix}`)
+
+    // Shared catalog state must still reach the observer...
+    await expect(worktreeRow(clientB, createdWorktreeId)).toBeVisible({ timeout: 30_000 })
+    // ...while its view stays exactly where its own user left it.
+    await expectActiveWorktree(clientB, ids.clientB)
+    await expectActiveWorktree(orcaPage, ids.host)
+
+    // The creator can still reach and open what it made, and doing so still moves nobody
+    // else. This drives the store action directly, so the composer's automatic
+    // self-navigation on create is covered by worktree-creation-flow.test.ts and by the
+    // host-side composer journey in worktree.spec.ts, not here.
+    await selectWorktree(clientA, createdWorktreeId)
+    await expectActiveWorktree(clientB, ids.clientB)
+    await expectActiveWorktree(orcaPage, ids.host)
+
+    // The observer keeps its own navigation authority afterwards.
+    await selectWorktree(clientB, ids.clientA2)
+    await expectActiveWorktree(clientA, createdWorktreeId)
+    await expectActiveWorktree(orcaPage, ids.host)
+  } finally {
+    await clientB?.close()
+    await clientA?.close()
+  }
+})
+
 test('shows only provider-backed creation actions in paired web', async ({
   electronApp,
   orcaPage

@@ -175,6 +175,11 @@ describe('shouldSuppressContextMenuFollowUpClick', () => {
     expect(shouldSuppressContextMenuFollowUpClick(1_000, 1_700)).toBe(false)
   })
 
+  it('keeps the 500 ms ctrl-click boundary inclusive', () => {
+    expect(shouldSuppressContextMenuFollowUpClick(1_000, 1_500)).toBe(true)
+    expect(shouldSuppressContextMenuFollowUpClick(1_000, 1_501)).toBe(false)
+  })
+
   it('does not suppress clicks that predate the context menu timestamp', () => {
     expect(shouldSuppressContextMenuFollowUpClick(1_000, 999)).toBe(false)
   })

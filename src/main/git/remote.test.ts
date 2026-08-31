@@ -8,11 +8,20 @@ vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+import { REBASE_SOURCE_FETCH_TIMEOUT_MS } from '../../shared/git-rebase-source'
+import { clearGitCapabilityStateForTests } from './git-capability-state'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from './remote'
+
+const REBASE_OPERATION_OPTIONS = {
+  cwd: '/repo',
+  terminationBarrier: true,
+  captureWslLoginShellOutput: true
+}
 
 describe('git remote operations', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    clearGitCapabilityStateForTests()
   })
 
   it('pushes to origin when no upstream is configured', async () => {
@@ -511,32 +520,154 @@ describe('git remote operations', () => {
     ])
   })
 
-  it('rebases from the selected remote base ref', async () => {
+  it('fetches to a private ref then rebases from the selected remote base ref', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'origin\nupstream\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'fork-point\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await gitPullRebaseFromBase('/repo', 'upstream/main')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['remote'], { cwd: '/repo' }],
-      [['check-ref-format', '--branch', 'main'], { cwd: '/repo' }],
-      [['pull', '--rebase', 'upstream', 'main'], { cwd: '/repo' }]
+      [['remote'], REBASE_OPERATION_OPTIONS],
+      [['check-ref-format', '--branch', 'main'], REBASE_OPERATION_OPTIONS],
+      [
+        ['merge-base', '--fork-point', 'refs/remotes/upstream/main', 'HEAD'],
+        REBASE_OPERATION_OPTIONS
+      ],
+      [
+        [
+          'fetch',
+          '--no-write-fetch-head',
+          'upstream',
+          expect.stringMatching(/^\+refs\/heads\/main:refs\/orca\/rebase\//),
+          '+refs/heads/main:refs/remotes/upstream/main'
+        ],
+        { ...REBASE_OPERATION_OPTIONS, timeout: REBASE_SOURCE_FETCH_TIMEOUT_MS }
+      ],
+      [
+        ['rebase', '--onto', expect.stringMatching(/^refs\/orca\/rebase\//), 'fork-point'],
+        REBASE_OPERATION_OPTIONS
+      ],
+      [['update-ref', '-d', expect.stringMatching(/^refs\/orca\/rebase\//)], { cwd: '/repo' }]
     ])
+
+    const fetchRefspec = gitExecFileAsyncMock.mock.calls[3][0][3]
+    const rebasedRef = gitExecFileAsyncMock.mock.calls[4][0][2]
+    const deletedRef = gitExecFileAsyncMock.mock.calls[5][0][2]
+    expect(fetchRefspec).toBe(`+refs/heads/main:${rebasedRef}`)
+    expect(gitExecFileAsyncMock.mock.calls[3][0][4]).toBe(
+      '+refs/heads/main:refs/remotes/upstream/main'
+    )
+    expect(deletedRef).toBe(rebasedRef)
   })
 
   it('uses the longest configured remote name when rebasing from a base ref', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'fork\nfork/team\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'fork-point\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await gitPullRebaseFromBase('/repo', 'fork/team/feature/base')
 
-    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['pull', '--rebase', 'fork/team', 'feature/base'],
-      { cwd: '/repo' }
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      5,
+      ['rebase', '--onto', expect.stringMatching(/^refs\/orca\/rebase\//), 'fork-point'],
+      REBASE_OPERATION_OPTIONS
+    )
+  })
+
+  it('rebases when the selected remote has not been fetched before', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'upstream\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('missing remote-tracking ref'))
+      .mockResolvedValueOnce({ stdout: 'head\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(gitPullRebaseFromBase('/repo', 'upstream/main')).resolves.toBeUndefined()
+
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      5,
+      [
+        'fetch',
+        '--no-write-fetch-head',
+        'upstream',
+        expect.stringMatching(/^\+refs\/heads\/main:refs\/orca\/rebase\//),
+        '+refs/heads/main:refs/remotes/upstream/main'
+      ],
+      { ...REBASE_OPERATION_OPTIONS, timeout: REBASE_SOURCE_FETCH_TIMEOUT_MS }
+    )
+  })
+
+  it('fast-forwards an unborn branch from the fetched private ref', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'upstream\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('unborn HEAD'))
+      .mockRejectedValueOnce(new Error('unborn HEAD'))
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPullRebaseFromBase('/repo', 'upstream/main')
+
+    const fetchedRef = gitExecFileAsyncMock.mock.calls[4][0][3]
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      6,
+      ['merge', '--ff-only', fetchedRef.slice(fetchedRef.indexOf(':') + 1)],
+      REBASE_OPERATION_OPTIONS
+    )
+  })
+
+  it('removes the private ref when rebase fails', async () => {
+    const controller = new AbortController()
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'upstream\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'fork-point\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockImplementationOnce(async () => {
+        controller.abort()
+        throw new Error('fatal: rebase conflict')
+      })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(
+      gitPullRebaseFromBase('/repo', 'upstream/main', { signal: controller.signal })
+    ).rejects.toThrow('fatal: rebase conflict')
+
+    const rebasedRef = gitExecFileAsyncMock.mock.calls[4][0][2]
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(6, ['update-ref', '-d', rebasedRef], {
+      cwd: '/repo'
+    })
+  })
+
+  it('serializes the private fetch when Git cannot avoid writing FETCH_HEAD', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'upstream\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'fork-point\n', stderr: '' })
+      .mockRejectedValueOnce(new Error("error: unknown option `no-write-fetch-head'"))
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitPullRebaseFromBase('/repo', 'upstream/main')
+
+    const preferredRefspecs = gitExecFileAsyncMock.mock.calls[3][0].slice(3)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      5,
+      ['fetch', 'upstream', ...preferredRefspecs],
+      { ...REBASE_OPERATION_OPTIONS, timeout: REBASE_SOURCE_FETCH_TIMEOUT_MS }
     )
   })
 

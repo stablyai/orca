@@ -111,6 +111,27 @@ describe('activateSimulatorTabPaletteResult', () => {
     })
   })
 
+  it('activates an SSH worktree through its paired-runtime owner alias', () => {
+    seedStore({
+      worktreesByRepo: {
+        'repo-1': [
+          makeWorktree({
+            hostId: 'ssh:private-target',
+            runtimeOwnerEnvironmentId: 'paired-host'
+          })
+        ]
+      }
+    })
+
+    expect(
+      activateSimulatorTabPaletteResult({ ...target, executionHostId: 'runtime:paired-host' })
+        .status
+    ).toBe('activated')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      executionHostId: 'runtime:paired-host'
+    })
+  })
+
   it('picks the host that owns the row when the worktree id exists on two hosts', () => {
     seedStore({
       worktreesByRepo: {

@@ -79,6 +79,35 @@ describe('TabsSlice', () => {
   })
 
   // Ghostty "show until interact": BEL always marks unread (even focused/visible tabs); only user interaction via clearTerminalTabUnread dismisses it.
+  describe('lastFocusedAt', () => {
+    it('stamps a newly created tab that activates', () => {
+      const before = Date.now()
+      const tab = store.getState().createUnifiedTab(WT, 'terminal')
+
+      const stored = store.getState().unifiedTabsByWorktree[WT].find((t) => t.id === tab.id)
+      expect(stored?.lastFocusedAt).toBeGreaterThanOrEqual(before)
+    })
+
+    it('leaves a background-created tab unstamped', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'terminal', { activate: false })
+
+      const stored = store.getState().unifiedTabsByWorktree[WT].find((t) => t.id === tab.id)
+      expect(stored?.lastFocusedAt).toBeUndefined()
+    })
+
+    it('stamps a tab created into a new split group', () => {
+      const source = store.getState().createUnifiedTab(WT, 'terminal')
+      const before = Date.now()
+      const split = store.getState().createUnifiedTabInSplit(WT, 'terminal', {
+        sourceGroupId: source.groupId,
+        splitDirection: 'right'
+      })
+
+      const stored = store.getState().unifiedTabsByWorktree[WT].find((t) => t.id === split?.id)
+      expect(stored?.lastFocusedAt).toBeGreaterThanOrEqual(before)
+    })
+  })
+
   describe('markTerminalTabUnread', () => {
     it('marks the tab even when it is active in a visible split group of the active worktree', () => {
       // Group A: the worktree's root group (implicit from createUnifiedTab), populated with tabA.

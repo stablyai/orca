@@ -244,6 +244,89 @@ describe('terminal tab retirement store boundary', () => {
     expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
   })
 
+  it('retires parked ownership before teardown and sweeps published state before unified close', () => {
+    const store = createRetirementStore()
+    const events: string[] = []
+    const unified = makeUnifiedTab({
+      id: 'unified-tab-1',
+      entityId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+    mockKill.mockImplementationOnce(() => {
+      events.push('provider-kill')
+      return Promise.resolve()
+    })
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      unifiedTabsByWorktree: { 'wt-1': [unified] },
+      dropAgentStatusByTabPrefix: vi.fn(() => {
+        expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
+        events.push('state-sweep')
+      }),
+      closeUnifiedTab: vi.fn(() => {
+        events.push('unified-close')
+        return null
+      })
+    })
+    parkedWatchersByTabId.set('tab-1', {
+      worktreeId: 'wt-1',
+      tabPtyId: 'pty-1',
+      paneIdByPtyId: new Map([['pty-1', 1]]),
+      disposersByPtyId: new Map([['pty-1', () => events.push('parked-retire')]])
+    })
+    const unsubscribe = store.subscribe((state, previous) => {
+      const wasPresent = previous.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-1')
+      const isPresent = state.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-1')
+      if (wasPresent && !isPresent) {
+        events.push('row-removal')
+      }
+    })
+
+    expect(() => store.getState().closeTab('tab-1')).not.toThrow()
+
+    expect(events).toEqual([
+      'parked-retire',
+      'provider-kill',
+      'row-removal',
+      'state-sweep',
+      'unified-close'
+    ])
+    unsubscribe()
+  })
+
+  it('starts mixed provider teardown and classifies both rejection kinds after synchronous retirement', async () => {
+    const store = createRetirementStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockKill.mockRejectedValueOnce(new Error('local unavailable'))
+    mockRuntimeCall.mockRejectedValueOnce(new Error('runtime unavailable'))
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-local' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-local', 'remote:runtime-terminal'] }
+    })
+
+    expect(() => store.getState().closeTab('tab-1')).not.toThrow()
+    expect(mockKill).toHaveBeenCalledWith('pty-local')
+    expect(mockRuntimeCall).toHaveBeenCalledWith({
+      method: 'terminal.close',
+      params: { terminal: 'runtime-terminal' }
+    })
+    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith('[terminal-retirement] provider teardown failed', {
+        tabId: 'tab-1',
+        localOrSshFailures: 1,
+        runtimeFailures: 1
+      })
+    )
+    warn.mockRestore()
+  })
+
   it('keeps the tab retired and reports provider rejection without an unhandled promise', async () => {
     const store = createRetirementStore()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

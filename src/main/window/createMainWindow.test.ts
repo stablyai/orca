@@ -13,17 +13,39 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+vi.mock('../browser/browser-route-session-runtime', async () => ({
+  browserRouteSessionRegistry: {
+    isAllowedPartition: (await import('./createMainWindow-test-harness')).routePartitionAllowedMock
+  },
+  browserRouteWebContentsRegistry: {
+    attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock
+  }
+}))
+vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+  const harness = await import('./createMainWindow-test-harness')
+  return {
+    attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
+    retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
+  }
+})
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
+import { getBrowserClientHostId } from '../browser/browser-client-host-id'
+import {
+  formatBrowserClientHostIdArgument,
+  readBrowserClientHostIdArgument
+} from '../../shared/browser-client-host-id-argument'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
   attachGuestPoliciesMock,
+  attachRouteGuestMock,
   browserWindowMock,
   macosTahoeMock,
   openExternalMock,
   powerMonitorOnMock,
   resetMainWindowMocks,
+  routePartitionAllowedMock,
   withPlatform
 } from './createMainWindow-test-harness'
 
@@ -75,19 +97,33 @@ describe('createMainWindow', () => {
   })
 
   it('enables renderer sandboxing and opens external links safely', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    // Why every handler and not the last one: two modules register `will-navigate` on this
+    // webContents, and keeping one slot per event let whichever registered last stand in for both.
+    const windowHandlers: Record<string, ((...args: any[]) => void)[]> = {}
+    const fire = (event: string, ...args: any[]): void => {
+      for (const handler of windowHandlers[event] ?? []) {
+        handler(...args)
+      }
+    }
+    let windowOpenHandler: (...args: any[]) => unknown = () => undefined
+    const record = (event: string, handler: (...args: any[]) => void): void => {
+      ;(windowHandlers[event] ??= []).push(handler)
+    }
     const webContents = {
+      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+      isDestroyed: vi.fn(() => false),
+      mainFrame: {},
       on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
+        record(event, handler)
       }),
       once: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
+        record(event, handler)
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn((handler) => {
-        windowHandlers.windowOpen = handler
+        windowOpenHandler = handler
       }),
       send: vi.fn(),
       isDevToolsOpened: vi.fn(),
@@ -137,32 +173,30 @@ describe('createMainWindow', () => {
       expect(browserWindowOptions.frame).toBe(false)
     }
 
-    expect(windowHandlers.windowOpen({ url: 'https://example.com' })).toEqual({ action: 'deny' })
-    expect(windowHandlers.windowOpen({ url: 'localhost:3000' })).toEqual({ action: 'deny' })
-    expect(windowHandlers.windowOpen({ url: 'file:///etc/passwd' })).toEqual({ action: 'deny' })
-    expect(windowHandlers.windowOpen({ url: 'not a url' })).toEqual({ action: 'deny' })
+    expect(windowOpenHandler({ url: 'https://example.com' })).toEqual({ action: 'deny' })
+    expect(windowOpenHandler({ url: 'localhost:3000' })).toEqual({ action: 'deny' })
+    expect(windowOpenHandler({ url: 'file:///etc/passwd' })).toEqual({ action: 'deny' })
+    expect(windowOpenHandler({ url: 'not a url' })).toEqual({ action: 'deny' })
 
     expect(openExternalMock).toHaveBeenCalledTimes(2)
     expect(openExternalMock).toHaveBeenCalledWith('https://example.com/')
     expect(openExternalMock).toHaveBeenCalledWith('http://localhost:3000/')
 
     const preventDefault = vi.fn()
-    windowHandlers['will-navigate']({ preventDefault } as never, 'https://example.com/docs')
+    fire('will-navigate', { preventDefault } as never, 'https://example.com/docs')
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(openExternalMock).toHaveBeenCalledTimes(3)
     expect(openExternalMock).toHaveBeenLastCalledWith('https://example.com/docs')
 
     const localhostPreventDefault = vi.fn()
-    windowHandlers['will-navigate'](
-      { preventDefault: localhostPreventDefault } as never,
-      'localhost:3000'
-    )
+    fire('will-navigate', { preventDefault: localhostPreventDefault } as never, 'localhost:3000')
     expect(localhostPreventDefault).toHaveBeenCalledTimes(1)
     expect(openExternalMock).toHaveBeenCalledTimes(4)
     expect(openExternalMock).toHaveBeenLastCalledWith('http://localhost:3000/')
 
     const fileNavigationPreventDefault = vi.fn()
-    windowHandlers['will-navigate'](
+    fire(
+      'will-navigate',
       { preventDefault: fileNavigationPreventDefault } as never,
       'file:///etc/passwd'
     )
@@ -171,7 +205,8 @@ describe('createMainWindow', () => {
 
     const allowBlankEvent = { preventDefault: vi.fn() }
     const allowBlankPrefs = { partition: 'persist:orca-browser' }
-    windowHandlers['will-attach-webview'](
+    fire(
+      'will-attach-webview',
       allowBlankEvent as never,
       allowBlankPrefs as never,
       { src: 'data:text/html,' } as never
@@ -184,8 +219,34 @@ describe('createMainWindow', () => {
       sandbox: true
     })
 
+    routePartitionAllowedMock.mockImplementation(
+      (partition) => partition === 'persist:orca-browser-v1-route-partition'
+    )
+    const allowRouteEvent = { preventDefault: vi.fn() }
+    const allowRoutePrefs = { partition: 'persist:orca-browser-v1-route-partition' }
+    fire(
+      'will-attach-webview',
+      allowRouteEvent as never,
+      allowRoutePrefs as never,
+      { src: 'about:blank' } as never
+    )
+    expect(allowRouteEvent.preventDefault).not.toHaveBeenCalled()
+    expect(allowRoutePrefs).toMatchObject({
+      partition: 'persist:orca-browser-v1-route-partition',
+      sandbox: true
+    })
+    const denyRouteNavigationEvent = { preventDefault: vi.fn() }
+    fire(
+      'will-attach-webview',
+      denyRouteNavigationEvent as never,
+      { partition: 'persist:orca-browser-v1-route-partition' } as never,
+      { src: 'https://example.com/' } as never
+    )
+    expect(denyRouteNavigationEvent.preventDefault).toHaveBeenCalledOnce()
+
     const denyInlineHtmlEvent = { preventDefault: vi.fn() }
-    windowHandlers['will-attach-webview'](
+    fire(
+      'will-attach-webview',
       denyInlineHtmlEvent as never,
       { partition: 'persist:orca-browser' } as never,
       { src: 'data:text/html,<script>alert(1)</script>' } as never
@@ -193,8 +254,12 @@ describe('createMainWindow', () => {
     expect(denyInlineHtmlEvent.preventDefault).toHaveBeenCalledTimes(1)
 
     const guest = { marker: 'guest' }
-    windowHandlers['did-attach-webview']({} as never, guest as never)
+    fire('did-attach-webview', {} as never, guest as never)
     expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
+    expect(attachRouteGuestMock).toHaveBeenCalledWith(guest)
+    expect(attachGuestPoliciesMock.mock.invocationCallOrder[0]).toBeLessThan(
+      attachRouteGuestMock.mock.invocationCallOrder[0]
+    )
 
     const untrustedPreloadParams = {
       src: 'data:text/html,',
@@ -204,7 +269,8 @@ describe('createMainWindow', () => {
       partition: 'persist:orca-browser',
       preload: '/tmp/untrusted-preload.js'
     }
-    windowHandlers['will-attach-webview'](
+    fire(
+      'will-attach-webview',
       { preventDefault: vi.fn() } as never,
       hardenedPrefs as never,
       untrustedPreloadParams as never
@@ -214,8 +280,71 @@ describe('createMainWindow', () => {
     expect(hardenedPrefs.preload).not.toContain('untrusted-preload')
 
     const secondGuest = { marker: 'second-guest' }
-    windowHandlers['did-attach-webview']({} as never, secondGuest as never)
+    fire('did-attach-webview', {} as never, secondGuest as never)
     expect(attachGuestPoliciesMock).toHaveBeenLastCalledWith(secondGuest)
+    expect(attachRouteGuestMock).toHaveBeenLastCalledWith(secondGuest)
+  })
+
+  // Why the renderer is told this at birth rather than asked for it: it needs to know whether a
+  // client-placed page is its own guest before it interprets the first session snapshot, and
+  // Electron never answers a sendSync that lands before its listener exists.
+  it('stamps the browser host id into the renderer that owns the guests, and strips it from a guest that carries one', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+      isDestroyed: vi.fn(() => false),
+      mainFrame: {},
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      once: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return {
+        webContents,
+        on: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+    })
+
+    createMainWindow(null)
+
+    const stamped = browserWindowMock.mock.calls[0]?.[0].webPreferences?.additionalArguments
+    expect(stamped).toEqual([formatBrowserClientHostIdArgument(getBrowserClientHostId())])
+    expect(readBrowserClientHostIdArgument(stamped ?? [])).toBe(getBrowserClientHostId())
+
+    // Electron 43 does not hand a guest the embedder's additionalArguments, so this stamp is one
+    // Electron would not have put there: what is pinned is that a guest cannot come out of the
+    // handler holding the id, not that it arrives holding it.
+    const guestPreferences = {
+      partition: 'persist:orca-browser',
+      additionalArguments: [...(stamped ?? [])]
+    }
+    windowHandlers['will-attach-webview'](
+      { preventDefault: vi.fn() } as never,
+      guestPreferences as never,
+      { src: 'data:text/html,' } as never
+    )
+
+    expect(guestPreferences.additionalArguments).toBeUndefined()
   })
 
   it('sets platform-specific titlebar and frame options for every desktop platform', () => {

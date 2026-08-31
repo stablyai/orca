@@ -51,6 +51,7 @@ vi.mock('./cdp-bridge', () => ({
 }))
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
+import { AGENT_BROWSER_IDLE_TIMEOUT_MS } from './agent-browser-process-environment'
 import {
   createSucceedWith,
   mockBrowserManager,
@@ -338,7 +339,10 @@ describe('AgentBrowserBridge', () => {
     expect(args).toContain('wait')
     expect(args).toContain('#ready')
     expect(options.timeout).toBe(2200)
-    expect(options.env).toBe(process.env)
+    // Why not toBe(process.env): the bridge hands the daemon an idle-lifetime bound (#16367).
+    const env = options.env as NodeJS.ProcessEnv
+    expect(env.PATH).toBe(process.env.PATH)
+    expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBe(String(AGENT_BROWSER_IDLE_TIMEOUT_MS))
   })
 
   it('returns browser_timeout for timed conditional waits without recycling the session', async () => {

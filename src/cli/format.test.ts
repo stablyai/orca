@@ -473,7 +473,7 @@ describe('formatComputerAction', () => {
     )
     expect(output).toContain('5 visible elements in current window')
     expect(output).toContain(
-      'Use the --json result or rerun state before choosing the next element index.'
+      'Inspect with the command above or use the --json result before assuming it worked.'
     )
   })
 

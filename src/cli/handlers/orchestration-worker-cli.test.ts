@@ -164,6 +164,52 @@ describe('orchestration worker-start CLI contract', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('prints the Structured Chat recovery action for a refused worker start', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'failed',
+        failedStage: 'dispatch_input',
+        lastError:
+          'The target terminal is in Structured Chat. Switch it to Terminal, then retry `orca orchestration worker-start`.',
+        effects: [],
+        residualResources: []
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-start']({
+      flags: new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['terminal', 'term_worker'],
+        ['from', 'term_coord']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
+      | ((result: {
+          taskId: string
+          dispatchId: string
+          state: string
+          failedStage?: string
+          lastError?: string
+        }) => string)
+      | undefined
+    expect(
+      formatter?.({
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'failed',
+        failedStage: 'dispatch_input',
+        lastError:
+          'The target terminal is in Structured Chat. Switch it to Terminal, then retry `orca orchestration worker-start`.'
+      })
+    ).toMatch(/Structured Chat.*Switch it to Terminal.*orca orchestration worker-start/s)
+  })
+
   it('prints a reveal warning for a live background worker', async () => {
     callMock.mockResolvedValue({
       result: {

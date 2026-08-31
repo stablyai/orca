@@ -22,6 +22,7 @@ type TerminalHostSessionCreateDependencies = {
   onDeadSessionRemoved: (sessionId: string) => void
   onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
   onSessionExit: (sessionId: string, generation: string | undefined) => void
+  reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
 }
 
 export async function createOrAttachTerminalSession(
@@ -37,6 +38,12 @@ export async function createOrAttachTerminalSession(
     throw new SessionNotFoundError(opts.sessionId)
   }
 
+  // Why no ownership settle here: attach is synchronous by contract. A viewer
+  // connecting inside an in-flight recovery proof (~100ms) gets the pre-reset
+  // snapshot and the injected reset arrives in-order over its stream — a
+  // self-healing first frame. Waiting instead created a race window (cancel,
+  // exit, kill during the await) that produced repeated regressions. Checkpoint
+  // readers that need a settled owner use getSettledSnapshot.
   if (existing && existing.isAlive && !existing.isTerminating) {
     const snapshot = existing.getSnapshot()
     existing.detachAllClients()
@@ -121,6 +128,7 @@ async function spawnAndPublishSession(
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
     wslDistro,
     onExit: () => deps.onSessionExit(opts.sessionId, opts.agentSessionGeneration),
+    ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
       : {})

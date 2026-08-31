@@ -9,6 +9,7 @@ import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
 const mocks = vi.hoisted(() => ({
   remountTerminalTabForRecovery: vi.fn<(tabId: string) => boolean>(() => true),
+  getTab: vi.fn<() => { viewMode?: 'terminal' | 'chat' } | null>(() => null),
   recordRendererCrashBreadcrumb: vi.fn(),
   hasPty: vi.fn<(id: string) => Promise<boolean | null>>(async () => true)
 }))
@@ -16,7 +17,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
-      remountTerminalTabForRecovery: mocks.remountTerminalTabForRecovery
+      remountTerminalTabForRecovery: mocks.remountTerminalTabForRecovery,
+      getTab: mocks.getTab
     })
   }
 }))
@@ -29,6 +31,8 @@ beforeEach(() => {
   _resetTerminalPaneRecoveryForTests()
   mocks.remountTerminalTabForRecovery.mockClear()
   mocks.remountTerminalTabForRecovery.mockReturnValue(true)
+  mocks.getTab.mockClear()
+  mocks.getTab.mockReturnValue(null)
   mocks.recordRendererCrashBreadcrumb.mockClear()
   mocks.hasPty.mockClear()
   mocks.hasPty.mockResolvedValue(true)
@@ -45,6 +49,20 @@ afterEach(() => {
 })
 
 describe('requestTerminalPaneRecovery', () => {
+  it('does not remount a terminal surface hidden behind native chat', async () => {
+    mocks.getTab.mockReturnValue({ viewMode: 'chat' })
+
+    await expect(
+      requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable'
+      })
+    ).resolves.toBe(false)
+    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
+    expect(mocks.hasPty).not.toHaveBeenCalled()
+  })
+
   it('remounts the tab and records a breadcrumb for a certified-dead pipeline', async () => {
     const result = await requestTerminalPaneRecovery({
       tabId: 'tab-1',
@@ -60,6 +78,19 @@ describe('requestTerminalPaneRecovery', () => {
     )
     // Pipeline-death reasons are already probe-certified — no liveness gate.
     expect(mocks.hasPty).not.toHaveBeenCalled()
+  })
+
+  it('remounts an unverifiable reattach without requiring host-death evidence', async () => {
+    const result = await requestTerminalPaneRecovery({
+      tabId: 'tab-ssh',
+      ptyId: 'ssh:target@@pty-1',
+      reason: 'reattach-unverifiable'
+    })
+
+    expect(result).toBe(true)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-ssh')
+    expect(mocks.hasPty).not.toHaveBeenCalled()
+    expect(isTerminalInputQuarantined('tab-ssh')).toBe(false)
   })
 
   it('records a breadcrumb when the tab cannot be remounted, without consuming budget', async () => {
@@ -149,6 +180,23 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(4)
     await vi.advanceTimersByTimeAsync(400_000)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not restart an unverifiable SSH reattach chain after its incident cap', async () => {
+    vi.useFakeTimers()
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      vi.setSystemTime(attempt * 20_000)
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-ssh',
+        ptyId: 'ssh:target@@pty-1',
+        reason: 'reattach-unverifiable',
+        terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration('tab-ssh')
+      })
+    }
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
+
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
   })
 
   it('does not retry a cooldown decline from the xterm replaced by the remount', async () => {

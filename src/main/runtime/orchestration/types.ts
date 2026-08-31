@@ -1,3 +1,4 @@
+import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -204,6 +205,8 @@ export type RemoteDispatchAttachmentRow = {
   effects: string
   residual_resources: string
   to_worker_imported_sequence: number
+  /** Nesting depth propagated from the Run home; 1 when an old client omitted it. */
+  depth: number
   last_error: string | null
   created_at: string
   updated_at: string
@@ -274,6 +277,11 @@ export type DispatchContextRow = {
   status: DispatchStatus
   failure_count: number
   last_failure: string | null
+  /** Why the dispatch ended, when Orca could establish it — `operator_close`,
+   *  `signaled`, `exited`, `unknown`. Null on rows written before STA-4603. */
+  termination_reason: TerminalExitCause['kind'] | null
+  /** Nesting depth; a root coordinator's worker is 1. Never 0 on a persisted row. */
+  depth: number
   dispatched_at: string | null
   completed_at: string | null
   created_at: string

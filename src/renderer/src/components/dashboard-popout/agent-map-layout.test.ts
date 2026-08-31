@@ -551,6 +551,9 @@ describe('agent map layout', () => {
     for (const dotState of ['working', 'blocked', 'waiting', 'idle'] as const) {
       expect(agentMapNodeStatus(card({ dotState }))).toBe(dotState)
     }
+    expect(agentMapNodeStatus(card({ dotState: 'working', workingMode: 'monitoring' }))).toBe(
+      'monitoring'
+    )
     expect(agentMapNodeStatus(card({ dotState: 'done', unseen: true }))).toBe('done')
     expect(agentMapNodeStatus(card({ dotState: 'done', unseen: false }))).toBe('done-seen')
     const shortBlocked = card({ dotState: 'blocked', startedAt: NOW - 60_000 })

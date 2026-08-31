@@ -1,6 +1,9 @@
 import { afterEach, describe, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import type * as LocalPtyShellReadyModule from './local-pty-shell-ready'
+import {
+  OVERLAY_ONLY_FEATURES,
+  STARTUP_COMMAND_FEATURES
+} from '../shell-startup-launch-intent-fixtures'
 
 // Why: can't import electron (bundled into the plain-node daemon-entry fork), so tests set the wrapper root via ORCA_USER_DATA_PATH instead of mocking app.
 export function setTestUserDataPath(path: string): void {
@@ -18,9 +21,18 @@ export function restoreUserDataPathAfterEach(): void {
   })
 }
 
-export async function importFreshLocalPtyShellReady(): Promise<typeof LocalPtyShellReadyModule> {
+export async function importFreshLocalPtyShellReady() {
   vi.resetModules()
-  return import('./local-pty-shell-ready')
+  const module = await import('./local-pty-shell-ready')
+  // Why the two adapters: the module exposes one feature-driven entry point, and
+  // these are the two launch intents the call sites select between.
+  return {
+    ...module,
+    getShellReadyLaunchConfig: (shell: string) =>
+      module.getShellLaunchConfig(shell, STARTUP_COMMAND_FEATURES),
+    getMarkerlessShellLaunchConfig: (shell: string) =>
+      module.getShellLaunchConfig(shell, OVERLAY_ONLY_FEATURES)
+  }
 }
 
 /** Plain suite call only; annotated because the inferred `describe.skip` type names vitest-runner internals. */

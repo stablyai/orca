@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
-import { WorktreeCreate } from './worktree-schemas'
+import { WorktreeCreate } from './worktree-create-schemas'
 
 const PROVENANCE = {
   automationProvenance: undefined,
@@ -25,5 +25,20 @@ describe('buildManagedWorktreeCreateArgs', () => {
     expect(build({ repo: 'id:repo-1', name: 'nautilus', nameWasGenerated: true })).toMatchObject({
       nameWasGenerated: true
     })
+  })
+
+  it('carries the parent-pick provenance only when the client marked it manual', () => {
+    // Why: older clients never send it, and those creates really are CLI-flag equivalents.
+    expect(
+      build({ repo: 'id:repo-1', name: 'child', parentWorkspace: 'folder:f1' }).lineage
+    ).not.toHaveProperty('parentWorkspaceOrigin')
+    expect(
+      build({
+        repo: 'id:repo-1',
+        name: 'child',
+        parentWorkspace: 'folder:f1',
+        parentWorkspaceOrigin: 'manual'
+      }).lineage
+    ).toMatchObject({ parentWorkspaceOrigin: 'manual' })
   })
 })

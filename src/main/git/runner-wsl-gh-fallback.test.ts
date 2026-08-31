@@ -94,7 +94,7 @@ describe('ghExecFileAsync WSL fallback', () => {
       [
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'bash',
         '-c',
         "cd '/home/jinwoo/stably/noqa' && 'gh' 'issue' 'list' '--repo' 'stablyhq/noqa' '--json' 'number,title'"
@@ -381,7 +381,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "'gh' 'api' 'rate_limit'"],
+      ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'gh' 'api' 'rate_limit'"],
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
     )
@@ -500,7 +500,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "'glab' 'api' 'projects'"],
+      ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'glab' 'api' 'projects'"],
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
     )
@@ -565,7 +565,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "'glab' 'auth' 'status'"],
+      ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'glab' 'auth' 'status'"],
       expect.not.objectContaining({ signal: controller.signal }),
       expect.any(Function)
     )
@@ -652,7 +652,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'wsl.exe',
-      ['-d', 'Debian', '--', 'bash', '-c', "'gh' 'auth' 'status'"],
+      ['-d', 'Debian', '--exec', 'bash', '-c', "'gh' 'auth' 'status'"],
       expect.any(Object),
       expect.any(Function)
     )
@@ -682,7 +682,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-c', "'gh' 'auth' 'status'"],
+      ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'gh' 'auth' 'status'"],
       expect.any(Object),
       expect.any(Function)
     )

@@ -37,6 +37,26 @@ describe('relay shell history', () => {
     expect(custom.HISTFILE).toBe('/custom/history')
   })
 
+  it.each([
+    ['relay', join(historyDir, `${hashWorktreeId('relay-test::/remote/other')}-zsh_history`)],
+    [
+      'desktop',
+      join(
+        '/fake/userData/terminal-history',
+        hashWorktreeId('relay-test::/remote/other'),
+        'zsh_history'
+      )
+    ]
+  ])('replaces a %s HISTFILE inherited from a parent Orca', (_kind, inherited) => {
+    // HISTFILE is exported, so a relay (or the client that spawned it) started
+    // from an Orca pane would otherwise scope every remote pane to that one
+    // worktree's history file.
+    const env: Record<string, string> = { HISTFILE: inherited }
+
+    expect(injectRelayHistoryEnv(env, worktreeId, '/usr/bin/zsh')).toBe(historyDir)
+    expect(env.HISTFILE).toBe(join(historyDir, `${historyPrefix}-zsh_history`))
+  })
+
   it('does not scope unsupported shells and cleans up idempotently', () => {
     const env: Record<string, string> = {}
     expect(injectRelayHistoryEnv(env, worktreeId, '/bin/fish')).toBeNull()

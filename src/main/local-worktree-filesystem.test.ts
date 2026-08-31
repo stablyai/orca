@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, lstatMock, readFileMock, rmMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
+const { runProcessMock, lstatMock, readFileMock, rmMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
   lstatMock: vi.fn(),
   readFileMock: vi.fn(),
   rmMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  execFile: execFileMock
+// Why mock the chokepoint: encoding, timeout and the hidden console are its
+// contract now, so this suite asserts what the distro is asked to run.
+vi.mock('../shared/child-process/run-process', () => ({
+  runProcess: runProcessMock
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -20,18 +22,21 @@ vi.mock('node:fs/promises', () => ({
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
+  toHostFilesystemPath,
   toHostRemovalPath
 } from './local-worktree-filesystem'
 
 function completeExecFile(stdout = ''): void {
-  execFileMock.mockImplementation((_file, _args, _options, callback) => {
-    callback(null, stdout, '')
-  })
+  runProcessMock.mockResolvedValue({ code: 0, signal: null, stdout, stderr: '', timedOut: false })
 }
 
-function failExecFile(error: Error & { code?: number | string }): void {
-  execFileMock.mockImplementation((_file, _args, _options, callback) => {
-    callback(error, '', '')
+function failExecFile(exitCode: number): void {
+  runProcessMock.mockResolvedValue({
+    code: exitCode,
+    signal: null,
+    stdout: '',
+    stderr: 'missing',
+    timedOut: false
   })
 }
 
@@ -47,7 +52,7 @@ async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>):
 
 describe('local worktree filesystem runtime access', () => {
   beforeEach(() => {
-    execFileMock.mockReset()
+    runProcessMock.mockReset()
     lstatMock.mockReset()
     readFileMock.mockReset()
     rmMock.mockReset()
@@ -77,7 +82,7 @@ describe('local worktree filesystem runtime access', () => {
         force: true
       })
     )
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
   it('uses a Win32 long-path namespace for host removal on Windows', async () => {
@@ -96,6 +101,27 @@ describe('local worktree filesystem runtime access', () => {
           retryDelay: expect.any(Number)
         })
       )
+    })
+  })
+
+  it('uses the same Win32 namespace for host directory creation on Windows', async () => {
+    await withPlatform('win32', async () => {
+      const longPath = `C:\\repo\\${'nested\\'.repeat(40)}feature`
+
+      expect(toHostFilesystemPath(longPath)).toBe(`\\\\?\\${longPath}`)
+    })
+  })
+
+  it('leaves POSIX WSL paths unchanged on a Windows host', async () => {
+    await withPlatform('win32', async () => {
+      expect(toHostFilesystemPath('/home/me/worktrees')).toBe('/home/me/worktrees')
+    })
+  })
+
+  it('leaves WSL UNC paths unchanged on a Windows host', async () => {
+    await withPlatform('win32', async () => {
+      const wslPath = String.raw`\\wsl.localhost\Ubuntu\home\me\worktrees`
+      expect(toHostFilesystemPath(wslPath)).toBe(wslPath)
     })
   })
 
@@ -157,26 +183,40 @@ describe('local worktree filesystem runtime access', () => {
       completeExecFile()
       await removeLocalWorktreePath('C:\\Users\\me\\repo feature', { wslDistro: 'Ubuntu' })
 
-      expect(execFileMock).toHaveBeenCalledTimes(3)
-      expect(execFileMock).toHaveBeenNthCalledWith(
+      expect(runProcessMock).toHaveBeenCalledTimes(3)
+      expect(runProcessMock).toHaveBeenNthCalledWith(
         1,
-        'wsl.exe',
-        expect.arrayContaining(['-d', 'Ubuntu']),
-        expect.objectContaining({ encoding: 'utf8' }),
-        expect.any(Function)
+        expect.objectContaining({
+          program: 'wsl.exe',
+          args: expect.arrayContaining(['-d', 'Ubuntu'])
+        })
       )
-      const removeArgs = execFileMock.mock.calls[2]?.[1] as string[]
+      const removeArgs = runProcessMock.mock.calls[2]?.[0].args as string[]
       expect(removeArgs.at(-1)).toContain('rm -rf --')
-      expect(removeArgs.at(-1)).toContain(
-        String.raw`rm -rf -- '\''/mnt/c/Users/me/repo feature'\''`
-      )
+      expect(removeArgs.at(-1)).toContain(String.raw`rm -rf -- '/mnt/c/Users/me/repo feature'`)
       expect(rmMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('never starts a login or interactive shell for filesystem reads', async () => {
+    await withPlatform('win32', async () => {
+      completeExecFile('file')
+      await getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' }).statPath('/home/me/repo/.git')
+
+      // Why: a login/interactive shell is what puts the distro's rc banner on the
+      // stdout these callers parse. cat/stat/rm need nothing from the user's PATH,
+      // so the shell mode is the fix rather than filtering what it prints.
+      const args = runProcessMock.mock.calls[0]?.[0].args as string[]
+      expect(args).toContain('-c')
+      expect(args).not.toContain('-lc')
+      expect(args).not.toContain('-ilc')
+      expect(args.at(-1)).not.toContain('getent passwd')
     })
   })
 
   it('reports missing WSL stat targets with an ENOENT-shaped error', async () => {
     await withPlatform('win32', async () => {
-      failExecFile(Object.assign(new Error('missing'), { code: 2 }))
+      failExecFile(2)
       const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
 
       await expect(access.statPath('/mnt/c/repo/missing/.git')).rejects.toMatchObject({

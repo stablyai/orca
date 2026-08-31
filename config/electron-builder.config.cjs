@@ -14,6 +14,9 @@ const {
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+const {
+  verifyPackagedNodePtyJobOwnership
+} = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
@@ -22,14 +25,27 @@ const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
 const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
 const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
+// Why a second set of variables rather than making the mac ones platform-neutral:
+// the mac ones gate `isMacRelease` below, which turns on hardened runtime,
+// notarization, and root-level `forceCodeSigning`. A Windows dev build that
+// reused them would fail packaging outright for want of a cert it is
+// deliberately not using.
+const isWinHourly = process.env.ORCA_WIN_HOURLY === '1'
+const isWinDaily = process.env.ORCA_WIN_DAILY === '1'
+const isWinAdhoc = process.env.ORCA_WIN_ADHOC === '1'
+const isWinDevChannel = isWinHourly || isWinDaily || isWinAdhoc
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
-const localBuildVersion = isMacRelease ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
-const devChannelBuildVersion = isMacHourly
+const localBuildVersion =
+  isMacRelease || isWinDevChannel ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+const isHourlyChannel = isMacHourly || isWinHourly
+const isDailyChannel = isMacDaily || isWinDaily
+const isAdhocChannel = isMacAdhoc || isWinAdhoc
+const devChannelBuildVersion = isHourlyChannel
   ? process.env.ORCA_HOURLY_BUILD_VERSION
-  : isMacDaily
+  : isDailyChannel
     ? process.env.ORCA_DAILY_BUILD_VERSION
-    : isMacAdhoc
+    : isAdhocChannel
       ? process.env.ORCA_ADHOC_BUILD_VERSION
       : undefined
 // Why each dev channel gets its own repo rather than tagging into the main one:
@@ -38,11 +54,11 @@ const devChannelBuildVersion = isMacHourly
 // to install. Keeping adhoc/daily separate from hourly too means a branch build
 // or a once-a-day cut cannot be picked up by someone who only meant to ride
 // main's hourlies.
-const devChannelRepo = isMacHourly
+const devChannelRepo = isHourlyChannel
   ? 'orca-hourly'
-  : isMacDaily
+  : isDailyChannel
     ? 'orca-daily'
-    : isMacAdhoc
+    : isAdhocChannel
       ? 'orca-adhoc'
       : null
 const appId = 'com.stablyai.orca'
@@ -74,6 +90,8 @@ const bundledPluginResources = {
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
 const commonExtraResources = [relayExtraResource, bundledPluginResources, skillFreshnessResources]
+// Why: native speech addons must be real files outside app.asar; copy only the
+// package matching the artifact target instead of every optional variant.
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -124,11 +142,21 @@ module.exports = {
     // it is gitignored, but exclude it defensively so a stray local capture at
     // package time never bloats app.asar.
     '!pr-evidence{,/**/*}',
+    // Why: local agent/tooling directories may contain worktree symlink loops;
+    // they are never runtime inputs and must not be traversed by electron-builder.
+    '!{.claude,.grok,.agents,.codex}{,/**/*}',
     '!Casks{,/**/*}',
     '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
     '!out/**/*.test.js',
+    // Why: main builds with sourcemap:'hidden' so release CI can publish maps
+    // for decoding minified crash traces. The app never loads them (no
+    // sourceMappingURL is emitted), and packing them would add ~34MB to app.asar.
+    '!out/**/*.map',
     // Why: Vite's manifest is only used to project the paired web client.
     '!out/renderer/.vite{,/**/*}',
+    // Why: out/electron-dev caches `pnpm dev`'s per-branch Electron.app copies (~270MB each).
+    // CI never creates it, but packaging on a machine that has run dev would pack them all.
+    '!out/electron-dev{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
@@ -140,6 +168,10 @@ module.exports = {
     // Why: bundled plugins ship via extraResources to resources/plugins/launch;
     // packing the source tree into app.asar would duplicate those exact bytes.
     '!resources/plugins/launch/**',
+    // Why: speech packages are copied selectively through the platform
+    // extraResources entry below; keeping them in app.asar would ship every
+    // native variant (and duplicate the selected one).
+    '!node_modules/sherpa-onnx*{,/**/*}',
     // Why: the Windows CLI shim ships via extraResources to resources/bin/orca.cmd
     // (beside the native resources/bin/orca.exe). Packing the source tree into
     // app.asar too lets asarUnpack:['resources/**'] extract a second copy at
@@ -163,9 +195,6 @@ module.exports = {
   // before the GUI process starts, so those deps need the same treatment.
   // Why: out/package.json pins compiled output to CommonJS so parent
   // package.json files with type=module cannot change the packaged CLI loader.
-  // Why: sherpa-onnx native bindings (platform-specific subpackages) must be
-  // unpacked because they ship .node addons + .dylib/.so files that cannot be
-  // dlopen()'d from inside the asar archive.
   // Why: the OpenCode SQLite worker entry is also spawned by the scanner
   // service, which runs under ELECTRON_RUN_AS_NODE and so cannot see into
   // app.asar. Left packed, that spawn fails closed and every OpenCode session
@@ -189,6 +218,7 @@ module.exports = {
     'out/main/hermes/**',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
+    'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/session-scanner-opencode-sqlite-worker-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',
@@ -198,8 +228,7 @@ module.exports = {
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',
-    'node_modules/yaml/**',
-    'node_modules/sherpa-onnx*/**'
+    'node_modules/yaml/**'
   ],
   afterPack: async (context) => {
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
@@ -249,6 +278,13 @@ module.exports = {
     const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
+    if (context.electronPlatformName === 'win32') {
+      if (process.platform === 'win32' && canExecuteTargetArch) {
+        verifyPackagedNodePtyJobOwnership(resourcesDir)
+      } else {
+        console.log('[verify-packaged-node-pty] skipped cross-platform or cross-arch package')
+      }
+    }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
       executeCommands: canExecuteTargetArch
     })
@@ -300,9 +336,18 @@ module.exports = {
     executableName: 'Orca',
     // Why: Windows installers are signed after electron-builder packaging by
     // SignPath, so the packager cannot infer the updater publisherName.
-    signtoolOptions: {
-      publisherName: 'SignPath Foundation'
-    },
+    //
+    // Why dev channels drop it instead: they ship unsigned, because SignPath's
+    // approval waits are budgeted in hours and cannot fit an hourly cadence.
+    // electron-updater Authenticode-verifies every installer it downloads
+    // against the publisherName baked into the *installed* app's app-update.yml
+    // (NsisUpdater.verifySignature), and skips verification entirely when that
+    // name is absent. An unsigned build that still claimed 'SignPath Foundation'
+    // would therefore reject its own channel's next build — and its way back to
+    // stable with it. Dropping it is what makes dev→dev and dev→stable work.
+    ...(isWinDevChannel
+      ? { verifyUpdateCodeSignature: false }
+      : { signtoolOptions: { publisherName: 'SignPath Foundation' } }),
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('win32'),
@@ -385,12 +430,6 @@ module.exports = {
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
         to: 'agent-browser-darwin-${arch}'
-      },
-      // Why: serve-sim resolves its helper binary and camera assets relative
-      // to dist/serve-sim.js, so the whole package must be a real resource dir.
-      {
-        from: 'node_modules/serve-sim',
-        to: 'serve-sim'
       },
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',

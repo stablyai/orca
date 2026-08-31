@@ -60,7 +60,12 @@ export function expandGroupsForWorktreeReveal(
   const folderGroupKeys = getFolderWorkspaceRevealGroupKeys(
     worktreeId,
     args.folderWorkspaces,
-    args.projectGroups
+    args.projectGroups,
+    {
+      groupBy: args.groupBy,
+      workspaceStatuses: args.workspaceStatuses,
+      defaultHostId: args.defaultHostId
+    }
   )
   if (folderGroupKeys.length > 0) {
     for (const groupKey of folderGroupKeys) {

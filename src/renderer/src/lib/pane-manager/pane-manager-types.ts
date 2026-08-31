@@ -114,6 +114,7 @@ export type PaneRenderingDiagnostics = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  webglContextLossesInWindow?: number
   webglAttachFailedSinceRecovery: boolean
   hasComplexScriptOutput: boolean
   terminalWebglAutoDecision: TerminalWebglAutoDecision
@@ -142,6 +143,8 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  // Shared history bounds context-loss retries across resume and settled reveal.
+  webglContextLossTimestamps?: number[]
   // Hidden retained renderers rebuild at the resume boundary, never behind the hidden surface.
   webglRebuildDeferred?: boolean
   // Why per-pane: one pane's failed WebGL attach must not strand every other

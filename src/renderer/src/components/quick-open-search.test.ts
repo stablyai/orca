@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  QuickOpenPathRanker,
   QUICK_OPEN_QUERY_MAX_BYTES,
   QUICK_OPEN_RESULT_LIMIT,
   isQuickOpenQueryTooLarge,
@@ -9,6 +10,18 @@ import {
 } from './quick-open-search'
 
 describe('quick-open-search', () => {
+  it('finds and retains a target after 100k non-matches without retaining the inventory', () => {
+    const ranker = new QuickOpenPathRanker('sta-4354-tail-target', 32)
+    for (let index = 0; index < 100_100; index++) {
+      ranker.consider(`data/chunk-${String(index).padStart(6, '0')}/payload.bin`)
+    }
+    ranker.consider('src/sta-4354-tail-target.ts')
+
+    expect(ranker.result()).toEqual({
+      paths: ['src/sta-4354-tail-target.ts'],
+      totalCount: 1
+    })
+  })
   it('orders numbered paths naturally for empty queries and fuzzy-score ties', () => {
     const files = prepareQuickOpenFiles([
       'songs/100 - b.txt',

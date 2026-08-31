@@ -198,7 +198,9 @@ describe('bulk git helpers', () => {
         ':(literal)scratch'
       ],
       {
-        cwd: '/repo'
+        cwd: '/repo',
+        // Why: this read buffers, so it fences the WSL login shell's rc banner off its first NUL record.
+        captureWslLoginShellOutput: true
       }
     )
     // Why: a pathspec is tracked if git reports either the exact path or a

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildNewWorkspaceShortcutModalData, openNewWorkspaceFromShortcut } from './useIpcEvents'
+import {
+  buildNewWorkspaceShortcutModalData,
+  openNewWorkspaceFromShortcut
+} from './ipc-events/new-workspace-command'
 
 describe('buildNewWorkspaceShortcutModalData', () => {
   it('carries the active Linear issue into the Cmd+N composer', () => {

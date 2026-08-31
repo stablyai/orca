@@ -1,17 +1,14 @@
 import React from 'react'
-import { AlertTriangle, ChevronRight, LoaderCircle, Monitor, Server } from 'lucide-react'
+import { AlertTriangle, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { ProjectOptionDetail } from './ProjectComboboxRow'
 import { translate } from '@/i18n/i18n'
+import { HostRowIcon } from '../host-row-icon'
 
-/** The local machine isn't a server — a monitor glyph reads as "this computer". */
-export function HostRowIcon({ hostId }: { hostId: ExecutionHostId }): React.JSX.Element {
-  const Icon = hostId === LOCAL_EXECUTION_HOST_ID ? Monitor : Server
-  return <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-}
+export { HostRowIcon }
 
 /**
  * One run-target row. Shares the Project picker's shape — 32px, label and

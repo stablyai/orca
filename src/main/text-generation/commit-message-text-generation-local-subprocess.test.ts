@@ -162,7 +162,7 @@ describe('generateCommitMessageFromContext', () => {
       })
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu 24.04', '--', 'sh', '-lc', expect.any(String)],
+        ['-d', 'Ubuntu 24.04', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({
           cwd: undefined,
           windowsHide: true,
@@ -173,7 +173,7 @@ describe('generateCommitMessageFromContext', () => {
       expect(spawnEnv.ORCA_HOST_ONLY_SECRET).toBeUndefined()
       const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
-      expect(shellCommand).toContain('exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'agent'")
       expect(shellCommand).toContain('--mode')

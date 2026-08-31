@@ -5,7 +5,8 @@ import {
   refreshWorktreeHeadIdentities,
   type WorktreeHeadIdentityRefreshState
 } from './worktree-head-identity-refresh'
-import { notifyWorktreeGitStatusMetadataChanged, notifyWorktreesChanged } from './worktree-remote'
+import { notifyWorktreeGitStatusMetadataChanged } from './worktree-remote'
+import { notifyWatchedWorktreeCatalogChanged } from './watched-worktree-catalog-notification'
 
 export type WorktreeBaseNotificationWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
@@ -63,7 +64,7 @@ export function scheduleWorktreeBaseNotification(
     const emitHeadIdentities = pendingStructure.length === 0
     clearPendingWorktreeBaseNotifications(watch)
     for (const repoId of pendingStructure) {
-      notifyWorktreesChanged(watch.mainWindow, repoId)
+      notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId, watch.connectionId)
     }
     for (const repoId of sourceControlRepoIds) {
       notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId)

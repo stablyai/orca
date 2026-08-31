@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { WorktreeActivate, WorktreeCreate, WorktreeSet } from './worktree-schemas'
+import { WorktreeCreate } from './worktree-create-schemas'
+import { WorktreeActivate, WorktreeSet } from './worktree-schemas'
 
 describe('worktree RPC schemas', () => {
   it('validates additive navigation intent', () => {
@@ -123,5 +124,18 @@ describe('worktree RPC schemas', () => {
     const parsed = WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', displayName: 42 })
 
     expect(parsed.displayName).toBeUndefined()
+  })
+
+  it('parses optional GitHub PR suppression writes and clears', () => {
+    expect(
+      WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: 42 }).suppressedGitHubPR
+    ).toBe(42)
+    expect(
+      WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: null })
+        .suppressedGitHubPR
+    ).toBeNull()
+    expect(
+      WorktreeSet.safeParse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: 0 }).success
+    ).toBe(false)
   })
 })

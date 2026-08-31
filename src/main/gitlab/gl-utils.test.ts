@@ -19,8 +19,12 @@ import {
   classifyJobLogError,
   classifyListFetchError,
   classifyListIssuesError,
+  acquire,
+  release,
+  GITLAB_ADMISSION_TIMEOUT_MS,
   getIssueProjectRef,
   parseGlabJsonList,
+  parseGlabPaginationHeader,
   isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
@@ -322,6 +326,31 @@ describe('gitlab project ref resolution', () => {
       path: 'after/orca'
     })
     expect(sshExecMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('GitLab operation admission', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    // Drain any slots held by the saturation test before the next test.
+    for (let i = 0; i < 4; i += 1) {
+      release()
+    }
+  })
+
+  it('expires queued work instead of retaining it behind saturated operations', async () => {
+    vi.useFakeTimers()
+    await Promise.all(Array.from({ length: 4 }, () => acquire()))
+
+    const queued = acquire()
+    const rejection = expect(queued).rejects.toThrow(
+      'Timed out waiting for a GitLab operation slot.'
+    )
+    await vi.advanceTimersByTimeAsync(GITLAB_ADMISSION_TIMEOUT_MS)
+    await rejection
+
+    release()
+    await expect(acquire()).resolves.toBeUndefined()
   })
 })
 
@@ -634,6 +663,21 @@ describe('getGlabKnownHosts', () => {
     expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], { timeout: 10_000 })
   })
 
+  it('preserves WSL and background admission on the cold auth-status probe', async () => {
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await getGlabKnownHosts(undefined, {
+      wslDistro: 'Ubuntu',
+      admissionTier: 'background'
+    })
+
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], {
+      timeout: 10_000,
+      wslDistro: 'Ubuntu',
+      admissionTier: 'background'
+    })
+  })
+
   it('falls back to default when glab auth status fails', async () => {
     glabExecFileAsyncMock.mockRejectedValueOnce(new Error('glab not authenticated'))
 
@@ -877,5 +921,26 @@ describe('getGlabKnownHosts', () => {
     ])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
     unregisterSshGitProvider(connectionId)
+  })
+})
+
+describe('parseGlabPaginationHeader', () => {
+  it('reads a usable header value', () => {
+    expect(parseGlabPaginationHeader('25', 1)).toBe(25)
+    expect(parseGlabPaginationHeader(' 9 ', 1)).toBe(9)
+  })
+
+  it('returns undefined for an absent or unparseable header', () => {
+    expect(parseGlabPaginationHeader(undefined, 0)).toBeUndefined()
+    expect(parseGlabPaginationHeader('', 0)).toBeUndefined()
+    expect(parseGlabPaginationHeader('abc', 0)).toBeUndefined()
+  })
+
+  // Why: the minimum is what lets issues.ts tell "x-total: 0" (derive one page) apart from an
+  // absent header (probe for a next page), and what makes x-total-pages: 0 fall through.
+  it('rejects values below the minimum', () => {
+    expect(parseGlabPaginationHeader('0', 1)).toBeUndefined()
+    expect(parseGlabPaginationHeader('0', 0)).toBe(0)
+    expect(parseGlabPaginationHeader('-3', 0)).toBeUndefined()
   })
 })

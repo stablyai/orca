@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync, spawn as spawnChild } from 'node:child_process'
 import { build } from 'esbuild'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
-import { getEndpointFileName } from '../shared/agent-hook-listener'
+import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
 import { relayTestSocketPath } from './relay-test-socket-path'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
@@ -204,7 +204,8 @@ describe('Subprocess: Relay entry point', () => {
     const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const repaired = await relay.waitForResponse(repairedId)
     expect(repaired.error).toBeUndefined()
-    expect(repaired.result).toMatchObject({ id: 'pty-1' })
+    // Why: a spawn that never loaded node-pty must not burn a mint sequence, so the repair is still :1.
+    expect(repaired.result).toMatchObject({ id: expect.stringMatching(/^pty2:[^:]+:1$/) })
   }, 10_000)
 
   it('reloads node-pty after a late native binding failure without restarting', async () => {
@@ -228,7 +229,8 @@ describe('Subprocess: Relay entry point', () => {
     const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const repaired = await relay.waitForResponse(repairedId)
     expect(repaired.error).toBeUndefined()
-    expect(repaired.result).toMatchObject({ id: 'pty-2' })
+    // Why: the late failure happens after the id is minted, so the repair lands on the next sequence.
+    expect(repaired.result).toMatchObject({ id: expect.stringMatching(/^pty2:[^:]+:2$/) })
   }, 10_000)
 
   it('responds to fs.stat over stdin/stdout', async () => {

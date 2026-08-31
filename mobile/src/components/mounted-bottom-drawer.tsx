@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Pressable,
@@ -88,6 +88,28 @@ export function MountedBottomDrawer({
         topGap: spacing.lg
       })
     : undefined
+
+  // Why: a sheet pinned under a fill picker holds progress at its target while the
+  // picker owns the window, so nothing re-applies its transform when the picker
+  // leaves. If the native view was rebuilt underneath, it keeps a stale transform
+  // and never paints — a dimmed, dead screen the user can only escape by dismissing
+  // the whole modal. A shared-value write alone cannot heal that (verified on
+  // device: an unchanged or nudged style lands on the stale native binding), so the
+  // remount is what repaints; the writes below keep the shared values authoritative
+  // for the fresh view, which matters because the drawer swap (166ms) hands back
+  // before the 180ms enter animation has finished.
+  const [windowEpoch, setWindowEpoch] = useState(0)
+  const wasInteractiveRef = useRef(interactive)
+  useEffect(() => {
+    const tookWindowBack = visible && interactive && !wasInteractiveRef.current
+    wasInteractiveRef.current = interactive
+    if (!tookWindowBack) {
+      return
+    }
+    translateY.value = 0
+    progress.value = withTiming(1, { duration: SHOW_DURATION })
+    setWindowEpoch((epoch) => epoch + 1)
+  }, [interactive, visible])
 
   useEffect(() => {
     if (visible) {
@@ -358,6 +380,8 @@ export function MountedBottomDrawer({
 
         <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
           <Animated.View
+            // Why: remount per window hand-back — see the windowEpoch effect.
+            key={windowEpoch}
             style={[
               styles.drawer,
               fillAvailable ? styles.drawerFill : null,

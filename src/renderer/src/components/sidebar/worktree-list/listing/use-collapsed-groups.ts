@@ -8,6 +8,9 @@ import { PINNED_GROUP_KEY, getLineageGroupKey } from '../grouping/group-keys'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
+import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 
@@ -26,6 +29,8 @@ export function useEffectiveCollapsedGroups(args: {
   settings: AppState['settings']
   projectGroups: readonly ProjectGroup[]
   projectGrouping: ProjectGroupingModel
+  folderWorkspaces: readonly FolderWorkspace[]
+  defaultHostId: ExecutionHostId
 }): Set<string> {
   const {
     collapsedGroups,
@@ -40,7 +45,9 @@ export function useEffectiveCollapsedGroups(args: {
     workspaceStatuses,
     settings,
     projectGroups,
-    projectGrouping
+    projectGrouping,
+    folderWorkspaces,
+    defaultHostId
   } = args
   return useMemo(() => {
     if (!agentSendTargetWorktreeId) {
@@ -48,7 +55,22 @@ export function useEffectiveCollapsedGroups(args: {
     }
     const targetWorktree = worktreeMap.get(agentSendTargetWorktreeId)
     if (!targetWorktree) {
-      return collapsedGroups
+      // Why: folder workspaces are absent from worktreeMap, so without this the
+      // agent-send picker could never open the section hiding one (#15362).
+      const folderKeys = getFolderWorkspaceRevealGroupKeys(
+        agentSendTargetWorktreeId,
+        folderWorkspaces,
+        projectGroups,
+        { groupBy, workspaceStatuses, defaultHostId }
+      )
+      if (folderKeys.length === 0) {
+        return collapsedGroups
+      }
+      const nextForFolder = new Set(collapsedGroups)
+      for (const groupKey of folderKeys) {
+        nextForFolder.delete(groupKey)
+      }
+      return nextForFolder
     }
     const next = new Set(collapsedGroups)
     if (
@@ -92,6 +114,8 @@ export function useEffectiveCollapsedGroups(args: {
     settings,
     workspaceStatuses,
     worktreeLineageById,
-    worktreeMap
+    worktreeMap,
+    folderWorkspaces,
+    defaultHostId
   ])
 }

@@ -496,6 +496,37 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('getBufferSnapshot', () => {
+    it('publishes shell ownership only after the daemon proves the live PTY tree', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      lastSubprocess.confirmShellForeground.mockResolvedValue(true)
+
+      lastSubprocess._simulateData(
+        '\x1b[?1049h\x1b[?1003h\x1b[?1006hTUI\x1b]133;D;137\x07shell-marker'
+      )
+
+      await vi.waitFor(async () => {
+        await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
+          alternateScreen: false,
+          terminalOwner: 'shell'
+        })
+      })
+      await expect(adapter.confirmShellForeground(id)).resolves.toBe(true)
+      expect(lastSubprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
+    })
+
+    it('preserves live TUI modes when the daemon cannot prove shell ownership', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      lastSubprocess._simulateData(
+        '\x1b[?1049h\x1b[?1003h\x1b[?1006hLIVE-TUI\x1b]133;D;0\x07nested-shell'
+      )
+
+      await vi.waitFor(() => expect(lastSubprocess.confirmShellForeground).toHaveBeenCalledTimes(1))
+      const snapshot = await adapter.getBufferSnapshot(id)
+      expect(snapshot?.alternateScreen).toBe(true)
+      expect(snapshot?.terminalOwner).toBeUndefined()
+    })
+
     it('returns the daemon model with its absolute stream sequence', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('complete hidden output\r\n')
@@ -698,14 +729,19 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('onExit', () => {
     it('routes exit events from daemon', async () => {
-      const exits: { id: string; code: number }[] = []
+      const exits: { id: string; code: number; cause?: unknown }[] = []
       adapter.onExit((payload) => exits.push(payload))
 
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateExit(42)
 
       await waitFor(() => exits.length > 0)
-      expect(exits[0]).toEqual({ id, code: 42, incarnationId: expect.any(String) })
+      expect(exits[0]).toEqual({
+        id,
+        code: 42,
+        incarnationId: expect.any(String),
+        cause: { kind: 'exited', exitCode: 42 }
+      })
     })
   })
 

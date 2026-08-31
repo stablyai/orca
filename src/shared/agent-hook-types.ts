@@ -49,3 +49,6 @@ export type AgentHookInstallStatus = {
 // rewritten on every install() call so there is no durable on-disk v1 script
 // to inherit. Reserve the next bump for a real wire change.
 export const ORCA_HOOK_PROTOCOL_VERSION = '1' as const
+
+// Why: absence means the listener predates raw-JSON metadata headers, so managed scripts must keep using form posts.
+export const ORCA_HOOK_RAW_JSON_TRANSPORT = 'raw-json-v1' as const

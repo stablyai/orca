@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState
 } from 'react'
+import { flushSync } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -100,6 +101,12 @@ import {
   type SearchableBrowserPage
 } from '@/lib/browser-palette-search'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
+import {
+  buildPaletteWorktreeIndex,
+  isPaletteCurrentWorktree,
+  resolvePaletteRepoForWorktree,
+  resolvePaletteWorktree
+} from '@/lib/palette-repo-resolution'
 import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
 import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
 import {
@@ -134,7 +141,17 @@ import {
 } from '@/components/browser-pane/host-guest/browser-focus'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
-import { getPaletteHostBadge, type PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
+import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import type { Repo } from '../../../shared/repo-types'
+import {
+  getSettingsFocusedExecutionHostId,
+  isRuntimeOwnedSshTargetId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { buildPaletteListEntryRenderKeys } from '@/components/cmd-j/palette-list-entry-render-keys'
+import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import PaletteFilterMenu from '@/components/cmd-j/PaletteFilterMenu'
 import PaletteFilterChips from '@/components/cmd-j/PaletteFilterChips'
 import { buildPaletteFilterModel } from '@/components/cmd-j/palette-filter-options'
@@ -149,7 +166,10 @@ import {
 } from '@/components/cmd-j/palette-filter'
 import {
   capPaletteSection,
-  layoutMultiPrimaryPaletteSections
+  layoutMultiPrimaryPaletteSections,
+  PALETTE_SECTION_EXPAND_STEP,
+  PALETTE_SECTION_RENDER_CAP,
+  TYPED_QUERY_LEADING_PREVIEW
 } from '@/components/cmd-j/palette-section-render-cap'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
@@ -182,7 +202,6 @@ import {
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
 import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-focus-restore-target'
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { buildPluginQuickActions } from '@/components/cmd-j/plugin-quick-actions'
 import { PaletteCreateWorktreeRow } from '@/components/cmd-j/PaletteCreateWorktreeRow'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
@@ -205,12 +224,9 @@ import {
 } from '@/lib/worktree-palette-task-url-match'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
-import {
-  getSettingsFocusedExecutionHostId,
-  isRuntimeOwnedSshTargetId
-} from '../../../shared/execution-host'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -275,6 +291,7 @@ type HintRow = {
   id: string
   type: 'hint'
   label: string
+  onSeeMore?: () => void
 }
 
 type CreateWorktreePaletteItem = {
@@ -339,9 +356,56 @@ function isCurrentOpenTabItem(item: OpenTabPaletteItem): boolean {
   return item.type === 'browser-page' ? item.result.isCurrentPage : item.result.isCurrentTab
 }
 
+/** Not the command id: two hosts — or a duplicate snapshot — can publish the same tab id. */
+function getRecentTabOccurrenceBase(item: OpenTabPaletteItem): string {
+  if (item.type === 'browser-page') {
+    const result = item.result
+    return JSON.stringify([
+      item.type,
+      item.id,
+      result.executionHostId ?? '',
+      result.worktreeId,
+      result.workspaceId,
+      result.pageId
+    ])
+  }
+  if (item.type === 'simulator-tab') {
+    const result = item.result
+    // Why no groupId: it changes when a tab is regrouped mid-open, and the frozen
+    // order must keep resolving the row; tabId already identifies it within a host.
+    return JSON.stringify([
+      item.type,
+      item.id,
+      result.executionHostId ?? '',
+      result.worktreeId,
+      result.tabId
+    ])
+  }
+  const result = item.result
+  return JSON.stringify([
+    item.type,
+    item.id,
+    result.executionHostId ?? '',
+    result.worktreeId,
+    result.tabId,
+    result.entityId
+  ])
+}
+
+function buildRecentTabOccurrenceIds(items: readonly OpenTabPaletteItem[]): string[] {
+  const nextOrdinalByBase = new Map<string, number>()
+  return items.map((item) => {
+    const base = getRecentTabOccurrenceBase(item)
+    const ordinal = nextOrdinalByBase.get(base) ?? 0
+    nextOrdinalByBase.set(base, ordinal + 1)
+    return `recent-tab:${base}:${ordinal}`
+  })
+}
+
 /** An open tab's recent-section row plus the inputs inclusion needs. */
 type OpenTabRecentRow = {
   item: OpenTabPaletteItem
+  occurrenceId: string
   worktree: Worktree
   row: RecentWorkspaceTabRow
 }
@@ -391,7 +455,7 @@ function shouldIncludeOpenTabInRecentSection({
       unreadAgentCompletionPanes
     })
   })
-  return badge != null && badge !== 'done'
+  return badge != null && badge !== 'done' && badge !== 'interrupted'
 }
 
 function PaletteRowShortcutBadge({
@@ -486,12 +550,14 @@ function PaletteOpenTabPrimaryLine({
   titleRanges,
   secondaryText,
   secondaryRanges,
+  sessionAge,
   leadingBadges
 }: {
   title: string
   titleRanges: readonly MatchRange[]
   secondaryText: string
   secondaryRanges: readonly MatchRange[]
+  sessionAge?: string
   leadingBadges?: React.ReactNode
 }): React.JSX.Element {
   // Why gate on non-empty: empty secondaries (terminals/simulators) used to still
@@ -502,10 +568,22 @@ function PaletteOpenTabPrimaryLine({
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
       <span
         data-slot="palette-open-tab-title"
-        className="min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
+        className="min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
       >
         <HighlightedText text={title} matchRanges={titleRanges} />
       </span>
+      {sessionAge ? (
+        <span
+          aria-label={translate(
+            'auto.components.WorktreeJumpPalette.lastActiveTime',
+            'Last active {{value0}} ago',
+            { value0: sessionAge }
+          )}
+          className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground/70"
+        >
+          {sessionAge}
+        </span>
+      ) : null}
       {leadingBadges}
       {showSecondary ? (
         <>
@@ -610,31 +688,6 @@ function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Eleme
   )
 }
 
-function PaletteHostBadgeChip({
-  badge
-}: {
-  badge: PaletteHostBadge | null
-}): React.JSX.Element | null {
-  if (!badge) {
-    return null
-  }
-  // Host labels come from the registry and are intentionally not translated.
-  return (
-    <span
-      aria-label={translate(
-        'auto.components.WorktreeJumpPalette.paletteHostBadge',
-        'Host: {{value0}}',
-        { value0: badge.label }
-      )}
-      // Why solid background: left-column text used to paint through translucent
-      // host chips when a long worktree name overflowed under the badge column.
-      className="max-w-[140px] truncate rounded-[6px] border border-border/60 bg-background px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88"
-    >
-      {badge.label}
-    </span>
-  )
-}
-
 function getSettingsTargetFromSectionId(sectionId: string): {
   pane: SettingsNavTarget
   repoId: string | null
@@ -683,6 +736,9 @@ function WorktreeJumpPaletteContent({
 }): React.JSX.Element | null {
   // Why: subscribe to language changes so translated memos recompute without a fake i18n.language dependency.
   useTranslation()
+  // Why frozen on open: recomputing every keystroke would tick the session-age badges mid-session.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- visible is the freeze trigger, not a read value.
+  const paletteNowMs = useMemo(() => Date.now(), [visible])
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -710,6 +766,7 @@ function WorktreeJumpPaletteContent({
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeView = useAppStore((s) => s.activeView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const activeTabType = useAppStore((s) => s.activeTabType)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
@@ -804,11 +861,26 @@ function WorktreeJumpPaletteContent({
   // Why: filters reset on close — a filter that survives reopen silently hides
   // results in a surface people open reflexively.
   const [rawFilter, setRawFilter] = useState<PaletteFilterState>(EMPTY_PALETTE_FILTER)
+  const [prevQuery, setPrevQuery] = useState(query)
+  const [prevVisible, setPrevVisible] = useState(visible)
+  const [expandedSectionCaps, setExpandedSectionCaps] = useState<Record<string, number>>({})
+
+  if (prevQuery !== query || prevVisible !== visible) {
+    setPrevQuery(query)
+    setPrevVisible(visible)
+    setExpandedSectionCaps({})
+  }
+
+  const handleExpandSection = useCallback((sectionKey: string) => {
+    setExpandedSectionCaps((prev) => ({
+      ...prev,
+      [sectionKey]: (prev[sectionKey] ?? 0) + PALETTE_SECTION_EXPAND_STEP
+    }))
+  }, [])
+
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
-  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal' | 'simulator'>(
-    'terminal'
-  )
+  const previousActiveTabTypeRef = useRef<WorkspaceVisibleTabType>('terminal')
   const previousBrowserPageIdRef = useRef<string | null>(null)
   const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>('webview')
   // Why: the exact element focused before Cmd+J opened, so Escape restores it precisely (not a background worktree's hidden terminal).
@@ -827,6 +899,14 @@ function WorktreeJumpPaletteContent({
     () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
     [repos]
   )
+  // Why one resolver: a runtime-owned SSH row must not bypass fail-closed ownership through its physical host.
+  const resolveRepoForWorktree = useCallback(
+    (
+      worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+    ): Repo | undefined => resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity),
+    [repoByHostIdentity, repoMap]
+  )
+
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   // Why: reuse the sidebar host-scope registry so host badge labels stay in sync.
   const hostOptions = useMemo(
@@ -992,9 +1072,15 @@ function WorktreeJumpPaletteContent({
       orderEmptyQueryWorktrees({
         visibleWorktrees: emptyQueryVisibleWorktrees,
         activeWorktreeId,
+        activeWorkspaceExecutionHostId,
         lastVisitedAtByWorktreeId
       }),
-    [emptyQueryVisibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId]
+    [
+      emptyQueryVisibleWorktrees,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId,
+      lastVisitedAtByWorktreeId
+    ]
   )
 
   const searchScopeWorktrees = useMemo(() => {
@@ -1047,17 +1133,23 @@ function WorktreeJumpPaletteContent({
     [hasQuery, browserSortedWorktrees, searchScopeWorktrees]
   )
 
-  // Why: browser search includes archived worktrees, so this map must cover all worktrees, not just non-archived.
-  const worktreeMap = useMemo(() => {
-    const map = new Map<string, Worktree>()
-    for (const worktree of browserSortedWorktrees) {
-      map.set(worktree.id, worktree)
-    }
-    return map
-  }, [browserSortedWorktrees])
+  // Why browser search includes archived worktrees, so its host-qualified metadata index must too.
+  const paletteWorktreeIndex = useMemo(
+    () => buildPaletteWorktreeIndex(browserSortedWorktrees),
+    [browserSortedWorktrees]
+  )
+
+  const resolveWorktree = useCallback(
+    (worktreeId: string, hostId: ExecutionHostId | undefined): Worktree | undefined =>
+      resolvePaletteWorktree(paletteWorktreeIndex, worktreeId, hostId),
+    [paletteWorktreeIndex]
+  )
 
   const worktreeOrder = useMemo(
-    () => new Map(browserSortedWorktrees.map((worktree, index) => [worktree.id, index])),
+    () =>
+      new Map(
+        browserSortedWorktrees.map((worktree, index) => [getWorktreeHostIdentity(worktree), index])
+      ),
     [browserSortedWorktrees]
   )
 
@@ -1077,13 +1169,17 @@ function WorktreeJumpPaletteContent({
   const hostLabelByWorktreeId = useMemo(() => {
     const labels = new Map<string, string>()
     for (const worktree of allWorktrees) {
-      const badge = getPaletteHostBadge(repoMap.get(worktree.repoId), hostOptions, hostFilterActive)
+      const badge = getPaletteHostBadge(
+        resolveRepoForWorktree(worktree),
+        hostOptions,
+        hostFilterActive
+      )
       if (badge) {
-        labels.set(worktree.id, badge.label)
+        labels.set(getWorktreeHostIdentity(worktree), badge.label)
       }
     }
     return labels
-  }, [allWorktrees, hostFilterActive, hostOptions, repoMap])
+  }, [allWorktrees, hostFilterActive, hostOptions, resolveRepoForWorktree])
 
   // Why keyed on the unsorted list: normalized documents depend only on text
   // inputs, so re-sorting for recency re-ranks without re-normalizing anything.
@@ -1094,6 +1190,7 @@ function WorktreeJumpPaletteContent({
         allWorktrees.filter((worktree) => !worktree.isArchived),
         {
           repoMap,
+          repoMapByHostIdentity: repoByHostIdentity,
           prCache,
           issueCache,
           workspacePortsByWorktreeId: getWorkspacePortsByWorktreeId(workspacePortScan),
@@ -1103,6 +1200,7 @@ function WorktreeJumpPaletteContent({
       ),
     [
       allWorktrees,
+      repoByHostIdentity,
       repoMap,
       prCache,
       issueCache,
@@ -1119,9 +1217,17 @@ function WorktreeJumpPaletteContent({
         query: paletteSearchQuery,
         documents: worktreeDocuments,
         repoMap,
+        repoMapByHostIdentity: repoByHostIdentity,
         checksReviewByWorktree
       }),
-    [sortedWorktrees, paletteSearchQuery, worktreeDocuments, repoMap, checksReviewByWorktree]
+    [
+      sortedWorktrees,
+      paletteSearchQuery,
+      worktreeDocuments,
+      repoByHostIdentity,
+      repoMap,
+      checksReviewByWorktree
+    ]
   )
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -1130,12 +1236,16 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableBrowserPages({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
+      repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
       browserTabsByWorktree,
       browserPagesByWorkspace,
+      unifiedTabsByWorktree,
       activeBrowserTabId,
       activeWorktreeId,
+      activeWorkspaceExecutionHostId,
       activeTabType
     })
   }, [
@@ -1143,10 +1253,14 @@ function WorktreeJumpPaletteContent({
     activeBrowserTabId,
     activeTabType,
     activeWorktreeId,
+    activeWorkspaceExecutionHostId,
+    allWorktrees,
     browserPagesByWorkspace,
     browserTabsByWorktree,
     browserSortedWorktrees,
+    repoByHostIdentity,
     repoMap,
+    unifiedTabsByWorktree,
     worktreeOrder
   ])
 
@@ -1161,12 +1275,15 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableSimulatorTabs({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
+      repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
       unifiedTabsByWorktree,
       activeGroupIdByWorktree,
       groupsByWorktree,
       activeWorktreeId,
+      activeWorkspaceExecutionHostId,
       activeTabType
     })
   }, [
@@ -1174,9 +1291,12 @@ function WorktreeJumpPaletteContent({
     activeGroupIdByWorktree,
     activeTabType,
     activeWorktreeId,
+    activeWorkspaceExecutionHostId,
+    allWorktrees,
     browserSortedWorktrees,
     groupsByWorktree,
     repoMap,
+    repoByHostIdentity,
     unifiedTabsByWorktree,
     worktreeOrder
   ])
@@ -1192,7 +1312,9 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableWorkspaceTabs({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
+      repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
       unifiedTabsByWorktree,
       tabsByWorktree,
@@ -1203,6 +1325,7 @@ function WorktreeJumpPaletteContent({
       activeGroupIdByWorktree,
       groupsByWorktree,
       activeWorktreeId,
+      activeWorkspaceExecutionHostId,
       activeTabType,
       activeTabId,
       activeTabIdByWorktree,
@@ -1223,10 +1346,13 @@ function WorktreeJumpPaletteContent({
     activeTabType,
     activeTabTypeByWorktree,
     activeWorktreeId,
+    activeWorkspaceExecutionHostId,
     agentStatusByPaneKey,
+    allWorktrees,
     browserSortedWorktrees,
     groupsByWorktree,
     openFiles,
+    repoByHostIdentity,
     repoMap,
     retainedAgentsByPaneKey,
     settings?.tabAutoGenerateTitle,
@@ -1246,11 +1372,14 @@ function WorktreeJumpPaletteContent({
   const worktreeItems = useMemo<WorktreePaletteItem[]>(() => {
     const items = worktreeMatches
       .map((match) => {
-        const worktree = worktreeMap.get(match.worktreeId)
+        const worktree = resolveWorktree(match.worktreeId, match.worktreeHostId)
         if (!worktree) {
           return null
         }
         return {
+          // Why the bare id stays: buildPaletteListEntryRenderKeys already disambiguates a
+          // repeated id for React and cmdk, and the row now resolves through its own host
+          // above — so the visible command value needs no host suffix.
           id: `worktree:${worktree.id}`,
           type: 'worktree' as const,
           match,
@@ -1270,7 +1399,7 @@ function WorktreeJumpPaletteContent({
         { rank: b.match.rank, order: orderById.get(b.id) ?? 0, id: b.id }
       )
     )
-  }, [hasQuery, worktreeMap, worktreeMatches])
+  }, [hasQuery, resolveWorktree, worktreeMatches])
 
   const browserItems = useMemo<BrowserPaletteItem[]>(
     () =>
@@ -1309,8 +1438,18 @@ function WorktreeJumpPaletteContent({
     // An empty query leaves every rank null, so ordering falls through to those scores.
     return items.sort((a, b) =>
       comparePaletteRankedItems(
-        { rank: a.result.rank, order: a.result.score, id: a.id },
-        { rank: b.result.rank, order: b.result.score, id: b.id }
+        {
+          rank: a.result.rank,
+          order: a.result.score,
+          id: a.id,
+          lastActiveAt: a.result.lastActiveAt ?? undefined
+        },
+        {
+          rank: b.result.rank,
+          order: b.result.score,
+          id: b.id,
+          lastActiveAt: b.result.lastActiveAt ?? undefined
+        }
       )
     )
   }, [browserItems, simulatorItems, workspaceTabItems])
@@ -1348,17 +1487,22 @@ function WorktreeJumpPaletteContent({
   // once inclusion would drop it (a current tab that quiets down), or the pip blanks mid-open.
   const openTabRecentRows = useMemo<OpenTabRecentRow[]>(() => {
     const entries: OpenTabRecentRow[] = []
-    for (const item of openTabItems) {
-      const worktree = worktreeMap.get(item.result.worktreeId)
+    const occurrenceIds = buildRecentTabOccurrenceIds(openTabItems)
+    for (const [index, item] of openTabItems.entries()) {
+      const worktree = resolveWorktree(item.result.worktreeId, item.result.executionHostId)
       if (!worktree) {
         continue
       }
+      const occurrenceId = occurrenceIds[index]
       entries.push({
         item,
+        occurrenceId,
         worktree,
         row: {
           id: item.id,
+          occurrenceId,
           worktreeId: worktree.id,
+          worktreeHostId: worktree.hostId,
           unifiedTabId: item.type === 'browser-page' ? null : item.result.tabId,
           terminalTab:
             item.type === 'workspace-tab' && item.result.contentType === 'terminal'
@@ -1369,10 +1513,10 @@ function WorktreeJumpPaletteContent({
       })
     }
     return entries
-  }, [openTabItems, terminalTabsById, worktreeMap])
+  }, [openTabItems, resolveWorktree, terminalTabsById])
 
-  const recentTabRowById = useMemo(
-    () => new Map(openTabRecentRows.map(({ row }) => [row.id, row])),
+  const recentTabRowByItem = useMemo(
+    () => new Map(openTabRecentRows.map(({ item, row }) => [item, row])),
     [openTabRecentRows]
   )
 
@@ -1487,15 +1631,16 @@ function WorktreeJumpPaletteContent({
     visible
   ])
 
-  // Why: walk the frozen order rather than re-sorting the tab list — the frozen ids are the ranking,
-  // so agent churn never reshuffles rows under the cursor. Cap after resolving, not before: a chip
-  // applied mid-open narrows `openTabItems`, and capping first would leave the section empty.
+  // Why walk the frozen order, and cap after resolving: agent churn must not reshuffle rows, and a
+  // mid-open chip narrows `openTabItems` — capping first would leave the section empty.
   const recentTabItems = useMemo<PaletteItem[]>(() => {
-    const itemById = new Map(openTabItems.map((item) => [item.id, item]))
+    const itemByOccurrenceId = new Map(
+      openTabRecentRows.map(({ occurrenceId, item }) => [occurrenceId, item])
+    )
     return recentTabOrder
-      .flatMap((id) => itemById.get(id) ?? [])
+      .flatMap((occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? [])
       .slice(0, EMPTY_QUERY_RECENT_TAB_CAP)
-  }, [openTabItems, recentTabOrder])
+  }, [openTabRecentRows, recentTabOrder])
 
   const settingsResults = useMemo(
     () => buildCmdJSettingsResults(settingsSections),
@@ -1746,27 +1891,35 @@ function WorktreeJumpPaletteContent({
   }, [hasQuery, openTabItems, worktreeItems])
 
   const paletteSections = useMemo(() => {
+    const openTabsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['open-tabs'] ?? 0)
     const openTabs = hasQuery
-      ? capPaletteSection(openTabItems)
+      ? capPaletteSection(openTabItems, openTabsCap)
       : { visible: recentTabItems, overflowCount: 0 }
     // Why: the worktree section shrinks against the recent rows to hold the empty-query list at its
     // pre-existing 10, so RECENT WORKTREES stays above the fold. An empty recent section hands the
     // whole budget to worktrees but never uncaps — a filter chip or a tab-less session used to drop
     // every open tab and mount one row per workspace.
-    const worktreeCap = hasQuery
+    const baseWorktreeCap = hasQuery
       ? Infinity
       : Math.min(
           openTabs.visible.length === 0 ? EMPTY_QUERY_ROW_BUDGET : EMPTY_QUERY_WORKTREE_CAP,
           Math.max(1, EMPTY_QUERY_ROW_BUDGET - openTabs.visible.length)
         )
+    const worktreeCap = hasQuery
+      ? PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['worktrees'] ?? 0)
+      : baseWorktreeCap + (expandedSectionCaps['worktrees'] ?? 0)
     // Why: a typed query can match hundreds of rows; capping the rendered slice
     // is what keeps a one-character search from building an unbounded DOM.
     const worktrees = hasQuery
-      ? capPaletteSection(worktreeItems)
-      : { visible: worktreeItems.slice(0, worktreeCap), overflowCount: 0 }
-    const projectTargets = capPaletteSection(hasQuery ? projectTargetItems : [])
-    const middle = capPaletteSection(hasQuery ? middleItems : [])
-    const showWorktreeHint = !hasQuery && worktreeItems.length > worktreeCap
+      ? capPaletteSection(worktreeItems, worktreeCap)
+      : {
+          visible: worktreeItems.slice(0, worktreeCap),
+          overflowCount: Math.max(0, worktreeItems.length - worktreeCap)
+        }
+    const projectTargetsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['projects'] ?? 0)
+    const projectTargets = capPaletteSection(hasQuery ? projectTargetItems : [], projectTargetsCap)
+    const middleCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['middle'] ?? 0)
+    const middle = capPaletteSection(hasQuery ? middleItems : [], middleCap)
     // Why: only interleave when both primaries have hits — a lone section keeps the
     // full hard-capped list with no floor (empty headers / wasted slots).
     const multiPrimaryFirstScreen =
@@ -1774,7 +1927,12 @@ function WorktreeJumpPaletteContent({
     const multiPrimaryLayout = multiPrimaryFirstScreen
       ? layoutMultiPrimaryPaletteSections<WorktreePaletteItem | OpenTabPaletteItem>({
           leadingItems: openTabsLeadSections ? openTabItems : worktreeItems,
-          trailingItems: openTabsLeadSections ? worktreeItems : openTabItems
+          trailingItems: openTabsLeadSections ? worktreeItems : openTabItems,
+          leadingPreviewCount:
+            TYPED_QUERY_LEADING_PREVIEW +
+            (expandedSectionCaps[openTabsLeadSections ? 'open-tabs' : 'worktrees'] ?? 0),
+          leadingHardCap: openTabsLeadSections ? openTabsCap : worktreeCap,
+          trailingHardCap: openTabsLeadSections ? worktreeCap : openTabsCap
         })
       : null
 
@@ -1787,11 +1945,11 @@ function WorktreeJumpPaletteContent({
       middleOverflowCount: middle.overflowCount,
       visibleOpenTabItems: openTabs.visible as PaletteItem[],
       openTabOverflowCount: openTabs.overflowCount,
-      showWorktreeHint,
       multiPrimaryFirstScreen,
       multiPrimaryLayout
     }
   }, [
+    expandedSectionCaps,
     worktreeItems,
     projectTargetItems,
     middleItems,
@@ -1802,10 +1960,10 @@ function WorktreeJumpPaletteContent({
   ])
 
   // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query.
-  const recentTabShortcutIndexById = useMemo(
+  const recentTabShortcutIndexByItem = useMemo(
     () =>
       new Map(
-        hasQuery ? [] : paletteSections.visibleOpenTabItems.map((item, index) => [item.id, index])
+        hasQuery ? [] : paletteSections.visibleOpenTabItems.map((item, index) => [item, index])
       ),
     [hasQuery, paletteSections]
   )
@@ -1864,13 +2022,11 @@ function WorktreeJumpPaletteContent({
       fetchLinearIssue: state.fetchLinearIssue
     })
       .catch(() => null)
-      .then(
-        (issue): CmdJLinearIssuePreview => ({
-          ...pendingPreview,
-          issue,
-          loading: false
-        })
-      )
+      .then((issue): CmdJLinearIssuePreview => ({
+        ...pendingPreview,
+        issue,
+        loading: false
+      }))
     linearIssueLookupRef.current = { query: createWorktreeName, promise }
     void promise.then((preview) => {
       if (linearIssueLookupGenerationRef.current === generation) {
@@ -1919,13 +2075,11 @@ function WorktreeJumpPaletteContent({
       sourceContext
     })
       .catch(() => null)
-      .then(
-        (item): CmdJGitHubWorkItemPreview => ({
-          ...pendingPreview,
-          item: item ?? null,
-          loading: false
-        })
-      )
+      .then((item): CmdJGitHubWorkItemPreview => ({
+        ...pendingPreview,
+        item: item ?? null,
+        loading: false
+      }))
     githubLookupRef.current = { query: createWorktreeName, promise }
     void promise.then((preview) => {
       if (githubLookupGenerationRef.current === generation) {
@@ -1981,7 +2135,6 @@ function WorktreeJumpPaletteContent({
       visibleProjectTargetItems,
       visibleMiddleItems,
       visibleOpenTabItems,
-      showWorktreeHint,
       worktreeOverflowCount,
       projectTargetOverflowCount,
       middleOverflowCount,
@@ -1989,16 +2142,15 @@ function WorktreeJumpPaletteContent({
       multiPrimaryFirstScreen,
       multiPrimaryLayout
     } = paletteSections
-    const pushOverflowHint = (id: string, overflowCount: number): void => {
+    const pushOverflowHint = (id: string, overflowCount: number, onSeeMore?: () => void): void => {
       if (overflowCount > 0) {
         entries.push({
           id,
           type: 'hint',
-          label: translate(
-            'worktreeJumpPalette.renderCapOverflow',
-            '{{value0}} more — scroll or keep typing to narrow',
-            { value0: overflowCount }
-          )
+          label: translate('worktreeJumpPalette.renderCapOverflow', '{{value0}} more', {
+            value0: overflowCount
+          }),
+          onSeeMore
         })
       }
     }
@@ -2048,18 +2200,9 @@ function WorktreeJumpPaletteContent({
       }
       pushWorktreesHeader()
       appendPaletteListEntries(entries, visibleWorktreeItems)
-      if (showWorktreeHint) {
-        entries.push({
-          id: '__hint_worktree_cap__',
-          type: 'hint',
-          label: translate(
-            'auto.components.WorktreeJumpPalette.dabd819ca1',
-            'Type to see all {{value0}} worktrees',
-            { value0: worktreeItems.length }
-          )
-        })
-      }
-      pushOverflowHint('__hint_worktree_overflow__', worktreeOverflowCount)
+      pushOverflowHint('__hint_worktree_overflow__', worktreeOverflowCount, () =>
+        handleExpandSection('worktrees')
+      )
     }
 
     const pushOpenTabSection = (): void => {
@@ -2068,7 +2211,9 @@ function WorktreeJumpPaletteContent({
       }
       pushOpenTabsHeader()
       appendPaletteListEntries(entries, visibleOpenTabItems)
-      pushOverflowHint('__hint_open_tab_overflow__', openTabOverflowCount)
+      pushOverflowHint('__hint_open_tab_overflow__', openTabOverflowCount, () =>
+        handleExpandSection('open-tabs')
+      )
     }
 
     const pushProjectAndMiddleSections = (): void => {
@@ -2084,7 +2229,9 @@ function WorktreeJumpPaletteContent({
           })
         }
         appendPaletteListEntries(entries, visibleProjectTargetItems)
-        pushOverflowHint('__hint_project_overflow__', projectTargetOverflowCount)
+        pushOverflowHint('__hint_project_overflow__', projectTargetOverflowCount, () =>
+          handleExpandSection('projects')
+        )
       }
       if (visibleMiddleItems.length > 0) {
         if (showMiddleHeader) {
@@ -2095,7 +2242,9 @@ function WorktreeJumpPaletteContent({
           })
         }
         appendPaletteListEntries(entries, visibleMiddleItems)
-        pushOverflowHint('__hint_middle_overflow__', middleOverflowCount)
+        pushOverflowHint('__hint_middle_overflow__', middleOverflowCount, () =>
+          handleExpandSection('middle')
+        )
       }
     }
 
@@ -2121,6 +2270,9 @@ function WorktreeJumpPaletteContent({
     // Typed query with both open tabs and worktrees: soft-split so the trailing
     // primary is not buried under ~50 leading rows (see tmp/cmd-j-recommended.html).
     if (multiPrimaryFirstScreen && multiPrimaryLayout) {
+      const leadingSectionKey = openTabsLeadSections ? 'open-tabs' : 'worktrees'
+      const trailingSectionKey = openTabsLeadSections ? 'worktrees' : 'open-tabs'
+
       const leadingHintId = openTabsLeadSections
         ? '__hint_open_tab_overflow__'
         : '__hint_worktree_overflow__'
@@ -2146,7 +2298,11 @@ function WorktreeJumpPaletteContent({
       pushLeadingHeader()
       appendPaletteListEntries(entries, multiPrimaryLayout.leadingPreview as PaletteItem[])
       // Soft more for the leading section (rows resuming below + hard-cap tail).
-      pushOverflowHint(leadingHintId, multiPrimaryLayout.leadingMoreCount)
+      // Why: reveals the next batch into the leading preview so the user can
+      // keep browsing tabs without having to scroll past the worktrees section.
+      pushOverflowHint(leadingHintId, multiPrimaryLayout.leadingMoreCount, () =>
+        handleExpandSection(leadingSectionKey)
+      )
       pushTrailingHeader()
       // Floor first, then remaining leading rows, then trailing rest — same order
       // as orderMultiPrimaryPaletteItems / keyboard selection. Each remainder
@@ -2156,6 +2312,9 @@ function WorktreeJumpPaletteContent({
       if (hasLeadingRest) {
         pushLeadingHeader(CONTINUED_SECTION_HEADER_ID_SUFFIX)
         appendPaletteListEntries(entries, multiPrimaryLayout.leadingRest as PaletteItem[])
+        pushOverflowHint(`${leadingHintId}_tail`, multiPrimaryLayout.leadingHardOverflowCount, () =>
+          handleExpandSection(leadingSectionKey)
+        )
       }
       if (multiPrimaryLayout.trailingRest.length > 0) {
         // Only re-label when the leading remainder split the trailing section.
@@ -2165,7 +2324,9 @@ function WorktreeJumpPaletteContent({
         appendPaletteListEntries(entries, multiPrimaryLayout.trailingRest as PaletteItem[])
       }
       // Trailing rest is already on screen; only hard-cap overflow needs a hint.
-      pushOverflowHint(trailingHintId, multiPrimaryLayout.trailingHardOverflowCount)
+      pushOverflowHint(trailingHintId, multiPrimaryLayout.trailingHardOverflowCount, () =>
+        handleExpandSection(trailingSectionKey)
+      )
       pushProjectAndMiddleSections()
       if (showCreateAction) {
         entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
@@ -2193,14 +2354,21 @@ function WorktreeJumpPaletteContent({
     }
     return entries
   }, [
+    handleExpandSection,
     hasQuery,
     middleLeadsSections,
     openTabsLeadSections,
     paletteSections,
     showCreateAction,
-    taskSourceUrl,
-    worktreeItems.length
+    taskSourceUrl
   ])
+
+  // Why not entry.id directly: a duplicated persisted id would repeat a React key,
+  // and the reconciler then leaves the extra row mounted as a frozen ghost.
+  const listEntryRenderKeys = useMemo(
+    () => buildPaletteListEntryRenderKeys(listEntries.map((entry) => entry.id)),
+    [listEntries]
+  )
 
   // Why derive from listEntries: multi-primary interleave must stay identical for
   // empty-state counts and keyboard selection — dual-path builders drifted before.
@@ -2215,9 +2383,11 @@ function WorktreeJumpPaletteContent({
     [listEntries]
   )
 
+  // Why the render keys, not entry ids: cmdk selects by the rendered `value`, so the
+  // allow-list has to name the same de-duplicated keys the rows carry.
   const selectionItemIds = useMemo(
-    () => getWorktreePaletteSelectionItemIds(listEntries),
-    [listEntries]
+    () => getWorktreePaletteSelectionItemIds(listEntries, listEntryRenderKeys),
+    [listEntries, listEntryRenderKeys]
   )
 
   // Why passive, and why after the snapshot effect: it must record the head cmdk *had* while the
@@ -2446,7 +2616,7 @@ function WorktreeJumpPaletteContent({
       const activation = activateBrowserPagePaletteResult(result)
       if (activation.status === 'failed') {
         toast.error(
-          activation.reason === 'missing-page'
+          activation.reason !== 'missing-worktree'
             ? translate(
                 'auto.components.WorktreeJumpPalette.d7d496a451',
                 'Browser page no longer exists'
@@ -2656,6 +2826,7 @@ function WorktreeJumpPaletteContent({
     if (
       !isWorktreePaletteCreateActivationAllowed({
         hasTaskUrlIntent: taskSourceUrl !== null,
+        hasCreateName: trimmed.length > 0,
         selectionMovedByUser: selectionMovedByUserRef.current
       })
     ) {
@@ -3073,11 +3244,12 @@ function WorktreeJumpPaletteContent({
           </CommandEmpty>
         ) : (
           <>
-            {listEntries.map((entry) => {
+            {listEntries.map((entry, entryIndex) => {
+              const renderKey = listEntryRenderKeys[entryIndex] ?? entry.id
               if (entry.type === 'section-header') {
                 return (
                   <div
-                    key={entry.id}
+                    key={renderKey}
                     className="mx-0.5 mt-3 mb-1 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70"
                   >
                     {entry.label}
@@ -3086,14 +3258,33 @@ function WorktreeJumpPaletteContent({
               }
 
               if (entry.type === 'hint') {
-                // Why: plain div (not CommandItem) so cmdk can't select it; arrow keys skip it via selectableItems.
                 return (
-                  <div
-                    key={entry.id}
-                    className="mx-0.5 mt-1 px-3 py-1.5 text-[12px] italic text-muted-foreground/70"
+                  <CommandItem
+                    key={renderKey}
+                    value={renderKey}
+                    onSelect={() => {
+                      const previousIndex = selectionItemIds.indexOf(renderKey)
+                      flushSync(() => entry.onSeeMore?.())
+                      const expandedItemId = Array.from(
+                        listRef.current?.querySelectorAll<HTMLElement>('[cmdk-item]') ?? []
+                      )[previousIndex]?.getAttribute('data-value')
+                      if (expandedItemId) {
+                        setSelectedItemId(expandedItemId)
+                      }
+                      inputRef.current?.focus()
+                    }}
+                    className={cn(
+                      JUMP_PALETTE_ITEM_CLASSNAME,
+                      'mt-1 min-h-0 gap-2 py-1.5 text-[12px] text-muted-foreground'
+                    )}
                   >
-                    {entry.label}
-                  </div>
+                    <span className="truncate">{entry.label}</span>
+                    {entry.onSeeMore ? (
+                      <span className="h-6 shrink-0 rounded-md border border-input bg-background px-2 text-xs font-medium leading-6 text-foreground">
+                        {translate('worktreeJumpPalette.seeMore', 'See more')}
+                      </span>
+                    ) : null}
+                  </CommandItem>
                 )
               }
 
@@ -3103,7 +3294,7 @@ function WorktreeJumpPaletteContent({
                   linearIssueUrlIntent !== null && currentLinearIssuePreview?.loading !== false
                 return (
                   <PaletteCreateWorktreeRow
-                    key={entry.id}
+                    key={renderKey}
                     className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'mt-1 py-1.5')}
                     createWorktreeName={createWorktreeName}
                     linearIdentifier={linearIssueUrlIntent?.identifier ?? null}
@@ -3118,13 +3309,17 @@ function WorktreeJumpPaletteContent({
 
               if (entry.type === 'worktree') {
                 const worktree = entry.worktree
-                const repo = repoMap.get(worktree.repoId)
+                const repo = resolveRepoForWorktree(worktree)
                 const repoName = repo?.displayName ?? ''
                 // Why: both must match searchWorktrees' resolution, or highlight ranges land on
                 // the wrong text — and a branch-less row would throw here before search ever ran.
                 const branch = resolveWorktreeBranchLabel(worktree)
                 const worktreeLabel = resolveWorktreeDisplayName(worktree)
-                const isCurrentWorktree = activeWorktreeId === worktree.id
+                const isCurrentWorktree = isPaletteCurrentWorktree(
+                  worktree,
+                  activeWorktreeId,
+                  activeWorkspaceExecutionHostId
+                )
                 // Why: runtime-owned SSH targets have relay health owned by the runtime layer — don't show a false disconnected.
                 const sshConnectionId =
                   repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
@@ -3134,12 +3329,11 @@ function WorktreeJumpPaletteContent({
                   ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
                   : null
                 const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-                const hostBadge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
-
+                const sessionAge = formatPaletteSessionAge(worktree.lastActivityAt, paletteNowMs)
                 return (
                   <CommandItem
-                    key={entry.id}
-                    value={entry.id}
+                    key={renderKey}
+                    value={renderKey}
                     onSelect={() => handleSelectItem(entry)}
                     data-current={isCurrentWorktree ? 'true' : undefined}
                     className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
@@ -3183,6 +3377,18 @@ function WorktreeJumpPaletteContent({
                               slot="palette-worktree-name"
                               className="truncate text-[14px] font-semibold text-foreground"
                             />
+                            {sessionAge ? (
+                              <span
+                                aria-label={translate(
+                                  'auto.components.WorktreeJumpPalette.lastActiveTime',
+                                  'Last active {{value0}} ago',
+                                  { value0: sessionAge }
+                                )}
+                                className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground/70"
+                              >
+                                {sessionAge}
+                              </span>
+                            ) : null}
                             {isCurrentWorktree && (
                               <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
                                 {translate(
@@ -3232,7 +3438,6 @@ function WorktreeJumpPaletteContent({
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <PaletteHostBadgeChip badge={hostBadge} />
                           {repoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                               <RepoBadgeMark color={repo?.badgeColor} />
@@ -3254,16 +3459,13 @@ function WorktreeJumpPaletteContent({
               if (entry.type === 'project-target') {
                 const result = entry.result
                 const isProject = result.kind === 'project'
-                const hostBadge = isProject
-                  ? getPaletteHostBadge(result.repo, hostOptions, hostFilterActive)
-                  : null
                 const badgeLabel = isProject
                   ? translate('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
                   : translate('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
                 return (
                   <CommandItem
-                    key={entry.id}
-                    value={entry.id}
+                    key={renderKey}
+                    value={renderKey}
                     onSelect={() => handleSelectItem(entry)}
                     className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
@@ -3284,7 +3486,6 @@ function WorktreeJumpPaletteContent({
                         </div>
                         {isProject ? (
                           <div className="flex shrink-0 items-center gap-1.5">
-                            <PaletteHostBadgeChip badge={hostBadge} />
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                               <RepoBadgeMark color={result.repo.badgeColor} />
                               <span className="truncate">{result.repo.displayName}</span>
@@ -3306,8 +3507,8 @@ function WorktreeJumpPaletteContent({
                     : translate('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
                 return (
                   <CommandItem
-                    key={entry.id}
-                    value={entry.id}
+                    key={renderKey}
+                    value={renderKey}
                     onSelect={() => handleSelectItem(entry)}
                     className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
@@ -3333,16 +3534,15 @@ function WorktreeJumpPaletteContent({
 
               if (entry.type === 'workspace-tab') {
                 const result = entry.result
-                const workspaceTabWorktree = worktreeMap.get(result.worktreeId)
+                const sessionAge = formatPaletteSessionAge(result.lastActiveAt, paletteNowMs)
+                const workspaceTabWorktree = resolveWorktree(
+                  result.worktreeId,
+                  result.executionHostId
+                )
                 const workspaceTabRepo = workspaceTabWorktree
-                  ? repoMap.get(workspaceTabWorktree.repoId)
+                  ? resolveRepoForWorktree(workspaceTabWorktree)
                   : undefined
                 const workspaceTabRepoName = workspaceTabRepo?.displayName ?? result.repoName
-                const workspaceTabHostBadge = getPaletteHostBadge(
-                  workspaceTabRepo,
-                  hostOptions,
-                  hostFilterActive
-                )
                 const workspaceTabFallback =
                   result.contentType === 'terminal' && result.occupantAgent ? (
                     <span
@@ -3359,12 +3559,12 @@ function WorktreeJumpPaletteContent({
                   )
                 // Why regardless of query: a searched-for tab is exactly when you need to know it's
                 // still working — the map covers every open tab, not just the recent section.
-                const recentRow = recentTabRowById.get(entry.id) ?? null
+                const recentRow = recentTabRowByItem.get(entry) ?? null
 
                 return (
                   <CommandItem
-                    key={entry.id}
-                    value={entry.id}
+                    key={renderKey}
+                    value={renderKey}
                     onSelect={() => handleSelectItem(entry)}
                     className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
@@ -3379,6 +3579,7 @@ function WorktreeJumpPaletteContent({
                             titleRanges={result.titleRanges}
                             secondaryText={result.secondaryText}
                             secondaryRanges={result.secondaryRanges}
+                            sessionAge={sessionAge}
                             leadingBadges={
                               <>
                                 {result.isCurrentTab && (
@@ -3408,7 +3609,6 @@ function WorktreeJumpPaletteContent({
                             worktree={workspaceTabWorktree}
                             className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
                           />
-                          <PaletteHostBadgeChip badge={workspaceTabHostBadge} />
                           {workspaceTabRepoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                               <RepoBadgeMark color={workspaceTabRepo?.badgeColor} />
@@ -3421,7 +3621,7 @@ function WorktreeJumpPaletteContent({
                             </span>
                           )}
                           <PaletteRowShortcutBadge
-                            index={recentTabShortcutIndexById.get(entry.id)}
+                            index={recentTabShortcutIndexByItem.get(entry)}
                             modifierKeys={digitShortcutModifiers}
                           />
                         </div>
@@ -3433,21 +3633,20 @@ function WorktreeJumpPaletteContent({
 
               if (entry.type === 'simulator-tab') {
                 const result = entry.result
-                const simulatorWorktree = worktreeMap.get(result.worktreeId)
+                const simulatorWorktree = resolveWorktree(result.worktreeId, result.executionHostId)
                 const simulatorRepo = simulatorWorktree
-                  ? repoMap.get(simulatorWorktree.repoId)
+                  ? resolveRepoForWorktree(simulatorWorktree)
                   : undefined
                 const simulatorRepoName = simulatorRepo?.displayName ?? result.repoName
-                const simulatorHostBadge = getPaletteHostBadge(
-                  simulatorRepo,
-                  hostOptions,
-                  hostFilterActive
+                const sessionAge = formatPaletteSessionAge(
+                  result.lastActiveAt ?? null,
+                  paletteNowMs
                 )
 
                 return (
                   <CommandItem
-                    key={entry.id}
-                    value={entry.id}
+                    key={renderKey}
+                    value={renderKey}
                     onSelect={() => handleSelectItem(entry)}
                     className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
@@ -3462,6 +3661,7 @@ function WorktreeJumpPaletteContent({
                             titleRanges={result.titleRanges}
                             secondaryText={result.secondaryText}
                             secondaryRanges={result.secondaryRanges}
+                            sessionAge={sessionAge}
                             leadingBadges={
                               <>
                                 {result.isCurrentTab && (
@@ -3491,7 +3691,6 @@ function WorktreeJumpPaletteContent({
                             worktree={simulatorWorktree}
                             className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
                           />
-                          <PaletteHostBadgeChip badge={simulatorHostBadge} />
                           {simulatorRepoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                               <RepoBadgeMark color={simulatorRepo?.badgeColor} />
@@ -3504,7 +3703,7 @@ function WorktreeJumpPaletteContent({
                             </span>
                           )}
                           <PaletteRowShortcutBadge
-                            index={recentTabShortcutIndexById.get(entry.id)}
+                            index={recentTabShortcutIndexByItem.get(entry)}
                             modifierKeys={digitShortcutModifiers}
                           />
                         </div>
@@ -3515,19 +3714,17 @@ function WorktreeJumpPaletteContent({
               }
 
               const result = entry.result
-              const browserWorktree = worktreeMap.get(result.worktreeId)
-              const browserRepo = browserWorktree ? repoMap.get(browserWorktree.repoId) : undefined
+              const browserWorktree = resolveWorktree(result.worktreeId, result.executionHostId)
+              const browserRepo = browserWorktree
+                ? resolveRepoForWorktree(browserWorktree)
+                : undefined
               const browserRepoName = browserRepo?.displayName ?? result.repoName
-              const browserHostBadge = getPaletteHostBadge(
-                browserRepo,
-                hostOptions,
-                hostFilterActive
-              )
+              const sessionAge = formatPaletteSessionAge(result.lastActiveAt ?? null, paletteNowMs)
 
               return (
                 <CommandItem
-                  key={entry.id}
-                  value={entry.id}
+                  key={renderKey}
+                  value={renderKey}
                   onSelect={() => handleSelectItem(entry)}
                   className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                 >
@@ -3542,6 +3739,7 @@ function WorktreeJumpPaletteContent({
                           titleRanges={result.titleRanges}
                           secondaryText={result.secondaryText}
                           secondaryRanges={result.secondaryRanges}
+                          sessionAge={sessionAge}
                           leadingBadges={
                             <>
                               {result.isCurrentPage && (
@@ -3571,7 +3769,6 @@ function WorktreeJumpPaletteContent({
                           worktree={browserWorktree}
                           className="max-w-[280px] truncate text-[12px] font-medium text-muted-foreground"
                         />
-                        <PaletteHostBadgeChip badge={browserHostBadge} />
                         {browserRepoName && (
                           <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                             <RepoBadgeMark color={browserRepo?.badgeColor} />
@@ -3584,7 +3781,7 @@ function WorktreeJumpPaletteContent({
                           </span>
                         )}
                         <PaletteRowShortcutBadge
-                          index={recentTabShortcutIndexById.get(entry.id)}
+                          index={recentTabShortcutIndexByItem.get(entry)}
                           modifierKeys={digitShortcutModifiers}
                         />
                       </div>

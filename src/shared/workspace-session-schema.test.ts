@@ -258,6 +258,7 @@ describe('parseWorkspaceSession', () => {
             entityId: 'tab1',
             groupId: 'group1',
             worktreeId: 'wt',
+            executionHostId: 'runtime:host-b',
             contentType: 'terminal',
             label: 'Claude working',
             generatedLabel: 'Refactor auth',
@@ -281,6 +282,7 @@ describe('parseWorkspaceSession', () => {
       expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
       expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
       expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+      expect(result.value.unifiedTabs?.wt[0].executionHostId).toBe('runtime:host-b')
     }
   })
 
@@ -545,6 +547,45 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves a structured agent session tab and its active projection', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'session-1',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'session-1',
+            entityId: 'session-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex',
+            structuredSessionId: 'codex-session-1',
+            label: 'Codex Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      activeTabTypeByWorktree: { wt: 'agent-session' }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex',
+        structuredSessionId: 'codex-session-1'
+      })
+      expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
+    }
+  })
+
   it('degrades an unknown viewMode to the safe default instead of failing parse', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -575,6 +616,82 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('terminal')
+    }
+  })
+
+  // Why: z.object strips unlisted keys, so a page row that reaches disk with the remote page
+  // identity comes back without it — and hydration can only reconstruct the handle it needs to
+  // reclaim a client-hosted page if both halves of that identity survive the round trip.
+  it('preserves the remote page identity of a client-hosted browser page', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserPagesByWorkspace: {
+        'workspace-1': [
+          {
+            id: 'page-1',
+            workspaceId: 'workspace-1',
+            worktreeId: 'wt',
+            url: 'https://example.com/',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1,
+            browserRuntimeEnvironmentId: 'env-1',
+            remoteBrowserPageId: 'remote-page-1',
+            remoteBrowserPageClientHosted: true
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.browserPagesByWorkspace?.['workspace-1']?.[0]).toMatchObject({
+        remoteBrowserPageId: 'remote-page-1',
+        remoteBrowserPageClientHosted: true
+      })
+    }
+  })
+
+  it('accepts a browser page persisted before the remote page identity existed', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserPagesByWorkspace: {
+        'workspace-1': [
+          {
+            id: 'page-1',
+            workspaceId: 'workspace-1',
+            worktreeId: 'wt',
+            url: 'https://example.com/',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const page = result.value.browserPagesByWorkspace?.['workspace-1']?.[0]
+      expect(page?.id).toBe('page-1')
+      expect(page?.remoteBrowserPageId).toBeUndefined()
+      expect(page?.remoteBrowserPageClientHosted).toBeUndefined()
     }
   })
 })

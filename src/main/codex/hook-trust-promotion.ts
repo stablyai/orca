@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   createManagedCommandMatcher,
   readHooksJson,
@@ -43,15 +44,23 @@ function getProvenancePath(runtimeHomePath: string): string {
   return join(runtimeHomePath, '.orca-hook-trust-provenance.json')
 }
 
+/**
+ * `null` means "no usable provenance": genuinely absent, or present but
+ * malformed, where rebuilding it IS the intent. It deliberately does NOT cover
+ * a file that could not be read — see `provenanceIsUnreadable`.
+ */
 function readHookTrustProvenance(
   runtimeHomePath: string
 ): Map<string, HookTrustProvenanceEntry> | null {
   const provenancePath = getProvenancePath(runtimeHomePath)
-  if (!existsSync(provenancePath)) {
+  let rawProvenance: string
+  try {
+    rawProvenance = readFileSync(provenancePath, 'utf-8')
+  } catch {
     return null
   }
   try {
-    const parsed: unknown = JSON.parse(readFileSync(provenancePath, 'utf-8'))
+    const parsed: unknown = JSON.parse(rawProvenance)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
@@ -79,9 +88,29 @@ function readHookTrustProvenance(
  * install/refresh, so the next launch can tell "entry Orca wrote" apart from
  * "entry Codex wrote after a user approval". Call after all trust writes.
  */
+/**
+ * Why: this record is the only thing that tells a later launch which
+ * `config.toml` trust entries Orca wrote apart from which the user approved
+ * inside Codex. Overwriting it from the current config state after a failed
+ * read stamps the user's approval as Orca-written, and promotion then skips it
+ * forever — a permanent loss from one unreadable file. Keep the old record and
+ * let the next pass, which can read it, do the comparison.
+ */
+function provenanceIsUnreadable(provenancePath: string): boolean {
+  try {
+    readFileSync(provenancePath, 'utf-8')
+    return false
+  } catch (error) {
+    return !isDefinitiveAbsence(error)
+  }
+}
+
 export function snapshotCodexRuntimeHookTrustProvenance(
   runtimeHomePath: string = getOrcaManagedCodexHomePath()
 ): void {
+  if (provenanceIsUnreadable(getProvenancePath(runtimeHomePath))) {
+    return
+  }
   try {
     const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
     const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)

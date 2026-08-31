@@ -32,6 +32,41 @@ afterEach(() => {
 })
 
 describe('BrowserLoadFailureOverlay', () => {
+  it('offers the connection-check undo only when a routed page provides it', () => {
+    const onRecheckSshRoute = vi.fn()
+    const loadError = {
+      code: -102,
+      description: 'ERR_CONNECTION_REFUSED',
+      url: 'https://example.com/',
+      validatedUrl: 'https://example.com/'
+    }
+    const { rerender } = render(
+      <BrowserLoadFailureOverlay
+        loadError={loadError}
+        currentUrl="https://example.com/"
+        httpsRecoveryUrl={null}
+        sshRoutedHint
+        onRecheckSshRoute={onRecheckSshRoute}
+        {...callbacks}
+      />
+    )
+    fireEvent.click(screen.getByTestId('browser-load-failure-recheck-ssh-route'))
+    expect(onRecheckSshRoute).toHaveBeenCalledTimes(1)
+
+    // Without a persisted Try-anyway there is nothing to undo — no dangling link.
+    rerender(
+      <BrowserLoadFailureOverlay
+        loadError={loadError}
+        currentUrl="https://example.com/"
+        httpsRecoveryUrl={null}
+        sshRoutedHint
+        onRecheckSshRoute={null}
+        {...callbacks}
+      />
+    )
+    expect(screen.queryByTestId('browser-load-failure-recheck-ssh-route')).toBeNull()
+  })
+
   it('uses certificate-specific copy while keeping strict verification', () => {
     render(
       <BrowserLoadFailureOverlay

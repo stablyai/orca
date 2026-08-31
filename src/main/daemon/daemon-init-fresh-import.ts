@@ -1,9 +1,11 @@
 import { vi } from 'vitest'
+import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import type { DaemonInitMockState } from './daemon-init-test-harness'
 
 /** Resets every mock plus the module registry, then re-imports daemon-init so its module-level spawner/adapter/restartInFlight start fresh. */
 export async function importFreshDaemonInit(state: DaemonInitMockState) {
   const {
+    getPathMock,
     getAppPathMock,
     isPackagedMock,
     probeSocketExistsMock,
@@ -108,6 +110,17 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   launchedStartedAtMs.current = 1_000_000
   getProcessStartedAtMsMock.mockReset()
   getProcessStartedAtMsMock.mockReturnValue(1_000_000)
+  // Why the real port rather than a module mock: daemon-init reads AppEnvironment, whose
+  // installed instance is anchored to a realm symbol precisely so it survives resetModules.
+  setAppEnvironment({
+    getPath: getPathMock,
+    getAppPath: getAppPathMock,
+    getVersion: () => '1.2.3',
+    isPackaged: isPackagedMock,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: () => []
+  } as unknown as AppEnvironment)
   // Why: import after resetModules so module-level spawner/adapter/restartInFlight start fresh — needed to test first-init and the coalescer.
   return import('./daemon-init')
 }
