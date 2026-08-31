@@ -43,8 +43,11 @@ export const INSTALL_DIR_ROOT_GRANT = `${RESTRICTED_APP_PACKAGES_SID}:(OI)(CI)(R
 export const INSTALL_DIR_TREE_GRANT = `${RESTRICTED_APP_PACKAGES_SID}:(RX)`
 
 const ROOT_GRANT_TIMEOUT_MS = 15_000
-// A packaged Electron dist is ~80 entries (45ms measured); the cap is for a slow
-// or contended volume, not for a tree this walk could plausibly still be in.
+// A packaged Orca install tree is ~3.2k entries (a bare Electron dist is ~80, which
+// is NOT the shape that ships: app.asar.unpacked and node_modules dominate). At the
+// ~2.2ms/entry this repo measured for a /T walk in windows-user-data-acl.ts, that is
+// ~5-7s of per-file DACL writes, each intercepted by Defender's filter driver. The
+// cap covers a slow or contended volume on top of that, not a tree this size alone.
 const TREE_GRANT_TIMEOUT_MS = 120_000
 
 /** icacls localizes this; an unparsed summary reports the count as unknown. */
