@@ -250,7 +250,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       command: "codex 'linked issue context'",
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       startupCommandDelivery: 'shell-ready',
-      terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
+      terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' },
+      terminalKittyKeyboardAdvertised: true
     })
 
     await transport.connect({ url: '', callbacks: {} })
@@ -263,7 +264,8 @@ describe('createRemoteRuntimePtyTransport', () => {
           command: "codex 'linked issue context'",
           envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
           startupCommandDelivery: 'shell-ready',
-          terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
+          terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' },
+          terminalKittyKeyboardAdvertised: true
         })
       })
     )

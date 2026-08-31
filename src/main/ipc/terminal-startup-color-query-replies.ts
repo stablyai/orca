@@ -2,6 +2,7 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { agentKindSchema } from '../../shared/telemetry-events'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress-intent'
 import {
   terminalOscColorQueryReply,
   type TerminalOscColorQueryReplyColors
@@ -24,7 +25,7 @@ function normalizeTerminalColorQueryReplyColors(
   return colors
 }
 
-function shouldReplyToStartupTerminalColorQueries(args: {
+function shouldHandleStartupTerminalQueries(args: {
   launchAgent?: unknown
   telemetry?: { agent_kind?: unknown } | undefined
   command?: string
@@ -44,15 +45,25 @@ function shouldReplyToStartupTerminalColorQueries(args: {
   return recognizeAgentProcessFromCommandLine(command) !== null
 }
 
-export function getStartupTerminalColorQueryReplyColors(args: {
+export function getStartupTerminalIngressIntent(args: {
   launchAgent?: unknown
   telemetry?: { agent_kind?: unknown } | undefined
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
   terminalColorQueryReplies?: unknown
-}): TerminalOscColorQueryReplyColors | null {
-  if (!shouldReplyToStartupTerminalColorQueries(args)) {
+  terminalKittyKeyboardAdvertised?: unknown
+}): PtyStartupIngressIntent | null {
+  if (!shouldHandleStartupTerminalQueries(args)) {
     return null
   }
-  return normalizeTerminalColorQueryReplyColors(args.terminalColorQueryReplies)
+  const colors = normalizeTerminalColorQueryReplyColors(args.terminalColorQueryReplies)
+  const kittyKeyboardAdvertised = args.terminalKittyKeyboardAdvertised === true
+  if (!colors && !kittyKeyboardAdvertised) {
+    return null
+  }
+  return {
+    ...(colors ? { colors } : {}),
+    ...(kittyKeyboardAdvertised ? { kittyKeyboardAdvertised: true as const } : {}),
+    deadlineMs: 5_000
+  }
 }

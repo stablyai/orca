@@ -250,6 +250,7 @@ export type IpcPtyTransportOptions = {
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  terminalKittyKeyboardAdvertised?: boolean
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void

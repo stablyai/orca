@@ -33,6 +33,8 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   session.terminalColorQueryReplies = session.terminalTheme
     ? { foreground: session.terminalTheme.foreground, background: session.terminalTheme.background }
     : undefined
+  const terminalKittyKeyboardAdvertised =
+    session.pane.terminal.options.vtExtensions?.kittyKeyboard === true
   session.agentLaunchPreferences = toAgentLaunchPreferences(session.paneStartup?.sessionOptions)
   session.transportOptions = {
     cwd: session.deps.cwd,
@@ -70,6 +72,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     ...(session.terminalColorQueryReplies
       ? { terminalColorQueryReplies: session.terminalColorQueryReplies }
       : {}),
+    ...(terminalKittyKeyboardAdvertised ? { terminalKittyKeyboardAdvertised: true } : {}),
     ...(session.paneStartup?.launchConfig
       ? { launchConfig: session.paneStartup.launchConfig }
       : {}),

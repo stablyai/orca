@@ -19,6 +19,7 @@ function createHarness(
   options: {
     projection?: boolean
     nested?: (data: string) => void
+    kittyKeyboardAdvertised?: boolean
   } = {}
 ) {
   const emissions: PtyIngressEmission[] = []
@@ -27,6 +28,7 @@ function createHarness(
   ingress = new PtyStartupIngress({
     intent: {
       colors: COLORS,
+      ...(options.kittyKeyboardAdvertised ? { kittyKeyboardAdvertised: true as const } : {}),
       deadlineMs: 5_000
     },
     ...(options.projection ? { ownerBackend: 'windows-conpty' as const } : {}),
@@ -54,6 +56,36 @@ describe('PtyStartupIngress', () => {
     }
     expect(parsePtyStartupIngressIntent(intent)).toEqual(intent)
     expect(parsePtyStartupIngressIntent({ ...intent, deadlineMs: 30_001 })).toBeUndefined()
+    expect(
+      parsePtyStartupIngressIntent({ kittyKeyboardAdvertised: true, deadlineMs: 5_000 })
+    ).toEqual({ kittyKeyboardAdvertised: true, deadlineMs: 5_000 })
+  })
+
+  it('answers a Kitty keyboard status query across every split without consuming its mode set', () => {
+    const query = '\x1b[?u'
+    const modeSet = '\x1b[>5u'
+    for (let split = 0; split <= query.length; split += 1) {
+      const { ingress, writes, emissions } = createHarness({ kittyKeyboardAdvertised: true })
+      ingress.accept(query.slice(0, split))
+      ingress.accept(query.slice(split))
+      expect(writes, `split ${split}`).toEqual(['\x1b[?0u'])
+      ingress.accept(modeSet)
+      ingress.drainAndClose()
+
+      expect(visible(emissions), `split ${split}`).toBe(modeSet)
+      expect(emissions.reduce((sum, item) => sum + item.rawEndSeq - item.rawStartSeq, 0)).toBe(
+        query.length + modeSet.length
+      )
+    }
+  })
+
+  it('leaves a Kitty keyboard status query for terminals that did not advertise it', () => {
+    const { ingress, writes, emissions } = createHarness()
+    ingress.accept('\x1b[?u')
+    ingress.drainAndClose()
+
+    expect(writes).toEqual([])
+    expect(visible(emissions)).toBe('\x1b[?u')
   })
 
   it('recognizes BEL/ST queries at every split and answers both in order', () => {

@@ -157,6 +157,7 @@ export const TerminalCreateParams = z.object({
       background: z.string().max(128).optional()
     })
     .optional(),
+  terminalKittyKeyboardAdvertised: z.boolean().optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),

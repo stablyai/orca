@@ -45,6 +45,7 @@ export type PtySpawnIpcArgs = {
     foreground?: unknown
     background?: unknown
   }
+  terminalKittyKeyboardAdvertised?: unknown
   // Why: hidden-at-spawn declaration (terminal-query-authority.md §races) — main marks hidden before byte zero so the gate owns spawn-time queries.
   initiallyHidden?: boolean
   // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.

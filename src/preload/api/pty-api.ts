@@ -39,6 +39,7 @@ export type PtyApi = {
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution
     terminalColorQueryReplies?: { foreground?: string; background?: string }
+    terminalKittyKeyboardAdvertised?: boolean
     // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
     // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).

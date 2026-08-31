@@ -68,6 +68,18 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('forwards an advertised Kitty keyboard protocol to the PTY spawn', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({ terminalKittyKeyboardAdvertised: true })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(window.api.pty.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalKittyKeyboardAdvertised: true })
+    )
+    transport.disconnect()
+  })
+
   it('forwards requested environment deletions to the PTY spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
