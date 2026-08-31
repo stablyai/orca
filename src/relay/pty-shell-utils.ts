@@ -10,7 +10,11 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
-import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
+import {
+  getProcessTableSnapshot,
+  scoreForegroundCandidateRow,
+  type ProcessTableRow
+} from '../shared/process-table-snapshot'
 import {
   resolveOuterWrapperForegroundProcess,
   shouldInspectOuterWrapperForegroundProcess
@@ -216,17 +220,6 @@ function collectDescendants(
   return descendants
 }
 
-function candidateScore(row: ProcessTableRow & { depth: number }): number {
-  return (row.stat.includes('+') ? 10_000 : 0) + row.depth
-}
-
-function candidateMatchesFallbackWrapper(
-  candidate: ProcessTableRow,
-  fallbackProcess: string
-): boolean {
-  return isExpectedAgentProcess(getFirstCommandToken(candidate.command), fallbackProcess)
-}
-
 async function getRecognizedForegroundDescendant(
   pid: number,
   fallbackProcess?: string | null
@@ -240,14 +233,17 @@ async function getRecognizedForegroundDescendant(
   return null
 }
 
-export function getForegroundProcessNameFromProcessTable(
+// Why: returns null (never the fallback) so `getForegroundProcessName` keeps
+// owning the fallback ladder — its wrapper branch answers with the RECOGNIZED
+// process name, which is normalized where node-pty's raw name is not.
+function getForegroundProcessNameFromProcessTable(
   rows: ProcessTableRow[],
   pid: number,
   fallbackProcess?: string | null
 ): string | null {
   const root = rows.find((row) => row.pid === pid)
   const candidates = collectDescendants(rows, pid).sort(
-    (a, b) => candidateScore(b) - candidateScore(a)
+    (a, b) => scoreForegroundCandidateRow(b) - scoreForegroundCandidateRow(a)
   )
   // Why: SSH relays do not have the daemon's async wrapper cache. Inspect the
   // remote process tree so node/python agent entrypoints become real agents.
@@ -260,7 +256,7 @@ export function getForegroundProcessNameFromProcessTable(
   const inspectionCandidates =
     fallbackProcess && isAgentForegroundWrapperProcess(fallbackProcess)
       ? foregroundCandidates.filter((candidate) =>
-          candidateMatchesFallbackWrapper(candidate, fallbackProcess)
+          isExpectedAgentProcess(getFirstCommandToken(candidate.command), fallbackProcess)
         )
       : foregroundCandidates
   if (
@@ -278,7 +274,7 @@ export function getForegroundProcessNameFromProcessTable(
       return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
     }
   }
-  return fallbackProcess ?? null
+  return null
 }
 
 /**

@@ -138,6 +138,25 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).not.toHaveBeenCalled()
   })
 
+  it('leaves a hidden noisy pane fully unpolled in the shipped option shape', async () => {
+    // Why: production sets no `shouldPollNoEvidenceProcessCadence`, so the
+    // activity re-arm has to stay under the visibility/tracking gate — a
+    // background `npm run dev` pane must not resume 3s host scans (#6288).
+    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const { coordinator } = createCoordinator(inspectProcess, {
+      shouldPollProcessCadence: () => false,
+      shouldPollNoEvidenceProcessCadence: undefined
+    })
+
+    coordinator.startProcessTracking()
+    for (let tick = 0; tick < 12; tick += 1) {
+      coordinator.observeOutputActivity()
+      await vi.advanceTimersByTimeAsync(5_000)
+    }
+
+    expect(inspectProcess).not.toHaveBeenCalled()
+  })
+
   it('escalates to the hot cadence when PTY output appears mid-interval', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess)

@@ -457,6 +457,21 @@ describe('getForegroundProcessName', () => {
     })
   })
 
+  it('normalizes a wrapper fallback the process table cannot confirm', async () => {
+    // Why: the table scan must answer null, not the raw node-pty name, so the
+    // ladder still publishes the RECOGNIZED (normalized) identity.
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: ['100 99 Ss   bash -l', '101 100 S+   vim notes.txt'].join('\n') }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, '/opt/homebrew/bin/pi')).resolves.toBe('pi')
+    })
+  })
+
   it('falls back to the root process command when descendant inspection fails', async () => {
     mockExecFile((_command, args) => {
       if (args[0] === '-axo') {

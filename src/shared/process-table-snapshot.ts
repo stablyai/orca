@@ -117,9 +117,6 @@ export function parseStrictProcessTableRows(stdout: string): ProcessTableRow[] {
   return rows
 }
 
-/** Alias retained for callers that prefer the adjective at the end. */
-export const parseProcessTableRowsStrict = parseStrictProcessTableRows
-
 export type ProcessTableIndexStats = {
   captures?: number
   indexBuilds: number
@@ -131,12 +128,15 @@ export type ProcessTableIndex = {
   rows: readonly ProcessTableRow[]
   byPid: ReadonlyMap<number, ProcessTableRow>
   childrenByPpid: ReadonlyMap<number, readonly ProcessTableRow[]>
-  byPgid: ReadonlyMap<number, readonly ProcessTableRow[]>
-  byTpgid: ReadonlyMap<number, readonly ProcessTableRow[]>
   stats?: ProcessTableIndexStats
 }
 
-/** Build all correlation indexes in one linear pass over a capture. */
+/**
+ * Build the correlation indexes in one linear pass over a capture. Only the
+ * indexes a resolver actually reads are materialized: group indexes would cost
+ * two more maps plus a per-row array allocation on every capture, and foreground
+ * membership is derived from each row's own `pgid` against the root's `tpgid`.
+ */
 export function buildProcessTableIndex(
   rows: readonly ProcessTableRow[],
   stats?: ProcessTableIndexStats
@@ -146,8 +146,6 @@ export function buildProcessTableIndex(
   }
   const byPid = new Map<number, ProcessTableRow>()
   const childrenByPpid = new Map<number, ProcessTableRow[]>()
-  const byPgid = new Map<number, ProcessTableRow[]>()
-  const byTpgid = new Map<number, ProcessTableRow[]>()
   for (const row of rows) {
     if (stats) {
       stats.rowVisits += 1
@@ -156,18 +154,16 @@ export function buildProcessTableIndex(
     const children = childrenByPpid.get(row.ppid) ?? []
     children.push(row)
     childrenByPpid.set(row.ppid, children)
-    if (row.pgid !== undefined) {
-      const group = byPgid.get(row.pgid) ?? []
-      group.push(row)
-      byPgid.set(row.pgid, group)
-    }
-    if (row.tpgid !== undefined) {
-      const foreground = byTpgid.get(row.tpgid) ?? []
-      foreground.push(row)
-      byTpgid.set(row.tpgid, foreground)
-    }
   }
-  return { rows, byPid, childrenByPpid, byPgid, byTpgid, stats }
+  return { rows, byPid, childrenByPpid, stats }
+}
+
+/**
+ * Rank a descendant row as a foreground candidate: a `+` (foreground process
+ * group) row always outranks a background one, then the deepest wins.
+ */
+export function scoreForegroundCandidateRow(row: ProcessTableRow & { depth: number }): number {
+  return (row.stat.includes('+') ? 10_000 : 0) + row.depth
 }
 
 export function lookupProcessTableIndex<T>(
@@ -296,27 +292,46 @@ export function createProcessTableSnapshotReader<T = string>(
   }
 }
 
-const defaultReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
-  runPs: async () => {
-    const { stdout } = await execFile('ps', [...PS_ARGS], {
-      encoding: 'utf-8',
-      timeout: PS_TIMEOUT_MS
-    })
-    // Why: parse once inside the deduped scan so a burst of panes sharing the
-    // TTL window reuse one ProcessTableRow[] instead of each re-tokenizing the
-    // identical stdout — matches the Windows reader, which already caches rows.
-    return parseProcessTableRows(stdout)
-  },
-  now: () => Date.now()
-})
+/**
+ * One capture, two views. The lenient and strict readers issue byte-identical
+ * `ps` argv, so giving them separate memoizers would fork `ps` twice per TTL
+ * window on a relay that serves both — the exact doubling issue #6288 removed.
+ * Each parse is memoized per capture (including a strict failure) so a burst of
+ * panes sharing the window re-tokenizes nothing.
+ */
+type ProcessTableCapture = {
+  lenient: () => ProcessTableRow[]
+  strict: () => ProcessTableRow[]
+}
 
-const strictReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
+function createProcessTableCapture(stdout: string): ProcessTableCapture {
+  let lenientRows: ProcessTableRow[] | null = null
+  let strictResult: { rows: ProcessTableRow[] } | { error: unknown } | null = null
+  return {
+    lenient: () => (lenientRows ??= parseProcessTableRows(stdout)),
+    strict: () => {
+      if (strictResult === null) {
+        try {
+          strictResult = { rows: parseStrictProcessTableRows(stdout) }
+        } catch (error) {
+          strictResult = { error }
+        }
+      }
+      if ('error' in strictResult) {
+        throw strictResult.error
+      }
+      return strictResult.rows
+    }
+  }
+}
+
+const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>({
   runPs: async () => {
     const { stdout } = await execFile('ps', [...PS_ARGS], {
       encoding: 'utf-8',
       timeout: PS_TIMEOUT_MS
     })
-    return parseStrictProcessTableRows(stdout)
+    return createProcessTableCapture(stdout)
   },
   now: () => Date.now()
 })
@@ -326,22 +341,18 @@ const strictReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
  * its parsed rows. Per-process singleton: the relay and local main processes
  * each dedupe their own scans and share a single parse per TTL window.
  */
-export function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return defaultReader.getSnapshot()
+export async function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
+  return (await processTableReader.getSnapshot()).lenient()
 }
 
 /** Capture process rows from a scan that starts after this request. */
-export function getFreshProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return defaultReader.getFreshSnapshot()
+export async function getFreshProcessTableSnapshot(): Promise<ProcessTableRow[]> {
+  return (await processTableReader.getFreshSnapshot()).lenient()
 }
 
-/** Run (or reuse) the strict evidence capture. */
-export function getStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return strictReader.getSnapshot()
-}
-
-export function getFreshStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return strictReader.getFreshSnapshot()
+/** Strict evidence view of the same deduplicated capture. */
+export async function getStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> {
+  return (await processTableReader.getSnapshot()).strict()
 }
 
 /**
@@ -349,6 +360,5 @@ export function getFreshStrictProcessTableSnapshot(): Promise<ProcessTableRow[]>
  * cases don't have one case's snapshot served to the next within the TTL.
  */
 export function resetProcessTableSnapshotForTests(): void {
-  defaultReader.reset()
-  strictReader.reset()
+  processTableReader.reset()
 }

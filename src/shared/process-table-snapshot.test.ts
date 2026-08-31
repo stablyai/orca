@@ -1,11 +1,20 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+
+vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+
 import {
+  buildProcessTableIndex,
   createProcessTableSnapshotReader,
+  getProcessTableSnapshot,
+  getStrictProcessTableSnapshot,
   parseProcessTableRows,
   parseStrictProcessTableRows,
-  ProcessTableCaptureError
+  ProcessTableCaptureError,
+  resetProcessTableSnapshotForTests
 } from './process-table-snapshot'
 
 function deferred<T>(): {
@@ -206,6 +215,75 @@ describe('process-table-snapshot reader', () => {
   })
 })
 
+describe('shared process-table capture', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+    resetProcessTableSnapshotForTests()
+  })
+
+  function mockPsCaptures(...stdouts: string[]): () => number {
+    let forks = 0
+    execFileMock.mockImplementation(
+      (_command: string, _args: string[], _options: unknown, callback: unknown) => {
+        const stdout = stdouts[Math.min(forks, stdouts.length - 1)] ?? ''
+        forks += 1
+        ;(callback as (err: unknown, result: { stdout: string; stderr: string }) => void)(null, {
+          stdout,
+          stderr: ''
+        })
+      }
+    )
+    return () => forks
+  }
+
+  it('serves the strict and lenient views from ONE ps fork per TTL window', async () => {
+    // Why: both views run byte-identical argv, so separate memoizers would double
+    // the relay's idle fork rate — the regression issue #6288 removed.
+    const forks = mockPsCaptures('100 1 100 100 Ss+ /bin/zsh\n', '200 1 200 200 Ss+ /bin/bash\n')
+
+    const [lenient, strict] = await Promise.all([
+      getProcessTableSnapshot(),
+      getStrictProcessTableSnapshot()
+    ])
+
+    expect(forks()).toBe(1)
+    expect(lenient.map((row) => row.pid)).toEqual([100])
+    expect(strict.map((row) => row.pid)).toEqual([100])
+  })
+
+  it('reuses the cached capture for a later strict read inside the TTL', async () => {
+    const forks = mockPsCaptures('100 1 100 100 Ss+ /bin/zsh\n', '200 1 200 200 Ss+ /bin/bash\n')
+
+    await getProcessTableSnapshot()
+    const strict = await getStrictProcessTableSnapshot()
+
+    expect(forks()).toBe(1)
+    expect(strict).toEqual([
+      { pid: 100, ppid: 1, pgid: 100, tpgid: 100, stat: 'Ss+', command: '/bin/zsh' }
+    ])
+  })
+
+  it('builds only the indexes a resolver reads', () => {
+    // Why: an unread group index costs two maps plus a per-row array on every
+    // capture, on the exact path this reader exists to make cheap.
+    const index = buildProcessTableIndex(
+      parseStrictProcessTableRows('100 1 100 101 Ss /bin/zsh\n101 100 101 101 S+ node /opt/codex')
+    )
+
+    expect(Object.keys(index).sort()).toEqual(['byPid', 'childrenByPpid', 'rows', 'stats'])
+  })
+
+  it('keeps the lenient view readable when the same capture is strictly unreadable', async () => {
+    const forks = mockPsCaptures('100 1 Ss+ /bin/zsh\n')
+
+    const lenient = await getProcessTableSnapshot()
+    await expect(getStrictProcessTableSnapshot()).rejects.toBeInstanceOf(ProcessTableCaptureError)
+
+    expect(forks()).toBe(1)
+    expect(lenient).toEqual([{ pid: 100, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }])
+  })
+})
+
 describe('parseProcessTableRows', () => {
   it('parses pid/ppid/stat and keeps the full command (including spaces)', () => {
     const rows = parseProcessTableRows(
@@ -245,6 +323,33 @@ describe('parseStrictProcessTableRows', () => {
       { pid: 6, ppid: 2, pgid: 0, tpgid: -1, stat: 'I', command: '[kworker/R-slub_]' },
       { pid: 100, ppid: 1, pgid: 100, tpgid: 100, stat: 'Ss+', command: '/bin/bash -l' },
       { pid: 101, ppid: 100, pgid: 101, tpgid: 101, stat: 'S+', command: 'node /opt/codex' }
+    ])
+  })
+
+  it('extracts pgid/tpgid across CRLF framing while retaining command spacing', () => {
+    expect(
+      parseStrictProcessTableRows(
+        ' PID PPID PGID TPGID STAT COMMAND\r\n 100 1 100 101 Ss /bin/zsh -l\r\n 101 100 101 101 S+ node /opt/codex --flag  value\r\n'
+      )
+    ).toEqual([
+      { pid: 100, ppid: 1, pgid: 100, tpgid: 101, stat: 'Ss', command: '/bin/zsh -l' },
+      {
+        pid: 101,
+        ppid: 100,
+        pgid: 101,
+        tpgid: 101,
+        stat: 'S+',
+        command: 'node /opt/codex --flag  value'
+      }
+    ])
+  })
+
+  it('accepts no-controlling-tty sentinels for later unverifiable classification', () => {
+    expect(parseStrictProcessTableRows('100 1 100 0 Ss /bin/zsh')).toEqual([
+      { pid: 100, ppid: 1, pgid: 100, tpgid: 0, stat: 'Ss', command: '/bin/zsh' }
+    ])
+    expect(parseStrictProcessTableRows('100 1 100 -1 Ss /bin/zsh')).toEqual([
+      { pid: 100, ppid: 1, pgid: 100, tpgid: -1, stat: 'Ss', command: '/bin/zsh' }
     ])
   })
 
