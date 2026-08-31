@@ -46,6 +46,13 @@ export class PtyBindingPersistenceOperations {
       expectedSourceBinding?: PtyBindingSourceExpectation
       /** Set by host-initiated creates, which have no renderer session writer behind them. */
       hostAdmittedMembership?: boolean
+      /**
+       * Defaults true, which is what `pty:spawn` needs — it can beat the debounced layout writer
+       * and must be able to mint the surface it is binding. A reattach is the opposite: the pane
+       * either still exists or the user closed it, so creating one grafts back a tab they closed.
+       * Callers pass false only once absence is meaningful; see the relay's reattach bind.
+       */
+      mayCreate?: boolean
     },
     hostId?: string | null
   ): boolean {
@@ -84,6 +91,24 @@ export class PtyBindingPersistenceOperations {
         boundPtyId !== args.expectedBinding.ptyId ||
         session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.expectedBinding.incarnationId
       ) {
+        return false
+      }
+    }
+    // Decided before any mutation so a refusal leaves nothing half-written. Mirrors the four
+    // creating branches below — mint a tab, mint a root leaf, split the root and graft a leaf,
+    // mint a layout — each of which sets `terminalMembershipChanged`.
+    if (args.mayCreate === false) {
+      const existingTab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
+        (candidate) => candidate.id === args.tabId
+      )
+      const existingLayout = session.terminalLayoutsByTabId?.[args.tabId]
+      const wouldCreateTopology =
+        !existingTab ||
+        (isTerminalLeafId(args.leafId) &&
+          (!existingLayout ||
+            !existingLayout.root ||
+            !layoutContainsLeafId(existingLayout.root, args.leafId)))
+      if (wouldCreateTopology) {
         return false
       }
     }

@@ -248,8 +248,8 @@ export function useAutomationHostCatalog(
         void window.api.runtimeEnvironments.connect({ selector: environmentId })
       },
       openSettings: (target) => {
-        openSettingsPage()
         openSettingsTarget(target)
+        openSettingsPage()
       }
     }),
     [controller, openSettingsPage, openSettingsTarget, pairingRevision]

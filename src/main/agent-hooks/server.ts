@@ -112,6 +112,7 @@ import {
   isAskUserQuestionTool,
   type AgentQuestionAnsweredInferenceRequest
 } from '../../shared/agent-question-answered-intent'
+import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../shared/pane-key-alias'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/persisted-state-types'
 import {
@@ -1828,13 +1829,18 @@ export class AgentHookServer {
     updatedAt = Date.now(),
     options?: { overwriteExisting?: boolean; authorityVerified?: boolean }
   ): void {
-    const legacy = parseLegacyNumericPaneKey(legacyPaneKey)
-    const stable = isValidPaneKey(stablePaneKey) ? parsePaneKey(stablePaneKey) : null
-    if (!legacy || !stable || legacy.tabId !== stable.tabId) {
+    const fromPaneKey = legacyPaneKey.trim()
+    const toPaneKey = stablePaneKey.trim()
+    if (!canRegisterPaneKeyAlias(fromPaneKey, toPaneKey)) {
       return
     }
-    const existing = this.legacyPaneKeyAliases.get(legacy.paneKey)
+    const existing = this.legacyPaneKeyAliases.get(fromPaneKey)
     if (existing && options?.overwriteExisting === false) {
+      return
+    }
+    // Why: remint tokens have no embedded tab id; first pane wins so a later spawn
+    // cannot steal leftover $$…:L$$ posts onto a different tab:leaf.
+    if (existing && existing.stablePaneKey !== toPaneKey && isOpaqueRemintedPaneKey(fromPaneKey)) {
       return
     }
     const normalizedPtyId =
@@ -1844,15 +1850,15 @@ export class AgentHookServer {
     const authorityVerified = options?.authorityVerified ?? false
     if (
       existing &&
-      existing.stablePaneKey === stablePaneKey &&
+      existing.stablePaneKey === toPaneKey &&
       existing.ptyId === (normalizedPtyId ?? null) &&
       existing.updatedAt === normalizedUpdatedAt &&
       existing.authorityVerified === authorityVerified
     ) {
       return
     }
-    this.legacyPaneKeyAliases.set(legacy.paneKey, {
-      stablePaneKey,
+    this.legacyPaneKeyAliases.set(fromPaneKey, {
+      stablePaneKey: toPaneKey,
       ptyId: normalizedPtyId ?? null,
       updatedAt: normalizedUpdatedAt,
       authorityVerified

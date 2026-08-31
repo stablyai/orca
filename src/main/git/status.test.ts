@@ -368,6 +368,35 @@ describe('getStatus', () => {
     ])
   })
 
+  it('omits line stats without overwriting the reusable line-stats cache', async () => {
+    readFileMock.mockResolvedValue('gitdir: /stats-repo/.git/worktrees/feature\n')
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({
+          stdout:
+            '# branch.oid head-stats\n' +
+            '1 .M N... 100644 100644 100644 aaaa aaaa src/unstaged.ts\n'
+        })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '3\t4\tsrc/unstaged.ts\n' })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const withStats = await getStatus('/stats-repo')
+    const withoutStats = await getStatus('/stats-repo', { includeLineStats: false })
+    const reused = await getStatus('/stats-repo', { reuseLineStats: true })
+
+    expect(withoutStats.entries).toEqual(
+      withStats.entries.map(({ added: _added, removed: _removed, ...entry }) => entry)
+    )
+    expect(reused.entries).toEqual(withStats.entries)
+    expect(
+      gitExecFileAsyncMock.mock.calls.filter(([args]) => args.includes('--numstat'))
+    ).toHaveLength(1)
+  })
+
   it('reuses unchanged line stats only when the safety hint is present', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {

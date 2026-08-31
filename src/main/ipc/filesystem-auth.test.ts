@@ -18,8 +18,10 @@ import {
 } from './filesystem-auth'
 import { isDescendantOrEqual, validateGitRelativeFilePath } from './filesystem-path-containment'
 import {
+  __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,
   rebuildAuthorizedRootsCache,
+  registerCreatedWorktreeRoot,
   resolveRegisteredWorktreePath
 } from './registered-worktree-roots-cache'
 
@@ -95,6 +97,7 @@ function makeStore(
 describe('filesystem auth worktree roots', () => {
   beforeEach(() => {
     invalidateAuthorizedRootsCache()
+    __resetCreatedWorktreeRootsForTests()
     vi.mocked(listRepoWorktrees).mockReset()
   })
 
@@ -119,6 +122,79 @@ describe('filesystem auth worktree roots', () => {
       resolve(lastWorktreePath)
     )
     expect(listRepoWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps a repo's roots when its listing fails mid-rebuild", async () => {
+    // Why: the rebuild runs while Git is still broken, and dropping the roots would revoke
+    // a worktree a create just recovered without a listing (#16520).
+    const store = makeStore()
+    registerCreatedWorktreeRoot(store, repo.id, '/linked/recovered')
+    vi.mocked(listRepoWorktrees).mockRejectedValue(new Error('git worktree list failed.'))
+
+    await rebuildAuthorizedRootsCache(store)
+
+    await expect(resolveRegisteredWorktreePath('/linked/recovered', store)).resolves.toBe(
+      resolve('/linked/recovered')
+    )
+  })
+
+  it('keeps a recovered root when a healthy rebuild still cannot list it', async () => {
+    // Why: the rebuild recomputes from the very listing that omitted the row, so replacing the cache
+    // would re-deny the worktree the create just recovered (#16520).
+    const scratch = await mkdtemp(join(await realpath(tmpdir()), 'orca-recovered-'))
+    const recovered = join(scratch, 'feature')
+    await mkdir(recovered)
+    const store = makeStore()
+    registerCreatedWorktreeRoot(store, repo.id, recovered)
+    vi.mocked(listRepoWorktrees).mockResolvedValue([])
+
+    await rebuildAuthorizedRootsCache(store)
+
+    await expect(resolveRegisteredWorktreePath(recovered, store)).resolves.toBe(resolve(recovered))
+    await rm(scratch, { recursive: true, force: true })
+  })
+
+  it('survives a rebuild that was already in flight when the create recovered', async () => {
+    const scratch = await mkdtemp(join(await realpath(tmpdir()), 'orca-recovered-race-'))
+    const recovered = join(scratch, 'feature')
+    await mkdir(recovered)
+    const store = makeStore()
+    // Register mid-listing: the rebuild's own result was computed before this worktree existed.
+    vi.mocked(listRepoWorktrees).mockImplementation(async () => {
+      registerCreatedWorktreeRoot(store, repo.id, recovered)
+      return []
+    })
+
+    await rebuildAuthorizedRootsCache(store)
+
+    await expect(resolveRegisteredWorktreePath(recovered, store)).resolves.toBe(resolve(recovered))
+    await rm(scratch, { recursive: true, force: true })
+  })
+
+  it('retires a recovered root once the listing can see it again', async () => {
+    const store = makeStore()
+    registerCreatedWorktreeRoot(store, repo.id, '/linked/feature')
+    vi.mocked(listRepoWorktrees).mockResolvedValue([
+      {
+        path: '/linked/feature',
+        head: '',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await rebuildAuthorizedRootsCache(store)
+    // Still authorized, but now from the listing itself; a later listing that drops it is authoritative.
+    await expect(resolveRegisteredWorktreePath('/linked/feature', store)).resolves.toBe(
+      resolve('/linked/feature')
+    )
+    vi.mocked(listRepoWorktrees).mockResolvedValue([])
+    await rebuildAuthorizedRootsCache(store)
+
+    await expect(resolveRegisteredWorktreePath('/linked/feature', store)).rejects.toThrow(
+      'Access denied'
+    )
   })
 
   it('bounds concurrent repo probes while rebuilding authorized roots', async () => {

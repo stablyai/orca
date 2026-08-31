@@ -5,6 +5,8 @@ import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
 import { TERMINAL_HANDLERS } from './terminal'
 
+const ORIGINAL_EXIT_CODE = process.exitCode
+
 describe('terminal close CLI', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -65,6 +67,7 @@ describe('terminal close CLI', () => {
 describe('terminal send CLI', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    process.exitCode = ORIGINAL_EXIT_CODE
   })
 
   it('marks combined text and Enter as an agent prompt candidate', async () => {
@@ -92,6 +95,44 @@ describe('terminal send CLI', () => {
       agentPrompt: true,
       client: { id: 'orca-cli', type: 'desktop' }
     })
+  })
+
+  it('explains that Structured Chat blocked a refused send and how to recover', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        send: {
+          handle: 'term-1',
+          accepted: false,
+          bytesWritten: 0,
+          agentSessionRefusal: {
+            code: 'agent_session_conflict',
+            sessionId: 'session-1',
+            ownerRuntimeKind: 'native',
+            handoffStage: null,
+            ownerPid: 4242,
+            runtimeFence: 7
+          }
+        }
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    process.exitCode = undefined
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true]
+      ]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: false
+    })
+
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringMatching(/Structured Chat.*Switch it to Terminal.*orca terminal send/s)
+    )
+    expect(process.exitCode).toBe(1)
   })
 
   it('keeps text-only and bare Enter sends as direct terminal input', async () => {

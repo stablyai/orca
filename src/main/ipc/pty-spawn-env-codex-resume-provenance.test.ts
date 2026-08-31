@@ -4,6 +4,7 @@ import { spawnMock } from './pty-ipc-mock-registry'
 import { posixOnlyIt, TEST_MANAGED_ROOT } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { registerPtyHandlers, setLocalPtyProvider, type PrepareCodexSessionResume } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -168,7 +169,7 @@ describe('registerPtyHandlers', () => {
             await Promise.resolve()
             vi.runAllTimers()
 
-            expect(mockProc.proc.write).toHaveBeenCalledWith('codex\n')
+            expect(mockProc.proc.write).not.toHaveBeenCalled()
             expect(mockProc.proc.write).not.toHaveBeenCalledWith(
               expect.stringContaining(RESUME_SESSION_ID)
             )
@@ -176,6 +177,7 @@ describe('registerPtyHandlers', () => {
             // The pane still runs under the selected account — but with nothing to resume.
             const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
             expect(env.CODEX_HOME).toBe(OTHER_HOME)
+            expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe('codex')
             expect(selectedHome).toHaveBeenCalled()
           } finally {
             vi.useRealTimers()
@@ -211,12 +213,13 @@ describe('registerPtyHandlers', () => {
           await Promise.resolve()
           vi.runAllTimers()
 
-          expect(mockProc.proc.write).toHaveBeenCalledWith(
-            `codex 'resume' '${RESUME_SESSION_ID}'\n`
-          )
+          expect(mockProc.proc.write).not.toHaveBeenCalled()
           expect(spawned.agentResumeUnavailable).toBeUndefined()
           const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
           expect(env.CODEX_HOME).toBe(ORIGIN_HOME)
+          expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(
+            `codex 'resume' '${RESUME_SESSION_ID}'`
+          )
           expect(selectedHome).not.toHaveBeenCalled()
         } finally {
           vi.useRealTimers()
@@ -238,7 +241,9 @@ describe('registerPtyHandlers', () => {
           await Promise.resolve()
           vi.runAllTimers()
 
-          expect(mockProc.proc.write).toHaveBeenCalledWith('codex\n')
+          expect(mockProc.proc.write).not.toHaveBeenCalled()
+          const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+          expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe('codex')
           expect(spawned.agentResumeUnavailable).toBe(true)
         } finally {
           vi.useRealTimers()

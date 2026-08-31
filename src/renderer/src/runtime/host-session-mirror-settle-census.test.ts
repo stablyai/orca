@@ -144,7 +144,9 @@ describe('host-session-mirror settle census', () => {
       // singular frame, scoped active frame.
       'runtime/web-session-tabs-sync.ts': 5,
       // The eager post-create session.tabs.list refresh.
-      'runtime/web-runtime-session.ts': 1
+      'runtime/web-runtime-session-snapshot.ts': 1,
+      // The local structured-session inventory/subscription frame.
+      'runtime/local-structured-session-tabs-sync.ts': 1
     })
   })
 
@@ -190,7 +192,8 @@ describe('host-session-mirror settle census', () => {
       // frame patch, and its patchless twin) and three mirror ones
       // (visibility-resume repair, global singular frame patch and patchless).
       'runtime/web-session-tabs-sync.ts': { settleHydration: 4, settleMirror: 3 },
-      'runtime/web-runtime-session.ts': { settleMirror: 1 }
+      'runtime/web-runtime-session-snapshot.ts': { settleMirror: 1 },
+      'runtime/local-structured-session-tabs-sync.ts': { settleStructuredSessionMirror: 1 }
     })
   })
 

@@ -26,4 +26,19 @@ describe('buildManagedWorktreeCreateArgs', () => {
       nameWasGenerated: true
     })
   })
+
+  it('carries the parent-pick provenance only when the client marked it manual', () => {
+    // Why: older clients never send it, and those creates really are CLI-flag equivalents.
+    expect(
+      build({ repo: 'id:repo-1', name: 'child', parentWorkspace: 'folder:f1' }).lineage
+    ).not.toHaveProperty('parentWorkspaceOrigin')
+    expect(
+      build({
+        repo: 'id:repo-1',
+        name: 'child',
+        parentWorkspace: 'folder:f1',
+        parentWorkspaceOrigin: 'manual'
+      }).lineage
+    ).toMatchObject({ parentWorkspaceOrigin: 'manual' })
+  })
 })

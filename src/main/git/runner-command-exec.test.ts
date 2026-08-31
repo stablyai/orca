@@ -22,6 +22,12 @@ import {
   translateWslOutputPaths,
   wslAwareSpawn
 } from './runner'
+import {
+  GitAdmissionScheduler,
+  _resetGitAdmissionForTests
+} from './command-runner/git-subprocess-admission'
+
+afterEach(() => _resetGitAdmissionForTests())
 
 type MockChildProcess = EventEmitter & {
   stdout: EventEmitter
@@ -213,6 +219,7 @@ describe('runner execFile timeout handling', () => {
       timeout: 1000
     })
     const rejection = expect(promise).rejects.toThrow('git timed out.')
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledOnce())
     await vi.advanceTimersByTimeAsync(1000)
 
     await rejection
@@ -249,6 +256,7 @@ describe('runner execFile timeout handling', () => {
           }
         )
 
+        await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
         controller.abort()
         child.emit('close', 0, null)
         await vi.advanceTimersByTimeAsync(1_999)
@@ -410,6 +418,36 @@ describe('runner execFile timeout handling', () => {
     expect(calls[1]?.env.GIT_SSH_COMMAND).toBe(
       'ssh -F ~/.ssh/github-work -i ~/.ssh/work_key -o BatchMode=yes'
     )
+  })
+
+  it('admits the core.sshCommand probe before spawning it', async () => {
+    const scheduler = new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 })
+    _resetGitAdmissionForTests(scheduler)
+    const blocker = await scheduler.acquire({ args: ['status'], cwd: '/repo', tier: 'status' })
+    const calls: string[][] = []
+    execFileMock.mockImplementation((_cmd, args, _opts, cb) => {
+      const child = createMockChildProcess(1234 + calls.length)
+      calls.push(args)
+      cb(null, '', '')
+      queueMicrotask(() => child.emit('close', 0, null))
+      return child
+    })
+
+    const pending = gitExecFileAsync(['fetch', '--no-write-fetch-head', 'origin'], {
+      cwd: '/repo',
+      env: {},
+      useConfiguredSshCommandForNetwork: true
+    })
+    await Promise.resolve()
+    expect(execFileMock).not.toHaveBeenCalled()
+
+    blocker.release()
+    await pending
+
+    expect(calls).toEqual([
+      ['config', '--get', 'core.sshCommand'],
+      ['fetch', '--no-write-fetch-head', 'origin']
+    ])
   })
 
   it('replaces configured BatchMode for opted-in mergeable OpenSSH commands', async () => {
@@ -717,6 +755,7 @@ describe('gitStreamStdout', () => {
         chunks.push(chunk)
       }
     })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stdout.emit('data', Buffer.from('? a.txt\n'))
     child.stdout.emit('data', Buffer.from('? b.txt\n'))
     child.emit('close', 0)
@@ -739,11 +778,13 @@ describe('gitStreamStdout', () => {
         return true
       }
     })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stdout.emit('data', Buffer.from('? a.txt\n'))
 
     await expect(promise).resolves.toEqual({ stoppedEarly: true })
     expect(child.kill).toHaveBeenCalled()
     expect(calls).toBe(1)
+    child.emit('close', null, 'SIGTERM')
   })
 
   it('rejects when stdout exceeds the maxBuffer backstop', async () => {
@@ -756,10 +797,12 @@ describe('gitStreamStdout', () => {
       onStdout: () => {}
     })
     const rejection = expect(promise).rejects.toThrow('git stdout exceeded maxBuffer.')
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stdout.emit('data', Buffer.from('way too much'))
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
+    child.emit('close', null, 'SIGTERM')
   })
 
   it('rejects on a non-zero exit with stderr context', async () => {
@@ -768,6 +811,7 @@ describe('gitStreamStdout', () => {
 
     const promise = gitStreamStdout(['status'], { cwd: '/repo', onStdout: () => {} })
     const rejection = expect(promise).rejects.toThrow('git exited with 128')
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stderr.emit('data', Buffer.from('fatal: not a git repository'))
     child.emit('close', 128)
 
@@ -785,10 +829,12 @@ describe('gitStreamStdout', () => {
       }
     })
     const rejection = expect(promise).rejects.toThrow('parser blew up')
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stdout.emit('data', Buffer.from('? a.txt\n'))
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
+    child.emit('close', null, 'SIGTERM')
   })
 
   it('handles a late spawn error after cancellation', async () => {
@@ -801,6 +847,7 @@ describe('gitStreamStdout', () => {
       signal: controller.signal,
       onStdout: () => {}
     })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     controller.abort()
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })

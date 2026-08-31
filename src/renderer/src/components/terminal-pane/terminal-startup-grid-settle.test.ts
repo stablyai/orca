@@ -115,6 +115,30 @@ describe('waitForStableStartupGrid', () => {
     expect(onSettled).toHaveBeenCalledWith({ cols: 88, rows: 50 })
   })
 
+  it('stops polling at the default cap when the external split gate never opens', () => {
+    const scheduler = createFrameScheduler()
+    const onSettled = vi.fn()
+    const measure = vi.fn(() => ({ cols: 88, rows: 50 }))
+
+    waitForStableStartupGrid({
+      isAlive: () => true,
+      isReadyToSettle: () => false,
+      measure,
+      onSettled,
+      requestFrame: scheduler.requestFrame,
+      cancelFrame: scheduler.cancelFrame
+    })
+
+    expect(scheduler.run(119)).toBe(119)
+    expect(scheduler.pending()).toBe(1)
+    expect(onSettled).not.toHaveBeenCalled()
+
+    expect(scheduler.run(10)).toBe(1)
+    expect(scheduler.pending()).toBe(0)
+    expect(measure).toHaveBeenCalledTimes(120)
+    expect(onSettled).toHaveBeenCalledWith({ cols: 88, rows: 50 })
+  })
+
   it('uses the latest usable grid at the frame cap when dimensions keep changing', () => {
     const scheduler = createFrameScheduler()
     const onSettled = vi.fn()

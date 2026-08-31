@@ -141,6 +141,7 @@ export const AutomationRuns = z.object({
 })
 
 export const AutomationCreate = z.object({
+  creationKey: OptionalString,
   name: requiredString('Missing automation name'),
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,

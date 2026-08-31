@@ -145,6 +145,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
             ['clone', '--progress', '--', args.url, clonePath],
             {
               cwd: args.destination,
+              admissionTier: 'interactive',
               // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
               env: nonInteractiveGitEnv(),
               signal: pendingController.signal,

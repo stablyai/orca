@@ -45,6 +45,7 @@ import {
 
 export type SettingsMutationOperations = {
   state: PersistedState
+  bumpLocalWorktreeScanGeneration: (repoId: string) => void
   removeRetainedBlob: (
     slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
   ) => void
@@ -254,6 +255,16 @@ export function updateSettings(
       ...sanitizedUpdates.notifications
     }),
     ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
+  }
+  if (
+    !Object.is(
+      previousSettings.localWindowsRuntimeDefault,
+      operations.state.settings.localWindowsRuntimeDefault
+    )
+  ) {
+    for (const repoId of new Set(operations.state.repos.map(({ id }) => id))) {
+      operations.bumpLocalWorktreeScanGeneration(repoId)
+    }
   }
   operations.scheduleSave()
   const changedUpdates = {} as Partial<GlobalSettings> & Record<string, unknown>

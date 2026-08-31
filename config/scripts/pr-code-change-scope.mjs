@@ -20,6 +20,7 @@ export const PR_CHECK_JOBS = [
   'static_analysis',
   'typecheck',
   'git_compatibility',
+  'codex_index_heal_contract',
   'xterm_patch_sync',
   'shell_contracts',
   'test',
@@ -46,6 +47,24 @@ const GIT_COMPAT_PREFIXES = [
   'src/main/git/',
   'src/relay/git-',
   'config/scripts/git-binary-compatibility'
+]
+
+// Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
+// depends on it, its app-server transport, or the contract itself changes.
+const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
+  'src/main/codex/codex-index-heal-binary-contract',
+  'src/main/codex/codex-session-index-heal',
+  'src/main/codex/codex-app-server-session',
+  'src/main/codex/codex-state-db',
+  'src/main/sqlite/sync-database',
+  'src/main/codex/codex-app-server-capability-signal',
+  'src/main/codex/codex-process-exit-deadline',
+  'src/main/codex/codex-session-backfill',
+  'src/main/codex/codex-session-index-heal-state',
+  'src/main/codex-cli/command',
+  'src/main/win32-utils',
+  'src/shared/node-cli-command-resolution',
+  'src/shared/windows-batch-spawn'
 ]
 
 const XTERM_PREFIXES = [
@@ -93,8 +112,18 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
   'src/shared/browser-client-host-placement',
+  'src/shared/agent-session-wire',
+  'src/shared/agent-session-mutation-envelope',
+  'src/shared/agent-session-journal-',
+  'src/main/ai-vault/structured-session-ownership.ts',
+  'src/main/native-chat/agent-session-journal/',
+  'src/main/native-chat/agent-session-wire/',
+  'src/main/runtime/agent-session-record-store',
   'src/main/runtime/rpc/dispatcher',
+  'src/main/runtime/rpc/methods/ai-vault.ts',
   'src/main/runtime/rpc/methods/browser-tab-create-schema',
+  'src/main/runtime/rpc/methods/session-tabs.ts',
+  'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
 ]
@@ -112,6 +141,19 @@ const NATIVE_RUNTIME_PREFIXES = [
   'config/scripts/rebuild-native-deps',
   'config/scripts/node-pty-job-ownership',
   'config/scripts/electron-builder-native-rebuild',
+  'config/patches/node-pty@',
+  'config/patches/@vscode__windows-process-tree'
+]
+
+const NATIVE_CACHE_FILES = new Set([
+  'package.json',
+  'pnpm-lock.yaml',
+  '.github/actions/install-node-dependencies/action.yml',
+  'config/scripts/ensure-native-runtime.mjs',
+  'config/scripts/rebuild-native-deps.mjs'
+])
+
+const NATIVE_CACHE_PREFIXES = [
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree'
 ]
@@ -222,13 +264,20 @@ export function classifyPrJobs(changedFiles) {
       shouldRun && (forceAll || ALWAYS_ON_CODE_JOBS.has(job) || jobDetector(job)(changedFiles))
     ])
   )
-  return { should_run: shouldRun, ...jobs }
+  return {
+    should_run: shouldRun,
+    native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
+    ...jobs
+  }
 }
 
 function jobDetector(job) {
   switch (job) {
     case 'git_compatibility':
       return (files) => files.some((file) => matchesPrefix(file, GIT_COMPAT_PREFIXES))
+    case 'codex_index_heal_contract':
+      return (files) =>
+        files.some((file) => matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES))
     case 'xterm_patch_sync':
       return (files) => files.some((file) => matchesPrefix(file, XTERM_PREFIXES))
     case 'shell_contracts':
@@ -272,6 +321,10 @@ function isTestFile(file) {
 
 function isDesktopIrrelevantPath(file) {
   return matchesPrefix(file, DESKTOP_IRRELEVANT_PREFIXES)
+}
+
+function isNativeCacheInputPath(file) {
+  return NATIVE_CACHE_FILES.has(file) || matchesPrefix(file, NATIVE_CACHE_PREFIXES)
 }
 
 function isGlobalForcePath(file) {

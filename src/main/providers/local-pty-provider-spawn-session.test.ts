@@ -317,6 +317,20 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).toHaveBeenCalledOnce()
     })
 
+    it('cancels an immediate stable-session shutdown before any PTY is spawned', async () => {
+      spawnMock.mockClear()
+
+      const spawn = provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'immediate-shutdown-session'
+      })
+      await provider.shutdown('immediate-shutdown-session', { immediate: true })
+
+      await expect(spawn).rejects.toThrow('PTY spawn canceled: immediate-shutdown-session')
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
     // Why (#16441): the Codex hook install and trust grant moved into
     // buildSpawnEnv, so the env build is now the long await before node-pty
     // exists — shutdown must be able to cancel the session id during it.
@@ -337,6 +351,41 @@ describe('LocalPtyProvider', () => {
 
       await envProvider.shutdown('env-build-session', { immediate: true })
       finishEnvBuild({})
+      await canceledSpawn
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('registers post-build preflight before a nested-microtask shutdown', async () => {
+      spawnMock.mockClear()
+      let finishEnvBuild!: () => void
+      const envProvider = new LocalPtyProvider({
+        buildSpawnEnv: (_id, baseEnv) =>
+          new Promise<Record<string, string>>((resolve) => {
+            finishEnvBuild = () => resolve(baseEnv)
+          })
+      })
+      const spawn = envProvider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'resolved-env-build-session'
+      })
+      const canceledSpawn = expect(spawn).rejects.toThrow(
+        'PTY spawn canceled: resolved-env-build-session'
+      )
+      await vi.waitFor(() => expect(finishEnvBuild).toBeTypeOf('function'))
+
+      finishEnvBuild()
+      const shutdown = new Promise<void>((resolve, reject) => {
+        queueMicrotask(() => {
+          queueMicrotask(() => {
+            envProvider
+              .shutdown('resolved-env-build-session', { immediate: true })
+              .then(resolve, reject)
+          })
+        })
+      })
+
+      await shutdown
       await canceledSpawn
       expect(spawnMock).not.toHaveBeenCalled()
     })

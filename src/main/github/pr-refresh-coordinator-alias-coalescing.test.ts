@@ -231,7 +231,8 @@ describe('pr-refresh-coordinator', () => {
       'feature/test',
       null,
       null,
-      null
+      null,
+      { localGitExecOptions: { admissionTier: 'background' } }
     )
     expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
       2,
@@ -239,7 +240,8 @@ describe('pr-refresh-coordinator', () => {
       'feature/test',
       null,
       'ssh-1',
-      null
+      null,
+      { localGitExecOptions: { admissionTier: 'background' } }
     )
   })
 
@@ -277,7 +279,8 @@ describe('pr-refresh-coordinator', () => {
       'feature/test',
       null,
       null,
-      null
+      null,
+      { localGitExecOptions: { admissionTier: 'background' } }
     )
     expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
       2,
@@ -286,7 +289,7 @@ describe('pr-refresh-coordinator', () => {
       null,
       null,
       null,
-      { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+      { localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'background' } }
     )
   })
 

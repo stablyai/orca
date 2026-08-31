@@ -70,9 +70,9 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
     'repos:add',
     async (
       _event,
-      args: { path: string; kind?: 'git' | 'folder' }
+      args: { path: string; kind?: 'git' | 'folder'; displayName?: string }
     ): Promise<{ repo: Repo } | { error: string }> => {
-      const result = await addLocalRepoFromPath(store, args.path, args.kind)
+      const result = await addLocalRepoFromPath(store, args.path, args.kind, args.displayName)
       if ('error' in result) {
         return result
       }

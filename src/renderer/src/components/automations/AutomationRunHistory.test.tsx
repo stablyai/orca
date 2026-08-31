@@ -113,7 +113,8 @@ describe('AutomationRunHistory unanswered history', () => {
     expect(container.textContent).not.toContain('No runs yet.')
     // "0 runs" is a count of something nobody managed to read.
     expect(container.textContent).not.toContain('0 runs')
-    expect(container.textContent).toContain('Run history could not be loaded')
+    expect(container.textContent).toContain('Run history is unavailable from this host')
+    expect(container.textContent).toContain('does not mean the automation failed or has no runs')
     expect(container.textContent).toContain('web-01 is not connected')
   })
 

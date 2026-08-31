@@ -14,6 +14,10 @@ import {
   makeTerminalTab,
   makeWorktreeLineage
 } from './persistence-test-harness'
+import {
+  getLocalWorktreeScanGeneration,
+  isLocalWorktreeScanGenerationCurrent
+} from './local-worktree-scan-generation'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -77,6 +81,23 @@ describe('Store', () => {
     expect(fetched!.displayName).toBe('test')
     // No username has been resolved yet — hydration must not probe git/gh.
     expect(fetched!.gitUsername).toBe('')
+  })
+
+  it('invalidates local scans across add, remove, and same-id re-add', async () => {
+    const store = await createStore()
+    const repoId = 'scan-lifecycle'
+    const beforeAdd = getLocalWorktreeScanGeneration(repoId)
+
+    store.addRepo(makeRepo({ id: repoId }))
+    expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeAdd)).toBe(false)
+
+    const beforeRemove = getLocalWorktreeScanGeneration(repoId)
+    store.removeProject(repoId)
+    expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeRemove)).toBe(false)
+
+    const beforeReAdd = getLocalWorktreeScanGeneration(repoId)
+    store.addRepo(makeRepo({ id: repoId, path: '/replacement' }))
+    expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeReAdd)).toBe(false)
   })
 
   it('setResolvedRepoGitUsername persists the enriched username for hydration', async () => {
@@ -368,6 +389,24 @@ describe('Store', () => {
   })
 
   // ── 6b. removeProjectForHost is host-scoped ───────────────────────────
+
+  it('invalidates local scans when one host registration is removed', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/remote/repo',
+        connectionId: 'ssh-old',
+        executionHostId: 'ssh:ssh-old'
+      })
+    )
+    const beforeRemove = getLocalWorktreeScanGeneration('shared')
+
+    store.removeProjectForHost('shared', 'ssh:ssh-old')
+
+    expect(isLocalWorktreeScanGenerationCurrent('shared', beforeRemove)).toBe(false)
+  })
 
   it('removeProjectForHost removes only the target host row for a shared repo id', async () => {
     const store = await createStore()

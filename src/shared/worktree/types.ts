@@ -80,6 +80,8 @@ export type Worktree = {
   comment: string
   linkedIssue: number | null
   linkedPR: number | null
+  /** GitHub PR hidden from branch discovery after an explicit unlink. */
+  suppressedGitHubPR?: number | null
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null

@@ -31,7 +31,7 @@ import {
   Upload,
   Wait
 } from './browser-schemas'
-import { BrowserTabCreateParams } from './browser-tab-create-schema'
+import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-schema'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 
 const CertificateProceed = BrowserTarget.extend({
@@ -117,6 +117,11 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
       pairedDeviceId
         ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind })
         : runtime.browserTabCreate(params, { clientKind })
+  }),
+  defineMethod({
+    name: 'browser.openUrl',
+    params: BrowserOpenUrlParams,
+    handler: async (params, { runtime }) => runtime.browserOpenUrlOnClient(params)
   }),
   defineMethod({
     name: 'browser.tabSetProfile',

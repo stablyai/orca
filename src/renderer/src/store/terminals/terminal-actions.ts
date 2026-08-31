@@ -1,3 +1,4 @@
+import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -34,6 +35,7 @@ import type {
 } from './terminal-contracts'
 
 export type TerminalActions = {
+  setTerminalStartupRestorationReady: (value: boolean) => void
   setRecentQuickCommandForGroup: (groupId: string, quickCommandId: string) => void
   claimAutomaticAgentResume: (tabId: string, claim: AutomaticAgentResumeClaim) => void
   seedNativeChatLaunchPrompt: (prompt: NativeChatLaunchPrompt) => void
@@ -66,6 +68,12 @@ export type TerminalActions = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
+      /** Stable leaf identity for adopting an already-live pane without changing its pane key. */
+      initialLeafId?: string
+      /** Published atomically with the tab so its first mount cannot spawn a bare shell. */
+      pendingStartup?: TerminalState['pendingStartupByTabId'][string]
+      /** Published atomically with pendingStartup for automatic resume ownership. */
+      automaticResumeClaim?: AutomaticAgentResumeClaim
       activate?: boolean
       recordInteraction?: boolean
       id?: string
@@ -208,7 +216,10 @@ export type TerminalActions = {
   ) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
   consumeTabInitialCwd: (tabId: string) => string | null
-  consumeTabStartupCommand: (tabId: string) => {
+  consumeTabStartupCommand: (
+    tabId: string,
+    expected?: TerminalState['pendingStartupByTabId'][string]
+  ) => {
     command: string
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery

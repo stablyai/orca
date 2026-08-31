@@ -32,6 +32,7 @@ export const findExistingWorktreeSymlinkPathsMock: ModuleMock = vi.fn()
 export const handleMock: Mock<(channel: string, handler: HandlerMap[string]) => void> = vi.fn()
 export const removeHandlerMock: ModuleMock = vi.fn()
 export const listWorktreesMock: StringArgMock = vi.fn()
+export const describeCreatedWorktreeMock: ModuleMock = vi.fn()
 export const parseWorktreeListMock: Mock<(output: string) => ParsedWorktreeRow[]> = vi.fn(
   (output: string) =>
     output
@@ -113,6 +114,8 @@ export const electronModuleMock = () => ({
 export const gitWorktreeModuleMock = () => ({
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
+  listWorktreesSharedStrict: listWorktreesMock,
+  describeCreatedWorktree: describeCreatedWorktreeMock,
   parseWorktreeList: parseWorktreeListMock,
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,

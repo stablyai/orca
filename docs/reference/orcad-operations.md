@@ -10,12 +10,12 @@ Design background: `docs/design/shipping-orcad.html` §00c and §04.
 
 A deployment is **orcad** plus **the terminal daemon**.
 
-| | orcad | terminal daemon |
-| --- | --- | --- |
-| Started by | the supervisor | orcad, detached |
-| Owns | RPC, git, worktrees, persistence | every local PTY |
-| Lifetime | one supervised run | **outlives orcad** |
-| Endpoint | `ws://<bind>:<port>` | `<data-root>/daemon/daemon-v<N>.sock` |
+|            | orcad                            | terminal daemon                       |
+| ---------- | -------------------------------- | ------------------------------------- |
+| Started by | the supervisor                   | orcad, detached                       |
+| Owns       | RPC, git, worktrees, persistence | every local PTY                       |
+| Lifetime   | one supervised run               | **outlives orcad**                    |
+| Endpoint   | `ws://<bind>:<port>`             | `<data-root>/daemon/daemon-v<N>.sock` |
 
 The daemon outliving orcad is the property the whole peer model is recommended for
 (`docs/reference/ssh-execution-boundary.md`): daemon-backed PTYs stay `live` across a runtime
@@ -52,13 +52,13 @@ The data root is `$ORCA_USER_DATA`, else `$XDG_DATA_HOME/Orca`, else `~/.orca`.
 Before the profile index or the store is touched, orcad takes `<data-root>/orcad.lock`.
 It refuses to start when:
 
-| Code | Meaning |
-| --- | --- |
-| `orcad_data_root_wrong_owner` | the root is owned by another uid (POSIX) |
-| `orcad_data_root_shared` | the root is group/world accessible and could not be tightened |
-| `orcad_instance_lock_held` | another live orcad owns this root |
-| `orcad_instance_lock_foreign_identity` | the lock belongs to a different identity |
-| `orcad_data_root_unusable` | the root cannot be created, stat'd or written |
+| Code                                   | Meaning                                                       |
+| -------------------------------------- | ------------------------------------------------------------- |
+| `orcad_data_root_wrong_owner`          | the root is owned by another uid (POSIX)                      |
+| `orcad_data_root_shared`               | the root is group/world accessible and could not be tightened |
+| `orcad_instance_lock_held`             | another live orcad owns this root                             |
+| `orcad_instance_lock_foreign_identity` | the lock belongs to a different identity                      |
+| `orcad_data_root_unusable`             | the root cannot be created, stat'd or written                 |
 
 A root that is merely too permissive and that we own is tightened to `0700` rather than
 refused — orcad stores credentials there unsealed (no OS keyring on this host), so the goal
@@ -91,14 +91,15 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
   and exits 1, so the failure stays attributable instead of arriving as an unlogged kill.
 - **Exit codes.**
 
-  | Code | Meaning | Supervisor should |
-  | --- | --- | --- |
-  | 0 | clean shutdown | restart per policy |
-  | 1 | startup or shutdown failure | restart with backoff |
-  | 78 | configuration fault (bind address, data root, instance lock) | **not** restart |
+  | Code | Meaning                                                      | Supervisor should    |
+  | ---- | ------------------------------------------------------------ | -------------------- |
+  | 0    | clean shutdown                                               | restart per policy   |
+  | 1    | startup or shutdown failure                                  | restart with backoff |
+  | 78   | configuration fault (bind address, data root, instance lock) | **not** restart      |
 
   78 is `EX_CONFIG`. Put it in systemd's `RestartPreventExitStatus`: restarting on a data
   root owned by someone else is a restart-spin, not a recovery.
+
 - **Logs.** orcad writes human-readable diagnostics to **stderr** and its readiness contract
   to **stdout**; the supervisor owns capture and rotation. The daemon, being detached, writes
   its own NDJSON lifecycle log to `<data-root>/logs/daemon.log` (suppressed by
@@ -110,7 +111,7 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
 - **Launch.** Forked detached from `daemon-entry.js` beside `orcad.js`, with its own PID
   record, token and socket under `<data-root>/daemon`.
 - **Adoption before spawn.** A daemon already answering the endpoint is adopted, not
-  replaced, unless it is unhealthy, foreign, or built from a superseded bundle *and* owns no
+  replaced, unless it is unhealthy, foreign, or built from a superseded bundle _and_ owns no
   live sessions. Replacing a healthy daemon kills its PTYs, so code freshness always defers
   to live work.
 - **Restart.** The adapter respawns the daemon on death, transparently to callers.

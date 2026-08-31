@@ -79,6 +79,11 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
       store.activateTab?.(next.tabId)
     }
     store.setActiveTabType('simulator')
+  } else if (next.type === 'agent-session') {
+    if (next.tabId) {
+      store.activateTab?.(next.tabId)
+    }
+    store.setActiveTabType('agent-session')
   } else {
     // Why: `setActiveFile` targets the file entity (its implicit activateTab
     // picks the first matching tab in the active group); `activateTab(tabId)`

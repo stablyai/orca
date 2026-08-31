@@ -106,6 +106,7 @@ export async function resolveAutomationRunUsage(
       acc.outputTokens += entry.outputTokens
       acc.cacheReadTokens += entry.cacheReadTokens
       acc.cacheWriteTokens += entry.cacheWriteTokens
+      acc.cacheWrite1hTokens += entry.cacheWrite1hTokens
       return acc
     },
     {
@@ -113,7 +114,8 @@ export async function resolveAutomationRunUsage(
       inputTokens: 0,
       outputTokens: 0,
       cacheReadTokens: 0,
-      cacheWriteTokens: 0
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0
     }
   )
   const estimatedCostUsd = estimateCostUsd(
@@ -121,7 +123,8 @@ export async function resolveAutomationRunUsage(
     totals.inputTokens,
     totals.outputTokens,
     totals.cacheReadTokens,
-    totals.cacheWriteTokens
+    totals.cacheWriteTokens,
+    totals.cacheWrite1hTokens
   )
 
   return {

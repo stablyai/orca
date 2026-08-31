@@ -18,6 +18,8 @@ vi.mock('./native-chat-composer-target', () => ({
 }))
 
 vi.mock('./native-chat-attachment-upload', () => ({
+  nativeChatLocalAttachmentUnsupportedNotice: () =>
+    'Local attachments are not available for remote sessions.',
   nativeChatWorktreeNotReadyNotice: () => 'Worktree not ready — try again in a moment.'
 }))
 
@@ -133,6 +135,24 @@ afterEach(() => {
 })
 
 describe('useNativeChatComposerPaste', () => {
+  it('does not save a clipboard image locally for a remote runtime', async () => {
+    const setNotice = vi.fn()
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'runtime' }),
+      attachResolvedPaths,
+      setNotice
+    })
+
+    await act(async () => probe.latest().pasteFromClipboard())
+
+    expect(setNotice).toHaveBeenCalledWith(
+      'Local attachments are not available for remote sessions.'
+    )
+    expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
   it('surfaces a failed SSH image save through the composer notice', async () => {
     mocks.saveClipboardImageAsTempFile.mockRejectedValue(
       new Error('Remote connection dropped. Click Reconnect on the SSH target before retrying.')

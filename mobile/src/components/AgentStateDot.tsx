@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Radio } from 'lucide-react-native'
+import { Activity } from 'lucide-react-native'
 import { Animated, Easing, StyleSheet, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 
@@ -49,7 +49,7 @@ export function AgentStateDot({ state }: { state: AgentDotState }) {
   if (state === 'monitoring') {
     return (
       <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
-        <Radio size={10} color={WORKING_COLOR} />
+        <Activity size={10} color={WORKING_COLOR} />
       </View>
     )
   }

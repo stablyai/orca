@@ -18,6 +18,13 @@ type ImportOptions = {
   resolveWorktreeId: (worktreePath: string) => string | null
   /** Host owning the projected snapshot; absent preserves the legacy bare key. */
   executionHostId?: ExecutionHostId
+  /**
+   * Called for every host path carrying terminal tabs that `resolveWorktreeId` could not place.
+   * An unplaceable path is `unverifiable` — the local catalog has not landed yet — never proof the
+   * row is not ours, so callers must not treat such an import as an authoritative picture of the
+   * host. See docs/reference/ssh-execution-boundary.md.
+   */
+  onUnplacedTerminalTabs?: (worktreePath: string, tabCount: number) => void
 }
 
 function worktreePathFromId(worktreeId: string): string | null {
@@ -157,6 +164,9 @@ export function importRemoteWorkspaceSession(
   for (const [worktreePath, tabs] of Object.entries(remote.tabsByWorktreePath ?? {})) {
     const worktreeId = resolvePath(worktreePath)
     if (!worktreeId) {
+      if (tabs.length > 0) {
+        options.onUnplacedTerminalTabs?.(worktreePath, tabs.length)
+      }
       continue
     }
     tabsByWorktree[worktreeId] = tabs.map((tab) => {

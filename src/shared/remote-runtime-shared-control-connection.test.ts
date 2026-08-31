@@ -317,6 +317,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     )
     expect(onError).toHaveBeenCalledTimes(1)
     expect(onClose).not.toHaveBeenCalled()
+    expect(connection.getDiagnostics()).toMatchObject({
+      state: 'ready',
+      lastError: null,
+      lastClose: null
+    })
 
     connection.close()
   })

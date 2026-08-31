@@ -112,7 +112,6 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 
 The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
 
-
 ## Release Channels
 
 The public Homebrew cask tracks stable desktop releases:

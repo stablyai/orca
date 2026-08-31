@@ -1,6 +1,41 @@
+// @vitest-environment happy-dom
+
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import type { ReactNode } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
+
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenuItem: ({
+    children,
+    disabled,
+    onSelect
+  }: {
+    children: ReactNode
+    disabled?: boolean
+    onSelect?: (event: { preventDefault: () => void }) => void
+  }) => (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onSelect?.({ preventDefault: () => undefined })}
+    >
+      {children}
+    </button>
+  ),
+  DropdownMenuSub: ({ children }: { children: ReactNode }) => (
+    <div data-slot="dropdown-menu-sub">{children}</div>
+  ),
+  DropdownMenuSubContent: ({ children }: { children: ReactNode }) => (
+    <div data-slot="dropdown-menu-sub-content">{children}</div>
+  ),
+  DropdownMenuSubTrigger: ({ children }: { children: ReactNode }) => (
+    <div data-slot="dropdown-menu-sub-trigger">{children}</div>
+  )
+}))
+
+afterEach(cleanup)
 
 describe('RuntimeHostStatusRow', () => {
   it('renders reconnecting diagnostics for remote hosts', () => {
@@ -67,5 +102,84 @@ describe('RuntimeHostStatusRow', () => {
     expect(markup).toContain('Dev Box')
     expect(markup).toContain('Connected')
     expect(markup).toContain('Disconnect')
+  })
+
+  it('keeps healthy rows free of a submenu trigger', () => {
+    const { container } = render(<RuntimeHostStatusRow label="Dev Box" state="connected" />)
+
+    expect(container.querySelector('[data-slot="dropdown-menu-sub-trigger"]')).toBeNull()
+  })
+
+  it('renders failing rows as submenu triggers', () => {
+    const { container } = render(
+      <RuntimeHostStatusRow label="Dev Box" state="disconnected" detail="Connection refused" />
+    )
+
+    const trigger = container.querySelector('[data-slot="dropdown-menu-sub-trigger"]')
+    expect(trigger).not.toBeNull()
+    expect(trigger?.querySelector('button')).toBeNull()
+  })
+
+  it('keeps the row action invokable for failing hosts', async () => {
+    const onConnect = vi.fn(async () => {})
+    render(
+      <RuntimeHostStatusRow
+        label="Dev Box"
+        state="disconnected"
+        detail="Connection refused"
+        onConnect={onConnect}
+      />
+    )
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0])
+
+    await waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
+  })
+
+  it('renders a long raw error in full inside the submenu', () => {
+    const longError = `Invalid remote endpoint: ${'wss://relay.example.test/path/'.repeat(8)}`
+    const { container } = render(
+      <RuntimeHostStatusRow
+        label="Dev Box"
+        state="disconnected"
+        detail={longError}
+        diagnostics={{
+          state: 'closed',
+          pendingRequestCount: 0,
+          subscriptionCount: 0,
+          reconnectAttempt: 3,
+          lastConnectedAt: null,
+          lastClose: null,
+          lastError: longError
+        }}
+      />
+    )
+
+    const submenu = container.querySelector('[data-slot="dropdown-menu-sub-content"]')
+    expect(submenu).not.toBeNull()
+    expect(submenu?.textContent).toContain(longError)
+  })
+
+  it('shows the existing connection diagnostics in the submenu', () => {
+    const { container } = render(
+      <RuntimeHostStatusRow
+        label="Dev Box"
+        state="reconnecting"
+        detail="Connection refused"
+        diagnostics={{
+          state: 'reconnecting',
+          pendingRequestCount: 0,
+          subscriptionCount: 0,
+          reconnectAttempt: 2,
+          lastConnectedAt: Date.now() - 60_000,
+          lastClose: null,
+          lastError: 'Connection refused'
+        }}
+      />
+    )
+
+    const submenu = container.querySelector('[data-slot="dropdown-menu-sub-content"]')
+    expect(submenu?.textContent).toContain('Last connected')
+    expect(submenu?.textContent).toContain('Attempt 3')
   })
 })

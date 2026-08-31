@@ -1,3 +1,5 @@
+import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
+
 // ─── SSH Connection Types ───────────────────────────────────────────
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
@@ -211,6 +213,9 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
+  /** A stop this client asked for and could not confirm, replayed on the next handshake to this
+   *  same target. See `shared/ssh-pending-pty-kill.ts`. Never on the wire — client-local. */
+  pendingKill?: SshPendingPtyKill
 }
 
 /** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */

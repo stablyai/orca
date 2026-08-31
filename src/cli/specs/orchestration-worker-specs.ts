@@ -29,6 +29,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
+      'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
       'When omitted, --agent uses the Settings > Orchestration default worker agent and --model/--effort use their Settings > Orchestration defaults; without a default agent, worker-start fails with agent_unconfigured.',
       '--model supports Claude, Codex, and Cursor opaque provider model ids; --effort requires --model. Neither can combine with --terminal.',
       'New worktrees use agent-first creation and default --setup to run. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',

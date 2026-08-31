@@ -3,11 +3,22 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import { admitCloseActiveTabPayload } from './close-active-tab-payload-admission'
+import type { CloseActiveTabPayload } from './api/ui-command-event-api'
 import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
 } from '../shared/skill-delete-contract'
+import {
+  DOC_PREVIEW_EXTERNAL_LINK_CHANNEL,
+  DOC_PREVIEW_LOAD_FAILURE_CHANNEL,
+  DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
+  DOC_PREVIEW_MINT_GRANT_CHANNEL,
+  DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
+  type DocPreviewFailure
+} from '../shared/doc-preview-scheme'
+import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -21,6 +32,7 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
+import type { AgentSessionPtyWriteRefusal } from '../shared/agent-session-pty-write-admission'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
@@ -581,6 +593,8 @@ const api = {
     },
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+    prepareTerminalStartupRestoration: (): Promise<void> =>
+      ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
     recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
       ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
     startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
@@ -1049,6 +1063,8 @@ const api = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
+      /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
+      incarnationId?: string
       launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
       snapshotCols?: number
@@ -1073,9 +1089,17 @@ const api = {
     },
     writeAccepted: (id: string, data: string): Promise<boolean> =>
       ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-    onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
-        callback(payload)
+    onWriteUnavailable: (
+      callback: (payload: {
+        id: string
+        /** Set only when a durable agent-session lease refused the write; absent otherwise. */
+        agentSessionRefusal?: AgentSessionPtyWriteRefusal
+      }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
+      ): void => callback(payload)
       ipcRenderer.on('pty:writeUnavailable', handler)
       return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
     },
@@ -1295,10 +1319,23 @@ const api = {
       ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
 
     onExit: (
-      callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
+      callback: (data: {
+        id: string
+        code: number
+        preserveRendererBinding?: boolean
+        /** Which lifetime of `id` died; absent when the execution host predates the field. */
+        incarnationId?: string
+      }) => void
     ): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; code: number }) =>
-        callback(data)
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          id: string
+          code: number
+          preserveRendererBinding?: boolean
+          incarnationId?: string
+        }
+      ) => callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
     },
@@ -1429,8 +1466,10 @@ const api = {
       currentHeadOid?: string | null
     }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
-    refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:refreshPRNow', args),
+    refreshPRNow: (args: {
+      candidate: GitHubPRRefreshCandidate
+      reason?: GitHubPRRefreshReason
+    }): Promise<unknown> => ipcRenderer.invoke('gh:refreshPRNow', args),
 
     enqueuePRRefresh: (args: {
       candidate: GitHubPRRefreshCandidate
@@ -1641,6 +1680,15 @@ const api = {
       prRepo?: GitHubOwnerRepo | null
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:updatePRState', args),
+
+    markPRReadyForReview: (args: {
+      repoPath: string
+      repoId?: string
+      sourceContext?: TaskSourceContext | null
+      prNumber: number
+      prRepo?: GitHubOwnerRepo | null
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:markPRReadyForReview', args),
 
     requestPRReviewers: (args: {
       repoPath: string
@@ -3322,6 +3370,27 @@ const api = {
     }
   } satisfies PreloadApi['updater'],
 
+  docPreview: {
+    mintGrant: (request: DocPreviewGrantRequest): Promise<{ grantId: string; url: string }> =>
+      ipcRenderer.invoke(DOC_PREVIEW_MINT_GRANT_CHANNEL, request),
+    revokeGrant: (grantId: string): Promise<boolean> =>
+      ipcRenderer.invoke(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, grantId),
+    authorizeDirectory: (grantId: string, relativePath: string): Promise<boolean> =>
+      ipcRenderer.invoke(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL, grantId, relativePath),
+    onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { url: string }): void =>
+        callback(payload)
+      ipcRenderer.on(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+    },
+    onLoadFailure: (callback: (payload: DocPreviewFailure) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: DocPreviewFailure): void =>
+        callback(payload)
+      ipcRenderer.on(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+    }
+  },
+
   notebook: {
     runPythonCell: (args: {
       filePath: string
@@ -3545,7 +3614,9 @@ const api = {
     status: (args: {
       worktreePath: string
       connectionId?: string
+      admissionTier?: 'interactive' | 'status' | 'background'
       includeIgnored?: boolean
+      includeLineStats?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
       reuseLineStats?: boolean
       branchLineTotalMergeBase?: string
@@ -3596,6 +3667,7 @@ const api = {
       worktreePath: string
       baseRef: string
       connectionId?: string
+      admissionTier?: 'interactive' | 'status' | 'background'
     }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
     commitCompare: (args: {
       worktreePath: string
@@ -3742,6 +3814,8 @@ const api = {
   ui: {
     get: () => ipcRenderer.invoke('ui:get'),
     set: (args) => ipcRenderer.invoke('ui:set', args),
+    // Same channel: the local invoke already rejects when main fails to apply.
+    setWithAck: (args) => ipcRenderer.invoke('ui:set', args),
     recordFeatureInteraction: (id) => ipcRenderer.invoke('ui:recordFeatureInteraction', id),
     onStateChanged: (callback: (ui: PersistedUIState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, ui: PersistedUIState): void =>
@@ -3983,8 +4057,15 @@ const api = {
       ipcRenderer.on('ui:hardReloadBrowserPage', listener)
       return () => ipcRenderer.removeListener('ui:hardReloadBrowserPage', listener)
     },
-    onCloseActiveTab: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
+    onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload?: unknown): void => {
+        const admitted = admitCloseActiveTabPayload(payload)
+        if (admitted.kind === 'legacy') {
+          callback()
+        } else if (admitted.kind === 'source') {
+          callback(admitted.payload)
+        }
+      }
       ipcRenderer.on('ui:closeActiveTab', listener)
       return () => ipcRenderer.removeListener('ui:closeActiveTab', listener)
     },
@@ -4173,6 +4254,7 @@ const api = {
         direction: 'horizontal' | 'vertical'
         command?: string
         telemetrySource?: TerminalPaneSplitSource
+        newLeafId?: string
       }) => void
     ): (() => void) => {
       const listener = (
@@ -4183,6 +4265,7 @@ const api = {
           direction: 'horizontal' | 'vertical'
           command?: string
           telemetrySource?: TerminalPaneSplitSource
+          newLeafId?: string
         }
       ) => callback(data)
       ipcRenderer.on('ui:splitTerminal', listener)
@@ -4562,6 +4645,31 @@ const api = {
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
       ipcRenderer.invoke('runtime:call', args),
+    subscribe: async (
+      args: { method: string; params?: unknown },
+      callback: (response: RuntimeRpcResponse<unknown>) => void
+    ): Promise<RuntimeEnvironmentSubscriptionHandle> => {
+      const subscriptionId = `desktop-${crypto.randomUUID()}`
+      const channel = `runtime:subscription:${subscriptionId}`
+      const listener = (_event: Electron.IpcRendererEvent, response: RuntimeRpcResponse<unknown>) =>
+        callback(response)
+      ipcRenderer.on(channel, listener)
+      try {
+        await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
+      } catch (error) {
+        ipcRenderer.removeListener(channel, listener)
+        throw error
+      }
+      return {
+        unsubscribe: () => {
+          ipcRenderer.removeListener(channel, listener)
+          ipcRenderer.send('runtime:unsubscribe', { subscriptionId })
+        },
+        sendBinary: () => {
+          throw new Error('Local runtime subscriptions do not accept binary input')
+        }
+      }
+    },
     getTerminalFitOverrides: (): Promise<
       { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),

@@ -57,7 +57,10 @@ import {
   type HttpLinkSourceOwner
 } from '@/lib/http-link-routing'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
-import { canOpenWorkspaceBrowserTabOnRuntime } from '@/lib/workspace-browser-tab-open'
+import {
+  canOpenWorkspaceBrowserTabOnRuntime,
+  canOpenWorkspaceBrowserTabOnSsh
+} from '@/lib/workspace-browser-tab-open'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -95,6 +98,7 @@ import {
   resolveNonLatinControlChordInput
 } from './terminal-non-latin-control-chord'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import { installTerminalImeComposerPlaceholderMask } from './terminal-ime-composer-placeholder-mask'
 import { isCurrentPlatformIosWeb } from '@/lib/ios-web-platform'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
@@ -329,6 +333,8 @@ type UseTerminalPaneLifecycleDeps = {
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
+  /** Settles the captured one-shot startup only after a pane owns a concrete PTY. */
+  onStartupBound?: () => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void
@@ -722,6 +728,7 @@ export function useTerminalPaneLifecycle({
   setCacheTimerStartedAt,
   syncPanePtyLayoutBinding,
   clearExitedPanePtyLayoutBinding,
+  onStartupBound,
   setTabPaneExpanded,
   setTabCanExpandPane,
   setExpandedPane,
@@ -825,14 +832,21 @@ export function useTerminalPaneLifecycle({
       resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     const getHttpLinkSourceOwnerForPane = (paneId: number) =>
       resolveTerminalHttpLinkSourceOwner(paneTransportsRef.current.get(paneId))
-    const canOpenRuntimeBrowserForPane = (paneId: number): boolean => {
+    const canOpenOwnedBrowserForPane = (paneId: number): boolean => {
       const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-      return (
-        sourceOwner.kind === 'runtime' &&
-        canOpenWorkspaceBrowserTabOnRuntime(
+      if (sourceOwner.kind === 'runtime') {
+        return canOpenWorkspaceBrowserTabOnRuntime(
           useAppStore.getState(),
           worktreeId,
           sourceOwner.runtimeEnvironmentId
+        )
+      }
+      return (
+        sourceOwner.kind === 'ssh' &&
+        canOpenWorkspaceBrowserTabOnSsh(
+          useAppStore.getState(),
+          worktreeId,
+          sourceOwner.connectionId
         )
       )
     }
@@ -841,7 +855,7 @@ export function useTerminalPaneLifecycle({
       return terminalHttpLinkActionDestinationsFor(
         settingsRef.current,
         sourceOwner,
-        canOpenRuntimeBrowserForPane(paneId)
+        canOpenOwnedBrowserForPane(paneId)
       )
     }
     const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
@@ -965,6 +979,7 @@ export function useTerminalPaneLifecycle({
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
       clearExitedPanePtyLayoutBinding,
+      onStartupBound,
       deferPtyInput: (paneId, data, forward) => {
         const suppression = httpLinkClickFallbackDisposables.get(paneId)?.ptyMouseSuppression
         if (!suppression) {
@@ -997,7 +1012,7 @@ export function useTerminalPaneLifecycle({
         ...terminalUrlOpenHintOptionsFor(
           settingsRef.current,
           getHttpLinkSourceOwnerForPane(paneId),
-          canOpenRuntimeBrowserForPane(paneId)
+          canOpenOwnedBrowserForPane(paneId)
         ),
         showActions: settingsRef.current?.terminalLinkActionPopoverEnabled !== false
       })
@@ -1063,6 +1078,7 @@ export function useTerminalPaneLifecycle({
           ? installTerminalImeLinuxCandidateState(pane.terminal.element)
           : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
         // Why after the tracker: the preedit stops propagation on `input` while
         // a syllable is held, so anything on this element that needs those
         // events has to be registered ahead of it. Nothing does today — the
@@ -1078,6 +1094,7 @@ export function useTerminalPaneLifecycle({
           : null
         imeCompositionDisposablesRef.current.set(pane.id, {
           dispose: () => {
+            imeComposerPlaceholderMask.dispose()
             imeCompositionTracker.dispose()
             linuxImeCandidateState?.dispose()
             iosHangulPreedit?.dispose()

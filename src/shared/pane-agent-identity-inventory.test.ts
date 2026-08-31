@@ -171,7 +171,6 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'resolveCommittedTitleAgentType',
     classification: 'identity-consumer',
     paths: [
-      ['src/renderer/src/components/tab-bar/tab-bar-item-surface.tsx', 3],
       ['src/renderer/src/components/terminal-pane/native-chat-leaf-title-agent.ts', 4],
       ['src/renderer/src/components/terminal-pane/pty-connection/pane-agent-identity.ts', 2]
     ]
@@ -273,7 +272,7 @@ const DIRECT_SINGLE_SOURCE_SURFACES: readonly {
     marker: 'isCursorAgentTitle'
   },
   {
-    path: 'src/main/providers/local-pty-provider.ts',
+    path: 'src/main/providers/local-pty-session-activation.ts',
     classification: 'action-consumer',
     marker: 'launchAgent'
   },

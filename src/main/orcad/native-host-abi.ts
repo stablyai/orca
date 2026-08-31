@@ -117,11 +117,7 @@ export function parseUnmetGlibcVersion(loaderError: string): string | null {
 }
 
 /** `NODE_MODULE_VERSION 115 ... requires NODE_MODULE_VERSION 127` -> { built: '115', host: '127' }. */
-export function parseNodeAbiMismatch(
-  loaderError: string
-): { built: string; host: string } | null {
-  const match = loaderError.match(
-    /NODE_MODULE_VERSION\s+(\d+)\D+NODE_MODULE_VERSION\s+(\d+)/
-  )
+export function parseNodeAbiMismatch(loaderError: string): { built: string; host: string } | null {
+  const match = loaderError.match(/NODE_MODULE_VERSION\s+(\d+)\D+NODE_MODULE_VERSION\s+(\d+)/)
   return match ? { built: match[1], host: match[2] } : null
 }

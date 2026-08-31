@@ -302,7 +302,7 @@ describe('createSetupRunnerScript', () => {
     }
   })
 
-  it('omits waitForAgentStartup unless the repo explicitly waits for setup', async () => {
+  it('waits when either local or project policy requires completed setup', async () => {
     gitExecFileSyncMock.mockReset()
     gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
     const { createSetupRunnerScript } = await import('./worktree-runner-script')
@@ -317,6 +317,26 @@ describe('createSetupRunnerScript', () => {
     expect(
       createSetupRunnerScript(makeRepo('wait-for-setup'), '/test/worktree', 'echo setup')
         .waitForAgentStartup
+    ).toBe(true)
+    expect(
+      createSetupRunnerScript(
+        makeRepo('start-immediately'),
+        '/test/worktree',
+        'echo setup',
+        undefined,
+        undefined,
+        'wait-for-setup'
+      ).waitForAgentStartup
+    ).toBe(true)
+    expect(
+      createSetupRunnerScript(
+        makeRepo('wait-for-setup'),
+        '/test/worktree',
+        'echo setup',
+        undefined,
+        undefined,
+        'start-immediately'
+      ).waitForAgentStartup
     ).toBe(true)
   })
 

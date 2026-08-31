@@ -1,5 +1,5 @@
 import { closeSync, fstatSync, openSync, readSync, type Stats } from 'node:fs'
-import { open } from 'node:fs/promises'
+import { open, type FileHandle } from 'node:fs/promises'
 
 const MIN_GROWTH_BYTES = 64 * 1024
 
@@ -33,48 +33,55 @@ export async function readNodeFileWithinLimit(
   filePath: string,
   maxBytes: number
 ): Promise<BoundedNodeFileRead> {
+  const handle = await open(filePath, 'r')
+  try {
+    return await readNodeFileHandleWithinLimit(handle, maxBytes)
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function readNodeFileHandleWithinLimit(
+  handle: FileHandle,
+  maxBytes: number
+): Promise<BoundedNodeFileRead> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
     throw new RangeError('File read limit must be a non-negative safe integer')
   }
 
-  const handle = await open(filePath, 'r')
-  try {
-    const stats = await handle.stat()
-    validateSize(stats.size, maxBytes)
+  const stats = await handle.stat()
+  validateSize(stats.size, maxBytes)
 
-    let buffer = Buffer.allocUnsafe(stats.size)
-    let offset = 0
-    while (true) {
-      while (offset < buffer.length) {
-        const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset)
-        if (bytesRead === 0) {
-          return { buffer: buffer.subarray(0, offset), stats }
-        }
-        offset += bytesRead
-      }
-
-      const probe = Buffer.allocUnsafe(1)
-      const { bytesRead } = await handle.read(probe, 0, 1, offset)
+  let buffer = Buffer.allocUnsafe(stats.size)
+  let offset = 0
+  while (true) {
+    while (offset < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset)
       if (bytesRead === 0) {
         return { buffer: buffer.subarray(0, offset), stats }
       }
-      if (offset >= maxBytes) {
-        throw new NodeFileReadTooLargeError(offset + bytesRead, maxBytes)
-      }
-
-      // Why: ordinary readFile includes concurrent growth, so retain that behavior while capacity stays bounded.
-      const nextCapacity = Math.min(
-        maxBytes,
-        Math.max(MIN_GROWTH_BYTES, buffer.length * 2, offset + bytesRead)
-      )
-      const expanded = Buffer.allocUnsafe(nextCapacity)
-      buffer.copy(expanded, 0, 0, offset)
-      expanded[offset] = probe[0]!
-      buffer = expanded
       offset += bytesRead
     }
-  } finally {
-    await handle.close()
+
+    const probe = Buffer.allocUnsafe(1)
+    const { bytesRead } = await handle.read(probe, 0, 1, offset)
+    if (bytesRead === 0) {
+      return { buffer: buffer.subarray(0, offset), stats }
+    }
+    if (offset >= maxBytes) {
+      throw new NodeFileReadTooLargeError(offset + bytesRead, maxBytes)
+    }
+
+    // Why: ordinary readFile includes concurrent growth, so retain that behavior while capacity stays bounded.
+    const nextCapacity = Math.min(
+      maxBytes,
+      Math.max(MIN_GROWTH_BYTES, buffer.length * 2, offset + bytesRead)
+    )
+    const expanded = Buffer.allocUnsafe(nextCapacity)
+    buffer.copy(expanded, 0, 0, offset)
+    expanded[offset] = probe[0]!
+    buffer = expanded
+    offset += bytesRead
   }
 }
 

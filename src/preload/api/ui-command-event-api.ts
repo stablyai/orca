@@ -32,9 +32,15 @@ import type {
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
 
+export type CloseActiveTabPayload = { sourceId: string }
+
 export type UiCommandEventApi = {
   get: () => Promise<PersistedUIState>
   set: (args: Partial<PersistedUIState>) => Promise<void>
+  /** Like set, but REJECTS when the update did not reach the host (the web preload's set
+   *  swallows transport failures for offline use). The diff writer needs the distinction:
+   *  folding an unacked patch into its baseline would silently stop retrying it (STA-5781). */
+  setWithAck?: (args: Partial<PersistedUIState>) => Promise<void>
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
@@ -101,7 +107,7 @@ export type UiCommandEventApi = {
   onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
   onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onHardReloadBrowserPage: (callback: () => void) => () => void
-  onCloseActiveTab: (callback: () => void) => () => void
+  onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
   onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
@@ -164,6 +170,7 @@ export type UiCommandEventApi = {
       direction: 'horizontal' | 'vertical'
       command?: string
       telemetrySource?: TerminalPaneSplitSource
+      newLeafId?: string
     }) => void
   ) => () => void
   onRenameTerminal: (

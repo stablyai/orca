@@ -74,6 +74,11 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         session.deps.updateTabPtyId(session.deps.tabId, ptyId)
       }
     }
+    if (session.paneStartup && !session.startupPtyBound) {
+      // Settles the captured one-shot startup only after this pane owns a concrete PTY.
+      session.startupPtyBound = true
+      session.deps.onStartupBound?.()
+    }
     if (options.seedInitialAgentStatus) {
       session.applyInitialAgentStatus()
     }

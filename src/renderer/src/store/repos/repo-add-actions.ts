@@ -33,10 +33,15 @@ export function createRepoAddActions(
     addRepoPath: async (path, kind = 'git', options) => {
       try {
         const target = getActiveRuntimeTarget(getAddRepoPathRouteSettings(options, get().settings))
+        const displayName = options?.displayName?.trim() || undefined
         let repo: Repo
         try {
           if (target.kind === 'local') {
-            const result = await window.api.repos.add({ path, kind })
+            const result = await window.api.repos.add({
+              path,
+              kind,
+              ...(displayName ? { displayName } : {})
+            })
             if ('error' in result) {
               throw new Error(result.error)
             }
@@ -46,7 +51,7 @@ export function createRepoAddActions(
               await callRuntimeRpc<{ repo: Repo }>(
                 target,
                 'repo.add',
-                { path, kind },
+                { path, kind, ...(displayName ? { displayName } : {}) },
                 { timeoutMs: 15_000 }
               )
             ).repo
@@ -81,6 +86,7 @@ export function createRepoAddActions(
           const { openModal } = get()
           openModal('confirm-non-git-folder', {
             folderPath: path,
+            ...(displayName ? { displayName } : {}),
             ...(target.kind === 'environment' ? { runtimeEnvironmentId: target.environmentId } : {})
           })
           return null

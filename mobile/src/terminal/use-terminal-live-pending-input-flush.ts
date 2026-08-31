@@ -30,7 +30,11 @@ type RunTerminalLiveMirrorStep = (
 ) => Promise<boolean>
 
 type TerminalLivePendingInputFlush = {
-  readonly applyLiveInputMirror: (handle: string, fieldText: string, composing?: boolean) => void
+  readonly applyLiveInputMirror: (
+    handle: string,
+    fieldText: string,
+    composing?: boolean
+  ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
@@ -153,9 +157,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   }, [runMirrorStep])
 
   const applyLiveInputMirror = useCallback(
-    (handle: string, fieldText: string, composing?: boolean): void => {
-      void runMirrorStep(handle, fieldText, false, composing)
-    },
+    (handle: string, fieldText: string, composing?: boolean): Promise<boolean> =>
+      runMirrorStep(handle, fieldText, false, composing),
     [runMirrorStep]
   )
 

@@ -230,18 +230,19 @@ export function createRemoteWorkspaceTargetSync(
       return
     }
     const applyToken = buildDirectSshSnapshotApplyToken(prepared.token, snapshot.revision)
-    if (applyToken) {
-      await applyDirectSshRemoteWorkspaceSnapshot({
-        store: deps.store,
-        snapshot,
-        token: applyToken,
-        arrival,
-        isArrivalCurrent,
-        isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
-        waitForWorkspaceSessionReady,
-        finalizeHydratedTerminals: deps.finalizeHydratedTerminals
-      })
+    if (!applyToken) {
+      return
     }
+    await applyDirectSshRemoteWorkspaceSnapshot({
+      store: deps.store,
+      snapshot,
+      token: applyToken,
+      arrival,
+      isArrivalCurrent,
+      isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
+      waitForWorkspaceSessionReady,
+      finalizeHydratedTerminals: deps.finalizeHydratedTerminals
+    })
   }
 
   return {

@@ -6,7 +6,7 @@ export type RequestTabCloseListener = (data: {
   tabId: string | null
   worktreeId?: string
 }) => void
-export type CloseActiveTabListener = () => void
+export type CloseActiveTabListener = (payload?: { sourceId: string }) => void
 export type CloseFloatingItemListener = (payload: { sourceId: string }) => void
 export type SelectFloatingIndexListener = (payload: { index: number }) => void
 export type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void

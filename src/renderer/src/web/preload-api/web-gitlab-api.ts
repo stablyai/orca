@@ -1,8 +1,12 @@
 import type { PreloadApi } from '../../../../preload/api-types'
+import {
+  GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
+  GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE
+} from '../../../../shared/protocol-version'
 import { GITLAB_WEB_RPC_METHODS } from './web-gitlab-routes'
 import type { WebGitLabRuntimeMethod } from './web-gitlab-routes'
 import { mapRepoPathArg } from './web-review-api'
-import { callRuntimeResult } from './web-runtime-calls'
+import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 
 export type WebGitLabApi = NonNullable<PreloadApi['gl']>
 
@@ -36,7 +40,7 @@ export function createGitLabApi(): WebGitLabApi {
       route<WebGitLabResult<'listLabels'>>(GITLAB_WEB_RPC_METHODS.listLabels, args),
     listAssignableUsers: () => Promise.resolve([]),
     todos: (args) => route<WebGitLabResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
-    workItemDetails: (args) =>
+    workItemDetails: ({ repoOwnerExecutionHostId: _owner, ...args }) =>
       route<WebGitLabResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
     closeMR: (args) =>
       route<WebGitLabResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {
@@ -49,7 +53,15 @@ export function createGitLabApi(): WebGitLabApi {
         state: 'opened'
       }),
     mergeMR: (args) => route<WebGitLabResult<'mergeMR'>>(GITLAB_WEB_RPC_METHODS.mergeMR, args),
-    updateMR: (args) => route<WebGitLabResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args),
+    updateMR: async (args) => {
+      if (args.updates.readyForReview) {
+        const status = await getRemoteRuntimeStatus().catch(() => null)
+        if (!status?.capabilities?.includes(GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY)) {
+          return { ok: false, error: GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE }
+        }
+      }
+      return route<WebGitLabResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args)
+    },
     updateMRReviewers: (args) =>
       route<WebGitLabResult<'updateMRReviewers'>>(GITLAB_WEB_RPC_METHODS.updateMRReviewers, args),
     addMRComment: (args) =>

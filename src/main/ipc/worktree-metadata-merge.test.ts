@@ -44,4 +44,22 @@ describe('mergeWorktree identity projection', () => {
 
     expect(worktree.identity).toBeUndefined()
   })
+
+  it('projects optional GitHub PR suppression metadata', () => {
+    const worktree = mergeWorktree('repo-1', git, {
+      displayName: 'Feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      suppressedGitHubPR: 42,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    })
+
+    expect(worktree.suppressedGitHubPR).toBe(42)
+  })
 })

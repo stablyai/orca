@@ -25,10 +25,7 @@ import type { ServeReadiness } from '../server/serve-readiness'
 export const ORCAD_READINESS_FILENAME = '.orcad-readiness'
 /** Stderr, including the bind-exposure line and every supervision message. */
 export const ORCAD_LOG_FILENAME = 'orcad.log'
-export {
-  ORCAD_PID_FILENAME,
-  OrcadRemoteLaunchUnsupportedError
-} from './orcad-remote-host-support'
+export { ORCAD_PID_FILENAME, OrcadRemoteLaunchUnsupportedError } from './orcad-remote-host-support'
 
 export type OrcadLaunchSpec = {
   remoteInstallDir: string
@@ -51,7 +48,9 @@ export type OrcadLaunchSpec = {
 export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSpec): string {
   assertPosixHost(host)
   const dir = shellEscape(spec.remoteInstallDir)
-  const readiness = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_READINESS_FILENAME))
+  const readiness = shellEscape(
+    joinRemotePath(host, spec.remoteInstallDir, ORCAD_READINESS_FILENAME)
+  )
   const log = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LOG_FILENAME))
   const pidFile = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
   const entry = shellEscape(joinRemotePath(host, spec.remoteInstallDir, 'orcad.js'))

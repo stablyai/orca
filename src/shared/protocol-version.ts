@@ -40,6 +40,8 @@ export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' a
 export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v1' as const
 export const WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY =
   'worktree.linked-work-item-context.v1' as const
+export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
+  'worktree.github-pr-suppression.v1' as const
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 export const ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY = 'orchestration.federation.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY =
@@ -116,6 +118,15 @@ export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
+// Why: structured sessions are journal-backed, not PTY-backed, so a client that
+// cannot read them must not see them at all — it would render an agent tab it
+// can neither display nor drive. The host also refuses every agentSession.*
+// method from a connection that does not advertise this.
+export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: paired structured clients explicitly hold every visible session surface, allowing the host
+// to stop provider children after the last surface closes without tying lifetime to a transport.
+export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =
+  'agent-session.structured.hold.v1' as const
 // Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
@@ -124,6 +135,13 @@ export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
+export const GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY = 'github.markPRReadyForReview' as const
+export const GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE =
+  'Marking a pull request ready requires a newer Orca server. Update the server and try again.'
+export const GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY =
+  'gitlab.updateMR.readyForReview.v1' as const
+export const GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE =
+  'Marking a merge request ready requires a newer Orca server. Update the server and try again.'
 export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
@@ -137,6 +155,8 @@ export const AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE =
 export const AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY = 'automation.owner-fencing.v1' as const
 export const AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE =
   'Editing automations on this host requires a newer Orca server. Update the HUB and try again.'
+export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'automation.create-idempotency.v1' as const
 
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
@@ -145,7 +165,9 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 ] as const
 
 // Electron clients can decode client-hosted page placement; becoming a page
@@ -182,6 +204,7 @@ export const RUNTIME_CAPABILITIES = [
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
@@ -197,8 +220,12 @@ export const RUNTIME_CAPABILITIES = [
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
+  GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
+  GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
@@ -213,7 +240,8 @@ export const RUNTIME_CAPABILITIES = [
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
   SKILL_DELETE_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY
+  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

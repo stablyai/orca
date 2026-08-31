@@ -24,6 +24,10 @@ type Props = {
   sendErrorMessage: string | null
   /** Drops that failure once a later send succeeds. */
   onClearSendError: () => void
+  /** Stable host/worktree/tab identity for accepted-send completion fencing. */
+  sendSurfaceId: string
+  /** Reads the retained route's focus generation for accepted-send fencing. */
+  getSendCompletionGeneration: () => number
   keyboardInset: number
 }
 
@@ -43,6 +47,8 @@ export function MobileNativeChatOverlay({
   inputLockReason,
   sendErrorMessage,
   onClearSendError,
+  sendSurfaceId,
+  getSendCompletionGeneration,
   keyboardInset
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
@@ -81,6 +87,9 @@ export function MobileNativeChatOverlay({
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
         onSend={images.sendNativeChat}
+        sendSurfaceId={sendSurfaceId}
+        getSendCompletionGeneration={getSendCompletionGeneration}
+        getComposerEditGeneration={controller.getChatComposerEditGeneration}
         pending={controller.chatPending}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}

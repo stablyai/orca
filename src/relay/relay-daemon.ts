@@ -20,8 +20,18 @@ export async function runRelayDaemon(
   }
 
   const socketOwnership = new RelaySocketOwnership(options.sockPath)
+  let fatalPtyHandler: RelayRuntimeServices['ptyHandler'] | null = null
   process.on('uncaughtException', (error) => {
     relayLogLine(`[relay] Uncaught exception: ${error.message}\n${error.stack}`)
+    try {
+      fatalPtyHandler?.forceKillAllPtyProcesses()
+    } catch (reapError) {
+      // Why log rather than swallow: exit must still win, but this line is the only
+      // forensic trace a crashed remote daemon leaves behind for an orphaned shell.
+      relayLogLine(
+        `[relay] Fatal PTY reap failed: ${reapError instanceof Error ? reapError.message : String(reapError)}`
+      )
+    }
     socketOwnership.cleanup()
     process.exit(1)
   })
@@ -36,6 +46,7 @@ export async function runRelayDaemon(
     options.graceTimeMs,
     launchVersion
   )
+  fatalPtyHandler = runtime.ptyHandler
   let reconnectListener: RelayReconnectListener | null = null
   const agentHooks = new RelayAgentHookRuntime(
     primaryChannel.dispatcher,

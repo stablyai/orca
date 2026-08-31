@@ -4,12 +4,13 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
-  PaletteLiveStatusProvider,
+  PaletteLiveStatusProvider as ProductionPaletteLiveStatusProvider,
   PaletteRecentTabStatusDot,
   PaletteWorktreeStatusDot
 } from './palette-live-status'
@@ -20,6 +21,16 @@ vi.mock('@/components/AgentWorkingSpinner', () => ({
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF = '11111111-2222-4333-8444-555555555555'
+
+function PaletteLiveStatusProvider(
+  props: React.ComponentProps<typeof ProductionPaletteLiveStatusProvider>
+): React.JSX.Element {
+  return (
+    <TooltipProvider>
+      <ProductionPaletteLiveStatusProvider {...props} />
+    </TooltipProvider>
+  )
+}
 
 let testRoot: Root
 let testContainer: HTMLDivElement
@@ -79,6 +90,13 @@ function dotLabels(): string[] {
   )
 }
 
+function expectStyledStatusTooltip(label: string): void {
+  const trigger = testContainer.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]')
+  expect(trigger).not.toBeNull()
+  expect(trigger?.getAttribute('title')).toBeNull()
+  expect(trigger?.textContent).toContain(label)
+}
+
 describe('palette live status', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -118,6 +136,7 @@ describe('palette live status', () => {
     setAgentState('working')
     await render()
     expect(dotLabels()).toEqual(['Working'])
+    expect(testContainer.querySelector('[data-slot="tooltip-trigger"]')).not.toBeNull()
 
     await act(async () => {
       setAgentState('blocked')
@@ -136,7 +155,7 @@ describe('palette live status', () => {
     await render()
 
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
-    expect(testContainer.querySelector('.lucide-radio')?.classList).toContain('text-yellow-500')
+    expect(testContainer.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
     expect(dotLabels()).toEqual(['Monitoring background tasks'])
   })
 
@@ -244,8 +263,7 @@ describe('palette live status', () => {
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(testContainer.querySelector('[data-spinner]')).not.toBeNull()
     expect(dotLabels()).toEqual(['Working'])
-    // Hover tooltip on the outer hit target (badge is pointer-events-none).
-    expect(testContainer.querySelector('[title="Working"]')).not.toBeNull()
+    expectStyledStatusTooltip('Working')
 
     await act(async () => {
       setAgentState('blocked')
@@ -253,7 +271,7 @@ describe('palette live status', () => {
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
     expect(dotLabels()).toEqual(['Needs permission'])
-    expect(testContainer.querySelector('[title="Needs permission"]')).not.toBeNull()
+    expectStyledStatusTooltip('Needs permission')
   })
 
   it('shows monitoring with a static radio instead of the working spinner', async () => {
@@ -276,9 +294,9 @@ describe('palette live status', () => {
     })
 
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
-    expect(testContainer.querySelector('.lucide-radio')?.classList).toContain('text-yellow-500')
+    expect(testContainer.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
     expect(dotLabels()).toEqual(['Monitoring background tasks'])
-    expect(testContainer.querySelector('[title="Monitoring background tasks"]')).not.toBeNull()
+    expectStyledStatusTooltip('Monitoring background tasks')
   })
 
   it('shows only the content icon when a terminal-backed row is inactive', async () => {
@@ -331,7 +349,7 @@ describe('palette live status', () => {
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
     expect(dotLabels()).toEqual(['Unread agent completion'])
-    expect(testContainer.querySelector('[title="Unread agent completion"]')).not.toBeNull()
+    expectStyledStatusTooltip('Unread agent completion')
   })
 
   it('prefers working over unread on the same row', async () => {
@@ -379,7 +397,7 @@ describe('palette live status', () => {
     })
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(dotLabels()).toEqual(['Done'])
-    expect(testContainer.querySelector('[title="Done"]')).not.toBeNull()
+    expectStyledStatusTooltip('Done')
     // lucide CircleCheck class marker
     expect(testContainer.innerHTML).toContain('lucide-circle-check')
   })

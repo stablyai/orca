@@ -1,6 +1,7 @@
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import type { Repo } from '../../../shared/repo-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
@@ -28,6 +29,12 @@ import {
   setWorktreeMetaForHost as setWorktreeMetaForHostOperation
 } from './worktree-identity-metadata'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
+import {
+  captureNativeLocalWorktreeMetadataScanExpectation as captureNativeLocalWorktreeMetadataScanExpectationOperation,
+  pruneSessionlessMissingLocalWorktreeMetadataForRepo as pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation,
+  type LocalWorktreeMetadataPruneExpectation,
+  type NativeLocalWorktreeMetadataScanExpectation
+} from '../tracking-repos/missing-local-worktree-metadata-pruning'
 
 type MetadataLineageOperationsRuntime = Pick<StoreRuntimeState, 'state'>
 
@@ -86,6 +93,15 @@ export class MetadataLineageOperations {
     return getAllWorktreeMetaForHostOperation(
       this[metadataLineageOperationsContext].runtime,
       executionHostId
+    )
+  }
+
+  captureNativeLocalWorktreeMetadataScanExpectation(
+    repo: Repo
+  ): NativeLocalWorktreeMetadataScanExpectation {
+    return captureNativeLocalWorktreeMetadataScanExpectationOperation(
+      this[metadataLineageOperationsContext].runtime.state,
+      repo
     )
   }
 
@@ -182,6 +198,21 @@ export class MetadataLineageOperations {
       )
     }
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
+  }
+
+  pruneSessionlessMissingLocalWorktreeMetadataForRepo(
+    scan: NativeLocalWorktreeMetadataScanExpectation,
+    missingMetadata: readonly LocalWorktreeMetadataPruneExpectation[]
+  ): string[] {
+    const removed = pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation(
+      this[metadataLineageOperationsContext].runtime.state,
+      scan,
+      missingMetadata
+    )
+    if (removed.length > 0) {
+      scheduleSave(this[metadataLineageOperationsContext].scheduling)
+    }
+    return removed
   }
 
   getWorktreeLineage(worktreeId: string): WorktreeLineage | undefined {

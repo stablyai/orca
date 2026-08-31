@@ -17,6 +17,7 @@ const expensiveJobs = [
   'static_analysis',
   'typecheck',
   'git_compatibility',
+  'codex_index_heal_contract',
   'xterm_patch_sync',
   'shell_contracts',
   'test',
@@ -118,6 +119,49 @@ describe('per-job path classification', () => {
     })
   })
 
+  it('runs the Codex index-heal contract only when the heal or its transport changes', () => {
+    expectClassification(['src/main/codex/codex-session-index-heal.ts'], {
+      codex_index_heal_contract: true,
+      package: true,
+      package_windows: true
+    })
+    expectClassification(['src/main/sqlite/sync-database.ts'], {
+      codex_index_heal_contract: true,
+      package: true,
+      package_windows: true
+    })
+    expectClassification(['src/main/codex/codex-app-server-session.ts'], {
+      codex_index_heal_contract: true,
+      package: true,
+      package_windows: true
+    })
+    expectClassification(['src/main/codex/codex-index-heal-binary-contract.test.ts'], {
+      codex_index_heal_contract: true
+    })
+    // Keep the real-binary gate live when a transport or launch dependency changes.
+    for (const file of [
+      'src/main/codex/codex-app-server-capability-signal.ts',
+      'src/main/codex/codex-process-exit-deadline.ts',
+      'src/main/codex/codex-session-backfill.ts',
+      'src/main/codex/codex-session-index-heal-state.ts',
+      'src/main/codex-cli/command.ts',
+      'src/main/win32-utils.ts',
+      'src/shared/node-cli-command-resolution.ts',
+      'src/shared/windows-batch-spawn.ts'
+    ]) {
+      expectClassification([file], {
+        codex_index_heal_contract: true,
+        package: true,
+        package_windows: true
+      })
+    }
+    // A neighbouring Codex module must not drag the real-binary job in.
+    expectClassification(['src/main/codex/codex-home-paths.ts'], {
+      package: true,
+      package_windows: true
+    })
+  })
+
   it('runs xterm patch sync only when xterm inputs change', () => {
     expectClassification(['config/patches/xterm-upstream.json'], {
       xterm_patch_sync: true
@@ -181,8 +225,24 @@ describe('per-job path classification', () => {
     for (const file of [
       'src/shared/protocol-version.ts',
       'src/shared/terminal-stream-protocol.ts',
+      'src/shared/agent-session-wire.ts',
+      'src/shared/agent-session-mutation-envelope.ts',
+      'src/shared/agent-session-journal-item-key.ts',
+      'src/shared/agent-session-journal-types.ts',
+      'src/main/ai-vault/structured-session-ownership.ts',
+      'src/main/native-chat/agent-session-journal/journal-cursor.ts',
+      'src/main/native-chat/agent-session-journal/journal-reducer.ts',
+      'src/main/native-chat/agent-session-journal/journal-row-schema.ts',
+      'src/main/native-chat/agent-session-wire/structured-agent-session-host.ts',
+      'src/main/runtime/agent-session-record-store.ts',
       'src/main/runtime/rpc/dispatcher.ts',
+      'src/main/runtime/rpc/methods/ai-vault.ts',
       'src/main/runtime/rpc/methods/browser-tab-create-schema.ts',
+      'src/main/runtime/rpc/methods/session-tabs.ts',
+      'src/main/runtime/rpc/methods/structured-agent-session.ts',
+      'src/main/runtime/rpc/methods/structured-agent-session-gate.ts',
+      'src/main/runtime/rpc/methods/structured-agent-session-hold.ts',
+      'src/main/runtime/rpc/methods/structured-agent-session-schemas.ts',
       'src/main/runtime/rpc/methods/terminal.ts',
       'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
     ]) {
@@ -205,6 +265,22 @@ describe('per-job path classification', () => {
       expect(result[job], job).toBe(true)
     }
     expect(classifyPrJobs(['pnpm-lock.yaml']).git_compatibility).toBe(true)
+  })
+
+  it('primes native caches only when their immutable inputs change', () => {
+    expect(classifyPrJobs([]).native_cache_changed).toBe(true)
+    expect(classifyPrJobs(['README.md']).native_cache_changed).toBe(false)
+    expect(classifyPrJobs(['src/main/index.ts']).native_cache_changed).toBe(false)
+    for (const file of [
+      'package.json',
+      'pnpm-lock.yaml',
+      '.github/actions/install-node-dependencies/action.yml',
+      'config/scripts/ensure-native-runtime.mjs',
+      'config/scripts/rebuild-native-deps.mjs',
+      'config/patches/node-pty@1.1.0.patch'
+    ]) {
+      expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
+    }
   })
 
   it('keeps unit-test-only diffs out of packaging', () => {
@@ -238,7 +314,7 @@ describe('PR Checks skip wiring', () => {
     expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mjs')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
-    for (const jobName of ['should_run', ...expensiveJobs]) {
+    for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
         `\${{ steps.filter.outputs.${jobName} }}`
       )
@@ -250,13 +326,26 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
   })
 
-  it('gates each expensive job on its own classifier output', () => {
-    for (const jobName of expensiveJobs) {
+  it('gates each expensive job on its classifier and cache prerequisite', () => {
+    for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
       expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths'])
       expect(prWorkflow.jobs[jobName].if, jobName).toBe(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
+    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'test_native_cache'])
+    expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'skipped'")
+    expect(prWorkflow.jobs.test_native_cache.needs).toEqual(['code_paths'])
+    expect(prWorkflow.jobs.test_native_cache.if).toBe(
+      "needs.code_paths.outputs.native_cache_changed == 'true'"
+    )
+    expect(prWorkflow.jobs.test_native_cache.strategy).toBeUndefined()
+    const primerInstall = prWorkflow.jobs.test_native_cache.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    expect(primerInstall.with['node-version']).toBe('24')
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {

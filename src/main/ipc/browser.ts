@@ -2,6 +2,7 @@ import { ipcMain, webContents } from 'electron'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { isWorkspaceDocPageId } from '../browser/doc-preview-guest-policy'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
   isLiveBrowserWebContentsId,
@@ -158,6 +159,13 @@ export function registerBrowserHandlers(): void {
 
   ipcMain.handle('browser:unregisterGuest', (event, args: { browserPageId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
+      return false
+    }
+    // Why the whole door and not just the manager call: a document page shares this renderer, and
+    // the grab disposal below drops the intent an in-flight preview grab compares by identity —
+    // that grab would then answer ok without ever arming. A document page withdraws by revoking
+    // its grant, so its id arriving here is misaddressed however it got here.
+    if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
       return false
     }
     // Why: notify bridge before unregistering so it can destroy the session

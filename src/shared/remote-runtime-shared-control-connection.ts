@@ -211,6 +211,10 @@ export class RemoteRuntimeSharedControlConnection {
       sendEncrypted: (payload) => this.sendEncrypted(payload),
       markReady: () => {
         this.lastConnectedAt = Date.now()
+        // Why cleared here: these describe the attempt that just succeeded's predecessor.
+        // Left set, a recovered host reads "Connected" next to a stale failure forever.
+        this.lastError = null
+        this.lastClose = null
         this.readyStableReset.schedule({
           getState: () => this.state,
           getSocket: () => this.ws,

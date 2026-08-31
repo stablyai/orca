@@ -26,7 +26,7 @@ main/git/command-runner/wsl-command-resolution.ts
 main/git/wsl-git-read-environment.ts
 main/ipc/filesystem-watcher-wsl.ts
 main/local-worktree-filesystem.ts
-main/providers/local-pty-provider.ts
+main/providers/local-pty-spawn.ts
 main/rate-limits/claude-pty.ts
 main/rate-limits/codex-fetcher.ts
 main/wsl-availability.ts

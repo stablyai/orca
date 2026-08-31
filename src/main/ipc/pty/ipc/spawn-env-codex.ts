@@ -142,6 +142,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
         networkProxySettings: ptySettings,
+        routeBrowserOpensToClient: ctx.deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
         deferGitConfigGuardToDaemon:
           ctx.provider.supportsGitCredentialGuardHost?.(ctx.effectiveSessionId) === true
       })

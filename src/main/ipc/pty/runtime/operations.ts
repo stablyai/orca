@@ -18,11 +18,39 @@ import {
 } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
+import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
 
-export function writePtyFromRuntimeController(ptyId: string, data: string): boolean {
+export function writePtyFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  data: string
+): boolean {
+  // Why: the backstop for every runtime write path — query replies, followups, deliveries —
+  // so a caller that forgets the typed gate still cannot reach a provider.
+  const admission = agentSessionPtyWriteGate.admit(ptyId)
+  if (!admission.admitted) {
+    reportAgentSessionWriteRefusal(deps.mainWindow, ptyId, admission.refusal)
+    return false
+  }
   try {
     getProviderForPty(ptyId).write(ptyId, data)
     return true
+  } catch {
+    return false
+  }
+}
+
+export function writePtyAgentSessionProofFromRuntimeController(
+  ptyId: string,
+  data: string,
+  authority: { sessionId: string; spawnToken: string }
+): boolean {
+  if (!agentSessionPtyWriteGate.admitProof(ptyId, authority)) {
+    return false
+  }
+  try {
+    return getProviderForPty(ptyId).write(ptyId, data) !== false
   } catch {
     return false
   }
@@ -152,8 +180,35 @@ export async function clearBufferFromRuntimeController(
   }
 }
 
-export function hasPtyFromRuntimeController(ptyId: string): boolean | null {
+const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
+const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
+
+export function hasPtyFromRuntimeController(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string
+): boolean | null {
   try {
+    // Why: no locally routed provider can authoritatively answer for a
+    // remote host's PTY, so remote-scoped ids stay unknown, never absent.
+    if (ptyId.startsWith('remote:')) {
+      return null
+    }
+    const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
+    const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
+    if (startupPromise && !settledLocalPtyProviderStartups.has(startupPromise)) {
+      // Why: a sync probe cannot wait out the cold-start daemon swap the way
+      // probePtyLiveness does, and the pre-swap provider's "no PTY" for a
+      // daemon-restored id is fabricated — answer unverifiable until the swap
+      // settles (docs/reference/ssh-execution-boundary.md rule 2).
+      if (!watchedLocalPtyProviderStartups.has(startupPromise)) {
+        watchedLocalPtyProviderStartups.add(startupPromise)
+        const markSettled = (): void => {
+          settledLocalPtyProviderStartups.add(startupPromise)
+        }
+        startupPromise.then(markSettled, markSettled)
+      }
+      return null
+    }
     return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
   } catch {
     return null

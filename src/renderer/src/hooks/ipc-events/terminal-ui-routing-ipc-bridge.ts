@@ -11,13 +11,14 @@ import {
 export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onSplitTerminal(
-      ({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
+      ({ tabId, paneRuntimeId, direction, command, telemetrySource, newLeafId }) => {
         const detail: SplitTerminalPaneDetail = {
           tabId,
           paneRuntimeId,
           direction,
           command,
-          telemetrySource
+          telemetrySource,
+          newLeafId
         }
         window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
       }
@@ -64,6 +65,11 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       const store = useAppStore.getState()
       const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId)
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+      // Why: chat-completion focus is a courtesy reveal, not navigation — never yank the user
+      // back into a workspace they deliberately left.
+      if (tab?.contentType === 'agent-session' && store.activeWorktreeId !== worktreeId) {
+        return
+      }
       if (!tab) {
         if (browserTarget) {
           // Why: older/mobile fallback snapshots identify browser tabs by workspace id when no unified tab wrapper exists.
@@ -81,7 +87,9 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       store.setActiveView('terminal')
       store.focusGroup(worktreeId, tab.groupId)
       store.activateTab(tab.id)
-      if (browserTarget) {
+      if (tab.contentType === 'agent-session') {
+        store.setActiveTabType('agent-session')
+      } else if (browserTarget) {
         // Why: browser tabs need their own active-page state, not the editor file activation path.
         store.setActiveBrowserTab(browserTarget.workspaceId)
         store.setActiveTabType('browser')

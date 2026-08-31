@@ -38,6 +38,7 @@ import {
 import {
   assertAuthorityCapability,
   assertOwnerFencingSupported,
+  assertAutomationCreateIdempotencySupported,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
   AutomationHostScopeUnsupportedError,
@@ -286,6 +287,9 @@ export async function createAutomationForDestination(
   input: AutomationCreateInput,
   destination: AutomationDestination
 ): Promise<Automation> {
+  if (input.creationKey) {
+    await assertAutomationCreateIdempotencySupported(authority)
+  }
   await assertOwnerFencingSupported(authority)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
     ...toRuntimeAutomationCreateInput(input),

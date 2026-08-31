@@ -50,6 +50,9 @@ export function mergeWorktree(
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
+    ...(meta?.suppressedGitHubPR !== undefined
+      ? { suppressedGitHubPR: meta.suppressedGitHubPR }
+      : {}),
     linkedLinearIssue: meta?.linkedLinearIssue ?? null,
     linkedLinearIssueWorkspaceId: meta?.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta?.linkedLinearIssueOrganizationUrlKey ?? null,

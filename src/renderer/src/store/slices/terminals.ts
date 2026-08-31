@@ -1,6 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalSlice } from '../terminals/terminal-state'
+
+export type { TerminalSlice } from '../terminals/terminal-state'
 import { createTerminalEphemeralActions } from '../terminals/terminal-ephemeral-state'
 import { createTerminalTabCreationActions } from '../terminals/terminal-tab-creation'
 import { createActiveWorkspaceTerminalActions } from '../terminals/terminal-active-workspace-creation'
@@ -47,8 +49,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   nativeChatLaunchDraftByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
+  terminalStartupRestorationReady: false,
+  setTerminalStartupRestorationReady: (value) => {
+    set({ terminalStartupRestorationReady: value })
+  },
   restoredRuntimeHostIdByWorkspaceSessionKey: {},
   defaultTerminalTabsAppliedByWorktreeId: {},
+  closedTerminalTabTombstonesByTabId: {},
   hydrationSucceeded: false,
   pendingReconnectWorktreeIds: [],
   pendingReconnectTabByWorktree: {},

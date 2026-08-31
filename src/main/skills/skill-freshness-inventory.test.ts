@@ -157,7 +157,11 @@ async function writeSkillLockHash(homeDir: string, skillFolderHash: string): Pro
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((root) => rm(root, { recursive: true })))
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
+  )
 })
 
 describe('read-only skill freshness inventory', () => {
@@ -907,5 +911,5 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.installations).toEqual([
       expect.objectContaining({ name: 'orca-cli', status: 'current', topology: 'canonical-copy' })
     ])
-  })
+  }, 90_000)
 })

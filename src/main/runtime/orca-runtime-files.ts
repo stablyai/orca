@@ -104,6 +104,11 @@ import {
   readNodeFileWithinLimit
 } from '../../shared/node-bounded-file-reader'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../shared/quick-open-listing-limits'
+import {
+  readAuthorizedDocPreviewFile,
+  type DocPreviewFileAccessRequest,
+  type DocPreviewFileAccessResult
+} from '../../shared/doc-preview-file-access'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 // Legacy SSH relays cannot enforce a byte budget; 32 max-length paths stay under one 4 MiB frame.
@@ -1692,6 +1697,53 @@ export class RuntimeFileCommands {
       { content: buffer.toString('utf-8'), isBinary: false },
       maxContentBytes
     )
+  }
+
+  async readDocPreviewFile(
+    worktreeSelector: string,
+    relativePath: string,
+    entryRelativePath: string,
+    implicitRootRelativePath: string | null,
+    authorizedRootRelativePaths: string[],
+    maxContentBytes?: number
+  ): Promise<DocPreviewFileAccessResult> {
+    const relativePaths = [
+      '',
+      entryRelativePath,
+      relativePath,
+      ...(implicitRootRelativePath === null ? [] : [implicitRootRelativePath]),
+      ...authorizedRootRelativePaths
+    ]
+    const [boundary, entry, target, ...authorityRoots] = await this.resolveFileExplorerPaths(
+      worktreeSelector,
+      relativePaths
+    )
+    const implicitRoot = implicitRootRelativePath === null ? null : authorityRoots[0]
+    const authorizedRoots = authorityRoots.slice(implicitRoot === null ? 0 : 1)
+    const binaryMaxBytes =
+      maxContentBytes === undefined
+        ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
+        : previewableBinaryByteLimit(maxContentBytes)
+    const request: DocPreviewFileAccessRequest = {
+      boundaryPath: boundary.path,
+      entryPath: entry.path,
+      implicitRootPath: implicitRoot?.path ?? null,
+      authorizedRootPaths: authorizedRoots.map((root) => root.path),
+      targetPath: target.path,
+      maxTextBytes: MOBILE_FILE_READ_MAX_BYTES,
+      maxBinaryBytes: binaryMaxBytes
+    }
+    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
+    if (target.connectionId && !provider) {
+      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    if (target.connectionId && !provider?.readDocPreviewFile) {
+      throw new Error('Secure document previews require a newer SSH relay')
+    }
+    const result = provider?.readDocPreviewFile
+      ? await provider.readDocPreviewFile(request)
+      : await readAuthorizedDocPreviewFile(request)
+    return assertPreviewWithinTransportBudget(result, maxContentBytes)
   }
 
   async readFileExplorerChunk(

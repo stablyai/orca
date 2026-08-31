@@ -1,10 +1,12 @@
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
-  getActiveRuntimeTarget
+  getActiveRuntimeTarget,
+  runtimeEnvironmentSupportsCapability
 } from '../../../../runtime/runtime-rpc-client'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
@@ -57,12 +59,35 @@ export async function persistWorktreeMeta(
       )
     )
   }
+  let compatibleUpdates = updates
+  if (target.kind === 'environment' && 'suppressedGitHubPR' in updates) {
+    if (typeof updates.suppressedGitHubPR === 'number' && updates.suppressedGitHubPR > 0) {
+      await assertRuntimeEnvironmentCapability(
+        target.environmentId,
+        WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+        translate(
+          'auto.store.slices.worktrees.metadata.worktree.meta.persist.github.pr.suppression',
+          'Update the remote runtime to unlink GitHub pull requests'
+        )
+      )
+    } else if (
+      updates.suppressedGitHubPR === null &&
+      !(await runtimeEnvironmentSupportsCapability(
+        target.environmentId,
+        WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY
+      ))
+    ) {
+      const olderHostUpdates = { ...updates }
+      delete olderHostUpdates.suppressedGitHubPR
+      compatibleUpdates = olderHostUpdates
+    }
+  }
   await callRuntimeRpc(
     target,
     'worktree.set',
     {
       worktree: identityKey ? `identity:${identityKey}` : toRuntimeWorktreeSelector(worktreeId),
-      ...encodePushTargetClearForRuntimeRpc(updates)
+      ...encodePushTargetClearForRuntimeRpc(compatibleUpdates)
     },
     { timeoutMs: 15_000 }
   )

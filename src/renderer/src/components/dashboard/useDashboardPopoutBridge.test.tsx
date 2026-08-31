@@ -14,9 +14,10 @@ const mocks = vi.hoisted(() => ({
   onSnapshotRequested: vi.fn(),
   getPopoutOpen: vi.fn(async () => false),
   publishSnapshot: vi.fn(async (_snapshot: DashboardSnapshot) => undefined),
-  buildDashboardSnapshot: vi.fn(
-    (_state: unknown, now: number): DashboardSnapshot => ({ generatedAt: now, cards: [] })
-  ),
+  buildDashboardSnapshot: vi.fn((_state: unknown, now: number): DashboardSnapshot => ({
+    generatedAt: now,
+    cards: []
+  })),
   offRevealAgent: vi.fn(),
   offAckAgent: vi.fn(),
   offPopoutOpenChanged: vi.fn(),
