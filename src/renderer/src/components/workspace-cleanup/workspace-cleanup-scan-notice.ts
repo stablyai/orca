@@ -64,36 +64,17 @@ export function formatWorkspaceCleanupScanProgress(
   )
 }
 
-export function formatWorkspaceCleanupReadyToast(
-  workspaceCount: number,
-  suggestedCount: number
-): string {
+/** Reports scan size without classifying the user's work. */
+export function formatWorkspaceCleanupReadyToast(workspaceCount: number): string {
   if (workspaceCount === 0) {
     return translate('components.workspace.cleanup.scan.noWorkspaces', 'No workspaces found.')
   }
   if (workspaceCount === 1) {
-    return suggestedCount === 1
-      ? translate(
-          'components.workspace.cleanup.scan.readyOneOne',
-          '1 workspace found, with 1 cleanup suggestion.'
-        )
-      : translate(
-          'components.workspace.cleanup.scan.readyOneMany',
-          '1 workspace found, with {{value0}} cleanup suggestions.',
-          { value0: suggestedCount }
-        )
+    return translate('components.workspace.cleanup.scan.readyOne', '1 workspace found.')
   }
-  return suggestedCount === 1
-    ? translate(
-        'components.workspace.cleanup.scan.readyManyOne',
-        '{{value0}} workspaces found, with 1 cleanup suggestion.',
-        { value0: workspaceCount }
-      )
-    : translate(
-        'components.workspace.cleanup.scan.readyManyMany',
-        '{{value0}} workspaces found, with {{value1}} cleanup suggestions.',
-        { value0: workspaceCount, value1: suggestedCount }
-      )
+  return translate('components.workspace.cleanup.scan.readyMany', '{{value0}} workspaces found.', {
+    value0: workspaceCount
+  })
 }
 
 function formatScanErrorRepoName(

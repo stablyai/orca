@@ -377,7 +377,7 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'openTasks' })
   })
 
-  it('leaves workspace delete unbound by default but honors custom terminal-active bindings', () => {
+  it('resolves workspace delete by default and honors custom terminal-active bindings', () => {
     const input = {
       code: 'Backspace',
       key: 'Backspace',
@@ -387,17 +387,18 @@ describe('resolveWindowShortcutAction', () => {
       shift: true
     }
 
-    expect(resolveWindowShortcutAction(input, 'linux')).toBeNull()
+    expect(resolveWindowShortcutAction(input, 'linux')).toEqual({ type: 'deleteCurrentWorkspace' })
+    const customInput = { ...input, code: 'KeyX', key: 'x', alt: true, shift: false }
     expect(
-      resolveWindowShortcutAction(input, 'linux', {
-        'workspace.delete': ['Mod+Shift+Backspace']
+      resolveWindowShortcutAction(customInput, 'linux', {
+        'workspace.delete': ['Mod+Alt+X']
       })
     ).toEqual({ type: 'deleteCurrentWorkspace' })
     expect(
       resolveWindowShortcutAction(
-        input,
+        customInput,
         'linux',
-        { 'workspace.delete': ['Mod+Shift+Backspace'] },
+        { 'workspace.delete': ['Mod+Alt+X'] },
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toEqual({ type: 'deleteCurrentWorkspace' })

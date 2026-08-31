@@ -270,6 +270,30 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
 
+  it('bumps the status epoch when same-state working enters monitoring', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p' }, 'claude', {
+      updatedAt: 1_000,
+      stateStartedAt: 1_000
+    })
+    const firstEpoch = store.getState().agentStatusEpoch
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', workingMode: 'monitoring', prompt: 'p' },
+        'claude',
+        { updatedAt: 2_000, stateStartedAt: 1_000 }
+      )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].workingMode).toBe('monitoring')
+    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch)
+  })
+
   it('bumps the status epoch, not sort epoch, for same-state done updates', () => {
     vi.useFakeTimers()
     const store = createTestStore()

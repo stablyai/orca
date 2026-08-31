@@ -162,7 +162,12 @@ export function mergeFetchedWorktrees(
             }
           }
         : {}),
-      ...(removedIds.length > 0 ? buildWorktreePurgeState(s, removedIds) : {})
+      ...(removedIds.length > 0
+        ? buildWorktreePurgeState(
+            s,
+            removedIds.map((id) => ({ id, hostId: args.hostId }))
+          )
+        : {})
     }
   })
   if (admitted) {

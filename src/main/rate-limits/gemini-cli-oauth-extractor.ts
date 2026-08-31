@@ -1,10 +1,10 @@
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { access, readdir, readFile, realpath } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -19,9 +19,16 @@ async function fileExists(filePath: string): Promise<boolean> {
 const OAUTH2_SUBPATH = path.join('dist', 'src', 'code_assist', 'oauth2.js')
 
 async function resolveGeminiBinary(): Promise<string | null> {
-  const whichCmd = process.platform === 'win32' ? 'where gemini' : 'which gemini'
+  const [lookup, args] =
+    process.platform === 'win32' ? ['where.exe', ['gemini']] : ['which', ['gemini']]
   try {
-    const { stdout } = await execAsync(whichCmd, { encoding: 'utf-8' })
+    // execFile, not exec: `exec` implies `shell: true`, which silently makes
+    // windowsHide a no-op (see run-process.ts, #14543), so the console-subsystem
+    // `where` would still flash a conhost (#10488).
+    const { stdout } = await execFileAsync(lookup, args, {
+      encoding: 'utf-8',
+      windowsHide: true
+    })
     const fromPath = stdout.trim().split(/\r?\n/)[0]
     if (fromPath && (await fileExists(fromPath))) {
       return fromPath

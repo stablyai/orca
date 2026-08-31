@@ -154,14 +154,19 @@ function buildAssignments(
 }
 
 function rankAssignments(args: {
+  document: PaletteDocument
   assignments: readonly PaletteTokenAssignment[]
   usesEvidence: boolean
   wholeQuery: number
   exactIntent: boolean
-}): { rank: PaletteDocumentRank; worstQuality: PaletteMatchQuality } {
+}): { rank: PaletteDocumentRank; worstQuality: PaletteMatchQuality; isContainerOnly: boolean } {
   let worstQuality: PaletteMatchQuality = 'field-exact'
   let fuzzyTokenCount = 0
   const fields = new Set<string>()
+  let containerOnlyTokenCount = 0
+  let tokenIndex = -1
+  let tokenHasDirectField = false
+  let matchedTokenCount = 0
 
   for (const assignment of args.assignments) {
     if (paletteMatchQualityRank(assignment.quality) > paletteMatchQualityRank(worstQuality)) {
@@ -171,12 +176,32 @@ function rankAssignments(args: {
       fuzzyTokenCount += 1
     }
     fields.add(assignment.fieldId)
+    if (assignment.tokenIndex !== tokenIndex) {
+      if (tokenIndex !== -1 && !tokenHasDirectField) {
+        containerOnlyTokenCount += 1
+      }
+      tokenIndex = assignment.tokenIndex
+      tokenHasDirectField = false
+      matchedTokenCount += 1
+    }
+    const field = args.document.fieldById.get(assignment.fieldId)
+    if (field && !field.isContainer) {
+      tokenHasDirectField = true
+    }
   }
+
+  if (tokenIndex !== -1 && !tokenHasDirectField) {
+    containerOnlyTokenCount += 1
+  }
+  const isContainerOnly =
+    containerOnlyTokenCount > 0 && containerOnlyTokenCount === matchedTokenCount
 
   return {
     worstQuality,
+    isContainerOnly,
     rank: {
       exactIntent: args.exactIntent ? 0 : 1,
+      containerOnlyTokenCount,
       wholeQuery: args.wholeQuery,
       worstQuality: paletteMatchQualityRank(worstQuality),
       usesSupportingEvidence: args.usesEvidence ? 1 : 0,
@@ -274,7 +299,8 @@ export function matchPaletteDocument(args: {
       continue
     }
     const usedEvidenceId = built.usesEvidence ? evidenceId : null
-    const { rank, worstQuality } = rankAssignments({
+    const { rank, worstQuality, isContainerOnly } = rankAssignments({
+      document,
       assignments: built.assignments,
       usesEvidence: built.usesEvidence,
       wholeQuery,
@@ -288,7 +314,8 @@ export function matchPaletteDocument(args: {
         ? 'exact-intent'
         : resolvePaletteResultQualityClass({
             worstQuality,
-            usesSupportingEvidence: built.usesEvidence
+            usesSupportingEvidence: built.usesEvidence,
+            isContainerOnly
           }),
       rank,
       assignments: built.assignments,

@@ -6,6 +6,7 @@ import {
   _resetHydrateShellPathCache,
   hydrateShellPath,
   mergePathSegments,
+  _setLaunchPathForTests,
   type HydrationResult
 } from './hydrate-shell-path'
 
@@ -39,6 +40,7 @@ describe('hydrateShellPath', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     if (originalPath === undefined) {
       delete process.env.PATH
     } else {
@@ -166,7 +168,7 @@ describe('hydrateShellPath', () => {
         failureReason: 'timeout'
       })
 
-      await vi.advanceTimersByTimeAsync(5000)
+      await vi.advanceTimersByTimeAsync(10_000)
 
       await assertion
       expect(proc.kill).toHaveBeenCalledWith('SIGKILL')
@@ -175,6 +177,57 @@ describe('hydrateShellPath', () => {
       expect(proc.listenerCount('close')).toBe(0)
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  async function captureProbeEnv(shell = '/bin/bash'): Promise<NodeJS.ProcessEnv> {
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+    const resultPromise = hydrateShellPath({ shellOverride: shell, force: true })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    proc.emit('close', 0)
+    await resultPromise
+    return spawnMock.mock.calls[0][2].env
+  }
+
+  it('probes with the launch PATH so seeded fallbacks cannot pin nvm', async () => {
+    process.env.PATH = `/home/u/.nvm/versions/node/v26.7.0/bin${delimiter}/usr/bin`
+    _setLaunchPathForTests('/usr/bin')
+
+    expect((await captureProbeEnv()).PATH).toBe('/usr/bin')
+  })
+
+  it('uses the PATH captured at module load, not a later mutation of process.env', async () => {
+    // Why: this is the anti-regression guard. patchPackagedProcessPath mutates
+    // process.env.PATH after this module is evaluated; the probe must not see it.
+    const seeded = `/seeded/newest-nvm/bin${delimiter}/usr/bin`
+    process.env.PATH = seeded
+
+    expect((await captureProbeEnv()).PATH).not.toBe(seeded)
+  })
+
+  it('sets a probe marker so rc files can take a fast path', async () => {
+    expect((await captureProbeEnv()).ORCA_SHELL_PATH_PROBE).toBe('1')
+  })
+
+  it('overwrites the captured key in place so Windows never carries both Path and PATH', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const originalWindowsPath = process.env.Path
+    delete process.env.PATH
+    process.env.PATH = 'C:\\Users\\u\\.nvm\\versions\\node\\v22.9.0\\bin;C:\\Windows'
+    process.env.Path = 'C:\\Users\\u\\.nvm\\versions\\node\\v22.9.0\\bin;C:\\Windows'
+    _setLaunchPathForTests('C:\\Windows', 'Path')
+
+    try {
+      const env = await captureProbeEnv('C:/Git/bin/bash.exe')
+      expect(env.Path).toBe('C:\\Windows')
+      expect(env.PATH).toBeUndefined()
+    } finally {
+      if (originalWindowsPath === undefined) {
+        delete process.env.Path
+      } else {
+        process.env.Path = originalWindowsPath
+      }
     }
   })
 })

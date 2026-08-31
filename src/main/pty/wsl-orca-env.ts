@@ -42,23 +42,14 @@ function applyWslenvPassthrough(
 
 function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): string[] {
   return [
-    // Why: worktree setup/hook scripts read these (#9206). For WSL worktrees
-    // hooks.ts pre-translates the values to Linux paths (must cross untranslated,
-    // /u); a wsl.exe terminal over a Windows worktree still carries C:\ paths
-    // that WSLENV must translate (/p).
+    // Setup/hook scripts read these (#9206). A pre-translated Linux value must
+    // cross untranslated (/u); a raw C:\ path still needs WSLENV to convert it (/p).
     ...['ORCA_ROOT_PATH', 'ORCA_WORKTREE_PATH', 'CONDUCTOR_ROOT_PATH', 'GHOSTX_ROOT_PATH'].map(
       (name) => `${name}/${env[name]?.startsWith('/') ? 'u' : 'p'}`
     ),
-    // Why: a display name, never a path — never path-translate it.
+    // A display name, never a path.
     'ORCA_WORKSPACE_NAME/u'
   ]
-}
-
-// Why: runHook spawns wsl.exe directly (archive hooks, windowless setup), and
-// wsl.exe only imports Windows env vars named in WSLENV — so the setup vars
-// must be registered there too, with the same /u-vs-/p flags as the PTY path (#9206).
-export function addWorktreeSetupWslInteropEnv(env: Record<string, string | undefined>): void {
-  applyWslenvPassthrough(env, worktreeSetupWslenvEntries(env))
 }
 
 export function addOrcaWslInteropEnv(env: Record<string, string>): void {
@@ -86,6 +77,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.
     'ORCA_SHELL_READY_ROOT/p',
     'ORCA_CLI_COMMAND/u',
+    'ORCA_CODEX_LAUNCH_PREFLIGHT/p',
     'ORCA_PANE_KEY/u',
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
@@ -99,6 +91,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_AGENT_HOOK_TOKEN/u',
     'ORCA_AGENT_HOOK_ENV/u',
     'ORCA_AGENT_HOOK_VERSION/u',
+    'ORCA_AGENT_HOOK_TRANSPORT/u',
     `ORCA_AGENT_HOOK_ENDPOINT/${endpointFlag}`,
     ...opencodeOverlayEntries,
     'ORCA_WSL_HOOK_RELAY_VERSION/u',

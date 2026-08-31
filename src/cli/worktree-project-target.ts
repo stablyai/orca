@@ -1,6 +1,6 @@
 import { normalizeExecutionHostId, type ParsedExecutionHost } from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
-import { hostFilterMatchesHostId, parseHostFlag } from './execution-host-flag'
+import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host-flag'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 
@@ -73,11 +73,24 @@ export async function resolveProjectCreateTarget(
 ): Promise<ProjectCreateTarget | undefined> {
   const projectHostSetupId = getPresentStringFlag(flags, 'project-host-setup')
   const projectId = getPresentStringFlag(flags, 'project')
-  const host = parseHostFlag(flags)
+  const host = await resolveHostFlagTarget(flags, client)
   if (!projectHostSetupId && !projectId && !host) {
     return undefined
   }
-  const result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
+  let result: Awaited<ReturnType<typeof client.call<{ setups: ProjectHostSetup[] }>>>
+  try {
+    result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
+  } catch (error) {
+    // Why: --host runtime:<id> routes here, so an older server is reachable without the caller
+    // meaning to; name the version gap rather than surfacing a raw method_not_found.
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca server does not support project host setup yet. Update Orca on the server and try again.'
+      )
+    }
+    throw error
+  }
   const ready = result.result.setups.filter((candidate) => candidate.setupState === 'ready')
   const setup = projectHostSetupId
     ? ready.find((candidate) => candidate.id === projectHostSetupId)

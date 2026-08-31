@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultWorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup-filter-model'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
 import {
   hasActiveWorkspaceCleanupFilters,
   listActiveWorkspaceCleanupFacetGroups
@@ -34,5 +35,15 @@ describe('listActiveWorkspaceCleanupFacetGroups', () => {
     filters.query = ' alpha '
     expect(listActiveWorkspaceCleanupFacetGroups(filters)).toEqual([])
     expect(hasActiveWorkspaceCleanupFilters(filters)).toBe(true)
+  })
+
+  it('drops retired verdict filters and recovers safety as inactive', () => {
+    const browse = normalizeWorkspaceCleanupBrowseState({
+      filters: { safety: { tiers: ['ready'], selectableOnly: true } },
+      sort: { field: 'tier', direction: 'desc' }
+    })
+
+    expect(listActiveWorkspaceCleanupFacetGroups(browse.filters)).not.toContain('safety')
+    expect(browse.sort).toEqual({ field: 'last-activity', direction: 'desc' })
   })
 })

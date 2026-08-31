@@ -5,8 +5,6 @@ import {
   Linking,
   type AppStateStatus,
   BackHandler,
-  FlatList,
-  Image,
   View,
   Text,
   ScrollView,
@@ -16,8 +14,7 @@ import {
   Platform,
   ActivityIndicator,
   type KeyboardEvent,
-  type LayoutChangeEvent,
-  type ListRenderItem
+  type LayoutChangeEvent
 } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -37,12 +34,10 @@ import {
   GitBranch,
   Globe,
   Keyboard as KeyboardIcon,
-  MessageSquare,
   Monitor,
   MoreHorizontal,
   Plus,
   RefreshCw,
-  Send,
   Smartphone,
   SquareTerminal,
   X
@@ -82,6 +77,8 @@ import {
 } from '../../../../src/session/mobile-bulk-close-sheet-actions'
 import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
 import { isFloatingWorkspaceWorktreeId } from '../../../../src/session/floating-workspace'
+import { useAgentSendKeyboardDismissal } from '../../../../src/session/use-agent-send-keyboard-dismissal'
+import { useMobileSendCompletionGeneration } from '../../../../src/session/use-mobile-send-completion-generation'
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
 import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
 import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
@@ -118,6 +115,10 @@ import {
 import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../../../../src/terminal/terminal-live-accessory-raw-send'
 import {
+  createTerminalAccessoryRepeatController,
+  createTerminalAccessoryRepeatSender
+} from '../../../../src/terminal/terminal-accessory-repeat'
+import {
   clearTerminalLiveInputFocusTimer,
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
@@ -126,6 +127,7 @@ import { useTerminalLiveInputFocus } from '../../../../src/terminal/use-terminal
 import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
+import { useBufferedTerminalDrafts } from '../../../../src/terminal/use-buffered-terminal-drafts'
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
@@ -156,7 +158,6 @@ import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileMarkdownReader } from '../../../../src/session/MobileMarkdownReader'
-import { MobileSyntaxSegments } from '../../../../src/components/MobileSyntaxSegments'
 import {
   CustomKeyModal,
   loadCustomKeys,
@@ -171,13 +172,8 @@ import {
   removeMobileDiffComments
 } from '../../../../src/session/mobile-diff-comments'
 import {
-  buildPlainMobileDiffSyntaxLines,
-  highlightMobileCode,
-  highlightMobileDiffLines,
-  resolveMobileSyntaxLanguage
-} from '../../../../src/session/mobile-file-syntax'
-import {
   getTerminalRecordsFromSessionTabs,
+  hasConnectedTerminalAbsentFromSessionTabs,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
@@ -218,7 +214,6 @@ import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
 } from '../../../../src/session/mobile-markdown-disk-fallback'
-import { MobileHtmlPreview } from '../../../../src/components/MobileHtmlPreview'
 import { MobileDictationSetupSheet } from '../../../../src/components/MobileDictationSetupSheet'
 import {
   fetchDictationSetup,
@@ -241,6 +236,11 @@ import {
 } from '../../../../src/session/mobile-terminal-prune-decision'
 import { useMobileNativeChatTerminalStream } from '../../../../src/session/use-mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from '../../../../src/session/mobile-terminal-stream-subscribe'
+import { MobileTerminalInventoryRequest } from '../../../../src/session/mobile-terminal-inventory-request'
+import {
+  useMobileTerminalInventoryRecoveryBridge,
+  type MobileTerminalInventoryRefreshOptions
+} from '../../../../src/session/use-mobile-terminal-inventory-recovery'
 import {
   TerminalViewportResubscribeBudget,
   readTerminalViewportDims,
@@ -280,21 +280,18 @@ import {
 import { colors } from '../../../../src/theme/mobile-theme'
 import { QuickCommandsTabButton } from '../../../../src/session/QuickCommandsTabButton'
 import { styles } from '../../../../src/session/mobile-session-styles'
+import { MobileSessionFileReader } from '../../../../src/session/MobileSessionFileReader'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
 import type { TerminalQuickCommand } from '../../../../../src/shared/terminal-quick-command-types'
 import type {
-  DiffCommentActions,
   DiffNotesDelivery,
-  DiffSyntaxState,
   DirtyMarkdownDraft,
   FileDocState,
-  FileSyntaxState,
   MarkdownDocState,
   MobileDisplayMode,
   MobileNewTabAgentLoadState,
   MobileSessionTab,
   MobileSessionTabType,
-  RenderableDiffLine,
   RuntimeRepoSummary,
   SessionTabsResult,
   Terminal,
@@ -304,415 +301,14 @@ import type {
 } from '../../../../src/session/mobile-session-route-types'
 
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
+const CLOSED_TAB_TOMBSTONE_TTL_MS = 10_000
 
-function DiffLineRow({
-  line,
-  title,
-  index,
-  comments,
-  activeCommentLine,
-  commentDraft,
-  commentsBusy,
-  onStartComment,
-  onCancelComment,
-  onDraftChange,
-  onSubmitComment,
-  onDeleteComment
-}: {
-  line: RenderableDiffLine
-  title: string
-  index: number
-  comments: DiffComment[]
-  activeCommentLine: number | null
-  commentDraft: string
-  commentsBusy: boolean
-  onStartComment: (lineNumber: number) => void
-  onCancelComment: () => void
-  onDraftChange: (value: string) => void
-  onSubmitComment: (lineNumber: number) => void
-  onDeleteComment: (commentId: string) => void
-}) {
-  const commentLine = line.newLineNumber
-  const isCommenting = commentLine !== undefined && activeCommentLine === commentLine
-  const canComment = commentLine !== undefined
-  // Why: review notes anchor to the modified side, so show that line number in the single mobile gutter.
-  const gutterLineNumber = line.newLineNumber ?? line.oldLineNumber ?? ''
-  return (
-    <View style={styles.diffLineBlock}>
-      <View
-        style={[
-          styles.diffLine,
-          line.kind === 'add' && styles.diffLineAdded,
-          line.kind === 'delete' && styles.diffLineDeleted
-        ]}
-      >
-        <Text style={styles.diffGutter}>{gutterLineNumber}</Text>
-        <Text
-          selectable
-          style={styles.diffText}
-          accessibilityLabel={`${title} diff line ${index + 1}`}
-        >
-          <Text
-            style={[
-              styles.diffPrefix,
-              line.kind === 'add' && styles.diffPrefixAdded,
-              line.kind === 'delete' && styles.diffPrefixDeleted
-            ]}
-          >
-            {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
-          </Text>
-          <MobileSyntaxSegments segments={line.segments} />
-        </Text>
-        {canComment ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.diffCommentAddButton,
-              pressed && styles.diffCommentAddButtonPressed,
-              commentsBusy && styles.diffCommentButtonDisabled
-            ]}
-            disabled={commentsBusy}
-            onPress={() => {
-              if (commentLine !== undefined) {
-                onStartComment(commentLine)
-              }
-            }}
-            accessibilityLabel={`Add note on line ${commentLine}`}
-          >
-            <Plus size={12} color={colors.textSecondary} strokeWidth={2.3} />
-          </Pressable>
-        ) : null}
-      </View>
-      {comments.length > 0 ? (
-        <View style={styles.diffCommentList}>
-          {comments.map((comment) => (
-            <View key={comment.id} style={styles.diffCommentCard}>
-              <View style={styles.diffCommentHeader}>
-                <MessageSquare size={12} color={colors.textMuted} strokeWidth={2.2} />
-                <Text style={styles.diffCommentMeta}>Line {comment.lineNumber}</Text>
-                <Pressable
-                  style={styles.diffCommentDeleteButton}
-                  disabled={commentsBusy}
-                  onPress={() => onDeleteComment(comment.id)}
-                  accessibilityLabel={`Delete note on line ${comment.lineNumber}`}
-                >
-                  <X size={12} color={colors.textMuted} strokeWidth={2.2} />
-                </Pressable>
-              </View>
-              <Text style={styles.diffCommentBody}>{comment.body}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-      {isCommenting ? (
-        <View style={styles.diffCommentComposer}>
-          <TextInput
-            style={[styles.textInput, styles.diffCommentInput]}
-            value={commentDraft}
-            onChangeText={onDraftChange}
-            placeholder="Add review note"
-            placeholderTextColor={colors.textMuted}
-            editable={!commentsBusy}
-            multiline
-            textAlignVertical="top"
-            autoFocus
-          />
-          <View style={styles.diffCommentComposerActions}>
-            <Pressable
-              style={styles.diffCommentSecondaryAction}
-              disabled={commentsBusy}
-              onPress={onCancelComment}
-            >
-              <Text style={styles.diffCommentSecondaryText}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.diffCommentPrimaryAction,
-                (!commentDraft.trim() || commentsBusy) && styles.diffCommentButtonDisabled
-              ]}
-              disabled={!commentDraft.trim() || commentsBusy}
-              onPress={() => {
-                if (commentLine !== undefined) {
-                  onSubmitComment(commentLine)
-                }
-              }}
-            >
-              <Text style={styles.diffCommentPrimaryText}>Save note</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-    </View>
-  )
+function createMobileTerminalMutationId(): string {
+  return `mobile-create:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function FileReader({
-  doc,
-  title,
-  relativePath,
-  language,
-  diffCommentActions
-}: {
-  doc: FileDocState | undefined
-  title: string
-  relativePath: string
-  language?: string
-  diffCommentActions?: DiffCommentActions
-}) {
-  const syntaxLanguage = useMemo(
-    () => resolveMobileSyntaxLanguage(relativePath || title, language),
-    [language, relativePath, title]
-  )
-  const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
-  const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
-  const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
-  const [commentDraft, setCommentDraft] = useState('')
-  const plainDiffLines = useMemo(
-    () =>
-      doc?.status === 'ready' && doc.kind === 'diff'
-        ? buildPlainMobileDiffSyntaxLines(doc.lines)
-        : [],
-    [doc]
-  )
-  const diffCommentsForFile = useMemo(
-    () =>
-      diffCommentActions?.comments.filter(
-        (comment) => comment.filePath === relativePath && comment.source !== 'markdown'
-      ) ?? [],
-    [diffCommentActions?.comments, relativePath]
-  )
-  const diffCommentsByLine = useMemo(() => {
-    const map = new Map<number, DiffComment[]>()
-    for (const comment of diffCommentsForFile) {
-      const list = map.get(comment.lineNumber) ?? []
-      list.push(comment)
-      map.set(comment.lineNumber, list)
-    }
-    for (const list of map.values()) {
-      list.sort((a, b) => a.createdAt - b.createdAt)
-    }
-    return map
-  }, [diffCommentsForFile])
-
-  const startComment = useCallback((lineNumber: number) => {
-    setActiveCommentLine(lineNumber)
-    setCommentDraft('')
-  }, [])
-
-  const cancelComment = useCallback(() => {
-    setActiveCommentLine(null)
-    setCommentDraft('')
-  }, [])
-
-  const submitComment = useCallback(
-    (lineNumber: number) => {
-      if (!diffCommentActions) {
-        return
-      }
-      void diffCommentActions.onAdd(relativePath, lineNumber, commentDraft).then((added) => {
-        if (added) {
-          setActiveCommentLine(null)
-          setCommentDraft('')
-        }
-      })
-    },
-    [commentDraft, diffCommentActions, relativePath]
-  )
-
-  const renderDiffLine: ListRenderItem<RenderableDiffLine> = useCallback(
-    ({ item, index }) => (
-      <DiffLineRow
-        line={item}
-        title={title}
-        index={index}
-        comments={
-          item.newLineNumber !== undefined ? (diffCommentsByLine.get(item.newLineNumber) ?? []) : []
-        }
-        activeCommentLine={activeCommentLine}
-        commentDraft={commentDraft}
-        commentsBusy={diffCommentActions?.busy === true}
-        onStartComment={startComment}
-        onCancelComment={cancelComment}
-        onDraftChange={setCommentDraft}
-        onSubmitComment={submitComment}
-        onDeleteComment={(commentId) => {
-          if (diffCommentActions) {
-            void diffCommentActions.onDelete(commentId)
-          }
-        }}
-      />
-    ),
-    [
-      activeCommentLine,
-      cancelComment,
-      commentDraft,
-      diffCommentActions,
-      diffCommentsByLine,
-      startComment,
-      submitComment,
-      title
-    ]
-  )
-
-  useEffect(() => {
-    if (doc?.status !== 'ready') {
-      return undefined
-    }
-
-    // Why: defer highlighting one tick so large files show as plain text immediately before colors are applied.
-    const timer = setTimeout(() => {
-      // file + html share the syntax-segment source view (html's "Source" toggle).
-      if (doc.kind === 'file' || doc.kind === 'html') {
-        setFileSyntax({
-          doc,
-          language: syntaxLanguage,
-          segments: highlightMobileCode(doc.content, syntaxLanguage).segments
-        })
-        return
-      }
-      if (doc.kind === 'diff') {
-        setDiffSyntax({
-          doc,
-          language: syntaxLanguage,
-          lines: highlightMobileDiffLines(doc.lines, syntaxLanguage)
-        })
-      }
-      // image: no syntax highlighting.
-    }, 0)
-
-    return () => clearTimeout(timer)
-  }, [doc, syntaxLanguage])
-
-  if (!doc || doc.status === 'loading') {
-    return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    )
-  }
-  if (doc.status === 'error') {
-    return (
-      <View style={styles.markdownState}>
-        <Text style={styles.markdownError}>{doc.message}</Text>
-      </View>
-    )
-  }
-
-  if (doc.kind === 'diff') {
-    const activeDiffSyntax =
-      diffSyntax?.doc === doc && diffSyntax.language === syntaxLanguage ? diffSyntax.lines : null
-    const commentCount = diffCommentActions?.comments.length ?? 0
-    const unsentCommentCount =
-      diffCommentActions?.comments.filter((comment) => !comment.sentAt).length ?? 0
-    const commentsBusy = diffCommentActions?.busy === true
-    const canCopyNotes = commentCount > 0 && !commentsBusy
-    const canSendNotes = unsentCommentCount > 0 && !commentsBusy
-    return (
-      <View style={styles.markdownEditor}>
-        {diffCommentActions ? (
-          <View style={styles.diffNotesToolbar}>
-            <View style={styles.diffNotesTitleRow}>
-              <MessageSquare size={14} color={colors.textSecondary} strokeWidth={2.2} />
-              <Text style={styles.diffNotesTitle}>
-                {commentCount === 0
-                  ? 'No review notes'
-                  : `${commentCount} review ${commentCount === 1 ? 'note' : 'notes'}`}
-              </Text>
-            </View>
-            <View style={styles.diffNotesActions}>
-              <Pressable
-                style={[
-                  styles.diffNotesActionButton,
-                  !canCopyNotes && styles.diffCommentButtonDisabled
-                ]}
-                disabled={!canCopyNotes}
-                onPress={() => void diffCommentActions.onCopyAll()}
-                accessibilityLabel="Copy review notes"
-              >
-                <Copy size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Copy</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.diffNotesActionButton,
-                  !canSendNotes && styles.diffCommentButtonDisabled
-                ]}
-                disabled={!canSendNotes}
-                onPress={diffCommentActions.onSendAll}
-                accessibilityLabel="Send review notes to AI"
-              >
-                <Send size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Send</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-        <FlatList
-          data={activeDiffSyntax ?? plainDiffLines}
-          style={styles.filePreviewScroll}
-          contentContainerStyle={styles.filePreviewContent}
-          keyExtractor={(line, index) =>
-            `${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`
-          }
-          renderItem={renderDiffLine}
-          initialNumToRender={32}
-          maxToRenderPerBatch={48}
-          windowSize={7}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          keyboardShouldPersistTaps="handled"
-        />
-      </View>
-    )
-  }
-
-  if (doc.kind === 'image') {
-    return (
-      <View style={styles.imagePreviewContainer}>
-        <ScrollView
-          style={styles.imagePreviewScroll}
-          contentContainerStyle={styles.imagePreviewContent}
-          maximumZoomScale={4}
-          minimumZoomScale={1}
-          centerContent
-        >
-          <Image
-            source={{ uri: doc.dataUri }}
-            style={styles.imagePreview}
-            resizeMode="contain"
-            accessibilityLabel={`${title} image`}
-          />
-        </ScrollView>
-      </View>
-    )
-  }
-
-  const renderSourceText = (content: string) => (
-    <View style={styles.markdownEditor}>
-      <ScrollView
-        style={styles.filePreviewScroll}
-        contentContainerStyle={styles.filePreviewContent}
-      >
-        <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
-          <MobileSyntaxSegments
-            segments={
-              fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
-                ? fileSyntax.segments
-                : [{ text: content, kind: 'plain' }]
-            }
-          />
-        </Text>
-      </ScrollView>
-    </View>
-  )
-
-  if (doc.kind === 'html') {
-    return (
-      <View style={styles.markdownEditor}>
-        <MobileHtmlPreview html={doc.content} renderSource={() => renderSourceText(doc.content)} />
-      </View>
-    )
-  }
-
-  return renderSourceText(doc.content)
+function getClosedTabTombstoneExpiry(): number {
+  return Date.now() + CLOSED_TAB_TOMBSTONE_TTL_MS
 }
 
 export default function SessionScreen() {
@@ -796,7 +392,6 @@ export default function SessionScreen() {
   // Why: after an optimistic close, suppress the tab (with expiry) until the publisher confirms, so an in-flight snapshot can't flash it back.
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
-  const [input, setInput] = useState('')
   // Why: baseline terminal zoom reloaded on focus so a Settings → Terminal change applies in place (panes stay mounted).
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
@@ -932,6 +527,8 @@ export default function SessionScreen() {
   // Why: don't subscribe until the WebView fires web-ready — iOS may defer JS in hidden WebViews and init() messages would queue unrendered.
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
+  const bufferedTerminalDraftState = useBufferedTerminalDrafts({ activeHandle, activeHandleRef })
+  const reconcileBufferedDraftsRef = useRef(bufferedTerminalDraftState.reconcileTerminalTabs)
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
   // Why: survive transient snapshot gaps so the device's own tab pick can re-bind.
@@ -964,6 +561,7 @@ export default function SessionScreen() {
   const {
     clearPendingLiveInputCommit,
     flushPendingLiveInputBeforeExternalSend,
+    getLiveInputInteractionGeneration: getLiveInteractionGeneration,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
@@ -996,12 +594,6 @@ export default function SessionScreen() {
     liveInputEnabled,
     timerRef: liveInputFocusTimerRef
   })
-  useFocusEffect(
-    useCallback(() => {
-      // Expo retains this route while pushed screens are visible.
-      return resetLiveInputFocus
-    }, [resetLiveInputFocus])
-  )
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
   // Why: hosts without aiVault.v1 reject listSessions, so hide the header entry instead of a dead-end "update this host" panel.
   const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
@@ -1114,6 +706,11 @@ export default function SessionScreen() {
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
+  const routeKey = nativeChatScopeKey ?? `${hostId}\0${worktreeId}`
+  const getSendCompletionGeneration = useMobileSendCompletionGeneration({
+    onBlur: resetLiveInputFocus,
+    surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
+  })
 
   const dictation = useMobileDictation({
     client,
@@ -1151,7 +748,7 @@ export default function SessionScreen() {
         })()
         return
       }
-      setInput((current) => appendBufferedDictation(current, route.text))
+      bufferedTerminalDraftState.setInput((current) => appendBufferedDictation(current, route.text))
       showToast('Dictation inserted')
     },
     onError: (err) => {
@@ -1273,6 +870,9 @@ export default function SessionScreen() {
   )
   const unsubscribeTerminalRef = useRef(unsubscribeTerminal)
   unsubscribeTerminalRef.current = unsubscribeTerminal
+  const terminalInventoryRecoveryScope = JSON.stringify([hostId, worktreeId])
+  const { registerTerminalInventoryRecoveryAction, signalTerminalInventoryRecovery } =
+    useMobileTerminalInventoryRecoveryBridge(terminalInventoryRecoveryScope)
 
   const clearTerminalCache = useCallback(() => {
     terminalUnsubsRef.current.forEach((unsub) => unsub())
@@ -1375,6 +975,7 @@ export default function SessionScreen() {
           diagnostics.firstStreamEvent(handle, seq, data.type)
           if (data.type === 'end' || data.type === 'error') {
             unsubscribeTerminalRef.current(handle)
+            signalTerminalInventoryRecovery()
             return
           }
           if (data.type === 'subscribed') {
@@ -1518,7 +1119,10 @@ export default function SessionScreen() {
             scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
           }
         },
-        () => unsubscribeTerminalRef.current(handle)
+        () => {
+          unsubscribeTerminalRef.current(handle)
+          signalTerminalInventoryRecovery()
+        }
       )
 
       if (subscribeSeqRef.current.get(handle) === seq) {
@@ -1528,7 +1132,14 @@ export default function SessionScreen() {
       }
       subscribingHandlesRef.current.delete(handle)
     },
-    [client, getTerminalRef, markNativeChatInputLeaseReady, scheduleDelayedAction, showToast]
+    [
+      client,
+      getTerminalRef,
+      markNativeChatInputLeaseReady,
+      scheduleDelayedAction,
+      showToast,
+      signalTerminalInventoryRecovery
+    ]
   )
 
   const nativeChatStream = useMobileNativeChatTerminalStream({
@@ -1582,93 +1193,107 @@ export default function SessionScreen() {
   )
 
   const lastKnownTerminalCountRef = useRef(0)
-  const fetchTerminalsInFlightRef = useRef(false)
+  const terminalInventoryRequest = useMemo(
+    () => new MobileTerminalInventoryRequest(),
+    [client, hostId, worktreeId]
+  )
+  useEffect(() => {
+    lastKnownTerminalCountRef.current = 0
+    return terminalInventoryRequest.activate()
+  }, [terminalInventoryRequest])
 
   const fetchTerminals = useCallback(
-    async (opts: { allowEmptyLoaded?: boolean } = {}) => {
+    (opts: MobileTerminalInventoryRefreshOptions = {}): Promise<boolean> => {
       if (!client) {
-        return
+        return Promise.resolve(false)
       }
-      if (fetchTerminalsInFlightRef.current) {
-        return
-      }
-      fetchTerminalsInFlightRef.current = true
       const allowEmptyLoaded = opts.allowEmptyLoaded ?? true
-
-      try {
-        const response = await client.sendRequest('terminal.list', {
-          worktree: `id:${worktreeId}`,
-          includeVisualLayouts: false
-        })
-        if (response.ok) {
-          const result = (response as RpcSuccess).result as { terminals: Terminal[] }
-          if (result.terminals.length === 0 && !allowEmptyLoaded) {
-            return
-          }
-          // Why: require two consecutive empties before trusting 0, so transient empty responses don't flash the UI empty.
-          if (result.terminals.length === 0 && lastKnownTerminalCountRef.current > 0) {
-            lastKnownTerminalCountRef.current = 0
-            return
-          }
-
-          const liveHandles = new Set(result.terminals.map((terminal) => terminal.handle))
-          const pruneContext = {
-            liveHandles,
-            showNativeChat: showNativeChatRef.current,
-            activeHandle: activeHandleRef.current
-          }
-          // Why: terminal.list is the lifetime signal; lagging tab snapshots must not erase a user's buffered-mode opt-out.
-          // Sweep against the retained set, not the raw list: a chat-covered handle
-          // keeps its subscription across a graph reload, so erasing its live-input
-          // preference on the same refresh is the erasure this guard exists to stop.
-          pruneTerminalHandlesFromLiveInput(resolveRetainedTerminalHandles(pruneContext))
-          defaultTerminalHandlesToLiveInput([...liveHandles])
-          const shouldPrune = createTerminalPrunePredicate(pruneContext)
-          for (const handle of Array.from(terminalUnsubsRef.current.keys())) {
-            if (!shouldPrune(handle)) {
-              continue
-            }
-            unsubscribeTerminal(handle)
-            terminalRefs.current.delete(handle)
-            initializedHandlesRef.current.delete(handle)
-            viewportResubscribeBudgetRef.current.forget(handle)
-            clearTerminalLiveInputDefault(handle)
-          }
-          setTerminalKeyboardMetrics((prev) => pruneTerminalKeyboardMetrics(prev, shouldPrune))
-          // Why: a chat-covered handle the host reports again refills its rearm budget,
-          // so an exhausted rearm can't lock the composer until leave-chat.
-          nativeChatStream.notifyListedHandles(liveHandles)
-          // Why: same absence-gated refill for the viewport-fit budget — a handle that
-          // left the list and returned may converge now, so it earns fresh attempts.
-          viewportResubscribeBudgetRef.current.notifyListedHandles(liveHandles)
-          lastKnownTerminalCountRef.current = result.terminals.length
-          // Why: dedupe duplicate handles (rename/split race) to avoid a React duplicate-key throw; keep first for tab-strip order.
-          const seen = new Set<string>()
-          const deduped = result.terminals.filter((t) => {
-            if (seen.has(t.handle)) {
+      return terminalInventoryRequest.run(
+        allowEmptyLoaded,
+        async (allowsEmpty, isCurrent) => {
+          try {
+            const response = await client.sendRequest('terminal.list', {
+              worktree: `id:${worktreeId}`,
+              includeVisualLayouts: false
+            })
+            if (!isCurrent()) {
               return false
             }
-            seen.add(t.handle)
+            if (!response.ok) {
+              return false
+            }
+            const result = (response as RpcSuccess).result as { terminals: Terminal[] }
+            if (result.terminals.length === 0 && !allowsEmpty()) {
+              return true
+            }
+            // Why: require two consecutive empties before trusting 0, so transient empty responses don't flash the UI empty.
+            if (result.terminals.length === 0 && lastKnownTerminalCountRef.current > 0) {
+              lastKnownTerminalCountRef.current = 0
+              return true
+            }
+
+            const liveHandles = new Set(result.terminals.map((terminal) => terminal.handle))
+            const pruneContext = {
+              liveHandles,
+              showNativeChat: showNativeChatRef.current,
+              activeHandle: activeHandleRef.current
+            }
+            // Why: terminal.list is the lifetime signal; lagging tab snapshots must not erase a user's buffered-mode opt-out.
+            // Sweep against the retained set, not the raw list: a chat-covered handle
+            // keeps its subscription across a graph reload, so erasing its live-input
+            // preference on the same refresh is the erasure this guard exists to stop.
+            const retainedHandles = resolveRetainedTerminalHandles(pruneContext)
+            pruneTerminalHandlesFromLiveInput(retainedHandles)
+            bufferedTerminalDraftState.pruneDrafts(retainedHandles)
+            defaultTerminalHandlesToLiveInput([...liveHandles])
+            const shouldPrune = createTerminalPrunePredicate(pruneContext)
+            for (const handle of Array.from(terminalUnsubsRef.current.keys())) {
+              if (!shouldPrune(handle)) {
+                continue
+              }
+              unsubscribeTerminal(handle)
+              terminalRefs.current.delete(handle)
+              initializedHandlesRef.current.delete(handle)
+              viewportResubscribeBudgetRef.current.forget(handle)
+              clearTerminalLiveInputDefault(handle)
+            }
+            setTerminalKeyboardMetrics((prev) => pruneTerminalKeyboardMetrics(prev, shouldPrune))
+            // Why: a chat-covered handle the host reports again refills its rearm budget,
+            // so an exhausted rearm can't lock the composer until leave-chat.
+            nativeChatStream.notifyListedHandles(liveHandles)
+            // Why: same absence-gated refill for the viewport-fit budget — a handle that
+            // left the list and returned may converge now, so it earns fresh attempts.
+            viewportResubscribeBudgetRef.current.notifyListedHandles(liveHandles)
+            lastKnownTerminalCountRef.current = result.terminals.length
+            // Why: dedupe duplicate handles (rename/split race) to avoid a React duplicate-key throw; keep first for tab-strip order.
+            const seen = new Set<string>()
+            const deduped = result.terminals.filter((t) => {
+              if (seen.has(t.handle)) {
+                return false
+              }
+              seen.add(t.handle)
+              return true
+            })
+
+            const mergedTerminals = mergeTerminalListWithKnownRecords(
+              deduped,
+              terminalsRef.current,
+              sessionTabsRef.current
+            )
+            setTerminals((prev) =>
+              terminalRecordsEqual(prev, mergedTerminals) ? prev : mergedTerminals
+            )
+            terminalsRef.current = mergedTerminals
+
+            // Session tabs are the UI authority; terminal.list only refreshes per-handle metadata for existing terminal surfaces.
             return true
-          })
-
-          const mergedTerminals = mergeTerminalListWithKnownRecords(
-            deduped,
-            terminalsRef.current,
-            sessionTabsRef.current
-          )
-          setTerminals((prev) =>
-            terminalRecordsEqual(prev, mergedTerminals) ? prev : mergedTerminals
-          )
-          terminalsRef.current = mergedTerminals
-
-          // Session tabs are the UI authority; terminal.list only refreshes per-handle metadata for existing terminal surfaces.
-        }
-      } catch {
-        // Failed to list terminals
-      } finally {
-        fetchTerminalsInFlightRef.current = false
-      }
+          } catch {
+            // Failed to list terminals
+            return false
+          }
+        },
+        opts.onPhysicalRequestStarted
+      )
     },
     [
       client,
@@ -1676,8 +1301,10 @@ export default function SessionScreen() {
       clearTerminalLiveInputDefault,
       defaultTerminalHandlesToLiveInput,
       nativeChatStream,
+      bufferedTerminalDraftState.pruneDrafts,
       pruneTerminalHandlesFromLiveInput,
       subscribeToTerminal,
+      terminalInventoryRequest,
       unsubscribeTerminal
     ]
   )
@@ -1715,6 +1342,9 @@ export default function SessionScreen() {
       if (orphanedDraftTabs.length > 0) {
         nextTabs = [...orphanedDraftTabs, ...nextTabs]
       }
+      reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
+        retainMissingSurfaces: result.tabs.length === 0
+      })
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       // Why: subscribe snapshots often repeat identical payloads; skip re-set to avoid a subscription teardown/replay loop.
@@ -2298,6 +1928,9 @@ export default function SessionScreen() {
     () =>
       closedTabTombstonesRef.current.size > 0 ||
       pendingBrowserFocusPageIdRef.current !== null ||
+      // Why: tabs dropped a connected handle we still hold. `terminal.list` is the only
+      // remover, so keep the fast cadence until that sweep confirms or restores it.
+      hasConnectedTerminalAbsentFromSessionTabs(terminalsRef.current, sessionTabsRef.current) ||
       // Why: a chat-covered handle that ran out of rearms and left `terminal.list`
       // was reminted by a desktop graph reload. Only a fresh tab snapshot carries
       // the replacement handle, so force one instead of holding the composer locked.
@@ -2329,7 +1962,8 @@ export default function SessionScreen() {
     fetchSessionTabs,
     ensureSessionTabs,
     fetchPendingBrowserSessionTabs,
-    retryPendingTerminalRecovery
+    retryPendingTerminalRecovery,
+    requestTerminalInventoryRecovery
   } = useMobileSessionTabsReconciliation<SessionTabsResult, MobileSessionTab>({
     client,
     connState,
@@ -2337,6 +1971,7 @@ export default function SessionScreen() {
     applySessionTabs,
     consumeAcceptedSessionTabs,
     fetchTerminals,
+    terminalInventoryRecoveryScopeKey: terminalInventoryRecoveryScope,
     hasRecoveryNeed: hasSessionTabsRecoveryNeed,
     pendingTerminalRecoveryContextKey,
     getPendingTerminalRecoveryContextKey,
@@ -2344,6 +1979,11 @@ export default function SessionScreen() {
     getApplicationRevision: getSessionTabsApplicationRevision,
     ...sessionTabsFetchReporting
   })
+
+  useEffect(
+    () => registerTerminalInventoryRecoveryAction(requestTerminalInventoryRecovery),
+    [registerTerminalInventoryRecoveryAction, requestTerminalInventoryRecovery]
+  )
 
   useEffect(() => {
     if (connState === 'connected') {
@@ -2607,6 +2247,7 @@ export default function SessionScreen() {
     terminalDiagnosticsRef.current.resetRoute()
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
     closedTabTombstonesRef.current.clear()
+    bufferedTerminalDraftState.resetDrafts()
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
         clearTimeout(queued.timer)
@@ -2626,14 +2267,17 @@ export default function SessionScreen() {
     return () => {
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+      bufferedTerminalDraftState.clearPendingRestorations()
       clearPendingLiveInputCommit()
       clearDelayedActionTimers()
     }
   }, [
     clearDelayedActionTimers,
+    bufferedTerminalDraftState.clearPendingRestorations,
     clearPendingLiveInputCommit,
     clearTerminalCache,
     hostId,
+    bufferedTerminalDraftState.resetDrafts,
     worktreeId
   ])
 
@@ -2964,6 +2608,20 @@ export default function SessionScreen() {
     }
   }, [activeSessionTab, fileDocs, readFileTab])
 
+  const dismissSoftwareKeyboard = useCallback(() => {
+    dismissTerminalKeyboard({
+      clearPendingLiveInputFocus: () => clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef),
+      commandInput: commandInputRef.current,
+      dismissKeyboard: () => Keyboard.dismiss(),
+      liveInput: liveInputRef.current
+    })
+  }, [])
+
+  const dismissKeyboardAfterAgentSend = useAgentSendKeyboardDismissal(
+    dismissSoftwareKeyboard,
+    getSendCompletionGeneration
+  )
+
   async function handleSend() {
     // Why: the return key still submits while offline; hold the composed text instead of firing a doomed RPC (#6713).
     if (!client || !activeHandle || sendingRef.current || !canSend) {
@@ -2971,12 +2629,23 @@ export default function SessionScreen() {
     }
     sendingRef.current = true
 
-    const text = normalizeTerminalTextInput(input)
-    setInput('')
+    const draft = bufferedTerminalDraftState.input
+    const text = normalizeTerminalTextInput(draft)
+    const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(
+      activeHandle,
+      draft
+    )
+    const sendOrigin = {
+      handle: activeHandle,
+      tab: activeSessionTab,
+      generation: getSendCompletionGeneration()
+    }
+    const restoreRejectedDraft = () =>
+      bufferedTerminalDraftState.restoreRejectedDraft(bufferedDraftSend)
 
     try {
       // Why: fail now and restore the text — a send parked across a reconnect would execute long after the tap.
-      await client.sendRequest(
+      const response = await client.sendRequest(
         'terminal.send',
         buildTerminalSendParams({
           terminal: activeHandle,
@@ -2986,23 +2655,37 @@ export default function SessionScreen() {
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
+      const accepted = isTerminalSendRpcAccepted(response)
+      if (!accepted) {
+        restoreRejectedDraft()
+      }
+      const draftUnchanged =
+        accepted && bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
+      dismissKeyboardAfterAgentSend(sendOrigin, accepted && draftUnchanged)
     } catch {
-      setInput(text)
+      restoreRejectedDraft()
     } finally {
+      bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
       sendingRef.current = false
     }
   }
 
-  async function handleAccessoryKey(input: ReturnType<typeof createTerminalLiveAccessoryInput>) {
-    if (!client || !activeHandle || !canSend) {
-      return
+  async function handleAccessoryKey(
+    input: ReturnType<typeof createTerminalLiveAccessoryInput>,
+    targetHandle = activeHandleRef.current,
+    isDeliveryTargetCurrent: () => boolean = () => targetHandle === activeHandleRef.current
+  ) {
+    if (!client || !targetHandle || !isDeliveryTargetCurrent() || !canSend) {
+      return false
     }
-    const targetHandle = activeHandle
     const accessoryCommit = await handleLiveInputAccessoryBytes(input)
-    if (accessoryCommit.kind !== 'allow-raw') {
-      return
+    if (!isDeliveryTargetCurrent()) {
+      return false
     }
-    await sendTerminalLiveAccessoryRawBytes({
+    if (accessoryCommit.kind !== 'allow-raw') {
+      return accessoryCommit.kind === 'handled'
+    }
+    return sendTerminalLiveAccessoryRawBytes({
       client: clientRef.current,
       targetHandle,
       activeHandle: activeHandleRef.current,
@@ -3117,15 +2800,6 @@ export default function SessionScreen() {
       scheduleDelayedAction
     ]
   )
-
-  const dismissSoftwareKeyboard = useCallback(() => {
-    dismissTerminalKeyboard({
-      clearPendingLiveInputFocus: () => clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef),
-      commandInput: commandInputRef.current,
-      dismissKeyboard: () => Keyboard.dismiss(),
-      liveInput: liveInputRef.current
-    })
-  }, [])
 
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
@@ -3399,32 +3073,37 @@ export default function SessionScreen() {
     }
   }
 
-  // Why: hold-to-repeat matches iOS cadence (400ms then 45ms); non-repeatable keys fire once (holding is destructive).
-  const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Why: ref keeps repeat firing the current callback; else a mid-hold tab switch/reconnect routes bytes to a stale terminal.
+  const accessoryRepeatRef = useRef(
+    createTerminalAccessoryRepeatController<ReturnType<typeof createTerminalLiveAccessoryInput>>()
+  )
+  // Why: the current callback observes reconnect state while the sender pins the press to its original terminal.
   const handleAccessoryKeyRef = useRef(handleAccessoryKey)
   handleAccessoryKeyRef.current = handleAccessoryKey
   const stopAccessoryRepeat = useCallback(() => {
-    if (repeatTimeoutRef.current) {
-      clearTimeout(repeatTimeoutRef.current)
-      repeatTimeoutRef.current = null
-    }
-    if (repeatIntervalRef.current) {
-      clearInterval(repeatIntervalRef.current)
-      repeatIntervalRef.current = null
-    }
+    accessoryRepeatRef.current.stop()
   }, [])
   const startAccessoryRepeat = useCallback(
     (input: ReturnType<typeof createTerminalLiveAccessoryInput>) => {
-      stopAccessoryRepeat()
-      repeatTimeoutRef.current = setTimeout(() => {
-        repeatIntervalRef.current = setInterval(() => {
-          void handleAccessoryKeyRef.current(input)
-        }, 45)
-      }, 400)
+      // Why: a held repeat must not resume through a replacement client or connection.
+      const targetClient = clientRef.current
+      const targetConnectedAt = targetClient?.getLastConnectedAt() ?? null
+      const isDeliveryTargetCurrent = (targetHandle: string) =>
+        activeHandleRef.current === targetHandle &&
+        targetClient !== null &&
+        clientRef.current === targetClient &&
+        connStateRef.current === 'connected' &&
+        targetClient.getLastConnectedAt() === targetConnectedAt
+      accessoryRepeatRef.current.start(
+        input,
+        createTerminalAccessoryRepeatSender(
+          activeHandleRef.current,
+          isDeliveryTargetCurrent,
+          (nextInput, targetHandle, isTargetCurrent) =>
+            handleAccessoryKeyRef.current(nextInput, targetHandle, isTargetCurrent)
+        )
+      )
     },
-    [stopAccessoryRepeat]
+    []
   )
   const setMobileSessionRootRef = useCallback(
     (node: View | null): void => {
@@ -3440,15 +3119,14 @@ export default function SessionScreen() {
       clearPendingLiveInputCommit()
       sessionTabActionSheetRequestSeqRef.current += 1
       clearSessionTabActionSheetKeyboardListener()
-      stopAccessoryRepeat()
+      accessoryRepeatRef.current.cancel()
     },
     [
       clearPendingLiveInputCommit,
       clearDelayedActionTimers,
       clearSessionTabActionSheetKeyboardListener,
       clearTerminalCache,
-      clearToastHideTimer,
-      stopAccessoryRepeat
+      clearToastHideTimer
     ]
   )
 
@@ -3697,9 +3375,7 @@ export default function SessionScreen() {
     setCreateError('')
 
     // Why: idempotency key so a transport retry (reconnect replay) resolves to the same terminal, not a duplicate; kept compact (no worktree id) for the schema length cap.
-    const clientMutationId = `mobile-create:${Date.now().toString(36)}-${Math.random()
-      .toString(36)
-      .slice(2, 10)}`
+    const clientMutationId = createMobileTerminalMutationId()
 
     try {
       const response = await client.sendRequest('session.tabs.createTerminal', {
@@ -4059,6 +3735,7 @@ export default function SessionScreen() {
       })
       if (response.ok) {
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
+        reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
@@ -4072,7 +3749,7 @@ export default function SessionScreen() {
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
         // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
-        closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
+        closedTabTombstonesRef.current.set(tab.id, getClosedTabTombstoneExpiry())
         // Why: bulk close re-activates the anchor before awaiting each close;
         // the render-synced ref sees that switch while this closure would not,
         // so comparing against the ref keeps the anchor from being nulled out.
@@ -4585,7 +4262,7 @@ export default function SessionScreen() {
               </View>
             ) : activeFileTab ? (
               <View style={styles.markdownFrame}>
-                <FileReader
+                <MobileSessionFileReader
                   doc={fileDocs.get(activeFileTab.id)}
                   title={activeFileTab.title || 'File'}
                   relativePath={activeFileTab.relativePath}
@@ -4704,6 +4381,8 @@ export default function SessionScreen() {
                   inputLockReason={nativeChatInputLockReason}
                   sendErrorMessage={nativeChatSendError.message}
                   onClearSendError={nativeChatSendError.clear}
+                  sendSurfaceId={nativeChatScopeKey ?? ''}
+                  getSendCompletionGeneration={getSendCompletionGeneration}
                   keyboardInset={keyboardLift}
                 />
                 {toastMessage && (
@@ -4848,7 +4527,6 @@ export default function SessionScreen() {
                             return
                           }
                           const input = createTerminalLiveAccessoryInput(key)
-                          void handleAccessoryKey(input)
                           startAccessoryRepeat(input)
                         }}
                         onPressOut={() => {
@@ -4960,7 +4638,20 @@ export default function SessionScreen() {
                       // marked-text report that says whether this text is still preedit.
                       onChange={handleLiveInputChange}
                       onKeyPress={handleLiveInputKeyPress}
-                      onSubmitEditing={handleLiveInputSubmit}
+                      onSubmitEditing={() => {
+                        const submit = handleLiveInputSubmit()
+                        const sendOrigin = {
+                          tab: activeSessionTab,
+                          generation: getSendCompletionGeneration(),
+                          interaction: getLiveInteractionGeneration()
+                        }
+                        void submit.then((accepted) =>
+                          dismissKeyboardAfterAgentSend(
+                            sendOrigin,
+                            accepted && sendOrigin.interaction === getLiveInteractionGeneration()
+                          )
+                        )
+                      }}
                       placeholder=""
                       showSoftInputOnFocus
                       autoCapitalize="none"
@@ -4989,9 +4680,9 @@ export default function SessionScreen() {
                           : 'cmd-input'
                       }
                       style={styles.textInput}
-                      value={input}
+                      value={bufferedTerminalDraftState.input}
                       // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
-                      onChangeText={setInput}
+                      onChangeText={bufferedTerminalDraftState.setInput}
                       placeholder="Type a command…"
                       placeholderTextColor={colors.textMuted}
                       autoCapitalize="none"
@@ -5005,6 +4696,7 @@ export default function SessionScreen() {
                         autocompleteEnabled
                       )}
                       returnKeyType="send"
+                      blurOnSubmit={false}
                       // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
                       editable={canCompose}
                       onSubmitEditing={() => void handleSend()}

@@ -10,7 +10,7 @@ const {
   spawnMock,
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
-  readWindowsConptyProcessIdsMock,
+  readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsMock,
@@ -24,7 +24,7 @@ const {
   spawnMock: vi.fn(),
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
-  readWindowsConptyProcessIdsMock: vi.fn(),
+  readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsMock: vi.fn(),
@@ -85,8 +85,9 @@ vi.mock('./agent-foreground-process', () => ({
     resolveAgentForegroundProcessMock(...args)
 }))
 
-vi.mock('./windows-conpty-process-membership', () => ({
-  readWindowsConptyProcessIds: (...args: unknown[]) => readWindowsConptyProcessIdsMock(...args)
+vi.mock('./windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
+  isWindowsPtyJobReadable: () => true
 }))
 
 vi.mock('../wsl', () => ({
@@ -139,7 +140,7 @@ describe('LocalPtyProvider', () => {
       writeFileSyncMock,
       prepareMacosTccLoginShellMock,
       resolveAgentForegroundProcessMock,
-      readWindowsConptyProcessIdsMock,
+      readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
       wslUncDirectoryExistsMock,
@@ -435,6 +436,56 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock.mock.calls.at(-1)?.[0]).toBe(PWSH7_ABS)
     })
 
+    it('re-reads Windows shell options after a reentrant configuration change', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const initialPowerShellImplementation = vi.fn(() => 'powershell.exe' as const)
+      const configuredPwshAvailable = vi.fn(() => true)
+      provider.configure({
+        getWindowsShell: () => {
+          provider.configure({
+            getWindowsPowerShellImplementation: () => 'auto',
+            pwshAvailable: configuredPwshAvailable
+          })
+          return 'powershell.exe'
+        },
+        getWindowsPowerShellImplementation: initialPowerShellImplementation
+      })
+
+      await provider.spawn({ cols: 80, rows: 24, cwd: 'C:\\Users\\jin\\repo' })
+
+      expect(initialPowerShellImplementation).not.toHaveBeenCalled()
+      expect(configuredPwshAvailable).toHaveBeenCalledOnce()
+      expect(spawnMock.mock.calls.at(-1)?.[0]).toBe(PWSH7_ABS)
+    })
+
+    it('registers a probe-complete spawn before a later microtask shutdown', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'auto',
+        pwshAvailable: () => false
+      })
+      const callsBeforeSpawn = spawnMock.mock.calls.length
+      const spawn = provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        sessionId: 'probe-shutdown-session'
+      })
+      const canceledSpawn = expect(spawn).rejects.toThrow(
+        'PTY spawn canceled: probe-shutdown-session'
+      )
+      const shutdown = new Promise<void>((resolve, reject) => {
+        queueMicrotask(() => {
+          provider.shutdown('probe-shutdown-session', { immediate: true }).then(resolve, reject)
+        })
+      })
+
+      await shutdown
+      await canceledSpawn
+      expect(spawnMock).toHaveBeenCalledTimes(callsBeforeSpawn)
+    })
+
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const savedCodexHome = process.env.CODEX_HOME
@@ -519,7 +570,14 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--exec', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
+        [
+          '-d',
+          'Ubuntu',
+          '--exec',
+          'sh',
+          '-c',
+          expect.stringContaining("cd '/home/jin/repo/subdir'")
+        ],
         expect.objectContaining({ cwd: expect.any(String) })
       )
     })

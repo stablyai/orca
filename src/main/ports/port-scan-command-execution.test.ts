@@ -42,7 +42,10 @@ describe('runPortScanCommandInProcess', () => {
 
     expect(result.stdout).toBe(LSOF_OUTPUT)
     expect(result.spawnMs).toBeGreaterThanOrEqual(SPAWN_STALL_MS - 100)
-  })
+    // Why the explicit budget: the stall is deliberately longer than the whole
+    // watchdog budget (5.2s), so on vitest's 5s default this test could never
+    // pass -- it has been red since #12217 landed.
+  }, 15_000)
 
   it('kills the child and times out when the callback never arrives', async () => {
     vi.useFakeTimers()

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID, OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 describe('OrchestrationDb version-skew migration', () => {
   let db: OrchestrationDb | undefined
@@ -158,7 +159,7 @@ describe('OrchestrationDb version-skew migration', () => {
       coordinatorPaneKey: 'tab_v2:leaf_coord'
     })
     const task = db.createTask({ spec: 'reply with ack', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker_v2', 'tab_v2:leaf_worker')
+    const dispatch = createRootDispatch(db, task.id, 'term_worker_v2', 'tab_v2:leaf_worker')
     const question = db.createQuestion({
       runId: run.id,
       dispatchId: dispatch.id,

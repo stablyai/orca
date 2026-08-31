@@ -215,6 +215,7 @@ describe('searchBaseRefs (widened glob)', () => {
 
   it('allows creating a local branch from the selected matching remote base ref', async () => {
     const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
 
     const result = await getBranchConflictKind(
@@ -228,12 +229,48 @@ describe('searchBaseRefs (widened glob)', () => {
 
   it('still reports a remote conflict for a different tracking ref with the same branch name', async () => {
     const sha = getHeadSha(tmpDir)
+    // Why register both: a ref only tracks a branch when a remote actually owns its
+    // prefix, and this case is about a second *tracking* ref, not an orphan.
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    git(tmpDir, ['remote', 'add', 'upstream', 'https://example.invalid/upstream.git'])
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
     createRemoteRef(tmpDir, 'upstream/feature/something', sha)
 
     expect(
       await getBranchConflictKind(tmpDir, 'feature/something', 'origin/feature/something')
     ).toBe('remote')
+  })
+
+  it('ignores a ref whose prefix matches no configured remote', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'mimic-fork/my-task', sha)
+
+    expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBeNull()
+  })
+
+  it('stops treating leftover refs from a removed remote as conflicts', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    git(tmpDir, ['remote', 'add', 'fork', 'https://example.invalid/fork.git'])
+    createRemoteRef(tmpDir, 'fork/my-task', sha)
+    expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBe('remote')
+
+    // Why not `remote remove`: that prunes the tracking refs too, which would pass
+    // with or without the ownership guard. Dropping only the config leaves the
+    // orphan ref behind, which is the state this guard exists for.
+    git(tmpDir, ['config', '--remove-section', 'remote.fork'])
+
+    expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBeNull()
+  })
+
+  it('still reports a local conflict when an unrelated ref shares the name', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'mimic-fork/my-task', sha)
+    git(tmpDir, ['branch', 'my-task'])
+
+    expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBe('local')
   })
 
   it('reports remote conflicts when the remote name contains a slash', async () => {

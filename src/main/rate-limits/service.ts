@@ -20,6 +20,7 @@ import {
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -1766,11 +1767,8 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity shares Gemini credentials today; mirror the Gemini snapshot so its status-bar UI gets a real lifecycle instead of null.
-    const antigravity: ProviderRateLimits = {
-      ...gemini,
-      provider: 'antigravity'
-    }
+    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
+    const antigravity = deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
@@ -1940,16 +1938,14 @@ export class RateLimitService {
             allowPtyFallback: this.shouldAllowCodexPtyFallback(),
             signal
           })
-    ).catch(
-      (err): ProviderRateLimits => ({
-        provider: 'codex',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: err instanceof Error ? err.message : 'Unknown error',
-        status: 'error'
-      })
-    )
+    ).catch((err): ProviderRateLimits => ({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: err instanceof Error ? err.message : 'Unknown error',
+      status: 'error'
+    }))
 
     if (signal.aborted) {
       return
@@ -2010,16 +2006,14 @@ export class RateLimitService {
       allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
       networkProxySettings: this.networkProxySettingsResolver?.(),
       signal
-    }).catch(
-      (err): ProviderRateLimits => ({
-        provider: 'claude',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: err instanceof Error ? err.message : 'Unknown error',
-        status: 'error'
-      })
-    )
+    }).catch((err): ProviderRateLimits => ({
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: err instanceof Error ? err.message : 'Unknown error',
+      status: 'error'
+    }))
 
     if (signal.aborted) {
       return
@@ -2062,16 +2056,14 @@ export class RateLimitService {
     const grok = await fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
-    }).catch(
-      (err): ProviderRateLimits => ({
-        provider: 'grok',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: err instanceof Error ? err.message : 'Unknown error',
-        status: 'error'
-      })
-    )
+    }).catch((err): ProviderRateLimits => ({
+      provider: 'grok',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: err instanceof Error ? err.message : 'Unknown error',
+      status: 'error'
+    }))
 
     if (signal.aborted) {
       return

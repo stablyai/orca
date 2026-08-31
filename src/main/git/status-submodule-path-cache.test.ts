@@ -148,7 +148,7 @@ describe('submodule path cache', () => {
       if (args[0] === 'remote') {
         return Promise.resolve({ stdout: 'origin\n' })
       }
-      if (args[0] === 'pull') {
+      if (args[0] === 'pull' || args[0] === 'fetch') {
         modulePath = 'fresh-lib'
         return Promise.resolve({ stdout: '' })
       }

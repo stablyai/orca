@@ -282,12 +282,10 @@ describe('fetchWorktrees', () => {
 
     const refresh = store.getState().fetchWorktrees('repo1')
     await vi.waitFor(() => expect(worktreeListMock).toHaveBeenCalledTimes(1))
-    await store.getState().updateWorktreesMeta(
-      new Map([
-        [daily.id, { manualOrder: 100 }],
-        [relay.id, { manualOrder: 200 }]
-      ])
-    )
+    await store.getState().updateWorktreesMeta([
+      { worktreeId: daily.id, updates: { manualOrder: 100 } },
+      { worktreeId: relay.id, updates: { manualOrder: 200 } }
+    ])
     resolveListing([refreshedDaily, relay])
 
     await refresh

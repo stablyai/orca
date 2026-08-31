@@ -118,6 +118,7 @@ function makeResult(
     score: 0,
     qualityClass: null,
     rank: null,
+    lastActiveAt: null,
     ...overrides
   }
 }

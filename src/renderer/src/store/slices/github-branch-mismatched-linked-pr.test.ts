@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldClearBranchMismatchedLinkedOpenPR } from './github'
+import { shouldClearBranchMismatchedLinkedOpenPR } from '../github/worktree-refresh'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import './github-slice-test-harness'
 

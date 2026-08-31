@@ -40,6 +40,7 @@ export type KeybindingActionId =
   | 'workspace.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'
+  | 'dashboard.toggle'
   | 'sidebar.left.toggle'
   | 'sidebar.right.toggle'
   | 'sidebar.explorer.toggle'
@@ -292,8 +293,8 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'remove',
       'trash'
     ],
-    // Why: ship now without a default chord; user overrides still win when a future default is assigned.
-    defaultBindings: platformBindings([]),
+    // Why: Backspace avoids the terminal pane's D-based split shortcuts on every platform.
+    defaultBindings: platformBindings(['Mod+Shift+Backspace']),
     allowInTerminal: true
   },
   {
@@ -313,6 +314,28 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'close'
     ],
     // Why: configurable but unbound by default, to not take a global chord from terminal/browser/editor users.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'dashboard.toggle',
+    title: 'Toggle Agent Dashboard',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'agent',
+      'agents',
+      'dashboard',
+      'kanban',
+      'board',
+      'toggle',
+      'open',
+      'close'
+    ],
+    // Why: configurable but unbound by default, matching workspace.openBoard — an
+    // experimental surface must not claim a global chord from terminal users.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
@@ -2258,7 +2281,7 @@ export function formatKeybinding(binding: string, platform: NodeJS.Platform): st
   if (parsed.shift) {
     parts.push(isMac ? '⇧' : 'Shift')
   }
-  parts.push(formatKeyToken(parsed.key))
+  parts.push(formatKeyToken(parsed.key, isMac))
   return parts
 }
 
@@ -2294,7 +2317,7 @@ export function findKeybindingActionsForBinding(
   ).map((definition) => definition.id)
 }
 
-function formatKeyToken(token: string): string {
+function formatKeyToken(token: string, isMac: boolean): string {
   const labels: Record<string, string> = {
     BracketLeft: '[',
     BracketRight: ']',
@@ -2318,7 +2341,7 @@ function formatKeyToken(token: string): string {
     Quote: "'",
     Backquote: '`',
     Enter: 'Enter',
-    Backspace: 'Backspace',
+    Backspace: isMac ? '⌫' : 'Backspace',
     Delete: 'Delete',
     Insert: 'Insert',
     Tab: 'Tab',

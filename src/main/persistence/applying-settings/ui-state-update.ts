@@ -24,7 +24,6 @@ import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
 import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
 import { persistedUIValuesEqual } from '../../../shared/persisted-ui-equality'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
@@ -44,7 +43,7 @@ import {
 } from './ui-interaction-merge'
 
 export type UIUpdateOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   removeRetainedBlob: (
     slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
   ) => void

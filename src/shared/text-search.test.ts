@@ -12,11 +12,10 @@ import {
   ingestGitGrepLine,
   ingestRgJsonLine,
   MAX_LINE_CONTENT_LENGTH,
-  normalizeRelativePath,
-  SEARCH_JSON_STRUCTURE_LIMITS,
-  splitSearchGlobPatterns,
-  toGitGlobPathspec
+  SEARCH_JSON_STRUCTURE_LIMITS
 } from './text-search'
+import { splitSearchGlobPatterns, toGitGlobPathspec } from './text-search-glob-patterns'
+import { normalizeRelativePath } from './text-search-paths'
 
 describe('normalizeRelativePath', () => {
   it('collapses mixed separators and strips leading slashes', () => {

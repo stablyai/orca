@@ -17,6 +17,10 @@ const liveInputFocusSource = readFileSync(
   new URL('./use-terminal-live-input-focus.ts', import.meta.url),
   'utf8'
 )
+const sendCompletionGenerationSource = readFileSync(
+  new URL('../session/use-mobile-send-completion-generation.ts', import.meta.url),
+  'utf8'
+)
 
 function liveInputBarBlock(): string {
   const start = sessionRouteSource.indexOf('{liveInputEnabled ? (')
@@ -41,7 +45,10 @@ describe('terminal live input affordance', () => {
     expect(block).toContain('showSoftInputOnFocus')
     expect(block).toContain('liveInputText={liveInputCapture}')
     expect(sessionRouteSource).toContain('useTerminalLiveInputFocus({')
-    expect(sessionRouteSource).toContain('return resetLiveInputFocus')
+    expect(sessionRouteSource).toContain('useMobileSendCompletionGeneration({')
+    expect(sessionRouteSource).toContain('onBlur: resetLiveInputFocus')
+    expect(sendCompletionGenerationSource).toContain('return () => {')
+    expect(sendCompletionGenerationSource).toContain('onBlur()')
     expect(liveInputFocusSource).toContain('focusTerminalLiveInputTarget(inputRef.current')
     expect(liveInputFocusSource).toContain('lifecycleIdentity,')
     expect(liveInputFocusSource).toContain('resetLiveInputFocus')

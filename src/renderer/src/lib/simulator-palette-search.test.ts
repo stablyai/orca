@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { buildPaletteTabDocument } from './palette-match/tab-document'
 import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
 import {
@@ -82,7 +83,116 @@ function makeEntry(entry: Omit<SearchableSimulatorTab, 'document'>): SearchableS
   }
 }
 
+describe('simulator-palette-search lastActiveAt', () => {
+  function entryFor(overrides: Partial<Tab>): SearchableSimulatorTab {
+    return makeEntry({
+      tab: makeTab(overrides),
+      worktree: makeWorktree(),
+      repoName: 'repo/mobile',
+      worktreeSortIndex: 0,
+      isCurrentTab: false,
+      isCurrentWorktree: true
+    })
+  }
+
+  it('is null when the tab was never focused', () => {
+    expect(searchSimulatorTabs([entryFor({})], '')[0].lastActiveAt).toBeNull()
+  })
+
+  it('carries the tab focus timestamp, never older than the tab itself', () => {
+    expect(
+      searchSimulatorTabs([entryFor({ createdAt: 5000, lastFocusedAt: 9000 })], '')[0].lastActiveAt
+    ).toBe(9000)
+    expect(
+      searchSimulatorTabs([entryFor({ createdAt: 5000, lastFocusedAt: 1000 })], '')[0].lastActiveAt
+    ).toBe(5000)
+  })
+
+  it('breaks a rank tie between equally-matching tabs by recency', () => {
+    // Ids are ordered so an id-only tiebreak would flip this expectation.
+    const older = entryFor({ id: 'sim-a-older', lastFocusedAt: 1000 })
+    const newer = entryFor({ id: 'sim-z-newer', lastFocusedAt: 5000 })
+
+    const results = searchSimulatorTabs([older, newer], 'emulator')
+
+    expect(results.map((result) => result.tabId)).toEqual(['sim-z-newer', 'sim-a-older'])
+  })
+})
+
 describe('simulator-palette-search', () => {
+  it('keeps same-id simulator tabs isolated by execution host', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
+    const remote = makeWorktree({
+      id: sharedId,
+      hostId: 'runtime:host-b',
+      displayName: 'Remote workspace'
+    })
+    const entries = buildSearchableSimulatorTabs({
+      worktrees: [local, remote],
+      repoMap: new Map([[local.repoId, { displayName: 'repo/mobile' }]]),
+      worktreeOrder: new Map([
+        [getWorktreeHostIdentity(local), 0],
+        [getWorktreeHostIdentity(remote), 1]
+      ]),
+      unifiedTabsByWorktree: {
+        [sharedId]: [
+          makeTab({
+            id: 'sim-local',
+            worktreeId: sharedId,
+            executionHostId: 'local',
+            label: 'Local emulator'
+          }),
+          makeTab({
+            id: 'sim-remote',
+            worktreeId: sharedId,
+            executionHostId: 'runtime:host-b',
+            label: 'Remote emulator'
+          })
+        ]
+      },
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
+
+    expect(entries.map((entry) => [entry.tab.id, entry.worktree.hostId])).toEqual([
+      ['sim-local', 'local'],
+      ['sim-remote', 'runtime:host-b']
+    ])
+    expect(
+      searchSimulatorTabs(entries, 'emulator').map((result) => [
+        result.tabId,
+        result.executionHostId
+      ])
+    ).toEqual([
+      ['sim-local', 'local'],
+      ['sim-remote', 'runtime:host-b']
+    ])
+  })
+
+  it('does not route one ambiguous legacy simulator bucket to both hosts', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const entries = buildSearchableSimulatorTabs({
+      worktrees: [
+        makeWorktree({ id: sharedId, hostId: 'local' }),
+        makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
+      ],
+      repoMap: new Map(),
+      worktreeOrder: new Map(),
+      unifiedTabsByWorktree: {
+        [sharedId]: [makeTab({ worktreeId: sharedId })]
+      },
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
+
+    expect(entries).toEqual([])
+  })
+
   it('keeps empty-query ordering deterministic and context-first', () => {
     const results = searchSimulatorTabs(
       [

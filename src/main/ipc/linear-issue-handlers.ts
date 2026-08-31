@@ -1,15 +1,9 @@
 import { ipcMain } from 'electron'
-import {
-  getIssue,
-  searchIssues,
-  listIssues,
-  createIssue,
-  updateIssue,
-  addIssueComment,
-  getIssueComments
-} from '../linear/issues'
+import { getIssue, searchIssues } from '../linear/linear-issue-lookups'
+import { listIssues, type LinearListFilter } from '../linear/linear-issue-listing'
+import { createIssue, updateIssue } from '../linear/linear-issue-mutations'
+import { addIssueComment, getIssueComments } from '../linear/linear-issue-comments'
 import { normalizeWorkspaceId, normalizeWorkspaceSelection } from './linear-ipc-args'
-import type { LinearListFilter } from '../linear/issues'
 import { clampLinearIssueListLimit } from '../../shared/linear/issue-read-limits'
 import { optionalParsedLinearIssueAttributeFilter } from '../../shared/linear/issue-attribute-filter'
 import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'

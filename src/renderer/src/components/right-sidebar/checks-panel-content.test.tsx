@@ -7,15 +7,14 @@ import type { PRComment } from '../../../../shared/github/comment-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import {
   buildMergeabilityRecalculationCommands,
-  CheckJobLogTail,
-  ChecksList,
-  ConflictTriageStrip,
-  getFailedChecksForDetails,
-  MergeConflictNotice,
-  isMutablePRConversationComment,
-  PRCommentsList,
-  PRTriageStrip
-} from './checks-panel-content'
+  MergeConflictNotice
+} from './checks-panel/conflict-summary'
+import { ConflictTriageStrip, PRTriageStrip } from './checks-panel/triage-strip'
+import { getFailedChecksForDetails } from './checks-panel/check-details-model'
+import { ChecksList } from './checks-panel/checks-list'
+import { isMutablePRConversationComment } from './checks-panel/comment-controls'
+import { PRCommentsList } from './checks-panel/comments-list'
+import { CheckJobLogTail } from './check-job-log-tail'
 
 function renderWithTooltips(element: React.ReactElement): string {
   return renderToStaticMarkup(React.createElement(TooltipProvider, null, element))

@@ -47,6 +47,7 @@ describe('daemon session scrollback window', () => {
       kill: vi.fn(() => {
         setTimeout(() => onExitCb?.(0), 1)
       }),
+      terminateOwnedTree: () => 'unavailable' as const,
       forceKill: vi.fn(() => onExitCb?.(137)),
       signal: vi.fn(),
       onData(cb) {

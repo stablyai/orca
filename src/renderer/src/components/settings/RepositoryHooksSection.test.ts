@@ -4,6 +4,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
+import { readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { getLocalCommandSourcePolicyNotice, RepositoryHooksSection } from './RepositoryHooksSection'
 
 vi.mock('@/store', () => ({
@@ -31,6 +32,7 @@ const repo: Repo = {
 
 function renderRepositoryHooksSection(args: {
   onUpdateHookSettings: (settings: NonNullable<Repo['hookSettings']>) => void
+  repo?: Repo
 }): { container: HTMLDivElement; root: Root } {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -38,7 +40,7 @@ function renderRepositoryHooksSection(args: {
   act(() => {
     root.render(
       React.createElement(RepositoryHooksSection, {
-        repo,
+        repo: args.repo ?? repo,
         yamlHooks: null,
         hasHooksFile: false,
         hooksInspectionReady: true,
@@ -152,5 +154,24 @@ describe('RepositoryHooksSection setup startup policy', () => {
       setupRunPolicy: 'run-by-default',
       scripts: { setup: '', archive: '' }
     })
+  })
+})
+
+describe('RepositoryHooksSection execution ownership', () => {
+  it('routes issue-command reads through the repository runtime owner', async () => {
+    vi.mocked(readRuntimeIssueCommand).mockClear()
+    await act(async () => {
+      rendered = renderRepositoryHooksSection({
+        onUpdateHookSettings: () => {},
+        repo: { ...repo, executionHostId: 'runtime:hub' }
+      })
+      await Promise.resolve()
+    })
+
+    expect(readRuntimeIssueCommand).toHaveBeenCalledWith(
+      { activeRuntimeEnvironmentId: 'hub' },
+      repo.id,
+      'runtime:hub'
+    )
   })
 })

@@ -31,6 +31,17 @@ export function WorkspaceCleanupSortHeader({
 }): React.JSX.Element {
   const allSelected = selectableCount > 0 && selectedCount >= selectableCount
   const someSelected = selectableCount > 0 && selectedCount > 0 && !allSelected
+  const selectAllLabel =
+    selectableCount === 1
+      ? translate(
+          'components.workspace.cleanup.browse.selectAllCountOne',
+          'Select 1 safety-checked workspace'
+        )
+      : translate(
+          'components.workspace.cleanup.browse.selectAllCount',
+          'Select all {{value0}} safety-checked workspaces',
+          { value0: selectableCount }
+        )
   return (
     <div className="flex items-center gap-1 border-b border-border bg-muted/25 px-3 py-1.5">
       <button
@@ -38,10 +49,7 @@ export function WorkspaceCleanupSortHeader({
         role="checkbox"
         aria-checked={someSelected ? 'mixed' : allSelected}
         disabled={selectableCount === 0}
-        aria-label={translate(
-          'components.workspace.cleanup.browse.selectAll',
-          'Select all matching workspaces'
-        )}
+        aria-label={selectAllLabel}
         onClick={() => onToggleSelectAll(!allSelected)}
         className="flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
@@ -51,12 +59,7 @@ export function WorkspaceCleanupSortHeader({
           <Minus className="size-3" strokeWidth={3} />
         ) : null}
       </button>
-      <span className="min-w-0 flex-1 text-xs text-muted-foreground">
-        {translate(
-          'components.workspace.cleanup.browse.selectAll',
-          'Select all matching workspaces'
-        )}
-      </span>
+      <span className="min-w-0 flex-1 text-xs text-muted-foreground">{selectAllLabel}</span>
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button

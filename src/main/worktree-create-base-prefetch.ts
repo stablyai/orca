@@ -44,7 +44,7 @@ async function prefetchLocalWorktreeCreateBase(
   repo: Repo,
   baseBranch: string | undefined,
   runtime: WorktreeCreateBasePrefetchRuntime
-): Promise<void> {
+): Promise<string | undefined> {
   const resolvedBaseBranch = await resolveWorktreeCreateBase({
     requestedBaseBranch: baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
@@ -64,13 +64,13 @@ async function prefetchLocalWorktreeCreateBase(
     }
   })
   if (!resolvedBaseBranch) {
-    return
+    return undefined
   }
   if (
     isFullGitObjectId(resolvedBaseBranch) &&
     (await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch))
   ) {
-    return
+    return resolvedBaseBranch
   }
   const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, resolvedBaseBranch)
   if (remoteTrackingBase) {
@@ -79,34 +79,35 @@ async function prefetchLocalWorktreeCreateBase(
       !(await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch))
     ) {
       await runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase)
-      return
+      return resolvedBaseBranch
     }
   }
   if (await hasLocalWorktreeBaseRef(repo.path, resolvedBaseBranch)) {
     // Why: hosted-review start points and local branch bases are already local; a broad remote fetch cannot make them fresher.
-    return
+    return resolvedBaseBranch
   }
 
   // Why: keep optimistic prefetch on the same best-effort fallback path as
   // create so the real create can reuse the runtime's remote fetch cache.
   await runtime.fetchRemoteWithCache(repo.path, 'origin')
+  return resolvedBaseBranch
 }
 
 export async function prefetchWorktreeCreateBase(args: {
   repo: Repo
   baseBranch?: string
   runtime: WorktreeCreateBasePrefetchRuntime
-}): Promise<void> {
+}): Promise<string | undefined> {
   if (isFolderRepo(args.repo)) {
-    return
+    return undefined
   }
   if (args.repo.connectionId) {
     const provider = getSshGitProvider(args.repo.connectionId)
     if (!provider) {
-      return
+      return undefined
     }
     await prefetchRemoteWorktreeCreateBase(provider, args.repo, { baseBranch: args.baseBranch })
-    return
+    return undefined
   }
-  await prefetchLocalWorktreeCreateBase(args.repo, args.baseBranch, args.runtime)
+  return prefetchLocalWorktreeCreateBase(args.repo, args.baseBranch, args.runtime)
 }

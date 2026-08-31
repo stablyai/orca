@@ -14,7 +14,12 @@ import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
+import {
+  gateWorktreeAgentActivation,
+  workspaceHasSleepingAgentSessions
+} from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -45,7 +50,8 @@ export type ActivateAndRevealResult = {
 
 function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
-  startup?: WorktreeStartupPayload
+  startup?: WorktreeStartupPayload,
+  providesInitialSurface?: boolean
 ): string | null {
   const state = useAppStore.getState()
   const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
@@ -55,9 +61,18 @@ function ensureFolderWorkspaceInitialTerminal(
     startup,
     undefined,
     undefined,
-    undefined
+    undefined,
+    { reseedEmptiedWorkspace: providesInitialSurface !== true }
   )
   return primaryTabId
+}
+
+function canInspectAgentActivationInventory(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.api?.runtime?.call === 'function' &&
+    typeof window.api?.pty?.listSessions === 'function'
+  )
 }
 
 export function activateAndRevealFolderWorkspace(
@@ -67,6 +82,8 @@ export function activateAndRevealFolderWorkspace(
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
+    /** See activateAndRevealWorktree — same contract for folder workspaces. */
+    providesInitialSurface?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -116,8 +133,31 @@ export function activateAndRevealFolderWorkspace(
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
-  resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  const primaryTabId = ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
+  // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
+  const shouldGateAgentActivation =
+    !opts?.startup &&
+    (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
+      (canInspectAgentActivationInventory() &&
+        shouldAutoCreateInitialTerminal(
+          state.reconcileWorktreeTabModel(workspaceKey).renderableTabCount
+        )))
+  if (!shouldGateAgentActivation) {
+    resumeSleepingAgentSessionsForWorktree(workspaceKey)
+  }
+  if (shouldGateAgentActivation) {
+    void gateWorktreeAgentActivation(workspaceKey).then((outcome) => {
+      if (outcome === 'empty' && useAppStore.getState().activeWorktreeId === workspaceKey) {
+        ensureFolderWorkspaceInitialTerminal(folderWorkspace)
+      }
+    })
+  }
+  const primaryTabId = shouldGateAgentActivation
+    ? null
+    : ensureFolderWorkspaceInitialTerminal(
+        folderWorkspace,
+        opts?.startup,
+        opts?.providesInitialSurface
+      )
 
   if (opts?.sidebarRevealBehavior) {
     state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
@@ -141,6 +181,12 @@ export function activateAndRevealWorktree(
     revealInSidebar?: boolean
     executionHostId?: ExecutionHostId
     backendStartupTerminalSpawned?: boolean
+    /** Set by callers that navigate here only to open their own non-terminal surface
+     *  (an editor file, a diff). Activation then leaves a closed-last-terminal workspace
+     *  empty instead of adding a shell the user never asked for. Caveat: on a
+     *  runtime-owned workspace with a live web session the host owns terminal creation,
+     *  so ensureWebRuntimeWorktreeTerminalAfterWake may still seed one (matches main). */
+    providesInitialSurface?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -191,19 +237,47 @@ export function activateAndRevealWorktree(
     state.recordWorktreeVisit(worktreeId)
   }
 
-  // Why: sleeping destroys the local PTY but preserves the provider session id, so waking should restore those CLI sessions automatically.
-  resumeSleepingAgentSessionsForWorktree(worktreeId)
+  // Why: the gate is decided BEFORE resuming. A sleeping session must defer seeding until startup
+  // restoration is ready (STA-1111) — resuming first would leave nothing to gate on. Structured
+  // agent inventory hydrates asynchronously too, so an empty tab model can otherwise authorize a
+  // fallback terminal beside a chat that is about to appear.
+  const shouldGateAgentActivation =
+    !hasActivationWork &&
+    (workspaceHasSleepingAgentSessions(postActivationState, worktreeId) ||
+      (canInspectAgentActivationInventory() &&
+        shouldAutoCreateInitialTerminal(
+          postActivationState.reconcileWorktreeTabModel(worktreeId).renderableTabCount
+        )))
+  if (!shouldGateAgentActivation) {
+    // Why: sleeping destroys the local PTY but preserves the provider session id, so waking should
+    // restore those CLI sessions. Ordering is load-bearing: resuming synchronously creates the
+    // session's tab first, so the seeding below doesn't add a bare shell next to it.
+    resumeSleepingAgentSessionsForWorktree(worktreeId)
+  }
+  if (shouldGateAgentActivation) {
+    void gateWorktreeAgentActivation(worktreeId).then((outcome) => {
+      const currentState = useAppStore.getState()
+      if (outcome === 'empty' && currentState.activeWorktreeId === worktreeId) {
+        ensureWorktreeHasInitialTerminal(currentState, worktreeId)
+      }
+    })
+  }
 
   // 4. Ensure a focusable surface exists for externally-created worktrees
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    useAppStore.getState(),
-    worktreeId,
-    opts?.startup,
-    opts?.setup,
-    opts?.issueCommand,
-    opts?.defaultTabs,
-    opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : undefined
-  )
+  const primaryTabId = shouldGateAgentActivation
+    ? null
+    : ensureWorktreeHasInitialTerminal(
+        useAppStore.getState(),
+        worktreeId,
+        opts?.startup,
+        opts?.setup,
+        opts?.issueCommand,
+        opts?.defaultTabs,
+        {
+          ...(opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : {}),
+          reseedEmptiedWorkspace: opts?.providesInitialSurface !== true
+        }
+      )
   if (primaryTabId && opts?.initialCwd) {
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
@@ -252,7 +326,7 @@ export function activateAndRevealWorktree(
  */
 export function activateAndRevealWorkspace(
   workspaceId: string,
-  opts?: { executionHostId?: ExecutionHostId }
+  opts?: { executionHostId?: ExecutionHostId; providesInitialSurface?: boolean }
 ): ActivateAndRevealResult | false {
   const workspaceScope = parseWorkspaceKey(workspaceId)
   if (workspaceScope?.type === 'folder') {

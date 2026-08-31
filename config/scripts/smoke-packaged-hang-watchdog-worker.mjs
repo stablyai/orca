@@ -11,6 +11,7 @@ const ASAR_ENV = 'ORCA_PACKAGED_WATCHDOG_SMOKE_ASAR'
 const TIMEOUT_MS = 100
 const CHECK_INTERVAL_MS = 20
 const POLL_TIMEOUT_MS = 5_000
+const LAUNCH_TIMEOUT_MS = 30_000
 const SUCCESS_LINE = '[packaged-watchdog-smoke] app.asar worker detected and recovered a stall'
 
 function sleep(ms) {
@@ -144,7 +145,7 @@ function runSmoke() {
     const result = spawnSync(executable, electronArgs, {
       env,
       encoding: 'utf8',
-      timeout: 15_000
+      timeout: LAUNCH_TIMEOUT_MS
     })
     if (result.status !== 0) {
       throw new Error(

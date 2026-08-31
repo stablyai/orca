@@ -8,7 +8,8 @@ import type {
   WorkspacePortProbe,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
-import { scanWorkspacePorts, type WorkspacePortScanOptions } from './local-workspace-port-scanner'
+import { scanWorkspacePorts } from './local-workspace-port-scanner'
+import type { WorkspacePortScanOptions } from './local-workspace-port-scan-state'
 
 export type WorkspacePortProbeInput = WorkspacePortProbe & {
   connectionId?: string | null
@@ -109,6 +110,13 @@ export async function killWorkspacePort(
     process.kill(pid, 'SIGTERM')
     return { ok: true }
   } catch (error) {
+    // Why ESRCH is success: the pid exited between the authorizing re-scan and
+    // this signal, so the listener is gone and the port is free -- which is
+    // what Stop was asked for. Surfacing the raw `kill ESRCH` made a Stop that
+    // had already succeeded read as a failure.
+    if ((error as NodeJS.ErrnoException)?.code === 'ESRCH') {
+      return { ok: true }
+    }
     const message = error instanceof Error ? error.message : String(error)
     return { ok: false, reason: message || 'Failed to stop the process.' }
   }

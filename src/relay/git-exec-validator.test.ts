@@ -150,22 +150,43 @@ describe('validateGitExecArgs', () => {
   })
 
   describe('git remote', () => {
-    it.each([
-      'add',
-      'remove',
-      'rm',
-      'rename',
-      'set-url',
-      'set-head',
-      'set-branches',
-      'prune',
-      'update'
-    ])('rejects remote %s', (subcmd) => {
-      expectBlocked(['remote', subcmd, 'arg'], 'Destructive git remote operations')
-    })
+    it.each(['rm', 'rename', 'set-url', 'set-head', 'set-branches', 'prune', 'update'])(
+      'rejects remote %s',
+      (subcmd) => {
+        expectBlocked(['remote', subcmd, 'arg'], 'Destructive git remote operations')
+      }
+    )
 
     it('skips flags when finding remote subcommand', () => {
       expectBlocked(['remote', '-v', 'add', 'evil', 'url'], 'Destructive git remote operations')
+    })
+
+    it('allows the fork-PR remote add and remove shapes', () => {
+      expectAllowed([
+        'remote',
+        'add',
+        'pr-contributor-orca',
+        'https://github.com/contributor/orca.git'
+      ])
+      expectAllowed(['remote', 'add', 'pr-contributor-orca', 'git@github.com:contributor/orca.git'])
+      expectAllowed(['remote', 'remove', 'pr-contributor-orca'])
+    })
+
+    it.each([
+      // Extra or missing operands are not a shape main ever sends.
+      [['remote', 'add', 'fork']],
+      [['remote', 'add', 'fork', 'https://github.com/contributor/orca.git', '--tags']],
+      [['remote', 'remove']],
+      [['remote', 'remove', 'fork', 'extra']],
+      // Names and URLs must pass the same rules the pushTarget RPCs enforce.
+      [['remote', 'add', '--mirror=push', 'https://github.com/contributor/orca.git']],
+      [['remote', 'add', '../escape', 'https://github.com/contributor/orca.git']],
+      [['remote', 'remove', '-f']],
+      [['remote', 'add', 'fork', 'ext::sh -c payload']],
+      [['remote', 'add', 'fork', 'https://evil.test/contributor/orca.git']],
+      [['remote', 'add', 'fork', '/etc/passwd']]
+    ])('rejects unsafe remote write args %j', (args) => {
+      expectBlocked(args, 'Destructive git remote operations')
     })
   })
 

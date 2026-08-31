@@ -1,9 +1,8 @@
 import { spawn } from 'node:child_process'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
-import { delimiter, dirname } from 'node:path'
 import { getRepeatedStringFlag } from '../flags'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
 import {
   getTuiAgentDetectionProbeCommands,
@@ -103,16 +102,6 @@ function resolveSelectedSkillNames(
 }
 
 /** PATH with the resolved npx's own directory first, so its `env node` shebang resolves. */
-function buildNpxPath(resolvedNpx: string): string {
-  // Why: resolveCliCommand falls back to the bare name when it finds nothing, and
-  // dirname('npx') is '.', so prepending it blindly would run ./npx out of the
-  // caller's checkout instead of reporting that npx is missing.
-  const own = dirname(resolvedNpx)
-  const existing = process.env.PATH ?? process.env.Path ?? ''
-  // Why: every version manager ships node beside npx in the same bin directory,
-  // so the resolved sibling is all the child needs to run npx's shebang.
-  return [own === '.' ? '' : own, existing].filter(Boolean).join(delimiter)
-}
 
 function runNpxSkills(args: string[]): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -145,7 +134,10 @@ function runNpxSkills(args: string[]): Promise<number> {
     // 'error' event and the message below never fires.
     const child = spawn(spawnCmd, spawnArgs, {
       stdio: 'inherit',
-      env: { ...process.env, PATH: buildNpxPath(resolved) }
+      // Why the shared helper: it verifies the sibling node actually exists,
+      // skips a bare-name fallback whose dirname is '.', and writes the key
+      // Windows will really read — all of which a local join got wrong.
+      env: withCliRuntimeOnPath(resolved, { ...process.env })
     })
     // Why: a missing npx/Node on a headless host surfaces as a raw spawn ENOENT;
     // wrap it so the CLI reports an actionable message like every other failure here.

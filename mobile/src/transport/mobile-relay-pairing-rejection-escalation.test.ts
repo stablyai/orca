@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { classifyConnection, type ConnectionVerdict } from './connection-health'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import {
+  bundle,
   dependencies,
   FakeRelaySession,
   FakeSession,
@@ -56,9 +57,11 @@ describe('continuous Relay pairing-rejection escalation', () => {
       return session
     })
     openRelay.mockImplementationOnce(() => activeRelay)
+    const readBundle = vi.fn(async () => bundle)
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       openRelay,
+      readBundle,
       randomBytes: () => new Uint8Array([0, 0]),
       onLog: () => {}
     })
@@ -124,6 +127,27 @@ describe('continuous Relay pairing-rejection escalation', () => {
 
     expect(logical.isPairingRejected()).toBe(true)
     expect(verdict(logical)).toMatchObject({ kind: 'auth-failed' })
+    supervisor.stop()
+    logical.close()
+  })
+
+  it('recovers a latched rejection through the manual app-resume nudge', async () => {
+    const { activeRelay, logical, openRelay, supervisor } = harness(
+      new MobileE2EEAuthenticationError()
+    )
+
+    await supervisor.start()
+    activeRelay.publishState('disconnected')
+    await vi.advanceTimersByTimeAsync(FOUR_HOURS_MS)
+    expect(logical.isPairingRejected()).toBe(true)
+
+    openRelay.mockImplementation(() => new FakeRelaySession('connected'))
+    supervisor.nudge('app-resume')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(openRelay.mock.calls.length).toBeGreaterThan(3)
+    expect(logical.getState()).toBe('connected')
+    expect(logical.isPairingRejected()).toBe(false)
     supervisor.stop()
     logical.close()
   })

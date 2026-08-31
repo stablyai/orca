@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -396,7 +396,16 @@ describe('configureElectronNetworkCompatibility', () => {
   })
 })
 
+const EXPECTED_DISABLED_FEATURES =
+  'FedCm,DirectSockets,DirectSocketsInSharedWorkers,DirectSocketsInServiceWorkers'
+
 describe('disableUnsupportedChromiumFeatures', () => {
+  it('matches the shared list the real-Electron egress probes launch with', async () => {
+    const { DISABLED_CHROMIUM_FEATURES } = await import('./disabled-chromium-features')
+
+    expect(DISABLED_CHROMIUM_FEATURES.join(',')).toBe(EXPECTED_DISABLED_FEATURES)
+  })
+
   it('disables FedCM before Chromium sessions are created', async () => {
     const { app } = await import('electron')
     const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
@@ -404,7 +413,31 @@ describe('disableUnsupportedChromiumFeatures', () => {
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     disableUnsupportedChromiumFeatures()
 
-    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-features', 'FedCm')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      EXPECTED_DISABLED_FEATURES
+    )
+  })
+
+  it('disables every Direct Sockets surface so a hostile page cannot kill its renderer', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    const disabled = vi
+      .mocked(app.commandLine.appendSwitch)
+      .mock.calls.find(([name]) => name === 'disable-features')?.[1]
+      ?.split(',')
+
+    expect(disabled).toEqual(
+      expect.arrayContaining([
+        'DirectSockets',
+        'DirectSocketsInSharedWorkers',
+        'DirectSocketsInServiceWorkers'
+      ])
+    )
   })
 
   it('preserves existing disabled Chromium features', async () => {
@@ -417,21 +450,23 @@ describe('disableUnsupportedChromiumFeatures', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'disable-features',
-      'FedCm,ExistingFeature'
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
     )
   })
 
-  it('does not duplicate FedCM when disable-features already includes it', async () => {
+  it('does not duplicate features when disable-features already includes them', async () => {
     const { app } = await import('electron')
     const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
 
-    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce('FedCm,ExistingFeature')
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce(
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     disableUnsupportedChromiumFeatures()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'disable-features',
-      'FedCm,ExistingFeature'
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
     )
   })
 })
@@ -471,20 +506,6 @@ describe('enableMainProcessGpuFeatures', () => {
       'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
     )
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
-  })
-
-  it('opts hidden pages out of intensive wake-up throttling', async () => {
-    const { app } = await import('electron')
-    const { enableMainProcessGpuFeatures } = await import('./configure-process')
-
-    delete process.env.ORCA_E2E_USER_DATA_DIR
-    vi.mocked(app.commandLine.appendSwitch).mockClear()
-    enableMainProcessGpuFeatures()
-
-    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
-      'disable-features',
-      'IntensiveWakeUpThrottling'
-    )
   })
 
   it('raises the WebGL context budget above the 16-context Blink default', async () => {
@@ -717,5 +738,79 @@ describe('enableMainProcessGpuFeatures', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
+  })
+})
+
+describe('safe graphics mode startup switches', () => {
+  const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+
+  afterEach(() => {
+    if (originalE2EUserDataDir === undefined) {
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+    } else {
+      process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
+    }
+  })
+
+  function disabledFeaturesFrom(appendSwitch: ReturnType<typeof vi.fn>): string[] {
+    return appendSwitch.mock.calls
+      .filter(([name]) => name === 'disable-features')
+      .flatMap(([, value]) => String(value ?? '').split(','))
+      .filter(Boolean)
+  }
+
+  it('opts hidden pages out of intensive wake-up throttling', async () => {
+    const { app } = await import('electron')
+    const { optOutOfHiddenPageWakeUpThrottling } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    optOutOfHiddenPageWakeUpThrottling()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      'IntensiveWakeUpThrottling'
+    )
+  })
+
+  // Why: the defect was the call site, not the switch — a win32 safe-graphics launch runs
+  // `if (!gpuFallbackActiveThisLaunch) enableMainProcessGpuFeatures()` and skips everything
+  // parked inside it, so only an unconditional call site reaches the users a GPU crash already hit.
+  it('calls the throttling opt-out outside the GPU-fallback gate in index.ts', () => {
+    const mainSource = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+    const gateStart = mainSource.indexOf('if (!gpuFallbackActiveThisLaunch) {')
+    expect(gateStart).toBeGreaterThanOrEqual(0)
+    const gateEnd = mainSource.indexOf('\n  }', gateStart)
+    expect(gateEnd).toBeGreaterThan(gateStart)
+
+    expect(mainSource.match(/\boptOutOfHiddenPageWakeUpThrottling\(\)/g)).toHaveLength(1)
+    expect(mainSource.slice(gateStart, gateEnd)).not.toContain('optOutOfHiddenPageWakeUpThrottling')
+  })
+
+  // Why: Chromium consumes the command line at ready, so this must stay in the pre-ready
+  // top-level block and never move into the whenReady callback, where appendSwitch is a silent
+  // no-op — the same invisible failure as parking it behind the GPU gate.
+  it('appends the throttling opt-out before app ready in index.ts', () => {
+    const mainSource = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+    const readyStart = mainSource.indexOf('void app.whenReady()')
+    expect(readyStart).toBeGreaterThan(0)
+
+    const callIndex = mainSource.indexOf('optOutOfHiddenPageWakeUpThrottling()')
+    expect(callIndex).toBeGreaterThan(0)
+    expect(callIndex).toBeLessThan(readyStart)
+  })
+
+  // Why: Chromium enables IntensiveWakeUpThrottling on every desktop platform, so the opt-out
+  // must never become reachable only through the GPU-feature path again.
+  it('does not couple the throttling opt-out to GPU feature setup', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(disabledFeaturesFrom(vi.mocked(app.commandLine.appendSwitch))).not.toContain(
+      'IntensiveWakeUpThrottling'
+    )
   })
 })

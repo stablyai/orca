@@ -65,6 +65,25 @@ describe('resolveTerminalWorktreeRoute', () => {
     })
   })
 
+  it('routes and tears down an unstamped local worktree despite an unrelated saved runtime', () => {
+    const ownerlessWorktree = { id: 'repo-1::/w', repoId: 'repo-1' }
+    const state = localState({
+      repos: [{ id: 'repo-1' }],
+      worktreesByRepo: { 'repo-1': [ownerlessWorktree] },
+      detectedWorktreesByRepo: { 'repo-1': { worktrees: [ownerlessWorktree] } },
+      runtimeEnvironments: [{ id: 'saved-runtime' }],
+      settings: { activeRuntimeEnvironmentId: null }
+    } as unknown as Partial<AppState>)
+
+    expect(resolveTerminalWorktreeRoute(state, 'repo-1::/w')).toEqual({
+      runtimeEnvironmentId: null
+    })
+    expect(resolveTerminalHostOwnership(state, 'repo-1::/w', 'teardown')).toEqual({
+      kind: 'local-or-ssh',
+      runtimeEnvironmentId: null
+    })
+  })
+
   it('still fails a genuinely unknown/stale worktree closed', () => {
     expect(resolveTerminalWorktreeRoute(localState(), 'repo-9::/stale')).toBeNull()
   })

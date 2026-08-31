@@ -314,8 +314,6 @@ Windows/WSL run and native-Windows staging lifecycle; this does not treat WSL se
 identical to macOS. The user-driven signed-in desktop and real-host production journey, supported
 Windows SSH, and the quarantine lifecycle deletion remain. The shared staging data plane is asleep.
 
-Source plan: [Agent skill sharing and installation plan](./agent-skill-sharing-installation-plan.md).
-
 This checklist turns the architecture plan into ordered implementation and release work. A checked
 item means evidence exists in code, tests, reviewed infrastructure, or release documentation; it
 does not mean the surrounding phase is complete.

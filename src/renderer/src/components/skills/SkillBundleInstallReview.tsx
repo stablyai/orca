@@ -57,16 +57,16 @@ export function SkillBundleInstallReview(props: {
 
   return (
     <div className="space-y-4">
-      <section className="space-y-2">
+      <div className="space-y-3 rounded-xl border border-border/70 bg-card/40 p-3.5">
         {manifest.skills.length > 1 ? (
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 pb-1">
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.skills.install.chooseSkills',
                 'Choose what to install from this link.'
               )}
             </p>
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
               <Checkbox
                 checked={allSelected ? true : props.selectedSkillIds.size ? 'indeterminate' : false}
                 disabled={props.busy}
@@ -87,24 +87,36 @@ export function SkillBundleInstallReview(props: {
           onSelectedChange={props.onToggleSkill}
         />
         {props.version.releaseNotes.trim() ? (
-          <p className="break-words whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
-            {translate(
-              'auto.components.skills.SkillBundleInstallReview.01c5a11e09',
-              'Release notes:'
-            )}{' '}
+          <p className="break-words whitespace-pre-wrap rounded-lg border border-border/40 bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              {translate(
+                'auto.components.skills.SkillBundleInstallReview.01c5a11e09',
+                'Release notes:'
+              )}
+            </span>{' '}
             {props.version.releaseNotes}
           </p>
         ) : null}
-      </section>
+        <SkillInstallRiskNotice summary={props.riskSummary} />
+      </div>
 
-      <SkillInstallRiskNotice summary={props.riskSummary} />
-
-      {props.children}
+      <div className="space-y-3 rounded-xl border border-border/70 bg-card/40 p-3.5">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {translate(
+            'auto.components.skills.SkillInstallReviewContent.targetHeader',
+            'Installation Target'
+          )}
+        </div>
+        {props.children}
+      </div>
 
       {conflicts.length ? (
-        <section className="space-y-3 rounded-md border border-border p-3" role="alert">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <AlertTriangle className="size-4" />{' '}
+        <section
+          className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3.5"
+          role="alert"
+        >
+          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+            <AlertTriangle className="size-4 shrink-0" />{' '}
             {translate(
               'auto.components.skills.SkillBundleInstallReview.01c5a11e11',
               'Local copies need a decision'

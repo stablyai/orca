@@ -14,6 +14,10 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+import {
+  getLocalWorktreeScanGeneration,
+  isLocalWorktreeScanGenerationCurrent
+} from './local-worktree-scan-generation'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -225,6 +229,21 @@ describe('Store', () => {
     store.updateSettings({ theme: 'dark' })
 
     expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('invalidates local worktree scans when the global Windows runtime changes', async () => {
+    writeDataFile({ repos: [makeRepo()] })
+    const store = await createStore()
+    const generation = getLocalWorktreeScanGeneration('r1')
+
+    store.updateSettings({ theme: 'dark' })
+    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(true)
+
+    store.updateSettings({
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(false)
   })
 
   it('migrates missing terminal scrollback rows to the row default and writes back rows only', async () => {

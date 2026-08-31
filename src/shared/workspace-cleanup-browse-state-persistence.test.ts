@@ -19,9 +19,17 @@ describe('workspace cleanup browse state persistence', () => {
   it('round-trips an edited state', () => {
     const state = createDefaultWorkspaceCleanupBrowseState()
     state.filters.query = 'checkout'
-    state.filters.activity = { idleSignal: 'created', idleMinDays: 45, neverVisited: true }
-    state.filters.safety.tiers = ['review', 'protected']
-    state.filters.review = { presence: 'some', states: ['merged'], providers: ['gitlab'] }
+    state.filters.activity = {
+      idleSignal: 'created',
+      idleMinDays: 45,
+      neverVisited: true
+    }
+    state.filters.safety.blockers = ['dirty-files', 'pinned']
+    state.filters.review = {
+      presence: 'some',
+      states: ['merged'],
+      providers: ['gitlab']
+    }
     state.sort = { field: 'size', direction: 'desc' }
 
     expect(normalizeWorkspaceCleanupBrowseState(throughDisk(state))).toEqual(state)
@@ -34,7 +42,11 @@ describe('workspace cleanup browse state persistence', () => {
       unknownTopLevelField: { anything: true },
       filters: {
         query: 'keep me',
-        activity: { idleSignal: 'from-the-future', idleMinDays: 30, unknownFacet: 'ignored' },
+        activity: {
+          idleSignal: 'from-the-future',
+          idleMinDays: 30,
+          unknownFacet: 'ignored'
+        },
         safety: { tiers: ['ready', 'not-a-tier'] },
         unknownGroup: { enabled: true }
       },
@@ -48,8 +60,13 @@ describe('workspace cleanup browse state persistence', () => {
     expect(normalized.filters.query).toBe('keep me')
     expect(normalized.filters.activity.idleMinDays).toBe(30)
     expect(normalized.filters.activity.idleSignal).toBe('last-visited')
-    expect(normalized.filters.safety.tiers).toEqual(['ready'])
-    expect(normalized.sort).toEqual({ field: 'last-activity', direction: 'desc' })
+    expect(normalized.filters.safety).toEqual(
+      createDefaultWorkspaceCleanupBrowseState().filters.safety
+    )
+    expect(normalized.sort).toEqual({
+      field: 'last-activity',
+      direction: 'desc'
+    })
     expect(normalized).not.toHaveProperty('activePresetId')
     expect(normalized).not.toHaveProperty('customPresets')
     expect(normalized).not.toHaveProperty('unknownTopLevelField')

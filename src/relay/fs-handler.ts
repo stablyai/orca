@@ -26,6 +26,8 @@ import {
 } from './fs-path-mutation-requests'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
+import { readRelayFileRange } from './fs-handler-file-range'
+import { FileRangeReadRequestError } from '../shared/file-range-read'
 import {
   readVerifiedTerminalArtifact,
   writeVerifiedTerminalArtifact
@@ -35,6 +37,10 @@ import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
 import { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 import type { RelayWatcherProcessPool } from './relay-watcher-process-pool'
+import {
+  readAuthorizedDocPreviewFile,
+  type DocPreviewFileAccessRequest
+} from '../shared/doc-preview-file-access'
 
 export class FsHandler {
   private dispatcher: RelayDispatcher
@@ -66,6 +72,10 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.readDir', (p) => readRelayDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
+    this.dispatcher.onRequest('fs.readFileRange', (p) => this.readFileRange(p))
+    this.dispatcher.onRequest('fs.readDocPreview', (p) =>
+      readAuthorizedDocPreviewFile(p as DocPreviewFileAccessRequest)
+    )
     this.dispatcher.onRequest('fs.readTerminalArtifact', (p) => this.readTerminalArtifact(p))
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => writeRelayFile(p))
@@ -82,7 +92,8 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.realpath', (p) => realpathRelayPath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
     this.dispatcher.onRequest('fs.getCapabilities', async () => ({
-      quickOpenSearchVersion: 1
+      quickOpenSearchVersion: 1,
+      rangedReadVersion: 1
     }))
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
@@ -106,6 +117,15 @@ export class FsHandler {
   private async readFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
     return readRelayFileContent(filePath)
+  }
+
+  // Why hand-checked: relay params arrive as raw casts with no schema. The
+  // offsets are validated inside readRelayFileRange, next to the read syscall.
+  private async readFileRange(params: Record<string, unknown>) {
+    if (typeof params.filePath !== 'string' || params.filePath.length === 0) {
+      throw new FileRangeReadRequestError('fs.readFileRange requires a filePath')
+    }
+    return readRelayFileRange(expandTilde(params.filePath), params.position, params.length)
   }
 
   private async readTerminalArtifact(params: Record<string, unknown>) {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Terminal } from '@xterm/headless'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
@@ -92,6 +93,51 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onAgentStatus).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
     expect(onConnect).toHaveBeenCalled()
+  })
+
+  it('paints a nonempty lossy initial snapshot once before resuming live output', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const terminal = new Terminal({ cols: 80, rows: 24 })
+    let xtermWrites = 0
+    const write = (data: string): void => {
+      xtermWrites += 1
+      terminal.write(data)
+    }
+    const onReplayData = vi.fn(write)
+    const onData = vi.fn(write)
+    const onConnect = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+    await transport.connect({ url: '', callbacks: { onReplayData, onData, onConnect } })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+    emitSnapshotFrame(
+      streamId,
+      TerminalStreamOpcode.SnapshotStart,
+      encodeTerminalStreamJson({ kind: 'scrollback', cols: 80, rows: 24, seq: 41, truncated: true })
+    )
+    emitSnapshotFrame(
+      streamId,
+      TerminalStreamOpcode.SnapshotChunk,
+      encodeTerminalStreamText('AUTHORITATIVE_INITIAL_MARKER')
+    )
+    emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+    const liveOutput = 'LIVE_AFTER_INITIAL'
+    const liveSeq = 41 + liveOutput.length
+    emitOutput(streamId, liveOutput, liveSeq)
+
+    expect(onReplayData).toHaveBeenCalledOnce()
+    expect(onReplayData).toHaveBeenCalledWith('AUTHORITATIVE_INITIAL_MARKER')
+    expect(onConnect).toHaveBeenCalledOnce()
+    expect(onData).toHaveBeenCalledWith(liveOutput, expect.objectContaining({ seq: liveSeq }))
+    await vi.waitFor(() => {
+      const rendered = terminal.buffer.active.getLine(0)?.translateToString(true) ?? ''
+      expect({ rendered, xtermWrites }).toEqual({
+        rendered: 'AUTHORITATIVE_INITIAL_MARKERLIVE_AFTER_INITIAL',
+        xtermWrites: 2
+      })
+    })
+    terminal.dispose()
   })
 
   it('resolves explicit binary snapshot requests without replaying into xterm', async () => {

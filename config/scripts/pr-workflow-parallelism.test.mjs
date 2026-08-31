@@ -3,26 +3,28 @@ import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
+const unitTestWorkflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
+const nodeNextWorkflow = parse(readFileSync('.github/workflows/node-next-compat.yml', 'utf8'))
 const dependencyAction = parse(
   readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8')
 )
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+const pnpmWorkspace = parse(readFileSync('pnpm-workspace.yaml', 'utf8'))
 const shellContractFiles = [
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
   'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
+  'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
+  'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
 const patchedNodePtyContractFiles = [
   'src/main/daemon/node-pty-fd-leak.test.ts',
-  'src/main/pty/omp-shell-wrapper.node-pty.test.ts'
+  'src/shared/fish-query-reply-child-stdin.node-pty.test.ts'
 ]
 const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
 const testFilePatterns = [
@@ -31,8 +33,12 @@ const testFilePatterns = [
   'tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'tests/tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
 ]
+// Why the harness import counts: the zsh startup hook runs from a `precmd`, so
+// its tests drive a real zsh through a PTY in zsh-startup-hook-pty-harness
+// rather than calling spawnSync('zsh') themselves. Without this branch the rule
+// silently stops noticing the very tests that need the lane's zsh install.
 const realZshUsage =
-  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath/
+  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
   it('cancels superseded runs for the same pull request', () => {
@@ -44,22 +50,36 @@ describe('PR workflow parallelism', () => {
     expect(workflow.permissions).toEqual({ contents: 'read' })
   })
 
-  it('shards the general test suite across Node 24 and Node 26', () => {
-    expect(workflow.jobs.test.strategy.matrix.node).toEqual(['24', '26'])
-    expect(workflow.jobs.test.strategy.matrix.shard).toEqual(
-      Array.from({ length: 16 }, (_, index) => index + 1)
+  it('runs Node 24 on PRs and the same eight-shard suite on Node 26 daily', () => {
+    const sharedTest = unitTestWorkflow.jobs.test
+    const testStep = sharedTest.steps.find((step) => step.name === 'Test shard')
+    const installStep = sharedTest.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
     )
-    expect(workflow.jobs.test.strategy.matrix.shard_total).toEqual([16])
-    const testStep = workflow.jobs.test.steps.find((step) => step.name === 'Test shard')
-    const installStep = workflow.jobs.test.steps.find(
+    const primerInstall = workflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
 
+    expect(workflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
+    expect(JSON.parse(workflow.jobs.test.with.node_versions)).toEqual(['24'])
+    expect(nodeNextWorkflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
+    expect(JSON.parse(nodeNextWorkflow.jobs.test.with.node_versions)).toEqual(['26'])
+    expect(nodeNextWorkflow.on.schedule).toHaveLength(1)
+    expect(nodeNextWorkflow.on.workflow_dispatch).toBeNull()
+    expect(sharedTest.strategy.matrix.node).toBe('${{ fromJSON(inputs.node_versions) }}')
+    expect(sharedTest.strategy.matrix.shard).toEqual(
+      Array.from({ length: 8 }, (_, index) => index + 1)
+    )
+    expect(sharedTest.strategy.matrix.shard_total).toEqual([8])
     expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
+    expect(installStep.with['cache-electron-package']).toBe('true')
     expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
     for (const testFile of nativeShellContractFiles) {
       expect(testStep.run).toContain(`--exclude=${testFile}`)
     }
+    expect(primerInstall.with['native-runtime']).toBe('node')
+    expect(primerInstall.with['node-version']).toBe('24')
+    expect(workflow.jobs.test.needs).toContain('test_native_cache')
   })
 
   it('runs real-shell coverage once outside the general shards', () => {
@@ -129,8 +149,34 @@ describe('PR workflow parallelism', () => {
     )
   })
 
+  it('bounds the shell lane so a stalled apt mirror cannot hold the run open', () => {
+    const job = workflow.jobs.shell_contracts
+    // A passing run of this job takes ~4.5 minutes, almost all of it package download.
+    // Without a job bound a stalled mirror runs to GitHub's 6h default, and because this
+    // is a required check it holds the whole run open and blocks `gh run rerun --failed`.
+    expect(job['timeout-minutes']).toBeGreaterThan(0)
+    expect(job['timeout-minutes']).toBeLessThanOrEqual(30)
+
+    const installStep = job.steps.find((step) => step.name === 'Install zsh and fish')
+    // apt applies no wall-clock bound to a stalled mirror on its own. These turn an
+    // unbounded hang into a bounded, retried, legible failure.
+    expect(installStep.run).toMatch(/Acquire::http::Timeout/)
+    expect(installStep.run).toMatch(/Acquire::https::Timeout/)
+    expect(installStep.run).toMatch(/Acquire::Retries/)
+    // Retries multiply: a first attempt at 30s x 3 retries across every index file turned
+    // a dead mirror into a ~15 minute stall. One attempt, then move on.
+    expect(installStep.run).toMatch(/Acquire::Retries "1"/)
+    // Acquire timeouts are per-connection, so they cannot bound the command as a whole.
+    // Only a wall-clock bound can, and both apt invocations need one.
+    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get update/)
+    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get install/)
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
+      // Why this file is excluded: it carries the detector pattern as a literal
+      // and would otherwise match itself.
+      .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
       .sort()
 
@@ -179,11 +225,33 @@ describe('PR workflow parallelism', () => {
 
     expect(pnpmIndex).toBeLessThan(nodeIndex)
     expect(pnpmIndex).toBeLessThan(requestedNodeIndex)
+    const packageManagerVersion = /^pnpm@([^+]+)/.exec(packageJson.packageManager)?.[1]
+    expect(packageManagerVersion).toBe('12.0.0')
+    expect(steps[pnpmIndex].uses).toBe('pnpm/setup@v2')
+    expect(steps[pnpmIndex].with.version).toBeUndefined()
+    expect(steps[pnpmIndex].with.install).toBe(false)
     expect(steps[nodeIndex].with.cache).toBe('pnpm')
     expect(steps[nodeIndex].if).toBe("inputs.node-version == ''")
     expect(steps[requestedNodeIndex].if).toBe("inputs.node-version != ''")
     expect(steps[requestedNodeIndex].with['node-version']).toBe('${{ inputs.node-version }}')
     expect(steps[requestedNodeIndex].with.cache).toBe('pnpm')
+  })
+
+  it('uses the repository package-manager version for every direct pnpm setup', () => {
+    const directSetups = globSync('.github/workflows/*.yml').flatMap((workflowPath) => {
+      const parsed = parse(readFileSync(workflowPath, 'utf8'))
+      return Object.values(parsed.jobs ?? {}).flatMap((job) =>
+        (job.steps ?? [])
+          .filter((step) => step.uses === 'pnpm/setup@v2')
+          .map((step) => ({ workflowPath, step }))
+      )
+    })
+
+    expect(directSetups.length).toBeGreaterThan(0)
+    for (const { workflowPath, step } of directSetups) {
+      expect(step.with?.version, workflowPath).toBeUndefined()
+      expect(step.with?.install, workflowPath).toBe(false)
+    }
   })
 
   it('restores Electron downloads before preparing the package runtime', () => {
@@ -203,22 +271,29 @@ describe('PR workflow parallelism', () => {
       workflow.jobs[jobName].steps.find(
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
+    const sharedTestInstall = unitTestWorkflow.jobs.test.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
 
-    for (const jobName of [
-      'static_analysis',
-      'typecheck',
-      'git_compatibility',
-      'xterm_patch_sync'
-    ]) {
+    for (const jobName of ['typecheck', 'git_compatibility', 'xterm_patch_sync']) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
+    expect(installFor('static_analysis').with['native-runtime']).toBe('node')
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
-    expect(installFor('test').with['native-runtime']).toBe('node')
+    expect(sharedTestInstall.with['native-runtime']).toBe('node')
     expect(installFor('package').with['native-runtime']).toBe('electron')
+    expect(installFor('package_windows').with['native-runtime']).toBe('node')
+    expect(installFor('package_windows').with['persist-native-cache']).toBe('false')
+    expect(
+      workflow.jobs.package_windows.steps.find(
+        (step) => step.name === 'Save compiled Node native modules'
+      ).if
+    ).toBe("steps.deps.outputs.native-cache-hit != 'true'")
 
+    expect(dependencyAction.inputs['persist-native-cache'].default).toBe('true')
     expect(
       dependencyAction.runs.steps.find((step) => step.name === 'Use external node-gyp').if
-    ).toBe("inputs.native-runtime != 'none'")
+    ).toBe("runner.os == 'Linux' && inputs.native-runtime != 'none'")
     const dependencyInstall = dependencyAction.runs.steps.find(
       (step) => step.name === 'Install dependencies'
     )
@@ -227,14 +302,16 @@ describe('PR workflow parallelism', () => {
     // resolution can never legitimately change anything.
     expect(dependencyInstall.run).toContain('--frozen-lockfile')
     expect(dependencyInstall.run).not.toContain('--no-frozen-lockfile')
-    expect(dependencyInstall.run).toContain('git diff --exit-code package.json pnpm-lock.yaml')
+    expect(dependencyInstall.run).toContain(
+      'git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml'
+    )
     expect(dependencyInstall.run).toContain('--ignore-scripts')
     expect(dependencyInstall.run).not.toContain('--os=')
     expect(dependencyInstall.run).not.toContain('--cpu=')
-    expect(packageJson.pnpm.supportedArchitectures.os).toEqual(
+    expect(pnpmWorkspace.supportedArchitectures.os).toEqual(
       expect.arrayContaining(['current', 'win32'])
     )
-    expect(packageJson.pnpm.supportedArchitectures.cpu).toContain('current')
+    expect(pnpmWorkspace.supportedArchitectures.cpu).toContain('current')
     const prepareRuntime = dependencyAction.runs.steps.find(
       (step) => step.name === 'Prepare native runtime'
     )
@@ -264,14 +341,63 @@ describe('PR workflow parallelism', () => {
     // overwritten and one after the rebuild would never save a hit.
     expect(installIndex).toBeLessThan(cacheIndex)
     expect(cacheIndex).toBeLessThan(prepareIndex)
-    expect(steps[cacheIndex].if).toBe("inputs.native-runtime != 'none'")
+    expect(steps[cacheIndex].if).toBe(
+      "inputs.native-runtime != 'none' && inputs.persist-native-cache != 'false'"
+    )
+    const restoreOnly = steps.find(
+      (step) => step.name === 'Restore compiled native modules without saving'
+    )
+    expect(restoreOnly.if).toBe(
+      "inputs.native-runtime != 'none' && inputs.persist-native-cache == 'false'"
+    )
+    expect(restoreOnly.uses).toBe('actions/cache/restore@v5')
     // Native artifacts are ABI-bound: a key missing either dimension serves a build
     // that cannot load, and ensure-native-runtime would recompile it anyway.
-    expect(steps[cacheIndex].with.key).toContain('${{ inputs.native-runtime }}')
-    expect(steps[cacheIndex].with.key).toContain('steps.requested-node.outputs.node-version')
-    expect(steps[cacheIndex].with.key).toContain('config/patches/node-pty@1.1.0.patch')
-    // No restore-keys: a partial-match key is exactly the ABI-mismatched build above.
-    expect(steps[cacheIndex].with['restore-keys']).toBeUndefined()
+    for (const cacheStep of [steps[cacheIndex], restoreOnly]) {
+      expect(cacheStep.with.key).toContain('${{ inputs.native-runtime }}')
+      expect(cacheStep.with.key).toContain('${{ runner.os }}')
+      expect(cacheStep.with.key).toContain('${{ runner.arch }}')
+      expect(cacheStep.with.key).toContain(
+        'steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version'
+      )
+      expect(cacheStep.with.key).toContain('steps.native-cache-scope.outputs.scope')
+      expect(cacheStep.with.key).toContain('config/patches/node-pty@1.1.0.patch')
+      expect(cacheStep.with.key).toContain(
+        'config/patches/@vscode__windows-process-tree@0.8.0.patch'
+      )
+      expect(cacheStep.with.key).toContain('.github/actions/install-node-dependencies/action.yml')
+      expect(cacheStep.with.key).toContain('config/scripts/ensure-native-runtime.mjs')
+      expect(cacheStep.with.key).toContain('config/scripts/rebuild-native-deps.mjs')
+      expect(cacheStep.with.path).toContain('node-pty@*/node_modules/node-pty/build')
+      expect(cacheStep.with.path).toContain('windows-native-registry@')
+      expect(cacheStep.with.path).toContain('@vscode+windows-process-tree@')
+      expect(cacheStep.with['restore-keys']).toBeUndefined()
+    }
+    expect(steps[cacheIndex].id).toBe('native-cache-restore')
+    expect(restoreOnly.id).toBe('native-cache-restore-only')
+    const cacheScope = steps.find((step) => step.name === 'Resolve native cache scope')
+    expect(cacheScope.if).toBe("inputs.native-runtime != 'none'")
+    expect(cacheScope.run).toContain('/etc/os-release')
+    expect(dependencyAction.outputs['native-cache-scope'].value).toBe(
+      '${{ steps.native-cache-scope.outputs.scope }}'
+    )
+    expect(dependencyAction.outputs['native-cache-hit'].value).toContain(
+      'steps.native-cache-restore.outputs.cache-hit'
+    )
+    expect(dependencyAction.outputs['native-cache-hit'].value).toContain(
+      'steps.native-cache-restore-only.outputs.cache-hit'
+    )
+    const electronCache = steps.find((step) => step.name === 'Cache Electron package archive')
+    const electronCacheResolution = steps.find(
+      (step) => step.name === 'Resolve Electron package cache'
+    )
+    expect(electronCacheResolution.if).toBe(
+      "inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'"
+    )
+    expect(electronCache.if).toBe(electronCacheResolution.if)
+    expect(electronCache.uses).toBe('actions/cache@v5')
+    expect(electronCache.with.key).toContain('steps.electron-package-cache.outputs.version')
+    expect(dependencyAction.inputs['cache-electron-package'].default).toBe('false')
   })
 
   it('reuses TypeScript incremental state across typecheck runs', () => {
@@ -282,13 +408,15 @@ describe('PR workflow parallelism', () => {
     expect(cacheIndex).toBeGreaterThanOrEqual(0)
     expect(cacheIndex).toBeLessThan(checkIndex)
     expect(steps[cacheIndex].with.path).toBe('config/*.tsbuildinfo')
-    // Why restore-keys matter here: an exact-key miss is the normal case (the key is
-    // per-SHA), so without them the cache would never once be read.
+    // Why restore-keys matter here: the base SHA key is shared by every commit in a PR,
+    // but actions/cache keeps the first successful graph until the base or config changes.
     expect(steps[cacheIndex].with['restore-keys']).toBeTruthy()
     // The buildinfo is only reusable while the compiler options that produced it hold.
     expect(steps[cacheIndex].with.key).toContain(
       "hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json')"
     )
+    expect(steps[cacheIndex].with.key).toContain('github.event.pull_request.base.sha')
+    expect(steps[cacheIndex].with['restore-keys']).not.toContain('tsbuildinfo-${{ runner.os }}-\n')
   })
 
   it('checks out full history without historical blobs', () => {
@@ -306,13 +434,17 @@ describe('PR workflow parallelism', () => {
 
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
+      'code_paths',
       'static_analysis',
       'root_directory_guard',
       'typecheck',
       'git_compatibility',
+      'codex_index_heal_contract',
       'xterm_patch_sync',
       'shell_contracts',
       'test',
+      'orcad_browser',
+      'cross-version-wire',
       'managed_hook_node18',
       'package',
       'package_windows'
@@ -322,5 +454,11 @@ describe('PR workflow parallelism', () => {
     )
     expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
     expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
+    // Why assert this one too: the browser provider test skips itself without
+    // ORCA_BROWSER_EXECUTABLE, so it only guards anything if verify actually reads it.
+    expect(verifyStep.env.ORCAD_BROWSER).toBe('${{ needs.orcad_browser.result }}')
+    expect(verifyStep.run).toContain('"$ORCAD_BROWSER"')
+    expect(verifyStep.env.CROSS_VERSION_WIRE).toBe('${{ needs.cross-version-wire.result }}')
+    expect(verifyStep.run).toContain('"$CROSS_VERSION_WIRE"')
   })
 })

@@ -105,7 +105,14 @@ function makeWorkspaceTab({
       repoName: REPO_NAME
     }),
     agentMetadata: agentSnippets.length
-      ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
+      ? [
+          {
+            paneKey: `${id}-pane`,
+            textParts: [],
+            snippetCandidates: agentSnippets,
+            lastActivityAt: 0
+          }
+        ]
       : [],
     occupantAgent,
     isCurrentTab,

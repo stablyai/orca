@@ -20,6 +20,11 @@ export class MailPointerRepointScheduler {
     this.timersByHandle.set(handle, timer)
   }
 
+  /** Handles still awaiting a repoint; a quiet scheduler holds none. */
+  get pendingCount(): number {
+    return this.timersByHandle.size
+  }
+
   clear(): void {
     for (const timer of this.timersByHandle.values()) {
       clearTimeout(timer)

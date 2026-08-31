@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
@@ -22,6 +21,7 @@ describe('terminal lease-only subscription', () => {
   it('keeps mobile input ownership without viewport resize or output delivery', async () => {
     const messages: string[] = []
     const registry = createSubscriptionRegistryDouble()
+    const unsubscribeExit = vi.fn()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -36,7 +36,7 @@ describe('terminal lease-only subscription', () => {
       registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
       registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
-      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
+      subscribeToPtyExit: vi.fn(() => unsubscribeExit)
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
@@ -65,6 +65,7 @@ describe('terminal lease-only subscription', () => {
 
     runtime.cleanupSubscription('terminal-1:phone-1')
     await dispatchPromise
+    expect(unsubscribeExit).toHaveBeenCalledOnce()
     expect(runtime.handleMobileUnsubscribe).toHaveBeenCalledWith('pty-1', 'phone-1')
   })
 })

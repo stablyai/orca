@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ExternalAutomationCommandExecutor } from './external-automation-command-executor'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import type { RelayDispatcher } from './dispatcher'
 
@@ -16,18 +17,15 @@ vi.mock('child_process', () => ({ execFile: execFileMock }))
 
 type CapturedHandler = (params?: Record<string, unknown>) => Promise<unknown>
 
-function createHandlerHarness(): {
-  handler: ExternalAutomationsHandler
-  requestHandlers: Map<string, CapturedHandler>
-} {
+function createHandlerHarness(): Map<string, CapturedHandler> {
   const requestHandlers = new Map<string, CapturedHandler>()
   const dispatcher = {
     onRequest(method: string, handler: CapturedHandler): void {
       requestHandlers.set(method, handler)
     }
   }
-  const handler = new ExternalAutomationsHandler(dispatcher as unknown as RelayDispatcher)
-  return { handler, requestHandlers }
+  new ExternalAutomationsHandler(dispatcher as unknown as RelayDispatcher)
+  return requestHandlers
 }
 
 beforeEach(() => {
@@ -35,8 +33,18 @@ beforeEach(() => {
 })
 
 describe('ExternalAutomationsHandler', () => {
-  it('runs external lifecycle actions without shell wrapping', async () => {
-    const { requestHandlers } = createHandlerHarness()
+  it('preserves the five external automation routes', () => {
+    expect([...createHandlerHarness().keys()]).toEqual([
+      'externalAutomations.list',
+      'externalAutomations.runs',
+      'externalAutomations.create',
+      'externalAutomations.update',
+      'externalAutomations.act'
+    ])
+  })
+
+  it('runs lifecycle actions without shell wrapping', async () => {
+    const requestHandlers = createHandlerHarness()
 
     await requestHandlers.get('externalAutomations.act')?.({
       provider: 'hermes',
@@ -52,189 +60,128 @@ describe('ExternalAutomationsHandler', () => {
     )
   })
 
-  it('paginates remote Hermes run history after ref lookup', async () => {
-    const { handler, requestHandlers } = createHandlerHarness()
-    const handlerInternals = handler as unknown as {
-      readHermesRunRefs: (jobId: string) => Promise<{ id: string; run_at: string }[]>
-      hydrateHermesRunRef: (
-        jobId: string,
-        ref: { id: string; run_at: string }
-      ) => Promise<{ id: string; run_at: string }>
-    }
-    handlerInternals.readHermesRunRefs = vi.fn().mockResolvedValue([
-      {
-        id: 'cron_job-1_20260516_090000',
-        run_at: '2026-05-16T09:00:00'
-      },
-      {
-        id: 'job-1:2026-05-15_09-00-00.md',
-        run_at: '2026-05-15T09:00:00'
-      },
-      {
-        id: 'job-1:2026-05-14_09-00-00.md',
-        run_at: '2026-05-14T09:00:00'
-      }
-    ])
-    handlerInternals.hydrateHermesRunRef = vi.fn(async (_jobId, ref) => ref)
+  it('propagates command failures through the registered route', async () => {
+    const commandError = new Error('remote Hermes failed')
+    execFileMock.mockImplementationOnce((...args: unknown[]) => {
+      const callback = args.at(-1) as (error: Error) => void
+      callback(commandError)
+    })
+    const requestHandlers = createHandlerHarness()
 
-    const result = (await requestHandlers.get('externalAutomations.runs')?.({
-      provider: 'hermes',
-      jobId: 'job-1',
-      page: 1,
-      pageSize: 2
-    })) as { total: number; runs: { id: string }[] }
+    await expect(
+      requestHandlers.get('externalAutomations.act')?.({
+        provider: 'hermes',
+        action: 'run',
+        jobId: 'job-1'
+      })
+    ).rejects.toBe(commandError)
+  })
+})
 
-    expect(result.total).toBe(3)
-    expect(result.runs.map((run) => run.id)).toEqual([
-      'cron_job-1_20260516_090000',
-      'job-1:2026-05-15_09-00-00.md'
-    ])
+describe('ExternalAutomationCommandExecutor', () => {
+  it.each([
+    ['hermes', 'pause', 'pause'],
+    ['hermes', 'resume', 'resume'],
+    ['hermes', 'run', 'run'],
+    ['hermes', 'delete', 'remove'],
+    ['openclaw', 'pause', 'disable'],
+    ['openclaw', 'resume', 'enable'],
+    ['openclaw', 'run', 'run'],
+    ['openclaw', 'delete', 'rm']
+  ])('maps %s %s to its provider command', async (provider, action, command) => {
+    const runCommand = vi.fn().mockResolvedValue(undefined)
+    const executor = new ExternalAutomationCommandExecutor(runCommand, vi.fn())
+
+    await executor.runAction({ provider, action, jobId: 'job-1' })
+
+    expect(runCommand).toHaveBeenCalledWith(provider, ['cron', command, 'job-1'], {
+      encoding: 'utf-8',
+      timeout: 30_000
+    })
   })
 
-  it('uses a count-only path for remote Hermes manager listing run counts', async () => {
-    const { handler, requestHandlers } = createHandlerHarness()
-    const handlerInternals = handler as unknown as {
-      readHermesRunCount: (jobId: string) => Promise<number>
-    }
-    handlerInternals.readHermesRunCount = vi.fn().mockResolvedValue(42)
-
-    const result = (await requestHandlers.get('externalAutomations.runs')?.({
-      provider: 'hermes',
-      jobId: 'job-1',
-      page: 1,
-      pageSize: 0
-    })) as { total: number; runs: unknown[] }
-
-    expect(result).toEqual({ total: 42, runs: [] })
-  })
-
-  it('deduplicates concurrent remote Hermes count reads', async () => {
-    const { handler, requestHandlers } = createHandlerHarness()
-    let resolveRefs: (refs: { id: string; run_at: string }[]) => void = () => {}
-    const readHermesRunRefs = vi.fn(
-      () =>
-        new Promise<{ id: string; run_at: string }[]>((resolve) => {
-          resolveRefs = resolve
-        })
+  it('does not clear count state when a command fails', async () => {
+    const commandError = new Error('command failed')
+    const clearRunCount = vi.fn()
+    const executor = new ExternalAutomationCommandExecutor(
+      vi.fn().mockRejectedValue(commandError),
+      clearRunCount
     )
-    const handlerInternals = handler as unknown as {
-      readHermesRunRefs: typeof readHermesRunRefs
-    }
-    handlerInternals.readHermesRunRefs = readHermesRunRefs
 
-    const first = requestHandlers.get('externalAutomations.runs')?.({
-      provider: 'hermes',
-      jobId: 'job-1',
-      page: 1,
-      pageSize: 0
-    })
-    const second = requestHandlers.get('externalAutomations.runs')?.({
-      provider: 'hermes',
-      jobId: 'job-1',
-      page: 1,
-      pageSize: 0
-    })
-
-    expect(readHermesRunRefs).toHaveBeenCalledTimes(1)
-    resolveRefs([
-      { id: 'job-1:2026-05-15_09-00-00.md', run_at: '2026-05-15T09:00:00' },
-      { id: 'job-1:2026-05-16_09-00-00.md', run_at: '2026-05-16T09:00:00' }
-    ])
-
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      { total: 2, runs: [] },
-      { total: 2, runs: [] }
-    ])
+    await expect(
+      executor.runAction({ provider: 'hermes', action: 'run', jobId: 'job-1' })
+    ).rejects.toBe(commandError)
+    expect(clearRunCount).not.toHaveBeenCalled()
   })
 
-  it('clears the remote Hermes count cache after lifecycle actions', async () => {
-    const { handler, requestHandlers } = createHandlerHarness()
-    const readHermesRunRefs = vi
-      .fn()
-      .mockResolvedValueOnce([
-        { id: 'job-1:2026-05-15_09-00-00.md', run_at: '2026-05-15T09:00:00' }
-      ])
-      .mockResolvedValueOnce([
-        { id: 'job-1:2026-05-15_09-00-00.md', run_at: '2026-05-15T09:00:00' },
-        { id: 'job-1:2026-05-16_09-00-00.md', run_at: '2026-05-16T09:00:00' }
-      ])
-    const handlerInternals = handler as unknown as {
-      readHermesRunRefs: typeof readHermesRunRefs
-    }
-    handlerInternals.readHermesRunRefs = readHermesRunRefs
+  it('preserves Hermes create arguments and clears all cached counts after success', async () => {
+    const runCommand = vi.fn().mockResolvedValue(undefined)
+    const clearRunCount = vi.fn()
+    const executor = new ExternalAutomationCommandExecutor(runCommand, clearRunCount)
 
-    await expect(
-      requestHandlers.get('externalAutomations.runs')?.({
-        provider: 'hermes',
-        jobId: 'job-1',
-        page: 1,
-        pageSize: 0
-      })
-    ).resolves.toEqual({ total: 1, runs: [] })
-    await expect(
-      requestHandlers.get('externalAutomations.runs')?.({
-        provider: 'hermes',
-        jobId: 'job-1',
-        page: 1,
-        pageSize: 0
-      })
-    ).resolves.toEqual({ total: 1, runs: [] })
-
-    await requestHandlers.get('externalAutomations.act')?.({
+    await executor.createJob({
       provider: 'hermes',
-      action: 'run',
-      jobId: 'job-1'
+      name: 'Nightly review',
+      prompt: 'Review the workspace',
+      schedule: '0 2 * * *',
+      workdir: '/remote/workspace'
     })
-    await expect(
-      requestHandlers.get('externalAutomations.runs')?.({
-        provider: 'hermes',
-        jobId: 'job-1',
-        page: 1,
-        pageSize: 0
-      })
-    ).resolves.toEqual({ total: 2, runs: [] })
-    expect(readHermesRunRefs).toHaveBeenCalledTimes(2)
-  })
 
-  it('evicts oldest remote Hermes count cache entries when many job ids are observed', async () => {
-    const { handler, requestHandlers } = createHandlerHarness()
-    const readHermesRunRefs = vi.fn(async (jobId: string) =>
-      jobId === 'job-0'
-        ? [{ id: 'job-0:2026-05-15_09-00-00.md', run_at: '2026-05-15T09:00:00' }]
-        : []
+    expect(runCommand).toHaveBeenCalledWith(
+      'hermes',
+      [
+        'cron',
+        'create',
+        '0 2 * * *',
+        'Review the workspace',
+        '--name',
+        'Nightly review',
+        '--deliver',
+        'local',
+        '--workdir',
+        '/remote/workspace'
+      ],
+      { encoding: 'utf-8', timeout: 30_000 }
     )
-    const handlerInternals = handler as unknown as {
-      readHermesRunRefs: typeof readHermesRunRefs
-    }
-    handlerInternals.readHermesRunRefs = readHermesRunRefs
+    expect(clearRunCount).toHaveBeenCalledWith()
+  })
+
+  it('preserves Hermes update arguments and clears only the edited job count', async () => {
+    const runCommand = vi.fn().mockResolvedValue(undefined)
+    const clearRunCount = vi.fn()
+    const executor = new ExternalAutomationCommandExecutor(runCommand, clearRunCount)
+
+    await executor.updateJob({
+      provider: 'hermes',
+      jobId: 'job-1',
+      name: 'Updated review',
+      prompt: 'Review changes',
+      schedule: '15 3 * * *'
+    })
+
+    expect(runCommand).toHaveBeenCalledWith(
+      'hermes',
+      [
+        'cron',
+        'edit',
+        'job-1',
+        '--schedule',
+        '15 3 * * *',
+        '--prompt',
+        'Review changes',
+        '--name',
+        'Updated review'
+      ],
+      { encoding: 'utf-8', timeout: 30_000 }
+    )
+    expect(clearRunCount).toHaveBeenCalledWith('job-1')
+  })
+
+  it('preserves update validation order', async () => {
+    const executor = new ExternalAutomationCommandExecutor(vi.fn(), vi.fn())
 
     await expect(
-      requestHandlers.get('externalAutomations.runs')?.({
-        provider: 'hermes',
-        jobId: 'job-0',
-        page: 1,
-        pageSize: 0
-      })
-    ).resolves.toEqual({ total: 1, runs: [] })
-
-    for (let i = 1; i <= 200; i += 1) {
-      await requestHandlers.get('externalAutomations.runs')?.({
-        provider: 'hermes',
-        jobId: `job-${i}`,
-        page: 1,
-        pageSize: 0
-      })
-    }
-
-    await expect(
-      requestHandlers.get('externalAutomations.runs')?.({
-        provider: 'hermes',
-        jobId: 'job-0',
-        page: 1,
-        pageSize: 0
-      })
-    ).resolves.toEqual({ total: 1, runs: [] })
-
-    expect(readHermesRunRefs).toHaveBeenCalledTimes(202)
+      executor.updateJob({ provider: 'hermes', jobId: '--help', prompt: '', schedule: '' })
+    ).rejects.toThrow('Hermes cron requires a prompt.')
   })
 })

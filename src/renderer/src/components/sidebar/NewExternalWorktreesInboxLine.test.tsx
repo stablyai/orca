@@ -17,6 +17,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 const roots: Root[] = []
 
 type RenderOverrides = {
+  hostContextLabel?: string
   inboxCount?: number
   pending?: boolean
   error?: string | null
@@ -34,6 +35,7 @@ async function renderLine(overrides: RenderOverrides = {}): Promise<HTMLDivEleme
     root.render(
       <NewExternalWorktreesInboxLine
         repoDisplayName="orca"
+        hostContextLabel={overrides.hostContextLabel}
         inboxCount={overrides.inboxCount ?? 24}
         pending={overrides.pending ?? false}
         error={overrides.error ?? null}
@@ -94,6 +96,38 @@ describe('NewExternalWorktreesInboxLine', () => {
     expect(container.textContent).not.toContain('hidden worktrees')
     expect(getReviewButton(container)?.getAttribute('aria-label')).toBe(
       'Review 1 hidden worktree in orca'
+    )
+  })
+
+  it('names the host so two checkouts of one project are distinguishable', async () => {
+    // Both rows read "N hidden worktrees"; only the host tells them apart.
+    const local = await renderLine({ hostContextLabel: 'Local Mac', inboxCount: 61 })
+    const remote = await renderLine({ hostContextLabel: 'openclaw', inboxCount: 134 })
+
+    expect(local.textContent).toContain('Local Mac')
+    expect(getReviewButton(local)?.getAttribute('aria-label')).toBe(
+      'Review 61 hidden worktrees in orca on Local Mac'
+    )
+    expect(getReviewButton(remote)?.getAttribute('aria-label')).toBe(
+      'Review 134 hidden worktrees in orca on openclaw'
+    )
+  })
+
+  it('host-qualifies the suppress control, which writes to that host alone', async () => {
+    const container = await renderLine({ hostContextLabel: 'openclaw', onSuppress: vi.fn() })
+
+    expect(
+      container.querySelector(
+        'button[aria-label="Hide external worktrees permanently for orca on openclaw"]'
+      )
+    ).not.toBeNull()
+  })
+
+  it('stays unqualified when the project has a single checkout', async () => {
+    const container = await renderLine()
+
+    expect(getReviewButton(container)?.getAttribute('aria-label')).toBe(
+      'Review 24 hidden worktrees in orca'
     )
   })
 

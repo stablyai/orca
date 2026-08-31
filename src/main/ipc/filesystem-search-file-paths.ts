@@ -13,7 +13,9 @@ import { isQuickOpenQueryTooLarge, QuickOpenPathRanker } from '../../shared/quic
 import {
   absorbPendingRipgrepSpawnError,
   isRipgrepUnavailableExit,
+  isTransientRipgrepSpawnError,
   killSpawnedRipgrepProcess,
+  RipgrepLaunchFailureError,
   RipgrepUnavailableError
 } from '../../shared/ripgrep-process-availability'
 import { wslAwareSpawn } from '../git/runner'
@@ -54,21 +56,15 @@ export async function searchQuickOpenFilePaths(
   const fallback = async (): Promise<QuickOpenFilePathSearchResult> => {
     throw new Error(await buildRipgrepRequiredMessage())
   }
-  if (
-    wslDistroForOutput &&
-    !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro))
-  ) {
-    return fallback()
-  }
-
   const excludePathPrefixes = buildExcludePathPrefixes(authorizedRootPath, args.excludePaths)
   const { ignoredPass } = buildRgArgsForQuickOpen({
     searchRoot: '.',
     excludePathPrefixes,
     forceSlashSeparator: sep === '\\'
   })
-  const ranker = new QuickOpenPathRanker(args.query, args.limit)
-  try {
+  // Fresh ranker per attempt so a retry cannot double-count paths from the aborted scan.
+  const scanOnce = async (): Promise<QuickOpenFilePathSearchResult> => {
+    const ranker = new QuickOpenPathRanker(args.query, args.limit)
     await scanRipgrepPaths({
       args: ignoredPass,
       authorizedRootPath,
@@ -78,14 +74,35 @@ export async function searchQuickOpenFilePaths(
       signal: args.signal,
       wslDistroForOutput
     })
-  } catch (error) {
-    if (error instanceof RipgrepUnavailableError) {
-      return fallback()
-    }
-    throw error
+    const result = ranker.result()
+    return { ...result, truncated: result.totalCount > args.limit }
   }
-  const result = ranker.result()
-  return { ...result, truncated: result.totalCount > args.limit }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      if (
+        wslDistroForOutput &&
+        !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro, {
+          rejectTransientLaunchFailure: true
+        }))
+      ) {
+        return fallback()
+      }
+      return await scanOnce()
+    } catch (error) {
+      if (error instanceof RipgrepUnavailableError) {
+        return fallback()
+      }
+      // Why: a supersede that lands after the scan rejected still owes the caller a cancellation.
+      if (args.signal?.aborted) {
+        throw fileListingCancellationError(args.signal)
+      }
+      // Why: one-off fork/exec pressure should not blank Quick Open until the query changes.
+      if (!(error instanceof RipgrepLaunchFailureError) || attempt > 0) {
+        throw error
+      }
+    }
+  }
+  throw new Error('unreachable Quick Open retry state')
 }
 
 function scanRipgrepPaths(args: {
@@ -106,11 +123,20 @@ function scanRipgrepPaths(args: {
     let parseablePathCount = 0
     let processErrorObserved = false
     let unavailableExitObserved = false
-    const child = wslAwareSpawn('rg', args.args, {
-      cwd: args.authorizedRootPath,
-      ...(args.localGitOptions.wslDistro ? { wslDistro: args.localGitOptions.wslDistro } : {}),
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
+    let child: ReturnType<typeof wslAwareSpawn>
+    try {
+      child = wslAwareSpawn('rg', args.args, {
+        cwd: args.authorizedRootPath,
+        ...(args.localGitOptions.wslDistro ? { wslDistro: args.localGitOptions.wslDistro } : {}),
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+    } catch (error) {
+      throw isTransientRipgrepSpawnError(error)
+        ? new RipgrepLaunchFailureError(
+            `rg failed to start (${(error as NodeJS.ErrnoException).code})`
+          )
+        : error
+    }
     let timer: ReturnType<typeof setTimeout>
 
     const processLine = (rawLine: string): void => {
@@ -166,12 +192,16 @@ function scanRipgrepPaths(args: {
     const handleStderrData = (): void => {
       /* drain */
     }
-    const handleError = (): void => {
+    const handleError = (error: NodeJS.ErrnoException): void => {
       processErrorObserved = true
+      if (isTransientRipgrepSpawnError(error)) {
+        finish(new RipgrepLaunchFailureError(`rg failed to start (${error.code})`))
+        return
+      }
       finish(
         isRipgrepUnavailableExit(child, null, null)
           ? new RipgrepUnavailableError()
-          : new Error('rg failed to start')
+          : new Error(`rg failed to start${error.code ? ` (${error.code})` : ''}`)
       )
     }
     const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {

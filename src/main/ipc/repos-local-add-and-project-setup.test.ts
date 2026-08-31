@@ -26,6 +26,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
@@ -64,6 +65,22 @@ describe('repos:add + repos:clone', () => {
       expect.objectContaining({ path: '/tmp/from-add', badgeColor: DEFAULT_REPO_BADGE_COLOR })
     )
     expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
+  })
+
+  it('uses the requested display name for repos:add folder repos', async () => {
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add',
+      kind: 'folder',
+      displayName: 'inf-오케스트레이터'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/tmp/from-add',
+        displayName: 'inf-오케스트레이터'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'inf-오케스트레이터')
   })
 
   it('inherits global non-Orca visibility while retaining the mixed-version safety marker', async () => {

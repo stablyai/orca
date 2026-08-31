@@ -30,6 +30,8 @@ import {
   _getWorktreeScanCacheSizesForTests,
   _resetWorktreeScanCacheForTests,
   listWorktrees,
+  listWorktreesSharedStrict,
+  listWorktreesStrict,
   moveWorktree,
   removeWorktree,
   WORKTREE_LIST_TIMEOUT_MS
@@ -74,6 +76,59 @@ describe('listWorktrees in-flight sharing', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
+  // Why (#16520): create verification moved off the fail-soft listing so a Git failure stops being
+  // hidden behind "created but not found in listing". That must not cost the in-flight coalescing,
+  // and sharing must never hand a strict caller a softened result.
+  it('coalesces concurrent strict scans for the same repo into one git call', async () => {
+    let resolveScan!: () => void
+    const scanOutput = 'worktree /repo\0HEAD abc123\0branch refs/heads/main\0\0'
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = () => resolve({ stdout: scanOutput })
+        })
+    )
+
+    const first = listWorktreesSharedStrict('/repo')
+    const second = listWorktreesSharedStrict('/repo')
+    resolveScan()
+    const [a, b] = await Promise.all([first, second])
+
+    expect(a).toEqual(b)
+    expect(a[0]?.path).toBe('/repo')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('propagates a shared strict failure to every joiner', async () => {
+    let rejectScan!: (error: Error) => void
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectScan = (error: Error) => reject(error)
+        })
+    )
+
+    const first = listWorktreesSharedStrict('/repo')
+    const second = listWorktreesSharedStrict('/repo')
+    const settled = Promise.allSettled([first, second])
+    rejectScan(new Error('git timed out.'))
+
+    // A joiner silently receiving [] would be #16520 re-entering through the dedup path.
+    expect((await settled).map((r) => r.status)).toEqual(['rejected', 'rejected'])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('never lets a strict caller join a fail-soft scan', async () => {
+    // Both variants reject; only the lenient one is allowed to soften that into [].
+    gitExecFileAsyncMock.mockRejectedValue(new Error('git timed out.'))
+
+    const lenient = listWorktrees('/repo')
+    const strict = listWorktreesSharedStrict('/repo')
+
+    await expect(lenient).resolves.toEqual([])
+    await expect(strict).rejects.toThrow('git timed out.')
+  })
+
   it('does not share scans across different timeout contracts', async () => {
     const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     gitExecFileAsyncMock.mockResolvedValue({ stdout: scanOutput })
@@ -115,6 +170,19 @@ describe('listWorktrees in-flight sharing', () => {
 
       expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
       expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 0, generations: 0 })
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('distinguishes fail-soft empty results from strict scan failures', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const failure = new Error('git spawn timed out')
+      gitExecFileAsyncMock.mockRejectedValue(failure)
+
+      await expect(listWorktrees('/repo')).resolves.toEqual([])
+      await expect(listWorktreesStrict('/repo')).rejects.toBe(failure)
     } finally {
       warnSpy.mockRestore()
     }

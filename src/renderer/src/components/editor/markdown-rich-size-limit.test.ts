@@ -3,6 +3,10 @@ import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 
 describe('exceedsMarkdownRichModeSizeLimit', () => {
+  it('uses a 600 KB default rich-mode ceiling', () => {
+    expect(RICH_MARKDOWN_MAX_SIZE_BYTES).toBe(600 * 1024)
+  })
+
   it('allows markdown at the rich-mode byte limit', () => {
     expect(exceedsMarkdownRichModeSizeLimit('a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES))).toBe(false)
   })

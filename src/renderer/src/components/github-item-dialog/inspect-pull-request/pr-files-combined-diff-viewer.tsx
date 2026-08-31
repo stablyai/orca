@@ -2,19 +2,15 @@ import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from '
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
-import {
-  createCombinedDiffSectionIndexMap,
-  handleCombinedDiffFileTreeNavigation
-} from '@/components/editor/CombinedDiffFileTree'
+import { createCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
+import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
 import {
   getDiffSectionEstimatedHeight,
   isIntrinsicHeightImageDiff
 } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
-import {
-  getCombinedDiffBranchEntriesInTreeOrder,
-  type CombinedDiffFileTreeEntry
-} from '@/components/editor/combined-diff-file-tree-model'
+import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
+import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { useAppStore } from '@/store'
 import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'

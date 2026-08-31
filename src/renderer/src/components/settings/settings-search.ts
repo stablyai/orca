@@ -145,13 +145,11 @@ export function rankSettingsSearchItems<T>(
   }
 
   return items
-    .map(
-      (item, index): SettingsSearchRankCandidate<T> => ({
-        item,
-        index,
-        score: scoreSettingsSearch(query, getEntries(item))
-      })
-    )
+    .map((item, index): SettingsSearchRankCandidate<T> => ({
+      item,
+      index,
+      score: scoreSettingsSearch(query, getEntries(item))
+    }))
     .filter((candidate) => candidate.score > SETTINGS_SEARCH_NO_MATCH_SCORE)
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map(({ item, score }) => ({ item, score }))

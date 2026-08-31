@@ -13,6 +13,10 @@ import {
   launchSleepingAgentSession,
   type ResumeSleepingAgentSessionsOptions
 } from './sleeping-agent-session-launch'
+import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
+import { findUnhydratedHostMirrorForPane } from './host-mirrored-pane-liveness'
+import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
+import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
@@ -133,6 +137,9 @@ function activeOrQueuedResumeClaimsProviderSession(
 // Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the
 // prompt — so discarding those records only stranded the session across wake and restart.
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
+  if (isStructuredAgentSyntheticSleepingRecord(record)) {
+    return true
+  }
   if (!record.origin && record.state === 'done') {
     return true
   }
@@ -141,11 +148,42 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
   )
 }
 
+function parkWorktreeResumeSweepUntilHostMirrorHydrates(
+  worktreeId: string,
+  environmentId: string | null,
+  options: ResumeSleepingAgentSessionsOptions | undefined
+): void {
+  if (!environmentId) {
+    // No paired runtime owns the workspace, so no verdict is coming; the next
+    // activation re-runs this sweep once one does.
+    return
+  }
+  parkUntilHostSessionMirrorHydrates(environmentId, worktreeId, () => {
+    // Why: the mirror can settle long after the user moved on, so a replayed
+    // resume must not steal the surface they are looking at now.
+    const isActive = useAppStore.getState().activeWorktreeId === worktreeId
+    // Why `skipClaimKeys` is dropped: it is a park-time snapshot of in-place
+    // wakes, and a latch that has since failed must stay resumable here.
+    resumeSleepingAgentSessionsForWorktree(worktreeId, {
+      ...(options?.onSessionLaunched ? { onSessionLaunched: options.onSessionLaunched } : {}),
+      ...(isActive ? {} : { suppressNavigation: true })
+    })
+  })
+}
+
 export function resumeSleepingAgentSessionsForWorktree(
   worktreeId: string,
   options?: ResumeSleepingAgentSessionsOptions
 ): number {
   const state = useAppStore.getState()
+  // Why: every branch below reads local rows as the verdict on what the execution host is running,
+  // and before it answers "I hold no pane for this record" is `unverifiable`, not `exited`. Resuming
+  // on it forks a second agent onto a transcript the host is still writing (STA-3500). Declining is
+  // recoverable — the record survives, and the caller re-runs this sweep once the verdict lands.
+  // Paired-runtime workspaces keep their own per-pane mirror park below, which is finer-grained.
+  if (resolveWorkspaceTerminalHostAuthority(state, worktreeId) === 'unverifiable') {
+    return 0
+  }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
@@ -177,6 +215,18 @@ export function resumeSleepingAgentSessionsForWorktree(
     }
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    const unhydratedMirror = findUnhydratedHostMirrorForPane(record, currentState)
+    if (unhydratedMirror) {
+      // Why: pane ownership is undecidable until the mirror answers, and every
+      // branch below — launch and clear alike — trusts that verdict. Take no
+      // action on the record; the replay re-runs this pass with real evidence.
+      parkWorktreeResumeSweepUntilHostMirrorHydrates(
+        worktreeId,
+        unhydratedMirror.environmentId,
+        options
+      )
       continue
     }
     const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)

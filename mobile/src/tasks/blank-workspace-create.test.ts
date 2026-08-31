@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { createBlankWorkspace } from './blank-workspace-create'
+import { WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS } from './worktree-create-idempotency-policy'
 
 type Call = { method: string; params: unknown }
+
+const IDEMPOTENT_CREATE_SUPPORT = {
+  dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS
+}
 
 function fakeClient(script: (method: string, call: number) => unknown, calls: Call[]): RpcClient {
   return {
@@ -35,7 +40,7 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'inherit',
       nameWasGenerated: false,
-      supportsIdempotentCutoverRetry: true
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'octopus' })
@@ -70,7 +75,7 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'inherit',
       nameWasGenerated: true,
-      supportsIdempotentCutoverRetry: true
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(calls[0]?.params).toMatchObject({ nameWasGenerated: true })
@@ -90,7 +95,7 @@ describe('createBlankWorkspace', () => {
       comment: 'spike',
       setupDecision: 'run',
       nameWasGenerated: false,
-      supportsIdempotentCutoverRetry: true
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     const params = calls[0]?.params as Record<string, unknown>
@@ -122,7 +127,7 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'inherit',
       nameWasGenerated: false,
-      supportsIdempotentCutoverRetry: true
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(result).toEqual({ worktreeId: 'wt-3', name: 'octopus-2' })
@@ -148,7 +153,7 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'inherit',
       nameWasGenerated: false,
-      supportsIdempotentCutoverRetry: true
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(result).toEqual({ worktreeId: 'wt-4', name: 'octopus-2' })
@@ -167,7 +172,7 @@ describe('createBlankWorkspace', () => {
       comment: undefined,
       setupDecision: 'skip',
       nameWasGenerated: false,
-      supportsIdempotentCutoverRetry: true
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(result).toEqual({ error: 'SSH connection is not available' })

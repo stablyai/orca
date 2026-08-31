@@ -1,4 +1,4 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreePurgeTarget, WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -15,6 +15,7 @@ import {
   isRemovedRuntimeHostId
 } from '../../stale-runtime-host-rows'
 import { buildWorktreePurgeState } from './worktree-purge-state'
+import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 
 export function createPurgeStaleRuntimeHostState(
   set: WorktreeSliceSet,
@@ -86,6 +87,8 @@ export function createPurgeStaleRuntimeHostState(
       recordWorktreeOwners(s.worktreesByRepo)
       recordWorktreeOwners(detectedRows)
 
+      const removedWorktreeTargets: WorktreePurgeTarget[] = []
+      const seenRemovedWorktreeTargets = new Set<string>()
       const sessionWorktreeIdsOwnedByRemovedHosts = new Set<string>()
       let survivingRestoredSessionOwners = s.restoredRuntimeHostIdByWorkspaceSessionKey
       for (const [workspaceKey, hostId] of Object.entries(
@@ -103,6 +106,12 @@ export function createPurgeStaleRuntimeHostState(
           continue
         }
         sessionWorktreeIdsOwnedByRemovedHosts.add(worktreeId)
+        // Restored session ownership is authoritative even before catalog rows hydrate.
+        const identity = `${hostId}\u0000${worktreeId}`
+        if (!seenRemovedWorktreeTargets.has(identity)) {
+          seenRemovedWorktreeTargets.add(identity)
+          removedWorktreeTargets.push({ id: worktreeId, hostId })
+        }
         repoIdsWithRemovedOwners.add(repoId)
         if (survivingRestoredSessionOwners === s.restoredRuntimeHostIdByWorkspaceSessionKey) {
           survivingRestoredSessionOwners = { ...survivingRestoredSessionOwners }
@@ -115,6 +124,55 @@ export function createPurgeStaleRuntimeHostState(
       for (const repoId of repoIdsWithSurvivingOwners) {
         repoIdsWithoutSurvivingOwners.delete(repoId)
       }
+
+      // Preserve host ownership for recency teardown. The other bulk maps are
+      // keyed by raw worktree id, but a host-qualified visit must not be
+      // removed when an id twin survives on another host.
+      const addRemovedWorktreeTarget = (
+        worktreeId: string,
+        hostId: ExecutionHostId | undefined
+      ): void => {
+        const identity = `${hostId ?? ''}\u0000${worktreeId}`
+        if (seenRemovedWorktreeTargets.has(identity)) {
+          return
+        }
+        seenRemovedWorktreeTargets.add(identity)
+        removedWorktreeTargets.push(hostId ? { id: worktreeId, hostId } : { id: worktreeId })
+      }
+      const recordRemovedRowTargets = (
+        rowsByRepo: Record<
+          string,
+          readonly {
+            id: string
+            hostId?: ExecutionHostId
+            runtimeOwnerEnvironmentId?: string
+          }[]
+        >
+      ): void => {
+        for (const [repoId, rows] of Object.entries(rowsByRepo)) {
+          for (const row of rows) {
+            const removedOwner =
+              (row.runtimeOwnerEnvironmentId !== undefined &&
+                removed.has(row.runtimeOwnerEnvironmentId)) ||
+              isRemovedRuntimeHostId(row.hostId, removed) ||
+              (row.hostId === undefined && repoIdsWithoutSurvivingOwners.has(repoId))
+            if (!removedOwner) {
+              continue
+            }
+            // A row's execution host is the recency owner. Runtime ownership
+            // is the only host evidence available for legacy rows without it.
+            addRemovedWorktreeTarget(
+              row.id,
+              row.hostId ??
+                (row.runtimeOwnerEnvironmentId
+                  ? toRuntimeExecutionHostId(row.runtimeOwnerEnvironmentId)
+                  : undefined)
+            )
+          }
+        }
+      }
+      recordRemovedRowTargets(s.worktreesByRepo)
+      recordRemovedRowTargets(detectedRows)
 
       const worktreeDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(
         s.worktreesByRepo,
@@ -163,8 +221,24 @@ export function createPurgeStaleRuntimeHostState(
           }
         }
       }
-      const purgeState =
-        removedWorktreeIds.size > 0 ? buildWorktreePurgeState(s, [...removedWorktreeIds]) : {}
+      const purgeTargets = [...removedWorktreeIds].flatMap((worktreeId) => {
+        const targets = removedWorktreeTargets.filter((target) => target.id === worktreeId)
+        return targets.length > 0 ? targets : [{ id: worktreeId }]
+      })
+      const purgeState = purgeTargets.length > 0 ? buildWorktreePurgeState(s, purgeTargets) : {}
+      const visitPurgeTargets = [
+        ...removedWorktreeTargets,
+        ...purgeTargets.filter(
+          (target) => !removedWorktreeTargets.some((candidate) => candidate.id === target.id)
+        )
+      ]
+      const nextLastVisitedAtByWorktreeId = removeWorktreeVisitEntriesForTargets(
+        s.lastVisitedAtByWorktreeId,
+        visitPurgeTargets
+      )
+      if (nextLastVisitedAtByWorktreeId !== s.lastVisitedAtByWorktreeId) {
+        purgeState.lastVisitedAtByWorktreeId = nextLastVisitedAtByWorktreeId
+      }
 
       const restoredSessionOwnersChanged =
         survivingRestoredSessionOwners !== s.restoredRuntimeHostIdByWorkspaceSessionKey

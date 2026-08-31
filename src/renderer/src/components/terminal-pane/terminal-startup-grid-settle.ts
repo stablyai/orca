@@ -13,6 +13,7 @@ export type TerminalStartupGridSettleOptions = {
   minFrames?: number
   stableFrames?: number
   maxFrames?: number
+  maxReadinessWaitFrames?: number
 }
 
 export type TerminalStartupGridSettleHandle = {
@@ -22,6 +23,8 @@ export type TerminalStartupGridSettleHandle = {
 const DEFAULT_MIN_FRAMES = 6
 const DEFAULT_STABLE_FRAMES = 2
 const DEFAULT_MAX_FRAMES = 12
+// Why: ten settle windows tolerate slow split layout without permitting permanent polling.
+const DEFAULT_MAX_READINESS_WAIT_FRAMES = DEFAULT_MAX_FRAMES * 10
 
 function usableDimensions(
   dimensions: TerminalStartupGridDimensions | null
@@ -42,6 +45,10 @@ export function waitForStableStartupGrid(
   const minFrames = Math.max(1, options.minFrames ?? DEFAULT_MIN_FRAMES)
   const stableFrames = Math.max(1, options.stableFrames ?? DEFAULT_STABLE_FRAMES)
   const maxFrames = Math.max(minFrames, options.maxFrames ?? DEFAULT_MAX_FRAMES)
+  const maxReadinessWaitFrames = Math.max(
+    1,
+    options.maxReadinessWaitFrames ?? DEFAULT_MAX_READINESS_WAIT_FRAMES
+  )
   let frame = 0
   let stableFrameCount = 0
   let previous: TerminalStartupGridDimensions | null = null
@@ -50,6 +57,7 @@ export function waitForStableStartupGrid(
   let pendingFrame: number | null = null
   let cancelled = false
   let readyFrame = 0
+  let latestReadinessWaitUsable: TerminalStartupGridDimensions | null = null
   const usesReadinessGate = options.isReadyToSettle !== undefined
 
   const settle = (dimensions: TerminalStartupGridDimensions | null): void => {
@@ -73,6 +81,13 @@ export function waitForStableStartupGrid(
     const measured = options.measure()
     const readyToSettle = options.isReadyToSettle?.() ?? true
     if (!readyToSettle) {
+      if (usableDimensions(measured)) {
+        latestReadinessWaitUsable = measured
+      }
+      if (frame >= maxReadinessWaitFrames) {
+        settle(latestReadinessWaitUsable)
+        return
+      }
       previous = null
       stableFrameCount = 0
       observedGridChange = false

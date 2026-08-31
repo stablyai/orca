@@ -27,11 +27,7 @@ async function wsl(command: string, ...args: string[]): Promise<string> {
 async function readThroughRawLoginShell(linuxPath: string): Promise<string> {
   const { stdout } = await execFileAsync(
     'wsl.exe',
-    buildWslExecArgs(DISTRO, [
-      'sh',
-      '-lc',
-      buildWslLoginShellCommand(`cat -- '${linuxPath}'`)
-    ]),
+    buildWslExecArgs(DISTRO, ['sh', '-lc', buildWslLoginShellCommand(`cat -- '${linuxPath}'`)]),
     { encoding: 'utf-8', timeout: 30000 }
   )
   return stdout
@@ -71,13 +67,17 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
   it.each([
     ['dir', 'directory'],
     ['file.txt', 'file']
-  ])('stats %s as a usable type, not shell chatter', async (entry, expectedType) => {
-    const { statPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
+  ])(
+    'stats %s as a usable type, not shell chatter',
+    async (entry, expectedType) => {
+      const { statPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
 
-    const stat = (await statPath(unc(`${fixtureRoot}/${entry}`))) as { type: string }
+      const stat = (await statPath(unc(`${fixtureRoot}/${entry}`))) as { type: string }
 
-    expect(stat.type).toBe(expectedType)
-  }, 60_000)
+      expect(stat.type).toBe(expectedType)
+    },
+    60_000
+  )
 
   it('still reports a missing path as ENOENT', async () => {
     const { statPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })

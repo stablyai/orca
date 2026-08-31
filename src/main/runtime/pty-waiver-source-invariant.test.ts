@@ -7,7 +7,21 @@ import { describe, expect, it } from 'vitest'
 // while silently disabling the PTY gate on that path. `force` is set by the
 // ordinary delete confirmation (to skip the dirty-file prompt) and is NOT user
 // intent to delete past live terminals — so pin the wiring itself, at every site.
-const FILES = [join(__dirname, '..', 'ipc', 'worktrees.ts'), join(__dirname, 'orca-runtime.ts')]
+const FILE_GROUPS = [
+  {
+    label: 'extracted worktree removal',
+    files: [
+      join(__dirname, '..', 'ipc', 'worktrees', 'removal', 'worktree-removal-ownership.ts'),
+      join(__dirname, '..', 'ipc', 'worktrees', 'removal', 'remove-registered-local-worktree.ts'),
+      join(__dirname, '..', 'ipc', 'worktrees', 'removal', 'remove-registered-remote-worktree.ts'),
+      join(__dirname, '..', 'ipc', 'worktrees', 'removal', 'remove-unregistered-worktree.ts')
+    ]
+  },
+  {
+    label: 'runtime removal',
+    files: [join(__dirname, 'orca-runtime.ts')]
+  }
+] as const
 
 // Why: a comment quoting `allowUnverifiedStop:` would otherwise count as a site —
 // and this very invariant invites people to write one in the file it guards.
@@ -20,8 +34,8 @@ function stripComments(source: string): string {
 }
 
 describe('the PTY-stop waiver is never derived from `force`', () => {
-  it.each(FILES)('%s passes only an explicit waiver to the teardown', (file) => {
-    const source = stripComments(readFileSync(file, 'utf8'))
+  it.each(FILE_GROUPS)('$label paths pass only an explicit waiver to the teardown', ({ files }) => {
+    const source = stripComments(files.map((file) => readFileSync(file, 'utf8')).join('\n'))
 
     // Why: derived, not hardcoded — merging two removal branches is a legitimate
     // refactor and must not read as a deleted safety wiring, while dropping the

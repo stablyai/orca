@@ -1,5 +1,6 @@
 import type { WorkerReportOutcome, WorkerReportSettlement } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
+import { AGENT_PROMPT_STALLED_ERROR } from '../../../agent-prompt-submission-verification'
 import { settleActiveDispatchesForTask } from './dispatch-completion'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
 
@@ -54,10 +55,26 @@ export function settleWorkerReportInTransaction(
 
   const expectedDispatchStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
   const expectedTaskStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
-  if (dispatch.status === expectedDispatchStatus && task.status === expectedTaskStatus) {
+  // Why (#16095): worker-start records a stalled prompt as failed, but the preamble was written
+  // before verification ran — the worker may have been executing it the whole time. Its own report
+  // is first-hand evidence and must be able to correct that record instead of being thrown away.
+  // Checked before the duplicate short-circuit: a `failed` report lands on the very statuses that
+  // short-circuit reads as already settled, dropping the worker's real cause and result body.
+  const settledByUnobservedPrompt =
+    dispatch.status === 'failed' &&
+    dispatch.last_failure === AGENT_PROMPT_STALLED_ERROR &&
+    task.status === 'failed'
+  if (
+    !settledByUnobservedPrompt &&
+    dispatch.status === expectedDispatchStatus &&
+    task.status === expectedTaskStatus
+  ) {
     return { action: 'settled', outcome: params.outcome, duplicate: true }
   }
-  if (dispatch.status !== 'dispatched' || task.status !== 'dispatched') {
+  const previous = settledByUnobservedPrompt
+    ? { status: 'failed', workerState: 'failed' }
+    : { status: 'dispatched', workerState: 'ready' }
+  if (dispatch.status !== previous.status || task.status !== previous.status) {
     return {
       action: 'rejected',
       code: 'inactive_dispatch',
@@ -105,16 +122,22 @@ export function settleWorkerReportInTransaction(
        SET status = ?, completed_at = datetime('now'),
            last_failure = CASE WHEN ? = 'failed' THEN ? ELSE last_failure END,
            capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
-       WHERE id = ? AND status = 'dispatched'`
+       WHERE id = ? AND status = ?`
     )
-    .run(expectedDispatchStatus, expectedDispatchStatus, params.result, params.dispatchId)
+    .run(
+      expectedDispatchStatus,
+      expectedDispatchStatus,
+      params.result,
+      params.dispatchId,
+      previous.status
+    )
   const taskUpdate = this.db
     .prepare(
       `UPDATE tasks
        SET status = ?, result = ?, completed_at = datetime('now')
-       WHERE id = ? AND status = 'dispatched'`
+       WHERE id = ? AND status = ?`
     )
-    .run(expectedTaskStatus, params.result, params.taskId)
+    .run(expectedTaskStatus, params.result, params.taskId, previous.status)
   if (dispatchUpdate.changes !== 1 || taskUpdate.changes !== 1) {
     this.db.exec('ROLLBACK TO settle_worker_report')
     this.db.exec('RELEASE settle_worker_report')
@@ -128,9 +151,13 @@ export function settleWorkerReportInTransaction(
     .prepare(
       `UPDATE worker_dispatches
        SET state = ?, stage = 'settled', updated_at = datetime('now')
-       WHERE dispatch_id = ? AND state = 'ready'`
+       WHERE dispatch_id = ? AND state = ?`
     )
-    .run(params.outcome === 'succeeded' ? 'succeeded' : 'failed', params.dispatchId)
+    .run(
+      params.outcome === 'succeeded' ? 'succeeded' : 'failed',
+      params.dispatchId,
+      previous.workerState
+    )
   settleActiveDispatchesForTask(
     this,
     params.taskId,

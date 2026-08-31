@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mergePRCommentIntoList, prCommentsCacheSuffix } from './github'
+import { prCommentsCacheSuffix } from '../github/cache-identity'
+import { mergePRCommentIntoList } from '../github/pr-comment-cache'
+import type { PRComment } from '../../../../shared/github/comment-types'
 import {
   createTestStore,
   githubSourceContext,
@@ -182,6 +184,31 @@ describe('createGitHubSlice.fetchPRComments', () => {
       ]?.data?.[0].author
     ).toBe('source')
     expect(mockApi.gh.prComments).not.toHaveBeenCalled()
+  })
+
+  it('deduplicates a forced comment fetch onto an existing non-forced request', async () => {
+    const store = createTestStore()
+    const pendingComments = Promise.withResolvers<PRComment[]>()
+    const comments: PRComment[] = [
+      {
+        id: 1,
+        author: 'octocat',
+        authorAvatarUrl: '',
+        body: 'pending',
+        createdAt: '2026-08-23T00:00:00Z',
+        url: ''
+      }
+    ]
+    mockApi.gh.prComments.mockReturnValueOnce(pendingComments.promise)
+
+    const first = store.getState().fetchPRComments('/repo/one', 12, { repoId: 'repo-1' })
+    const forced = store
+      .getState()
+      .fetchPRComments('/repo/one', 12, { repoId: 'repo-1', force: true })
+
+    expect(mockApi.gh.prComments).toHaveBeenCalledTimes(1)
+    pendingComments.resolve(comments)
+    await expect(Promise.all([first, forced])).resolves.toEqual([comments, comments])
   })
 
   it('bounds PR comment cache entries across many repos', async () => {

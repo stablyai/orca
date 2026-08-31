@@ -7,6 +7,7 @@ import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
+import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -57,6 +58,101 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it('routes headless browser launches through the owning Orca workspace', () => {
+      const inheritedBrowser = process.env.BROWSER
+      delete process.env.BROWSER
+      try {
+        const env = buildPtyHostEnv(
+          'pty-headless',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            agentStatusHooksEnabled: false,
+            routeBrowserOpensToClient: true
+          }
+        )
+
+        expect(env.BROWSER).toBe('orca open-url --url %s')
+      } finally {
+        if (inheritedBrowser === undefined) {
+          delete process.env.BROWSER
+        } else {
+          process.env.BROWSER = inheritedBrowser
+        }
+      }
+    })
+
+    it('preserves an explicit browser command on headless runtimes', () => {
+      const env = buildPtyHostEnv(
+        'pty-custom-browser',
+        { BROWSER: 'custom-browser %s' },
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: false,
+          routeBrowserOpensToClient: true
+        }
+      )
+
+      expect(env.BROWSER).toBe('custom-browser %s')
+    })
+
+    it('uses the registered WSL CLI name for headless browser launches', () => {
+      const inheritedBrowser = process.env.BROWSER
+      delete process.env.BROWSER
+      try {
+        const env = buildPtyHostEnv(
+          'pty-headless-wsl',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            isWsl: true,
+            agentStatusHooksEnabled: false,
+            routeBrowserOpensToClient: true
+          }
+        )
+
+        expect(env.BROWSER).toBe('orca-ide open-url --url %s')
+      } finally {
+        if (inheritedBrowser === undefined) {
+          delete process.env.BROWSER
+        } else {
+          process.env.BROWSER = inheritedBrowser
+        }
+      }
+    })
+
+    it('passes the PTY-resolved Codex home to the WSL relay lane', () => {
+      const runtimeHome =
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
+      const ensureForDistro = vi
+        .spyOn(wslHookRelayManager, 'ensureForDistro')
+        .mockImplementation(() => {})
+
+      try {
+        buildPtyHostEnv(
+          'pty-wsl',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: runtimeHome,
+            isWsl: true,
+            wslDistro: 'Ubuntu',
+            agentStatusHooksEnabled: true
+          }
+        )
+        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome)
+      } finally {
+        ensureForDistro.mockRestore()
+      }
+    })
+
     it('refreshes the outer Windows PATH for a WSL spawn without forwarding it', async () => {
       const originalPlatform = process.platform
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

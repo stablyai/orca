@@ -13,8 +13,8 @@ import type {
 } from './remote-browser-stream-tokens'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import {
-  getPositiveFiniteNumber,
   getRemoteBrowserMouseButton,
+  resolveRemoteBrowserCssViewport,
   type PendingRemoteBrowserWheel,
   type RemoteBrowserPaneNotice,
   type RemoteBrowserRuntimeTarget
@@ -111,16 +111,12 @@ export function useRemoteBrowserPageInput({
         return null
       }
       const rect = viewport.getBoundingClientRect()
-      const viewportWidth =
-        getPositiveFiniteNumber(remoteCssViewportSizeRef.current?.width) ??
-        getPositiveFiniteNumber(remoteViewportSizeRef.current?.width) ??
-        getPositiveFiniteNumber(frameMetadata?.deviceWidth) ??
-        image.naturalWidth
-      const viewportHeight =
-        getPositiveFiniteNumber(remoteCssViewportSizeRef.current?.height) ??
-        getPositiveFiniteNumber(remoteViewportSizeRef.current?.height) ??
-        getPositiveFiniteNumber(frameMetadata?.deviceHeight) ??
-        image.naturalHeight
+      const { width: viewportWidth, height: viewportHeight } = resolveRemoteBrowserCssViewport({
+        cssViewportSize: remoteCssViewportSizeRef.current,
+        requestedViewportSize: remoteViewportSizeRef.current,
+        frameMetadata,
+        naturalSize: { width: image.naturalWidth, height: image.naturalHeight }
+      })
       if (rect.width <= 0 || rect.height <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
         return null
       }

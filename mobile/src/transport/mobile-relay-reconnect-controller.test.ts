@@ -3,6 +3,7 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
+import { RelayDirectorHttpError } from './mobile-relay-resume-director'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -334,6 +335,41 @@ describe('relay reconnect controller', () => {
     expect(onRetry).toHaveBeenCalledOnce()
     vi.advanceTimersByTime(1)
     expect(onRetry).toHaveBeenCalledTimes(2)
+  })
+
+  it('paces the next dial by the director Retry-After instead of the local backoff', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+
+    reconnect.registerFailure(new RelayDirectorHttpError(503, 30_000))
+
+    expect(reconnect.retryDelayMs(0)).toBe(30_000)
+    vi.advanceTimersByTime(29_999)
+    expect(onRetry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the local backoff when the director sent no Retry-After', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+
+    reconnect.registerFailure(new RelayDirectorHttpError(500, null))
+
+    expect(reconnect.retryDelayMs(0)).toBe(250)
+    vi.advanceTimersByTime(250)
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
+  it('never lets a short Retry-After shorten an escalated backoff', () => {
+    const reconnect = createController(vi.fn())
+
+    for (let failure = 0; failure < 6; failure++) {
+      reconnect.registerFailure(new RelayOuterError(4429), false)
+    }
+    reconnect.registerFailure(new RelayDirectorHttpError(503, 100), false)
+
+    expect(reconnect.retryDelayMs(0)).toBe(15_000)
   })
 
   it('uses grace only when the outer relay credential was rejected', () => {

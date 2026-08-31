@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../store'
 import { browserSourceLabel } from '../../../../shared/browser-source-label'
 import { translate } from '@/i18n/i18n'
@@ -89,7 +90,7 @@ export function BrowserProfileRow({
                 value2: profile.label
               }
             ),
-        result.executionHostLabel
+        result
       )
     } else {
       toast.error(result.reason)
@@ -106,7 +107,7 @@ export function BrowserProfileRow({
           'Imported {{value0}} cookies from file into {{value1}}.',
           { value0: result.summary.importedCookies, value1: profile.label }
         ),
-        result.executionHostLabel
+        result
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -181,6 +182,7 @@ export function BrowserProfileRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <BrowserCookieImportMachineNotice />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.customBrowserId ?? browser.family}>

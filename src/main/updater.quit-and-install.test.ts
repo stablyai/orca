@@ -12,6 +12,10 @@ const {
   resetUpdaterMocks
 } = await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
+const { launchPathScope } = vi.hoisted(() => ({
+  launchPathScope: { active: false, calls: 0 }
+}))
+
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
@@ -25,10 +29,23 @@ vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExi
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
+vi.mock('./startup/hydrate-shell-path', () => ({
+  runWithLaunchPath: (action: () => unknown): unknown => {
+    launchPathScope.active = true
+    launchPathScope.calls += 1
+    try {
+      return action()
+    } finally {
+      launchPathScope.active = false
+    }
+  }
+}))
 
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
+    launchPathScope.active = false
+    launchPathScope.calls = 0
   })
 
   it('still surfaces updater error events while a download is in flight', async () => {
@@ -118,8 +135,12 @@ describe('updater', () => {
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(2)
   })
 
-  it('defers quitAndInstall through the shared main-process entrypoint', async () => {
+  it('defers quitAndInstall and runs its launcher within the launch PATH scope', async () => {
     vi.useFakeTimers()
+    let launcherSawLaunchPathScope = false
+    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+      launcherSawLaunchPathScope = launchPathScope.active
+    })
 
     const mainWindow = { webContents: { send: vi.fn() } }
     const { setupAutoUpdater, quitAndInstall } = await import('./updater')
@@ -135,6 +156,9 @@ describe('updater', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
+    expect(launcherSawLaunchPathScope).toBe(true)
+    expect(launchPathScope.calls).toBe(1)
+    expect(launchPathScope.active).toBe(false)
   })
 
   it('runs pre-quit cleanup before local PTY cleanup during update install', async () => {

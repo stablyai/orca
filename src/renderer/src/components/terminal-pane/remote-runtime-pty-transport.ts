@@ -19,10 +19,8 @@ import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
-import {
-  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { agentResumeHostAuthorityCapability } from '../../runtime/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -86,8 +84,9 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-rev
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
+const REMOTE_RUNTIME_MAX_PENDING_QUERY_REPLIES = 64
 const HOST_SESSION_ATTACH_POLL_MS = 150
-const HOST_SESSION_REPLACEMENT_POLL_MAX_MS = 1_000
+const HOST_SESSION_POLL_MAX_MS = 1_000
 const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
 const HOST_SESSION_INVENTORY_MAX_WINDOWS_PER_RECOVERY = 2
 const HOST_SESSION_SAME_HANDLE_END_REUSE_LIMIT = 2
@@ -266,7 +265,8 @@ export function createRemoteRuntimePtyTransport(
   })
   let lastRecoveryStateKey = ''
   let pendingViewportClaim = false
-  let pendingClaimInput = ''
+  let pendingClaimInput: { text: string; queryReply: boolean }[] = []
+  let pendingClaimQueryReplyCount = 0
   let terminalCreateRetryWait: {
     timer: ReturnType<typeof setTimeout>
     resolve: (continueRetrying: boolean) => void
@@ -346,9 +346,48 @@ export function createRemoteRuntimePtyTransport(
   const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
   const clearPendingViewportClaim = (): void => {
     pendingViewportClaim = false
-    pendingClaimInput = ''
+    pendingClaimInput = []
+    pendingClaimQueryReplyCount = 0
     for (const resolve of viewportClaimReadyWaiters) {
       resolve(false)
+    }
+    viewportClaimReadyWaiters.clear()
+  }
+  const queuePendingClaimInput = (text: string, queryReply: boolean): void => {
+    if (queryReply && pendingClaimQueryReplyCount >= REMOTE_RUNTIME_MAX_PENDING_QUERY_REPLIES) {
+      const oldestReply = pendingClaimInput.findIndex((segment) => segment.queryReply)
+      if (oldestReply !== -1) {
+        pendingClaimInput.splice(oldestReply, 1)
+        pendingClaimQueryReplyCount -= 1
+        const left = pendingClaimInput[oldestReply - 1]
+        const right = pendingClaimInput[oldestReply]
+        if (left && right && !left.queryReply && !right.queryReply) {
+          left.text += right.text
+          pendingClaimInput.splice(oldestReply, 1)
+        }
+      }
+    }
+    const tail = pendingClaimInput.at(-1)
+    if (!queryReply && tail && !tail.queryReply) {
+      tail.text += text
+      return
+    }
+    pendingClaimInput.push({ text, queryReply })
+    if (queryReply) {
+      pendingClaimQueryReplyCount += 1
+    }
+  }
+  // Why: clearing the claim flag without draining strands the queued bytes.
+  const flushPendingClaimInput = (stream: RemoteRuntimeMultiplexedTerminal): void => {
+    const queued = pendingClaimInput
+    pendingViewportClaim = false
+    pendingClaimInput = []
+    pendingClaimQueryReplyCount = 0
+    for (const segment of queued) {
+      stream.sendInput(segment.text)
+    }
+    for (const resolve of viewportClaimReadyWaiters) {
+      resolve(true)
     }
     viewportClaimReadyWaiters.clear()
   }
@@ -565,34 +604,68 @@ export function createRemoteRuntimePtyTransport(
     }
 
     const startedAt = Date.now()
+    let pollMs = HOST_SESSION_ATTACH_POLL_MS
+    let nextRequest: 'activate' | 'list' = 'list'
+    let activationOutcomeUnknown = false
     while (isCurrent()) {
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
         return undefined
       }
       // Why: host mirrors can publish before their PTY handle is ready, but a stuck pending surface must not poll forever.
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.min(HOST_SESSION_ATTACH_POLL_MS, remainingMs))
-      )
-      const listed = await listRemoteRuntimeSessionTabsDeduped({
-        environmentId: currentRuntimeEnvironmentId,
-        worktreeId,
-        load: () =>
-          callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-            worktree
-          })
-      })
-      const handle = findReadyHostSessionHandle(listed, hostTabId)
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, remainingMs)))
+      pollMs = Math.min(pollMs * 2, HOST_SESSION_POLL_MAX_MS)
+      // Why: an RPC left on its own 15s default would stretch this bounded wait to ~30s before the pane reports any terminal state.
+      const requestRemainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      if (requestRemainingMs <= 0) {
+        return undefined
+      }
+      const request = nextRequest
+      let snapshot: RuntimeMobileSessionTabsResult
+      try {
+        snapshot =
+          request === 'list'
+            ? await listRemoteRuntimeSessionTabsDeduped({
+                environmentId: currentRuntimeEnvironmentId,
+                worktreeId,
+                load: () =>
+                  callRuntime<RuntimeMobileSessionTabsResult>(
+                    'session.tabs.list',
+                    {
+                      worktree
+                    },
+                    requestRemainingMs
+                  )
+              })
+            : await activateHostSessionSurface(hostTabId, worktree, 'user', requestRemainingMs)
+      } catch (error) {
+        if (request === 'list') {
+          throw error
+        }
+        // Why: no re-activation failure is absence proof, whether the surface is missing or the host predates the method — but
+        // activation materializes host-side, so an outcome the client never saw must not be replayed into a duplicate PTY.
+        activationOutcomeUnknown = true
+        nextRequest = 'list'
+        continue
+      }
+      const handle = findReadyHostSessionHandle(snapshot, hostTabId)
       if (handle) {
         return handle
       }
-      if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
+      if (request === 'activate') {
+        // Why: an activation response can race host publication, so inventory — not this snapshot — decides what exists.
+        nextRequest = 'list'
+        continue
+      }
+      if (!hasHostSessionTerminalSurface(snapshot, hostTabId)) {
         const siblingStillExists =
-          getHostSessionTerminalSurfaces(listed, hostTabId, {
+          getHostSessionTerminalSurfaces(snapshot, hostTabId, {
             matchRequestedLeaf: false
           }).length > 0
         return siblingStillExists ? false : null
       }
+      // Why: a host relaunch republishes the surface unmaterialized, and only activation can mint its PTY — list-only polling waits forever.
+      nextRequest = activationOutcomeUnknown ? 'list' : 'activate'
     }
     return undefined
   }
@@ -759,9 +832,25 @@ export function createRemoteRuntimePtyTransport(
       }
       // Why: a stale response can precede its replacement; bounded backoff avoids retrying the stale handle in a hot loop.
       await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, remainingMs)))
-      pollMs = Math.min(pollMs * 2, HOST_SESSION_REPLACEMENT_POLL_MAX_MS)
+      pollMs = Math.min(pollMs * 2, HOST_SESSION_POLL_MAX_MS)
     }
     return { handle: undefined, inventoryFailed: false }
+  }
+
+  // Why: the reconnect button and a parked external trigger revive a pane the same way — replay whichever entry point opened it.
+  function replayLastTransportEntryPoint(): boolean {
+    if (destroyed || terminalEnded || connected) {
+      return false
+    }
+    if (lastAttachOptions) {
+      transport.attach(lastAttachOptions)
+      return true
+    }
+    if (lastConnectOptions) {
+      void transport.connect(lastConnectOptions)
+      return true
+    }
+    return false
   }
 
   async function attachHostSessionMirror(
@@ -779,17 +868,26 @@ export function createRemoteRuntimePtyTransport(
       (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch)
     const hostTabId = toHostSessionTabId(tabId)
     const hostHandle = await waitForHostSessionHandleWithRecovery(hostTabId, isCurrent)
-    if (hostHandle === undefined || !isCurrent()) {
+    if (!isCurrent()) {
       return undefined
     }
-    if (hostHandle === null) {
-      surfaceErrorMessage('Remote terminal was closed.')
-      return undefined
-    }
-    if (!hostHandle || !isCurrent()) {
-      if (isCurrent()) {
-        surfaceErrorMessage('Remote terminal was closed.')
+    if (hostHandle === undefined) {
+      connecting = false
+      // Why: no handle and no removal evidence is unknown liveness, so own an epoch and keep an unarmed retry parked for the
+      // banner and online/resume to fire — a silent 'connecting' renders no banner and retryRecovery() refuses to run.
+      if (recovery.currentPhase !== 'disconnected') {
+        const recoveryEpoch = recovery.isActive ? recovery.currentEpoch : recovery.begin()
+        recovery.parkRetryForExternalTrigger(recoveryEpoch, () => {
+          replayLastTransportEntryPoint()
+        })
       }
+      emitRecoveryState()
+      return undefined
+    }
+    if (!hostHandle) {
+      connecting = false
+      emitRecoveryState()
+      surfaceErrorMessage('Remote terminal was closed.')
       return undefined
     }
 
@@ -1257,20 +1355,20 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
-  const inputBatcher = createRemoteRuntimePtyTextBatcher(REMOTE_TERMINAL_INPUT_FLUSH_MS, (text) => {
+  const sendUnacknowledgedInput = (text: string, queryReply = false): boolean => {
     const targetHandle = handle
     const targetLifecycleEpoch = lifecycleEpoch
     if (!connected || !targetHandle || recoveryBlocksIo()) {
-      return
+      return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
     if (stream?.sendInput(text)) {
-      return
+      return true
     }
     if (pendingViewportClaim) {
       // Why: a claim during subscribe/reconnect has no stream record yet; hold its input so the stream emits claim+input in one order.
-      pendingClaimInput += text
-      return
+      queuePendingClaimInput(text, queryReply)
+      return true
     }
     void callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
       terminal: targetHandle,
@@ -1298,7 +1396,13 @@ export function createRemoteRuntimePtyTransport(
           handleRemoteTerminalError(error)
         }
       })
-  })
+    return true
+  }
+
+  const inputBatcher = createRemoteRuntimePtyTextBatcher(
+    REMOTE_TERMINAL_INPUT_FLUSH_MS,
+    sendUnacknowledgedInput
+  )
 
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
     const targetHandle = handle
@@ -1307,8 +1411,8 @@ export function createRemoteRuntimePtyTransport(
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
     if (claim ? stream?.claimViewport(cols, rows) : stream?.resize(cols, rows)) {
-      if (claim) {
-        pendingViewportClaim = false
+      if (claim && stream) {
+        flushPendingClaimInput(stream)
       }
       return
     }
@@ -1778,6 +1882,12 @@ export function createRemoteRuntimePtyTransport(
                     kittyKeyboardFlags: meta.kittyKeyboardFlags,
                     snapshotSeq: meta.seq
                   }
+                : {}),
+              ...(meta?.terminalOwner && meta.seq !== undefined
+                ? { terminalOwner: meta.terminalOwner }
+                : {}),
+              ...(meta?.alternateScreen !== undefined && meta.seq !== undefined
+                ? { alternateScreen: meta.alternateScreen }
                 : {})
             })
           }
@@ -1922,16 +2032,6 @@ export function createRemoteRuntimePtyTransport(
     // Why: a viewport change during the subscribe round-trip hit the no-op one-shot fallback; replay the latest viewport so the PTY isn't stuck at subscribe-time size.
     if (pendingViewportClaim && desiredViewport) {
       nextStream.claimViewport(desiredViewport.cols, desiredViewport.rows)
-      pendingViewportClaim = false
-      const queuedInput = pendingClaimInput
-      pendingClaimInput = ''
-      if (queuedInput) {
-        nextStream.sendInput(queuedInput)
-      }
-      for (const resolve of viewportClaimReadyWaiters) {
-        resolve(true)
-      }
-      viewportClaimReadyWaiters.clear()
     } else if (
       desiredViewport &&
       (desiredViewport.cols !== subscribedViewport?.cols ||
@@ -1939,6 +2039,8 @@ export function createRemoteRuntimePtyTransport(
     ) {
       nextStream.resize(desiredViewport.cols, desiredViewport.rows)
     }
+    // Why: a live claim may already have cleared the flag, so drain on every install.
+    flushPendingClaimInput(nextStream)
   }
 
   const transport: PtyTransport = {
@@ -2070,14 +2172,17 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
+        const resumeHostAuthorityCapability = resumeProviderSessionToSend
+          ? agentResumeHostAuthorityCapability(launchAgentToSend)
+          : undefined
         const created = launchAgentToSend
           ? agentSessionRequiresHostAuthorityReplay
             ? await hostAuthorityCreate()
             : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
                 environmentId: createEnvironmentId,
                 hostAuthority: hostAuthorityCreate,
-                ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
-                  ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+                ...(resumeHostAuthorityCapability
+                  ? { hostAuthorityCapability: resumeHostAuthorityCapability }
                   : {}),
                 legacy: legacyCreate
               })
@@ -2345,39 +2450,37 @@ export function createRemoteRuntimePtyTransport(
     // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms debounce would miss it and echo the reply onto the prompt (#7329).
     sendInputImmediate(data: string): boolean {
       const targetHandle = handle
+      const targetLifecycleEpoch = lifecycleEpoch
       if (!connected || !targetHandle || recoveryBlocksIo()) {
         return false
       }
       if (!data) {
         return true
       }
-      // Why: earlier input may still be in async byte-length validation (in validationTail, not takePending); route the reply through the ordered queue so it can't jump ahead and reorder bytes.
+      // Why: wait behind async validation, but keep the reply as its own host-classifiable write.
       if (inputBatcher.hasPendingValidation()) {
-        const accepted = inputBatcher.push(data)
-        inputBatcher.flush()
-        return accepted
+        inputBatcher.enqueueAfterValidation(() => {
+          if (
+            !connected ||
+            lifecycleEpoch !== targetLifecycleEpoch ||
+            handle !== targetHandle ||
+            recoveryBlocksIo()
+          ) {
+            return
+          }
+          const pending = inputBatcher.takePending()
+          if (pending) {
+            sendUnacknowledgedInput(pending)
+          }
+          sendUnacknowledgedInput(data, true)
+        })
+        return true
       }
       const pending = inputBatcher.takePending()
-      const text = `${pending}${data}`
-      const stream = getCurrentMultiplexedStream(targetHandle)
-      if (stream?.sendInput(text)) {
-        return true
+      if (pending && !sendUnacknowledgedInput(pending)) {
+        return false
       }
-      if (pendingViewportClaim) {
-        pendingClaimInput += text
-        return true
-      }
-      void callRuntime('terminal.send', {
-        terminal: targetHandle,
-        text,
-        client: { id: clientId, type: 'desktop' },
-        ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
-      }).catch((error) => {
-        if (handle === targetHandle) {
-          handleRemoteTerminalError(error)
-        }
-      })
-      return true
+      return sendUnacknowledgedInput(data, true)
     },
 
     sendInputAccepted: sendInputAcceptedToRuntime,
@@ -2449,12 +2552,7 @@ export function createRemoteRuntimePtyTransport(
         recovery.currentPhase === 'disconnected'
       ) {
         recovery.cancel()
-        if (lastAttachOptions) {
-          transport.attach(lastAttachOptions)
-          return true
-        }
-        if (lastConnectOptions) {
-          void transport.connect(lastConnectOptions)
+        if (replayLastTransportEntryPoint()) {
           return true
         }
       }

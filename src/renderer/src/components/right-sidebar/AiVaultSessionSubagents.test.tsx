@@ -1,11 +1,23 @@
 // @vitest-environment happy-dom
 
+import type { ComponentProps, JSX } from 'react'
 import { act, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AiVaultSession, AiVaultSubagentListResult } from '../../../../shared/ai-vault-types'
-import { SessionSubagentsSection } from './AiVaultSessionSubagents'
+import { SessionSubagentsSection as ProductionSessionSubagentsSection } from './AiVaultSessionSubagents'
 
 const listSubagentSessions = vi.fn<(args: unknown) => Promise<AiVaultSubagentListResult>>()
+
+function SessionSubagentsSection(
+  props: ComponentProps<typeof ProductionSessionSubagentsSection>
+): JSX.Element {
+  return (
+    <TooltipProvider>
+      <ProductionSessionSubagentsSection {...props} />
+    </TooltipProvider>
+  )
+}
 
 beforeEach(() => {
   listSubagentSessions.mockReset()
@@ -84,6 +96,22 @@ describe('SessionSubagentsSection', () => {
     })
     expect(queryByText('Second pass')).not.toBeNull()
     expect(queryByText('First pass')).toBeNull()
+  })
+
+  it('labels the subagent run state exactly once, on the dot itself', async () => {
+    listSubagentSessions.mockResolvedValueOnce({
+      sessions: [makeSubagent('Running task')],
+      issues: []
+    })
+    const { container } = render(<SessionSubagentsSection session={makeSession()} />)
+    await act(async () => {})
+
+    const titles = [...container.querySelectorAll('[title]')].map((element) =>
+      element.getAttribute('title')
+    )
+
+    expect(titles).toEqual(['Running task', 'View Log'])
+    expect(container.querySelector('[data-slot="tooltip-trigger"]')).not.toBeNull()
   })
 
   it('does not fetch for remote sessions even when the scan counted transcripts', async () => {

@@ -13,7 +13,12 @@ function viewWorktreeDiff(
   worktreeId: string,
   executionHostId: WorktreeRemovalTarget['executionHostId']
 ): void {
-  activateAndRevealWorktree(worktreeId, executionHostId ? { executionHostId } : {})
+  // The Source Control panel is the requested surface — don't re-seed a shell in a
+  // workspace the user is trying to delete.
+  activateAndRevealWorktree(worktreeId, {
+    providesInitialSurface: true,
+    ...(executionHostId ? { executionHostId } : {})
+  })
   const state = useAppStore.getState()
   state.setRightSidebarTab('source-control')
   state.setRightSidebarOpen(true)

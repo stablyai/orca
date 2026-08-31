@@ -624,6 +624,11 @@ const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' ||
 if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
   console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}`)
 }
+// Why: automation launches this app while someone is working; announce that the
+// window will come up without taking the foreground so the mode is visible in logs.
+if (!isHelpOrVersion && process.env.ORCA_BACKGROUND_LAUNCH === '1') {
+  console.error('[orca-dev] Background launch: window shows without stealing focus')
+}
 let forwardedExtras = []
 if (!userPassedPort && !isHelpOrVersion) {
   const envPortRaw = process.env.REMOTE_DEBUGGING_PORT

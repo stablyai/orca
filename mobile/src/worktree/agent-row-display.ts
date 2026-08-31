@@ -9,23 +9,34 @@ export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 // Mirrors the desktop AgentStateDot vocabulary. The wire `state` is the agent
 // status state; 'blocked'/'waiting' read as attention states, 'done' as
 // complete, everything else idle.
-export type AgentDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle' | 'interrupted'
+export type AgentDotState =
+  | 'working'
+  | 'monitoring'
+  | 'blocked'
+  | 'waiting'
+  | 'done'
+  | 'idle'
+  | 'interrupted'
 
 export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'updatedAt'>,
+  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'workingMode' | 'interrupted' | 'updatedAt'>,
   now: number
 ): AgentDotState {
   if (row.interrupted) {
     return 'interrupted'
   }
   switch (row.state) {
-    case 'working':
     case 'blocked':
     case 'waiting':
       // Why: an agent that exits without a final report would otherwise read as
       // active forever. Decay a stale active state to idle, matching desktop's
       // renderer-side staleness decay (worktree-agent-rows.ts).
       return now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS ? 'idle' : row.state
+    case 'working':
+      if (now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+        return 'idle'
+      }
+      return row.workingMode === 'monitoring' ? 'monitoring' : 'working'
     case 'done':
       return 'done'
   }
@@ -37,6 +48,8 @@ export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
       return 'Working'
+    case 'monitoring':
+      return 'Monitoring background tasks'
     case 'blocked':
       return 'Blocked'
     case 'waiting':

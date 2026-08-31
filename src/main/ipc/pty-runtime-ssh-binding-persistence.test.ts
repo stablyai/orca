@@ -156,7 +156,8 @@ describe('registerPtyHandlers', () => {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -199,7 +200,8 @@ describe('registerPtyHandlers', () => {
           worktreeId: 'wt-remote',
           tabId: 'tab-remote',
           leafId,
-          ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
+          ptyId: 'ssh:ssh-reattach-ok@@relay-pty',
+          hostAdmittedMembership: true
         },
         'ssh:ssh-reattach-ok'
       )
@@ -372,7 +374,8 @@ describe('registerPtyHandlers', () => {
         throw new Error('disk full')
       }),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -468,7 +471,8 @@ describe('registerPtyHandlers', () => {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {

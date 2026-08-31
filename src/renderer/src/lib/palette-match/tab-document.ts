@@ -72,13 +72,29 @@ function dedupeSecondaryTexts(
 export function buildPaletteTabDocument(input: PaletteTabDocumentInput): PaletteDocument {
   const fields: PaletteFieldSource[] = [
     { id: PALETTE_TAB_TITLE_FIELD_ID, profile: 'structured-label', text: input.title },
-    { id: PALETTE_TAB_WORKTREE_FIELD_ID, profile: 'structured-label', text: input.worktreeName },
-    { id: PALETTE_TAB_BRANCH_FIELD_ID, profile: 'structured-label', text: input.branch },
-    { id: PALETTE_TAB_REPO_FIELD_ID, profile: 'structured-label', text: input.repoName },
+    {
+      id: PALETTE_TAB_WORKTREE_FIELD_ID,
+      profile: 'structured-label',
+      text: input.worktreeName,
+      isContainer: true
+    },
+    {
+      id: PALETTE_TAB_BRANCH_FIELD_ID,
+      profile: 'structured-label',
+      text: input.branch,
+      isContainer: true
+    },
+    {
+      id: PALETTE_TAB_REPO_FIELD_ID,
+      profile: 'structured-label',
+      text: input.repoName,
+      isContainer: true
+    },
     {
       id: PALETTE_TAB_WORKSPACE_FIELD_ID,
       profile: 'structured-label',
-      text: input.workspaceLabel ?? ''
+      text: input.workspaceLabel ?? '',
+      isContainer: true
     }
   ]
 

@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
   moveUnifiedTabToGroup: vi.fn(),
   setRemoteBrowserPageHandle: vi.fn(),
   focusBrowserTabInWorktree: vi.fn(),
-  applyFreshWebSessionTabsSnapshot: vi.fn(),
+  applyWebSessionTabsSnapshot: vi.fn(),
+  decideWebSessionTabsSnapshot: vi.fn(() => ({ apply: true, settlesHostMirror: true })),
+  getWebSessionTabsTrackingGeneration: vi.fn(() => 0),
   acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
@@ -41,9 +43,14 @@ vi.mock('../store', () => ({
 
 vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyFreshWebSessionTabsSnapshot: mocks.applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) =>
-    mocks.setState(buildPatch),
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
+  getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
+  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
+    mocks.setState(buildPatch)
+    // The production caller invokes the returned settle receipt.
+    return () => {}
+  },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
@@ -86,7 +93,7 @@ describe('web runtime session tab actions', () => {
         activeWorktreeId: WORKTREE_ID
       })
     })
-    mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
+    mocks.applyWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
   })
 
   afterEach(() => {
@@ -134,7 +141,7 @@ describe('web runtime session tab actions', () => {
         tabId: 'local-browser-unified',
         reason: 'user'
       })
-    ).resolves.toBe(true)
+    ).resolves.toBe('applied')
 
     expect(runtimeCall).toHaveBeenNthCalledWith(1, {
       selector: ENVIRONMENT_ID,
@@ -166,7 +173,7 @@ describe('web runtime session tab actions', () => {
       },
       timeoutMs: 15_000
     })
-    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalled()
+    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalled()
   })
 
   it('supersedes browser focus intent when a terminal is activated next', async () => {
@@ -211,14 +218,14 @@ describe('web runtime session tab actions', () => {
         publicationEpoch: 'epoch-1',
         terminalHandle: 'term-1'
       })
-    ).resolves.toBe(true)
+    ).resolves.toBe('applied')
     await expect(
       closeWebRuntimeSessionTab({
         worktreeId: WORKTREE_ID,
         tabId: 'local-browser-unified',
         reason: 'user'
       })
-    ).resolves.toBe(true)
+    ).resolves.toBe('applied')
 
     expect(runtimeCall).toHaveBeenNthCalledWith(1, {
       selector: ENVIRONMENT_ID,
@@ -260,7 +267,7 @@ describe('web runtime session tab actions', () => {
         tabId: 'local-browser-unified',
         reason: 'pty-exit'
       })
-    ).resolves.toBe(false)
+    ).resolves.toBe('failed')
 
     expect(runtimeCall).toHaveBeenCalledTimes(1)
     expect(runtimeCall).toHaveBeenCalledWith(
@@ -270,6 +277,28 @@ describe('web runtime session tab actions', () => {
       ENVIRONMENT_ID,
       WORKTREE_ID
     )
+  })
+
+  // Why this distinction is load-bearing: a close that reports 'unknown-tab' lets the client
+  // finish a teardown the host cannot, and reporting it for an ordinary failure would tear down
+  // tabs a reachable host still holds.
+  it.each([
+    ['tab_not_found', 'unknown-tab'],
+    ['runtime_rpc_timeout', 'failed']
+  ])('classifies a %s close refusal as %s', async (code, outcome) => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'close', ok: false, error: { code, message: code } })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).resolves.toBe(outcome)
   })
 
   it('fails closed when reconnect routes a lifecycle close to an older host', async () => {
@@ -296,7 +325,7 @@ describe('web runtime session tab actions', () => {
         publicationEpoch: 'epoch-1',
         terminalHandle: 'term-1'
       })
-    ).resolves.toBe(false)
+    ).resolves.toBe('failed')
 
     expect(runtimeCall).toHaveBeenNthCalledWith(
       1,
@@ -347,7 +376,7 @@ describe('web runtime session tab actions', () => {
         publicationEpoch: 'epoch-1',
         terminalHandle: 'term-1'
       })
-    ).resolves.toBe(true)
+    ).resolves.toBe('applied')
 
     expect(
       isWebSessionCloseIntentPending(
@@ -362,7 +391,7 @@ describe('web runtime session tab actions', () => {
       WORKTREE_ID
     )
     expect(mocks.acceptReplayedWebSessionTabsSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.applyFreshWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
+      mocks.applyWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
     )
   })
 
@@ -398,7 +427,7 @@ describe('web runtime session tab actions', () => {
         publicationEpoch: 'epoch-1',
         terminalHandle: 'term-1'
       })
-    ).resolves.toBe(true)
+    ).resolves.toBe('applied')
 
     expect(
       isWebSessionCloseIntentPending(
@@ -433,7 +462,7 @@ describe('web runtime session tab actions', () => {
         tabId: 'local-browser-unified',
         reason: 'user'
       })
-    ).resolves.toBe(false)
+    ).resolves.toBe('failed')
 
     expect(
       isWebSessionCloseIntentPending(

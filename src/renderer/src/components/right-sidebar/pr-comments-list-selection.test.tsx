@@ -74,7 +74,7 @@ import {
   seedPRCommentsListSelectionForTests,
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
-import { PRCommentsList } from './checks-panel-content'
+import { PRCommentsList } from './checks-panel/comments-list'
 
 let container: HTMLDivElement
 let root: Root

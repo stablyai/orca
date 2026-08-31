@@ -117,6 +117,7 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
+  --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -388,6 +389,12 @@
 
 [data-sonner-toaster] {
   font-family: var(--font-sans);
+  z-index: 40 !important;
+}
+
+/* Keep interruption controls above unrelated updater/onboarding chrome. */
+.native-chat-pane-shell:has([data-native-chat-working='true']) {
+  z-index: 50;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
@@ -395,7 +402,7 @@
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 16px;
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-floating);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
@@ -1144,9 +1151,11 @@ html.native-shell .app-layout {
 
 /* ── Jump palette (Cmd+J) ─────────────────────────────── */
 
-/* Why the data-slot qualifier: CommandItem also sets data-[selected=true]:bg-accent;
-   this selector must beat that utility so light-mode selection is actually visible. */
-[data-slot='command-item'].jump-palette-item[data-selected='true'] {
+/* Why the extra qualifier: CommandItem also sets data-[selected=true]:bg-accent;
+   this selector must beat that utility so light-mode selection is actually visible.
+   The role='option' arm covers virtualized rows that render outside cmdk. */
+[data-slot='command-item'].jump-palette-item[data-selected='true'],
+[role='option'].jump-palette-item[data-selected='true'] {
   /* Why: flat --accent (#f5f5f5) on the palette surface (#fff) is nearly invisible
      in light mode — the keyboard cursor has to read as a solid selected row.
      Mix foreground into background and draw an inset ring; expose the surface
@@ -1158,7 +1167,8 @@ html.native-shell .app-layout {
   color: var(--foreground);
 }
 
-.dark [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+.dark [data-slot='command-item'].jump-palette-item[data-selected='true'],
+.dark [role='option'].jump-palette-item[data-selected='true'] {
   /* Why accent, not the light-mode mix: --accent (#404040) already reads clearly on
      dark surfaces; a low-%% foreground mix was a visible step down from the old row. */
   --jump-palette-selection-surface: var(--accent);
@@ -1322,7 +1332,7 @@ html.native-shell .app-layout {
   background: var(--popover);
   color: var(--popover-foreground);
   /* STYLEGUIDE: floating elevation for popovers that escape the editor surface. */
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-floating);
 }
 
 /* Why: caret points down at the usage meters this notice explains. */

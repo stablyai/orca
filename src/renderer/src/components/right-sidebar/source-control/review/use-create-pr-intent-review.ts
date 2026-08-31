@@ -132,12 +132,7 @@ export function useSourceControlCreatePrIntentReview({
           if (!resolved.ok) {
             setCreatePrIntentNoticeForWorktree(token.worktreeId, {
               tone: 'destructive',
-              message:
-                resolved.error ??
-                translate(
-                  'auto.components.right.sidebar.SourceControl.createPrIntentEmptyGeneratedBody',
-                  'Generated review details did not include a description. Retry Create PR.'
-                )
+              message: resolved.error
             })
             return false
           }

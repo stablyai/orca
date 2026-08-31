@@ -14,6 +14,7 @@ import {
   type SearchableWorkspaceTab
 } from '@/lib/workspace-tab-palette-search'
 import type { AppState } from '@/store/types'
+import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
@@ -46,6 +47,7 @@ export type OpenTabSearchEntryState = Pick<
 > & {
   executionHostId: ExecutionHostId
   generatedTitlesEnabled: boolean
+  ownershipWorktrees: readonly Pick<Worktree, 'id'>[]
   repo: Pick<Repo, 'connectionId' | 'displayName' | 'executionHostId' | 'id'> | null
   worktree: Worktree
 }
@@ -101,6 +103,7 @@ export function selectOpenTabSearchEntryState(
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     groupsByWorktree: state.groupsByWorktree,
     openFiles: state.openFiles,
+    ownershipWorktrees: getIndexedAllWorktrees(state.worktreesByRepo),
     repo,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
@@ -130,6 +133,7 @@ export function buildOpenTabSearchEntries(
   const worktrees = [scopedWorktree]
   const scope = {
     worktrees,
+    ownershipWorktrees: state.ownershipWorktrees,
     repoMap: new Map(repo ? [[repo.id, repo]] : []),
     worktreeOrder: new Map([[worktree.id, 0]])
   }
@@ -160,6 +164,7 @@ export function buildOpenTabSearchEntries(
       ...scope,
       browserTabsByWorktree: state.browserTabsByWorktree,
       browserPagesByWorkspace: state.browserPagesByWorkspace,
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       activeBrowserTabId: state.activeBrowserTabId,
       activeWorktreeId: state.activeWorktreeId,
       activeTabType: state.activeTabType

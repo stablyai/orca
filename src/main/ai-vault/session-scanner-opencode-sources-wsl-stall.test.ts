@@ -20,7 +20,10 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', () => ({
 }))
 
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
-import { WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS } from '../native-chat/wsl-transcript-fs-gate'
+import {
+  resetWslTranscriptFsGateForTests,
+  WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS
+} from '../native-chat/wsl-transcript-fs-gate'
 
 let releaseStall: (() => void) | undefined
 
@@ -39,6 +42,7 @@ function stalls(): Promise<never> {
 }
 
 beforeEach(() => {
+  resetWslTranscriptFsGateForTests()
   mocks.readdir.mockReset()
   mocks.stat.mockReset()
   releaseStall = undefined

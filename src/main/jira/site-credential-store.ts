@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../../shared/secret-store'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
@@ -157,11 +157,11 @@ export function writeSiteFile(file: JiraSiteFile): void {
 }
 
 function writeEncryptedToken(path: string, apiToken: string): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    writeFileSync(path, safeStorage.encryptString(apiToken), { mode: 0o600 })
+  if (getSecretStore().isEncryptionAvailable()) {
+    writeFileSync(path, getSecretStore().encryptString(apiToken), { mode: 0o600 })
     return
   }
-  console.warn('[jira] safeStorage encryption unavailable — storing token in plaintext')
+  console.warn('[jira] secret encryption unavailable — storing token in plaintext')
   writeFileSync(path, apiToken, { encoding: 'utf-8', mode: 0o600 })
 }
 

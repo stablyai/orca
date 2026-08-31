@@ -4,6 +4,7 @@ import type { Project } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
 import {
   getLocalProjectGitExecOptions,
+  getWorktreeMirrorDistro,
   resolveLocalProjectRuntimeForRepo
 } from './project-runtime-git-options'
 import { _resetWslCachesForTests, _setWslCachesForTests } from './wsl'
@@ -133,6 +134,46 @@ describe('project runtime git options', () => {
     )
 
     expect(runtime).toBeUndefined()
+  })
+
+  describe('getWorktreeMirrorDistro', () => {
+    it('names the distro a resolved WSL project runs in', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+
+      expect(
+        withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
+      ).toBe('Ubuntu')
+    })
+
+    it('names no distro for a host-runtime project', () => {
+      const project = makeProject({ localWindowsRuntimePreference: { kind: 'windows-host' } })
+
+      expect(
+        withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
+      ).toBeUndefined()
+    })
+
+    // Placement must not throw where git execution does: a project awaiting
+    // repair still gets a worktree, on the Windows side as it always has.
+    it('names no distro instead of throwing when the runtime needs repair', () => {
+      _setWslCachesForTests({ available: true, distros: ['Debian'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+
+      expect(
+        withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
+      ).toBeUndefined()
+    })
+
+    it('names no distro when the store cannot resolve projects', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+
+      expect(withPlatform('win32', () => getWorktreeMirrorDistro({}, makeRepo()))).toBeUndefined()
+    })
   })
 
   it('does not apply local Windows runtime routing to runtime-owned repos', () => {

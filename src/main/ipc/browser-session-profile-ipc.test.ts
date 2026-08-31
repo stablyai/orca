@@ -4,6 +4,7 @@ const {
   handleMock,
   removeHandlerMock,
   createProfileMock,
+  routeIdentityMock,
   getProfileMock,
   updateProfileSourceMock,
   detectAllBrowsersMock,
@@ -12,6 +13,7 @@ const {
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   createProfileMock: vi.fn(),
+  routeIdentityMock: vi.fn(),
   getProfileMock: vi.fn(),
   updateProfileSourceMock: vi.fn(),
   detectAllBrowsersMock: vi.fn(),
@@ -39,8 +41,13 @@ vi.mock('../browser/browser-session-registry', () => ({
   }
 }))
 
+vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
+  getPairedRuntimeBrowserClientRouteIdentity: routeIdentityMock
+}))
+
 vi.mock('../browser/browser-cookie-import', () => ({
   detectAllBrowsers: detectAllBrowsersMock,
+  detectInstalledBrowsers: vi.fn(() => []),
   importCookiesFromBrowser: importCookiesFromBrowserMock,
   importCookiesFromFile: vi.fn(),
   pickCookieFile: vi.fn(),
@@ -55,29 +62,83 @@ describe('browser session profile IPC', () => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     createProfileMock.mockReset()
+    routeIdentityMock.mockReset()
     getProfileMock.mockReset()
     updateProfileSourceMock.mockReset()
     detectAllBrowsersMock.mockReset()
+    detectAllBrowsersMock.mockResolvedValue([])
     importCookiesFromBrowserMock.mockReset()
     setTrustedBrowserRendererWebContentsId(null)
   })
 
-  const trustedSender = {
-    id: 91,
-    isDestroyed: () => false,
-    getType: () => 'window',
-    getURL: () => 'file:///renderer/index.html'
-  } as Electron.WebContents
+  function trustedSender(): Electron.WebContents {
+    return {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+  }
 
   function getHandler(channel: string): (...args: unknown[]) => unknown {
     registerBrowserHandlers()
-    setTrustedBrowserRendererWebContentsId(trustedSender.id)
+    setTrustedBrowserRendererWebContentsId(trustedSender().id)
     return handleMock.mock.calls.find(([registered]) => registered === channel)?.[1] as (
       ...args: unknown[]
     ) => unknown
   }
 
-  it('forwards the user-agent mode from a trusted renderer', () => {
+  function clientHostDetectHandler(): (
+    event: { sender: Electron.WebContents },
+    args: { environmentId: string }
+  ) => unknown {
+    registerBrowserHandlers()
+    return handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:session:detectBrowsersForClientHost'
+    )?.[1]
+  }
+
+  // Why: the import runs wherever the pages are hosted, so the picker must be sourced from the same
+  // machine — a remote-sourced list is either empty (headless) or names profiles this desktop lacks.
+  it('detects this desktop’s browsers only while the environment is client-hosted', async () => {
+    detectAllBrowsersMock.mockResolvedValue([
+      {
+        family: 'chrome',
+        label: 'Google Chrome',
+        cookiesPath: '/Users/someone/Library/.../Cookies',
+        keychainService: 'Chrome Safe Storage',
+        keychainAccount: 'Chrome',
+        profiles: [{ name: 'Person 1', directory: 'Default' }],
+        selectedProfile: 'Default'
+      }
+    ])
+    routeIdentityMock.mockReturnValue({ orcaProfileId: 'profile-a' })
+
+    const handler = clientHostDetectHandler()
+
+    await expect(handler({ sender: trustedSender() }, { environmentId: 'env-1' })).resolves.toEqual([
+      {
+        family: 'chrome',
+        label: 'Google Chrome',
+        profiles: [{ name: 'Person 1', directory: 'Default' }],
+        selectedProfile: 'Default'
+      }
+    ])
+    expect(routeIdentityMock).toHaveBeenCalledWith('env-1')
+  })
+
+  it('returns null so detection falls back to the server when nothing is client-hosted', async () => {
+    routeIdentityMock.mockReturnValue(null)
+
+    const handler = clientHostDetectHandler()
+
+    await expect(
+      handler({ sender: trustedSender() }, { environmentId: 'env-1' })
+    ).resolves.toBeNull()
+    expect(detectAllBrowsersMock).not.toHaveBeenCalled()
+  })
+
+  it('forwards the user-agent mode from a trusted renderer', async () => {
     const profile = {
       id: 'profile-google',
       scope: 'isolated',
@@ -101,9 +162,9 @@ describe('browser session profile IPC', () => {
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
 
-    expect(
+    await expect(
       createHandler({ sender }, { scope: 'isolated', label: 'Google', userAgentMode: 'native' })
-    ).toEqual(profile)
+    ).resolves.toEqual(profile)
     expect(createProfileMock).toHaveBeenCalledWith('isolated', 'Google', {
       userAgentMode: 'native'
     })
@@ -124,7 +185,7 @@ describe('browser session profile IPC', () => {
     ])
     const detectHandler = getHandler('browser:session:detectBrowsers')
 
-    const detected = (await detectHandler({ sender: trustedSender })) as Record<string, unknown>[]
+    const detected = (await detectHandler({ sender: trustedSender() })) as Record<string, unknown>[]
 
     expect(detected).toEqual([
       {
@@ -168,7 +229,7 @@ describe('browser session profile IPC', () => {
     const importHandler = getHandler('browser:session:importFromBrowser')
 
     const result = await importHandler(
-      { sender: trustedSender },
+      { sender: trustedSender() },
       { profileId: 'default', browserFamily: 'custom', customBrowserId: 'com.operasoftware.Opera' }
     )
 
@@ -202,7 +263,7 @@ describe('browser session profile IPC', () => {
     const importHandler = getHandler('browser:session:importFromBrowser')
 
     const result = await importHandler(
-      { sender: trustedSender },
+      { sender: trustedSender() },
       { profileId: 'default', browserFamily: 'custom' }
     )
 
@@ -229,7 +290,7 @@ describe('browser session profile IPC', () => {
     const importHandler = getHandler('browser:session:importFromBrowser')
 
     await importHandler(
-      { sender: trustedSender },
+      { sender: trustedSender() },
       { profileId: 'default', browserFamily: 'custom', customBrowserId: 'at.studio.AsideBrowser' }
     )
 
