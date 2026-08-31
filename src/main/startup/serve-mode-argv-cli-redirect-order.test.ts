@@ -14,8 +14,6 @@ const REDIRECT_OPTIONS = {
   isPackaged: true,
   commandNames: ['serve', 'status']
 }
-// A mounted AppImage is the case where the runtime does export these.
-const MOUNTED_APPIMAGE_ENV = { APPIMAGE: '/opt/orca/Orca.AppImage', APPDIR: '/tmp/.mount_ab12' }
 
 function rewriteAsIndexDoes(argv: string[]): string[] {
   return argvRequestsServeMode(argv) ? normalizeServeModeArgv(argv) : argv
@@ -25,7 +23,7 @@ describe('serve argv rewrite vs AppImage CLI redirect ordering', () => {
   const launchArgv = ['/opt/orca/orca-ide', '--no-sandbox', 'serve', '--port', '7777', '--json']
 
   it('hands the launch argv to the CLI when the redirect runs first', () => {
-    expect(getAppImageCliArgs(launchArgv, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toEqual([
+    expect(getAppImageCliArgs(launchArgv, REDIRECT_OPTIONS)).toEqual([
       'serve',
       '--port',
       '7777',
@@ -36,13 +34,13 @@ describe('serve argv rewrite vs AppImage CLI redirect ordering', () => {
   it('loses the redirect if the rewrite runs first', () => {
     const rewritten = rewriteAsIndexDoes(launchArgv)
     expect(rewritten).toContain('--serve')
-    expect(getAppImageCliArgs(rewritten, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toBeNull()
+    expect(getAppImageCliArgs(rewritten, REDIRECT_OPTIONS)).toBeNull()
   })
 
   it('leaves non-serve CLI commands redirectable either way', () => {
     const argv = ['/opt/orca/orca-ide', 'status']
     expect(rewriteAsIndexDoes(argv)).toEqual(argv)
-    expect(getAppImageCliArgs(argv, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toEqual(['status'])
+    expect(getAppImageCliArgs(argv, REDIRECT_OPTIONS)).toEqual(['status'])
   })
 
   // Why source text: the ordering only exists as statement order at index.ts module scope, and the
