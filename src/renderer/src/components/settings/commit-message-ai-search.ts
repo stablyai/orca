@@ -158,5 +158,29 @@ export const getCommitMessageAiPaneSearchEntries = createLocalizedCatalog(() => 
         'open'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.commit.message.ai.search.a8f3c1d2e7',
+      'Generation timeout'
+    ),
+    description: translate(
+      'auto.components.settings.commit.message.ai.search.b2e9d4f5a1',
+      'Maximum time allowed for AI commit message, branch name, and pull request generation.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.c7d1e3f8b2',
+        'timeout'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.d4a2f1c9e8',
+        'seconds'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.e5b3f2d0c9',
+        'duration'
+      )
+    ]
   }
 ])

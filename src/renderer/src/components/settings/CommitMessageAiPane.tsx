@@ -134,6 +134,12 @@ export function CommitMessageAiPane({
     void writeConfig({ customAgentCommand: value })
   }
 
+  const onGenerationTimeoutChange = (value: string): void => {
+    const seconds = Number.parseInt(value, 10)
+    if (Number.isNaN(seconds) || seconds < 10 || seconds > 600) return
+    void writeConfig({ generationTimeoutMs: seconds * 1000 })
+  }
+
   const onPrDefaultChange = (
     key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>,
     value: boolean
@@ -225,6 +231,59 @@ export function CommitMessageAiPane({
       writeConfig={writeConfig}
     />
   )
+
+  const generationTimeoutSeconds = Math.round(
+    (config.generationTimeoutMs ?? 60_000) / 1000
+  )
+  if (
+    matchesSettingsSearch(searchQuery, {
+      title: translate(
+        'auto.components.settings.CommitMessageAiPane.a8f3c1d2e7',
+        'Generation timeout'
+      ),
+      description: translate(
+        'auto.components.settings.CommitMessageAiPane.b2e9d4f5a1',
+        'Maximum time allowed for AI commit message, branch name, and pull request generation.'
+      ),
+      keywords: [
+        translate('auto.components.settings.CommitMessageAiPane.c7d1e3f8b2', 'timeout'),
+        translate('auto.components.settings.CommitMessageAiPane.d4a2f1c9e8', 'seconds'),
+        translate('auto.components.settings.CommitMessageAiPane.e5b3f2d0c9', 'duration')
+      ]
+    })
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="generation-timeout"
+        title={translate(
+          'auto.components.settings.CommitMessageAiPane.a8f3c1d2e7',
+          'Generation timeout'
+        )}
+        description={translate(
+          'auto.components.settings.CommitMessageAiPane.b2e9d4f5a1',
+          'Maximum time allowed for AI commit message, branch name, and pull request generation.'
+        )}
+        keywords={['timeout', 'seconds', 'duration']}
+        className="space-y-2 py-2"
+      >
+        <div className="flex items-center gap-2">
+          <Input
+            id="source-control-ai-generation-timeout"
+            type="number"
+            min={10}
+            max={600}
+            step={5}
+            value={generationTimeoutSeconds}
+            onChange={(e) => onGenerationTimeoutChange(e.target.value)}
+            className="h-8 w-20 text-xs tabular-nums"
+          />
+          <span className="text-xs text-muted-foreground">
+            {translate('auto.components.settings.CommitMessageAiPane.f6c4d3e1b0', 'seconds')}
+          </span>
+        </div>
+      </SearchableSetting>
+    )
+  }
 
   if (
     config.enabled &&

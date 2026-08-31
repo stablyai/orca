@@ -16,6 +16,7 @@ import type {
   SourceControlAiPrCreationDefaults,
   SourceControlAiSettings
 } from './source-control-ai-types'
+import { DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../main/text-generation/source-control-generation-limits'
 
 export const DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS: Required<SourceControlAiPrCreationDefaults> =
   {
@@ -47,7 +48,8 @@ export function getDefaultSourceControlAiSettings(): SourceControlAiSettings {
     customAgentCommand: '',
     instructionsByOperation: { commitMessage: '', pullRequest: '', branchName: '' },
     prCreationDefaults: { ...DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS },
-    launchActionDefaults: {}
+    launchActionDefaults: {},
+    generationTimeoutMs: DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS
   }
 }
 
@@ -151,6 +153,7 @@ export function normalizeSourceControlAiSettings(
       ...base.instructionsByOperation
     },
     modelOverridesByOperation: copyRecord(base.modelOverridesByOperation),
+    generationTimeoutMs: base.generationTimeoutMs ?? defaults.generationTimeoutMs,
     prCreationDefaults: { ...defaults.prCreationDefaults, ...base.prCreationDefaults },
     actions: { ...defaults.actions, ...normalizedActions, ...migratedTextActions },
     launchActionDefaults: normalizedLaunchActionDefaults ?? defaults.launchActionDefaults

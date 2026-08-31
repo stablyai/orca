@@ -39,6 +39,8 @@ export type SourceControlAiSettings = {
   prCreationDefaults?: SourceControlAiPrCreationDefaults
   /** @deprecated use actions instead. Kept for automatic migration and rollback compatibility. */
   launchActionDefaults?: SourceControlAiActionDefaults
+  /** Timeout in ms for AI generation and model discovery (default: 60000). */
+  generationTimeoutMs?: number
 }
 
 export type SourceControlAiSettingsPatch =
