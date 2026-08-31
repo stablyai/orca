@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto'
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -44,8 +45,25 @@ const DAEMON_ENTRY = join(ROOT, 'src/main/daemon/daemon-entry.ts')
 const DAEMON_OUT_FILE = join(OUT_DIR, 'daemon-entry.js')
 const AGENT_BROWSER_NAME = `agent-browser-${platform()}-${arch()}${process.platform === 'win32' ? '.exe' : ''}`
 const OUT_FILE = join(OUT_DIR, 'orcad.js')
-const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
+const AGENT_BROWSER_PACKAGE = join(ROOT, 'node_modules', 'agent-browser')
+const AGENT_BROWSER_SOURCE = join(AGENT_BROWSER_PACKAGE, 'bin', AGENT_BROWSER_NAME)
 const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
+// Why beside the binary, and why both: agent-browser resolves its version-matched skill
+// catalog from `<binary dir>/skills`, and only reads `<binary dir>/skill-data` when that
+// sibling `skills/` directory anchors it — probed against 0.27.0, where skill-data alone
+// answers `skills get core` with "Skills directory not found". electron-builder ships this
+// exact pair as extraResources; copying the binary here without it is what left a deployed
+// orcad reporting no skills at all.
+const AGENT_BROWSER_SKILL_PAYLOADS = [
+  {
+    from: join(AGENT_BROWSER_PACKAGE, 'skills', 'agent-browser'),
+    to: join(OUT_DIR, 'skills', 'agent-browser')
+  },
+  {
+    from: join(AGENT_BROWSER_PACKAGE, 'skill-data'),
+    to: join(OUT_DIR, 'skill-data')
+  }
+]
 
 // Native addons must exist on the host; they cannot be bundled.
 // `electron` is external so a residual import fails loudly at require() time rather
@@ -82,6 +100,11 @@ mkdirSync(OUT_DIR, { recursive: true })
 copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
 if (process.platform !== 'win32') {
   chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
+}
+// Why dereference: the deploy's SFTP walk skips symlinks outright, so a linked payload
+// would land on the host as an empty directory and read as no catalog at all.
+for (const payload of AGENT_BROWSER_SKILL_PAYLOADS) {
+  cpSync(payload.from, payload.to, { recursive: true, dereference: true })
 }
 
 /** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
