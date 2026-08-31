@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 2,
+  "benchmark": "terminal-split-activation-latency",
+  "label": "candidate-073e6c7b0eb-headful-clean",
+  "revision": {
+    "headSha": "073e6c7b0eb1c0ccbb115db1528b641901997c73",
+    "dirty": false
+  },
+  "status": "passed",
+  "valid": true,
+  "platform": "darwin",
+  "arch": "arm64",
+  "headful": true,
+  "browserWindowVisible": true,
+  "documentVisibility": "visible",
+  "config": {
+    "warmupCycles": 3,
+    "measuredCycles": 20,
+    "maxMeasuredCycles": 200,
+    "splitChord": "Meta+d",
+    "closeChord": "Meta+w",
+    "sampleTimeoutMs": 15000,
+    "cleanupTimeoutMs": 15000,
+    "processCwdCacheExpiryWaitMs": 1650
+  },
+  "warmupSummary": {
+    "requested": 3,
+    "attempted": 3,
+    "success": 3,
+    "missing": 0,
+    "unattempted": 0,
+    "missingEvents": {
+      "keydown": 0,
+      "focus": 0,
+      "cwdRequest": 0,
+      "cwdSettled": 0,
+      "ptySpawnRequest": 0,
+      "ptySpawnResult": 0,
+      "ptyBind": 0,
+      "fixtureUnlockRequest": 0,
+      "fixtureUnlockIpcWrite": 0,
+      "fixtureReadyParse": 0,
+      "input": 0,
+      "firstEcho": 0,
+      "paneCount": 0,
+      "ptyIdentity": 0,
+      "ptyExit": 0,
+      "cleanup": 0
+    }
+  },
+  "measuredSummary": {
+    "requested": 20,
+    "attempted": 20,
+    "success": 20,
+    "missing": 0,
+    "unattempted": 0,
+    "missingEvents": {
+      "keydown": 0,
+      "focus": 0,
+      "cwdRequest": 0,
+      "cwdSettled": 0,
+      "ptySpawnRequest": 0,
+      "ptySpawnResult": 0,
+      "ptyBind": 0,
+      "fixtureUnlockRequest": 0,
+      "fixtureUnlockIpcWrite": 0,
+      "fixtureReadyParse": 0,
+      "input": 0,
+      "firstEcho": 0,
+      "paneCount": 0,
+      "ptyIdentity": 0,
+      "ptyExit": 0,
+      "cleanup": 0
+    },
+    "distributionsMs": {
+      "shortcutToFocus": { "p50": 12.0, "p95": 13.6, "max": 14.7 },
+      "shortcutToCwdRequest": { "p50": 0.0, "p95": 0.1, "max": 0.3 },
+      "cwdLookup": { "p50": 40.0, "p95": 97.0, "max": 103.0 },
+      "cwdSettleToPtySpawnRequest": { "p50": 1.0, "p95": 4.0, "max": 4.0 },
+      "ptySpawnRequestToResult": { "p50": 48.0, "p95": 120.0, "max": 122.0 },
+      "ptySpawnResultToBind": { "p50": 2.1, "p95": 2.5, "max": 2.5 },
+      "shortcutToPtyBind": { "p50": 113.5, "p95": 161.3, "max": 162.7 },
+      "ptyBindToFixtureUnlockRequest": { "p50": 6.6, "p95": 7.4, "max": 7.6 },
+      "fixtureUnlockRequestToIpcWrite": { "p50": 0.5, "p95": 0.8, "max": 0.9 },
+      "fixtureUnlockIpcWriteToReadyParse": { "p50": 35.1, "p95": 87.4, "max": 141.8 },
+      "fixtureReadyParseToInput": { "p50": 0.0, "p95": 0.1, "max": 0.1 },
+      "shortcutToFirstEcho": { "p50": 158.5, "p95": 240.7, "max": 291.2 },
+      "ptyBindToFirstEcho": { "p50": 45.0, "p95": 98.8, "max": 152.0 },
+      "inputToFirstEcho": { "p50": 1.3, "p95": 3.5, "max": 3.9 }
+    }
+  }
+}
