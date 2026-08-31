@@ -100,7 +100,12 @@ function orphanTerminalRow(
   }
 }
 
-function stubInventory(args?: { structured?: boolean; livePtyId?: string }): {
+function stubInventory(args?: {
+  structured?: boolean
+  livePtyId?: string
+  /** Host that could not produce a complete census for the workspace it was asked about. */
+  unverifiableCensus?: boolean
+}): {
   runtimeCall: ReturnType<typeof vi.fn>
   listSessions: ReturnType<typeof vi.fn>
 } {
@@ -120,9 +125,15 @@ function stubInventory(args?: { structured?: boolean; livePtyId?: string }): {
       return {
         ok: true,
         result: {
-          terminals: args?.livePtyId ? [orphanTerminalRow(worktree, args.livePtyId)] : [],
+          terminals: args?.unverifiableCensus
+            ? []
+            : args?.livePtyId
+              ? [orphanTerminalRow(worktree, args.livePtyId)]
+              : [],
           truncated: false,
-          hostScope: { hostIds: ['local'], omittedHostIds: [] }
+          hostScope: args?.unverifiableCensus
+            ? { hostIds: [], omittedHostIds: ['local', 'runtime:env-9'] }
+            : { hostIds: ['local'], omittedHostIds: [] }
         }
       }
     }
@@ -217,6 +228,24 @@ describe('worktree agent activation seam', () => {
 
     const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(1)
+    expect(tabs[0]?.ptyId).toBeNull()
+  })
+
+  // A paired-runtime owner is always omitted from its own scoped census, and an SSH relay that
+  // never answered omits everything. Declining to mint is right; leaving the workspace with no
+  // surface at all is not — the user asked for a pane and must get one.
+  it('still seeds a usable pane when the census cannot prove who owns a live PTY', async () => {
+    const worktree = makeWorktree()
+    const livePtyId = `${worktree.id}@@live-codex`
+    useAppStore.setState(baseState())
+    stubInventory({ livePtyId, unverifiableCensus: true })
+
+    expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
+    expect(tabs).toHaveLength(1)
+    // A fresh shell, never a second surface forked onto the live agent's PTY.
     expect(tabs[0]?.ptyId).toBeNull()
   })
 

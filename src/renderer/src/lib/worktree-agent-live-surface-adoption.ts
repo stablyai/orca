@@ -1,4 +1,5 @@
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { useAppStore } from '@/store'
 import { resolveTerminalTabPtyOwnership } from './terminal-tab-for-pty-id'
 import type {
@@ -51,7 +52,7 @@ export function bindLivePtyToExactSurface(
   if (existing) {
     const layout = store.terminalLayoutsByTabId[terminal.tabId]
     if (
-      existing.ownerWorktreeId !== worktreeId ||
+      !worktreeIdsEqual(existing.ownerWorktreeId, worktreeId) ||
       !layoutContainsLeaf(layout?.root ?? null, pane.leafId)
     ) {
       return false
@@ -74,31 +75,31 @@ function tabExists(store: LiveSurfaceAdoptionStore, tabId: string): boolean {
   return Object.values(store.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === tabId))
 }
 
-/** Bind one host-owned PTY to the surface the host names for it. */
+/** Bind one host-owned PTY to the surface the host names for it; false when none could be named. */
 function adoptHostOwnedSurface(
   getState: () => LiveSurfaceAdoptionStore,
   worktreeId: string,
   owner: LiveTerminalSurfaceOwner,
   materializedTabIds: Set<string>
-): void {
+): boolean {
   const store = getState()
   const known = tabExists(store, owner.tabId)
   if (bindLivePtyToExactSurface(store, worktreeId, owner)) {
     if (!known) {
       materializedTabIds.add(owner.tabId)
     }
-    return
+    return true
   }
   const pane = parsePaneKey(owner.paneKey)
   // Why: a tab this sweep materialized carries only the one host leaf it was
   // minted with, so the host's later panes need a leaf rather than no surface.
   if (!pane || !materializedTabIds.has(owner.tabId)) {
-    return
+    return false
   }
   const current = getState()
   const layout = current.terminalLayoutsByTabId[owner.tabId]
   if (!layout?.root) {
-    return
+    return false
   }
   current.setTabLayout(owner.tabId, {
     ...layout,
@@ -111,25 +112,31 @@ function adoptHostOwnedSurface(
     ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [pane.leafId]: owner.ptyId }
   })
   current.updateTabPtyId(owner.tabId, owner.ptyId)
+  return true
 }
 
 /**
  * Give every live workspace PTY the surface that already owns it, minting one
  * only for a PTY proven to have none.
+ *
+ * Returns whether any live PTY ends the sweep holding a surface. False means the
+ * workspace has live agents but nothing the user can look at — the caller owes them
+ * a seeded pane, because failing closed must not also fail silent.
  */
 export async function adoptLiveWorkspacePtySurfaces(
   getState: () => LiveSurfaceAdoptionStore,
   worktreeId: string,
   livePtyIds: readonly string[],
   listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
-): Promise<void> {
+): Promise<boolean> {
   // Why: ptyIdsByTabId holds only panes this renderer mounted, so a tab bound
   // solely in tab.ptyId or the persisted layout used to read as unbound.
   const unbound = livePtyIds.filter(
     (ptyId) => resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind === 'none'
   )
+  let surfaced = unbound.length < livePtyIds.length
   if (unbound.length === 0) {
-    return
+    return surfaced
   }
   let surfaceOwners: LiveTerminalSurfaceOwnerIndex | null
   try {
@@ -142,11 +149,12 @@ export async function adoptLiveWorkspacePtySurfaces(
     // Why: a pane can mount while the census is in flight, so the pre-RPC
     // verdict is stale by the time it would authorize a mint.
     if (resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none') {
+      surfaced = true
       continue
     }
     const owner = surfaceOwners?.get(ptyId)
     if (owner) {
-      adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds)
+      surfaced = adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds) || surfaced
       continue
     }
     // Why: only the execution host can prove a live PTY is unowned, and minting
@@ -159,5 +167,7 @@ export async function adoptLiveWorkspacePtySurfaces(
       activate: false,
       recordInteraction: false
     })
+    surfaced = true
   }
+  return surfaced
 }

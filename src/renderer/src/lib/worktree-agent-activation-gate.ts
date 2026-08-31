@@ -209,14 +209,18 @@ export async function runWorktreeAgentActivationGate(
       return 'blocked'
     }
   }
+  let liveSurfaceAdopted = false
   if (liveWorkspaceSessions.length > 0) {
-    await adoptLiveWorkspacePtySurfaces(
+    // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted'
+    // would suppress the caller's seed and leave the workspace with no surface at all —
+    // fail-closed must still leave the user a usable pane (STA-5701).
+    liveSurfaceAdopted = await adoptLiveWorkspacePtySurfaces(
       deps.getState,
       worktreeId,
       [...liveWorkspacePtyIds],
       deps.listSurfaceOwners
     )
-    if (!workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
+    if (liveSurfaceAdopted && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
       return 'adopted'
     }
   }
@@ -232,9 +236,11 @@ export async function runWorktreeAgentActivationGate(
       structuredInventory
     )
   })
+  // 'empty' is the caller's directive — "this gate produced no surface, seed one" — not a
+  // claim the host had nothing; the callers re-check their own seeding guards first.
   return launched > 0
     ? 'resumed'
-    : liveWorkspaceSessions.length > 0
+    : liveSurfaceAdopted
       ? 'adopted'
       : structured
         ? 'structured'

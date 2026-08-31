@@ -590,28 +590,66 @@ describe('worktree agent activation gate', () => {
     })
   })
 
-  it('declines to mint when the host cannot say who owns a live PTY', async () => {
+  // Failing closed must not also fail silent: an unreadable census leaves the workspace with
+  // no surface, so the gate has to hand the caller its seed instead of claiming 'adopted'.
+  it('declines to mint but still asks for a seed when the host cannot answer', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
-      surfaceOwners: null
+      surfaceOwners: null,
+      resumeCount: 0
     })
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
 
     expect(createTab).not.toHaveBeenCalled()
   })
 
-  it('declines to mint when two host surfaces claim one live PTY', async () => {
+  it('declines to mint but still asks for a seed when two host surfaces claim one live PTY', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
-      surfaceOwners: new Map([[livePtyId, null]])
+      surfaceOwners: new Map([[livePtyId, null]]),
+      resumeCount: 0
     })
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
+
+    expect(createTab).not.toHaveBeenCalled()
+  })
+
+  it('reports adopted only for the PTYs that actually landed on a surface', async () => {
+    const adoptedPtyId = `${WORKTREE_ID}@@orphan-agent`
+    const unverifiablePtyId = `${WORKTREE_ID}@@ambiguous-agent`
+    const { deps } = testDeps({
+      sessions: [listed(adoptedPtyId), listed(unverifiablePtyId)],
+      surfaceOwners: new Map([[unverifiablePtyId, null]]),
+      resumeCount: 0
+    })
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+  })
+
+  it('adopts a host surface hydrated under a differently spelled workspace id', async () => {
+    const livePtyId = `${WORKTREE_ID}@@live-agent`
+    const { deps, createTab } = testDeps({
+      sessions: [listed(livePtyId)],
+      surfaceOwners: new Map([
+        [livePtyId, { paneKey: `tab-live:${LIVE_LEAF_ID}`, ptyId: livePtyId, tabId: 'tab-live' }]
+      ])
+    })
+    const store = deps.getState()
+    seedExistingSurface(store, { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
+    // Packaged hydration can key the same workspace by an equivalent path spelling.
+    store.tabsByWorktree[`${WORKTREE_ID}/`] = store.tabsByWorktree[WORKTREE_ID]!
+    store.tabsByWorktree[WORKTREE_ID] = []
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 
     expect(createTab).not.toHaveBeenCalled()
+    expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
+      [LIVE_LEAF_ID]: livePtyId
+    })
   })
 
   it('re-reads local ownership after the census before minting', async () => {

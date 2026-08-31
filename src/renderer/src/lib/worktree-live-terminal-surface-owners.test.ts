@@ -74,6 +74,16 @@ describe('live terminal surface owners', () => {
     expect(owners.size).toBe(0)
   })
 
+  // Dropping the host's row over path spelling would read as `unowned` and mint a duplicate.
+  it('indexes a row the host spelled with an equivalent workspace path', () => {
+    const owners = indexLiveTerminalSurfaceOwners(
+      [summary({ worktreeId: `${WORKTREE_ID}/` })],
+      WORKTREE_ID
+    )
+
+    expect(owners.get(`${WORKTREE_ID}@@live-agent`)?.tabId).toBe('tab-live')
+  })
+
   it('reports a PTY claimed by two panes as unverifiable rather than unowned', () => {
     const ptyId = `${WORKTREE_ID}@@live-agent`
     const owners = indexLiveTerminalSurfaceOwners(

@@ -4,6 +4,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../shared/runtime-types'
+import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 
 /** The exact surface the execution host records as owning a live PTY. */
@@ -68,7 +69,13 @@ export function indexLiveTerminalSurfaceOwners(
   const owners = new Map<string, LiveTerminalSurfaceOwner | null>()
   for (const terminal of terminals) {
     // `orphaned` is the host's own word for "live PTY, no surface owns it".
-    if (terminal.worktreeId !== worktreeId || !terminal.ptyId || terminal.orphaned === true) {
+    // Path spelling can differ between the host's row and the renderer's id; dropping a row
+    // over that would read as `unowned` and mint the duplicate this index exists to prevent.
+    if (
+      !worktreeIdsEqual(terminal.worktreeId, worktreeId) ||
+      !terminal.ptyId ||
+      terminal.orphaned === true
+    ) {
       continue
     }
     const owner = toSurfaceOwner(terminal)
