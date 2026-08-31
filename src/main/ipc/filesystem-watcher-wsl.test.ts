@@ -174,6 +174,36 @@ describe('createWslWatcher', () => {
     ])
   })
 
+  it('emits update events for files nested more than two levels deep', async () => {
+    const scheduleBatchFlush = vi.fn()
+    const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))
+
+    child.stdout.write(
+      snapshotFrame([
+        ['d', '1.0', '/home/me/repo/docs'],
+        ['d', '1.0', '/home/me/repo/docs/api'],
+        ['f', '1.0', '/home/me/repo/docs/api/reference.md']
+      ])
+    )
+    const root = await promise
+    child.stdout.write(
+      snapshotFrame([
+        ['d', '1.0', '/home/me/repo/docs'],
+        ['d', '1.0', '/home/me/repo/docs/api'],
+        ['f', '2.0', '/home/me/repo/docs/api/reference.md'],
+        ['f', '1.0', '/home/me/repo/src/main/deep/new.md']
+      ])
+    )
+
+    expect(root.batch.events).toEqual([
+      {
+        type: 'update',
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\docs\\api\\reference.md'
+      },
+      { type: 'create', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\src\\main\\deep\\new.md' }
+    ])
+  })
+
   it('turns watcher exit into an overflow refresh without retaining UNC paths', async () => {
     const scheduleBatchFlush = vi.fn()
     const deps = makeDeps(scheduleBatchFlush)

@@ -13,6 +13,7 @@ import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
 import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { buildSnapshotScript } from './wsl-snapshot-poll-script'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -40,7 +41,6 @@ export type WslWatcherDeps = {
   watchedRoots: Map<string, WatchedRoot>
 }
 
-const POLL_INTERVAL_SECONDS = 2
 const STARTUP_TIMEOUT_MS = 10_000
 const [SNAPSHOT_START, SNAPSHOT_END] = ['\x1e', '\x1f']
 const MAX_STREAM_BUFFER_CHARS = 10 * 1024 * 1024
@@ -55,37 +55,6 @@ type WslSnapshot = Map<string, WslSnapshotEntry>
 
 function toWslUncPath(linuxPath: string, distro: string): string {
   return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
-}
-
-function quoteSafeFindName(name: string): string {
-  if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
-    throw new Error(`Unsupported WSL watcher ignore name: ${name}`)
-  }
-  return `'${name}'`
-}
-
-function buildPruneExpression(ignoreDirs: readonly string[]): string {
-  if (ignoreDirs.length === 0) {
-    return ''
-  }
-  const names = ignoreDirs.map((name) => `-name ${quoteSafeFindName(name)}`).join(' -o ')
-  return `\\( -type d \\( ${names} \\) -prune \\) -o`
-}
-
-function buildSnapshotScript(ignoreDirs: readonly string[]): string {
-  const prune = buildPruneExpression(ignoreDirs)
-  return [
-    'set -efu',
-    'root=$1',
-    'while :; do',
-    "  printf '\\036'",
-    '  if [ -d "$root" ]; then',
-    `    find "$root" -mindepth 1 -maxdepth 2 ${prune} -printf '%y\\t%T@\\t%p\\0' 2>/dev/null || true`,
-    '  fi',
-    "  printf '\\037'",
-    `  sleep ${POLL_INTERVAL_SECONDS} || exit 0`,
-    'done'
-  ].join('\n')
 }
 
 function parseSnapshotFrame(frame: string, distro: string): WslSnapshot {
