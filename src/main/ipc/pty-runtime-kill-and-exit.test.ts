@@ -287,7 +287,9 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:kill')!(null, { id: 'local-pty' })
 
     expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, undefined)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, {
+      providerExitObserved: true
+    })
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
       [['pty:exit', { id: 'local-pty', code: 0 }]]
     )
@@ -529,7 +531,9 @@ describe('registerPtyHandlers', () => {
         seq: 13,
         rawLength: 'daemon output'.length
       })
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(result.id, 0, undefined, undefined)
+      expect(runtime.onPtyExit).toHaveBeenCalledWith(result.id, 0, undefined, {
+        providerExitObserved: true
+      })
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
         id: result.id,
         code: 0

@@ -57,8 +57,7 @@ import {
   clampUsedPercent,
   formatResetCreditExpiry,
   getProviderDisplayName,
-  getProviderUsageStatusLabel,
-  getWindowSections
+  getProviderUsageStatusLabel
 } from './tooltip'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -1911,11 +1910,6 @@ export function ProviderDetailsMenu({
     useAppStore((s) => s.usagePercentageDisplay)
   )
   const menuFocusHandoff = useStatusBarMenuFocusHandoff()
-  // Why: the panel's reset countdowns and its pace markers both drift with the
-  // clock rather than with the usage poll, so they share one scheduled tick.
-  const panelNow = useResetCountdownClock(
-    provider ? getWindowSections(provider).map((section) => section.window?.resetsAt) : []
-  )
 
   const handleOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
@@ -1934,7 +1928,6 @@ export function ProviderDetailsMenu({
           p={provider}
           showResetCredits={!hidePanelResetCredits}
           usagePercentageDisplay={usagePercentageDisplay}
-          now={panelNow}
         />
       </div>
       {children ? (

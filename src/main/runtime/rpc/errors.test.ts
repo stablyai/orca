@@ -5,6 +5,10 @@ import {
   ARTIFACT_SHARING_DISABLED_MESSAGE,
   ArtifactSharingDisabledError
 } from '../../../shared/artifact-sharing-gate'
+import {
+  AUTOMATION_OWNER_CONFLICT_CODES,
+  AutomationOwnerConflictError
+} from '../../../shared/automation-owner-conflict'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -226,5 +230,23 @@ describe('artifact sharing denial', () => {
         data: { nextSteps: expect.arrayContaining([expect.stringContaining('Settings')]) }
       }
     })
+  })
+})
+
+// Why: the renderer decides between "reload the host", "re-adopt", and "stop offering
+// the action" from this code; flattened to runtime_error it can only guess.
+describe('automation owner conflicts', () => {
+  it.each(Object.values(AUTOMATION_OWNER_CONFLICT_CODES))(
+    'passes %s through structured',
+    (code) => {
+      expect(
+        mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new AutomationOwnerConflictError(code))
+      ).toMatchObject({ ok: false, error: { code } })
+    }
+  )
+
+  it('still lets an old runtime be classified from the message tail', () => {
+    const error = new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
+    expect(error.message.endsWith(`: ${AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged}`)).toBe(true)
   })
 })

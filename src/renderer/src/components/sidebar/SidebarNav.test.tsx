@@ -429,6 +429,23 @@ describe('SidebarNav', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
   })
 
+  it('places the worktree palette search above the sidebar nav rows', async () => {
+    const container = await renderSidebarNav()
+    const nav = container.querySelector('[data-contextual-tour-target="sidebar-navigation"]')
+    const searchButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Search worktrees and browser tabs"]'
+    )
+    const tasksButton = getButtonByText(container, 'Tasks')
+
+    expect(nav?.firstElementChild).toBe(searchButton)
+    if (!searchButton) {
+      throw new Error('worktree palette search button not rendered')
+    }
+    expect(
+      searchButton.compareDocumentPosition(tasksButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
   it('hides the worktree palette shortcut until the search field is hovered or focused', async () => {
     const container = await renderSidebarNav()
 
@@ -436,32 +453,38 @@ describe('SidebarNav', () => {
       'button[aria-label="Search worktrees and browser tabs"]'
     )
     expect(searchButton).not.toBeNull()
+    expect(searchButton?.className).toContain('bg-worktree-sidebar-foreground/5')
 
     const shortcuts = searchButton?.querySelector('span.hidden')
     expect(shortcuts?.className).toContain('hidden')
-    expect(shortcuts?.className).toContain('group-hover:inline-flex')
-    expect(shortcuts?.className).toContain('group-focus-within:inline-flex')
+    expect(shortcuts?.className).toContain('group-hover:flex')
+    expect(shortcuts?.className).toContain('group-focus-within:flex')
     expect(shortcuts?.textContent).toContain('⌘')
     expect(shortcuts?.textContent).toContain('J')
     expect(searchButton?.querySelector('kbd')).toBeNull()
   })
 
-  it('hides task source shortcuts until the Tasks row is hovered or focused', async () => {
+  it('keeps task source shortcuts keyboard-reachable and revealed on Tasks row hover or focus', async () => {
     const container = await renderSidebarNav()
 
     const tasksButton = getButtonByText(container, 'Tasks')
-    const shortcuts = tasksButton.querySelector('[aria-label="Open GitHub tasks"]')?.parentElement
+    const githubShortcut = tasksButton.parentElement?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open GitHub tasks"]'
+    )
+    expect(githubShortcut).not.toBeNull()
+    expect(githubShortcut?.tabIndex).toBe(0)
+    expect(tasksButton.contains(githubShortcut ?? null)).toBe(false)
 
-    expect(shortcuts?.className).toContain('hidden')
-    expect(shortcuts?.className).toContain('group-hover:flex')
-    expect(shortcuts?.className).toContain('group-focus-within:flex')
+    const shortcuts = githubShortcut?.parentElement
+    expect(shortcuts?.className).toContain('can-hover:opacity-0')
+    expect(shortcuts?.className).toContain('can-hover:group-hover:opacity-100')
+    expect(shortcuts?.className).toContain('can-hover:group-focus-within:opacity-100')
   })
 
   it('hides available Tasks from its sidebar context menu', async () => {
     const container = await renderSidebarNav()
 
     const tasksButton = getButtonByText(container, 'Tasks')
-    expect(tasksButton.getAttribute('aria-disabled')).toBe('false')
 
     const tasksMenu = tasksButton.closest('[data-testid="context-menu"]')
     expect(tasksMenu).not.toBeNull()
@@ -470,18 +493,20 @@ describe('SidebarNav', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showTasksButton: false })
   })
 
-  it('keeps unavailable Tasks context-menu-capable while left click remains inert', async () => {
+  it('keeps Tasks enabled with no git repos so the page can explain the empty state', async () => {
     setSidebarState({ repos: [folderRepo()] })
     const container = await renderSidebarNav()
 
     const tasksButton = getButtonByText(container, 'Tasks')
-    expect(tasksButton.getAttribute('aria-disabled')).toBe('true')
+    expect(tasksButton.getAttribute('aria-disabled')).toBeNull()
     expect(tasksButton.disabled).toBe(false)
-    expect(tasksButton.querySelectorAll('[role="button"]')).toHaveLength(0)
-    expect(tasksButton.querySelector('[aria-label="Open GitHub tasks"]')).toBeNull()
+    expect(tasksButton.className).not.toContain('opacity-50')
+    expect(
+      tasksButton.parentElement?.querySelector('button[aria-label="Open GitHub tasks"]')
+    ).not.toBeNull()
 
     await clickButton(tasksButton)
-    expect(mocks.openTaskPage).not.toHaveBeenCalled()
+    expect(mocks.openTaskPage).toHaveBeenCalled()
 
     const tasksMenu = tasksButton.closest('[data-testid="context-menu"]')
     expect(tasksMenu).not.toBeNull()

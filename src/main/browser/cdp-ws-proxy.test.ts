@@ -599,7 +599,6 @@ describe('CdpWsProxy', () => {
       printBackground: true,
       pageSize: { width: 8.5, height: 11 },
       margins: {
-        marginType: 'custom',
         top: 0.25,
         bottom: 0.5,
         left: 0.75,
@@ -625,7 +624,6 @@ describe('CdpWsProxy', () => {
 
     expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
       margins: {
-        marginType: 'custom',
         top: 0.25,
         bottom: defaultPdfMarginInches,
         left: defaultPdfMarginInches,

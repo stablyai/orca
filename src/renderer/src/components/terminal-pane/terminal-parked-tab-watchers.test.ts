@@ -93,6 +93,8 @@ type MockStoreState = {
   setRuntimePaneTitle: ReturnType<typeof vi.fn>
   setTabLayout: ReturnType<typeof vi.fn>
   updateTabTitle: ReturnType<typeof vi.fn>
+  isPtyShutdownPending: ReturnType<typeof vi.fn>
+  suppressedPtyExitIds: Record<string, true>
 }
 
 let mockStoreState: MockStoreState
@@ -159,7 +161,9 @@ describe('terminal-parked-tab-watchers', () => {
       clearRuntimePaneTitle: vi.fn(),
       setRuntimePaneTitle: vi.fn(),
       setTabLayout: vi.fn(),
-      updateTabTitle: vi.fn()
+      updateTabTitle: vi.fn(),
+      isPtyShutdownPending: vi.fn(() => false),
+      suppressedPtyExitIds: {}
     }
     ;(globalThis as { window?: unknown }).window = { api: { pty: { write: ptyWrite } } }
     clearTerminalProviderSnapshotCapabilities()
@@ -331,11 +335,12 @@ describe('terminal-parked-tab-watchers', () => {
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
   })
 
-  it('collapses a dead split leaf even when a stale primary handler also observed the exit', () => {
-    // Why (regression, #ghost-blank-pane): a genuinely parked tab's PaneManager
-    // is already destroyed, so the retained primary exit handler's own
-    // split-collapse path is a no-op against the persisted layout — hadPrimary
-    // must not skip this sidecar's collapse for a surviving sibling leaf.
+  it('collapses a dead split leaf even when a concurrent primary handler also observed the exit', () => {
+    // Why (regression, #ghost-blank-pane): a primary can coexist with a parked
+    // sidecar — an eager pre-mount handle, or a reveal remount racing watcher
+    // disposal. Neither collapses the persisted parked layout (eager handlers
+    // never touch layout; detach dropped the session observer that once did) —
+    // hadPrimary must not skip this sidecar's collapse for a surviving leaf.
     capturePanes([
       { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
       { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
@@ -431,7 +436,9 @@ describe('terminal-parked-tab-watchers', () => {
     expect(getParkedTerminalWatcherTabIds()).toEqual([])
   })
 
-  it('does not queue a second close when a retained primary handled the parked exit', () => {
+  // Why still reachable post detach-fix: an eager pre-mount handle or a reveal
+  // remount's fresh registerExit can own the exit while this sidecar is live.
+  it('does not queue a second close when a concurrent primary handled the parked exit', () => {
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked()
 

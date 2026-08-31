@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { appRelaunchMock, recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
   appRelaunchMock: vi.fn(),
@@ -11,10 +11,22 @@ vi.mock('./crash-reporting/durable-crash-breadcrumb', () => ({
 }))
 
 import { relaunchApp } from './app-relaunch'
+import { _resetHydrateShellPathCache, _setLaunchPathForTests } from './startup/hydrate-shell-path'
 
 beforeEach(() => {
   appRelaunchMock.mockReset()
   recordDurableCrashBreadcrumbMock.mockReset()
+})
+
+const originalPath = process.env.PATH
+
+afterEach(() => {
+  _resetHydrateShellPathCache()
+  if (originalPath === undefined) {
+    delete process.env.PATH
+  } else {
+    process.env.PATH = originalPath
+  }
 })
 
 describe('relaunchApp', () => {
@@ -31,5 +43,19 @@ describe('relaunchApp', () => {
     expect(recordDurableCrashBreadcrumbMock.mock.invocationCallOrder[0]).toBeLessThan(
       appRelaunchMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('does not carry Orca PATH seeds into the replacement process', () => {
+    process.env.PATH = '/seeded/newest-nvm/bin:/usr/bin'
+    _setLaunchPathForTests('/usr/bin')
+    let inheritedPath: string | undefined
+    appRelaunchMock.mockImplementation(() => {
+      inheritedPath = process.env.PATH
+    })
+
+    relaunchApp('renderer-request')
+
+    expect(inheritedPath).toBe('/usr/bin')
+    expect(process.env.PATH).toBe('/seeded/newest-nvm/bin:/usr/bin')
   })
 })

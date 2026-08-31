@@ -86,6 +86,64 @@ describe('web native chat preload API', () => {
       }
     ])
   })
+
+  it('forwards the pending flag and still treats the real snapshot as the initial frame', async () => {
+    const message = {
+      id: 'a-1',
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text: 'flushed' }],
+      timestamp: 7,
+      source: 'transcript' as const
+    }
+    let deliver: (result: unknown) => void = () => {}
+    let subscribeParams: unknown
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        subscribe(
+          _method: string,
+          params: unknown,
+          callbacks: { onResponse: (response: RuntimeRpcResponse<unknown>) => void }
+        ): Promise<{ unsubscribe: () => void }> {
+          subscribeParams = params
+          deliver = (result) =>
+            callbacks.onResponse({
+              id: 'stream-1',
+              ok: true,
+              result,
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const frames: unknown[] = []
+    globals.window.api.nativeChat.subscribe(
+      { subscriptionId: 'sub-1', agent: 'claude', sessionId: 'session-1', limit: 1 },
+      (frame) => frames.push(frame)
+    )
+    await Promise.resolve()
+
+    expect(subscribeParams).toMatchObject({ capabilities: { transcriptPending: 1 } })
+
+    // The host's unflushed-transcript frame, then the flush that follows it.
+    deliver({ type: 'snapshot', messages: [], hasMore: false, pending: true })
+    deliver({ type: 'snapshot', messages: [message] })
+
+    // Dropping `pending` would settle an empty read as the session's history.
+    // hasMore proves the pending frame did not consume the initial slot — only
+    // the initial branch infers a filled window from the limit.
+    expect(frames).toEqual([
+      { type: 'snapshot', messages: [], hasMore: false, pending: true },
+      { type: 'snapshot', messages: [message], hasMore: true }
+    ])
+  })
 })
 
 describe('web MiniMax preload API', () => {

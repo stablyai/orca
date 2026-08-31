@@ -3,7 +3,6 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   applyTerminalAppearance,
-  composeRendererTerminalTheme,
   hexToRgba,
   publishTerminalViewAttributesAtAppStart
 } from './terminal-appearance'
@@ -217,54 +216,6 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.theme?.background).toBe('#102030')
   })
 
-  it('lets the pane paint a fractional background exactly once', () => {
-    const pane = makePane(1)
-    const settings = getDefaultSettings('/tmp')
-    const manager = makeManager([pane])
-
-    applyTerminalAppearance(
-      manager,
-      { ...settings, terminalBackgroundOpacity: 0.5 },
-      true,
-      new Map(),
-      new Map(),
-      'false',
-      new Map(),
-      new Map()
-    )
-
-    expect(pane.terminal.options.theme?.background).toMatch(/^rgba\(.+, 0\)$/)
-    expect(pane.terminal.options.allowTransparency).toBe(true)
-    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
-      expect.objectContaining({ paneBackground: expect.stringMatching(/^rgba\(.+, 0\.5\)$/) })
-    )
-  })
-
-  it('stamps four-edge padding before fitting', () => {
-    const pane = makePane(1)
-    pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 79, rows: 23 }))
-    const manager = makeManager([pane])
-    const settings = getDefaultSettings('/tmp')
-
-    applyTerminalAppearance(
-      manager,
-      { ...settings, terminalPaddingX: 11, terminalPaddingY: 7 },
-      true,
-      new Map(),
-      new Map(),
-      'false',
-      new Map(),
-      new Map()
-    )
-
-    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
-      expect.objectContaining({ paddingX: 11, paddingY: 7 })
-    )
-    expect(vi.mocked(manager.setPaneStyleOptions).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(pane.fitAddon.proposeDimensions).mock.invocationCallOrder[0]!
-    )
-  })
-
   // #7934: contrast correction rescues invisible white text on light backgrounds but over-corrects on dark;
   // gate by the composed theme's background luminance (either theme slot can hold either kind of theme).
   it('keeps xterm contrast correction on light themes', () => {
@@ -408,23 +359,6 @@ describe('applyTerminalAppearance theme assignment', () => {
 
     // Latest wins, exactly one write: intermediate hidden values never touch xterm.
     expect(writes).toEqual([21])
-  })
-})
-
-describe('composeRendererTerminalTheme', () => {
-  it('preserves background RGB while removing fractional renderer alpha', () => {
-    const theme = { background: 'rgba(16, 32, 48, 0.5)', foreground: '#ffffff' }
-
-    expect(composeRendererTerminalTheme(theme, 0.5)).toEqual({
-      ...theme,
-      background: 'rgba(16, 32, 48, 0)'
-    })
-  })
-
-  it('keeps the opaque fast path unchanged', () => {
-    const theme = { background: '#102030' }
-
-    expect(composeRendererTerminalTheme(theme, 1)).toBe(theme)
   })
 })
 

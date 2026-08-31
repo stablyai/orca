@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
 import type * as ReactModule from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
@@ -463,7 +464,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('Fable')
     expect(markup).toContain('Resets in 6d 17h')
@@ -483,7 +484,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     // Why: bars show consumption (% used), matching harness meters (#7551).
     expect(markup).toContain('35%')
@@ -505,7 +506,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('100%')
     expect(markup).toContain('% used')
@@ -525,7 +526,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('100%')
     expect(markup).toContain('width:100%')
@@ -544,7 +545,9 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
+    const markup = renderToStaticMarkup(
+      createElement(ProviderPanel, { p, usagePercentageDisplay: 'remaining' })
+    )
 
     expect(markup).toContain('75% left')
     expect(markup).toContain('width:75%')
@@ -571,7 +574,7 @@ describe('ProviderPanel pace', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p: weeklyProvider(10, 2) }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p: weeklyProvider(10, 2) }))
 
     expect(markup).toContain('data-usage-pace="reserve"')
     expect(markup).toContain('19% in reserve · Lasts until reset')
@@ -583,7 +586,7 @@ describe('ProviderPanel pace', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p: weeklyProvider(60, 2) }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p: weeklyProvider(60, 2) }))
 
     expect(markup).toContain('data-usage-pace="deficit"')
     expect(markup).toContain('31% in deficit · Runs out in 1d 8h')
@@ -594,7 +597,7 @@ describe('ProviderPanel pace', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p: weeklyProvider(29, 2) }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p: weeklyProvider(29, 2) }))
 
     expect(markup).toContain('data-usage-pace="on-pace"')
     // On pace still projects a run-out: an even burn lands on empty at the reset.
@@ -605,7 +608,7 @@ describe('ProviderPanel pace', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p: weeklyProvider(1, 0.1) }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p: weeklyProvider(1, 0.1) }))
 
     expect(markup).not.toContain('data-usage-pace')
     expect(markup).not.toContain('in reserve')
@@ -623,7 +626,9 @@ describe('ProviderPanel pace', () => {
       }
     })
 
-    expect(renderToStaticMarkup(ProviderPanel({ p }))).not.toContain('data-usage-pace')
+    expect(renderToStaticMarkup(createElement(ProviderPanel, { p }))).not.toContain(
+      'data-usage-pace'
+    )
   })
 
   it('mirrors the marker with the fill under remaining-percentage display', () => {
@@ -631,7 +636,10 @@ describe('ProviderPanel pace', () => {
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
 
     const markup = renderToStaticMarkup(
-      ProviderPanel({ p: weeklyProvider(10, 2), usagePercentageDisplay: 'remaining' })
+      createElement(ProviderPanel, {
+        p: weeklyProvider(10, 2),
+        usagePercentageDisplay: 'remaining'
+      })
     )
 
     expect(markup).toContain('width:90%')
@@ -658,7 +666,7 @@ describe('ProviderPanel pace', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('9% in reserve')
     expect(markup).toContain('31% in deficit')
@@ -669,7 +677,7 @@ describe('ProviderPanel pace', () => {
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
     const p = provider({ provider: providerId, status: 'ok', weekly: weeklyProvider(10, 2).weekly })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('data-usage-pace="reserve"')
     expect(markup).toContain('19% in reserve')
@@ -692,21 +700,10 @@ describe('ProviderPanel pace', () => {
       ]
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     // A quarter into the hour against 10% spent leaves 15 points of headroom.
     expect(markup).toContain('15% in reserve')
-  })
-
-  it('honors a host-supplied clock so the panel can tick without a re-fetch', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
-    const p = weeklyProvider(10, 2)
-
-    const later = renderToStaticMarkup(ProviderPanel({ p, now: Date.now() + 2 * DAY_MS }))
-
-    // Four of seven days gone against the same 10% spend widens the reserve.
-    expect(later).toContain('47% in reserve')
   })
 })
 

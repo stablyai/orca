@@ -56,6 +56,51 @@ export function normalizeRuntimePathForComparison(rawValue: string): string {
   return isWindowsPath ? normalized.toLowerCase() : normalized
 }
 
+/**
+ * Whether `uncPath` is the WSL UNC spelling of `linuxPath` as the caller's own distro sees it.
+ *
+ * Why the distro must match and not just the Linux tail: every distro spells
+ * `/home/<user>/repo`, so a tail-only match lets a Debian caller resolve — and
+ * `worktree rm` then delete — an Ubuntu directory. The distro is proven by the
+ * caller's UNC cwd, never guessed.
+ */
+export function isWslUncPathForCallerLinuxPath(
+  uncPath: string,
+  linuxPath: string,
+  callerDistro: string
+): boolean {
+  const parsed = parseWslUncPath(uncPath)
+  if (!parsed) {
+    return false
+  }
+  // Why the case split: Windows folds the distro name, the Linux tail it fronts is case-sensitive.
+  return (
+    parsed.distro.toLowerCase() === callerDistro.toLowerCase() &&
+    normalizeRuntimePathForComparison(parsed.linuxPath) ===
+      normalizeRuntimePathForComparison(linuxPath)
+  )
+}
+
+/**
+ * Whether a WSL UNC path fronts the same Windows-mounted `/mnt/<drive>` path.
+ *
+ * `/mnt/<drive>` is backed by the host drive and is shared across distros, so
+ * matching it does not require the caller's distro proof used for Linux paths.
+ */
+export function isWslUncPathForLinuxMountedPath(uncPath: string, linuxPath: string): boolean {
+  const parsed = parseWslUncPath(uncPath)
+  if (!parsed || !/^\/mnt\/[A-Za-z](?:\/|$)/.test(parsed.linuxPath)) {
+    return false
+  }
+  if (!/^\/mnt\/[A-Za-z](?:\/|$)/.test(linuxPath)) {
+    return false
+  }
+  return (
+    normalizeRuntimePathForComparison(toWindowsWslPath(parsed.linuxPath, parsed.distro)) ===
+    normalizeRuntimePathForComparison(toWindowsWslPath(linuxPath, parsed.distro))
+  )
+}
+
 export function areLocalWindowsWslPathAliases(left: string, right: string): boolean {
   const leftIdentity = getLocalWindowsWslPathIdentity(left)
   const rightIdentity = getLocalWindowsWslPathIdentity(right)

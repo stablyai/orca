@@ -3,7 +3,12 @@ import type { SshConnectionState, SshTargetSummary } from '../../../shared/ssh-t
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
-import { sshTargetLabelsEqual } from '@/store/slices/ssh-target-cleanup'
+import {
+  collectSshTargetGenerations,
+  sshTargetGenerationsEqual,
+  sshTargetLabelsEqual
+} from '@/store/slices/ssh-target-cleanup'
+import { sanitizeSshTargetGeneration } from '../../../shared/ssh-target-generation'
 
 /**
  * Mirrors a remote Orca server's own SSH targets into that environment's
@@ -33,7 +38,13 @@ async function fetchEnvironmentSshTargets(environmentId: string): Promise<SshTar
     if (typeof target.id !== 'string' || typeof target.label !== 'string') {
       throw new Error('Remote SSH target metadata is invalid')
     }
-    return { id: target.id, label: target.label }
+    // Why: an old server omits `generation`; a malformed one is dropped rather than trusted as a fence value.
+    const generation = sanitizeSshTargetGeneration(target.generation)
+    return {
+      id: target.id,
+      label: target.label,
+      ...(generation === undefined ? {} : { generation })
+    }
   })
 }
 
@@ -127,8 +138,12 @@ async function runEnvironmentSshTargetMetadataRefresh(environmentId: string): Pr
   if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
     return
   }
+  const priorTargetGenerations = bucket?.targetGenerations ?? new Map<string, number>()
+  const nextTargetGenerations = collectSshTargetGenerations(targets)
   const metadataChanged =
-    !bucket?.targetsHydrated || !sshTargetLabelsEqual(bucket.targetLabels, targets)
+    !bucket?.targetsHydrated ||
+    !sshTargetLabelsEqual(bucket.targetLabels, targets) ||
+    !sshTargetGenerationsEqual(priorTargetGenerations, nextTargetGenerations)
   useAppStore.getState().setEnvironmentSshTargetsMetadata(environmentId, targets, generation)
   const priorTargetIds = new Set(bucket?.targetLabels.keys() ?? [])
   // Why: read states after the write — a resync racing this fetch can label a target that never had one read.
@@ -136,7 +151,10 @@ async function runEnvironmentSshTargetMetadataRefresh(environmentId: string): Pr
     .getState()
     .sshStateByEnvironment.get(environmentId)?.connectionStates
   const needStateRead = targets.filter(
-    (target) => !priorTargetIds.has(target.id) || !knownStates?.has(target.id)
+    (target) =>
+      !priorTargetIds.has(target.id) ||
+      !knownStates?.has(target.id) ||
+      priorTargetGenerations.get(target.id) !== nextTargetGenerations.get(target.id)
   )
   if (!metadataChanged) {
     await fetchEnvironmentSshConnectionStates(environmentId, needStateRead, generation)

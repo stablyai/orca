@@ -413,6 +413,78 @@ describe('connectPanePty', () => {
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
   })
 
+  it.each([
+    ['rejects', 'reject'],
+    ['returns no PTY', 'empty']
+  ] as const)(
+    'preserves a direct SSH binding and schedules another retry when reattach %s',
+    async (_description, outcome) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const restoredPtyId = 'ssh:conn-1@@restored-session'
+      const transport = createMockTransport()
+      if (outcome === 'reject') {
+        transport.connect.mockRejectedValueOnce(new Error('relay attach timed out'))
+      } else {
+        transport.connect.mockResolvedValueOnce(undefined)
+      }
+      transportFactoryQueue.push(transport)
+      const pendingRetry = {
+        attemptId: 'attempt-generic-reattach-failure',
+        authority: {
+          targetId: 'conn-1',
+          providerEpoch: 'epoch-1',
+          connectionGeneration: 3
+        },
+        tabGeneration: 7,
+        startedAt: 1
+      }
+      const settleDirectSshPaneRetry = vi.fn()
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }]
+        },
+        ptyIdsByTabId: { 'tab-1': [] },
+        repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+        sshConnectionStates: new Map([
+          [
+            'conn-1',
+            {
+              targetId: 'conn-1',
+              status: 'connected',
+              providerEpoch: 'epoch-1',
+              connectionGeneration: 3
+            }
+          ]
+        ]),
+        deferredSshSessionIdsByTabId: { 'tab-1': restoredPtyId },
+        directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+        settleDirectSshPaneRetry
+      } as StoreState
+      const deps = createDeps()
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(12)
+
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+      expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
+      expect(settleDirectSshPaneRetry).toHaveBeenCalledExactlyOnceWith({
+        status: 'failed',
+        tabId: 'tab-1',
+        attemptId: pendingRetry.attemptId,
+        authority: pendingRetry.authority,
+        tabGeneration: pendingRetry.tabGeneration
+      })
+      expect(mockStoreState.tabsByWorktree['wt-1']).toEqual([
+        { id: 'tab-1', ptyId: null, generation: 7 }
+      ])
+      expect(mockStoreState.deferredSshSessionIdsByTabId['tab-1']).toBe(restoredPtyId)
+    }
+  )
+
   it('reattaches via the tab-level SSH pty id when deferred bookkeeping missed the tab', async () => {
     // Why: restore can miss the deferred maps; the tab's SSH pty id must still drive connect-then-reattach, not a fresh spawn into a missing provider.
     const { connectPanePty } = await import('./pty-connection')

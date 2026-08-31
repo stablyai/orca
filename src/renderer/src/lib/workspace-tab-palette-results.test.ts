@@ -99,13 +99,14 @@ function makeEntry({
 
 describe('searchWorkspaceTabs lastActiveAt', () => {
   it('is null when neither agent activity nor worktree activity is known', () => {
-    const [result] = searchWorkspaceTabs([makeEntry()], '')
+    const [result] = searchWorkspaceTabs([makeEntry({ createdAt: 4000 })], '')
     expect(result.lastActiveAt).toBeNull()
   })
 
   it('falls back to worktree PTY activity for editor tabs with no agent metadata', () => {
     const entry = makeEntry({
       contentType: 'editor',
+      createdAt: 1000,
       worktree: makeWorktree({ lastActivityAt: 5000 })
     })
     const [result] = searchWorkspaceTabs([entry], '')
@@ -148,9 +149,61 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
     const [result] = searchWorkspaceTabs([entry], '')
     expect(result.lastActiveAt).toBe(6000)
   })
+
+  it('uses a newer tab focus instead of stale agent activity', () => {
+    const entry = makeEntry({
+      id: 'tab-refocused',
+      createdAt: 1000,
+      agentLastActivityAt: 3000
+    })
+    entry.tab.lastFocusedAt = 8000
+
+    const [result] = searchWorkspaceTabs([entry], '')
+
+    expect(result.lastActiveAt).toBe(8000)
+  })
+
+  it('uses newer agent activity instead of an older tab focus', () => {
+    const entry = makeEntry({
+      id: 'tab-agent-active',
+      createdAt: 1000,
+      agentLastActivityAt: 8000
+    })
+    entry.tab.lastFocusedAt = 3000
+
+    const [result] = searchWorkspaceTabs([entry], '')
+
+    expect(result.lastActiveAt).toBe(8000)
+  })
 })
 
 describe('searchWorkspaceTabs ranking', () => {
+  it('ranks a multi-token direct-plus-container hit above a container-only whole-query hit', () => {
+    const directEntry = makeEntry({ id: 'direct-tab' })
+    const containerEntry = makeEntry({ id: 'container-tab' })
+    directEntry.document = buildPaletteTabDocument({
+      id: 'direct',
+      title: 'Auth notes',
+      secondaryTexts: [],
+      worktreeName: 'Aurora migration',
+      branch: 'main',
+      repoName: 'repo'
+    })
+    containerEntry.document = buildPaletteTabDocument({
+      id: 'container',
+      title: 'Unrelated notes',
+      secondaryTexts: [],
+      worktreeName: 'Auth Aurora',
+      branch: 'main',
+      repoName: 'repo'
+    })
+
+    const results = searchWorkspaceTabs([containerEntry, directEntry], 'auth aurora')
+
+    expect(results.map((result) => result.tabId)).toEqual(['direct-tab', 'container-tab'])
+    expect(results.map((result) => result.rank?.containerOnlyTokenCount)).toEqual([1, 2])
+  })
+
   it('ranks direct tab title matches ahead of container-only worktree matches', () => {
     const directEntry = makeEntry({ id: 'README-4360' })
     const containerEntry = makeEntry({ id: 'unrelated-file' })
@@ -175,9 +228,9 @@ describe('searchWorkspaceTabs ranking', () => {
     const results = searchWorkspaceTabs([containerEntry, directEntry], '4360')
     expect(results).toHaveLength(2)
     expect(results[0].tabId).toBe('README-4360')
-    expect(results[0].rank?.matchedDirectField).toBe(0)
+    expect(results[0].rank?.containerOnlyTokenCount).toBe(0)
     expect(results[1].tabId).toBe('unrelated-file')
-    expect(results[1].rank?.matchedDirectField).toBe(1)
+    expect(results[1].rank?.containerOnlyTokenCount).toBe(1)
   })
 
   it('breaks tie between two container-matching tabs using lastActiveAt recency', () => {

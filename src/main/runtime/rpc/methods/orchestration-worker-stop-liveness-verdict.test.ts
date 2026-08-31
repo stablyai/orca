@@ -44,6 +44,8 @@ describe('worker-stop against a terminal we lost contact with', () => {
     })
     const task = db.createTask({ spec: 'stop worker', runId: run.id })
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       runtimeEpoch: runtime.getRuntimeId()

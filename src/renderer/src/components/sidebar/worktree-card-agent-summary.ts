@@ -11,8 +11,9 @@ export type SummaryAgentGroup = {
 const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'waiting',
   'blocked',
-  'interrupted',
   'working',
+  'monitoring',
+  'interrupted',
   'done',
   'idle'
 ]
@@ -30,7 +31,12 @@ function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
 }
 
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  return agent.entry.interrupted === true ? 'interrupted' : asDotState(agent.state)
+  if (agent.entry.interrupted === true) {
+    return 'interrupted'
+  }
+  return agent.state === 'working' && agent.entry.workingMode === 'monitoring'
+    ? 'monitoring'
+    : asDotState(agent.state)
 }
 
 export function formatSummaryStateLabel(state: AgentDotState): string {
@@ -45,6 +51,8 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
       return 'failed'
     case 'working':
       return 'working'
+    case 'monitoring':
+      return 'monitoring'
     case 'done':
       return 'done'
     case 'idle':

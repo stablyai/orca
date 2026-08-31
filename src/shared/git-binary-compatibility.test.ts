@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -9,6 +9,7 @@ import {
   isUnsupportedMergeTreeWriteTreeError
 } from './git-merge-tree-capability'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
+import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedWorktreeListZError
@@ -150,7 +151,45 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
   })
 
+  it('supports prepared worktree creation and finalization', async () => {
+    await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-prepared', 'HEAD'])
+    await runGit(['-C', 'compat-prepared', 'reset', '--hard', 'HEAD'])
+    await runGit([
+      'worktree',
+      'lock',
+      '--reason',
+      'orca-create-preparation:v1:compat',
+      'compat-prepared'
+    ])
+    // Why: `-f -f` moves a locked preparation while preserving its lock reason (Git >=2.25).
+    await runGit(['worktree', 'move', '-f', '-f', 'compat-prepared', 'compat-final'])
+    await runGit([
+      '-C',
+      'compat-final',
+      'checkout',
+      '--no-track',
+      '-b',
+      'compat-prepared-final',
+      'HEAD'
+    ])
+
+    await expect(runGit(['-C', 'compat-final', 'branch', '--show-current'])).resolves.toMatchObject(
+      { stdout: 'compat-prepared-final\n' }
+    )
+    await runGit(['worktree', 'unlock', 'compat-final'])
+    await runGit(['worktree', 'remove', '--force', 'compat-final'])
+    await runGit(['branch', '-D', 'compat-prepared-final'])
+  })
+
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
+    const fetchHeadPath = join(repoPath, '.git', 'FETCH_HEAD')
+    await writeFile(fetchHeadPath, 'sentinel\n')
+    await expectPreferredOrRecognizedFallback(
+      ['fetch', '--no-write-fetch-head', '.', '+HEAD:refs/orca/compat/no-write-fetch-head'],
+      supports(2, 29),
+      isNoWriteFetchHeadUnsupportedError
+    )
+    await expect(readFile(fetchHeadPath, 'utf-8')).resolves.toBe('sentinel\n')
     await expectPreferredOrRecognizedFallback(
       ['for-each-ref', '--format=%(refname)', '--exclude=refs/remotes/**/HEAD', '--count=10'],
       supports(2, 42),

@@ -1,5 +1,6 @@
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
 import { buildPaletteDocument, type PaletteDocument } from './palette-match/palette-document'
 import type { PaletteComposedEvidence } from './palette-match/evidence-composer'
 import {
@@ -18,6 +19,7 @@ import {
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { isGitHubPRSuppressed } from '../../../shared/worktree/github-pr-suppression'
 import { resolvePaletteRepoForWorktree } from './palette-repo-resolution'
 
 export const WORKTREE_PALETTE_NAME_FIELD_ID = 'name'
@@ -64,8 +66,17 @@ function resolveReviewSource(
   }
 
   const branch = resolveWorktreeBranchLabel(worktree)
-  const cached = repo && sources.prCache ? sources.prCache[`${repo.path}::${branch}`]?.data : null
-  if (cached) {
+  // Why: legacy cache keys have no host identity, so only the local owner can
+  // consume them without borrowing another host's review metadata.
+  const cached =
+    repo && sources.prCache && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      ? sources.prCache[`${repo.path}::${branch}`]?.data
+      : null
+  if (
+    cached &&
+    (worktree.linkedPR === null || cached.number === worktree.linkedPR) &&
+    !isGitHubPRSuppressed(worktree, cached.number)
+  ) {
     return { provider: 'github', number: cached.number, title: cached.title }
   }
   if (worktree.linkedPR != null) {

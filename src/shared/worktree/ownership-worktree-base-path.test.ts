@@ -30,6 +30,34 @@ function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
 }
 
 describe('repo-specific worktree ownership layouts', () => {
+  it('lets an explicitly configured Claude base outrank the built-in scratch path', () => {
+    const repo = makeRepo({ worktreeBasePath: '.claude/worktrees' })
+    const settings = makeSettings()
+    const worktree = makeWorktree('/projects/a/repo/.claude/worktrees/repo/feature')
+
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree,
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      })
+    ).toBe('external')
+  })
+
+  it('keeps the same path classified as scratch without the explicit base', () => {
+    const repo = makeRepo()
+    const settings = makeSettings()
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree('/projects/a/repo/.claude/worktrees/repo/feature'),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      })
+    ).toBe('agent-scratch')
+  })
+
   it('resolves the same relative base path from each repo root', () => {
     const settings = makeSettings()
     const repoA = makeRepo({ path: '/projects/a/repo', worktreeBasePath: '../worktrees' })
@@ -73,6 +101,73 @@ describe('repo-specific worktree ownership layouts', () => {
         repo,
         settings,
         worktree: makeWorktree('C:\\projects\\App\\worktrees\\repo\\Feature'),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      })
+    ).toBe('external')
+  })
+
+  it('resolves an absolute Linux base path of a WSL repo into its distro layout (STA-4772)', () => {
+    const repo = makeRepo({
+      path: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\repo',
+      worktreeBasePath: '/home/jin/src/.orca-worktrees'
+    })
+    const settings = makeSettings({ workspaceDir: 'C:\\global' })
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+
+    expect(layouts[0]).toEqual({
+      path: '//wsl.localhost/Ubuntu-24.04/home/jin/src/.orca-worktrees',
+      nestWorkspaces: true
+    })
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree(
+          '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\.orca-worktrees\\repo\\feature'
+        ),
+        knownOrcaLayouts: layouts
+      })
+    ).toBe('external')
+  })
+
+  it('classifies worktrees under a dotted Linux base exactly where creation collapses it', () => {
+    const repo = makeRepo({
+      path: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\repo',
+      worktreeBasePath: '/home/jin/src/../.orca-worktrees'
+    })
+    const settings = makeSettings({ workspaceDir: 'C:\\global' })
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+
+    expect(layouts[0]).toEqual({
+      path: '//wsl.localhost/Ubuntu-24.04/home/jin/.orca-worktrees',
+      nestWorkspaces: true
+    })
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree(
+          '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\.orca-worktrees\\repo\\feature'
+        ),
+        knownOrcaLayouts: layouts
+      })
+    ).toBe('external')
+  })
+
+  it('preserves mixed-case WSL paths while resolving the configured base', () => {
+    const repo = makeRepo({
+      path: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\Dev\\Repo',
+      worktreeBasePath: '/home/Dev/Repo/.claude/worktrees'
+    })
+    const settings = makeSettings({ workspaceDir: 'C:\\global' })
+
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree(
+          '\\\\wsl.localhost\\Ubuntu-24.04\\home\\Dev\\Repo\\.claude\\worktrees\\feature'
+        ),
         knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
       })
     ).toBe('external')

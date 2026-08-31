@@ -1,4 +1,5 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../shared/child-process/run-process'
+import { windowsPowerShellPath } from '../shared/child-process/windows-system-binary'
 
 let cachedFonts: string[] | null = null
 let fontsPromise: Promise<string[]> | null = null
@@ -87,7 +88,7 @@ $fonts.Families | ForEach-Object { $_.Name }
 `
 
   return execFileText(
-    'powershell.exe',
+    windowsPowerShellPath(),
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
     8 * 1024 * 1024
   ).then((output) =>
@@ -100,45 +101,27 @@ $fonts.Families | ForEach-Object { $_.Name }
   )
 }
 
-function execFileText(
+async function execFileText(
   command: string,
   args: string[],
   maxBuffer: number,
   timeoutMs = SYSTEM_FONT_LIST_TIMEOUT_MS
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const child = execFile(command, args, { encoding: 'utf8', maxBuffer }, (error, stdout) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve(stdout)
-    })
-    if (!settled) {
-      timer = setTimeout(() => {
-        if (settled) {
-          return
-        }
-        settled = true
-        // Why: font discovery is a startup convenience; a stuck OS font tool
-        // should fall back instead of keeping settings IPC pending forever.
-        child.kill()
-        reject(new Error(`Timed out listing system fonts with ${command}`))
-      }, timeoutMs)
-      if (typeof timer === 'object' && 'unref' in timer) {
-        timer.unref()
-      }
-    }
+  // Why: font discovery is a startup convenience; a stuck OS font tool should
+  // fall back rather than keep settings IPC pending forever.
+  const result = await runProcess({
+    program: command,
+    args,
+    timeoutMs,
+    maxOutputBytes: maxBuffer
   })
+  if (result.timedOut) {
+    throw new Error(`Timed out listing system fonts with ${command}`)
+  }
+  if (result.code !== 0) {
+    throw new Error(`Failed to list system fonts with ${command}`)
+  }
+  return result.stdout
 }
 
 function uniqueSorted(values: (string | undefined)[]): string[] {

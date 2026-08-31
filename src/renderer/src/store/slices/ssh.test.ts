@@ -330,6 +330,88 @@ describe('createSshSlice', () => {
     expect(store.getState().sshTargetLabels).toBe(labels)
   })
 
+  it('mirrors registration generations so desktop SSH hosts are fenceable', () => {
+    const store = createTestStore()
+
+    store.getState().setSshTargetsMetadata([
+      { id: 'ssh-1', label: 'Remote', generation: 4 },
+      { id: 'ssh-2', label: 'Other', generation: 7 }
+    ])
+
+    expect(store.getState().sshTargetGenerations.get('ssh-1')).toBe(4)
+    expect(store.getState().sshTargetGenerations.get('ssh-2')).toBe(7)
+  })
+
+  it('leaves an unusable generation absent rather than defaulting it', () => {
+    const store = createTestStore()
+
+    store.getState().setSshTargetsMetadata([
+      { id: 'ssh-legacy', label: 'Legacy' },
+      { id: 'ssh-bad', label: 'Bad', generation: 0 },
+      { id: 'ssh-ok', label: 'Ok', generation: 2 }
+    ])
+
+    // Why: a defaulted generation would fence an owner against a registration
+    // that never existed; absent degrades that one host to view-only instead.
+    const generations = store.getState().sshTargetGenerations
+    expect(generations.has('ssh-legacy')).toBe(false)
+    expect(generations.has('ssh-bad')).toBe(false)
+    expect(generations.get('ssh-ok')).toBe(2)
+  })
+
+  it('refreshes generations when a host is re-registered under a new id', () => {
+    const store = createTestStore()
+    store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote', generation: 4 }])
+
+    // Remove-and-re-add issues a fresh id and a fresh generation; the mirror has
+    // to follow, or the re-added host stays view-only for the rest of the session.
+    store.getState().setSshTargetsMetadata([{ id: 'ssh-2', label: 'Remote', generation: 9 }])
+
+    expect(store.getState().sshTargetGenerations.has('ssh-1')).toBe(false)
+    expect(store.getState().sshTargetGenerations.get('ssh-2')).toBe(9)
+  })
+
+  it('refreshes a generation re-registered under the same id', () => {
+    const store = createTestStore()
+    store.getState().setSshTargetsMetadata([{ id: 'ssh-runtime-owned-r1', label: 'Env' }])
+    store
+      .getState()
+      .setSshTargetsMetadata([{ id: 'ssh-runtime-owned-r1', label: 'Env', generation: 4 }])
+
+    // Runtime-owned targets keep a deterministic id, so a re-upsert after removal
+    // reissues a *new* generation under the *old* key — the one re-registration
+    // shape a key-set comparison would miss, freezing the host view-only.
+    store
+      .getState()
+      .setSshTargetsMetadata([{ id: 'ssh-runtime-owned-r1', label: 'Env', generation: 11 }])
+
+    expect(store.getState().sshTargetGenerations.get('ssh-runtime-owned-r1')).toBe(11)
+  })
+
+  it('adopts generations when a prior load mirrored the same labels without them', () => {
+    const store = createTestStore()
+    store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote' }])
+
+    // Why: labels alone would satisfy the unchanged-list early return and freeze
+    // the mirror empty, leaving the host view-only against a known generation.
+    store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote', generation: 3 }])
+
+    expect(store.getState().sshTargetGenerations.get('ssh-1')).toBe(3)
+  })
+
+  it('drops a removed target generation so a dead registration stays unfenceable', () => {
+    const store = createTestStore()
+    store.getState().setSshTargetsMetadata([
+      { id: 'ssh-1', label: 'Remote', generation: 4 },
+      { id: 'ssh-2', label: 'Other', generation: 7 }
+    ])
+
+    store.getState().clearRemovedSshTargetState('ssh-1')
+
+    expect(store.getState().sshTargetGenerations.has('ssh-1')).toBe(false)
+    expect(store.getState().sshTargetGenerations.get('ssh-2')).toBe(7)
+  })
+
   it('marks targets hydrated on the first load, even when the list is empty', () => {
     const store = createTestStore()
     expect(store.getState().sshTargetsHydrated).toBe(false)

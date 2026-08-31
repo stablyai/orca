@@ -5,11 +5,11 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
 
 export type RepoUpdateMutationOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
+  bumpLocalWorktreeScanGeneration: (repoId: string) => void
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
   hydrateRepo: (repo: Repo) => Repo
@@ -20,6 +20,10 @@ export class RepoUpdatePersistenceOperations {
 
   private get state(): PersistedState {
     return this.operations.state
+  }
+
+  private bumpLocalWorktreeScanGeneration(repoId: string): void {
+    this.operations.bumpLocalWorktreeScanGeneration(repoId)
   }
 
   private syncProjectHostSetupCompatibilityState(): void {
@@ -178,6 +182,7 @@ export class RepoUpdatePersistenceOperations {
       }
     }
     Object.assign(repo, sanitizedUpdates)
+    this.bumpLocalWorktreeScanGeneration(id)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return this.hydrateRepo(repo)

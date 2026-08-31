@@ -51,6 +51,8 @@ vi.mock('./codex-auth-presence', () => ({
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
+import { getCmdExePath } from '../win32-utils'
+import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -722,7 +724,7 @@ describe('fetchCodexRateLimits', () => {
         "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
       )
       expect(shellCommand).toContain(
-        "exec codex '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''untrusted'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
+        "exec codex '\\''-c'\\'' '\\''approval_policy=never'\\'' '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''never'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
       )
       expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
       expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
@@ -748,6 +750,8 @@ describe('fetchCodexRateLimits', () => {
       configurable: true,
       value: 'win32'
     })
+    const codexCommand = 'C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd'
+    resolveCodexCommandMock.mockReturnValue(codexCommand)
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
@@ -783,8 +787,8 @@ describe('fetchCodexRateLimits', () => {
       await resultPromise
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
-      expect(spawnFile).toBe('codex')
-      expect(spawnArgs).toEqual(['-s', 'read-only', '-a', 'untrusted', 'app-server'])
+      expect(spawnFile).toBe(getCmdExePath())
+      expect(spawnArgs).toEqual(['/d', '/c', codexCommand, ...CODEX_READ_ONLY_APP_SERVER_ARGS])
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           env: expect.objectContaining({ CODEX_HOME: 'C:\\Users\\alice\\.codex' })

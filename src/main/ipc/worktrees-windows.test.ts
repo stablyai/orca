@@ -73,6 +73,8 @@ vi.mock('electron', () => ({
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
+  listWorktreesSharedStrict: listWorktreesMock,
+  describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
@@ -165,6 +167,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
+    getAllWorktreeMeta: vi.fn(),
+    captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(),
     setWorktreeMeta: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     addRetiredWorktreeName: vi.fn(),
@@ -209,6 +213,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
+    store.getAllWorktreeMeta.mockReset()
+    store.captureNativeLocalWorktreeMetadataScanExpectation.mockReset()
     store.setWorktreeMeta.mockReset()
     store.removeWorktreeMeta.mockReset()
     store.addRetiredWorktreeName.mockReset()
@@ -251,6 +257,21 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     })
     resolveSetupRunnerShellMock.mockReturnValue(undefined)
     store.getWorktreeMeta.mockReturnValue(undefined)
+    store.getAllWorktreeMeta.mockReturnValue({})
+    store.captureNativeLocalWorktreeMetadataScanExpectation.mockImplementation((repo) => ({
+      repo: {
+        id: repo.id,
+        path: repo.path,
+        kind: 'git',
+        expectedRepo: repo
+      },
+      routing: {
+        expectedProject: undefined,
+        expectedProjectUpdatedAt: undefined,
+        expectedSettings: store.getSettings()
+      },
+      metadata: []
+    }))
     store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: [] })
     store.setWorktreeMeta.mockReturnValue({})
     resolveLocalGitUsernameMock.mockResolvedValue('')
@@ -464,7 +485,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       'C:\\workspaces\\improve-dashboard',
       'pnpm install',
       undefined,
-      setupShell
+      setupShell,
+      undefined
     )
     expect(result).toMatchObject({
       setup: {
@@ -501,6 +523,14 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
           }
         : undefined
     )
+    store.getAllWorktreeMeta.mockReturnValue({
+      'repo-1::C:/workspaces/improve-dashboard': {
+        lastActivityAt: 123,
+        displayName: 'Improve Dashboard',
+        linkedIssue: 123,
+        linkedPR: 456
+      }
+    })
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',

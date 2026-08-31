@@ -28,7 +28,6 @@ const {
   (await import('./daemon-init-test-harness')).createDaemonInitMocks()
 )
 
-vi.mock('electron', () => moduleFactories.electron())
 vi.mock('fs', () => moduleFactories.fs())
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
@@ -253,6 +252,28 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       rows: 24
     })
     expect(adapterInstances[0].listProcesses).toHaveBeenCalled()
+  })
+
+  it('answers daemonOwnsFreshPersistentPtys honestly for each installed provider', async () => {
+    // What orcad publishes as `canRecoverPersistentLocalPtys` and as the readiness health
+    // verdict. Answering true under degraded routing would advertise recovery for terminals
+    // that die with the runtime process.
+    const mod = await importFresh()
+    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(false)
+
+    await mod.initDaemonPtyProvider()
+    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(true)
+
+    const degraded = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/degraded-socket',
+      tokenPath: '/fake/degraded-token',
+      mode: 'degraded-new-pty-fallback'
+    }))
+    await degraded.initDaemonPtyProvider()
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    expect(degraded.getDaemonProvider()).toBeInstanceOf(DegradedDaemonPtyProvider)
+    expect(degraded.daemonOwnsFreshPersistentPtys()).toBe(false)
   })
 
   it('rechecks the preserved daemon endpoint before recovering fresh-spawn routing', async () => {

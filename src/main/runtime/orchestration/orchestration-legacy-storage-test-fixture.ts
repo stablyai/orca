@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from '../../sqlite/sync-database'
 import { LEGACY_RUN_ID, OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 export type LegacyStorageCutoverFixture = {
   dbPath: string
@@ -38,7 +39,8 @@ export function createLegacyStorageCutoverFixture(): {
     coordinatorHandle: 'term_unrelated_coord',
     coordinatorPaneKey: 'tab_unrelated:55555555-5555-4555-8555-555555555555'
   })
-  const currentDispatch = first.createDispatchContext(
+  const currentDispatch = createRootDispatch(
+    first,
     currentTask.id,
     'term_current_worker',
     'tab_current:22222222-2222-4222-9222-222222222222',
@@ -55,7 +57,8 @@ export function createLegacyStorageCutoverFixture(): {
     spec: 'legacy',
     createdByTerminalHandle: 'term_legacy_coord'
   })
-  first.createDispatchContext(
+  createRootDispatch(
+    first,
     legacyTask.id,
     'term_legacy_worker',
     'tab_legacy:33333333-3333-4333-8333-333333333333'
@@ -65,7 +68,8 @@ export function createLegacyStorageCutoverFixture(): {
     question: 'Retained gate?'
   })
   first.resolveGate(legacyGate.id, 'continue')
-  const retryDispatch = first.createDispatchContext(
+  const retryDispatch = createRootDispatch(
+    first,
     legacyTask.id,
     'term_legacy_worker',
     'tab_legacy:33333333-3333-4333-8333-333333333333'

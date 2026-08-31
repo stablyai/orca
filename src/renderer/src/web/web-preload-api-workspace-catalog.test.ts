@@ -343,6 +343,40 @@ describe('web worktree preload API', () => {
     ])
   })
 
+  it('reuses the worktree catalog cache until disconnect invalidates its runtime owner', async () => {
+    const calls: string[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push(method)
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result:
+              method === 'status.get'
+                ? { runtimeId: 'runtime-a', version: '1.0.0' }
+                : { worktrees: [{ id: 'worktree-a', repoId: 'repo-a', path: '/srv/a' }] },
+            _meta: { runtimeId: 'runtime-a' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.listAll()
+    await globals.window.api.worktrees.listAll()
+    await globals.window.api.runtimeEnvironments.disconnect({ selector: 'web-server-a' })
+    await globals.window.api.runtimeEnvironments.connect({ selector: 'web-server-a' })
+    await globals.window.api.worktrees.listAll()
+
+    expect(calls).toEqual(['worktree.list', 'status.get', 'worktree.list'])
+  })
+
   it('preserves runtime-routed detected-worktree host ownership in the compatibility shape', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -641,6 +675,49 @@ describe('web worktree preload API', () => {
     // Why: this client hand-enumerates create params, so a new optional field silently vanishes.
     // Absent must mean user-typed — the host neither skips a retired candidate nor retires it.
     expect(runtimeCalls[0]?.params).not.toHaveProperty('nameWasGenerated')
+  })
+
+  // Why: without it the host records the app's parent pick as a CLI flag, which cleans up differently.
+  it('marks a parent-picked create as a manual action', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { worktree: { id: 'repo-1::/workspace/child', path: '/workspace/child' } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'child',
+      setupDecision: 'inherit'
+    })
+    await globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'child',
+      setupDecision: 'inherit',
+      parentWorkspace: 'folder:folder-1'
+    })
+
+    expect(runtimeCalls[0]?.params).not.toHaveProperty('parentWorkspaceOrigin')
+    expect(runtimeCalls[1]?.params).toMatchObject({
+      parentWorkspace: 'folder:folder-1',
+      parentWorkspaceOrigin: 'manual'
+    })
   })
 
   it('encodes explicit push target clears for runtime worktree updates', async () => {

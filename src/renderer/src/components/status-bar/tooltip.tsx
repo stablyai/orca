@@ -20,6 +20,7 @@ import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsagePace } from '../../../../shared/usage-pace'
 import { formatUsagePaceLine } from './usage-pace-copy'
 import { UsagePaceMarker } from './UsagePaceMarker'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -270,17 +271,16 @@ export function ProviderPanel({
   inverted = false,
   className,
   showResetCredits = true,
-  usagePercentageDisplay = 'used',
-  now = Date.now()
+  usagePercentageDisplay = 'used'
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
   usagePercentageDisplay?: UsagePercentageDisplay
-  /** Countdown and pace both drift with the clock; hosts pass a ticking value. */
-  now?: number
 }): React.JSX.Element {
+  const windowSections = p ? getWindowSections(p) : []
+  const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
@@ -366,7 +366,7 @@ export function ProviderPanel({
 
       <div className={`border-t ${dividerClass}`} />
 
-      {getWindowSections(p).map((s) => (
+      {windowSections.map((s) => (
         <ProviderRateLimitWindowSection
           key={s.label}
           window={s.window}

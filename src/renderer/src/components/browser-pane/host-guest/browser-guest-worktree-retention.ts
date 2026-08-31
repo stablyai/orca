@@ -1,4 +1,6 @@
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import { hasActiveBrowserPageDownload } from '../navigate/browser-page-download-activity'
+import { browserPageNeedsPaintRetention } from './browser-guest-paint-retention'
 
 // Why 4: every hidden worktree that retains browser guests keeps one Electron
 // guest process per page alive purely for instant revisits, so guest memory
@@ -66,6 +68,16 @@ export function worktreeHoldsLiveBrowserGuests(
     }
     return pages.some((page) => hasLiveGuest(page.id))
   })
+}
+
+// Why eviction needs more than the paint terms: eviction DESTROYS the guest rather than parking
+// it, and main cancels a page's active downloads when its guest unregisters (tab-close semantics).
+export function browserTabsVetoGuestEviction(tabs: readonly BrowserWorkspace[]): boolean {
+  return tabs.some((tab) =>
+    browserTabVisibilityPageIds(tab).some(
+      (pageId) => browserPageNeedsPaintRetention(pageId) || hasActiveBrowserPageDownload(pageId)
+    )
+  )
 }
 
 // Mirrors BrowserOverlaySlot's page-id derivation so visibility pinning

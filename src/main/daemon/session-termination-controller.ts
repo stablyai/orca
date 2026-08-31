@@ -67,7 +67,8 @@ export class SessionTerminationController {
           },
           {
             // Why: if the root exits during ps its PID can be recycled; never apply that stale snapshot to a different process tree.
-            ownsRoot: () => !this.deps.isExited()
+            ownsRoot: () => !this.deps.isExited(),
+            terminateOwnedTree: () => this.deps.subprocess.terminateOwnedTree()
           }
         )
       ).catch((error) => {

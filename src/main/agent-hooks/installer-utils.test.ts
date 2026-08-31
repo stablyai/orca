@@ -30,6 +30,7 @@ import {
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
+import { buildPosixAgentHookPostCommand } from './hook-post-command'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 
@@ -604,7 +605,7 @@ describe('wrapPosixHookCommand', () => {
 })
 
 const qualifiedWindowsPowerShellCommand =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
 function decodeWindowsHookCommand(command: string): string {
   const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
@@ -614,8 +615,10 @@ function decodeWindowsHookCommand(command: string): string {
 
 function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "''")}'`
+  // Why: the execution-policy bypass rides in the payload, not on the command
+  // line, so the launcher cannot spell the AV-blocked flag triple (#16003).
   // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
-  return `$ProgressPreference='SilentlyContinue'; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 describe('wrapWindowsHookCommand', () => {
@@ -634,6 +637,17 @@ describe('wrapWindowsHookCommand', () => {
     })
     expect(decodeWindowsHookCommand(command)).toContain(
       "$env:ORCA_COPILOT_HOOK_EVENT = 'UserPromptSubmit'; if (Test-Path"
+    )
+  })
+
+  it('emits fallback stdout when the managed script is missing', () => {
+    const command = wrapWindowsHookCommand(
+      'C:\\hooks\\cursor-hook.cmd',
+      {},
+      { fallbackStdout: '{"permission":"allow"}' }
+    )
+    expect(decodeWindowsHookCommand(command)).toContain(
+      'Write-Output \'{"permission":"allow"}\'; exit 0'
     )
   })
 
@@ -741,6 +755,17 @@ describe('wrapRuntimeHomeHookCommand', () => {
       expect(command).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/)
     }
   )
+
+  it('hides the console on the Git Bash branch too, and still avoids the denied triple', () => {
+    // Why: this branch launches PowerShell from bash, where the parent has no
+    // console to inherit — Windows allocates a fresh one per hook event unless
+    // the switch says otherwise (#14815), and the AV verdict on the flag triple
+    // applies to the exact same string (#16003).
+    const command = wrapRuntimeHomeHookCommand('claude-hook')
+
+    expect(command).toContain('powershell.exe" -NoProfile -EncodedCommand ')
+    expect(command).not.toMatch(/-ExecutionPolicy/i)
+  })
 
   it('rejects a script base name that could inject shell syntax', () => {
     expect(() => wrapRuntimeHomeHookCommand('claude-hook; echo injected')).toThrow(
@@ -855,6 +880,26 @@ describe('buildWindowsAgentHookPostCommand', () => {
 
     expect(command).toMatch(/^"%SystemRoot%\\System32\\curl\.exe"/)
     expect(command).not.toMatch(/^curl\.exe\b/)
+  })
+})
+
+describe('buildPosixAgentHookPostCommand', () => {
+  it('uses raw JSON only when the listener advertises support', () => {
+    const command = buildPosixAgentHookPostCommand('claude').join('\n')
+
+    expect(command).toContain('ORCA_AGENT_HOOK_TRANSPORT:-}')
+    expect(command).toContain('raw-json-v1')
+    expect(command).toContain('command -v base64')
+    expect(command).toContain('command -v tr')
+    expect(command).toContain('Content-Type: application/json')
+    expect(command).toContain('X-Orca-Agent-Hook-Meta-Encoding: base64')
+    expect(command).toContain('X-Orca-Agent-Hook-Meta: ${orca_hook_metadata}')
+    expect(command).toContain("printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s'")
+    expect(command).toContain('$ORCA_PANE_KEY')
+    expect(command).toContain('$ORCA_WORKTREE_ID')
+    expect(command).toContain('--data-binary @-')
+    expect(command).toContain('Content-Type: application/x-www-form-urlencoded')
+    expect(command).toContain('--data-urlencode "payload@-"')
   })
 })
 

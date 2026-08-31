@@ -16,6 +16,7 @@ import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { getUnifiedTabPaletteExecutionHostId } from './unified-tab-host-ownership'
 import type {
   SearchableWorkspaceTab,
   WorkspaceTabContentType
@@ -86,21 +87,20 @@ function positionScore(entry: SearchableWorkspaceTab): number {
 }
 
 function resolveWorkspaceTabLastActiveAt(entry: SearchableWorkspaceTab): number | null {
-  // Agent activity wins when present; then explicit tab focus; otherwise fall back to worktree.
-  const candidate =
-    maxAgentActivityAt(entry.agentMetadata) ??
-    entry.tab.lastFocusedAt ??
-    (entry.worktree.lastActivityAt || null)
+  // Why: explicit tab activity outranks the worktree fallback; creation only clamps stale signals.
+  const tabLocalActivity =
+    Math.max(maxAgentActivityAt(entry.agentMetadata) ?? 0, entry.tab.lastFocusedAt ?? 0) || null
+  const candidate = tabLocalActivity || entry.worktree.lastActivityAt || null
   if (candidate == null) {
     return null
   }
-  // Never report activity older than the tab itself (e.g. a stale worktree signal).
   return Math.max(candidate, entry.tab.createdAt)
 }
 
 function baseResult(entry: SearchableWorkspaceTab): WorkspaceTabPaletteSearchResult {
+  const executionHostId = getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree)
   return {
-    ...(entry.worktree.hostId ? { executionHostId: entry.worktree.hostId } : {}),
+    ...(executionHostId ? { executionHostId } : {}),
     tabId: entry.tab.id,
     entityId: entry.tab.entityId,
     worktreeId: entry.worktree.id,

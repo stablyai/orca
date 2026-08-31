@@ -16,6 +16,10 @@ import {
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
+import {
+  createWorktreeTabBucketProjection,
+  type WorktreeTabBucketProjection
+} from '@/lib/worktree-tab-bucket-projection'
 // Why: when an agent finishes or its terminal closes, the store cleans up the
 // explicit status entry and the agent vanishes from the live status set.
 // Retaining the last-known "done" snapshot in the store lets the inline
@@ -34,6 +38,16 @@ type RetainedAgentsSyncInputs = {
 
 type RetainedAgentsSyncSnapshotInputs = RetainedAgentsSyncInputs & {
   now: number
+}
+export function createRetainedAgentsTabTopologyProjection(
+  onInspectBucket?: (worktreeId: string) => void
+) {
+  return createWorktreeTabBucketProjection<TerminalTab, TerminalTab>({
+    projectTab: (tab) => tab,
+    isSameProjectedTab: (previousTab, nextTab) =>
+      previousTab.id === nextTab.id && previousTab.worktreeId === nextTab.worktreeId,
+    onInspectBucket
+  })
 }
 
 function paneKeyTabId(paneKey: string): string | null {
@@ -122,17 +136,22 @@ export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshot
 }
 
 export function useRetainedAgentsSync(): void {
+  const tabTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
+    TerminalTab,
+    TerminalTab
+  > | null>(null)
+  tabTopologyProjectionRef.current ??= createRetainedAgentsTabTopologyProjection()
   const retainAgents = useAppStore((s) => s.retainAgents)
   const pruneRetainedAgents = useAppStore((s) => s.pruneRetainedAgents)
   const clearRetentionSuppressedPaneKeys = useAppStore((s) => s.clearRetentionSuppressedPaneKeys)
-  const [repos, worktreesByRepo, folderWorkspaces, tabsByWorktree, agentStatusEpoch] = useAppStore(
+  const [repos, worktreesByRepo, folderWorkspaces, tabTopology, agentStatusEpoch] = useAppStore(
     useShallow(
       (s) =>
         [
           s.repos,
           s.worktreesByRepo,
           s.folderWorkspaces,
-          s.tabsByWorktree,
+          tabTopologyProjectionRef.current!.project(s.tabsByWorktree),
           s.agentStatusEpoch
         ] as const
     )
@@ -150,11 +169,11 @@ export function useRetainedAgentsSync(): void {
       now: Date.now()
     })
 
-    // Why: read retention state via getState() after the cheap ref/epoch gate
-    // fires. Building the full retention snapshot scans all agents, so do it
-    // only when live identity/state/freshness/final-done data or worktree
-    // membership changes. Subscribing to retainedAgentsByPaneKey would create
-    // a feedback loop because this effect calls retainAgents.
+    // Why: read retention state via getState() after the cheap topology/epoch
+    // gate fires. Building the full retention snapshot scans all agents, so
+    // display-title-only publications must not enter this effect. The fresh
+    // store read still supplies current tab objects whenever a real topology
+    // or agent transition does run.
     const { retainedAgentsByPaneKey: retainedNow, retentionSuppressedPaneKeys } = state
     const { toRetain, consumedSuppressedPaneKeys } = collectRetainedAgentsOnDisappear({
       previousAgents: prevAgentsRef.current,
@@ -181,7 +200,7 @@ export function useRetainedAgentsSync(): void {
     repos,
     worktreesByRepo,
     folderWorkspaces,
-    tabsByWorktree,
+    tabTopology,
     agentStatusEpoch,
     retainAgents,
     pruneRetainedAgents,
@@ -273,9 +292,8 @@ export function collectRetainedAgentsOnDisappear(args: {
     // Why: prefer the real destination tab — reusing the source tab's title and
     // launchAgent under a different id would mislabel the retained row.
     const ownerTab =
-      ownerTabId === prev.row.tab.id
-        ? prev.row.tab
-        : (args.tabIndex?.get(ownerTabId)?.tab ?? { ...prev.row.tab, id: ownerTabId })
+      args.tabIndex?.get(ownerTabId)?.tab ??
+      (ownerTabId === prev.row.tab.id ? prev.row.tab : { ...prev.row.tab, id: ownerTabId })
     // Why: PTY exit can remove the live row before closeTab plants a suppressor;
     // the closed-tab marker prevents re-retention.
     if (args.recentlyClosedAgentStatusTabIds[ownerTabId]) {

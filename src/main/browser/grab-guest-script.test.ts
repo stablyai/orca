@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { types } from 'node:util'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
@@ -5,6 +6,18 @@ import { buildGuestOverlayScript } from './grab-guest-script'
 import { clampGrabPayload } from './browser-grab-payload'
 
 describe('buildGuestOverlayScript', () => {
+  it.each([
+    ['arm', '07cffca05c4c9dab10bdcf301deab24e033edd07c6cd235bb364e1a139720a0a'],
+    ['awaitClick', 'b6b65b2b53c8719f1d10f93954cf867d99e43e14dbd1ca0a92e5067b168a126c'],
+    ['finalize', '91bd9836b0536c9579e0d4648d30679c0b4a5893d9a43110a70e67d6804fd291'],
+    ['extractHover', 'cf0ee3ac61669daefa7db9389233c1abfe9f0fb9e7257300c761987aac914b02'],
+    ['teardown', '732efde1022745f26dd4250d2891a663023eecafdf025fd66dde87781a985d81']
+  ] as const)('preserves the serialized %s guest script', (action, expectedSha256) => {
+    expect(createHash('sha256').update(buildGuestOverlayScript(action)).digest('hex')).toBe(
+      expectedSha256
+    )
+  })
+
   it('returns a non-empty string for arm action', () => {
     const script = buildGuestOverlayScript('arm')
     expect(script).toBeTruthy()

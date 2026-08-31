@@ -75,8 +75,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  rebaseInternals.setSessionRunnerSync(null)
-  trustGrantInternals.setGrantSessionRunnerSync(null)
+  rebaseInternals.setSessionRunner(null)
+  trustGrantInternals.setGrantSessionRunner(null)
   trustGrantInternals.resetDiagnostics()
   codexAppServerCapabilityCache.clear()
   if (previousDisableTrustRpc === undefined) {
@@ -123,7 +123,7 @@ function writeCodexLikeTrust(configPath: string, entries: CodexTrustEntry[]): vo
 function installCodexLikeGrantRunner(): ReturnType<typeof vi.fn> {
   const codexHash = (key: string): string =>
     `sha256:codex-${parseTrustKey(key)?.eventLabel ?? 'unknown'}`
-  const runner = vi.fn((request: CodexHookTrustGrantRequest) => {
+  const runner = vi.fn(async (request: CodexHookTrustGrantRequest) => {
     const codexHome = request.invocation.env?.CODEX_HOME
     expect(codexHome).toBeTruthy()
     const entries: CodexTrustEntry[] = request.expectedTrustKeys.map((key) => {
@@ -145,7 +145,7 @@ function installCodexLikeGrantRunner(): ReturnType<typeof vi.fn> {
       }))
     }
   })
-  trustGrantInternals.setGrantSessionRunnerSync(runner)
+  trustGrantInternals.setGrantSessionRunner(runner)
   return runner
 }
 
@@ -154,11 +154,11 @@ function prepareSystemHome(): void {
 }
 
 describe('CodexHookService app-server trust grant lane', () => {
-  it('treats Codex hashes as authoritative and records the verified grant', () => {
+  it('treats Codex hashes as authoritative and records the verified grant', async () => {
     prepareSystemHome()
     const runner = installCodexLikeGrantRunner()
 
-    const status = new CodexHookService().install()
+    const status = await new CodexHookService().install()
 
     expect(status.state).toBe('installed')
     expect(runner).toHaveBeenCalledTimes(1)
@@ -177,15 +177,15 @@ describe('CodexHookService app-server trust grant lane', () => {
     expect(Object.keys(readCodexTrustGrantLedgerHome(managedHome)!.entries)).toHaveLength(8)
   })
 
-  it('keeps config byte-stable and skips the session on a repeat ledger hit', () => {
+  it('keeps config byte-stable and skips the session on a repeat ledger hit', async () => {
     prepareSystemHome()
     const runner = installCodexLikeGrantRunner()
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
     const firstToml = readFileSync(join(managedHome, 'config.toml'))
 
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     expect(runner).toHaveBeenCalledTimes(1)
     // Why: each launch validates the binary stamp once; getStatus reuses the
     // just-verified grant instead of repeating PATH/version-manager scans.
@@ -193,7 +193,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     expect(readFileSync(join(managedHome, 'config.toml'))).toEqual(firstToml)
   })
 
-  it('retries ledger-proven real-home trust cleanup after the hook is already gone', () => {
+  it('retries ledger-proven real-home trust cleanup after the hook is already gone', async () => {
     prepareSystemHome()
     const systemHome = join(tmpHome, '.codex')
     const hooksPath = join(systemHome, 'hooks.json')
@@ -223,7 +223,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     })
     installCodexLikeGrantRunner()
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     expect(readHookTrustEntries(configPath).has(trustKey)).toBe(false)
     expect(readCodexTrustGrantLedgerHome(systemHome)).toBeNull()
@@ -232,7 +232,7 @@ describe('CodexHookService app-server trust grant lane', () => {
   // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
   it.skipIf(process.platform === 'win32')(
     'keeps a real-home symlink and rebases later user trust during flag-off cleanup',
-    () => {
+    async () => {
       prepareSystemHome()
       const systemHome = join(tmpHome, '.codex')
       const hooksPath = join(systemHome, 'hooks.json')
@@ -256,7 +256,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       )
       symlinkSync(targetPath, hooksPath)
       const operations: string[] = []
-      rebaseInternals.setSessionRunnerSync((request) => {
+      rebaseInternals.setSessionRunner(async (request) => {
         operations.push(request.operation)
         if (request.operation === 'inspect-user-hook-trust') {
           return {
@@ -273,7 +273,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       })
       installCodexLikeGrantRunner()
 
-      expect(new CodexHookService().install().state).toBe('installed')
+      expect((await new CodexHookService().install()).state).toBe('installed')
 
       expect(lstatSync(hooksPath).isSymbolicLink()).toBe(true)
       expect(JSON.parse(readFileSync(targetPath, 'utf-8')).hooks.Stop).toEqual([
@@ -285,7 +285,7 @@ describe('CodexHookService app-server trust grant lane', () => {
 
   it.skipIf(process.platform === 'win32')(
     'preserves restrictive real-home hooks permissions during flag-off cleanup',
-    () => {
+    async () => {
       prepareSystemHome()
       const hooksPath = join(tmpHome, '.codex', 'hooks.json')
       const material = getCodexManagedHookInstallMaterial()
@@ -296,17 +296,17 @@ describe('CodexHookService app-server trust grant lane', () => {
       chmodSync(hooksPath, 0o600)
       installCodexLikeGrantRunner()
 
-      expect(new CodexHookService().install().state).toBe('installed')
+      expect((await new CodexHookService().install()).state).toBe('installed')
 
       expect(statSync(hooksPath).mode & 0o777).toBe(0o600)
     }
   )
 
-  it('does not accept a ledger hash after the recorded Codex binary stamp changes', () => {
+  it('does not accept a ledger hash after the recorded Codex binary stamp changes', async () => {
     prepareSystemHome()
     installCodexLikeGrantRunner()
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
     const ledger = readCodexTrustGrantLedgerHome(managedHome)!
     writeCodexTrustGrantLedgerHome(managedHome, {
@@ -320,16 +320,16 @@ describe('CodexHookService app-server trust grant lane', () => {
     })
   })
 
-  it('upgrades self-computed trust in place without duplicate logical entries', () => {
+  it('upgrades self-computed trust in place without duplicate logical entries', async () => {
     prepareSystemHome()
     const service = new CodexHookService()
     process.env.ORCA_DISABLE_CODEX_TRUST_RPC = '1'
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
     delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
     installCodexLikeGrantRunner()
 
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     const upgraded = readFileSync(join(managedHome, 'config.toml'), 'utf-8')
     // Why: the legacy Windows fallback intentionally writes slash variants;
     // duplicate detection is about the normalized trust identity.
@@ -350,7 +350,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     expect(upgraded).toContain('sha256:codex-session_start')
   })
 
-  it('leaves user trust byte-untouched while granting managed entries', () => {
+  it('leaves user trust byte-untouched while granting managed entries', async () => {
     prepareSystemHome()
     const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
     mkdirSync(managedHome, { recursive: true })
@@ -362,35 +362,35 @@ describe('CodexHookService app-server trust grant lane', () => {
     writeFileSync(join(managedHome, 'config.toml'), `${userBlock}\n`)
     installCodexLikeGrantRunner()
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
     expect(readFileSync(join(managedHome, 'config.toml'), 'utf-8')).toContain(userBlock)
   })
 
-  it('keeps the forced fallback on self-computed writes', () => {
+  it('keeps the forced fallback on self-computed writes', async () => {
     prepareSystemHome()
     process.env.ORCA_DISABLE_CODEX_TRUST_RPC = '1'
     const runner = vi.fn()
-    trustGrantInternals.setGrantSessionRunnerSync(runner)
+    trustGrantInternals.setGrantSessionRunner(runner)
 
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     expect(service.getStatus().state).toBe('installed')
     expect(runner).not.toHaveBeenCalled()
     expect(resolveCodexCommandMock).not.toHaveBeenCalled()
   })
 
-  it('restores exact config bytes before fallback after a mutating RPC failure', () => {
+  it('restores exact config bytes before fallback after a mutating RPC failure', async () => {
     prepareSystemHome()
     const service = new CodexHookService()
     process.env.ORCA_DISABLE_CODEX_TRUST_RPC = '1'
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
     const baseline = readFileSync(join(managedHome, 'config.toml'))
 
     delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
     rmSync(managedHome, { recursive: true, force: true })
     trustGrantInternals.resetDiagnostics()
-    const runner = vi.fn((request: CodexHookTrustGrantRequest) => {
+    const runner = vi.fn(async (request: CodexHookTrustGrantRequest) => {
       const codexHome = request.invocation.env?.CODEX_HOME
       writeFileSync(
         join(codexHome!, 'config.toml'),
@@ -398,9 +398,9 @@ describe('CodexHookService app-server trust grant lane', () => {
       )
       throw new Error('transport failed after config/batchWrite')
     })
-    trustGrantInternals.setGrantSessionRunnerSync(runner)
+    trustGrantInternals.setGrantSessionRunner(runner)
 
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
     expect(runner).toHaveBeenCalledTimes(1)
     expect(readFileSync(join(managedHome, 'config.toml'))).toEqual(baseline)
   })

@@ -4,7 +4,14 @@ import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
 } from '../../shared/crash-reporting'
+import {
+  CRASH_REPORT_ATTRIBUTION_DETAIL_KEY,
+  CRASH_REPORT_ATTRIBUTION_NOTE_DETAIL_KEY,
+  UNRELIABLE_BOUNDARY_ATTRIBUTION,
+  UNRELIABLE_BOUNDARY_ATTRIBUTION_NOTE
+} from '../../shared/react-update-depth-attribution'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
+import { rendererCrashBreadcrumbOrigin } from '../../shared/crash-breadcrumb-origin'
 import { getCrashBreadcrumbSnapshot } from '../crash-reporting/crash-breadcrumb-store'
 
 export const recentRendererErrorReportKeys = new Map<string, number>()
@@ -45,11 +52,17 @@ function nullableStringField(value: unknown, maxLength: number): string | null |
   return stringField(value, maxLength)
 }
 
+function attributionField(value: unknown): ReactErrorBoundaryReportArgs['attribution'] {
+  // Only the one known verdict; anything else from a newer renderer degrades to no attribution.
+  return value === UNRELIABLE_BOUNDARY_ATTRIBUTION ? UNRELIABLE_BOUNDARY_ATTRIBUTION : undefined
+}
+
 function normalizeRendererErrorReportArgs(args: unknown): ReactErrorBoundaryReportArgs | null {
   if (!args || typeof args !== 'object') {
     return null
   }
   const record = args as Record<string, unknown>
+  const attribution = attributionField(record.attribution)
   const boundaryId = stringField(record.boundaryId, 120)
   const surface = stringField(record.surface, 80)
   const errorName = stringField(record.errorName, 120) ?? 'Error'
@@ -87,7 +100,8 @@ function normalizeRendererErrorReportArgs(args: unknown): ReactErrorBoundaryRepo
       : {}),
     ...(typeof record.hasActiveWorktree === 'boolean'
       ? { hasActiveWorktree: record.hasActiveWorktree }
-      : {})
+      : {}),
+    ...(attribution ? { attribution } : {})
   }
 }
 
@@ -106,8 +120,12 @@ function pruneRendererErrorReportKeys(now: number): void {
   }
 }
 
-function getRendererErrorReportKey(args: ReactErrorBoundaryReportArgs): string {
+function getRendererErrorReportKey(
+  args: ReactErrorBoundaryReportArgs,
+  webContentsId?: number
+): string {
   return JSON.stringify({
+    webContentsId,
     boundaryId: args.boundaryId,
     surface: args.surface,
     errorName: args.errorName,
@@ -118,7 +136,8 @@ function getRendererErrorReportKey(args: ReactErrorBoundaryReportArgs): string {
 
 export async function recordRendererErrorReport(
   store: CrashReportStore,
-  args: unknown
+  args: unknown,
+  webContentsId?: number
 ): Promise<ReactErrorBoundaryReportResult> {
   const normalized = normalizeRendererErrorReportArgs(args)
   if (!normalized) {
@@ -127,7 +146,7 @@ export async function recordRendererErrorReport(
 
   const now = Date.now()
   pruneRendererErrorReportKeys(now)
-  const key = getRendererErrorReportKey(normalized)
+  const key = getRendererErrorReportKey(normalized, webContentsId)
   if (now - (recentRendererErrorReportKeys.get(key) ?? 0) < RENDERER_ERROR_DEDUPE_MS) {
     return { ok: true, report: null, deduped: true }
   }
@@ -155,6 +174,12 @@ export async function recordRendererErrorReport(
       error_message: normalized.errorMessage,
       ...(normalized.errorStack ? { error_stack: normalized.errorStack } : {}),
       ...(normalized.componentStack ? { component_stack: normalized.componentStack } : {}),
+      ...(normalized.attribution
+        ? {
+            [CRASH_REPORT_ATTRIBUTION_DETAIL_KEY]: normalized.attribution,
+            [CRASH_REPORT_ATTRIBUTION_NOTE_DETAIL_KEY]: UNRELIABLE_BOUNDARY_ATTRIBUTION_NOTE
+          }
+        : {}),
       ...(normalized.activeView ? { active_view: normalized.activeView } : {}),
       ...(normalized.activeModal !== undefined ? { active_modal: normalized.activeModal } : {}),
       ...(normalized.activeTabType ? { active_tab_type: normalized.activeTabType } : {}),
@@ -167,7 +192,9 @@ export async function recordRendererErrorReport(
     },
     // Why: React render failures are recoverable only because a boundary
     // caught them; persist the same recent app breadcrumbs as native crashes.
-    breadcrumbs: getCrashBreadcrumbSnapshot()
+    breadcrumbs: getCrashBreadcrumbSnapshot(
+      webContentsId === undefined ? undefined : rendererCrashBreadcrumbOrigin(webContentsId)
+    )
   })
 
   return { ok: true, report, deduped: false }

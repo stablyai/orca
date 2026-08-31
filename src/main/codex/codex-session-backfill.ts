@@ -17,10 +17,16 @@ import {
 } from './codex-session-backfill-date'
 import {
   captureCodexSessionBackfillMarkerGeneration,
-  hasCompletedCodexSessionBackfillMarker,
-  writeCodexSessionBackfillMarker as writeBackfillMarker
+  readCodexSessionBackfillBaseline,
+  writeCodexSessionBackfillMarker as writeBackfillMarker,
+  type CodexSessionBackfillBaseline
 } from './codex-session-backfill-marker'
+import {
+  getCodexSessionBackfillDate,
+  mergeCodexSessionBackfillDates
+} from './codex-session-backfill-scan-dates'
 import type {
+  CodexSessionBackfillDate,
   CodexSessionBackfillOptions,
   CodexSessionBackfillPaths,
   CodexSessionBackfillSummary
@@ -88,28 +94,59 @@ async function runCodexSessionBackfillOncePerHost(
 ): Promise<CodexSessionBackfillSummary | null> {
   const paths = resolveCodexSessionBackfillPaths(systemCodexHomePathOverride)
   const markerGeneration = captureCodexSessionBackfillMarkerGeneration()
-  if (
-    !options.ignoreCompletionMarker &&
-    hasCompletedCodexSessionBackfillMarker(paths.markerPath, paths.systemSessionsRoot)
-  ) {
+  const baseline = readCodexSessionBackfillBaseline(paths.markerPath, paths.systemSessionsRoot)
+  const scanPlan = resolveCodexSessionBackfillScanPlan(baseline, options)
+  if (!scanPlan) {
     return null
   }
-  const summary = await backfillManagedCodexSessionsIntoSystemHome(paths, options)
-  // Why: file or heal-queue failures leave the marker unset so the next
+  const summary = await backfillManagedCodexSessionsIntoSystemHome(paths, {
+    ...options,
+    scanDates: scanPlan.scanDates
+  })
+  // Why: file or heal-queue failures leave the pass uncertified so the next
   // startup retries; skip-existing keeps those retries cheap.
   if (
     !summary.stopped &&
     options.shouldStop?.() !== true &&
-    options.writeCompletionMarker !== false &&
     options.canWriteCompletionMarker?.() !== false &&
-    (options.scanDates === undefined || options.writeBoundedCompletionMarker === true) &&
     summary.failedFiles === 0 &&
     summary.failedDirectories === 0 &&
     summary.failedHealAuditRecords === 0
   ) {
-    writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary, markerGeneration)
+    writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary, markerGeneration, {
+      coverage: scanPlan.scanDates ? 'bounded' : 'full',
+      coveredScanDates: scanPlan.scanDates ?? [],
+      retainPendingScanDates: options.retainPendingScanDates === true
+    })
   }
   return summary
+}
+
+/**
+ * Decides how much of the sessions tree this pass must walk.
+ *
+ * Null means the baseline already covers everything and there is nothing
+ * pending; an absent `scanDates` means a full walk, which is only ever needed
+ * when no certified baseline exists (or the caller demands recertification).
+ */
+function resolveCodexSessionBackfillScanPlan(
+  baseline: CodexSessionBackfillBaseline | null,
+  options: CodexSessionBackfillOptions
+): { scanDates?: readonly CodexSessionBackfillDate[] } | null {
+  const requestedScanDates = options.scanDates?.length ? options.scanDates : undefined
+  if (options.fullScanRequired) {
+    return {}
+  }
+  if (!baseline) {
+    return { scanDates: requestedScanDates }
+  }
+  const scanDates = mergeCodexSessionBackfillDates(baseline.pendingScanDates, requestedScanDates)
+  if (scanDates.length > 0) {
+    return { scanDates }
+  }
+  // Why: a launch-scheduled pass exists to publish rollouts the running pane is
+  // creating right now, so with a baseline in hand the current date is enough.
+  return options.ignoreCompletionMarker ? { scanDates: [getCodexSessionBackfillDate()] } : null
 }
 
 /**

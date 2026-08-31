@@ -11,6 +11,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import { checkRgAvailable } from './rg-availability'
+import { RipgrepLaunchFailureError } from '../../shared/ripgrep-process-availability'
 
 function createMockProcess(): ChildProcess {
   const child = new EventEmitter() as unknown as ChildProcess
@@ -35,6 +36,28 @@ describe('checkRgAvailable', () => {
       cwd: '/repo',
       stdio: 'ignore'
     })
+  })
+
+  it('rejects transient synchronous launch pressure when requested', async () => {
+    wslAwareSpawnMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error('spawn rg ENOMEM'), { code: 'ENOMEM' })
+    })
+
+    await expect(
+      checkRgAvailable('/repo', 'Ubuntu', { rejectTransientLaunchFailure: true })
+    ).rejects.toBeInstanceOf(RipgrepLaunchFailureError)
+  })
+
+  it('rejects transient asynchronous launch pressure when requested', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    const promise = checkRgAvailable('/repo', 'Ubuntu', {
+      rejectTransientLaunchFailure: true
+    })
+
+    child.emit('error', Object.assign(new Error('spawn rg EAGAIN'), { code: 'EAGAIN' }))
+
+    await expect(promise).rejects.toBeInstanceOf(RipgrepLaunchFailureError)
   })
 
   it('settles and detaches when rg availability check ignores timeout kills', async () => {

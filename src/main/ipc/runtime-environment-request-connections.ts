@@ -1,4 +1,5 @@
 import type { PairingOffer } from '../../shared/pairing'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -9,6 +10,8 @@ import type {
   RemoteRuntimeSharedConnectionDiagnostics,
   RemoteRuntimeSharedSubscription
 } from '../../shared/remote-runtime-shared-control-types'
+import { isRuntimeEnvironmentCapabilityPaused } from './runtime-environment-capability-evidence'
+import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -37,7 +40,10 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
     cached?.connection.close()
     cached = {
       pairingKey,
-      connection: new RemoteRuntimeRequestConnection(pairing)
+      connection: new RemoteRuntimeRequestConnection(
+        pairing,
+        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      )
     }
     requestConnections.set(environmentId, cached)
   }
@@ -106,6 +112,23 @@ export function reconnectRemoteRuntimeSharedControlConnection(environmentId: str
   sharedControlConnections.get(environmentId)?.connection.reconnectNow()
 }
 
+export function retryRemoteRuntimeSharedControlConnectionNow(environmentId: string): void {
+  sharedControlConnections.get(environmentId)?.connection.retryNow()
+}
+
+export function pauseRemoteRuntimeSharedControlRetry(environmentId: string): void {
+  sharedControlConnections.get(environmentId)?.connection.pauseStandingRetry()
+}
+
+export function ensureRemoteRuntimeSharedControlConnection(
+  environmentId: string,
+  pairing: PairingOffer
+): void {
+  if (!isRuntimeEnvironmentManuallyDisconnected(environmentId)) {
+    getSharedControlConnection(environmentId, pairing)
+  }
+}
+
 export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
   for (const { connection } of sharedControlConnections.values()) {
     connection.retryNow()
@@ -122,7 +145,12 @@ function getSharedControlConnection(
     cached?.connection.close()
     cached = {
       pairingKey,
-      connection: new RemoteRuntimeSharedControlConnection(pairing, { environmentId })
+      connection: new RemoteRuntimeSharedControlConnection(pairing, {
+        environmentId,
+        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        isManuallyDisconnected: () => isRuntimeEnvironmentManuallyDisconnected(environmentId),
+        isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId)
+      })
     }
     sharedControlConnections.set(environmentId, cached)
   }

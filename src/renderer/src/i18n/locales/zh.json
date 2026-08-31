@@ -232,7 +232,10 @@
         "workspace": {
           "cleanup": {
             "9d6e531da6": "工作区不再存在。",
-            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。"
+            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。",
+            "gitStatusUnavailable": "Orca 无法检查此工作区的 Git 状态。请重试，或从对应主机的侧边栏或项目列表中将其删除。",
+            "gitStatusUnavailableOlderPeer": "Orca 无法将此 Git 状态检查失败与主机匹配。请更新较旧的已连接端，或从对应主机的侧边栏或项目列表中删除该工作区。",
+            "forceNeedsApproval": "请先检查并确认此工作区，然后再强制删除。"
           }
         },
         "worktrees": {
@@ -263,7 +266,10 @@
           "3b57982bf6": "删除工作区\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
           "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
           "runtimeScopeForbiddenTitle": "此连接具有受限（移动端）访问权限",
-          "runtimeScopeForbiddenDescription": "移动端范围的配对无法使用工作区。请通过设置 → 远程 Orca 服务器 → 分享此 Orca 服务器中的浏览器访问链接重新连接。"
+          "runtimeScopeForbiddenDescription": "移动端范围的配对无法使用工作区。请通过设置 → 远程 Orca 服务器 → 分享此 Orca 服务器中的浏览器访问链接重新连接。",
+          "createdWithoutParentNesting": "已创建，但未嵌套在“{{value0}}”下",
+          "createdWithoutParentNestingUnnamed": "已创建，但未嵌套在所选父工作树下",
+          "createdWithoutParentNestingDetail": "父工作树已不可用。您可以从工作区菜单中重新设置。"
         },
         "repos": {
           "2975400634": "请更新 Orca 服务器，以便在此运行时打开非 Git 文件夹。",
@@ -2752,6 +2758,14 @@
             "5c8ce20be6": "如果这种情况持续存在，请",
             "cc6d997c65": "从此处重新启动终端守护进程以清除失效的守护进程状态。"
           },
+          "TerminalProcessExitOverlay": {
+            "capacityTitle": "已达到 Git Bash 控制台上限",
+            "capacityDetail": "Git Bash 已达到 128 个控制台的上限。关闭未使用的 Git Bash 终端，然后重新启动此终端。",
+            "failedTitle": "终端已退出",
+            "failedDetail": "Shell 进程以退出代码 {{code}} 结束。输出已保留。",
+            "close": "关闭",
+            "restart": "重新启动"
+          },
           "TerminalPane": {
             "ac112e9036": "删除标题",
             "f984ab2a30": "删除窗格标题：{{value0}}",
@@ -3229,6 +3243,14 @@
             "workspaceConflict": "工作区冲突",
             "workspaceSyncError": "工作区同步错误"
           },
+          "CaffeinateStatusSegment": {
+            "active": "生效中",
+            "inactive": "未生效",
+            "ariaLabel": "{{title}}，{{status}}",
+            "onDescription": "始终防止此电脑进入睡眠状态",
+            "autoDescription": "智能体工作时防止电脑进入睡眠状态",
+            "offDescription": "允许系统正常进入睡眠状态"
+          },
           "StatusBar": {
             "9659e38343": "端口",
             "d1e1a7a6bf": "资源管理器",
@@ -3497,7 +3519,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "工作集 (WS) 的总和。共享页可能会出现在多个进程中。",
+                "workingSetDescription": "工作集 (WS) 的总和：当前驻留在 RAM 中的页。共享页可能会出现在多个进程中，被 Windows 换出到页面文件的内存不计入其中。",
+                "privateBytesDescription": "专用字节的总和：这些进程已提交的内存，无论驻留还是已换出都会计入。这是主机计入提交限制的数值，因此在分页导致上方工作集缩小时它仍会继续上升。",
                 "rssDescription": "驻留集大小 (RSS) 的总和。共享页或别名映射页可能会出现在多个进程中。"
               }
             },
@@ -3868,6 +3891,92 @@
         }
       },
       "skills": {
+        "SkillsPage": {
+          "cb142070b4": "刷新",
+          "a68dee6a32": "搜索技能",
+          "f43ad6edf3": "技能",
+          "ea72d6185b": "无法扫描技能",
+          "dc4c3328ee": "显示文件",
+          "9963dff6d3": "未找到说明。",
+          "995fde8337": "无法显示技能文件",
+          "4acd6d68ec": "未找到技能",
+          "6a62a0168c": "无匹配项",
+          "08a321a984": "没有技能匹配当前搜索和筛选条件。",
+          "cd7893fbc1": "正在扫描技能",
+          "35b9a724a0": "可用",
+          "c13b82793c": "管理安装",
+          "aee7b99cc6": "从链接安装",
+          "filterProvider": "按 Agent 筛选",
+          "filterSource": "按来源筛选",
+          "allSources": "全部",
+          "clearFilters": "清除筛选",
+          "closeSkills": "关闭技能",
+          "closeTooltip": "关闭 · Esc",
+          "moreActions": "更多操作",
+          "sharedLinks": "共享链接",
+          "emptyCopy": "扫描的技能文件夹为空。请安装共享包，或添加技能后刷新。",
+          "retry": "重试",
+          "remoteShareNotice": "这些技能位于 {{host}}。请在该机器上打开“技能”以进行共享。",
+          "viewSwitch": "显示",
+          "searchLinks": "搜索链接",
+          "deleteSkills": "删除技能…"
+        },
+        "SkillShareSelectionControls": { "01c5a15e02": "共享技能" },
+        "SkillRow": {
+          "updatedUnknown": "无日期",
+          "pathCopied": "路径已复制",
+          "copyPath": "复制路径",
+          "detailPath": "路径",
+          "skillActions": "{{value0}} 的操作",
+          "viewDetails": "查看详情",
+          "deleteSkill": "删除…"
+        },
+        "SkillsList": { "listLabel": "技能" },
+        "sourceStatus": {
+          "missing": "未找到文件夹",
+          "remoteRepo": "远程仓库 — 未扫描",
+          "unavailable": "未扫描"
+        },
+        "sources": { "heading": "技能文件夹" },
+        "sourceKind": {
+          "home": "主目录",
+          "workspace": "工作区",
+          "bundled": "内置",
+          "plugin": "插件"
+        },
+        "count": {
+          "skillOne": "{{count}} 个技能",
+          "skillOther": "{{count}} 个技能",
+          "sourceOne": "{{count}} 个来源",
+          "sourceOther": "{{count}} 个来源",
+          "fileOne": "{{count}} 个文件",
+          "fileOther": "{{count}} 个文件",
+          "resultOne": "{{count}} 个结果",
+          "resultOther": "{{count}} 个结果",
+          "selected": "已选择 {{count}} 个",
+          "shareOne": "共享 {{count}} 个技能",
+          "shareOther": "共享 {{count}} 个技能",
+          "linkOne": "{{count}} 个链接",
+          "linkOther": "{{count}} 个链接",
+          "deleteOne": "删除 {{count}} 个技能",
+          "deleteOther": "删除 {{count}} 个技能",
+          "deletedOne": "已删除 {{count}} 个技能",
+          "deletedOther": "已删除 {{count}} 个技能",
+          "deleteFolderOne": "{{count}} 个文件夹",
+          "deleteFolderOther": "{{count}} 个文件夹",
+          "deleteLinkOne": "{{count}} 个链接",
+          "deleteLinkOther": "{{count}} 个链接"
+        },
+        "filter": { "allAgents": "所有 Agent", "sharedAgent": "共享 (.agents)" },
+        "SkillsSelectionHeader": {
+          "exit": "退出选择",
+          "exitTooltip": "退出选择 · Esc",
+          "title": "选择要共享的技能",
+          "selectAll": "选择全部 {{count}} 个符合条件的项目",
+          "clear": "清除",
+          "deleteTitle": "选择要删除的技能"
+        },
+        "SkillDetailDialog": { "agents": "Agent", "updated": "已更新", "copy": "复制" },
         "SkillFreshnessNudge": {
           "titleOne": "已安装的 Orca 技能已过期",
           "titleMany": "{{value0}} 个已安装的 Orca 技能已过期",
@@ -3964,6 +4073,35 @@
         "SkillUpdateRow": {
           "oneLocation": "1 location",
           "manyLocations": "{{value0}} locations"
+        },
+        "host": {
+          "local": "此机器",
+          "remote": "已连接的运行时"
+        },
+        "SkillDelete": {
+          "dismissResults": "关闭",
+          "reasonBundled": "Orca 内置技能 — 删除后会恢复",
+          "reasonPlugin": "由插件安装 — 请改为移除插件",
+          "reasonUnowned": "此技能位于 Orca 技能文件夹之外 — 请在其存储位置删除",
+          "reasonMissing": "此技能已不在磁盘上",
+          "reasonStale": "此技能在列表加载后发生了变化 — 请刷新后重试",
+          "placementSummaryParts": "将在 {{roots}} 中删除 {{parts}}。",
+          "placementJoin": " 和 ",
+          "retainedSource": "技能本体仍保留在 {{path}}。",
+          "blockedLine": "{{count}} × {{reason}}",
+          "resultLine": "{{count}} × {{label}}",
+          "statusSkipped": "已跳过",
+          "statusBusy": "忙碌 — 另一项技能操作正在进行",
+          "statusPartial": "部分移除 — 某些文件仍以隐藏名称保留在磁盘上",
+          "statusFailed": "失败 — 未进行任何更改",
+          "statusDeleted": "已删除",
+          "confirmHost": "位于 {{host}}。",
+          "confirmPermanent": "此操作无法撤销。",
+          "failed": "无法删除技能",
+          "hostUnresolved": "仍在查找存储这些技能的计算机。",
+          "hostUpdateRequired": "请更新所选机器上的 Orca 以删除技能。",
+          "nothingOne": "无法从这里删除该技能。",
+          "nothingOther": "所选的 {{count}} 个技能均无法从这里删除。"
         }
       },
       "sidebar": {
@@ -6056,10 +6194,9 @@
           "compareBaseBranchUpstream": "分支上游"
         },
         "HiddenExperimentalGroup": {
-          "d0f914a528": "占位符切换",
-          "1014ddbfaf": "今天什么也不做。保留作为隐藏实验选项的第一个插槽。",
-          "232cf83de8": "用于内部测试的未列出的切换。这里什么都不支持。",
-          "3e9e827ca5": "隐藏实验"
+          "7c4e18d2f6": "在本机启用粗体故障捕获手势：{{samplingShortcut}} 开始采样突发；{{captureShortcut}} 将窗格证据捕获到磁盘。",
+          "b09f24a51d": "终端渲染诊断",
+          "f2c81d904a": "隐藏实验设置"
         },
         "InputPane": {
           "db15068196": "在 Linux 和 macOS 上默认启用。 Linux使用系统选择剪贴板；其他平台使用私有缓冲区。",
@@ -9170,7 +9307,13 @@
         "agent-awake-copy": {
           "e5995ce268": "智能体工作时保持电脑唤醒",
           "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
-          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。"
+          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
+          "modeTitle": "防止电脑休眠"
+        },
+        "AgentAwakeSetting": {
+          "on": "开启",
+          "auto": "智能体",
+          "off": "关闭"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
@@ -10583,6 +10726,8 @@
             "7a09d7f9d2": "根据",
             "383cf92c73": "树",
             "d7ae61269b": "已提交的更改",
+            "branchFilesChangedVsBaseOne": "与 {{ref}} 相比更改了 1 个文件",
+            "branchFilesChangedVsBaseOther": "与 {{ref}} 相比更改了 {{count}} 个文件",
             "48a003c1b1": "已暂存的更改",
             "d4ef4bafc5": "更改",
             "522f44dce5": "未跟踪文件",
@@ -10657,10 +10802,10 @@
             "b3c8f1a902": "按文件名筛选",
             "d4f8c2a901": "清除并关闭筛选器",
             "e8a1c4b203": "vs",
-            "f9b2441bb6": "领先 {{value0}} 1 个提交",
-            "b715ef615b": "领先 {{value1}} {{value0}} 个提交",
-            "c1a8f3e204": "落后 {{value0}} 1 个提交",
-            "d2b9g4f315": "落后 {{value1}} {{value0}} 个提交",
+            "compareBaseCommitsAheadOne": "领先 {{ref}} 1 个提交",
+            "compareBaseCommitsAheadOther": "领先 {{ref}} {{count}} 个提交",
+            "compareBaseCommitsBehindOne": "落后 {{ref}} 1 个提交",
+            "compareBaseCommitsBehindOther": "落后 {{ref}} {{count}} 个提交",
             "4b4a7de138": "在浏览器中打开审查页面",
             "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修复问题后重试创建 PR。",
             "pushRecovery": {
@@ -10683,7 +10828,6 @@
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "生成的评审详情未包含描述。请重试创建 PR。",
             "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。"
           },
           "SourceControlAgentActionDialog": {
@@ -12666,8 +12810,9 @@
           "7e7ca60816": "更改的文件",
           "b6c3b84476": "显示文件树",
           "39f8007549": "评审冲突",
-          "39e73e7181": "被排除在此差异视图之外。",
-          "689b99f8ad": "未解决的冲突",
+          "skippedConflictsExcluded": "{{count}} 个未解决的冲突已被排除在此差异视图之外。",
+          "skippedConflictsExcluded_one": "{{count}} 个未解决的冲突已被排除在此差异视图之外。",
+          "skippedConflictsExcluded_other": "{{count}} 个未解决的冲突已被排除在此差异视图之外。",
           "820ec01f24": "冲突文件单独评审",
           "fd8892b120": "没有显示任何变化",
           "eb5f40e49c": "此差异视图排除了未解决的冲突，因为普通的双向差异管道不是冲突安全的。",
@@ -13297,7 +13442,12 @@
           "5d2c3e7ae3": "未检测到语音。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "停止听写"
+          "335e1bc6cb": "停止听写",
+          "7f3660a7ba": "正在启动麦克风…",
+          "f082d0cb9d": "正在处理…",
+          "3de5a129e7": "正在聆听",
+          "4977162383": "音量过大",
+          "25f2b7a6a5": "正在说话"
         }
       },
       "dashboard": {
@@ -13611,9 +13761,20 @@
           "3e3b2c369f": "cron",
           "e81a02d61b": "保存前输入有效的五字段 cron。",
           "968e66d686": "输入一个五字段 cron。",
-          "cadb7b0bc9": "无效的"
+          "cadb7b0bc9": "无效的",
+          "f6ca30da23": "有效的自定义 cron",
+          "a226dbdd40": "分钟",
+          "ec9c1e35df": "小时",
+          "2d82246d23": "日",
+          "0e1de0358b": "月",
+          "77e96bded6": "星期"
+        },
+        "AutomationPromptDisclosure": {
+          "showLess": "收起",
+          "showMore": "显示更多"
         },
         "AutomationDetail": {
+          "host": "主机",
           "007c8ad874": "提示词",
           "a1d52c2189": "使用范围",
           "449fc83bf7": "token",
@@ -13777,6 +13938,9 @@
           "b11170a008": "无法保存自动化。",
           "2a20596d6b": "自动化已保存。",
           "244727e655": "自动化已更新。",
+          "moved": "自动化已移动到 {host}。",
+          "moveOriginalKept": "已在 {host} 上创建，但无法删除原有自动化。请在原主机上删除它。",
+          "moveOriginalUnverified": "已在 {host} 上创建，但无法确认是否删除了原有自动化。重试前请检查原主机。",
           "77b81bc4ac": "Hermes 自动化创建。",
           "08efc3ae12": "Hermes 自动化已更新。",
           "e431bb85d4": "选择与此 Hermes 自动化位于同一主机上的工作区。",
@@ -13820,6 +13984,7 @@
           "backToList": "全部自动化",
           "tableName": "名称",
           "tableProject": "项目",
+          "tableHost": "主机",
           "tableStatus": "状态",
           "tableActions": "操作",
           "newAutomation": "新建自动化",
@@ -13914,6 +14079,16 @@
               "name": "每小时维护检查",
               "prompt": "检查是否有卡住的工作、过时的生成文件、失败的验证以及任何需要人工注意的内容。仅报告需处理的问题。"
             }
+          },
+          "schedule": {
+            "label": {
+              "a95afb7483": "每小时 :{{minute}}",
+              "280ccd2701": "每天 {{time}}",
+              "3f1422adc1": "工作日 {{time}}",
+              "cc71e252ba": "每{{day}} {{time}}",
+              "ba20c92073": "自定义日程",
+              "086a5a9fe2": "无效日程"
+            }
           }
         },
         "external": {
@@ -13962,6 +14137,19 @@
           "filters": "筛选器",
           "clear": "清除筛选器",
           "removeFilter": "移除 {{value0}} 筛选器"
+        },
+        "createDestination": {
+          "label": "主机",
+          "placeholder": "选择主机",
+          "storedOn": "由 {authority} 存储和调度。",
+          "unselected": "选择存储和调度此自动化的主机。",
+          "orphan": "没有主机的自动化无法容纳新的自动化。请选择要在其上创建此自动化的主机。",
+          "unavailable": "该主机尚无法容纳新的自动化。请选择另一台主机来创建它。",
+          "stale": "此表单打开期间 {host} 已更改。保存前请重新选择。",
+          "projectMismatch": "该项目不在 {host} 上。请选择该主机上的项目，或选择另一台主机。",
+          "noProjects": "{host} 上未设置任何项目。请在该主机上添加一个，或选择另一台主机。",
+          "updateRequired": "更新 {hosts} 上的 Orca 服务器即可在其中存储自动化。",
+          "move": "保存后会在 {host} 上创建此自动化，并删除原有自动化及其运行历史。"
         }
       },
       "agent": {
@@ -14312,6 +14500,13 @@
           "deleteDescription": "“{{name}}” 将无法再通过其公共链接访问。",
           "delete": "删除"
         }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "父工作树",
+        "noParent": "无父工作树",
+        "description": "在侧边栏中将此工作区嵌套到另一个工作树下。不会更改基础分支。",
+        "searchPlaceholder": "搜索工作树...",
+        "noMatches": "无匹配项。"
       }
     },
     "i18n": {
@@ -14508,6 +14703,67 @@
     },
     "workspace": {
       "cleanup": {
+        "browse": {
+          "gitStatusCheckFailed": "Git 状态检查失败",
+          "gitStatusUnverified": "无法验证 Git 状态",
+          "deleteAnyway": "仍然删除",
+          "forceDeleteProjectionOne": "当前有 {{count}} 个工作区显示风险，可能需要强制删除",
+          "forceDeleteProjectionMany": "当前有 {{count}} 个工作区显示风险，可能需要强制删除",
+          "selectionWithheldOne": "当前筛选条件隐藏了 1 个已选工作区，已取消选择。",
+          "selectionWithheld": "当前筛选条件隐藏了 {{value0}} 个已选工作区，已取消选择。",
+          "selectAllCountOne": "选择 1 个通过安全检查的工作区",
+          "selectAllCount": "选择全部 {{value0}} 个通过安全检查的工作区",
+          "appliedFilters": "已应用的筛选",
+          "removeFilter": "移除筛选 {{value0}}",
+          "chip": {
+            "idleDays": "闲置 {{value0}} 天以上",
+            "neverVisited": "从未访问",
+            "minSize": "至少 {{value0}} MB",
+            "maxSize": "最多 {{value0}} MB",
+            "excludesUnsized": "仅已测量",
+            "excludesStatusless": "有状态",
+            "list": "{{value0}}：{{value1}}",
+            "triState": "{{value0}}：{{value1}}",
+            "only": "仅",
+            "exclude": "排除",
+            "minAhead": "领先 {{value0}} 个以上",
+            "minBehind": "落后 {{value0}} 个以上",
+            "branchQuery": "分支：{{value0}}",
+            "pathPrefix": "路径：{{value0}}",
+            "presence": "{{value0}}：{{value1}}",
+            "has": "有",
+            "none": "无",
+            "completelyEmpty": "没有可丢失的内容",
+            "selectableOnly": "仅可删除",
+            "kind": {
+              "status": "状态",
+              "agent": "代理",
+              "git": "Git",
+              "review": "审查",
+              "reviewState": "审查状态",
+              "reviewProvider": "提供方",
+              "ticket": "工单",
+              "ticketSource": "工单来源",
+              "context": "上下文",
+              "host": "主机",
+              "repo": "仓库",
+              "blocker": "阻塞项",
+              "tier": "安全",
+              "dismissed": "已忽略",
+              "archived": "已归档",
+              "pinned": "已固定",
+              "unread": "未读",
+              "comment": "评论",
+              "prunable": "可修剪",
+              "locked": "已锁定",
+              "retainedAgents": "已完成的代理"
+            }
+          }
+        },
+        "scan": {
+          "readyOne": "找到 1 个工作区。",
+          "readyMany": "找到 {{value0}} 个工作区。"
+        },
         "presentationFixtures": {
           "reviewAlphaCleanup": "评审 Alpha 清理"
         },

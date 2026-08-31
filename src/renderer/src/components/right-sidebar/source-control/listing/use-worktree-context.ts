@@ -7,7 +7,7 @@ import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-displ
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'

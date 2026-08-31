@@ -160,6 +160,20 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
+  it('detects monitoring mode changes within working', () => {
+    const first = [worktree({ agents: [agent({ state: 'working' })] })]
+    const second = [worktree({ agents: [agent({ state: 'working', workingMode: 'monitoring' })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
+  it('detects workspace monitoring mode changes within working', () => {
+    const first = [worktree({ status: 'working' })]
+    const second = [worktree({ status: 'working', workingMode: 'monitoring' })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
   it('treats missing and empty agent arrays as equivalent for rendering', () => {
     const first = [worktree({ agents: undefined })]
     const second = [worktree({ agents: [] })]

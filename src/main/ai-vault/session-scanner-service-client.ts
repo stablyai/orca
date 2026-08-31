@@ -9,6 +9,7 @@ import {
   AiVaultServiceIdleRetirement,
   AiVaultServiceInvalidations,
   armAiVaultServiceCancellationTimeout,
+  attachAiVaultServiceChild,
   clearAiVaultServiceCall,
   createAiVaultServiceReadyWaiter,
   rejectAiVaultServiceCall,
@@ -20,11 +21,9 @@ import {
 } from './session-scanner-service-client-state'
 import { AiVaultServiceRestartPolicy } from './session-scanner-service-restart-policy'
 import {
-  AI_VAULT_SERVICE_PROTOCOL_VERSION,
   aiVaultServiceLane,
   isAiVaultServiceChildMessage,
   type AiVaultServiceChildMessage,
-  type AiVaultServiceInit,
   type AiVaultServiceRequest,
   type AiVaultServiceRequestBody,
   type AiVaultServiceResultValue
@@ -75,6 +74,11 @@ export class AiVaultScannerServiceClient {
       this.idleRetirement.clear()
       this.pump()
     })
+  }
+
+  clearRestartCircuit(): void {
+    this.restartPolicy.clearCircuit()
+    this.pump()
   }
 
   async invalidate(paths: string[]): Promise<void> {
@@ -199,16 +203,11 @@ export class AiVaultScannerServiceClient {
       this.onFault(new Error('AI Vault service did not become ready.'))
     )
     this.readyWaiter = waiter
-    child.on('message', (message) => this.onMessage(message))
-    child.on('error', (error) => this.onFault(error))
-    child.on('disconnect', () => this.onFault(new Error('AI Vault service disconnected.')))
-    child.on('exit', (code) => this.onFault(new Error(`AI Vault service exited (${code}).`)))
-    child.stderr?.on('data', (chunk: Buffer) => this.options.onStderr?.(String(chunk)))
-    child.send({
-      type: 'init',
-      protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION,
-      ...this.options.init
-    } satisfies AiVaultServiceInit)
+    attachAiVaultServiceChild(child, this.options.init, {
+      onMessage: (message) => this.onMessage(message),
+      onFault: (error) => this.onFault(error),
+      onStderr: this.options.onStderr
+    })
     return waiter.promise
   }
 

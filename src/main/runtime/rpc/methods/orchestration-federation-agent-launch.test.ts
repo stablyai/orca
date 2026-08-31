@@ -59,6 +59,7 @@ describe('federated worker agent launch', () => {
         dispatchId: 'ctx_remote',
         taskId: 'task_remote',
         taskSpec: 'remote cursor worker',
+        depth: 2,
         protocolVersion: 3,
         worktree: 'folder:remote-workspace',
         agent: 'cursor',
@@ -90,6 +91,7 @@ describe('federated worker agent launch', () => {
         effective: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' }
       }
     })
+    expect(db.getRemoteDispatchAttachment('ctx_remote')?.depth).toBe(2)
     expect(createTerminal).toHaveBeenCalledWith(
       'id:folder:remote-workspace',
       expect.objectContaining({

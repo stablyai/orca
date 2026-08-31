@@ -1,0 +1,41 @@
+diff --git a/binding.gyp b/binding.gyp
+index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e773638bf4 100644
+--- a/binding.gyp
++++ b/binding.gyp
+@@ -3,7 +3,6 @@
+     {
+       "target_name": "windows_process_tree",
+       "dependencies": [
+-        "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
+       ],
+       "conditions": [
+         ['OS=="win"', {
+@@ -15,12 +14,11 @@
+             "src/process_commandline.cc"
+           ],
+-          "include_dirs": [],
++          "include_dirs": ["deps/node-addon-api"],
++          "defines": ["NAPI_CPP_EXCEPTIONS", "_HAS_EXCEPTIONS=1"],
+           "libraries": [ 'psapi.lib' ],
+-          "msvs_configuration_attributes": {
+-            "SpectreMitigation": "Spectre"
+-          },
+           "msvs_settings": {
+             "VCCLCompilerTool": {
++              "ExceptionHandling": 1,
+               "AdditionalOptions": [
+                 "/guard:cf",
+                 "/sdl",
+diff --git a/src/process.cc b/src/process.cc
+index 3eea92077c4d1d433119361d5c432881859131e9..1998f4addd4d7e9aba946ea6f7f7a4a5d13291bc 100644
+--- a/src/process.cc
++++ b/src/process.cc
+@@ -37,7 +37,7 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
+         process_info.push_back(std::move(pinfo));
+         process_count++;
+       }
+-    } while (process_count < 1024 && Process32Next(snapshot_handle, &process_entry));
++    } while (Process32Next(snapshot_handle, &process_entry));
+   }
+ 
+   CloseHandle(snapshot_handle);

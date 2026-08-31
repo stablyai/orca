@@ -53,7 +53,7 @@ function agentStateAnimation(
     if (entry.state === 'blocked' || entry.state === 'waiting') {
       return 'waiting'
     }
-    if (entry.state === 'working') {
+    if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
       hasWorking = true
     } else if (entry.state === 'done') {
       hasDone = true

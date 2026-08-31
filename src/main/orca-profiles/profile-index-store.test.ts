@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -12,11 +13,10 @@ import {
 
 const testState = { dir: '' }
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: () => testState.dir
-  }
-}))
+// Why the port and not vi.mock('electron'): profile path resolution reads AppEnvironment
+// now, so an electron mock would be inert and every case would share the global fake's
+// one temp dir instead of its own.
+installFakeAppEnvironment({ getPath: () => testState.dir })
 
 async function loadProfileIndexStore() {
   vi.resetModules()
@@ -30,6 +30,8 @@ function readJson(path: string): unknown {
 describe('profile index store', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-profile-test-'))
+    // Why re-install per test: the global setup's beforeEach reinstates its own fake.
+    installFakeAppEnvironment({ getPath: () => testState.dir })
   })
 
   afterEach(() => {

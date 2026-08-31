@@ -4,14 +4,12 @@ import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
 import type { ConnectionState, HostProfile, RpcResponse } from './types'
 
 class FakeClient implements RpcClient {
-  readonly sendRequest = vi.fn(
-    async (): Promise<RpcResponse> => ({
-      id: 'rpc-1',
-      ok: true,
-      result: {},
-      _meta: { runtimeId: 'runtime-1' }
-    })
-  )
+  readonly sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
+    id: 'rpc-1',
+    ok: true,
+    result: {},
+    _meta: { runtimeId: 'runtime-1' }
+  }))
   readonly subscribe = vi.fn(() => () => {})
   readonly updateTerminalSubscriptionViewport = vi.fn()
   readonly notifyForeground = vi.fn()

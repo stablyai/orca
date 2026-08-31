@@ -13,6 +13,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
@@ -68,6 +69,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           repos,
           worktreesByRepo,
           tabsByWorktree,
+          unifiedTabsByWorktree,
           agentStatusByPaneKey,
           retainedAgentsByPaneKey,
           migrationUnsupportedByPtyId,
@@ -107,6 +109,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       repos,
       worktreesByRepo,
       tabsByWorktree,
+      unifiedTabsByWorktree,
       agentStatusByPaneKey,
       retainedAgentsByPaneKey,
       migrationUnsupportedByPtyId,

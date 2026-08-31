@@ -169,6 +169,12 @@ async function assertStubSourcesMatchTopics(repoRoot) {
   }
 }
 
+// Why: path.relative yields `\` on Windows, but these paths are asserted in tests and pasted into commands.
+// split(sep) rather than replaceAll('\\', '/') so a POSIX filename containing a backslash survives intact.
+function toPosixRelativePath(repoRoot, filePath, pathModule = path) {
+  return pathModule.relative(repoRoot, filePath).split(pathModule.sep).join('/')
+}
+
 async function buildArtifacts(repoRoot = REPO_ROOT) {
   const guideRoot = path.join(repoRoot, 'skill-guides')
   const sourceFiles = (await readdir(guideRoot, { withFileTypes: true }))
@@ -193,7 +199,7 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
     // Why: Git may render text with native EOLs despite repository policy; the
     // embedded guide and generated projection must have one platform-neutral identity.
     const markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
-    const frontmatter = parseFrontmatter(markdown, path.relative(repoRoot, sourcePath))
+    const frontmatter = parseFrontmatter(markdown, toPosixRelativePath(repoRoot, sourcePath))
     if (frontmatter.name !== name) {
       throw new Error(`Guide source ${name}.md declares mismatched name ${frontmatter.name}`)
     }
@@ -243,7 +249,7 @@ async function verifyArtifacts(artifacts, repoRoot = REPO_ROOT) {
   if (stale.length > 0) {
     throw new Error(
       `Generated bundled skill guides are stale:\n${stale
-        .map((filePath) => path.relative(repoRoot, filePath))
+        .map((filePath) => toPosixRelativePath(repoRoot, filePath))
         .join('\n')}\nRun node config/scripts/generate-bundled-skill-guides.mjs --write.`
     )
   }
@@ -272,6 +278,7 @@ export {
   normalizeMarkdown,
   parseFrontmatter,
   serializeEmbeddedModule,
+  toPosixRelativePath,
   verifyArtifacts,
   writeArtifacts
 }
