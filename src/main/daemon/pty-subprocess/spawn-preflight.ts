@@ -30,6 +30,13 @@ function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): Dae
   )
 }
 
+/** EACCES, not the ENOENT "install is gone" story: the file is there, its mode is the problem. */
+function formatNonExecutableHelperError(path: string): DaemonProtocolError {
+  return new DaemonProtocolError(
+    `Daemon's node-pty spawn-helper is not executable (chmod +x failed?). node-pty: posix_spawn failed: EACCES (errno 13, Permission denied) - helper='${path}'${daemonEnvironmentDiagSuffix()}`
+  )
+}
+
 function isExistingDirectory(path: string | undefined): path is string {
   if (!path) {
     return false
@@ -88,14 +95,26 @@ function preflightMacNodePtySpawnEnvironment(): void {
   } catch {
     throw formatMissingDaemonPathError('helper', '<unresolved>')
   }
+  // Why the mode check: the packaged prebuild helper ships 644, and node-pty spawns whichever
+  // dir it loaded from — a present-but-unexecutable helper passes an isFile() probe and then
+  // dies with EACCES at the native spawn.
+  let presentButNotExecutable: string | null = null
   for (const candidate of candidates) {
     try {
-      if (statSync(candidate).isFile()) {
+      const stats = statSync(candidate)
+      if (!stats.isFile()) {
+        continue
+      }
+      if ((stats.mode & 0o111) !== 0) {
         return
       }
+      presentButNotExecutable ??= candidate
     } catch {
       // Try the next node-pty native location.
     }
+  }
+  if (presentButNotExecutable) {
+    throw formatNonExecutableHelperError(presentButNotExecutable)
   }
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
 }

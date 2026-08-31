@@ -1,5 +1,5 @@
-import { basename, isAbsolute, join } from 'node:path'
-import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
+import { isAbsolute } from 'node:path'
+import { existsSync, accessSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
 import {
   hostReportsChildExitStatus,
@@ -8,35 +8,18 @@ import {
 import { formatLocalPtyEnvironmentDiag } from './working-directory-validation'
 
 export {
+  ensureNodePtySpawnHelperExecutable,
+  getNodePtySpawnHelperCandidates
+} from '../pty/node-pty-spawn-helper'
+
+export {
   formatLocalPtyEnvironmentDiag,
   validateWorkingDirectory,
   validateWorkingDirectoryAsync,
   WorkingDirectoryValidationAbortedError
 } from './working-directory-validation'
 
-let didEnsureSpawnHelperExecutable = false
-
 const UNIX_SHELL_FALLBACKS = ['/bin/zsh', '/bin/bash', '/bin/sh'] as const
-
-function toUnpackedAsarPath(candidate: string): string {
-  return candidate
-    .replace(/app\.asar([/\\])/, 'app.asar.unpacked$1')
-    .replace(/node_modules\.asar([/\\])/, 'node_modules.asar.unpacked$1')
-}
-
-export function getNodePtySpawnHelperCandidates(): string[] {
-  const unixTerminalPath = require.resolve('node-pty/lib/unixTerminal.js')
-  const packageRoot =
-    basename(unixTerminalPath) === 'unixTerminal.js'
-      ? unixTerminalPath.replace(/[/\\]lib[/\\]unixTerminal\.js$/, '')
-      : unixTerminalPath
-
-  return [
-    join(packageRoot, 'build', 'Release', 'spawn-helper'),
-    join(packageRoot, 'build', 'Debug', 'spawn-helper'),
-    join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
-  ].map(toUnpackedAsarPath)
-}
 
 /**
  * Validate that a shell binary exists and is executable.
@@ -74,38 +57,6 @@ export function resolveUnixShellPath(shellPath: string): string {
     return resolved
   }
   throw new Error(`No executable Unix shell found (tried: ${candidates.join(', ')})`)
-}
-
-/**
- * Ensure the node-pty spawn-helper binary has the executable bit set.
- *
- * Why: when Electron packages the app via asar, the native spawn-helper
- * binary may lose its +x permission. This function detects and repairs
- * that so pty.spawn() does not fail with EACCES on first launch.
- */
-export function ensureNodePtySpawnHelperExecutable(): void {
-  if (didEnsureSpawnHelperExecutable || process.platform === 'win32') {
-    return
-  }
-  didEnsureSpawnHelperExecutable = true
-
-  try {
-    for (const candidate of getNodePtySpawnHelperCandidates()) {
-      if (!existsSync(candidate)) {
-        continue
-      }
-      const mode = statSync(candidate).mode
-      if ((mode & 0o111) !== 0) {
-        return
-      }
-      chmodSync(candidate, mode | 0o755)
-      return
-    }
-  } catch (error) {
-    console.warn(
-      `[pty] Failed to ensure node-pty spawn-helper is executable: ${error instanceof Error ? error.message : String(error)}`
-    )
-  }
 }
 
 /** A pre-resolved Windows shell attempt: an absolute executable plus the launch
