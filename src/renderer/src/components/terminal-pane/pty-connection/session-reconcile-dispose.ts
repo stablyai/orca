@@ -170,12 +170,16 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     markShortcutTerminalInputSent() {
       session.markInteractiveRedrawInput()
     },
+    dispatchKittyShortcutInput(input, send) {
+      return session.kittyShortcutInputSettlement.dispatch(input, send)
+    },
     reconcileIfSessionDead: session.reconcileIfSessionDead,
     reconcileIfSessionMissing: session.reconcileIfSessionMissing,
     isUntouchedFreshSpawnPty: (ptyId) =>
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.kittyShortcutInputSettlement.dispose()
       // A successor can claim the numeric pane slot before this retired
       // binding's disposal callback runs; do not clear its pane-scoped error.
       const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)

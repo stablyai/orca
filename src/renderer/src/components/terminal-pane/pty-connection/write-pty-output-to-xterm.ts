@@ -11,6 +11,7 @@ import {
 import { containsHiddenStartupRendererQuery } from './hidden-startup-renderer-query'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { retainTerminalKittyState } from '../terminal-kitty-state-retention'
 
 /** The xterm write path for PTY output, including the queued agent-idle mode reset. */
 export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void {
@@ -21,6 +22,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
   ): void {
     // Why: every application byte funnels through here, so it's the one place the kitty keyboard mirror observes the pane's protocol negotiation.
     session.kittyKeyboardModes.scan(data)
+    retainTerminalKittyState(session.transport.getPtyId(), session.kittyKeyboardModes)
     if (foreground) {
       session.resetHiddenOutputRestoreIfPtyChanged()
     }

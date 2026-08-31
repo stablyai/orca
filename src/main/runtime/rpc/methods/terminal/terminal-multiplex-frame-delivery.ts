@@ -1,5 +1,7 @@
 import {
   TerminalStreamOpcode,
+  decodeTerminalStreamJson,
+  decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
@@ -13,6 +15,24 @@ import type {
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
 import type { TerminalStreamInputOutcome } from './terminal-input-delivery'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+
+function scanDeliveredOsc52Output(
+  stream: TerminalMultiplexStream,
+  chunk: TerminalOutputFrameChunk
+): void {
+  if (!stream.supportsClipboardScannerSync) {
+    return
+  }
+  chunk.osc52StartState = stream.osc52DeliveryScanner.syncState
+  if (chunk.opcode === TerminalStreamOpcode.OutputSpan) {
+    const span = decodeTerminalStreamJson<{ data?: unknown }>(chunk.bytes)
+    if (typeof span?.data === 'string') {
+      stream.osc52DeliveryScanner.scan(span.data)
+    }
+    return
+  }
+  stream.osc52DeliveryScanner.scan(decodeTerminalStreamText(chunk.bytes))
+}
 
 export function installMultiplexFrameDelivery(
   build: TerminalMultiplexConnectionBase
@@ -140,6 +160,7 @@ export function installMultiplexFrameDelivery(
     if (state.closed || streams.get(stream.streamId) !== stream || stream.outputPaused) {
       return
     }
+    scanDeliveredOsc52Output(stream, chunk)
     if (
       stream.ackPendingOutputOverflowed ||
       stream.ackPendingOutput.length > 0 ||

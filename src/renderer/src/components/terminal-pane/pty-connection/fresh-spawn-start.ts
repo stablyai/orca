@@ -15,6 +15,7 @@ import type {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { resolveTerminalTabId } from './terminal-tab-id'
+import { forgetRetainedTerminalKittyState } from '../terminal-kitty-state-retention'
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
@@ -37,11 +38,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     // Why: a canceled old replay clear can preserve xterm's native
     // isUserScrolling flag. A replacement shell must start in follow mode.
     session.resetFreshSpawnFollowOutput()
-    // Why: a fresh spawn is a new process with kitty keyboard flags at
-    // zero. The exit-handler reset alone is not enough: a late exit from a
-    // replaced PTY takes the stale-transport early return and skips it, so
-    // a restart-in-place would leak the old TUI's flags into a fresh shell.
-    session.kittyKeyboardModes.reset()
+    const replacedPtyId = session.transport.getPtyId()
     session.prepareFreshShellViewportForSpawn(options)
     const coldRestoreOverride =
       startupOverride && 'launchConfig' in startupOverride
@@ -190,6 +187,11 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           }
           return accepted ? resolvedPtyId : null
         }
+        // connect() can adopt an existing daemon PTY; clear prior protocol state only
+        // after its result proves this is a new process.
+        forgetRetainedTerminalKittyState(replacedPtyId)
+        session.kittyKeyboardModes.reset()
+        session.kittyShortcutInputSettlement.settle(session.kittyKeyboardModes.flags)
         if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
           session.registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
             ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),

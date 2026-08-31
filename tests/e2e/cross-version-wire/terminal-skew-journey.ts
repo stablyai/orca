@@ -169,6 +169,7 @@ export async function runTerminalSkewJourney(args: {
     onSnapshot: (data: string) => {
       record.snapshotsRendered.push(data)
     },
+    onOsc52Clipboard: () => {},
     onSubscribed: () => {
       subscribedCount++
     },

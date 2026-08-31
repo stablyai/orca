@@ -5,6 +5,7 @@ import {
 } from '../../../shared/terminal-stream-protocol'
 import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal-multiplex-flow-control'
 import type { TerminalOutputSourceRange } from '../../../shared/terminal-output-source-range'
+import type { TerminalOsc52ScannerSyncState } from '../../../shared/terminal-osc52-stream-scanner'
 import { terminalStreamByteLength } from './terminal-stream-byte-length'
 
 export type TerminalOutputMeta = {
@@ -21,6 +22,7 @@ export type TerminalOutputFrameChunk = {
   seq?: number
   opcode?: TerminalStreamOpcode
   sourceRanges?: readonly TerminalOutputSourceRange[]
+  osc52StartState?: TerminalOsc52ScannerSyncState
 }
 
 export const TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS = 8 * 1024

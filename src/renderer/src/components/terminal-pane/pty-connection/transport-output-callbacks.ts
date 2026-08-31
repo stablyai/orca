@@ -11,6 +11,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
     onError: (message: string) => void,
     startup: PtyPaneStartup
   ) => {
+    session.kittyShortcutInputSettlement.begin()
     // Why: a new stream generation cannot inherit an old replay's pending
     // destination-grid fit or keep its live-data waiter open.
     session.pendingHiddenSnapshotFit?.cancel()
@@ -51,6 +52,11 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
           if (isCurrent()) {
             processExitState.detector.observe(data)
             session.dataCallback(data, meta, generation)
+          }
+        },
+        onOsc52Clipboard: (data: string): void => {
+          if (isCurrent()) {
+            session.deps.dispatchLiveOsc52Clipboard(data)
           }
         },
         onReplayData: (data: string, meta?: PtyReplayDataMeta): void => {

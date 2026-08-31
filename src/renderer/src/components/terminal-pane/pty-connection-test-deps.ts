@@ -37,6 +37,7 @@ export type PaneConnectionDeps = {
   clearWorktreeUnread: Mock
   clearTerminalTabUnread: Mock
   clearTerminalPaneUnread: Mock
+  dispatchLiveOsc52Clipboard: Mock
   dispatchNotification: Mock
   onShowSessionRestoredBanner: Mock
   setCacheTimerStartedAt: Mock
@@ -89,6 +90,7 @@ export function buildPaneConnectionDeps(
     clearWorktreeUnread: vi.fn(),
     clearTerminalTabUnread: vi.fn(),
     clearTerminalPaneUnread: vi.fn(),
+    dispatchLiveOsc52Clipboard: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),

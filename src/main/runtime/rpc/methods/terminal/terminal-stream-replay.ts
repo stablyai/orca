@@ -1,5 +1,9 @@
 import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal-reply-query-scan'
 import {
+  TerminalOsc52StreamScanner,
+  type TerminalOsc52ScannerSyncState
+} from '../../../../../shared/terminal-osc52-stream-scanner'
+import {
   iterateTerminalOutputFrameChunks,
   sliceTerminalOutputSourceRanges,
   type TerminalOutputFrameChunk,
@@ -15,7 +19,8 @@ import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-st
 export function appendPendingMultiplexOutput(
   stream: TerminalMultiplexStream,
   data: string,
-  meta?: TerminalOutputMeta
+  meta?: TerminalOutputMeta,
+  osc52StartState?: TerminalOsc52ScannerSyncState
 ): void {
   const remainingBudget = Math.max(
     1,
@@ -24,7 +29,7 @@ export function appendPendingMultiplexOutput(
   const measurement = measureTerminalStreamByteLength(data, {
     stopAfterBytes: remainingBudget
   })
-  stream.pendingOutput.push({ data, bytes: measurement.byteLength, meta })
+  stream.pendingOutput.push({ data, bytes: measurement.byteLength, meta, osc52StartState })
   stream.pendingOutputBytes += measurement.byteLength
   const trimmed = trimPendingOutputToBudget(stream.pendingOutput, stream.pendingOutputBytes)
   stream.pendingOutputBytes = trimmed.bytes
@@ -53,6 +58,13 @@ export function getOutputAfterSnapshotSeq(
     return null
   }
   const offset = snapshotSeq - chunkStartSeq
+  let osc52StartState = chunk.osc52StartState
+  if (osc52StartState) {
+    const scanner = new TerminalOsc52StreamScanner()
+    scanner.restoreSyncState(osc52StartState)
+    scanner.scan(chunk.data.slice(0, offset))
+    osc52StartState = scanner.syncState
+  }
   return {
     data: chunk.data.slice(offset),
     bytes: chunk.bytes,
@@ -64,7 +76,8 @@ export function getOutputAfterSnapshotSeq(
         offset,
         chunk.data.length
       )
-    }
+    },
+    osc52StartState
   }
 }
 

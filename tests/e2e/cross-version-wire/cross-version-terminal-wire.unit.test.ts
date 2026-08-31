@@ -87,7 +87,9 @@ function expectJourneyActuallyRan(record: JourneyRecord): void {
   // The anti-vacuous-pass oracle. A harness that connects and then does nothing
   // fails here, because "nothing threw" is never enough to call a pairing green.
   expect(record.completed).toEqual([...JOURNEY_STEPS])
-  expect(record.frameSequence).toEqual(EXPECTED_JOURNEY_FRAMES)
+  expect(record.frameSequence.filter((frame) => frame !== 'H>C ClipboardScannerSync')).toEqual(
+    EXPECTED_JOURNEY_FRAMES
+  )
   expect(record.subscribedEvents).toHaveLength(2)
   expect(record.snapshotStarts).toHaveLength(3)
   expect(record.missingRuntimeMethods).toEqual([])
@@ -116,10 +118,9 @@ function expectWireCompatible(record: JourneyRecord): void {
   expect(record.rejected).toEqual([])
   expect(record.clientErrors).toEqual([])
 
-  // The subscribe handshake still negotiates the optional output-pause opcode,
-  // which is what keeps opcode 16 legal to send on this pairing.
+  // The subscribe handshake still negotiates output pause across both skew directions.
   for (const event of record.subscribedEvents) {
-    expect(event.capabilities).toEqual({ outputPause: 1 })
+    expect(event.capabilities).toMatchObject({ outputPause: 1 })
   }
 
   // Input reached the process, before and after the reconnect.
@@ -163,6 +164,15 @@ describe('cross-version remote terminal wire', () => {
   it('current client against current server completes the journey, and is the reference for a current host', () => {
     expectJourneyActuallyRan(currentReference)
     expectWireCompatible(currentReference)
+    expect(
+      currentReference.frameSequence.filter((frame) => frame === 'H>C ClipboardScannerSync')
+    ).toHaveLength(3)
+    for (const event of currentReference.subscribedEvents) {
+      expect(event.capabilities).toMatchObject({
+        clipboardWrite: 1,
+        clipboardScannerSync: 1
+      })
+    }
     // Current code's own contract in both roles, so it is safe to state literally.
     expect(currentReference.snapshotStarts).toEqual([
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),

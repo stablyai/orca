@@ -1889,6 +1889,11 @@ export function createRemoteRuntimePtyTransport(
             shutdownDataHandler(data, meta)
           }
         },
+        onOsc52Clipboard: (data) => {
+          if (isCurrentSubscription()) {
+            storedCallbacks.onOsc52Clipboard?.(data)
+          }
+        },
         onSnapshot: (data, meta) => {
           // Why: an empty snapshot can still carry a pending mid-escape tail that must replay so the next live chunk completes it.
           if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {

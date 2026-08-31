@@ -1,4 +1,8 @@
 import type { TerminalOscLinkRange } from '../../../../../shared/terminal-osc-link-ranges'
+import type {
+  TerminalOsc52ScannerSyncState,
+  TerminalOsc52StreamScanner
+} from '../../../../../shared/terminal-osc52-stream-scanner'
 import type { TerminalSnapshotUnavailableReason } from '../../../../../shared/terminal-snapshot-unavailability'
 import type { TerminalSourceRangeLedger } from '../../terminal-source-range-ledger'
 import type { RemoteTerminalSourceRangeReplacementReservation } from '../../../remote-terminal-source-range-consumer'
@@ -69,6 +73,10 @@ export type TerminalMultiplexStream = {
   ackWindowBytes: number
   supportsOutputPause: boolean
   supportsWriteUnavailable: boolean
+  supportsClipboardWrite: boolean
+  supportsClipboardScannerSync: boolean
+  osc52Scanner: TerminalOsc52StreamScanner
+  osc52DeliveryScanner: TerminalOsc52StreamScanner
   outputPaused: boolean
   supportsDesktopViewportClaims: boolean
   desktopClaimTail: Promise<boolean>
@@ -101,4 +109,5 @@ export type TerminalOutputChunk = {
   data: string
   bytes: number
   meta?: TerminalOutputMeta
+  osc52StartState?: TerminalOsc52ScannerSyncState
 }

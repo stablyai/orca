@@ -113,6 +113,8 @@ type PtyCallbacks = {
   onStreamRecovered?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
+  /** Live OSC 52 intent carried outside snapshot-recoverable terminal output. */
+  onOsc52Clipboard?: (data: string) => void
   onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void

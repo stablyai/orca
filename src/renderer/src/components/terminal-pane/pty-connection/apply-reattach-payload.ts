@@ -19,6 +19,7 @@ import { resolveSshReconnectModelPaint } from './resolve-ssh-reconnect-model-pai
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
+import { retainTerminalKittyState } from '../terminal-kitty-state-retention'
 
 export function createReattachPayloadHandlers(
   session: ReattachPayloadSession,
@@ -168,6 +169,7 @@ export function createReattachPayloadHandlers(
           // baseline, then the replay layers the outage on top — otherwise Option/Alt chords
           // encode against a stale flag stack.
           session.kittyKeyboardModes.scanReplay(ctx.connectResult.replay)
+          retainTerminalKittyState(ctx.ptyId, session.kittyKeyboardModes)
         }
         // Why shared: park+reveal of an alt-screen TUI needs the same
         // ?1049l/?1049h rebuild as applyMainBufferSnapshot (main strips
@@ -217,6 +219,7 @@ export function createReattachPayloadHandlers(
           session.kittyKeyboardModes.resetForSnapshot()
         }
         session.kittyKeyboardModes.scanReplay(ctx.connectResult.replay)
+        retainTerminalKittyState(ctx.ptyId, session.kittyKeyboardModes)
         session.writeReplayData(
           `${ctx.connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${ctx.connectResult.replay}`
         )

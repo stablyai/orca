@@ -1,6 +1,7 @@
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyShortcutInputSettlement } from '../terminal-kitty-shortcut-input'
 import type { PtyConnectionDeps } from '../pty-connection-types'
 import {
   captureTerminalPaneRecoveryGeneration,
@@ -191,6 +192,7 @@ export function connectPanePty(
   // Fed only from application output (live PTY bytes + daemon replay
   // payloads), never from renderer-generated resets, so it reflects what the
   // application expects even after defensive renderer-side kitty wipes.
+  session.kittyShortcutInputSettlement = new TerminalKittyShortcutInputSettlement()
   session.kittyKeyboardModes = (() => {
     const existing = session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id)
     if (existing) {

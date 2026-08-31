@@ -1,4 +1,5 @@
 import type { PtyTransport } from './pty-transport'
+import type { TerminalKittyShortcutInput } from './terminal-kitty-shortcut-input'
 
 type CapturedTerminalInputDispatch = {
   targetPaneMounted: boolean
@@ -12,6 +13,10 @@ type CapturedTerminalInputDispatch = {
 export type TerminalCapturedInputBinding = {
   requestWindowsShiftEnterReconfirmation?: () => void
   markShortcutTerminalInputSent?: () => void
+  dispatchKittyShortcutInput?: (
+    input: TerminalKittyShortcutInput,
+    send: (data: string) => void
+  ) => boolean
 }
 
 export function sendCapturedTerminalInput({

@@ -25,6 +25,7 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
   ): void {
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
       clearSnapshot(stream)
+      stream.osc52Scanner.reset()
       stream.snapshotInfo = decodeSnapshotInfo(frame.payload)
       const requestId = stream.snapshotInfo?.requestId
       stream.snapshotTarget =

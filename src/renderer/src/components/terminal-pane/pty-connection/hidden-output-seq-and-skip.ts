@@ -17,6 +17,7 @@ import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindWritePtyOutputToXterm } from './write-pty-output-to-xterm'
+import { retainTerminalKittyState } from '../terminal-kitty-state-retention'
 
 import { bindAbandonHiddenOutputRestore } from './hidden-output-restore-abandon'
 import { bindHiddenOutputRestoreChunk } from './hidden-output-restore-chunk'
@@ -155,11 +156,13 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
         session.kittyKeyboardModes.resetForSnapshot()
       }
       session.kittyKeyboardModes.scanReplay(snapshotData)
+      retainTerminalKittyState(session.transport.getPtyId(), session.kittyKeyboardModes)
       return
     }
     session.kittyKeyboardModes.resetForSnapshot()
     session.kittyKeyboardModes.scanReplay(snapshotData)
     session.kittyKeyboardModes.restoreSnapshotFlags(proven)
+    retainTerminalKittyState(session.transport.getPtyId(), session.kittyKeyboardModes)
     // Why in the same critical section: without the baseline a quiet pane
     // could not publish a coherent snapshot until unrelated output arrived.
     session.recordRendererOrderedSeq({ seq: snapshot.snapshotSeq })

@@ -2,6 +2,7 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { UUID_RE } from './pty-connection-test-constants'
 import {
@@ -513,7 +514,16 @@ describe('connectPanePty', () => {
       restoredPtyIdByLeafId: { [LEAF_1]: retainedPtyId }
     })
 
-    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      deps as never
+    ) as unknown as {
+      dispatchKittyShortcutInput: (
+        input: { kitty: string; legacy: string },
+        send: (data: string) => void
+      ) => boolean
+    }
     await flushAsyncTicks(20)
     await new Promise((resolve) => setTimeout(resolve, 70))
 
@@ -523,6 +533,69 @@ describe('connectPanePty', () => {
     expect(transport.connect).not.toHaveBeenCalled()
     expect(deps.clearTabPtyId).not.toHaveBeenCalled()
     expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
+
+    const send = vi.fn()
+    expect(
+      binding.dispatchKittyShortcutInput({ kitty: '\x1b[13;2u', legacy: '\x1b\r' }, send)
+    ).toBe(true)
+    expect(send).toHaveBeenCalledExactlyOnceWith('\x1b\r')
+  })
+
+  it('discards deferred shortcuts when a retained remote attach fails asynchronously', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const retainedPtyId = toRemoteRuntimePtyId('missing-legacy-worker', 'env-a')
+    const transport = createMockTransport()
+    let onError: ((message: string) => void) | undefined
+    transport.attach.mockImplementation(({ callbacks }) => {
+      onError = callbacks.onError
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: retainedPtyId }]
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          prompt: 'finish the task',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+        }
+      }
+    } as StoreState
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: retainedPtyId }
+      }) as never
+    ) as unknown as {
+      dispatchKittyShortcutInput: (
+        input: { kitty: string; legacy: string },
+        send: (data: string) => void
+      ) => boolean
+    }
+    await flushAsyncTicks(20)
+
+    const send = vi.fn()
+    binding.dispatchKittyShortcutInput({ kitty: '\x1b[13;2u', legacy: '\x1b\r' }, send)
+    expect(send).not.toHaveBeenCalled()
+
+    expect(onError).toBeTypeOf('function')
+    onError?.('remote attach failed')
+    expect(send).not.toHaveBeenCalled()
+
+    binding.dispatchKittyShortcutInput({ kitty: '\x1b[13;2u', legacy: '\x1b\r' }, send)
+    expect(send).toHaveBeenCalledExactlyOnceWith('\x1b\r')
   })
 
   it('preserves a missing retained legacy worker through direct SSH reconnect', async () => {

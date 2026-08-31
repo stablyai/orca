@@ -103,6 +103,7 @@ import type { AgentSessionContinuationRequest } from '@/lib/agent-session-contin
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
+import { createTerminalLiveOsc52ClipboardHandler } from './terminal-live-osc52-clipboard'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pty-connection/pane-pty-layout-binding'
@@ -888,6 +889,13 @@ function TerminalPane(
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  const dispatchLiveOsc52Clipboard = useMemo(
+    () =>
+      createTerminalLiveOsc52ClipboardHandler(
+        () => settingsRef.current?.terminalAllowOsc52Clipboard
+      ),
+    []
+  )
   const openLinksInAppPreferencePromiseRef = useRef<Promise<boolean> | null>(null)
 
   const requestOpenLinksInAppPreference = useCallback(
@@ -1495,6 +1503,7 @@ function TerminalPane(
     clearWorktreeUnread,
     clearTerminalTabUnread,
     clearTerminalPaneUnread,
+    dispatchLiveOsc52Clipboard,
     onShowSessionRestoredBanner: showRestoredSessionBanner,
     dispatchNotification,
     setCacheTimerStartedAt,
@@ -1713,6 +1722,7 @@ function TerminalPane(
         clearWorktreeUnread,
         clearTerminalTabUnread,
         clearTerminalPaneUnread,
+        dispatchLiveOsc52Clipboard,
         onShowSessionRestoredBanner: showRestoredSessionBanner,
         dispatchNotification,
         setCacheTimerStartedAt,
@@ -1729,6 +1739,7 @@ function TerminalPane(
       clearTabPtyId,
       cwd,
       dispatchNotification,
+      dispatchLiveOsc52Clipboard,
       handlePaneProcessDied,
       markWorktreeUnread,
       markTerminalTabUnread,

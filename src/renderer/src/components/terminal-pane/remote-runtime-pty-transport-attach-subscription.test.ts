@@ -62,6 +62,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(latestSubscribePayload().capabilities).toEqual({
         ackOutput: 1,
         ackOutputSourceRanges: 1,
+        clipboardWrite: 1,
+        clipboardScannerSync: 1,
         desktopViewportClaims: 1,
         outputPause: 1,
         writeUnavailable: 1

@@ -6,6 +6,7 @@ import {
   type TerminalStreamFrame
 } from '../../../shared/terminal-stream-protocol'
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
+import { isTerminalOsc52ScannerSyncState } from '../../../shared/terminal-osc52-stream-scanner'
 import {
   shouldDropE2eRemoteTerminalOutput,
   shouldHoldE2eRemoteTerminalAck
@@ -49,6 +50,18 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
       stream.callbacks.onWriteUnavailable?.()
       return
     }
+    if (frame.opcode === TerminalStreamOpcode.ClipboardWrite) {
+      stream.supportsClipboardWrite = true
+      stream.callbacks.onOsc52Clipboard?.(decodeTerminalStreamText(frame.payload))
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.ClipboardScannerSync) {
+      const syncState = decodeTerminalStreamText(frame.payload)
+      if (stream.supportsClipboardScannerSync && isTerminalOsc52ScannerSyncState(syncState)) {
+        stream.osc52Scanner.restoreSyncState(syncState)
+      }
+      return
+    }
     if (
       frame.opcode === TerminalStreamOpcode.Output ||
       frame.opcode === TerminalStreamOpcode.OutputSpan
@@ -78,12 +91,15 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
         Number.isSafeInteger(span.rawLength) &&
         span.rawLength >= 0 &&
         span.transformed === true)
-    const data =
+    const rawData =
       frame.opcode === TerminalStreamOpcode.OutputSpan
         ? validSpan
           ? (span!.data as string)
           : ''
         : decodeTerminalStreamText(frame.payload)
+    const data = stream.supportsClipboardWrite
+      ? stream.osc52Scanner.scan(rawData).passthrough
+      : rawData
     const deliverOutput = (): void => {
       if (!validSpan) {
         // Why: rendering malformed span JSON would expose protocol framing
@@ -94,7 +110,7 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
       const rawLength =
         frame.opcode === TerminalStreamOpcode.OutputSpan && typeof span?.rawLength === 'number'
           ? span.rawLength
-          : data.length
+          : rawData.length
       // Why: a resync snapshot is authoritative; discard live output while
       // it is in flight, but still return transport credit in finally.
       if (stream.resyncInFlight) {
@@ -121,7 +137,9 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
       stream.callbacks.onData(data, {
         seq,
         rawLength,
-        ...(frame.opcode === TerminalStreamOpcode.OutputSpan ? { transformed: true } : {})
+        ...(frame.opcode === TerminalStreamOpcode.OutputSpan || data !== rawData
+          ? { transformed: true }
+          : {})
       })
     }
     if (!stream.acknowledgeOutput) {

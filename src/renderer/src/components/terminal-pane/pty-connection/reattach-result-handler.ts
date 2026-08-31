@@ -19,6 +19,7 @@ import type { ReattachPayloadContext } from './reattach-payload-context'
 import { createReattachPayloadHandlers } from './apply-reattach-payload'
 import type { ReattachPayloadSession } from './reattach-payload-session'
 import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
+import { restoreRetainedTerminalKittyState } from '../terminal-kitty-state-retention'
 
 type ReattachResultSession = ReattachPayloadSession &
   Pick<
@@ -35,6 +36,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'disposed'
     | 'getSshMainModelSnapshotProbe'
     | 'handleReattachResult'
+    | 'kittyShortcutInputSettlement'
     | 'followsDirectSshReconnect'
     | 'mountFollowsTerminalPark'
     | 'registerEffectiveLaunchConfig'
@@ -82,8 +84,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     session.authoritativeReattachGeneration += 1
     const connectResult =
       result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
+    const settleShortcutInput = (): void =>
+      session.kittyShortcutInputSettlement.settle(session.kittyKeyboardModes.flags)
 
     if (connectResult?.exitedBeforeAttach) {
+      settleShortcutInput()
       // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.
       return true
     }
@@ -93,6 +98,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       (typeof result === 'string' ? result : (staleSessionId ?? session.transport.getPtyId()))
     if (session.rejectObsoleteDirectSshReattach(retryPtyId)) {
       // Why: an obsolete reattach must stop consuming frames without killing the durable PTY a newer lease may adopt.
+      settleShortcutInput()
       return false
     }
     const ptyId =
@@ -107,6 +113,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         ptyId: staleSessionId ?? null
       })
       if (session.connectionId) {
+        settleShortcutInput()
         recoverUnverifiableDirectSshReattach(sessionBag, staleSessionId)
         return false
       }
@@ -119,6 +126,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       if (staleSessionId) {
         session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
       }
+      settleShortcutInput()
       session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
         forceBlankRestoredViewport: true
       })
@@ -142,6 +150,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
       }
       // Why: SSH sleep/reconnect can invalidate the relay PTY while the tab stays mounted; replace the dead lease in-place, not a stale overlay.
+      settleShortcutInput()
       session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
         forceBlankRestoredViewport: true
       })
@@ -156,6 +165,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     if (!isCurrentReattachPayload()) {
       return false
     }
+    restoreRetainedTerminalKittyState(ptyId, session.kittyKeyboardModes)
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
@@ -175,6 +185,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       } else {
         session.syncPanePtyLayoutBinding(null)
       }
+      settleShortcutInput()
       session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
         forceBlankRestoredViewport: true
       })
@@ -314,8 +325,12 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       await fitAfterReattachRestore()
     }
     if (!isCurrentReattachPayload() || !reattachPayload.reattachPayloadApplied) {
+      if (isCurrentReattachPayload()) {
+        settleShortcutInput()
+      }
       return false
     }
+    settleShortcutInput()
     session.scheduleReattachIdleAgentCursorReset()
 
     scheduleRuntimeGraphSync()

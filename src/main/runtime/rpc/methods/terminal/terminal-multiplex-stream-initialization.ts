@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import {
   TerminalStreamOpcode,
-  encodeTerminalStreamJson
+  encodeTerminalStreamJson,
+  encodeTerminalStreamText
 } from '../../../../../shared/terminal-stream-protocol'
 import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
 import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
 import { createTerminalOutputBatcher } from './terminal-output-batcher'
 import { appendPendingMultiplexOutput } from './terminal-stream-replay'
+import {
+  TerminalOsc52StreamScanner,
+  isTerminalOsc52ClipboardQuery
+} from '../../../../../shared/terminal-osc52-stream-scanner'
 import { updateViewportForClient } from './terminal-viewport-update'
 import type {
   MultiplexSubscribeRequest,
@@ -55,6 +60,12 @@ export async function initializeMultiplexStream(
     ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
     supportsOutputPause: request.capabilities?.outputPause === 1,
     supportsWriteUnavailable: request.capabilities?.writeUnavailable === 1,
+    supportsClipboardWrite: request.capabilities?.clipboardWrite === 1,
+    supportsClipboardScannerSync:
+      request.capabilities?.clipboardWrite === 1 &&
+      request.capabilities?.clipboardScannerSync === 1,
+    osc52Scanner: new TerminalOsc52StreamScanner(),
+    osc52DeliveryScanner: new TerminalOsc52StreamScanner(),
     outputPaused: false,
     supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
     desktopClaimTail: Promise.resolve(true),
@@ -102,11 +113,27 @@ export async function initializeMultiplexStream(
     if (state.closed || streams.get(request.streamId) !== stream) {
       return
     }
+    const osc52StartState = stream.supportsClipboardWrite
+      ? stream.osc52Scanner.syncState
+      : undefined
+    if (stream.supportsClipboardWrite) {
+      const payload = stream.osc52Scanner
+        .scan(data)
+        .payloads.findLast((candidate) => !isTerminalOsc52ClipboardQuery(candidate))
+      if (payload !== undefined) {
+        state.sendFrame(
+          request.streamId,
+          TerminalStreamOpcode.ClipboardWrite,
+          encodeTerminalStreamText(payload),
+          meta?.seq
+        )
+      }
+    }
     if (stream.outputPaused) {
       return
     }
     if (stream.buffering) {
-      appendPendingMultiplexOutput(stream, data, meta)
+      appendPendingMultiplexOutput(stream, data, meta, osc52StartState)
       return
     }
     stream.outputBatcher.push(data, meta)

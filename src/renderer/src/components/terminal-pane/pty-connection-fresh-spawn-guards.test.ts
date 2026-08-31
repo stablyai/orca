@@ -199,6 +199,28 @@ describe('connectPanePty', () => {
     expect(staleTracker.flags).toBe(0)
   })
 
+  it('preserves kitty state when a fresh-spawn request adopts an existing PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { TerminalKittyKeyboardModeTracker } =
+      await import('../../../../shared/terminal-kitty-keyboard-mode-tracker')
+    const transport = createMockTransport()
+    transport.connect.mockResolvedValue({ id: 'reattached-pty', isReattach: true })
+    transportFactoryQueue.push(transport)
+    const retainedTracker = new TerminalKittyKeyboardModeTracker()
+    retainedTracker.scan('\x1b[>1u')
+    const paneKittyKeyboardModesRef = { current: new Map([[92, retainedTracker]]) }
+    const deps = createDeps({
+      tabId: 'tab-kitty-adopted-spawn',
+      paneKittyKeyboardModesRef
+    })
+
+    connectPanePty(createPane(92) as never, createManager(92) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(paneKittyKeyboardModesRef.current.get(92)).toBe(retainedTracker)
+    expect(retainedTracker.flags).toBe(1)
+  })
+
   // Why: deleting a worktree kills its PTYs for the filesystem teardown; the
   // renderer must not race a doomed respawn into a directory main is deleting
   // (main fences it with TerminalRemovalInProgressError and the pane is about to

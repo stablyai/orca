@@ -14,6 +14,7 @@ import type {
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import type { RemoteTerminalSourceRangeReplacementReservation } from '../../../remote-terminal-source-range-consumer'
+import { sendTerminalClipboardScannerSync } from './terminal-clipboard-scanner-synchronization'
 
 export function installMultiplexFlowControl(
   build: TerminalMultiplexFrameDeliveryStage
@@ -30,6 +31,7 @@ export function installMultiplexFlowControl(
       return
     }
     stream.ackRecoverySnapshotInFlight = true
+    stream.outputBatcher.flush()
     let replacement: RemoteTerminalSourceRangeReplacementReservation | null = null
     try {
       const serialized = await serializeBudgetedRequestedSnapshot(runtime, stream.ptyId, 0)
@@ -121,6 +123,12 @@ export function installMultiplexFlowControl(
           0
         )
       }
+      sendTerminalClipboardScannerSync(
+        stream,
+        stream.ackPendingOutput[0]?.osc52StartState ?? stream.osc52Scanner?.syncState ?? 'plain',
+        (opcode, payload) => state.sendFrame(stream.streamId, opcode, payload),
+        false
+      )
       stream.ackPendingOutputOverflowed = false
     } catch (error) {
       if (replacement) {

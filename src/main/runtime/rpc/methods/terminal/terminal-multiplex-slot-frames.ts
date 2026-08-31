@@ -10,15 +10,16 @@ import {
   TerminalMultiplexSourceRangeAckFrame
 } from './stream-schemas'
 import { isTerminalInputLockedForClient, sendTerminalStreamInput } from './terminal-input-delivery'
-import {
-  getOutputAfterSnapshotSeq,
-  normalizeMultiplexSnapshotScrollbackRows
-} from './terminal-stream-replay'
+import { normalizeMultiplexSnapshotScrollbackRows } from './terminal-stream-replay'
 import {
   sendSnapshotFrames,
   serializeBudgetedRequestedSnapshot
 } from './terminal-snapshot-publication'
 import { updateViewportForClient } from './terminal-viewport-update'
+import {
+  prepareTerminalSnapshotPendingOutput,
+  sendTerminalClipboardScannerSync
+} from './terminal-clipboard-scanner-synchronization'
 import type {
   MultiplexSnapshotRequest,
   TerminalMultiplexCleanupStage,
@@ -88,6 +89,14 @@ export function installMultiplexSlotFrames(
       const payload = decodeTerminalStreamJson<{ paused?: unknown }>(frame.payload)
       if (typeof payload?.paused !== 'boolean' || stream.outputPaused === payload.paused) {
         return
+      }
+      if (!payload.paused) {
+        sendTerminalClipboardScannerSync(
+          stream,
+          stream.osc52Scanner.syncState,
+          (opcode, encoded) => state.sendFrame(stream.streamId, opcode, encoded),
+          true
+        )
       }
       stream.outputPaused = payload.paused
       if (stream.outputPaused) {
@@ -255,20 +264,16 @@ export function installMultiplexSlotFrames(
         const shouldFlushPendingOutput = !stream.pendingOutputOverflowed
         stream.buffering = false
         const pendingOutput = stream.pendingOutput.splice(0)
-        if (shouldFlushPendingOutput) {
-          for (const chunk of pendingOutput) {
-            // Why: an untagged reply resets the client to the snapshot's
-            // high-water, so covered bytes would render twice; tagged
-            // snapshots feed a side consumer and the live view still
-            // needs every buffered chunk.
-            const uncovered =
-              typeof requestId === 'number'
-                ? chunk
-                : getOutputAfterSnapshotSeq(chunk, sentSnapshotOutputSeq)
-            if (uncovered) {
-              stream.outputBatcher.push(uncovered.data, uncovered.meta)
-            }
-          }
+        const uncoveredOutput = prepareTerminalSnapshotPendingOutput({
+          stream,
+          pendingOutput: shouldFlushPendingOutput ? pendingOutput : [],
+          snapshotSeq: sentSnapshotOutputSeq,
+          // Why: tagged snapshots feed a side consumer and still need every live chunk.
+          includeAll: typeof requestId === 'number',
+          sendFrame: (opcode, payload) => state.sendFrame(stream.streamId, opcode, payload)
+        })
+        for (const chunk of uncoveredOutput) {
+          stream.outputBatcher.push(chunk.data, chunk.meta)
         }
         stream.pendingOutputBytes = 0
         stream.pendingOutputOverflowed = false

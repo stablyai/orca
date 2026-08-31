@@ -32,7 +32,11 @@ export enum TerminalStreamOpcode {
   // Negotiated per stream; older hosts reject unknown opcodes, so clients send only after capability confirmation.
   SetOutputPaused = 16,
   // Negotiated per stream because older clients reject unknown opcodes.
-  WriteUnavailable = 17
+  WriteUnavailable = 17,
+  // Carries live OSC 52 intent outside the lossy terminal snapshot/ack path.
+  ClipboardWrite = 18,
+  // Negotiated with ClipboardWrite; aligns duplicate stripping after omitted output.
+  ClipboardScannerSync = 19
 }
 
 export type TerminalStreamFrame = {
@@ -122,6 +126,8 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.ClaimViewport ||
     value === TerminalStreamOpcode.OutputSpan ||
     value === TerminalStreamOpcode.SetOutputPaused ||
-    value === TerminalStreamOpcode.WriteUnavailable
+    value === TerminalStreamOpcode.WriteUnavailable ||
+    value === TerminalStreamOpcode.ClipboardWrite ||
+    value === TerminalStreamOpcode.ClipboardScannerSync
   )
 }

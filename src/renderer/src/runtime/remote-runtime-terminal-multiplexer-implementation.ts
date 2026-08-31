@@ -17,6 +17,7 @@ import type {
   RemoteRuntimeMultiplexedTerminalState
 } from './remote-runtime-terminal-multiplexer-types'
 import { createRemoteTerminalStreamWatchdog } from './remote-terminal-stream-watchdog'
+import { TerminalOsc52StreamScanner } from '../../../shared/terminal-osc52-stream-scanner'
 
 export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinaryController {
   async subscribeTerminal(args: {
@@ -34,7 +35,10 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       acknowledgeOutput: true,
       acknowledgeOutputSourceRanges: false,
       supportsOutputPause: false,
+      supportsClipboardWrite: false,
+      supportsClipboardScannerSync: false,
       outputPaused: false,
+      osc52Scanner: new TerminalOsc52StreamScanner(),
       streamGeneration: null,
       sourceAckedEndByte: 0,
       heldAckBytes: 0,
@@ -144,6 +148,9 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
             ackOutputSourceRanges: 1,
             outputPause: 1,
             writeUnavailable: 1,
+            ...(args.callbacks.onOsc52Clipboard
+              ? { clipboardWrite: 1, clipboardScannerSync: 1 }
+              : {}),
             ...(args.client.type === 'desktop' ? { desktopViewportClaims: 1 } : {})
           }
         })

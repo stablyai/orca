@@ -128,10 +128,18 @@ describe('resolvePreviewShortcutAction', () => {
     })
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'Enter', shiftKey: true }), windowsHost)
-    ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
+    ).toEqual({
+      type: 'sendInput',
+      data: '\x1b[13;2u',
+      kittyKeyboardInput: { kitty: '\x1b[13;2u', legacy: '\x1b[13;2u' }
+    })
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'Enter', shiftKey: true }), contextFor())
-    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    ).toEqual({
+      type: 'sendInput',
+      data: '\x1b\r',
+      kittyKeyboardInput: { kitty: '\x1b[13;2u', legacy: '\x1b\r' }
+    })
   })
 
   it('protects local ConPTY shells while preserving trusted Ctrl+Enter consumers', () => {

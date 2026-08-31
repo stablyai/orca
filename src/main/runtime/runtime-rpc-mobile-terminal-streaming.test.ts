@@ -570,7 +570,12 @@ describe('OrcaRuntimeRpcServer', () => {
             streamId: 22,
             terminal: activeTerminal.handle,
             client: { id: 'desktop-active', type: 'desktop' },
-            capabilities: { ackOutput: 1 }
+            capabilities: {
+              ackOutput: 1,
+              clipboardWrite: 1,
+              clipboardScannerSync: 1,
+              outputPause: 1
+            }
           })
         })
       )
@@ -580,6 +585,116 @@ describe('OrcaRuntimeRpcServer', () => {
           .filter((result) => result?.type === 'subscribed')
           .map((result) => result?.streamId)
         expect(subscribedStreamIds).toEqual(expect.arrayContaining([21, 22]))
+      })
+      binaryFrames.splice(0)
+
+      runtime.onPtyData('multiplex-active-pty', '\x1b]52;c;Y29weQ==\x07', 1)
+      await vi.waitFor(() => {
+        const clipboardWrites = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter(
+            (frame) =>
+              frame?.opcode === TerminalStreamOpcode.ClipboardWrite && frame.streamId === 22
+          )
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        expect(clipboardWrites).toEqual(['c;Y29weQ=='])
+      })
+      binaryFrames.splice(0)
+
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 3,
+          opcode: TerminalStreamOpcode.SetOutputPaused,
+          streamId: 22,
+          payload: encodeTerminalStreamJson({ paused: true })
+        })
+      )
+      runtime.onPtyData('multiplex-active-pty', '\x1b]52;c;aGlkZGVu\x07', 2)
+      await vi.waitFor(() => {
+        const frames = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.streamId === 22)
+        expect(
+          frames
+            .filter((frame) => frame?.opcode === TerminalStreamOpcode.ClipboardWrite)
+            .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        ).toEqual(['c;aGlkZGVu'])
+        expect(frames.some((frame) => frame?.opcode === TerminalStreamOpcode.Output)).toBe(false)
+      })
+      binaryFrames.splice(0)
+      runtime.onPtyData('multiplex-active-pty', '\x1b]52;c;?\x07', 3)
+      await Promise.resolve()
+      expect(
+        binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .some((frame) => frame?.opcode === TerminalStreamOpcode.ClipboardWrite)
+      ).toBe(false)
+
+      runtime.onPtyData('multiplex-active-pty', '\x1b]52;c;c3Bs', 4)
+      binaryFrames.splice(0)
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 4,
+          opcode: TerminalStreamOpcode.SetOutputPaused,
+          streamId: 22,
+          payload: encodeTerminalStreamJson({ paused: false })
+        })
+      )
+      await vi.waitFor(() => {
+        const scannerSync = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .find(
+            (frame) =>
+              frame?.opcode === TerminalStreamOpcode.ClipboardScannerSync && frame.streamId === 22
+          )
+        expect(scannerSync && decodeTerminalStreamText(scannerSync.payload)).toBe('payload')
+      })
+      binaryFrames.splice(0)
+      runtime.onPtyData('multiplex-active-pty', 'aXQ=\x07visible', 5)
+      await vi.waitFor(() => {
+        const clipboardWrites = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter(
+            (frame) =>
+              frame?.opcode === TerminalStreamOpcode.ClipboardWrite && frame.streamId === 22
+          )
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        expect(clipboardWrites).toEqual(['c;c3BsaXQ='])
+      })
+      binaryFrames.splice(0)
+
+      runtime.onPtyData('multiplex-active-pty', '\x1b]52;c;cGFy', 6)
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 5,
+          opcode: TerminalStreamOpcode.SnapshotRequest,
+          streamId: 22,
+          payload: encodeTerminalStreamJson({ requestId: 77 })
+        })
+      )
+      await vi.waitFor(() => {
+        const frames = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.streamId === 22)
+        expect(frames.some((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotEnd)).toBe(
+          true
+        )
+        const scannerSync = frames.find(
+          (frame) => frame?.opcode === TerminalStreamOpcode.ClipboardScannerSync
+        )
+        expect(scannerSync && decodeTerminalStreamText(scannerSync.payload)).toBe('payload')
+      })
+      binaryFrames.splice(0)
+      runtime.onPtyData('multiplex-active-pty', 'dGlhbA==\x07after-snapshot', 7)
+      await vi.waitFor(() => {
+        const frames = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.streamId === 22)
+        expect(frames.some((frame) => frame?.opcode === TerminalStreamOpcode.Output)).toBe(true)
+        const clipboardWrites = frames
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.ClipboardWrite)
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        expect(clipboardWrites).toEqual(['c;cGFydGlhbA=='])
       })
       binaryFrames.splice(0)
 
@@ -598,7 +713,7 @@ describe('OrcaRuntimeRpcServer', () => {
       })
 
       const frameCountBeforeActive = binaryFrames.length
-      runtime.onPtyData('multiplex-active-pty', 'ACTIVE_MULTIPLEX_READY\r\n', 2)
+      runtime.onPtyData('multiplex-active-pty', 'ACTIVE_MULTIPLEX_READY\r\n', 3)
       await vi.waitFor(() => {
         const activeOutput = binaryFrames
           .slice(frameCountBeforeActive)
@@ -611,7 +726,7 @@ describe('OrcaRuntimeRpcServer', () => {
 
       subscription.sendBinary(
         encodeTerminalStreamFrame({
-          seq: 3,
+          seq: 6,
           opcode: TerminalStreamOpcode.Input,
           streamId: 22,
           payload: encodeTerminalStreamText('still interactive\r')
@@ -630,7 +745,7 @@ describe('OrcaRuntimeRpcServer', () => {
         .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
       subscription.sendBinary(
         encodeTerminalStreamFrame({
-          seq: 4,
+          seq: 7,
           opcode: TerminalStreamOpcode.Ack,
           streamId: 21,
           payload: encodeTerminalStreamJson({ bytes: backgroundBytesBeforeAck })

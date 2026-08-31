@@ -1,6 +1,7 @@
 import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal-snapshot-unavailability'
 import type { TerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
 import type { RemoteTerminalStreamWatchdog } from './remote-terminal-stream-watchdog'
+import type { TerminalOsc52StreamScanner } from '../../../shared/terminal-osc52-stream-scanner'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -13,7 +14,12 @@ export type TerminalMultiplexEvent =
       type: 'subscribed'
       streamId: number
       streamGeneration?: string
-      capabilities?: { ackOutputSourceRanges?: 1; outputPause?: 1 }
+      capabilities?: {
+        ackOutputSourceRanges?: 1
+        outputPause?: 1
+        clipboardWrite?: 1
+        clipboardScannerSync?: 1
+      }
     }
   | { type: 'end'; streamId: number; verdict?: TerminalStreamEndVerdict }
   | { type: 'error'; streamId: number; message?: string }
@@ -45,6 +51,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   ) => void
   onSubscribed?: () => void
   onOutputPauseCapability?: () => void
+  onOsc52Clipboard?: (data: string) => void
   onEnd?: (verdict: TerminalStreamEndVerdict) => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
@@ -151,7 +158,10 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   acknowledgeOutput: boolean
   acknowledgeOutputSourceRanges: boolean
   supportsOutputPause: boolean
+  supportsClipboardWrite: boolean
+  supportsClipboardScannerSync: boolean
   outputPaused: boolean
+  osc52Scanner: TerminalOsc52StreamScanner
   streamGeneration: string | null
   sourceAckedEndByte: number
   heldAckBytes: number
