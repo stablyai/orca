@@ -12,6 +12,8 @@ export const MISSION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'orca-sub is the local natural-language subagent entry and does not replace the system orca executable.',
       'The command stays attached as the Mission supervisor until all tasks finish or the process is cancelled.',
+      'An external shell without --from or an Orca terminal identity gets its own background coordinator; unrelated focused terminals are not reused.',
+      'Owned coordinators close after settled completion or pre-Run cancellation. Uncertain Run outcomes retain the reported coordinator for recovery; worker terminals are managed separately.',
       'Mission execution reuses orchestration Run/Task/worker and collaboration topology APIs.'
     ]
   }
