@@ -105,6 +105,30 @@ describe('orca CLI skill guidance', () => {
     expect(skill).not.toContain('live_sk_')
   })
 
+  it('routes generic Orca browser requests away from Codex IAB adapters', () => {
+    const skill = readSkill().replace(/\s+/gu, ' ')
+
+    for (const phrase of [
+      'generic browser requests',
+      'browser use',
+      'open a website',
+      'navigate',
+      'snapshot',
+      'screenshot'
+    ]) {
+      expect(skill).toContain(phrase)
+    }
+    expect(skill).toContain(
+      "Codex CLI and the Codex IDE extension do not expose ChatGPT's built-in Browser/IAB surface"
+    )
+    expect(skill).toContain('`browsers.list`')
+    expect(skill).toContain('`browsers.getDefault()`')
+    expect(skill).toContain('an `agent.browsers` adapter')
+    expect(skill).toContain('an IAB socket')
+    expect(skill).toContain('Keep the `browserPageId` from `tab list`')
+    expect(skill).toContain('use the `computer-use` skill instead')
+  })
+
   // Publishing defaults to off, so an agent that follows the unconditional share workflow
   // just loops on denials. The guide has to teach the opt-in and the recovery.
   it('teaches the artifact publish opt-in and its recovery path', () => {
@@ -168,5 +192,14 @@ describe('orca CLI install stub', () => {
     const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
 
     expect(frontmatter(readSkill(stubPath))).toBe(frontmatter(readSkill(guidePath)))
+  })
+
+  it('keeps generic browser routing in the discovery stub', () => {
+    const stub = readSkill(stubPath).replace(/\s+/gu, ' ')
+
+    expect(stub).toContain('generic "browser use"')
+    expect(stub).toContain("ChatGPT's Browser/IAB surface")
+    expect(stub).toContain('`browsers.list`/`browsers.getDefault()`')
+    expect(stub).toContain('external desktop browser, webview, or Orca app chrome/settings')
   })
 })
