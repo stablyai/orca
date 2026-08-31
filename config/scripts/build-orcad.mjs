@@ -101,8 +101,8 @@ copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
 if (process.platform !== 'win32') {
   chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
 }
-// Why dereference: the deploy's SFTP walk skips symlinks outright, so a linked payload
-// would land on the host as an empty directory and read as no catalog at all.
+// Why dereference: the payload has no symlinks today, but the deploy's SFTP walk skips
+// symlinked entries outright, so this guards against a future pnpm layout shipping empty.
 for (const payload of AGENT_BROWSER_SKILL_PAYLOADS) {
   cpSync(payload.from, payload.to, { recursive: true, dereference: true })
 }
@@ -268,6 +268,9 @@ if (graphErrors.length > 0) {
 // this string, so two different builds carrying one version would share a directory — and an
 // already-`.install-complete` dir is never re-uploaded. The deploy would silently run stale
 // bytes while reporting the new version.
+// Note: the skill payload isn't hashed in — ORCAD_ARTIFACTS entries are read individually
+// as files, so a directory can't join the list. orcad.js changes almost every release, which
+// keeps fullVersion moving and re-triggers the upload in practice.
 if (process.exitCode !== 1) {
   const hash = createHash('sha256')
   for (const filename of orcadArtifactFilenames()) {
