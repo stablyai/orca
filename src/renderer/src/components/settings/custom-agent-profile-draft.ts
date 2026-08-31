@@ -51,6 +51,7 @@ export function duplicateBuiltInAgentAsCustom(args: {
   return {
     id: createCustomAgentProfileId(),
     name: uniqueCopyName(args.agent.label, args.reservedNames),
+    baseAgent: args.agent.id,
     executable: commandTokens[0],
     args: [...commandTokens.slice(1), ...launchArgTokens]
   }

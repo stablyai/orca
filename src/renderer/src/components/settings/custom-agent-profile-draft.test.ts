@@ -23,6 +23,7 @@ describe('custom agent profile drafts', () => {
     ).toEqual({
       id: 'profile-id',
       name: 'Codex copy 2',
+      baseAgent: 'codex',
       executable: 'codex',
       args: ['--model', 'luna pro']
     })

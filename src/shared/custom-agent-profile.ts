@@ -1,6 +1,8 @@
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 import { buildShellCommandFromArgv } from './tui-agent-startup-shell'
 import { encodePowerShellCommand } from './powershell-command-encoding'
+import type { TuiAgent } from './tui-agent'
+import { isTuiAgent } from './tui-agent-config'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 export const CUSTOM_AGENT_PROFILES_MAX = 32
@@ -21,6 +23,7 @@ function hasControlCharacter(value: string): boolean {
 export type CustomAgentProfile = {
   id: string
   name: string
+  baseAgent?: TuiAgent
   executable: string
   args: readonly string[]
 }
@@ -73,7 +76,13 @@ export function normalizeCustomAgentProfile(value: unknown): CustomAgentProfile 
   if (4 * Math.ceil(argvBytes / 3) > WINDOWS_ENV_VALUE_CHARS_MAX) {
     return null
   }
-  return { id, name, executable, args }
+  return {
+    id,
+    name,
+    ...(isTuiAgent(row.baseAgent) ? { baseAgent: row.baseAgent } : {}),
+    executable,
+    args
+  }
 }
 
 export function normalizeCustomAgentProfiles(value: unknown): CustomAgentProfile[] {

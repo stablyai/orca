@@ -450,6 +450,7 @@ describe('Store', () => {
             {
               id: 'luna',
               name: 'Codex Luna',
+              baseAgent: 'codex',
               executable: 'codex',
               args: ['--model', 'luna']
             },
@@ -464,6 +465,7 @@ describe('Store', () => {
       {
         id: 'luna',
         name: 'Codex Luna',
+        baseAgent: 'codex',
         executable: 'codex',
         args: ['--model', 'luna']
       }
@@ -471,7 +473,13 @@ describe('Store', () => {
 
     const updated = store.updateSettings({
       customAgentProfiles: [
-        { id: 'tool', name: 'Dhimanex', executable: 'dhimanex', args: [''] },
+        {
+          id: 'tool',
+          name: 'Dhimanex',
+          baseAgent: 'not-real',
+          executable: 'dhimanex',
+          args: ['']
+        },
         { id: 'bad', name: 'Bad', executable: 'bad\u0000', args: [] }
       ] as never
     })

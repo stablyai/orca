@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 const codexLunaProfile = {
   id: 'codex-luna',
   name: 'Codex Luna',
+  baseAgent: 'codex' as const,
   executable: 'codex',
   args: ['--model', 'luna']
 }
@@ -78,11 +79,13 @@ describe('launchCustomAgentInNewTab', () => {
     launchCustomAgentInNewTab({ profileId: 'codex-luna', worktreeId: 'wt-1' })
 
     expect(mocks.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'codex',
       quickCommandLabel: 'Codex Luna',
       viewMode: 'terminal'
     })
     expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
-      command: "'codex' '--model' 'luna'"
+      command: "'codex' '--model' 'luna'",
+      launchAgent: 'codex'
     })
   })
 
@@ -125,7 +128,8 @@ describe('launchCustomAgentInNewTab', () => {
     launchCustomAgentInNewTab({ profileId: 'codex-luna', worktreeId: 'folder:docs' })
 
     expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
-      command: "'codex' '--model' 'luna'"
+      command: "'codex' '--model' 'luna'",
+      launchAgent: 'codex'
     })
   })
 
@@ -141,7 +145,8 @@ describe('launchCustomAgentInNewTab', () => {
     launchCustomAgentInNewTab({ profileId: 'codex-luna', worktreeId: 'folder:wsl-folder' })
 
     expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
-      command: "'codex' '--model' 'luna'"
+      command: "'codex' '--model' 'luna'",
+      launchAgent: 'codex'
     })
   })
 

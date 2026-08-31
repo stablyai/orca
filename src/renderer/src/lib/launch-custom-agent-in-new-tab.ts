@@ -108,12 +108,14 @@ export function launchCustomAgentInNewTab(args: {
   }
 
   const tab = store.createTab(args.worktreeId, args.groupId, undefined, {
+    ...(profile.baseAgent ? { launchAgent: profile.baseAgent } : {}),
     quickCommandLabel: profile.name,
     viewMode: 'terminal'
   })
   store.queueTabStartupCommand(tab.id, {
     command: launch.command,
-    ...(launch.env ? { env: launch.env } : {})
+    ...(launch.env ? { env: launch.env } : {}),
+    ...(profile.baseAgent ? { launchAgent: profile.baseAgent } : {})
   })
   store.setActiveTabType('terminal')
   const fresh = useAppStore.getState()
