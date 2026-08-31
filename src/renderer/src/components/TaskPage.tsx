@@ -538,7 +538,10 @@ export default function TaskPage(): React.JSX.Element {
 
   useLayoutEffect(() => {
     const target = pendingGithubScrollRestoreRef.current
-    if (target === null || !pages[currentPage]) {
+    // Start observing as soon as the list mounts; its page rows may be committed
+    // by a later render, and the restore helper will retry when they appear.
+    // Keep the target armed while the detail route is transitioning and the list is still mounted.
+    if (target === null || pageData.openGitHubWorkItem) {
       return
     }
     return startGitHubListScrollRestore({
@@ -559,6 +562,7 @@ export default function TaskPage(): React.JSX.Element {
     currentPage,
     dialogWorkItem,
     githubResumeContextKey,
+    pageData.openGitHubWorkItem,
     pages,
     githubListScrollTopRef,
     pendingGithubScrollRestoreRef,
