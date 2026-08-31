@@ -1156,7 +1156,8 @@ export class SshRelaySession {
       clientInstanceId: this.ptyConsumerClientInstanceId,
       expectedServerBuildId: serverBuildId,
       allowSameBuildLegacyFallback: true,
-      outputFlowControl: { requestedWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
+      outputFlowControl: { requestedWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU },
+      identityEvidence: true
     }
     let admission: SshPtyConsumerAdmission
     try {
@@ -1769,6 +1770,20 @@ export class SshRelaySession {
       const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:replay', payload)
+      }
+    })
+    ptyProvider.onIdentityEvidence?.((payload) => {
+      if (
+        this.mux !== mux ||
+        this.activePtyProviderGeneration !== providerGeneration ||
+        payload.providerGeneration !== providerGeneration ||
+        !this.activePtyConsumerOwner()?.identityEvidence
+      ) {
+        return
+      }
+      const win = this.getMainWindow()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('pty:identityEvidence', payload)
       }
     })
     ptyProvider.onExit((payload) => {

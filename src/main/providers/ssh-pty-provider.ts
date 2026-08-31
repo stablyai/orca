@@ -7,7 +7,8 @@ import type {
   SshPtyDataCallback,
   SshPtyDeliveryPauseAdapter,
   SshPtyExitCallback,
-  SshPtyReplayCallback
+  SshPtyReplayCallback,
+  SshPtyIdentityEvidenceCallback
 } from './ssh-pty-provider-contract'
 import { SshPtyProviderOutputState } from './ssh-pty-provider-output-state'
 import { spawnFreshSshPty } from './ssh-agent-session-create-operation'
@@ -23,8 +24,8 @@ import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
+import { createSshIdentityVisibilityPublisher } from './ssh-pty-identity-visibility'
 
-// Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
   return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
 }
@@ -38,6 +39,7 @@ export class SshPtyProvider implements IPtyProvider {
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
   private readonly outputState: SshPtyProviderOutputState
+  private readonly identityVisibility: ReturnType<typeof createSshIdentityVisibilityPublisher>
 
   requestHostRpc: NonNullable<IPtyProvider['requestHostRpc']> = (method, params, options) =>
     this.mux.request(method, params as Record<string, unknown>, options)
@@ -52,6 +54,7 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux = mux
     this.agentSessionCapabilities = new SshAgentSessionCapabilities(mux)
     this.getAppliedSize = createSshPtyAppliedSizeReader(mux, connectionId)
+    this.identityVisibility = createSshIdentityVisibilityPublisher(mux, connectionId)
 
     this.outputState = new SshPtyProviderOutputState(providerGeneration, {
       mux,
@@ -62,14 +65,14 @@ export class SshPtyProvider implements IPtyProvider {
       }
     })
   }
-
   dispose(): void {
+    this.identityVisibility.dispose()
     this.outputState.dispose()
     this.livePtyIds.clear()
   }
 
   getConnectionId = (): string => this.connectionId
-
+  setIdentityEvidenceVisibility = (ids: string[]): void => this.identityVisibility.set(ids)
   canProvideAuthoritativeBufferSnapshot = (_id: string): boolean => false
 
   private toRelayPtyId = (id: string): string => toRelaySshPtyId(this.connectionId, id)
@@ -293,7 +296,6 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   hasPty = (id: string): boolean => this.livePtyIds.has(id)
-
   async getDefaultShell(): Promise<string> {
     const result = await this.mux.request('pty.getDefaultShell')
     return result as string
@@ -308,6 +310,8 @@ export class SshPtyProvider implements IPtyProvider {
   onRejectedData = (callback: SshPtyDataCallback): (() => void) =>
     this.outputState.onRejectedData(callback)
   onReplay = (callback: SshPtyReplayCallback): (() => void) => this.outputState.onReplay(callback)
+  onIdentityEvidence = (callback: SshPtyIdentityEvidenceCallback): (() => void) =>
+    this.outputState.onIdentityEvidence(callback)
   onExit = (callback: SshPtyExitCallback): (() => void) => this.outputState.onExit(callback)
 
   setPtyDeliveryPauseAdapter(adapter: SshPtyDeliveryPauseAdapter | null): void {

@@ -37,6 +37,9 @@ export type PtyConsumerSessionHello = {
       versions: number[]
       requestedWindowSu: number
     }
+    identityEvidence?: {
+      versions: number[]
+    }
   }
 }
 
@@ -54,6 +57,9 @@ export type PtyConsumerSessionGrant = {
     outputFlowControl?: {
       version: 1
       windowSu: number
+    }
+    identityEvidence?: {
+      version: 1
     }
   }
 }
@@ -84,6 +90,9 @@ export type PtyConsumerSessionOptions = {
   outputFlowControl?: {
     versions: readonly number[]
     maxWindowSu: number
+  }
+  identityEvidence?: {
+    versions: readonly number[]
   }
   ownerGraceMs?: number
   now?: () => number

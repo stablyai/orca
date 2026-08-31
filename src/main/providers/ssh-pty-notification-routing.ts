@@ -6,14 +6,21 @@ import type {
   SshPtyExitCallback,
   SshPtyReplayCallback
 } from './ssh-pty-provider-contract'
+import type { SshPtyIdentityEvidenceCallback } from './ssh-pty-provider-contract'
 import { parseSshPtySourceFrame } from './ssh-pty-source-frame'
+import { parseSshIdentityEvidenceNotification } from './ssh-pty-identity-notification'
 import { SshPtySourceDeliveryLedger } from './ssh-pty-source-delivery-ledger'
 import type {
   PendingSshPtySourceData,
   SshPtyRejectedSourceRecovery
 } from './ssh-pty-source-delivery-state'
 
-export type { SshPtyDataCallback, SshPtyExitCallback, SshPtyReplayCallback }
+export type {
+  SshPtyDataCallback,
+  SshPtyExitCallback,
+  SshPtyReplayCallback,
+  SshPtyIdentityEvidenceCallback
+}
 export type SshPtyRecoveryActivationLease = Readonly<{
   commit: () => void
   retire: () => void
@@ -38,6 +45,7 @@ export function subscribeSshPtyNotifications(args: {
   dataListeners: Set<SshPtyDataCallback>
   rejectedDataListeners?: Set<SshPtyDataCallback>
   replayListeners: Set<SshPtyReplayCallback>
+  identityEvidenceListeners?: Set<SshPtyIdentityEvidenceCallback>
   exitListeners: Set<SshPtyExitCallback>
   livePtyIds: Set<string>
   recordExit: (relayPtyId: string, incarnationId: unknown) => void
@@ -106,6 +114,8 @@ export function subscribeSshPtyNotifications(args: {
     }
   }
   const sourceDeliveries = new SshPtySourceDeliveryLedger(args.mux, publishData)
+  let identityAuthorityGeneration: string | undefined
+  let identityObservationEpoch = -1
   const rejectedPublications = new Map<
     string,
     {
@@ -153,7 +163,36 @@ export function subscribeSshPtyNotifications(args: {
     // Why: mux delivers every method to generic handlers; non-PTY payloads
     // (workspace.changed, fs.changed, …) have no `id` and must not reach
     // toAppPtyId → startsWith.
-    if (method !== 'pty.exit' && method !== 'pty.data' && method !== 'pty.replay') {
+    if (
+      method !== 'pty.exit' &&
+      method !== 'pty.data' &&
+      method !== 'pty.replay' &&
+      method !== 'pty.identityEvidence'
+    ) {
+      return
+    }
+    if (method === 'pty.identityEvidence') {
+      const parsed = parseSshIdentityEvidenceNotification(params, args.toAppPtyId)
+      if (!parsed) {
+        return
+      }
+      const { authorityGeneration, observationEpoch, rows } = parsed
+      if (
+        identityAuthorityGeneration === authorityGeneration &&
+        (observationEpoch as number) <= identityObservationEpoch
+      ) {
+        return
+      }
+      identityAuthorityGeneration = authorityGeneration
+      identityObservationEpoch = observationEpoch as number
+      for (const listener of args.identityEvidenceListeners ?? []) {
+        listener({
+          authorityGeneration,
+          observationEpoch: observationEpoch as number,
+          rows,
+          providerGeneration: args.providerGeneration
+        })
+      }
       return
     }
     if (typeof params.id !== 'string' || params.id.length === 0) {

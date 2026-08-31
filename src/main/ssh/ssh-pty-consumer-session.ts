@@ -17,6 +17,9 @@ export type SshPtyConsumerOwnerState = {
     version: 1
     windowSu: number
   }
+  identityEvidence?: {
+    version: 1
+  }
 }
 
 export type SshPtyLegacyFallbackState = {
@@ -41,6 +44,7 @@ export type OpenSshPtyConsumerSessionOptions = {
   outputFlowControl?: {
     requestedWindowSu: number
   }
+  identityEvidence?: boolean
   allowSameBuildLegacyFallback?: boolean
 }
 
@@ -94,6 +98,10 @@ function validateGrant(
   } else if (grantedFlow) {
     throw new Error('Remote relay granted an unoffered PTY output-flow-control capability')
   }
+  const grantedIdentity = grant.capabilities?.identityEvidence
+  if (!options.identityEvidence && grantedIdentity) {
+    throw new Error('Remote relay granted an unoffered PTY identity-evidence capability')
+  }
   return grant as PtyConsumerSessionGrant
 }
 
@@ -110,13 +118,18 @@ export async function openSshPtyConsumerSession(
         clientInstanceId: options.clientInstanceId,
         requestedRole: 'session-owner',
         ...(options.resume ? { resume: options.resume } : {}),
-        ...(options.outputFlowControl
+        ...(options.outputFlowControl || options.identityEvidence
           ? {
               capabilities: {
-                outputFlowControl: {
-                  versions: [1],
-                  requestedWindowSu: options.outputFlowControl.requestedWindowSu
-                }
+                ...(options.outputFlowControl
+                  ? {
+                      outputFlowControl: {
+                        versions: [1],
+                        requestedWindowSu: options.outputFlowControl.requestedWindowSu
+                      }
+                    }
+                  : {}),
+                ...(options.identityEvidence ? { identityEvidence: { versions: [1] } } : {})
               }
             }
           : {})
@@ -152,6 +165,9 @@ export async function openSshPtyConsumerSession(
       ownerLease: grant.ownerLease!,
       ...(grant.capabilities?.outputFlowControl
         ? { outputFlowControl: grant.capabilities.outputFlowControl }
+        : {}),
+      ...(grant.capabilities?.identityEvidence
+        ? { identityEvidence: grant.capabilities.identityEvidence }
         : {})
     },
     resumed: grant.resumed!

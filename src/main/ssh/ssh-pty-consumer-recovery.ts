@@ -23,7 +23,8 @@ function ownerFromPersisted(record: PersistedRecovery): SshPtyConsumerOwnerState
     clientGeneration: record.clientGeneration,
     ownerGeneration: record.ownerGeneration,
     ownerLease: record.ownerLease,
-    ...(record.outputFlowControl ? { outputFlowControl: record.outputFlowControl } : {})
+    ...(record.outputFlowControl ? { outputFlowControl: record.outputFlowControl } : {}),
+    ...(record.identityEvidence ? { identityEvidence: record.identityEvidence } : {})
   }
 }
 
@@ -78,7 +79,8 @@ export async function rememberSshPtyConsumerRecovery(args: {
     clientGeneration: args.owner.clientGeneration,
     ownerGeneration: args.owner.ownerGeneration,
     ownerLease: args.owner.ownerLease,
-    ...(args.owner.outputFlowControl ? { outputFlowControl: args.owner.outputFlowControl } : {})
+    ...(args.owner.outputFlowControl ? { outputFlowControl: args.owner.outputFlowControl } : {}),
+    ...(args.owner.identityEvidence ? { identityEvidence: args.owner.identityEvidence } : {})
   })
 }
 

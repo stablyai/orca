@@ -11,7 +11,8 @@ export type {
   PtyDataPublicationAdmission,
   RelayClientSessionIdentity,
   RelayClientSourceOptions,
-  RequestContext
+  RequestContext,
+  PtyIdentityEvidencePublicationAdmission
 } from './dispatcher-contract'
 
 export class RelayDispatcher extends RelayDispatcherNotificationPublication {}

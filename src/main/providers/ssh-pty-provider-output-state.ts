@@ -3,7 +3,8 @@ import type {
   SshPtyDataCallback,
   SshPtyDeliveryPauseAdapter,
   SshPtyExitCallback,
-  SshPtyReplayCallback
+  SshPtyReplayCallback,
+  SshPtyIdentityEvidenceCallback
 } from './ssh-pty-provider-contract'
 import {
   subscribeSshPtyNotifications,
@@ -16,6 +17,7 @@ export class SshPtyProviderOutputState {
   private readonly dataListeners = new Set<SshPtyDataCallback>()
   private readonly rejectedDataListeners = new Set<SshPtyDataCallback>()
   private readonly replayListeners = new Set<SshPtyReplayCallback>()
+  private readonly identityEvidenceListeners = new Set<SshPtyIdentityEvidenceCallback>()
   private readonly exitListeners = new Set<SshPtyExitCallback>()
   private readonly incarnationByRelayPtyId = new Map<string, string>()
   private readonly pausedRelayPtyIds = new Set<string>()
@@ -37,6 +39,7 @@ export class SshPtyProviderOutputState {
       dataListeners: this.dataListeners,
       rejectedDataListeners: this.rejectedDataListeners,
       replayListeners: this.replayListeners,
+      identityEvidenceListeners: this.identityEvidenceListeners,
       exitListeners: this.exitListeners,
       providerGeneration,
       resolvePtyIncarnation: (relayPtyId, incarnationId) =>
@@ -57,6 +60,7 @@ export class SshPtyProviderOutputState {
     this.dataListeners.clear()
     this.rejectedDataListeners.clear()
     this.replayListeners.clear()
+    this.identityEvidenceListeners.clear()
     this.exitListeners.clear()
     this.incarnationByRelayPtyId.clear()
     this.deliveryPauseAdapter = null
@@ -75,6 +79,11 @@ export class SshPtyProviderOutputState {
   onReplay(callback: SshPtyReplayCallback): () => void {
     this.replayListeners.add(callback)
     return () => this.replayListeners.delete(callback)
+  }
+
+  onIdentityEvidence(callback: SshPtyIdentityEvidenceCallback): () => void {
+    this.identityEvidenceListeners.add(callback)
+    return () => this.identityEvidenceListeners.delete(callback)
   }
 
   onExit(callback: SshPtyExitCallback): () => void {

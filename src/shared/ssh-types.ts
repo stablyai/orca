@@ -230,6 +230,9 @@ export type SshPtyConsumerRecovery = {
     version: 1
     windowSu: number
   }
+  identityEvidence?: {
+    version: 1
+  }
 }
 
 // ─── Port Forwarding Types ─────────────────────────────────────────

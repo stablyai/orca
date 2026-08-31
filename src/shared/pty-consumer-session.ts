@@ -89,7 +89,11 @@ export class PtyConsumerSession {
       ...(owner
         ? { ownerGeneration: owner.generation, ownerLease: owner.lease, resumed: owner.resumed }
         : {}),
-      ...intersectPtyConsumerCapabilities(hello, this.options.outputFlowControl)
+      ...intersectPtyConsumerCapabilities(
+        hello,
+        this.options.outputFlowControl,
+        this.options.identityEvidence
+      )
     })
     const client: ClientRecord = {
       principal: authentication.principal,

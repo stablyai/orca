@@ -46,6 +46,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
+  let ptyIncarnationId: string | null = null
   let suppressAttentionEvents = false
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
 
@@ -78,11 +79,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     markExited: () => {
       connected = false
       ptyId = null
+      ptyIncarnationId = null
     },
     onPtyExit
   })
-  const bind = (id: string): void => {
+  const bind = (id: string, incarnationId?: string): void => {
     ptyId = id
+    ptyIncarnationId = incarnationId ?? null
     connected = true
   }
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
@@ -122,6 +125,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         window.api.pty.kill(id)
         connected = false
         ptyId = null
+        ptyIncarnationId = null
         handlers.unregisterAll(id)
         storedCallbacks.onDisconnect?.()
       }
@@ -140,6 +144,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
       connected = false
       ptyId = null
+      ptyIncarnationId = null
       storedCallbacks = {}
     },
 
@@ -188,6 +193,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     isConnected: () => connected,
     getPtyId: () => ptyId,
+    getPtyIncarnationId: () => ptyIncarnationId,
     getConnectionId: () => connectionId ?? null,
     getLocalSessionMetadata: () =>
       connectionId

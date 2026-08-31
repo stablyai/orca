@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as ptyShellUtils from './pty-shell-utils'
+import * as processTableSnapshot from '../shared/process-table-snapshot'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -179,6 +180,33 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.replay', expect.anything())
     vi.advanceTimersByTime(8)
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
+  })
+
+  it('keeps stale replay bytes out of the live identity scanner', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+    vi.spyOn(processTableSnapshot, 'getStrictProcessTableSnapshot').mockResolvedValue([])
+
+    const spawn = await spawnPty()
+    const boundary = '\x1b]133;C\x07'
+    dataCallback!(boundary)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(handler.getIdentityEvidenceDebugSnapshot().processTableReads).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(5_001)
+    await expect(attachPty({ id: PTY_1, suppressReplayNotification: true })).resolves.toEqual({
+      incarnationId: spawn.incarnationId,
+      replay: boundary
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(handler.getIdentityEvidenceDebugSnapshot().processTableReads).toBe(1)
   })
 
   it('suppresses legacy replay after the V1 owner is already active', async () => {

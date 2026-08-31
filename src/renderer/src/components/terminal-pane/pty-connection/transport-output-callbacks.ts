@@ -37,6 +37,13 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
         },
         onConnect: (): void => {
           if (isCurrent()) {
+            const ptyId = session.transport.getPtyId()
+            if (ptyId) {
+              session.bindIdentityEvidence?.(
+                ptyId,
+                session.transport.getPtyIncarnationId?.() ?? undefined
+              )
+            }
             session.reportRemoteRendererSerializerReady()
             // Re-derive the pause bit after a rebind; visibility can change while no PTY is bound.
             session.syncHiddenRendererPtyDelivery()

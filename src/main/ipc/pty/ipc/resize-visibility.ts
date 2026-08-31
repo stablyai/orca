@@ -239,6 +239,9 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       visibleRendererPtys.delete(args.id)
     }
     session.syncPtyBackgroundedDelivery(args.id, 'visibility-report')
+    // Keep the SSH relay's subscription in sync with the renderer's current visible set. The
+    // provider debounces this fire-and-forget control request and filters ids to its host.
+    tryGetProviderForPty(args.id)?.setIdentityEvidenceVisibility?.(Array.from(visibleRendererPtys))
   })
 
   ipcMain.removeAllListeners('pty:setHiddenRendererPty')

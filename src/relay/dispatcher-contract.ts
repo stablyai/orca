@@ -32,6 +32,11 @@ export type PtyDataPublicationAdmission = (
   params: Readonly<Record<string, unknown>>
 ) => boolean
 
+export type PtyIdentityEvidencePublicationAdmission = (
+  clientId: number,
+  params: Readonly<Record<string, unknown>>
+) => boolean
+
 export type MethodHandler = (
   params: Record<string, unknown>,
   context: RequestContext

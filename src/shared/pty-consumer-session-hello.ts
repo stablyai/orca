@@ -20,17 +20,25 @@ export function validateHello(hello: PtyConsumerSessionHello): void {
     assertNonEmptyString(hello.resume.ownerLease, 'resume.ownerLease')
   }
   const flow = hello.capabilities?.outputFlowControl
-  if (!flow) {
-    return
+  if (flow) {
+    if (
+      !Array.isArray(flow.versions) ||
+      flow.versions.length > MAX_CAPABILITY_VERSIONS ||
+      flow.versions.some((version) => !Number.isSafeInteger(version) || version <= 0)
+    ) {
+      throw new Error('outputFlowControl.versions must contain positive safe integers')
+    }
+    if (!Number.isSafeInteger(flow.requestedWindowSu) || flow.requestedWindowSu <= 0) {
+      throw new Error('outputFlowControl.requestedWindowSu must be a positive safe integer')
+    }
   }
+  const identity = hello.capabilities?.identityEvidence
   if (
-    !Array.isArray(flow.versions) ||
-    flow.versions.length > MAX_CAPABILITY_VERSIONS ||
-    flow.versions.some((version) => !Number.isSafeInteger(version) || version <= 0)
+    identity &&
+    (!Array.isArray(identity.versions) ||
+      identity.versions.length > MAX_CAPABILITY_VERSIONS ||
+      identity.versions.some((version) => !Number.isSafeInteger(version) || version <= 0))
   ) {
-    throw new Error('outputFlowControl.versions must contain positive safe integers')
-  }
-  if (!Number.isSafeInteger(flow.requestedWindowSu) || flow.requestedWindowSu <= 0) {
-    throw new Error('outputFlowControl.requestedWindowSu must be a positive safe integer')
+    throw new Error('identityEvidence.versions must contain positive safe integers')
   }
 }

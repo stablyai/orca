@@ -5,9 +5,37 @@ import {
   type PreparedRelayFrame,
   type RelayClient
 } from './dispatcher-contract'
+import type { PtyIdentityEvidencePublicationAdmission } from './dispatcher-contract'
 import { RelayDispatcherPtyPublication } from './dispatcher-pty-publication'
 
 export abstract class RelayDispatcherNotificationPublication extends RelayDispatcherPtyPublication {
+  private ptyIdentityEvidenceAdmission: PtyIdentityEvidencePublicationAdmission | null = null
+
+  registerPtyIdentityEvidencePublicationAdmission(
+    admission: PtyIdentityEvidencePublicationAdmission | null
+  ): () => void {
+    if (admission && this.ptyIdentityEvidenceAdmission) {
+      throw new Error('PTY identity evidence publication admission is already registered')
+    }
+    this.ptyIdentityEvidenceAdmission = admission
+    return () => {
+      if (this.ptyIdentityEvidenceAdmission === admission) {
+        this.ptyIdentityEvidenceAdmission = null
+      }
+    }
+  }
+
+  admitsPtyIdentityEvidencePublication(
+    clientId: number,
+    params: Readonly<Record<string, unknown>> = {}
+  ): boolean {
+    return this.ptyIdentityEvidenceAdmission?.(clientId, params) ?? false
+  }
+
+  hasConnectedClients(): boolean {
+    return this.activeClients().length > 0
+  }
+
   notify(method: string, params?: Record<string, unknown>): void {
     if (this.disposed) {
       return
@@ -24,6 +52,12 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
           continue
         }
         if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
+          continue
+        }
+        if (
+          method === 'pty.identityEvidence' &&
+          !this.admitsPtyIdentityEvidencePublication(client.id, params ?? {})
+        ) {
           continue
         }
         frame ??= this.prepareFrame(msg)
@@ -65,6 +99,12 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
       ...(params !== undefined ? { params } : {})
     }
     if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
+      return false
+    }
+    if (
+      method === 'pty.identityEvidence' &&
+      !this.admitsPtyIdentityEvidencePublication(client.id, params ?? {})
+    ) {
       return false
     }
     const frame = this.prepareFrame(msg)

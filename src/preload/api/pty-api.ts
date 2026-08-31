@@ -16,6 +16,7 @@ import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
+import type { PtyIdentityEvidenceNotification } from '../../shared/pty-identity-evidence'
 
 export type PtyApi = {
   spawn: (opts: {
@@ -104,6 +105,8 @@ export type PtyApi = {
   /** Ref-counted-on-the-renderer delivery-interest signal that suppresses
    *  the hidden-delivery gate while any raw-byte consumer is registered. */
   setPtyDeliveryInterest: (id: string, interested: boolean) => void
+  /** Updates the SSH relay's visible-pane identity subscription for this connection. */
+  setIdentityEvidenceVisibility?: (ids: string[]) => void
   /** View-attribute bridge (Phase 5 slice 2): app-global composed terminal
    *  appearance push backing main's hidden-PTY OSC/DSR color replies. */
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
@@ -188,6 +191,7 @@ export type PtyApi = {
     }) => void
   ) => () => void
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
+  onIdentityEvidence?: (callback: (data: PtyIdentityEvidenceNotification) => void) => () => void
   /** Out-of-band main→renderer signal that renderer-bound bytes were
    *  dropped (hidden-delivery gate / pending cap); the pane restores from
    *  the model snapshot. Never delivered in-band on pty:data. */

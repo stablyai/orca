@@ -124,6 +124,19 @@ describe('openSshPtyConsumerSession', () => {
     ).rejects.toThrow('did not grant')
   })
 
+  it('keeps identity evidence optional when an older relay omits the grant', async () => {
+    const { mux, request } = muxReturning(legacyOwnerGrant())
+    const admission = await openSshPtyConsumerSession(mux, {
+      clientInstanceId: 'client-a',
+      expectedServerBuildId: 'build-a',
+      identityEvidence: true
+    })
+    expect(admission.state).not.toHaveProperty('identityEvidence')
+    expect(request.mock.calls[0][1]).toMatchObject({
+      capabilities: { identityEvidence: { versions: [1] } }
+    })
+  })
+
   it('rejects an unoffered V1 capability in a legacy session', async () => {
     const { mux } = muxReturning(
       legacyOwnerGrant({

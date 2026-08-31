@@ -12,6 +12,7 @@ import type {
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { SshPtyIdentityEvidenceCallback } from './ssh-pty-provider-contract'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -227,6 +228,9 @@ export type IPtyProvider = {
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: PtyDataEvent) => void): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
+  onIdentityEvidence?: (callback: SshPtyIdentityEvidenceCallback) => () => void
+  /** Update the host-side visible-pane projection used by identity reconciliation. */
+  setIdentityEvidenceVisibility?: (ids: string[]) => void
   onExit(
     callback: (payload: {
       id: string

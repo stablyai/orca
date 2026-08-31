@@ -20,6 +20,7 @@ import {
 } from '../shared/doc-preview-scheme'
 import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { AppIdentity } from '../shared/app-identity'
+import type { PtyIdentityEvidenceNotification } from '../shared/pty-identity-evidence'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
@@ -1174,6 +1175,9 @@ const api = {
     setPtyDeliveryInterest: (id: string, interested: boolean): void => {
       ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
     },
+    setIdentityEvidenceVisibility: (ids: string[]): void => {
+      ipcRenderer.send('pty:setIdentityEvidenceVisibility', { ids })
+    },
     /** Push composed terminal appearance so main's model responder can answer OSC 4/10/11/12 and DSR ?996n for hidden-gated PTYs with renderer-true values. */
     publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
       ipcRenderer.send('pty:terminalViewAttributes', attributes)
@@ -1295,6 +1299,15 @@ const api = {
         callback(data)
       ipcRenderer.on('pty:replay', listener)
       return () => ipcRenderer.removeListener('pty:replay', listener)
+    },
+
+    onIdentityEvidence: (
+      callback: (data: PtyIdentityEvidenceNotification) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: PtyIdentityEvidenceNotification) =>
+        callback(data)
+      ipcRenderer.on('pty:identityEvidence', listener)
+      return () => ipcRenderer.removeListener('pty:identityEvidence', listener)
     },
 
     /** Out-of-band signal that main dropped renderer-bound bytes (hidden-gate / pending cap); pane restores from the model snapshot.

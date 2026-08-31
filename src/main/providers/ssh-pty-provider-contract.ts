@@ -1,4 +1,5 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
 
 export type RemoteCliBridgeEnv = {
   binDir: string
@@ -31,6 +32,16 @@ export type SshPtyDataCallback = (payload: {
   rejectedSourceRecovery?: 'confirm-existing' | 'fresh-activation' | 'reconnect-channel'
 }) => void
 export type SshPtyReplayCallback = (payload: { id: string; data: string }) => void
+export type SshPtyIdentityEvidenceCallback = (payload: {
+  authorityGeneration: string
+  observationEpoch: number
+  rows: readonly {
+    id: string
+    incarnationId: string
+    foregroundProcessEvidence: ForegroundProcessEvidence
+  }[]
+  providerGeneration: number
+}) => void
 export type SshPtyExitCallback = (payload: {
   id: string
   code: number

@@ -82,6 +82,11 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
     return Array.from(this.clients.values()).filter((client) => !client.closed)
   }
 
+  /** Active transport ids for producers that need per-client projections. */
+  activeClientIds(): number[] {
+    return this.activeClients().map((client) => client.id)
+  }
+
   protected admitsPtyDataPublication(
     clientId: number,
     params: Readonly<Record<string, unknown>>

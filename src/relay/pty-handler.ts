@@ -73,6 +73,11 @@ import {
   type ProcessTableRow
 } from '../shared/process-table-snapshot'
 import type { ForegroundProcessEvidence } from '../shared/foreground-process-evidence'
+import {
+  createPtyIdentityBoundaryScanner,
+  type PtyIdentityEvidenceNotification,
+  type PtyIdentityEvidenceRow
+} from '../shared/pty-identity-evidence'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
 import {
   agentSessionOwnerBindingsEqual,
@@ -210,6 +215,14 @@ type RelayAgentSessionCreateResult = {
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
 const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
+
+// Held evidence is only a reconnect seed; bounded retention keeps a quiet relay from
+// accumulating one row per recycled PTY forever.
+const IDENTITY_EVIDENCE_HELD_MAX_ROWS = 512
+const IDENTITY_EVIDENCE_HELD_MAX_BYTES = 512 * 1024
+const IDENTITY_EVIDENCE_HELD_TTL_MS = 30_000
+const IDENTITY_EVIDENCE_FRESHNESS_MS = 5_000
+const IDENTITY_EVIDENCE_BACKSTOP_MS = 30_000
 
 type PendingPtyOutput = RelayPtySourceOutput & {
   data: string
@@ -451,6 +464,24 @@ export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
   private readonly ptyIdMintEpoch: string
   private foregroundEvidenceEpoch = 0
+  private identityEvidenceReadTimer: ReturnType<typeof setTimeout> | null = null
+  private identityEvidenceReadInFlight = false
+  private identityEvidenceReadQueued = false
+  private identityEvidenceReadCount = 0
+  private readonly identityEvidencePendingIds = new Set<string>()
+  private identityEvidenceBackstopTimer: ReturnType<typeof setInterval> | null = null
+  private readonly identityEvidenceHeld = new Map<string, PtyIdentityEvidenceRow>()
+  private readonly identityEvidenceHeldAt = new Map<string, number>()
+  private identityEvidenceHeldBytes = 0
+  private readonly identityEvidenceScanners = new Map<
+    string,
+    ReturnType<typeof createPtyIdentityBoundaryScanner>
+  >()
+  private readonly identityEvidenceVisibleByClient = new Map<number, Set<string>>()
+  private readonly identityEvidenceBackoffByPty = new Map<
+    string,
+    { attempts: number; nextAt: number }
+  >()
   private nextId = 1
   private dispatcher: RelayDispatcher
   private graceTimeMs: number
@@ -668,6 +699,10 @@ export class PtyHandler {
     if (this.ptys.size > 0) {
       return
     }
+    if (this.identityEvidenceBackstopTimer !== null) {
+      clearInterval(this.identityEvidenceBackstopTimer)
+      this.identityEvidenceBackstopTimer = null
+    }
     this.notifyPoolListener(this.ptyPoolEmptyListener, 'pty-pool-empty')
   }
 
@@ -839,6 +874,10 @@ export class PtyHandler {
   private wireAndStore(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
+    this.ensureIdentityEvidenceBackstopTimer()
+    if (this.dispatcher.hasConnectedClients?.()) {
+      this.scheduleIdentityEvidenceRead()
+    }
     // Why: a PTY joining the pool under this paneKey means the surface exists again (reopened pane
     // or revive), so a prior retirement no longer describes anything and must not mute its hooks.
     const boundPaneKey = managed.paneKey ?? managed.attachIdentity?.paneKey
@@ -864,6 +903,12 @@ export class PtyHandler {
       write: (data) => managed.pty.write(data),
       onEmission: emitIngressData
     })
+    // The scanner observes only raw bytes from the live child PTY. Replay is emitted from the
+    // retained buffer through a separate path and never calls this feed.
+    this.identityEvidenceScanners.set(
+      managed.id,
+      createPtyIdentityBoundaryScanner(() => this.scheduleIdentityEvidenceRead(managed.id))
+    )
     const startup = managed.startupCommand
     if (startup?.waitForShellReady) {
       startup.promptProbe = createShellPromptReadinessProbe({
@@ -882,6 +927,7 @@ export class PtyHandler {
       })
     }
     managed.pty.onData((data: string) => {
+      this.identityEvidenceScanners.get(managed.id)?.feed(data)
       const startup = managed.startupCommand
       if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
         const scanned = scanShellStartupOutput(startup.outputScanState, data)
@@ -918,6 +964,8 @@ export class PtyHandler {
       }
       this.clearStartupCommandTimer(managed)
       this.releaseRelayIngress(managed)
+      this.identityEvidenceScanners.delete(managed.id)
+      this.evictIdentityEvidence(managed.id, managed.incarnationId)
       this.pausedOutputPtys.delete(managed.id)
       this.consumerPausedOutputPtys.delete(managed.id)
       this.flushPtyOutput(managed.id)
@@ -979,9 +1027,31 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
-      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
+      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      identityEvidence: { versions: [1] }
     }))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
+    this.dispatcher.onRequest('pty.identityEvidence.setVisibility', async (params, context) => {
+      if (!this.dispatcher.admitsPtyIdentityEvidencePublication(context.clientId)) {
+        throw new Error('pty_identity_evidence_capability_required')
+      }
+      const ids = params.ids
+      if (!Array.isArray(ids) || ids.length > 512 || ids.some((id) => typeof id !== 'string')) {
+        throw new Error('invalid_identity_evidence_visibility')
+      }
+      const visible = new Set(ids as string[])
+      this.identityEvidenceVisibleByClient.set(context.clientId, visible)
+      this.ensureIdentityEvidenceBackstopTimer()
+      this.publishHeldIdentityEvidenceToClient(context.clientId, visible)
+      return { ok: true }
+    })
+    this.dispatcher.onClientDetached?.((clientId) => {
+      this.identityEvidenceVisibleByClient.delete(clientId)
+      if (this.identityEvidenceVisibleByClient.size === 0 && this.identityEvidenceBackstopTimer) {
+        clearInterval(this.identityEvidenceBackstopTimer)
+        this.identityEvidenceBackstopTimer = null
+      }
+    })
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
@@ -1981,6 +2051,12 @@ export class PtyHandler {
     )
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
+    if (context) {
+      this.publishHeldIdentityEvidenceToClient(
+        context.clientId,
+        this.identityEvidenceVisibleByClient.get(context.clientId)
+      )
+    }
     if (typeof activation === 'object') {
       return {
         incarnationId: managed.incarnationId,
@@ -2370,6 +2446,247 @@ export class PtyHandler {
     }
   }
 
+  private evictIdentityEvidence(id: string, incarnationId?: string): void {
+    for (const [key, row] of this.identityEvidenceHeld) {
+      if (row.id !== id || (incarnationId && row.incarnationId !== incarnationId)) {
+        continue
+      }
+      this.identityEvidenceHeldBytes -= this.identityEvidenceRowBytes(row)
+      this.identityEvidenceHeld.delete(key)
+      this.identityEvidenceHeldAt.delete(key)
+    }
+  }
+
+  private identityEvidenceRowBytes(row: PtyIdentityEvidenceRow): number {
+    return chargedPtyRetainedStringBytes(JSON.stringify(row))
+  }
+
+  private pruneIdentityEvidenceHeld(now = performance.now()): void {
+    for (const [key, row] of this.identityEvidenceHeld) {
+      const age =
+        row.foregroundProcessEvidence.capturedAgeMs +
+        Math.max(0, now - (this.identityEvidenceHeldAt.get(key) ?? now))
+      if (age > IDENTITY_EVIDENCE_HELD_TTL_MS) {
+        this.identityEvidenceHeld.delete(key)
+        this.identityEvidenceHeldAt.delete(key)
+        this.identityEvidenceHeldBytes -= this.identityEvidenceRowBytes(row)
+      }
+    }
+    // Map insertion order is observation order; evict the oldest rows first when bounded.
+    while (
+      this.identityEvidenceHeld.size > IDENTITY_EVIDENCE_HELD_MAX_ROWS ||
+      this.identityEvidenceHeldBytes > IDENTITY_EVIDENCE_HELD_MAX_BYTES
+    ) {
+      const oldest = this.identityEvidenceHeld.keys().next().value as string | undefined
+      if (!oldest) {
+        break
+      }
+      const row = this.identityEvidenceHeld.get(oldest)
+      this.identityEvidenceHeld.delete(oldest)
+      if (row) {
+        this.identityEvidenceHeldBytes -= this.identityEvidenceRowBytes(row)
+      }
+    }
+  }
+
+  private storeIdentityEvidenceRow(row: PtyIdentityEvidenceRow): void {
+    const key = `${row.id}\0${row.incarnationId}`
+    const previous = this.identityEvidenceHeld.get(key)
+    if (previous) {
+      this.identityEvidenceHeldBytes -= this.identityEvidenceRowBytes(previous)
+    }
+    this.identityEvidenceHeld.set(key, row)
+    this.identityEvidenceHeldAt.set(key, performance.now())
+    this.identityEvidenceHeldBytes += this.identityEvidenceRowBytes(row)
+    this.pruneIdentityEvidenceHeld()
+  }
+
+  private publishHeldIdentityEvidenceToClient(clientId: number, ids?: ReadonlySet<string>): void {
+    this.pruneIdentityEvidenceHeld()
+    const rows = Array.from(this.identityEvidenceHeld.values()).filter(
+      (row) => ids === undefined || ids.has(row.id)
+    )
+    if (rows.length === 0) {
+      return
+    }
+    if (!this.dispatcher.publishProducerNotification) {
+      return
+    }
+    const epoch = Math.max(...rows.map((row) => row.foregroundProcessEvidence.observationEpoch))
+    this.dispatcher.publishProducerNotification(clientId, 'pty.identityEvidence', {
+      authorityGeneration: this.ptyIdMintEpoch,
+      observationEpoch: epoch,
+      rows
+    })
+  }
+
+  private reconcileVisibleIdentityEvidence(): void {
+    if (this.identityEvidenceVisibleByClient.size === 0) {
+      return
+    }
+    const now = performance.now()
+    const stale = new Set<string>()
+    for (const visible of this.identityEvidenceVisibleByClient.values()) {
+      for (const id of visible) {
+        const managed = this.ptys.get(id)
+        if (!managed || managed.disposed) {
+          continue
+        }
+        const row = this.identityEvidenceHeld.get(`${managed.id}\0${managed.incarnationId}`)
+        const heldAt =
+          this.identityEvidenceHeldAt.get(`${managed.id}\0${managed.incarnationId}`) ?? now
+        const age =
+          (row?.foregroundProcessEvidence.capturedAgeMs ?? Number.POSITIVE_INFINITY) +
+          Math.max(0, now - heldAt)
+        const backoff = this.identityEvidenceBackoffByPty.get(id)
+        if (
+          (!row || age >= IDENTITY_EVIDENCE_FRESHNESS_MS) &&
+          (!backoff || now >= backoff.nextAt)
+        ) {
+          stale.add(id)
+        }
+      }
+    }
+    for (const id of stale) {
+      this.scheduleIdentityEvidenceRead(id)
+    }
+  }
+
+  private ensureIdentityEvidenceBackstopTimer(): void {
+    if (
+      this.identityEvidenceBackstopTimer !== null ||
+      this.identityEvidenceVisibleByClient.size === 0 ||
+      this.ptys.size === 0
+    ) {
+      return
+    }
+    this.identityEvidenceBackstopTimer = setInterval(
+      () => this.reconcileVisibleIdentityEvidence(),
+      IDENTITY_EVIDENCE_BACKSTOP_MS
+    )
+    this.identityEvidenceBackstopTimer.unref?.()
+  }
+
+  private scheduleIdentityEvidenceRead(id?: string): void {
+    if (id) {
+      this.identityEvidencePendingIds.add(id)
+    }
+    if (this.identityEvidenceReadTimer !== null) {
+      return
+    }
+    this.identityEvidenceReadQueued = true
+    this.identityEvidenceReadTimer = setTimeout(() => {
+      this.identityEvidenceReadTimer = null
+      if (!this.identityEvidenceReadInFlight) {
+        this.identityEvidenceReadQueued = false
+        void this.publishIdentityEvidence()
+      }
+    }, 0)
+    this.identityEvidenceReadTimer.unref?.()
+  }
+
+  private async publishIdentityEvidence(): Promise<void> {
+    if (this.identityEvidenceReadInFlight) {
+      this.identityEvidenceReadQueued = true
+      return
+    }
+    if (this.dispatcher.hasConnectedClients && !this.dispatcher.hasConnectedClients()) {
+      this.identityEvidencePendingIds.clear()
+      return
+    }
+    const requestedIds = this.identityEvidencePendingIds
+    this.identityEvidencePendingIds.clear()
+    const entries = Array.from(this.ptys.values()).filter(
+      (managed) =>
+        !managed.disposed &&
+        managed.pty.pid > 0 &&
+        (requestedIds.size === 0 || requestedIds.has(managed.id))
+    )
+    if (entries.length === 0) {
+      return
+    }
+    this.identityEvidenceReadInFlight = true
+    this.identityEvidenceReadCount++
+    try {
+      const epoch = ++this.foregroundEvidenceEpoch
+      let results: BatchedForegroundProcessResult[]
+      if (process.platform === 'win32') {
+        results = entries.map(() => ({
+          available: false,
+          processName: null,
+          reason: 'unsupported'
+        }))
+      } else {
+        try {
+          const rows = await getStrictProcessTableSnapshot()
+          results = await resolveAgentForegroundProcessesBatch(
+            entries.map((managed) => ({
+              rootPid: managed.pty.pid,
+              fallbackProcess: managed.pty.process || null
+            })),
+            { rows }
+          )
+        } catch {
+          results = entries.map(() => ({
+            available: false,
+            processName: null,
+            reason: 'table_unreadable'
+          }))
+        }
+      }
+      const rows: PtyIdentityEvidenceRow[] = entries.map((managed, index) => ({
+        id: managed.id,
+        incarnationId: managed.incarnationId,
+        foregroundProcessEvidence: toForegroundProcessEvidence(
+          results[index] ?? { available: false, processName: null, reason: 'table_unreadable' },
+          {
+            authorityGeneration: this.ptyIdMintEpoch,
+            observationEpoch: epoch,
+            capturedAgeMs: 0
+          }
+        )
+      }))
+      for (const row of rows) {
+        this.storeIdentityEvidenceRow(row)
+        if (row.foregroundProcessEvidence.verdict === 'live') {
+          this.identityEvidenceBackoffByPty.delete(row.id)
+        } else {
+          const attempts = (this.identityEvidenceBackoffByPty.get(row.id)?.attempts ?? 0) + 1
+          const delaySeconds = [2, 4, 8, 30][Math.min(attempts - 1, 3)]
+          this.identityEvidenceBackoffByPty.set(row.id, {
+            attempts,
+            nextAt: performance.now() + delaySeconds * 1_000
+          })
+        }
+      }
+      const notification: PtyIdentityEvidenceNotification = {
+        authorityGeneration: this.ptyIdMintEpoch,
+        observationEpoch: epoch,
+        rows
+      }
+      this.pruneIdentityEvidenceHeld()
+      for (const clientId of this.dispatcher.activeClientIds?.() ?? []) {
+        const visible = this.identityEvidenceVisibleByClient.get(clientId)
+        // A client that has not sent a visibility report is intentionally uncovered; it still
+        // receives a held push so reattach can seed its renderer, but no host read is keyed to it.
+        const projectedRows = visible ? rows.filter((row) => visible.has(row.id)) : rows
+        if (projectedRows.length === 0) {
+          continue
+        }
+        this.dispatcher.publishProducerNotification(clientId, 'pty.identityEvidence', {
+          ...notification,
+          rows: projectedRows
+        } as unknown as Record<string, unknown>)
+      }
+    } finally {
+      this.identityEvidenceReadInFlight = false
+      if (this.identityEvidenceReadQueued) {
+        this.identityEvidenceReadQueued = false
+        this.scheduleIdentityEvidenceRead()
+      }
+    }
+  }
+
   private async listProcesses(): Promise<PtyProcessSummary[]> {
     const results: PtyProcessSummary[] = []
     // Why (SSH-v3 P2 — the host is the authoritative liveness source, so it has to look): this
@@ -2381,8 +2698,22 @@ export class PtyHandler {
     // the existing title/liveness path until the measured relay adapter lands.
     let evidenceRows: readonly ProcessTableRow[] | null = null
     let evidenceResults: BatchedForegroundProcessResult[] = []
-    const evidenceEpoch = ++this.foregroundEvidenceEpoch
-    if (process.platform !== 'win32' && managedEntries.length > 0) {
+    const heldEvidence = managedEntries.map(([, managed]) =>
+      this.identityEvidenceHeld.get(`${managed.id}\0${managed.incarnationId}`)
+    )
+    const hasCompleteHeldEvidence = heldEvidence.every((row) => row !== undefined)
+    const evidenceEpoch = hasCompleteHeldEvidence
+      ? (heldEvidence[0]?.foregroundProcessEvidence.observationEpoch ??
+        this.foregroundEvidenceEpoch)
+      : ++this.foregroundEvidenceEpoch
+    if (hasCompleteHeldEvidence) {
+      evidenceResults = heldEvidence.map((row) => {
+        const evidence = row!.foregroundProcessEvidence
+        return evidence.verdict === 'live'
+          ? { available: true, processName: evidence.processName }
+          : { available: false, processName: null, reason: evidence.reason }
+      })
+    } else if (process.platform !== 'win32' && managedEntries.length > 0) {
       try {
         evidenceRows = await getStrictProcessTableSnapshot()
         evidenceResults = await resolveAgentForegroundProcessesBatch(
@@ -2409,7 +2740,8 @@ export class PtyHandler {
           : await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
       const foregroundProcessEvidence =
         process.platform !== 'win32'
-          ? toForegroundProcessEvidence(
+          ? (heldEvidence[entryIndex]?.foregroundProcessEvidence ??
+            toForegroundProcessEvidence(
               evidenceResults[entryIndex] ?? {
                 available: false,
                 processName: managed.pty.process || null,
@@ -2420,7 +2752,7 @@ export class PtyHandler {
                 observationEpoch: evidenceEpoch,
                 capturedAgeMs: 0
               }
-            )
+            ))
           : undefined
       results.push({
         id,
@@ -2714,6 +3046,22 @@ export class PtyHandler {
     this.pendingOutputByPty.clear()
     this.pendingProducerBytesByPty.clear()
     this.pendingExitByPty.clear()
+    if (this.identityEvidenceReadTimer !== null) {
+      clearTimeout(this.identityEvidenceReadTimer)
+      this.identityEvidenceReadTimer = null
+    }
+    if (this.identityEvidenceBackstopTimer !== null) {
+      clearInterval(this.identityEvidenceBackstopTimer)
+      this.identityEvidenceBackstopTimer = null
+    }
+    this.identityEvidencePendingIds.clear()
+    this.identityEvidenceReadQueued = false
+    this.identityEvidenceHeld.clear()
+    this.identityEvidenceHeldAt.clear()
+    this.identityEvidenceHeldBytes = 0
+    this.identityEvidenceScanners.clear()
+    this.identityEvidenceVisibleByClient.clear()
+    this.identityEvidenceBackoffByPty.clear()
     this.pausedOutputPtys.clear()
     this.consumerPausedOutputPtys.clear()
     this.lastInputAtByPty.clear()
@@ -2794,6 +3142,18 @@ export class PtyHandler {
 
   get activePtyCount(): number {
     return this.ptys.size
+  }
+
+  getIdentityEvidenceDebugSnapshot(): Readonly<{
+    heldRows: number
+    heldBytes: number
+    processTableReads: number
+  }> {
+    return {
+      heldRows: this.identityEvidenceHeld.size,
+      heldBytes: this.identityEvidenceHeldBytes,
+      processTableReads: this.identityEvidenceReadCount
+    }
   }
 
   /** Spawns admitted but not yet in the pool — each already owns a shell the relay must not treat as idle. */

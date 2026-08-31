@@ -27,6 +27,7 @@ export class SshPtyConsumerSessionAdapter {
   private readonly session: PtyConsumerSession
   private readonly sourceCredit: SshPtySourceCreditAdapter
   private readonly pausedDeliveryByPty = new Map<string, PtySourceDeliveryIdentity>()
+  private readonly removeIdentityAdmission: (() => void) | null
 
   constructor(
     private readonly dispatcher: RelayDispatcher,
@@ -44,8 +45,20 @@ export class SshPtyConsumerSessionAdapter {
     )
     this.session = new PtyConsumerSession({
       serverBuildId,
-      outputFlowControl: { versions: [1], maxWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
+      outputFlowControl: { versions: [1], maxWindowSu: DEFAULT_PTY_SOURCE_WINDOW_SU },
+      identityEvidence: { versions: [1] }
     })
+    this.removeIdentityAdmission =
+      dispatcher.registerPtyIdentityEvidencePublicationAdmission?.((clientId, params) => {
+        const grant = this.session.activeGrant(String(clientId))
+        if (grant?.capabilities?.identityEvidence?.version !== 1) {
+          return false
+        }
+        if (params.clientGeneration !== undefined) {
+          return params.clientGeneration === grant.clientGeneration
+        }
+        return true
+      }) ?? null
     // Why the admission is consulted again at drain time (see isStillAdmitted): a frame can sit
     // queued behind a saturated socket long enough for the grant or the delivery to be retired, and
     // publishing it then hands the client output from an owner it no longer is.
@@ -104,6 +117,7 @@ export class SshPtyConsumerSessionAdapter {
       this.sourceCredit.cancel(params, this.session.activeGrant(String(context.clientId)))
     )
     dispatcher.onDisposed(() => {
+      this.removeIdentityAdmission?.()
       for (const id of this.pausedDeliveryByPty.keys()) {
         this.setDeliveryPaused?.(id, false)
       }

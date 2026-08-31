@@ -9,17 +9,29 @@ import {
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { createTerminalCommandLifecycle } from '../terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-tracker'
-import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+import { bindPaneSshIdentityEvidence } from './pane-ssh-identity-evidence'
+import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** Pane agent identity, foreground-agent sampling, and command lifecycle handling. */
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
+  const bindSshIdentity = bindPaneSshIdentityEvidence(session)
+  const isDirectSshPtyId = (id: string): boolean => parseAppSshPtyId(id) !== null
+  session.disposeIdentityEvidence = session.disposeIdentityEvidence ?? null
+  session.bindIdentityEvidence = (ptyId: string, incarnationId?: string): void => {
+    session.disposeIdentityEvidence?.()
+    if (!isDirectSshPtyId(ptyId)) {
+      return
+    }
+    session.disposeIdentityEvidence = bindSshIdentity(ptyId, incarnationId)
+  }
   // Why: the 133;D confirmation guard and the visible-pane resampler both key off
   // "does this pane expect an agent"; derive each signal once so the two callers
   // can't drift and silently reintroduce the icon bug this fix closes.
@@ -106,10 +118,6 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
       return
     }
-    // Why: main-side only. The renderer row and launch config are already owned by the deferred
-    // drop above; what that path cannot reach is the hook server's per-pane Claude latches, which
-    // `agentStatus:drop` deliberately preserves for a still-live pane. Main echoes its own clear
-    // back through the pane-status-cleared channel, so both sides stay consistent.
     window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey)
   }
   session.visibleForegroundSamplePending = false
@@ -127,6 +135,10 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     }
   }
   session.isForegroundTrackingAllowed = (id: string): boolean => {
+    if (isDirectSshPtyId(id)) {
+      session.bindIdentityEvidence?.(id)
+      return false
+    }
     if (isRemoteExecutionHostPtyId(id)) {
       return false
     }
@@ -153,8 +165,14 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.paneForegroundAgentTracker = createPaneForegroundAgentTracker({
     getPtyId: () => session.transport.getPtyId(),
     isTrackablePtyId: session.isForegroundTrackingAllowed,
-    readForegroundProcess: (id) => window.api.pty.getForegroundProcess(id),
-    confirmForegroundProcess: (id) => window.api.pty.confirmForegroundProcess(id),
+    readForegroundProcess: (id) =>
+      isRemoteExecutionHostPtyId(id)
+        ? Promise.resolve(null)
+        : window.api.pty.getForegroundProcess(id),
+    confirmForegroundProcess: (id) =>
+      isRemoteExecutionHostPtyId(id)
+        ? Promise.resolve(null)
+        : window.api.pty.confirmForegroundProcess(id),
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
