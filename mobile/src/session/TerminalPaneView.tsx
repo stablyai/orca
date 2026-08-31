@@ -66,9 +66,6 @@ export function TerminalPaneView({
     <View
       // Why: inactive terminal WebViews stay mounted to preserve xterm state,
       // while touch and visibility are disabled until the tab is active again.
-      // iOS notification resume can leave the last frame painted with a dead
-      // hit-test; one-frame pointerEvents none (same flip as a tab switch)
-      // recommits the native wrapper.
       pointerEvents={active && touchCommitted ? 'auto' : 'none'}
       style={[
         styles.terminalPane,

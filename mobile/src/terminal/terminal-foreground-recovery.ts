@@ -32,8 +32,6 @@ export function shouldRecoverTerminalOnAppStateChange(
   )
 }
 
-// Why: a notification tap marks the app active before SessionScreen mounts
-// (catalog load, then host-stack REPLACE), so the AppState listener never fires.
 export function shouldKickIosTouchesOnSessionMount(platform: string, appState: string): boolean {
   return platform === 'ios' && appState === 'active'
 }
