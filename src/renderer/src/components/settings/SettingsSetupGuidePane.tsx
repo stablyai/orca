@@ -1,3 +1,4 @@
+import { EyeOff, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   getFeatureWallSetupSteps,
@@ -6,12 +7,17 @@ import {
 import type { FeatureWallSetupStepId } from '../../../../shared/feature-wall-setup-steps'
 import { FeatureWallSetupChecklist } from '../feature-wall/FeatureWallSetupChecklist'
 import { useSettingsSetupGuideFullProgress } from './settings-setup-guide-progress'
+import { Button } from '../ui/button'
+import { translate } from '@/i18n/i18n'
 
 export function SettingsSetupGuidePane(): React.JSX.Element {
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
+  const [checklistDismissed, setChecklistDismissed] = useState(false)
+  const [checklistVisibilityLoaded, setChecklistVisibilityLoaded] = useState(false)
+  const [dismissalUpdating, setDismissalUpdating] = useState(false)
   const progress = useSettingsSetupGuideFullProgress(
     true,
     orchestrationSkillInstalled,
@@ -21,6 +27,27 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
     getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
   )
   const activeStep = setupSteps.find((step) => step.id === activeStepId) ?? setupSteps[0] ?? null
+
+  useEffect(() => {
+    let mounted = true
+    void window.api.onboarding
+      .get()
+      .then((onboarding) => {
+        if (mounted) {
+          setChecklistDismissed(onboarding.checklist.dismissed)
+          setChecklistVisibilityLoaded(true)
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load onboarding checklist visibility:', error)
+        if (mounted) {
+          setChecklistVisibilityLoaded(true)
+        }
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   useEffect(() => {
     if (userSelectedStep) {
@@ -44,8 +71,78 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
     setActiveStepId(id)
   }
 
+  const handleChecklistDismissal = async (dismissed: boolean): Promise<void> => {
+    setDismissalUpdating(true)
+    try {
+      const onboarding = await window.api.onboarding.update({ checklist: { dismissed } })
+      setChecklistDismissed(onboarding.checklist.dismissed)
+      setChecklistVisibilityLoaded(true)
+    } catch (error) {
+      console.error('Failed to update onboarding checklist visibility:', error)
+    } finally {
+      setDismissalUpdating(false)
+    }
+  }
+
+  if (checklistDismissed) {
+    return (
+      <div className="flex h-[min(740px,calc(100vh-14rem))] min-h-[540px] items-center justify-center px-7 py-6">
+        <div className="flex max-w-md flex-col items-center gap-3 text-center">
+          <EyeOff className="size-5 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            {translate(
+              'auto.components.settings.SettingsSetupGuidePane.checklistHiddenDescription',
+              'The onboarding checklist is hidden. You can show it again whenever you need it.'
+            )}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={dismissalUpdating}
+            onClick={() => void handleChecklistDismissal(false)}
+          >
+            <RotateCcw />
+            {translate(
+              'auto.components.settings.SettingsSetupGuidePane.showChecklist',
+              'Show checklist'
+            )}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!checklistVisibilityLoaded) {
+    return (
+      <div
+        className="h-[min(740px,calc(100vh-14rem))] min-h-[540px]"
+        aria-busy="true"
+        aria-label={translate(
+          'auto.components.settings.SettingsSetupGuidePane.loadingChecklist',
+          'Loading onboarding checklist'
+        )}
+      />
+    )
+  }
+
   return (
     <div className="h-[min(740px,calc(100vh-14rem))] min-h-[540px] px-7 py-6">
+      <div className="mb-4 flex justify-end">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={dismissalUpdating}
+          onClick={() => void handleChecklistDismissal(true)}
+        >
+          <EyeOff />
+          {translate(
+            'auto.components.settings.SettingsSetupGuidePane.hideChecklist',
+            'Hide checklist'
+          )}
+        </Button>
+      </div>
       <FeatureWallSetupChecklist
         layout="embedded"
         activeStep={activeStep}
