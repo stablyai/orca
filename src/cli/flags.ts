@@ -1,5 +1,6 @@
 import { RuntimeClientError } from './runtime/types'
 import { REPEATED_FLAG_SEPARATOR } from './args'
+import { describeQuoteStrippedJsonFlag } from './quote-stripped-json-flag'
 
 export function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = flags.get(name)
@@ -26,6 +27,26 @@ export function getOptionalStringFlag(
 ): string | undefined {
   const value = flags.get(name)
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/**
+ * A JSON-valued flag, rejected up front when a native argv boundary stripped its quotes so the
+ * error names the shell instead of the user's value (#16706). The value itself is still parsed
+ * downstream; this only catches the damaged shape.
+ */
+export function getOptionalJsonFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): string | undefined {
+  const value = getOptionalStringFlag(flags, name)
+  if (value === undefined) {
+    return undefined
+  }
+  const mangled = describeQuoteStrippedJsonFlag(name, value)
+  if (mangled) {
+    throw new RuntimeClientError('invalid_argument', mangled)
+  }
+  return value
 }
 
 export function getRepeatedStringFlag(

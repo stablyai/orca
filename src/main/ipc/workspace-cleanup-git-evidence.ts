@@ -45,8 +45,9 @@ export async function readWorkspaceCleanupGitEvidence(
     status = await withWorkspaceCleanupTimeout(
       (signal) =>
         repo.connectionId
-          ? provider!.getStatus(worktree.path, { signal })
+          ? provider!.getStatus(worktree.path, { includeLineStats: false, signal })
           : getStatus(worktree.path, {
+              includeLineStats: false,
               signal,
               ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
             }),

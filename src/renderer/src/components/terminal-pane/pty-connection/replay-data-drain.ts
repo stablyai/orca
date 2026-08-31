@@ -86,7 +86,8 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         return false
       }
       const payload = session.pendingReplayData
-      const { data, clearBeforeReplay, pendingEscapeTailAnsi } = payload
+      const { data, clearBeforeReplay, pendingEscapeTailAnsi, alternateScreen, terminalOwner } =
+        payload
       session.pendingReplayData = null
       const isCurrentPayload = (): boolean =>
         !session.disposed &&
@@ -120,7 +121,9 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         continue
       }
       if (clearBeforeReplay || data.length > 0) {
-        await session.writeReplayDataAsync(session.reattachReplayResetSequence(data))
+        await session.writeReplayDataAsync(
+          session.reattachReplayResetSequence(data, false, alternateScreen, terminalOwner)
+        )
         if (!isCurrentPayload()) {
           continue
         }

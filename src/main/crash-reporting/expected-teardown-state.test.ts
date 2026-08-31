@@ -13,6 +13,7 @@ import {
 
 function shouldRecordKilledRenderer(expectedTeardown: 'none' | 'renderer-reload' | 'app-shutdown') {
   return shouldRecordProcessGoneCrash({
+    platform: 'win32',
     source: 'renderer',
     processType: 'renderer',
     reason: 'killed',

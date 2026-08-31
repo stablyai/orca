@@ -22,6 +22,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isSelectAllShortcut } from '@/lib/editable-target'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
 import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvancedSection'
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'
@@ -196,6 +197,16 @@ export function TerminalQuickCommandDialog({
         <div
           className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
           onKeyDown={(event) => {
+            if (
+              isSelectAllShortcut(event) &&
+              (event.target instanceof HTMLInputElement ||
+                event.target instanceof HTMLTextAreaElement)
+            ) {
+              event.preventDefault()
+              event.stopPropagation()
+              event.target.select()
+              return
+            }
             if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
               saveDraft()

@@ -4,6 +4,7 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveAgentPaneAuthorityKey } from '../slices/agent-pane-authority'
 import type { HydrateWorkspaceSessionOptions } from './terminal-contracts'
+import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
 export type WorkspaceHydrationPatch = Pick<
   AppState,
@@ -19,12 +20,14 @@ export type WorkspaceHydrationPatch = Pick<
   | 'worktreesByRepo'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
+  | 'closedTerminalTabTombstonesByTabId'
   | 'automaticAgentResumeClaimsByTabId'
   | 'sleepingAgentSessionsByPaneKey'
   | 'pendingReconnectWorktreeIds'
   | 'pendingReconnectTabByWorktree'
   | 'pendingReconnectPtyIdByTabId'
   | 'everActivatedWorktreeIds'
+  | 'unverifiedPtyLossTabIds'
   | 'worktreeNavHistory'
   | 'worktreeNavHistoryIndex'
   | 'ptyIdsByTabId'
@@ -109,6 +112,12 @@ export function targetScopedWorkspaceHydrationPatch(
       .flatMap((workspaceKey) => (state.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id))
       .filter((tabId) => !retainedTargetTabIds.has(tabId))
   )
+  // The reprieve is session-scoped, so a target snapshot that retires or
+  // replaces a row must not leave its old id protected in a later orphan sweep.
+  const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(
+    state.unverifiedPtyLossTabIds,
+    deletedTargetTabIds
+  )
   const pendingReconnectPtyIdByTabId = replaceHydratedRecordKeys(
     state.pendingReconnectPtyIdByTabId,
     {},
@@ -176,6 +185,9 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.defaultTerminalTabsAppliedByWorktreeId,
       workspaceKeys
     ),
+    // Why passed through whole: hydration already unioned it with live store state, and the map is
+    // keyed by tab id rather than by workspace key so replaceHydratedRecordKeys has nothing to match.
+    closedTerminalTabTombstonesByTabId: hydrated.closedTerminalTabTombstonesByTabId,
     automaticAgentResumeClaimsByTabId: replaceHydratedRecordKeys(
       state.automaticAgentResumeClaimsByTabId,
       hydrated.automaticAgentResumeClaimsByTabId,
@@ -208,6 +220,9 @@ export function targetScopedWorkspaceHydrationPatch(
       {},
       deletedTargetTabIds
     ),
+    ...(nextUnverifiedPtyLossTabIds !== state.unverifiedPtyLossTabIds
+      ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
+      : {}),
     ptyIdsByTabId: replaceHydratedRecordKeys(
       state.ptyIdsByTabId,
       hydrated.ptyIdsByTabId,

@@ -121,6 +121,7 @@ describe('startup ordering', () => {
     expect(desktopStartup).toContain(
       'openWindow: () => openMainWindow({ revealOnDidFinishLoad: true })'
     )
+    expect(desktopStartup).toContain('bindServices: bindTerminalRuntimeStartupServices')
     expect(desktopStartup).toContain('shellPathReady,')
     expect(desktopStartup).toContain('startServices: startTerminalRuntimeStartupServices')
     expect(barrier).toContain('managedWslCliStartupBarrierReady')
@@ -270,6 +271,54 @@ describe('startup ordering', () => {
     expect(disposeIndex).toBeGreaterThan(commitIndex)
   })
 
+  it('joins structured agent sessions to the committed quit barrier', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const willQuitStart = source.indexOf("app.on('will-quit'")
+    const willQuitEnd = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const willQuit = source.slice(willQuitStart, willQuitEnd)
+
+    expect(willQuit).toContain(
+      'const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()'
+    )
+    expect(willQuit).toContain(
+      "{ name: 'structured-agent-session', promise: structuredAgentSessionShutdown }"
+    )
+  })
+
+  it('joins agent-browser cleanup before the committed quit exits', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const willQuitStart = source.indexOf("app.on('will-quit'")
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const cleanupStart = willQuit.indexOf('const browserShutdown')
+    const offscreenCleanupStart = willQuit.indexOf(
+      'runtime?.getOffscreenBrowserBackend()?.destroyAll?.()'
+    )
+    const residualCleanupStart = willQuit.indexOf(
+      'runtime?.getAgentBrowserBridge()?.destroyAllSessions()'
+    )
+    const barrierStart = willQuit.indexOf('settleTeardownWithinDeadline([')
+
+    expect(willQuitStart).toBeGreaterThanOrEqual(0)
+    expect(windowAllClosedStart).toBeGreaterThan(willQuitStart)
+    expect(cleanupStart).toBeGreaterThanOrEqual(0)
+    expect(offscreenCleanupStart).toBeGreaterThan(cleanupStart)
+    expect(residualCleanupStart).toBeGreaterThan(offscreenCleanupStart)
+    expect(barrierStart).toBeGreaterThan(cleanupStart)
+    expect(willQuit.slice(barrierStart)).toContain("{ name: 'browser', promise: browserShutdown }")
+  })
+
+  it('registers repeatable serve signal handling before headless startup completes', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const serveStart = source.indexOf('if (serveOptions) {')
+    const signalHandlers = source.indexOf('registerServeSignalHandlers(process', serveStart)
+    const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
+
+    expect(serveStart).toBeGreaterThanOrEqual(0)
+    expect(signalHandlers).toBeGreaterThan(serveStart)
+    expect(signalHandlers).toBeLessThan(serveReady)
+  })
+
   it('starts the automation scheduler before headless serve reports ready', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const serveStart = source.indexOf('if (serveOptions) {')
@@ -289,5 +338,35 @@ describe('startup ordering', () => {
     expect(automationStart).toBeLessThan(serveReturn)
     expect(desktopSetWebContents).toBeGreaterThanOrEqual(0)
     expect(desktopAutomationStart).toBeGreaterThan(desktopSetWebContents)
+  })
+
+  it('installs the serve supervisor disconnect quit after the app environment and data path', () => {
+    // Why (#16761): the call resolves the handoff path through getCanonicalUserDataPath(). At module
+    // scope that accessor throws by design, so every `orca serve` process on macOS died at startup
+    // before it could listen. serve-update-handoff.test.ts mocks the resolver, so only ordering
+    // catches this; serve-update-handoff.app-environment.test.ts pins the throw it depends on.
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const install = 'installServeSupervisorDisconnectQuit(isServeMode)'
+    const appEnvironmentIndex = source.indexOf('setAppEnvironment(new ElectronAppEnvironment())')
+    const dataPathIndex = source.indexOf('initDataPath()')
+    const installIndex = source.indexOf(install)
+
+    expect(source.split(install).length - 1, `${install} should appear exactly once`).toBe(1)
+    expect(appEnvironmentIndex).toBeGreaterThanOrEqual(0)
+    expect(dataPathIndex).toBeGreaterThan(appEnvironmentIndex)
+    expect(installIndex).toBeGreaterThan(dataPathIndex)
+
+    // Why also pin it synchronous: 'disconnect' cannot be delivered while this module is still
+    // evaluating, which is the whole reason deferring it is free. Parked behind an await — say
+    // inside app.whenReady() — the ordering above still holds but a parent that dies in the gap
+    // leaves the serve process orphaned on its port, which is the failure this handler prevents.
+    expect(installIndex).toBeLessThan(source.indexOf('void app.whenReady().then('))
+    expect(installIndex).toBeGreaterThan(source.indexOf('if (hasSingleInstanceLock) {'))
+    const betweenCode = source
+      .slice(dataPathIndex, installIndex)
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n')
+    expect(betweenCode).not.toContain('await')
   })
 })

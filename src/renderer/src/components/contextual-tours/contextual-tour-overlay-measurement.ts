@@ -206,6 +206,67 @@ export function measureContextualTourOverlayRenderState(args: {
   }
 }
 
+export type MeasuredContextualTourTarget = { element: Element; rect: DOMRect }
+
+// Why: a scroll anywhere in the app reaches the overlay's capture-phase
+// listener. One rect read decides whether the full step scan is worth running.
+export function hasContextualTourTargetMoved(
+  measured: MeasuredContextualTourTarget | null
+): boolean {
+  if (!measured) {
+    return true
+  }
+  const rect = measured.element.getBoundingClientRect()
+  return (
+    rect.left !== measured.rect.left ||
+    rect.top !== measured.rect.top ||
+    rect.width !== measured.rect.width ||
+    rect.height !== measured.rect.height
+  )
+}
+
+// Why: re-measures fire on scroll, resize and the liveness poll, but the
+// measured state almost never changes. Bail out so an unchanged pass costs no
+// React commit and no floating-position resubscribe.
+export function areContextualTourRenderStatesEqual(
+  a: ActiveTourRenderState | null,
+  b: ActiveTourRenderState | null
+): boolean {
+  if (a === null || b === null) {
+    return a === b
+  }
+  return (
+    a.targetElement === b.targetElement &&
+    a.panelHost === b.panelHost &&
+    a.rect.left === b.rect.left &&
+    a.rect.top === b.rect.top &&
+    a.rect.width === b.rect.width &&
+    a.rect.height === b.rect.height &&
+    a.progress.current === b.progress.current &&
+    a.progress.total === b.progress.total &&
+    a.title === b.title &&
+    a.body === b.body &&
+    a.control === b.control &&
+    a.preferredPlacement === b.preferredPlacement &&
+    a.targetPulse === b.targetPulse &&
+    a.hidePrimaryAction === b.hidePrimaryAction &&
+    a.isLastStep === b.isLastStep &&
+    a.isFirstStep === b.isFirstStep &&
+    areStepActionsEqual(a.primaryAction, b.primaryAction) &&
+    areStepActionsEqual(a.secondaryAction, b.secondaryAction)
+  )
+}
+
+function areStepActionsEqual(
+  a: ActiveTourRenderState['primaryAction'],
+  b: ActiveTourRenderState['primaryAction']
+): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b
+  }
+  return a.kind === b.kind && a.label === b.label
+}
+
 export function getContextualTourCleanupOutcome(
   activeTourId: ContextualTourId
 ): ContextualTourOutcome {

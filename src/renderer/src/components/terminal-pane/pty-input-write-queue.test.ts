@@ -509,7 +509,14 @@ describe('pty input write queue', () => {
     // → ingress echo strip, and assert no `997;1n` emission at the confirm prompt.
     vi.useFakeTimers()
     const reply = mode2031SequenceFor('dark')
-    const caretEcho = (data: string): string => data.replaceAll('\x1b', '^[')
+    // ECHOCTL carets every control, not just ESC. Identical for this reply (it carries no
+    // other control), but modelled correctly so this does not drift from the encoder.
+    const caretEcho = (data: string): string =>
+      [...data]
+        .map((ch) =>
+          ch.charCodeAt(0) < 0x20 ? `^${String.fromCharCode(ch.charCodeAt(0) + 0x40)}` : ch
+        )
+        .join('')
     const masterWrites: string[] = []
     const emissions: PtyIngressEmission[] = []
     let ingress!: PtyStartupIngress

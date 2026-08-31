@@ -6,7 +6,11 @@ import {
   SEARCH_ENGINE_LABELS,
   type SearchEngine
 } from '../../../../../shared/browser-url'
-import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserHistoryEntry,
+  BrowserPageDocLocation
+} from '../../../../../shared/browser-workspace-types'
+import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
 import { translate } from '@/i18n/i18n'
 
@@ -14,12 +18,28 @@ export const MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS = 8
 export const BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES = 2 * 1024
 
 export type BrowserAddressBarSuggestion = {
+  /** For a workspace-doc row this is the document's absolute path — a selection identity that even
+   *  the url fallback routes correctly, since every pane's navigate runs path detection first. */
   url: string
   title: string
   subtitle: string
   lastVisitedAt: number
   visitCount: number
   isSearch: boolean
+  /** Set on a previewed-document row; selecting it opens the document on a fresh grant. */
+  docLocation?: BrowserPageDocLocation
+}
+
+function toWorkspaceDocSuggestion(entry: WorkspaceDocHistoryEntry): BrowserAddressBarSuggestion {
+  return {
+    url: entry.docLocation.filePath,
+    title: entry.title,
+    subtitle: entry.docLocation.filePath,
+    lastVisitedAt: entry.lastVisitedAt,
+    visitCount: entry.visitCount,
+    isSearch: false,
+    docLocation: entry.docLocation
+  }
 }
 
 export function isBrowserAddressBarQueryTooLarge(
@@ -53,11 +73,13 @@ function scoreBrowserAddressBarSuggestion(
 
 export function buildBrowserAddressBarSuggestions({
   browserUrlHistory,
+  workspaceDocHistory = [],
   kagiSessionLink,
   searchEngine = DEFAULT_SEARCH_ENGINE,
   value
 }: {
   browserUrlHistory: readonly BrowserHistoryEntry[]
+  workspaceDocHistory?: readonly WorkspaceDocHistoryEntry[]
   kagiSessionLink?: string | null
   searchEngine?: SearchEngine
   value: string
@@ -67,26 +89,30 @@ export function buildBrowserAddressBarSuggestions({
   }
   const trimmed = value.trim()
   if (trimmed === '' || trimmed === 'about:blank' || trimmed.startsWith('data:')) {
-    if (browserUrlHistory.length === 0) {
-      return []
-    }
-    return [...browserUrlHistory]
+    const recents: BrowserAddressBarSuggestion[] = [
+      ...browserUrlHistory.map((entry) => ({ ...entry, subtitle: entry.url, isSearch: false })),
+      ...workspaceDocHistory.map(toWorkspaceDocSuggestion)
+    ]
+    return recents
       .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
       .slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
-      .map((entry) => ({ ...entry, subtitle: entry.url, isSearch: false }))
   }
-  const historySuggestions: BrowserAddressBarSuggestion[] =
-    browserUrlHistory.length > 0
-      ? browserUrlHistory
-          .map((entry) => ({
-            entry,
-            score: scoreBrowserAddressBarSuggestion(entry, trimmed)
-          }))
-          .filter((item) => item.score >= 0)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS - 1)
-          .map((item) => ({ ...item.entry, subtitle: item.entry.url, isSearch: false }))
-      : []
+  const scoredRows: { row: BrowserAddressBarSuggestion; score: number }[] = [
+    ...browserUrlHistory.map((entry) => ({
+      row: { ...entry, subtitle: entry.url, isSearch: false },
+      score: scoreBrowserAddressBarSuggestion(entry, trimmed)
+    })),
+    // The scorer only reads url/title/recency/visits, and a doc row's url is its path.
+    ...workspaceDocHistory.map(toWorkspaceDocSuggestion).map((row) => ({
+      row,
+      score: scoreBrowserAddressBarSuggestion(row, trimmed)
+    }))
+  ]
+  const historySuggestions: BrowserAddressBarSuggestion[] = scoredRows
+    .filter((item) => item.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS - 1)
+    .map((item) => item.row)
 
   const isQuery = looksLikeSearchQuery(trimmed)
   let topAction: BrowserAddressBarSuggestion | null

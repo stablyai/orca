@@ -9,10 +9,25 @@
  */
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { arch, platform, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import {
+  ORCAD_VERSION,
+  ORCAD_VERSION_FILENAME,
+  orcadArtifactFilenames
+} from '../../src/shared/orcad-artifacts.ts'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = join(ROOT, 'out', 'orcad')
@@ -22,6 +37,11 @@ const ENTRY = join(ROOT, 'src/main/orcad/main.ts')
 // looks for it in the app root. A deployment has no desktop out/main to fall back to.
 const WATCHER_ENTRY = join(ROOT, 'src/main/ipc/parcel-watcher-process-entry.ts')
 const WATCHER_OUT_FILE = join(OUT_DIR, 'parcel-watcher-process-entry.js')
+// Why beside orcad.js: orcad forks the terminal daemon so PTYs outlive the runtime process,
+// and `getDaemonEntryPath()` probes the app root for this exact filename. Without it every
+// orcad restart would SIGKILL every running terminal.
+const DAEMON_ENTRY = join(ROOT, 'src/main/daemon/daemon-entry.ts')
+const DAEMON_OUT_FILE = join(OUT_DIR, 'daemon-entry.js')
 const AGENT_BROWSER_NAME = `agent-browser-${platform()}-${arch()}${process.platform === 'win32' ? '.exe' : ''}`
 const OUT_FILE = join(OUT_DIR, 'orcad.js')
 const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
@@ -64,20 +84,31 @@ if (process.platform !== 'win32') {
   chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
 }
 
-await build({
-  entryPoints: [WATCHER_ENTRY],
-  bundle: true,
-  platform: 'node',
-  target: 'node18',
-  format: 'cjs',
-  outfile: WATCHER_OUT_FILE,
-  external: EXTERNAL,
-  plugins: [externalNativeAddons],
-  minify: true,
-  sourcemap: false,
-  define: { 'process.env.NODE_ENV': '"production"' },
-  logLevel: 'error'
-})
+/** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
+ *  directory under `outdir`, and both children must land flat beside orcad.js — that is where
+ *  their runtime resolvers look for them. */
+function buildForkedChild(entryPoint, outfile) {
+  return build({
+    entryPoints: [entryPoint],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile,
+    external: EXTERNAL,
+    plugins: [externalNativeAddons],
+    metafile: true,
+    minify: true,
+    sourcemap: false,
+    define: { 'process.env.NODE_ENV': '"production"' },
+    logLevel: 'error'
+  })
+}
+
+const childResults = await Promise.all([
+  buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
+  buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE)
+])
 
 const result = await build({
   entryPoints: [ENTRY],
@@ -95,28 +126,35 @@ const result = await build({
   logLevel: 'error'
 })
 
-const output = Object.values(result.metafile.outputs).find((o) => o.entryPoint)
+const output = Object.values(result.metafile.outputs).find(
+  (o) => o.entryPoint === 'src/main/orcad/main.ts'
+)
 // Why check `original` and not just `path`: when electron is bundleable, esbuild
 // rewrites `path` to the resolved file under node_modules and the naive check passes
 // while the package is very much in the bundle.
-const electronImporters = new Set()
-for (const [file, info] of Object.entries(result.metafile.inputs)) {
-  for (const imported of info.imports ?? []) {
-    const specifier = imported.original ?? imported.path
-    if (specifier === 'electron' || specifier.startsWith('electron/')) {
-      electronImporters.add(file)
+// Why both metafiles: the forked children ship in the same deployment and run under the
+// same plain Node. A daemon-entry that reached electron would fail at fork time, on the
+// path whose whole point is that terminals survive.
+function collectImporters(metafiles, matches) {
+  const importers = new Set()
+  for (const metafile of metafiles) {
+    for (const [file, info] of Object.entries(metafile.inputs)) {
+      for (const imported of info.imports ?? []) {
+        if (matches(imported.original ?? imported.path)) {
+          importers.add(file)
+        }
+      }
     }
   }
+  return importers
 }
-const sqliteImporters = new Set()
-for (const [file, info] of Object.entries(result.metafile.inputs)) {
-  for (const imported of info.imports ?? []) {
-    const specifier = imported.original ?? imported.path
-    if (specifier === 'node:sqlite') {
-      sqliteImporters.add(file)
-    }
-  }
-}
+
+const metafiles = [result.metafile, ...childResults.map((child) => child.metafile)]
+const electronImporters = collectImporters(
+  metafiles,
+  (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
+)
+const sqliteImporters = collectImporters(metafiles, (specifier) => specifier === 'node:sqlite')
 
 const graphErrors = []
 if (electronImporters.size > 0) {
@@ -147,20 +185,50 @@ if (graphErrors.length > 0) {
   // dynamic require, a missing native, a top-level throw. The plain-node-entry-guard
   // smoke-loads its entries for exactly this reason, and orcad cannot join that guard
   // because it is an esbuild artifact rather than a rollup input.
+  // Why an exit code and not a message match: these bundles are minified onto one line, so
+  // Node's uncaught-exception report echoes that whole line — which contains every string
+  // literal in the bundle. A crash therefore "matches" any expected message, and a textual
+  // assertion passes against a bundle that never loaded.
   const smoke = spawnSync(process.execPath, [OUT_FILE, '--orcad-smoke-load-check'], {
     encoding: 'utf8',
     timeout: 60_000
   })
   const smokeOutput = `${smoke.stdout ?? ''}${smoke.stderr ?? ''}`
-  if (
-    smoke.error ||
-    smoke.signal ||
-    !/Unknown argument: --orcad-smoke-load-check/.test(smokeOutput)
-  ) {
+  if (smoke.error || smoke.signal || smoke.status !== 0) {
     console.error(
       `[build-orcad] the bundle did not load under plain Node.\n` +
-        `Expected argv rejection, got signal=${smoke.signal ?? 'none'} ` +
+        `Expected a clean load-check exit, got status=${smoke.status ?? 'none'} ` +
+        `signal=${smoke.signal ?? 'none'} ` +
         `error=${smoke.error?.message ?? 'none'}\n${smokeOutput.slice(0, 2000)}`
+    )
+    process.exitCode = 1
+  }
+  // Why require + parseArgs and not a real daemon: requiring the bundle evaluates every
+  // top-level import, and calling its exported argv parser proves the entry's own code is
+  // there rather than a graph that merely resolved. Booting one would need a socket, a
+  // token and a PTY — `smoke:orcad-terminal` does that end to end, through orcad.
+  // The verdict is carried by the exit code for the same minification reason as above.
+  const daemonSmoke = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `const mod = require(${JSON.stringify(DAEMON_OUT_FILE)})\n` +
+        `if (typeof mod.parseArgs !== 'function') { process.exit(3) }\n` +
+        `try { mod.parseArgs([]); process.exit(4) } catch { process.exit(0) }`
+    ],
+    {
+      encoding: 'utf8',
+      timeout: 60_000,
+      env: { ...process.env, ORCA_DAEMON_ENTRY_LOAD_CHECK: '1' }
+    }
+  )
+  const daemonSmokeOutput = `${daemonSmoke.stdout ?? ''}${daemonSmoke.stderr ?? ''}`
+  if (daemonSmoke.error || daemonSmoke.signal || daemonSmoke.status !== 0) {
+    console.error(
+      `[build-orcad] the daemon child did not load under plain Node.\n` +
+        `Expected a clean load check, got status=${daemonSmoke.status ?? 'none'} ` +
+        `signal=${daemonSmoke.signal ?? 'none'} ` +
+        `error=${daemonSmoke.error?.message ?? 'none'}\n${daemonSmokeOutput.slice(0, 2000)}`
     )
     process.exitCode = 1
   }
@@ -173,9 +241,26 @@ if (graphErrors.length > 0) {
   }
 }
 
+// Why a content hash and not ORCAD_VERSION alone: the remote install directory is keyed on
+// this string, so two different builds carrying one version would share a directory — and an
+// already-`.install-complete` dir is never re-uploaded. The deploy would silently run stale
+// bytes while reporting the new version.
 if (process.exitCode !== 1) {
+  const hash = createHash('sha256')
+  for (const filename of orcadArtifactFilenames()) {
+    const artifactPath = join(OUT_DIR, filename)
+    if (!existsSync(artifactPath)) {
+      throw new Error(
+        `orcad declares ${filename} in ORCAD_ARTIFACTS but never emitted it. Add the build ` +
+          'step, or drop it from src/shared/orcad-artifacts.ts.'
+      )
+    }
+    hash.update(readFileSync(artifactPath))
+  }
+  const fullVersion = `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
+  writeFileSync(join(OUT_DIR, ORCAD_VERSION_FILENAME), fullVersion)
   console.log(
-    `[build-orcad] ok — ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports.`
+    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports.`
   )
 }
 

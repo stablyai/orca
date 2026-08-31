@@ -122,7 +122,7 @@ export function buildPtyHostEnv(
     if (opts.isWsl === true) {
       // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
       const distro = opts.wslDistro ?? null
-      wslHookRelayManager.ensureForDistro(distro)
+      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
@@ -262,6 +262,15 @@ export function buildPtyHostEnv(
     baseEnv[resolvePathEnvKey(baseEnv, process.platform)] = inheritedPath
       ? `${bundledCliBin}${delimiter}${inheritedPath}`
       : bundledCliBin
+  }
+
+  if (
+    opts.routeBrowserOpensToClient === true &&
+    baseEnv.BROWSER === undefined &&
+    process.env.BROWSER === undefined
+  ) {
+    const cliCommand = opts.isWsl ? (opts.isPackaged ? 'orca-ide' : 'orca-dev') : 'orca'
+    baseEnv.BROWSER = `${cliCommand} open-url --url %s`
   }
 
   // Why: must run after the prepends above — they re-read PATH from the unscrubbed

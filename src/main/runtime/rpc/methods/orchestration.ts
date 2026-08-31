@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { defineMethod, type RpcMethod } from '../core'
+import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
 import {
   LEGACY_CONTRACT_VERSION,
@@ -24,14 +25,17 @@ import {
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import {
+  assertDispatchMailboxDeliverable,
   resolveBareOrchestrationRecipient,
   type SendRecipientWarning
 } from './orchestration-recipient-routing'
 import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
+import { parseOrchestrationTaskDepsFlag } from '../../orchestration/task-deps-flag'
 import { resolveRunScope } from './orchestration-run-scope'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
+import { ORCHESTRATION_MUTATION_REQUEST_METHODS } from './orchestration-mutation-request-show'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RunRow } from '../../orchestration/types'
@@ -71,6 +75,11 @@ async function routeAllMailboxPages(
 }
 
 type DispatchMutationMessageType = 'worker_done' | 'heartbeat' | 'escalation' | 'decision_gate'
+
+const SEND_MESSAGE_TYPE_ERROR = [
+  `Invalid --type. Expected one of: ${MESSAGE_TYPES.join(', ')}.`,
+  'To answer a worker question, use the same Orca CLI executable with orchestration reply --id <msg_id> --body <text>.'
+].join(' ')
 
 function isDispatchMutationMessageType(
   type: string | undefined
@@ -128,17 +137,9 @@ const SendParams = z
     from: OptionalString,
     body: OptionalString,
     type: z
-      .enum([
-        'status',
-        'dispatch',
-        'worker_done',
-        'merge_ready',
-        'escalation',
-        'handoff',
-        'decision_gate',
-        'question',
-        'heartbeat'
-      ])
+      .enum(MESSAGE_TYPES, {
+        error: SEND_MESSAGE_TYPE_ERROR
+      })
       .optional(),
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
     threadId: OptionalString,
@@ -439,6 +440,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   ...ORCHESTRATION_RUN_METHODS,
   ...ORCHESTRATION_WORKER_METHODS,
   ...ORCHESTRATION_FEDERATION_METHODS,
+  ...ORCHESTRATION_MUTATION_REQUEST_METHODS,
   defineMethod({
     name: 'orchestration.send',
     params: SendParams,
@@ -624,15 +626,18 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       } => (sendWarnings.length > 0 ? { ...receipt, warnings: sendWarnings } : receipt)
 
       if (!isGroupAddress(to)) {
-        const federatedDispatchId = to.startsWith('dispatch:')
+        const addressedDispatchId = to.startsWith('dispatch:')
           ? to.slice('dispatch:'.length)
           : undefined
         const federatedTarget =
-          federatedDispatchId && to === `dispatch:${federatedDispatchId}`
-            ? db.getFederatedDispatch(federatedDispatchId)
+          addressedDispatchId && to === `dispatch:${addressedDispatchId}`
+            ? db.getFederatedDispatch(addressedDispatchId)
             : undefined
-        if (federatedTarget && federatedDispatchId) {
-          const dispatchId = federatedDispatchId
+        if (addressedDispatchId && !federatedTarget) {
+          assertDispatchMailboxDeliverable(db, addressedDispatchId)
+        }
+        if (federatedTarget && addressedDispatchId) {
+          const dispatchId = addressedDispatchId
           if (
             federatedTarget.protocol_version <
             ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
@@ -1477,18 +1482,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskCreateParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
-      let deps: string[] | undefined
-      if (params.deps) {
-        try {
-          const parsed = JSON.parse(params.deps)
-          if (!Array.isArray(parsed) || !parsed.every((d) => typeof d === 'string')) {
-            throw new Error('not an array of strings')
-          }
-          deps = parsed
-        } catch {
-          throw new Error('Invalid --deps: must be a JSON array of task IDs')
-        }
-      }
+      const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
@@ -1617,9 +1611,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
       if (params.dryRun) {
+        const maxDepth = runtime.getNestedWorkerMaxDepth()
+        const previewDepth = db.resolveChildDispatchDepth(
+          resolveDispatchCreator(runtime, params.from),
+          maxDepth
+        )
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
+          canDispatchSubWorkers: previewDepth < maxDepth,
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
           workerHandle: params.to ?? 'worker',
@@ -1663,13 +1663,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
 
       revalidateLegacyCoordinator?.()
-      const ctx = db.createDispatchContext(
-        params.task,
-        to,
+      const ctx = db.createDispatchContext({
+        taskId: params.task,
+        assigneeHandle: to,
         assigneePaneKey,
-        dispatchAuthority?.launchTokenHash ?? undefined,
-        processIncarnation
-      )
+        launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
+        processIncarnation,
+        creator: resolveDispatchCreator(runtime, params.from),
+        maxDepth: runtime.getNestedWorkerMaxDepth()
+      })
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
             dispatchId: ctx.id,
@@ -1682,6 +1684,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
+        canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
         taskSpec: task.spec,
         coordinatorHandle: params.from ?? 'coordinator',
         workerHandle: to,
@@ -1730,6 +1733,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           taskId: task.id,
           // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
           dispatchId: ctx?.id ?? 'ctx_preview',
+          canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
           workerHandle,

@@ -3,48 +3,27 @@ import { OrchestrationError } from '../../orchestration-error'
 import { parsePaneKey } from '../../../../../shared/stable-pane-id'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
-import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL, paneKeyMatchSuffix } from '../pane-key-match'
+import { paneKeyMatchSuffix } from '../pane-key-match'
+import { claimDispatchContextRow } from '../dispatch-row-writer'
+import type { DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
-
-export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
-  id, run_id, task_id, contract_version, launch_token_hash,
-  assignee_handle, assignee_pane_key, process_incarnation,
-  status, failure_count, dispatched_at
-)
-SELECT ?, run_id, id, ?, ?, ?, ?, ?, 'dispatched', ?, datetime('now')
-FROM tasks
-WHERE id = ? AND status = 'ready'
-  AND NOT EXISTS (
-    SELECT 1 FROM dispatch_contexts active
-    WHERE active.assignee_handle = ?
-      AND active.status IN ('pending', 'dispatched')
-  )
-  AND (
-    ? IS NULL OR NOT EXISTS (
-      SELECT 1 FROM dispatch_contexts active
-      WHERE active.assignee_pane_key = ?
-        AND active.status IN ('pending', 'dispatched')
-    )
-  )
-  AND (
-    ? IS NULL OR NOT EXISTS (
-      SELECT 1 FROM dispatch_contexts active
-      WHERE active.assignee_pane_key IS NOT NULL
-        AND active.status IN ('pending', 'dispatched')
-        AND instr(active.assignee_pane_key, ':') > 1
-        AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
-    )
-  )`
 
 export function createDispatchContext(
   this: OrchestrationDb,
-  taskId: string,
-  assigneeHandle: string,
-  // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
-  assigneePaneKey?: string,
-  launchTokenHash?: string,
-  processIncarnation?: string
+  params: {
+    taskId: string
+    assigneeHandle: string
+    // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
+    assigneePaneKey?: string
+    launchTokenHash?: string
+    processIncarnation?: string
+    /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
+    creator: DispatchCreator
+    maxDepth: number
+  }
 ): DispatchContextRow {
+  const { taskId, assigneeHandle, assigneePaneKey, launchTokenHash, processIncarnation } = params
+  const depth = this.resolveChildDispatchDepth(params.creator, params.maxDepth)
   const task = this.getTask(taskId)
   if (!task) {
     throw new Error(`Task not found: ${taskId}`)
@@ -73,23 +52,18 @@ export function createDispatchContext(
   const id = generateId('ctx')
   this.db.exec('SAVEPOINT create_dispatch_context')
   try {
-    const inserted = this.db
-      .prepare(DISPATCH_CONTEXT_CLAIM_SQL)
-      .run(
-        id,
-        CURRENT_CONTRACT_VERSION,
-        launchTokenHash ?? null,
-        assigneeHandle,
-        assigneePaneKey ?? null,
-        processIncarnation ?? null,
-        priorFailures,
-        taskId,
-        assigneeHandle,
-        assigneePaneKey ?? null,
-        assigneePaneKey ?? null,
-        paneSuffix,
-        paneSuffix
-      )
+    const inserted = claimDispatchContextRow(this.db, {
+      id,
+      contractVersion: CURRENT_CONTRACT_VERSION,
+      launchTokenHash: launchTokenHash ?? null,
+      assigneeHandle,
+      assigneePaneKey: assigneePaneKey ?? null,
+      processIncarnation: processIncarnation ?? null,
+      priorFailures,
+      depth,
+      taskId,
+      paneSuffix
+    })
     if (inserted.changes !== 1) {
       const current = this.getTask(taskId)
       const occupied = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
   appMock,
@@ -27,6 +28,8 @@ vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBui
 /** Mirrors AUTO_UPDATE_CHECK_INTERVAL_MS in updater.ts. */
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
+warmUpdaterModule()
+
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
@@ -54,7 +57,7 @@ describe('updater', () => {
       const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
       try {
         const send = vi.fn()
-        const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+        const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
         setupAutoUpdater({ webContents: { send } } as never, {
           getLastUpdateCheckAt: () => Date.now()
         })
@@ -83,7 +86,7 @@ describe('updater', () => {
     try {
       appMock.getVersion.mockReturnValue('1.4.160')
       const send = vi.fn()
-      const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+      const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -113,7 +116,7 @@ describe('updater', () => {
       try {
         appMock.getVersion.mockReturnValue('1.4.160-hourly.202607281400')
         const send = vi.fn()
-        const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+        const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
         setupAutoUpdater({ webContents: { send } } as never, {
           getLastUpdateCheckAt: () => Date.now()
         })
@@ -146,7 +149,7 @@ describe('updater', () => {
         return Promise.resolve(undefined)
       })
       const send = vi.fn()
-      const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+      const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -199,7 +202,7 @@ describe('updater', () => {
       chooseLocalBuildMock.mockRejectedValue(new Error('invalid local build'))
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
-        await import('./updater')
+        await loadUpdaterModule()
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -242,7 +245,7 @@ describe('updater', () => {
       })
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
-        await import('./updater')
+        await loadUpdaterModule()
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -281,7 +284,7 @@ describe('updater', () => {
       autoUpdaterMock.checkForUpdates.mockRejectedValueOnce(new Error('local feed failed'))
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
-        await import('./updater')
+        await loadUpdaterModule()
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -327,7 +330,7 @@ describe('updater', () => {
       autoUpdaterMock.downloadUpdate.mockRejectedValue(new Error('local download failed'))
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } =
-        await import('./updater')
+        await loadUpdaterModule()
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -382,7 +385,7 @@ describe('updater', () => {
       })
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu, dismissAvailableUpdate } =
-        await import('./updater')
+        await loadUpdaterModule()
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -429,7 +432,7 @@ describe('updater', () => {
       autoUpdaterMock.downloadUpdate.mockResolvedValue(undefined)
       const send = vi.fn()
       const { setupAutoUpdater, checkForUpdatesFromMenu, dismissAvailableUpdate, downloadUpdate } =
-        await import('./updater')
+        await loadUpdaterModule()
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -461,7 +464,7 @@ describe('updater', () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const mainWindow = { webContents: { send: vi.fn() } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
     // Why: recent timestamp defers the startup check so we observe updater state before any RC-mode call, without racing.
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
@@ -490,7 +493,7 @@ describe('updater', () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const mainWindow = { webContents: { send: vi.fn() } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
 
@@ -517,7 +520,7 @@ describe('updater', () => {
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     const setupFeedUrlCalls = autoUpdaterMock.setFeedURL.mock.calls.length
@@ -548,7 +551,7 @@ describe('updater', () => {
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
 
@@ -582,7 +585,7 @@ describe('updater', () => {
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu({ includePrerelease: true })
@@ -604,7 +607,7 @@ describe('updater', () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const mainWindow = { webContents: { send: vi.fn() } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     const initialFeedUrlCalls = autoUpdaterMock.setFeedURL.mock.calls.length

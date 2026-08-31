@@ -17,6 +17,7 @@ import {
   listShellProfiles
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
+import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
@@ -48,6 +49,7 @@ import {
 import { isTuiAgent } from '../shared/tui-agent-config'
 import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
+import { terminatePtyJob } from '../main/windows/windows-pty-job'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 import { dropIncoherentCondaActivationEnv } from '../main/pty/conda-activation-env'
@@ -61,6 +63,16 @@ import {
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
+import {
+  resolveAgentForegroundProcessesBatch,
+  toForegroundProcessEvidence,
+  type BatchedForegroundProcessResult
+} from '../main/providers/agent-foreground-process'
+import {
+  getStrictProcessTableSnapshot,
+  type ProcessTableRow
+} from '../shared/process-table-snapshot'
+import type { ForegroundProcessEvidence } from '../shared/foreground-process-evidence'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
 import {
   agentSessionOwnerBindingsEqual,
@@ -83,6 +95,7 @@ import {
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
 import { readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
+import { chargedPtyRetainedStringBytes } from '../shared/pty-retained-string-memory'
 import {
   deleteRelayFishHistory,
   deleteRelayHistory,
@@ -151,6 +164,9 @@ type ManagedPty = {
   buffered: RecentPtyOutputBuffer
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
+  /** Timer for the post-shutdown reap sweep: re-probes liveness after a kill request instead of
+   *  assuming the request landed. */
+  reapTimer?: ReturnType<typeof setTimeout>
   /** True once disposeManagedPty has run; blocks double-dispose and makes post-dispose calls fail "not found" not silently. */
   disposed?: boolean
   /** True once external cleanup observers have been notified. */
@@ -199,6 +215,8 @@ type PendingPtyOutput = RelayPtySourceOutput & {
   data: string
   interactive?: boolean
   sourceChunk?: RelayPtySourceOutput
+  /** Cached producer-retention charge; kept off the wire and refreshed on data mutations. */
+  producerChargeBytes?: number
 }
 
 type ManagedStartupCommand = {
@@ -242,6 +260,10 @@ function disposeManagedPty(managed: ManagedPty): void {
     clearTimeout(managed.killTimer)
     managed.killTimer = undefined
   }
+  if (managed.reapTimer) {
+    clearTimeout(managed.reapTimer)
+    managed.reapTimer = undefined
+  }
   // Why: neutralize pty.kill before destroy() so UnixTerminal's async 'close' SIGHUP can't hit a recycled pid.
   // Windows exempt: its destroy() IS a kill() (via _deferNoArgs), so neutralizing leaks the ConPTY agent.
   if (process.platform !== 'win32') {
@@ -258,6 +280,9 @@ function disposeManagedPty(managed: ManagedPty): void {
 }
 const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 export const IMMEDIATE_PTY_EXIT_TIMEOUT_MS = 8_000
+/** Longer than the 5s armed SIGKILL fallback, so the first sweep observes the post-kill state. */
+export const SHUTDOWN_REAP_VERIFY_DELAY_MS = 6_000
+export const SHUTDOWN_REAP_MAX_SWEEPS = 3
 export const MAX_RELAY_PTY_SESSIONS = 50
 export const REPLAY_BUFFER_MAX = 100 * 1024
 const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
@@ -349,6 +374,7 @@ type PtyProcessSummary = {
   title: string
   worktreeId?: string
   terminalHandle?: string
+  foregroundProcessEvidence?: ForegroundProcessEvidence
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
@@ -389,11 +415,15 @@ function sanitizeEnvToDelete(value: unknown): string[] {
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 
+/** Notified when a client retires a pane's surface (`pty.shutdown`). Deliberately separate from
+ *  {@link PtyExitListener}: retirement says the tab is gone, never that the process exited. */
+export type PtySurfaceRetiredListener = (event: { id: string; paneKey: string }) => void
+
 type PtyIdentity = { paneKey?: string; tabId?: string }
 
 /**
  * True when a reattach's expected pane identity contradicts the target PTY's own.
- * Rejects cross-relay-generation id collisions (a reset relay reuses `pty-N`).
+ * Rejects legacy cross-relay-generation id collisions (a reset relay reused `pty-N`).
  * Only compares fields present on both sides; absent identity stays permissive.
  */
 export function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
@@ -419,12 +449,15 @@ export type RelayPtyWorktreeRemovalCoordinator = {
 
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
+  private readonly ptyIdMintEpoch: string
+  private foregroundEvidenceEpoch = 0
   private nextId = 1
   private dispatcher: RelayDispatcher
   private graceTimeMs: number
   private graceTimer: ReturnType<typeof setTimeout> | null = null
   private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
+  private pendingProducerBytesByPty = new Map<string, number>()
   private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
   private pausedOutputPtys = new Set<string>()
   private consumerPausedOutputPtys = new Set<string>()
@@ -443,6 +476,8 @@ export class PtyHandler {
   private reloadPtyModuleFromDisk = false
   // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
+  private surfaceRetiredListener: PtySurfaceRetiredListener | null = null
+  private readonly retiredPaneSurfaces = new RetiredPaneSurfaceRegistry()
   private ptyPoolEmptyListener: (() => void) | null = null
   private ptyPoolActiveListener: (() => void) | null = null
   // Why: augment environment on every spawn so PTYs receive current hook coordinates.
@@ -453,9 +488,14 @@ export class PtyHandler {
     Promise<RelayAgentSessionCreateResult>
   >()
 
-  constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
+  constructor(
+    dispatcher: RelayDispatcher,
+    graceTimeMs = DEFAULT_GRACE_TIME_MS,
+    ptyIdMintEpoch: string = randomUUID()
+  ) {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
+    this.ptyIdMintEpoch = ptyIdMintEpoch
     this.registerHandlers()
     this.removeLegacyCapacityListener =
       this.dispatcher.onLegacyPtyCapacity?.(() => this.handleLegacyCapacity()) ?? null
@@ -569,6 +609,19 @@ export class PtyHandler {
   /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
+  }
+
+  /** Subscribe to pane-surface retirement (relay-hook server uses this to drop the pane's cached
+   *  agent status the moment the tab goes away, rather than waiting for a process exit that a
+   *  surviving shell may never produce). */
+  setSurfaceRetiredListener(listener: PtySurfaceRetiredListener | null): void {
+    this.surfaceRetiredListener = listener
+  }
+
+  /** True when the client has told this host the pane's tab is gone and no PTY has re-bound the
+   *  paneKey since. Nothing this pane emits can belong to a surface any client still owns. */
+  isPaneSurfaceRetired(paneKey: string): boolean {
+    return this.retiredPaneSurfaces.isRetired(paneKey)
   }
 
   /** Notified when the last PTY leaves the pool, so the relay can re-arm its idle grace. */
@@ -786,6 +839,12 @@ export class PtyHandler {
   private wireAndStore(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
+    // Why: a PTY joining the pool under this paneKey means the surface exists again (reopened pane
+    // or revive), so a prior retirement no longer describes anything and must not mute its hooks.
+    const boundPaneKey = managed.paneKey ?? managed.attachIdentity?.paneKey
+    if (boundPaneKey) {
+      this.retiredPaneSurfaces.restore(boundPaneKey)
+    }
     // Why: a second announce covers any store whose admission window has already closed.
     this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     const emitIngressData = (emission: PtyIngressEmission): void => {
@@ -987,8 +1046,10 @@ export class PtyHandler {
   ): void {
     const queue = this.pendingOutputByPty.get(id) ?? []
     if (this.sourcePublication?.accepts(id)) {
-      queue.push({ data, ...meta })
+      const pending = this.initializePendingProducerCharge({ data, ...meta })
+      queue.push(pending)
       this.pendingOutputByPty.set(id, queue)
+      this.addPendingProducerBytes(id, pending)
       if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, data)) {
         queue[0].interactive = true
         if (this.flushPtyOutput(id)) {
@@ -1004,23 +1065,31 @@ export class PtyHandler {
     const existing = queue.at(-1)
     if (meta.transformed === true) {
       if (queue.length === 0) {
-        const transformed = { data, ...meta }
+        const transformed = this.initializePendingProducerCharge({ data, ...meta })
         if (this.publishPtyOutput(id, transformed, false)) {
           return
         }
         queue.push(transformed)
+        // Registering after direct publish preserves legacy overwrite semantics for re-entrant ingress.
+        this.replacePendingOutputQueue(id, queue, this.pendingProducerChargeForEntry(transformed))
       } else if (existing?.transformed) {
+        const previousCharge = this.pendingProducerChargeForEntry(existing)
         existing.data += data
         existing.rawLength = (existing.rawLength ?? 0) + (meta.rawLength ?? data.length)
         existing.seq = meta.seq
+        this.refreshPendingProducerCharge(id, existing, previousCharge)
       } else {
-        queue.push({ data, ...meta })
+        const transformed = this.initializePendingProducerCharge({ data, ...meta })
+        queue.push(transformed)
+        this.addPendingProducerBytes(id, transformed)
       }
       this.pendingOutputByPty.set(id, queue)
       this.pausePtyOutput(id)
       return
     }
     const pending: PendingPtyOutput = existing && !existing.transformed ? existing : { data: '' }
+    const previousCharge =
+      existing && !existing.transformed ? this.pendingProducerChargeForEntry(pending) : 0
     const previousLength = pending.data.length
     pending.data += data
     if (pending.rawLength !== undefined || meta.rawLength !== undefined) {
@@ -1030,7 +1099,11 @@ export class PtyHandler {
       pending.seq = meta.seq
     }
     if (!existing || existing.transformed) {
+      this.initializePendingProducerCharge(pending)
       queue.push(pending)
+      this.addPendingProducerBytes(id, pending)
+    } else {
+      this.refreshPendingProducerCharge(id, pending, previousCharge)
     }
     this.pendingOutputByPty.set(id, queue)
     if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, pending.data)) {
@@ -1057,18 +1130,23 @@ export class PtyHandler {
     // Why batch before the first send: a re-entrant sink must read the values a whole-map snapshot
     // would have frozen. Why the raw iterator: `for...of` would consume one entry past the limit.
     const pendingEntries = this.pendingOutputByPty[Symbol.iterator]()
-    const batch: [string, PendingPtyOutput[]][] = []
+    const batch: [string, PendingPtyOutput[], number][] = []
     while (batch.length < PTY_OUTPUT_FLUSH_MAX_WRITES) {
       const next = pendingEntries.next()
       if (next.done === true) {
         break
       }
-      batch.push([next.value[0], next.value[1].map((pending) => ({ ...pending }))])
+      const [id, queue] = next.value
+      batch.push([
+        id,
+        queue.map((pending) => ({ ...pending })),
+        this.pendingProducerBytesByPty.get(id) ?? 0
+      ])
     }
     let writes = 0
-    for (const [id, queue] of batch) {
-      this.pendingOutputByPty.delete(id)
-      if (this.flushPtyOutput(id, queue)) {
+    for (const [id, queue, chargedBytes] of batch) {
+      this.deletePendingOutput(id)
+      if (this.flushPtyOutput(id, queue, chargedBytes)) {
         writes++
       }
     }
@@ -1078,13 +1156,21 @@ export class PtyHandler {
     }
   }
 
-  private flushPtyOutput(id: string, capturedQueue?: PendingPtyOutput[]): boolean {
+  private flushPtyOutput(
+    id: string,
+    capturedQueue?: PendingPtyOutput[],
+    capturedProducerBytes?: number
+  ): boolean {
     const queue = capturedQueue ?? this.pendingOutputByPty.get(id)
     const pending = queue?.[0]
     if (!queue || !pending) {
       this.publishPendingExit(id)
       return true
     }
+    const queueWasCaptured = capturedQueue !== undefined
+    const capturedQueueBytes = queueWasCaptured
+      ? (capturedProducerBytes ?? this.pendingProducerChargeForEntry(pending))
+      : (this.pendingProducerBytesByPty.get(id) ?? this.pendingProducerChargeForEntry(pending))
     const desiredChars = pending.transformed
       ? pending.data.length
       : Math.min(pending.data.length, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
@@ -1117,7 +1203,7 @@ export class PtyHandler {
       (!sourceOnlyEmission && chunkChars <= 0) ||
       (pending.transformed && chunkChars !== pending.data.length)
     ) {
-      this.pendingOutputByPty.set(id, queue)
+      this.restorePendingOutputAfterFlush(id, queue, capturedQueueBytes, queueWasCaptured)
       this.pausePtyOutput(id)
       return false
     }
@@ -1141,30 +1227,42 @@ export class PtyHandler {
     pending.sourceChunk = sourceChunk
     const published = this.publishPtyOutput(id, sourceChunk, pending.interactive === true)
     if (!published) {
-      this.pendingOutputByPty.set(id, queue)
+      this.restorePendingOutputAfterFlush(id, queue, capturedQueueBytes, queueWasCaptured)
       this.pausePtyOutput(id)
       return false
     }
+    const queueStillTracked = !queueWasCaptured && this.pendingOutputByPty.get(id) === queue
+    const queueChargeAfterPublish = queueStillTracked
+      ? (this.pendingProducerBytesByPty.get(id) ?? capturedQueueBytes)
+      : capturedQueueBytes
+    const pendingChargeAfterPublish = this.pendingProducerChargeForEntry(pending)
     // rawLength fallback is defensive only: transformed memos always carry rawLength (ingress meta).
     const publishedRawLength = sourceChunk.rawLength ?? sourceChunk.data.length
     const remainingRawLength = pending.transformed
       ? (pending.rawLength ?? 0) - publishedRawLength
       : remaining.length
     if (remaining || (pending.transformed && remainingRawLength > 0)) {
-      queue[0] = {
+      const remainder = this.initializePendingProducerCharge({
         data: remaining,
         ...(pending.transformed ? { transformed: true } : {}),
         ...(pending.rawLength === undefined ? {} : { rawLength: remainingRawLength }),
         seq: pending.seq
-      }
+      })
+      queue[0] = remainder
+      const nextQueueBytes =
+        queueChargeAfterPublish -
+        pendingChargeAfterPublish +
+        this.pendingProducerChargeForEntry(remainder)
+      this.replacePendingOutputQueue(id, queue, nextQueueBytes)
     } else {
       queue.shift()
-    }
-    if (queue.length === 0) {
-      this.pendingOutputByPty.delete(id)
-      this.publishPendingExit(id)
-    } else {
-      this.pendingOutputByPty.set(id, queue)
+      const nextQueueBytes = queueChargeAfterPublish - pendingChargeAfterPublish
+      if (queue.length === 0) {
+        this.deletePendingOutput(id)
+        this.publishPendingExit(id)
+      } else {
+        this.replacePendingOutputQueue(id, queue, nextQueueBytes)
+      }
     }
     this.maybeResumePtyOutput(id)
     this.clearOutputFlushTimerIfIdle()
@@ -1180,7 +1278,7 @@ export class PtyHandler {
   }
 
   private clearPtyFlowState(id: string): void {
-    this.pendingOutputByPty.delete(id)
+    this.deletePendingOutput(id)
     this.pendingExitByPty.delete(id)
     this.pausedOutputPtys.delete(id)
     this.consumerPausedOutputPtys.delete(id)
@@ -1283,12 +1381,76 @@ export class PtyHandler {
     this.pendingExitByPty.delete(id)
   }
 
+  private pendingProducerCharge(data: string): number {
+    return chargedPtyRetainedStringBytes(data)
+  }
+
+  private initializePendingProducerCharge(pending: PendingPtyOutput): PendingPtyOutput {
+    pending.producerChargeBytes = this.pendingProducerCharge(pending.data)
+    return pending
+  }
+
+  private pendingProducerChargeForEntry(pending: PendingPtyOutput): number {
+    if (pending.producerChargeBytes === undefined) {
+      pending.producerChargeBytes = this.pendingProducerCharge(pending.data)
+    }
+    return pending.producerChargeBytes
+  }
+
+  private addPendingProducerBytes(id: string, pending: PendingPtyOutput): void {
+    const charge = this.pendingProducerChargeForEntry(pending)
+    this.pendingProducerBytesByPty.set(id, (this.pendingProducerBytesByPty.get(id) ?? 0) + charge)
+  }
+
+  private refreshPendingProducerCharge(
+    id: string,
+    pending: PendingPtyOutput,
+    previousCharge: number
+  ): void {
+    const nextCharge = this.pendingProducerCharge(pending.data)
+    pending.producerChargeBytes = nextCharge
+    const currentTotal = this.pendingProducerBytesByPty.get(id)
+    if (currentTotal === undefined) {
+      return
+    }
+    this.pendingProducerBytesByPty.set(id, currentTotal + nextCharge - previousCharge)
+  }
+
+  private deletePendingOutput(id: string): void {
+    this.pendingOutputByPty.delete(id)
+    this.pendingProducerBytesByPty.delete(id)
+  }
+
+  private replacePendingOutputQueue(
+    id: string,
+    queue: PendingPtyOutput[],
+    chargedBytes: number
+  ): void {
+    if (queue.length === 0) {
+      this.deletePendingOutput(id)
+      return
+    }
+    this.pendingOutputByPty.set(id, queue)
+    this.pendingProducerBytesByPty.set(id, chargedBytes)
+  }
+
+  private restorePendingOutputAfterFlush(
+    id: string,
+    queue: PendingPtyOutput[],
+    capturedBytes: number,
+    wasCaptured: boolean
+  ): void {
+    if (wasCaptured || this.pendingOutputByPty.get(id) !== queue) {
+      this.replacePendingOutputQueue(id, queue, capturedBytes)
+      return
+    }
+    // A live queue remains tracked through a failed send; ingress may have coalesced into it while
+    // the sink was called, so keep the incrementally maintained total instead of replacing it.
+    this.pendingOutputByPty.set(id, queue)
+  }
+
   private pendingProducerBytes(id: string): number {
-    return (this.pendingOutputByPty.get(id) ?? []).reduce(
-      (total, pending) =>
-        total + Math.max(Buffer.byteLength(pending.data, 'utf8'), 2 * pending.data.length) + 128,
-      0
-    )
+    return this.pendingProducerBytesByPty.get(id) ?? 0
   }
 
   private pausePtyOutput(id: string): void {
@@ -1580,7 +1742,7 @@ export class PtyHandler {
     const shell = resolvedShellOverride || requestedEnvShell || resolveDefaultShell()
     let id: string
     do {
-      id = `pty-${this.nextId++}`
+      id = `pty2:${encodeURIComponent(this.ptyIdMintEpoch)}:${this.nextId++}`
     } while (this.ptys.has(id) || this.pendingReviveIds.has(id))
 
     // Why: augmenter values override renderer env so remote paths and hook coords win over local userData.
@@ -1778,18 +1940,11 @@ export class PtyHandler {
 
     // Why: verify liveness because shells can exit without node-pty onExit.
     if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
-      managed.physicalExit?.markExited()
-      this.releaseRelayIngress(managed)
-      this.flushPtyOutput(id)
-      this.notifyExitListener(managed)
-      this.agentSessionOwners.release(managed.id)
-      disposeManagedPty(managed)
-      this.removePty(id)
-      this.clearPtyFlowState(id)
+      this.reapExitedPty(managed)
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Why: generation resets can reuse PTY IDs; reject conflicting identities.
+    // Why: legacy `pty-N` ids repeated across relay generations; reject conflicting identities.
     const mismatch = attachIdentityMismatches(
       {
         paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
@@ -1799,6 +1954,14 @@ export class PtyHandler {
     )
     if (mismatch) {
       throw new Error(`PTY "${id}" not found (identity mismatch)`)
+    }
+
+    // Why: an accepted attach is a client surface for this pane, so a prior retirement no longer
+    // describes anything — without this a reattach to a shut-down-but-surviving PTY would keep the
+    // pane's agent hooks muted for the rest of the daemon's life.
+    const attachedPaneKey = managed.paneKey ?? managed.attachIdentity?.paneKey
+    if (attachedPaneKey) {
+      this.retiredPaneSurfaces.restore(attachedPaneKey)
     }
 
     managed.startupIngress?.snapshotBarrier()
@@ -1853,7 +2016,7 @@ export class PtyHandler {
     const replay = managed.buffered.read()
     if (replay) {
       // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
-      this.pendingOutputByPty.delete(id)
+      this.deletePendingOutput(id)
       this.clearOutputFlushTimerIfIdle()
       this.maybeResumePtyOutput(id)
       if (params.suppressReplayNotification) {
@@ -1913,9 +2076,30 @@ export class PtyHandler {
   private async shutdown(params: Record<string, unknown>): Promise<void> {
     const id = params.id as string
     const immediate = params.immediate as boolean
+    const expectedIncarnationId = params.expectedIncarnationId
+    if (
+      expectedIncarnationId !== undefined &&
+      (typeof expectedIncarnationId !== 'string' || expectedIncarnationId.length === 0)
+    ) {
+      throw new Error('Invalid expectedIncarnationId')
+    }
     const managed = this.ptys.get(id)
     if (!managed) {
       return
+    }
+    if (expectedIncarnationId !== undefined && expectedIncarnationId !== managed.incarnationId) {
+      throw new Error(`PTY incarnation mismatch for ${id}`)
+    }
+    // Why: `pty.shutdown` is the only authoritative statement this host ever gets that a tab is
+    // gone. Record it before the kill request, because the kill is the part that can fail: an agent
+    // that survives teardown otherwise keeps posting hooks the relay forwards as a live agent pane
+    // with no tab, and that advertisement is what drives a second `--resume` onto its transcript.
+    // Why gated on an actual retirement: the teardown below is fire-and-forget — one SIGTERM, one
+    // armed SIGKILL, and nobody ever looks again. Re-probing is what stops a retired pane's shell
+    // outliving its tab; a PTY with no pane surface has nothing to outlive, so its long-standing
+    // teardown contract is left exactly as it was.
+    if (this.retirePaneSurface(managed)) {
+      this.armShutdownReapSweep(managed, SHUTDOWN_REAP_MAX_SWEEPS)
     }
 
     if (immediate) {
@@ -1928,6 +2112,93 @@ export class PtyHandler {
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'force-kill')
     }
+  }
+
+  /** Record that this pane's client surface is gone, and tell the hook server so the pane's cached
+   *  agent status stops being replayed to reconnecting clients. Returns false when there is no pane
+   *  surface to retire. */
+  private retirePaneSurface(managed: ManagedPty): boolean {
+    const paneKey = managed.paneKey ?? managed.attachIdentity?.paneKey
+    if (!paneKey) {
+      return false
+    }
+    this.retiredPaneSurfaces.retire(paneKey)
+    const listener = this.surfaceRetiredListener
+    if (!listener) {
+      return true
+    }
+    try {
+      listener({ id: managed.id, paneKey })
+    } catch (err) {
+      process.stderr.write(
+        `[pty-handler] surface-retired listener threw: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+    }
+    return true
+  }
+
+  /**
+   * After a retirement, verify the host actually reaped the shell rather than trusting the kill
+   * request. Two outcomes matter and both are bookkeeping the relay previously never did:
+   *
+   * - the pid is gone but node-pty never produced `onExit` — retire the record here, so the entry
+   *   and its agent-session owners stop being published by `pty.listProcesses`;
+   * - the pid is still alive — re-issue the force kill instead of leaving a detached shell (and the
+   *   agent inside it) outliving its tab for the life of the daemon.
+   *
+   * Bounded: after {@link SHUTDOWN_REAP_MAX_SWEEPS} the owner claim is deliberately *retained*.
+   * Releasing a claim we cannot prove dead is what lets a reopened project spawn a second agent
+   * over one transcript; keeping it makes the next `pty.spawn` adopt this PTY instead.
+   */
+  private armShutdownReapSweep(managed: ManagedPty, attemptsRemaining: number): void {
+    if (managed.reapTimer) {
+      return
+    }
+    const timer = setTimeout(() => {
+      managed.reapTimer = undefined
+      if (this.ptys.get(managed.id) !== managed || managed.disposed) {
+        return
+      }
+      const pid = managed.pty.pid
+      if (pid && !isProcessAlive(pid)) {
+        this.reapExitedPty(managed)
+        return
+      }
+      if (attemptsRemaining <= 0) {
+        process.stderr.write(
+          `[pty-handler] retired pane PTY ${managed.id} still alive after force kill; ownership retained as unverifiable\n`
+        )
+        return
+      }
+      // Why POSIX-only: a SIGKILL that returned success is not proof of death there — the group
+      // probe can degrade to a root-pid kill, leaving the agent running under a shell nobody is
+      // watching. On Windows ConPTY's kill is already force-final and closing its handle twice is
+      // the hazard disposeManagedPty guards against, so the probe above is the whole sweep.
+      if (process.platform !== 'win32') {
+        managed.forceKillSent = false
+        try {
+          this.requestForceKill(managed)
+        } catch {
+          /* Re-probed on the next sweep; a transient failure must not end the escalation. */
+        }
+      }
+      this.armShutdownReapSweep(managed, attemptsRemaining - 1)
+    }, SHUTDOWN_REAP_VERIFY_DELAY_MS)
+    timer.unref?.()
+    managed.reapTimer = timer
+  }
+
+  /** Retire every record for a PTY whose process is proven gone. Shared by the attach probe, the
+   *  listing probe and the post-shutdown sweep so the three cannot drift on what "gone" retires. */
+  private reapExitedPty(managed: ManagedPty): void {
+    managed.physicalExit?.markExited()
+    this.releaseRelayIngress(managed)
+    this.flushPtyOutput(managed.id)
+    this.notifyExitListener(managed)
+    this.agentSessionOwners.release(managed.id)
+    disposeManagedPty(managed)
+    this.removePty(managed.id)
+    this.clearPtyFlowState(managed.id)
   }
 
   private async sendSignal(params: Record<string, unknown>): Promise<void> {
@@ -2101,9 +2372,56 @@ export class PtyHandler {
 
   private async listProcesses(): Promise<PtyProcessSummary[]> {
     const results: PtyProcessSummary[] = []
-    for (const [id, managed] of this.ptys) {
+    // Why (SSH-v3 P2 — the host is the authoritative liveness source, so it has to look): this
+    // listing is what publishes `agentSessionOwners`, i.e. "there is a live agent session here you
+    // can adopt". A shell can exit without node-pty's onExit, and an unverified entry advertised
+    // that session forever. Snapshot the map because reaping mutates it.
+    const managedEntries = Array.from(this.ptys)
+    // R1 seed evidence is additive and POSIX-only. Windows authorities retain
+    // the existing title/liveness path until the measured relay adapter lands.
+    let evidenceRows: readonly ProcessTableRow[] | null = null
+    let evidenceResults: BatchedForegroundProcessResult[] = []
+    const evidenceEpoch = ++this.foregroundEvidenceEpoch
+    if (process.platform !== 'win32' && managedEntries.length > 0) {
+      try {
+        evidenceRows = await getStrictProcessTableSnapshot()
+        evidenceResults = await resolveAgentForegroundProcessesBatch(
+          managedEntries.map(([, managed]) => ({
+            rootPid: managed.pty.pid,
+            fallbackProcess: managed.pty.process || null
+          })),
+          { rows: evidenceRows }
+        )
+      } catch {
+        // An unreadable capture is represented as unverifiable evidence below;
+        // existing inventory fields remain available for old clients.
+      }
+    }
+    for (const [entryIndex, [id, managed]] of managedEntries.entries()) {
+      if (managed.disposed || (managed.pty.pid && !isProcessAlive(managed.pty.pid))) {
+        this.reapExitedPty(managed)
+        continue
+      }
+      // Reuse batched correlation; per-PTY tree scans recreate O(PTY × rows) work.
       const title =
-        (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
+        (evidenceRows
+          ? (evidenceResults[entryIndex]?.processName ?? managed.pty.process ?? null)
+          : await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
+      const foregroundProcessEvidence =
+        process.platform !== 'win32'
+          ? toForegroundProcessEvidence(
+              evidenceResults[entryIndex] ?? {
+                available: false,
+                processName: managed.pty.process || null,
+                reason: 'table_unreadable'
+              },
+              {
+                authorityGeneration: this.ptyIdMintEpoch,
+                observationEpoch: evidenceEpoch,
+                capturedAgeMs: 0
+              }
+            )
+          : undefined
       results.push({
         id,
         incarnationId: managed.incarnationId,
@@ -2111,6 +2429,7 @@ export class PtyHandler {
         title,
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
+        ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
         ...(this.agentSessionOwners.listForPty(id).length
           ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
           : {})
@@ -2330,6 +2649,37 @@ export class PtyHandler {
     }
   }
 
+  /**
+   * Reap every owned PTY synchronously, for the fatal-exit path only.
+   *
+   * Runs to completion across all PTYs: one shell that refuses to die must not
+   * strand the rest. The first failure is rethrown so the caller can record it --
+   * a reap that failed on a remote host is otherwise invisible.
+   */
+  forceKillAllPtyProcesses(): void {
+    let firstError: unknown
+    let hasError = false
+    for (const managed of this.ptys.values()) {
+      try {
+        // Why mark rather than skip: the job already took the whole tree, and the
+        // flag is what suppresses the redundant signal -- here in requestForceKill,
+        // and in any dispose that still runs after this.
+        if (process.platform === 'win32' && terminatePtyJob(managed.pty) === 'terminated') {
+          managed.forceKillSent = true
+        }
+        this.requestForceKill(managed)
+      } catch (error) {
+        if (!hasError) {
+          firstError = error
+          hasError = true
+        }
+      }
+    }
+    if (hasError) {
+      throw firstError
+    }
+  }
+
   dispose(options: { waitForPhysicalExit?: boolean } = {}): Promise<void> {
     // Why: fence synchronously before the first await so a spawn/revive can't slip past disposal and escape exit.
     this.creationFenced = true
@@ -2362,6 +2712,7 @@ export class PtyHandler {
       this.outputFlushTimer = null
     }
     this.pendingOutputByPty.clear()
+    this.pendingProducerBytesByPty.clear()
     this.pendingExitByPty.clear()
     this.pausedOutputPtys.clear()
     this.consumerPausedOutputPtys.clear()

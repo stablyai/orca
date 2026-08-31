@@ -8,7 +8,7 @@ import {
   mergePersistedWindowsPathAsync
 } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
-import { execLocalPreflightCommand } from './preflight-command-exec'
+import { execLocalPreflightCommandOrThrow } from './preflight-command-exec'
 
 describe.runIf(process.platform === 'win32')('Windows preflight Path refresh reproduction', () => {
   const originalPath = process.env.Path ?? process.env.PATH ?? ''
@@ -42,7 +42,7 @@ describe.runIf(process.platform === 'win32')('Windows preflight Path refresh rep
     }))
     __resetPersistedWindowsPathCacheForTests()
 
-    await expect(execLocalPreflightCommand(command, ['/?'])).rejects.toMatchObject({
+    await expect(execLocalPreflightCommandOrThrow(command, ['/?'])).rejects.toMatchObject({
       code: 'ENOENT'
     })
 
@@ -50,7 +50,7 @@ describe.runIf(process.platform === 'win32')('Windows preflight Path refresh rep
     const refreshOptions = { forceRefresh: true }
     await mergePersistedWindowsPathAsync(process.env, refreshOptions)
 
-    await expect(execLocalPreflightCommand(command, ['/?'])).resolves.toMatchObject({
+    await expect(execLocalPreflightCommandOrThrow(command, ['/?'])).resolves.toMatchObject({
       stdout: expect.any(String)
     })
     expect(getRegistryKey).toHaveBeenCalledTimes(4)

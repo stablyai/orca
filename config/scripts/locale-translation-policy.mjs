@@ -351,10 +351,13 @@ function phraseFixMatchesEnglish(enValue, fix) {
   return enValue.toLowerCase().includes(fix.whenEnIncludes.toLowerCase())
 }
 
-function applyPhraseFixes(enValue, localeValue, locale) {
+function applyPhraseFixes(enValue, localeValue, locale, key = '') {
   let result = localeValue
   for (const fix of LOCALE_PHRASE_FIXES[locale] ?? []) {
     if (!phraseFixMatchesEnglish(enValue, fix)) {
+      continue
+    }
+    if (fix.skipKeyPrefixes?.some((prefix) => key.startsWith(prefix))) {
       continue
     }
     result = result.replace(fix.pattern, fix.replacement)
@@ -367,7 +370,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   if (keyOverride) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
     let result = applyBrandMistranslationFixes(enValue, keyOverride, locale, key)
-    result = applyPhraseFixes(enValue, result, locale)
+    result = applyPhraseFixes(enValue, result, locale, key)
     if (['zh', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
     }
@@ -377,7 +380,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   const valueOverride = LOCALE_VALUE_OVERRIDES[locale]?.[enValue]
   if (valueOverride) {
     let result = applyBrandMistranslationFixes(enValue, valueOverride, locale, key)
-    result = applyPhraseFixes(enValue, result, locale)
+    result = applyPhraseFixes(enValue, result, locale, key)
     if (['zh', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
     }
@@ -398,7 +401,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   }
 
   result = applyBrandMistranslationFixes(enValue, result, locale, key)
-  result = applyPhraseFixes(enValue, result, locale)
+  result = applyPhraseFixes(enValue, result, locale, key)
   if (['zh', 'ja', 'ko'].includes(locale)) {
     result = applyCjkLatinTermSpacing(result, locale)
   }

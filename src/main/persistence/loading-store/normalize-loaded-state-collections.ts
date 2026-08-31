@@ -1,4 +1,8 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  normalizeProjectHostSetupRows,
+  normalizeProjectRows
+} from '../../../shared/project-catalog-row-normalization'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-session-salvage'
 import {
@@ -63,4 +67,22 @@ export function normalizeLoadedAutomationRuns(
     markNeedsSave()
   }
   return runs
+}
+
+/**
+ * Repairs project/setup rows whose stored field types do not match the declared ones — a null
+ * `repoId` or `path` written by an older build reaches every consumer that calls `.trim()` on it.
+ * Marking dirty is the migration: without a save the bad rows stay on disk and are repaired again
+ * every launch, and this host keeps publishing them to paired clients over the wire.
+ */
+export function normalizeLoadedProjectCatalog(
+  parsed: Partial<Pick<PersistedState, 'projects' | 'projectHostSetups'>>,
+  markNeedsSave: () => void
+): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
+  const projects = normalizeProjectRows(parsed.projects ?? [])
+  const projectHostSetups = normalizeProjectHostSetupRows(parsed.projectHostSetups ?? [])
+  if (projects !== parsed.projects || projectHostSetups !== parsed.projectHostSetups) {
+    markNeedsSave()
+  }
+  return { projects, projectHostSetups }
 }

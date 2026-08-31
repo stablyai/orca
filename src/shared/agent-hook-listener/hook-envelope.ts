@@ -1,8 +1,91 @@
+import { Buffer } from 'node:buffer'
+import type { IncomingHttpHeaders } from 'node:http'
+
 import type { AgentHookSource } from '../agent-hook-relay'
 import { parsePaneKey } from '../stable-pane-id'
 import { MAX_PANE_KEY_LEN, warnOnHookEnvOrVersionMismatch } from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import { parseAgentHookJson } from './request-body'
+
+function readHookHeader(headers: IncomingHttpHeaders, name: string): string | undefined {
+  const value = headers[name]
+  return Array.isArray(value) ? value[0] : value
+}
+
+function decodeBase64HookHeader(value: string): string | undefined {
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 === 1) {
+    return undefined
+  }
+  const decoded = Buffer.from(value, 'base64').toString('utf8')
+  const normalizedInput = value.replace(/=+$/, '')
+  const normalizedRoundTrip = Buffer.from(decoded, 'utf8').toString('base64').replace(/=+$/, '')
+  return normalizedRoundTrip === normalizedInput ? decoded : undefined
+}
+
+function readHookMetadataHeader(
+  headers: IncomingHttpHeaders,
+  name: string,
+  encoding: 'base64' | undefined
+): string | undefined {
+  const value = readHookHeader(headers, name)
+  if (value === undefined) {
+    return undefined
+  }
+  return encoding === 'base64' ? decodeBase64HookHeader(value) : value
+}
+
+type HookMetadata = {
+  paneKey: string
+  tabId?: string
+  launchToken?: string
+  worktreeId?: string
+  env?: string
+  version?: string
+}
+
+function readPackedHookMetadata(
+  headers: IncomingHttpHeaders,
+  encoding: 'base64' | undefined
+): HookMetadata | null {
+  const encoded = readHookHeader(headers, 'x-orca-agent-hook-meta')
+  if (encoded === undefined || encoding !== 'base64') {
+    return null
+  }
+  const decoded = decodeBase64HookHeader(encoded)
+  if (decoded === undefined) {
+    return null
+  }
+  // POSIX command substitution strips NUL bytes, so use the shell-safe unit separator.
+  const fields = decoded.split('\x1f')
+  if (fields.length !== 6 || !fields[0]) {
+    return null
+  }
+  const [paneKey, tabId, launchToken, worktreeId, env, version] = fields
+  return { paneKey, tabId, launchToken, worktreeId, env, version }
+}
+
+/** Rebuilds the canonical envelope for POSIX hooks that carry raw JSON bodies. */
+export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHttpHeaders): unknown {
+  const metadataEncoding =
+    readHookHeader(headers, 'x-orca-agent-hook-meta-encoding')?.trim().toLowerCase() === 'base64'
+      ? 'base64'
+      : undefined
+  const metadata = readPackedHookMetadata(headers, metadataEncoding) ?? {
+    paneKey: readHookMetadataHeader(headers, 'x-orca-pane-key', metadataEncoding) ?? '',
+    tabId: readHookMetadataHeader(headers, 'x-orca-tab-id', metadataEncoding),
+    launchToken: readHookMetadataHeader(headers, 'x-orca-launch-token', metadataEncoding),
+    worktreeId: readHookMetadataHeader(headers, 'x-orca-worktree-id', metadataEncoding),
+    env: readHookMetadataHeader(headers, 'x-orca-agent-hook-env', metadataEncoding),
+    version: readHookMetadataHeader(headers, 'x-orca-agent-hook-version', metadataEncoding)
+  }
+  if (!metadata.paneKey) {
+    return body
+  }
+  return {
+    ...metadata,
+    payload: body
+  }
+}
 function readEnvelopeString(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {

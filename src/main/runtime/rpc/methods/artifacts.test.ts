@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../../../shared/artifacts'
+import {
+  ARTIFACT_MAX_CONTENT_BYTES,
+  ARTIFACT_MAX_REQUEST_BYTES
+} from '../../../../shared/artifacts'
 import { ARTIFACT_METHODS } from './artifacts'
 
 const validRequest = {
@@ -32,14 +35,55 @@ describe('artifact RPC schemas', () => {
     const schema = writeSchema('artifacts.publish')
     expect(schema.safeParse({ ...validRequest, content: '' }).success).toBe(false)
     expect(
-      schema.safeParse({ ...validRequest, content: 'x'.repeat(ARTIFACT_CLI_MAX_RPC_BYTES + 1) })
+      schema.safeParse({ ...validRequest, content: 'x'.repeat(ARTIFACT_MAX_CONTENT_BYTES + 1) })
         .success
     ).toBe(false)
     expect(
       schema.safeParse({
         ...validRequest,
-        content: '"'.repeat(Math.floor(ARTIFACT_CLI_MAX_RPC_BYTES / 2))
+        content: '"'.repeat(ARTIFACT_MAX_CONTENT_BYTES + 1)
       }).success
     ).toBe(false)
+  })
+
+  it('accepts a 5 MiB UTF-8 artifact at the content boundary', () => {
+    expect(
+      writeSchema('artifacts.publish').safeParse({
+        ...validRequest,
+        content: 'a'.repeat(ARTIFACT_MAX_CONTENT_BYTES)
+      }).success
+    ).toBe(true)
+  })
+
+  it('measures the content boundary in UTF-8 bytes', () => {
+    const exact = `${'€'.repeat(Math.floor(ARTIFACT_MAX_CONTENT_BYTES / 3))}aa`
+    const oversized = `${exact}€`
+    expect(new TextEncoder().encode(exact).byteLength).toBe(ARTIFACT_MAX_CONTENT_BYTES)
+    expect(new TextEncoder().encode(oversized).byteLength).toBeGreaterThan(
+      ARTIFACT_MAX_CONTENT_BYTES
+    )
+    expect(
+      writeSchema('artifacts.publish').safeParse({ ...validRequest, content: exact }).success
+    ).toBe(true)
+    expect(
+      writeSchema('artifacts.publish').safeParse({ ...validRequest, content: oversized }).success
+    ).toBe(false)
+  })
+
+  it('allows JSON escaping within the bounded 5 MiB content request', () => {
+    expect(
+      writeSchema('artifacts.publish').safeParse({
+        ...validRequest,
+        content: '"'.repeat(ARTIFACT_MAX_CONTENT_BYTES)
+      }).success
+    ).toBe(true)
+  })
+
+  it('rejects an escaped envelope beyond the request budget', () => {
+    const content = '\u0000'.repeat(Math.ceil(ARTIFACT_MAX_REQUEST_BYTES / 6))
+    expect(new TextEncoder().encode(content).byteLength).toBeLessThan(ARTIFACT_MAX_CONTENT_BYTES)
+    expect(writeSchema('artifacts.publish').safeParse({ ...validRequest, content }).success).toBe(
+      false
+    )
   })
 })

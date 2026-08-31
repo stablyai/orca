@@ -56,4 +56,31 @@ describe('resolveBrowserAddressBarSubmission', () => {
   it('treats blank input as the blank page rather than an error', () => {
     expect(resolveBrowserAddressBarSubmission('   ')).toMatchObject({ status: 'navigate' })
   })
+
+  it('keeps file URLs navigable for the local browser pane', () => {
+    expect(resolveBrowserAddressBarSubmission('/tmp/report.html')).toMatchObject({
+      status: 'navigate',
+      url: 'file:///tmp/report.html'
+    })
+  })
+
+  it('explains the refusal instead of blanking the tab when a client-hosted page gets a file URL', () => {
+    expect(
+      resolveBrowserAddressBarSubmission('/tmp/report.html', { allowFileUrls: false })
+    ).toEqual({
+      status: 'invalid',
+      loadError: {
+        code: 0,
+        description:
+          'This browser tab cannot open local files. Use "Open Preview to the Side" on the file instead.',
+        validatedUrl: '/tmp/report.html'
+      }
+    })
+  })
+
+  it('still navigates http(s) when file URLs are refused', () => {
+    expect(
+      resolveBrowserAddressBarSubmission('https://example.com', { allowFileUrls: false })
+    ).toMatchObject({ status: 'navigate' })
+  })
 })

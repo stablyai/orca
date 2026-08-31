@@ -4,9 +4,11 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { removeWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
 import {
+  getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
+import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
 
 export function pruneWorktreeStateForRepo(
   state: PersistedState,
@@ -67,6 +69,14 @@ export function pruneWorktreeStateForRepo(
       delete state.worktreeMeta[key]
     }
   }
+  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
+    const rawId = getWorktreeIdFromHostIdentity(alias)
+    const aliasHost = getExecutionHostIdFromWorktreeHostIdentity(alias)
+    if (rawId.startsWith(prefix) && (hostId === null || aliasHost === hostId)) {
+      delete state.worktreeIdentityAliases?.[alias]
+    }
+  }
+  pruneUnreferencedWorktreeIdentityMeta(state)
   // Why: a host-scoped prune must touch only that host's session (legacy blob = local, one partition
   // per remote host); pruning every partition would wipe a surviving host's tabs and sleeping agents
   // for a shared repo id/path. A full removal (hostId === null) still clears every host.

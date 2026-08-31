@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
@@ -27,6 +27,14 @@ async function createStore() {
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
   return new Store()
+}
+
+/** Simulate registry drift after a record was stored; the create path derives contexts itself. */
+function mutateDataFile(mutate: (state: { automations: Record<string, unknown>[] }) => void): void {
+  const file = join(testState.dir, 'orca-data.json')
+  const state = JSON.parse(readFileSync(file, 'utf-8'))
+  mutate(state)
+  writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8')
 }
 
 const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
@@ -133,21 +141,24 @@ describe('AutomationService', () => {
       prompt: 'Check the repo',
       agentId: 'claude',
       projectId: 'r1',
-      runContext: {
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    mutateDataFile((state) => {
+      state.automations[0].runContext = {
         kind: 'workspace-run',
         projectId: 'project-1',
         hostId: 'local',
         projectHostSetupId: 'missing-setup',
         repoId: 'r1',
         path: '/repo'
-      },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+      }
     })
+    const reloaded = await createStore()
     const send = vi.fn()
-    const service = new AutomationService(store, { tickMs: 60_000 })
+    const service = new AutomationService(reloaded, { tickMs: 60_000 })
     service.setWebContents({
       isDestroyed: () => false,
       send
@@ -171,21 +182,24 @@ describe('AutomationService', () => {
       prompt: 'Check the repo',
       agentId: 'claude',
       projectId: 'r1',
-      runContext: {
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    mutateDataFile((state) => {
+      state.automations[0].runContext = {
         kind: 'workspace-run',
         projectId: setup.projectId,
         hostId: setup.hostId,
         projectHostSetupId: setup.id,
         repoId: setup.repoId,
         path: '/repo/old'
-      },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+      }
     })
+    const reloaded = await createStore()
     const send = vi.fn()
-    const service = new AutomationService(store, { tickMs: 60_000 })
+    const service = new AutomationService(reloaded, { tickMs: 60_000 })
     service.setWebContents({
       isDestroyed: () => false,
       send

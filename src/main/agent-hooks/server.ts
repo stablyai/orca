@@ -8,7 +8,10 @@ import { join } from 'node:path'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../shared/telemetry-events'
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
+import {
+  ORCA_HOOK_PROTOCOL_VERSION,
+  ORCA_HOOK_RAW_JSON_TRANSPORT
+} from '../../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -46,6 +49,7 @@ import {
 } from '../../shared/agent-hook-listener/listener-limits'
 import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { mergeAgentHookRequestHeaders } from '../../shared/agent-hook-listener/hook-envelope'
 import {
   parseFormEncodedBody,
   readRequestBody
@@ -108,6 +112,7 @@ import {
   isAskUserQuestionTool,
   type AgentQuestionAnsweredInferenceRequest
 } from '../../shared/agent-question-answered-intent'
+import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from '../../shared/pane-key-alias'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/persisted-state-types'
 import {
@@ -116,6 +121,13 @@ import {
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
+import {
+  buildSpoolHookBody,
+  drainAgentHookSpool,
+  launchTokenHash,
+  type SpoolRecord
+} from '../../shared/agent-hook-spool'
+import { CodexSubagentPollScheduler } from '../../shared/codex-subagent-poll-scheduler'
 
 export type { AgentHookSource }
 
@@ -190,6 +202,7 @@ export type AgentHookAuthorityAttestation = Readonly<{
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 type ProviderSessionChangeListener = (providerSessions: AgentHookProviderSessionIdentity[]) => void
 type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
+type StatusDropListener = (paneKey: string) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
   stablePaneKey: string
@@ -210,6 +223,12 @@ const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
 const CODEX_SUBAGENT_POLL_MS = 1_000
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
+
+type CodexSubagentPoll = {
+  source: AgentHookSource
+  body: unknown
+  original: EnrichedAgentHookEventPayload
+}
 
 // Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
 const LAST_STATUS_FILE_VERSION = 2
@@ -694,6 +713,7 @@ export class AgentHookServer {
   private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
   private paneStatusClearListeners = new Set<PaneStatusClearListener>()
+  private statusDropListeners = new Set<StatusDropListener>()
   private statusChangeListeners = new Set<StatusChangeListener>()
   private providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
   // Why: setListener is a single slot owned by the main-window fanout; the
@@ -729,7 +749,10 @@ export class AgentHookServer {
   // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
   private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private codexSubagentPollScheduler = new CodexSubagentPollScheduler<CodexSubagentPoll>(
+    CODEX_SUBAGENT_POLL_MS,
+    (paneKey, poll) => this.runCodexSubagentPoll(paneKey, poll)
+  )
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   private activeHookTurnCompletedAtByPaneKey = new Map<string, number>()
   private promptSentHashSalt = randomBytes(16).toString('hex')
@@ -801,6 +824,44 @@ export class AgentHookServer {
     }
   }
 
+  /** Replay is durable evidence from a prior runtime, not a live observation. */
+  private withdrawReplayObservation(paneKey: string): void {
+    if (this.runtimeObservedStatusPaneKeys.delete(paneKey)) {
+      this.notifyStatusChangeListeners()
+    }
+  }
+
+  private ingestSpoolRecord(record: SpoolRecord): void {
+    if (!isAgentHookSource(record.source)) {
+      return
+    }
+    const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
+    const normalized = this.normalizeLocalHookPayload(record.source, body)
+    if (!normalized.event) {
+      return
+    }
+    const replay = { ...normalized.event, isReplay: true as const }
+    const statusDisposition = this.getAgentStatusDisposition(replay.paneKey, {
+      source: record.source,
+      hookEventName: replay.hookEventName,
+      isReplay: true,
+      hasExplicitPrompt: replay.hasExplicitPrompt,
+      launchToken: replay.launchToken
+    })
+    if (statusDisposition === 'suppress') {
+      return
+    }
+    const event = statusDisposition === 'restart' ? { ...replay, launchToken: undefined } : replay
+    if (statusDisposition === 'restart') {
+      this.observations.rebind(event.paneKey)
+    }
+    this.recordCurrentAuthorityObservation(event)
+    this.applyNormalizedStatus(event, normalized.onAccepted)
+    if (event.payload.state !== 'done') {
+      this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
+    }
+  }
+
   setPaneStatusClearListener(listener: PaneStatusClearListener | null): void {
     this.onPaneStatusCleared = listener
   }
@@ -812,6 +873,27 @@ export class AgentHookServer {
     this.paneStatusClearListeners.add(listener)
     return () => {
       this.paneStatusClearListeners.delete(listener)
+    }
+  }
+
+  /** Multi-subscriber tap on definitive live-row deletions. `dropStatusEntry` is a user
+   *  dismissal, so it never routes through the pane-status-clear fan-out — pane-owned
+   *  cleanup (synthetic spinners) still has to retire with the row it was driving. */
+  subscribeStatusDrop(listener: StatusDropListener): () => void {
+    this.statusDropListeners.add(listener)
+    return () => {
+      this.statusDropListeners.delete(listener)
+    }
+  }
+
+  private emitStatusDropped(paneKey: string): void {
+    for (const listener of this.statusDropListeners) {
+      // Why: matches every other fan-out here — one throwing subscriber must not strand the rest.
+      try {
+        listener(paneKey)
+      } catch (err) {
+        console.error('[agent-hooks] status-drop listener threw', err)
+      }
     }
   }
 
@@ -1585,12 +1667,7 @@ export class AgentHookServer {
   }
 
   private clearCodexSubagentPoll(paneKey: string): void {
-    const timer = this.codexSubagentPollTimers.get(paneKey)
-    if (!timer) {
-      return
-    }
-    clearTimeout(timer)
-    this.codexSubagentPollTimers.delete(paneKey)
+    this.codexSubagentPollScheduler.clear(paneKey)
   }
 
   private scheduleCodexSubagentPoll(
@@ -1602,29 +1679,32 @@ export class AgentHookServer {
     if (source !== 'codex') {
       return
     }
-    this.clearCodexSubagentPoll(original.paneKey)
+    this.codexSubagentPollScheduler.clear(original.paneKey)
     if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
       return
     }
-    const timer = setTimeout(() => {
-      this.codexSubagentPollTimers.delete(original.paneKey)
-      const current = this.state.lastStatusByPaneKey.get(original.paneKey)
-      if (!this.server || current !== original) {
-        return
-      }
-      const normalized = normalizeHookPayload(this.state, source, body, this.env)
-      if (!normalized) {
-        return
-      }
-      const subagentsChanged =
-        JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
-      this.scheduleCodexSubagentPoll(source, body, next)
-    }, CODEX_SUBAGENT_POLL_MS)
-    this.codexSubagentPollTimers.set(original.paneKey, timer)
-    if (typeof timer.unref === 'function') {
-      timer.unref()
+    this.codexSubagentPollScheduler.schedule(original.paneKey, { source, body, original })
+  }
+
+  private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
+    const { source, body, original } = poll
+    // Keep the identity check at callback time: a newer event supersedes this
+    // payload even when its pane still has transcript children.
+    if (
+      paneKey !== original.paneKey ||
+      !this.server ||
+      this.state.lastStatusByPaneKey.get(original.paneKey) !== original
+    ) {
+      return
     }
+    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    if (!normalized) {
+      return
+    }
+    const subagentsChanged =
+      JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
+    const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
+    this.scheduleCodexSubagentPoll(source, body, next)
   }
 
   private scheduleAssistantMessageRetry(
@@ -1780,13 +1860,18 @@ export class AgentHookServer {
     updatedAt = Date.now(),
     options?: { overwriteExisting?: boolean; authorityVerified?: boolean }
   ): void {
-    const legacy = parseLegacyNumericPaneKey(legacyPaneKey)
-    const stable = isValidPaneKey(stablePaneKey) ? parsePaneKey(stablePaneKey) : null
-    if (!legacy || !stable || legacy.tabId !== stable.tabId) {
+    const fromPaneKey = legacyPaneKey.trim()
+    const toPaneKey = stablePaneKey.trim()
+    if (!canRegisterPaneKeyAlias(fromPaneKey, toPaneKey)) {
       return
     }
-    const existing = this.legacyPaneKeyAliases.get(legacy.paneKey)
+    const existing = this.legacyPaneKeyAliases.get(fromPaneKey)
     if (existing && options?.overwriteExisting === false) {
+      return
+    }
+    // Why: remint tokens have no embedded tab id; first pane wins so a later spawn
+    // cannot steal leftover $$…:L$$ posts onto a different tab:leaf.
+    if (existing && existing.stablePaneKey !== toPaneKey && isOpaqueRemintedPaneKey(fromPaneKey)) {
       return
     }
     const normalizedPtyId =
@@ -1796,15 +1881,15 @@ export class AgentHookServer {
     const authorityVerified = options?.authorityVerified ?? false
     if (
       existing &&
-      existing.stablePaneKey === stablePaneKey &&
+      existing.stablePaneKey === toPaneKey &&
       existing.ptyId === (normalizedPtyId ?? null) &&
       existing.updatedAt === normalizedUpdatedAt &&
       existing.authorityVerified === authorityVerified
     ) {
       return
     }
-    this.legacyPaneKeyAliases.set(legacy.paneKey, {
-      stablePaneKey,
+    this.legacyPaneKeyAliases.set(fromPaneKey, {
+      stablePaneKey: toPaneKey,
       ptyId: normalizedPtyId ?? null,
       updatedAt: normalizedUpdatedAt,
       authorityVerified
@@ -2259,14 +2344,14 @@ export class AgentHookServer {
       claudeRunningNonAgentTask?: unknown
       payload: unknown
     },
-    connectionId: string
+    connectionId: string | null
   ): void {
     // Why: wire crosses a trust boundary — re-check/trim so an empty connectionId can't poison caches.
-    if (typeof connectionId !== 'string') {
+    if (connectionId !== null && typeof connectionId !== 'string') {
       return
     }
-    const trimmedConnectionId = connectionId.trim()
-    if (trimmedConnectionId.length === 0) {
+    const trimmedConnectionId = connectionId?.trim() ?? null
+    if (trimmedConnectionId !== null && trimmedConnectionId.length === 0) {
       return
     }
     if (!envelope || typeof envelope.paneKey !== 'string') {
@@ -2285,6 +2370,14 @@ export class AgentHookServer {
     }
     if (!parsedPaneKey) {
       return
+    }
+    // Why: fence relay spool replay at main so stale generations cannot overwrite hydrated state.
+    if (envelope.isReplay === true) {
+      const expectedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+      const actualLaunchTokenHash = launchTokenHash(envelope.launchToken)
+      if (expectedLaunchTokenHash && actualLaunchTokenHash !== expectedLaunchTokenHash) {
+        return
+      }
     }
     if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
       return
@@ -2515,6 +2608,15 @@ export class AgentHookServer {
       this.hydrateLastStatusFromDisk()
     }
     this.captureHydratedAuthorityCommitments()
+    // Drain before binding the listener so replay cannot race a live hook during startup.
+    if (this.endpointDir) {
+      drainAgentHookSpool({
+        endpointDir: this.endpointDir,
+        getPersistedLaunchTokenHash: (paneKey) =>
+          this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
+        ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
+      })
+    }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -2555,8 +2657,9 @@ export class AgentHookServer {
           return
         }
 
-        trackEmptyPaneKeyHook(body)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
+        const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
+        trackEmptyPaneKeyHook(hookBody)
+        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
@@ -2639,10 +2742,7 @@ export class AgentHookServer {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
-    for (const timer of this.codexSubagentPollTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.codexSubagentPollTimers.clear()
+    this.codexSubagentPollScheduler.clearAll()
     // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     this.endpointDir = null
     this.endpointFilePathCache = null
@@ -2695,6 +2795,7 @@ export class AgentHookServer {
     }
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
+    this.emitStatusDropped(deleted.paneKey)
   }
 
   /** Retire panes whose owning process is certifiably dead.
@@ -3068,7 +3169,8 @@ export class AgentHookServer {
       ORCA_AGENT_HOOK_PORT: String(this.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,
       ORCA_AGENT_HOOK_ENV: this.env,
-      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
+      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
+      ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
     }
     // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
     if (this.endpointFileWritten && this.endpointFilePathCache) {
@@ -3095,7 +3197,8 @@ export class AgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     this.endpointFileWritten = ok
   }
@@ -3309,6 +3412,8 @@ export class AgentHookServer {
         restoredUnconfirmed: _restoredUnconfirmed,
         // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).
         observation: _observation,
+        // Replay provenance is runtime-only and must not survive another restart.
+        isReplay: _isReplay,
         launchToken,
         ...persistedPayload
       } = enrichedPayload

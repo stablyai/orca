@@ -528,14 +528,13 @@ describe('web runtime environment identity', () => {
 
   it('replaces API closures on reinstall while retaining the runtime client singleton', async () => {
     let clientCount = 0
-    const call = vi.fn(
-      (method: string): Promise<RuntimeRpcResponse<unknown>> =>
-        Promise.resolve({
-          id: method,
-          ok: true,
-          result: { method },
-          _meta: { runtimeId: 'runtime-a' }
-        })
+    const call = vi.fn((method: string): Promise<RuntimeRpcResponse<unknown>> =>
+      Promise.resolve({
+        id: method,
+        ok: true,
+        result: { method },
+        _meta: { runtimeId: 'runtime-a' }
+      })
     )
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {

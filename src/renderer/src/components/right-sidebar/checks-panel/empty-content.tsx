@@ -9,13 +9,24 @@ import {
 import { openChecksPanelHostedReviewUrl } from '../checks-panel-hosted-review-click-routing'
 import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
 import { translate } from '@/i18n/i18n'
+import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
+import { useNow } from '@/hooks/use-now'
 
 export function ChecksPanelEmptyContent({
   model
 }: {
   model: ChecksPanelEmptyContentModel
 }): React.JSX.Element | null {
+  // Why: the auto-retry line and the retry-disabled window are the only readers,
+  // and both are populated solely by a GitHub refresh error — so an idle panel
+  // (and every folder workspace, which never reaches them) stays tick-free
+  // rather than re-rendering the create composer once a second.
+  const now = useNow(
+    1000,
+    model.prRefreshState?.nextAutoRetryAt !== undefined ||
+      model.prRefreshState?.retryDisabledUntil !== undefined
+  )
   const {
     activeReview,
     activeWorktree,
@@ -36,6 +47,7 @@ export function ChecksPanelEmptyContent({
     handleCancelGeneratePullRequestFields,
     handleCreatePullRequest,
     handleGeneratePullRequestFields,
+    handleLinkSuppressedPullRequest,
     handlePrBaseChange,
     handlePrTitleChange,
     handlePublishBranch,
@@ -52,6 +64,8 @@ export function ChecksPanelEmptyContent({
     isRemoteOperationActive,
     isSyncingBranch,
     linkedGitLabMR,
+    linkedPR,
+    linkedReviewNumber,
     panelContextKey,
     prAiGenerationEnabled,
     prBase,
@@ -65,6 +79,7 @@ export function ChecksPanelEmptyContent({
     prGenerateDisabledReason,
     prGenerateError,
     prGenerating,
+    prNumber,
     prRepoDefaultBaseRef,
     prStackedCreationSupported,
     prTitle,
@@ -77,7 +92,8 @@ export function ChecksPanelEmptyContent({
     setPrBody,
     setPrDraft,
     sourceControlAiActionsVisible,
-    stackParentReview
+    stackParentReview,
+    suppressedGitHubPR
   } = model
   // ── Empty state ──
   if (!activeWorktree) {
@@ -110,6 +126,30 @@ export function ChecksPanelEmptyContent({
             'Checks require a Git branch and hosted review context'
           )}
         </div>
+      </div>
+    )
+  }
+
+  const currentGitHubPRIsSuppressed =
+    prNumber !== null && isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, prNumber)
+  if (!activeReview && linkedReviewNumber === null && currentGitHubPRIsSuppressed) {
+    return (
+      <div className="px-4 py-6">
+        <div className="text-sm font-medium text-foreground">
+          {translate('checksPanel.unlinked.title', 'Pull request unlinked')}
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          {translate(
+            'checksPanel.unlinked.description',
+            'PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.',
+            { number: suppressedGitHubPR }
+          )}
+        </div>
+        <Button size="xs" className="mt-3" onClick={handleLinkSuppressedPullRequest}>
+          {translate('checksPanel.unlinked.relink', 'Link PR #{{number}}', {
+            number: suppressedGitHubPR
+          })}
+        </Button>
       </div>
     )
   }
@@ -178,7 +218,7 @@ export function ChecksPanelEmptyContent({
     })
     const emptyStateCopy = { title: reviewState.title, description: reviewState.description }
     const reviewStateAutoRetryText =
-      reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > Date.now()
+      reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > now
         ? translate(
             'auto.components.right.sidebar.ChecksPanel.review.auto_retry',
             'Orca will retry at {{time}}.',
@@ -186,7 +226,7 @@ export function ChecksPanelEmptyContent({
           )
         : null
     const reviewRecoveryRetryDisabled =
-      reviewState.retryDisabledUntil !== undefined && Date.now() < reviewState.retryDisabledUntil
+      reviewState.retryDisabledUntil !== undefined && now < reviewState.retryDisabledUntil
     const reviewRecoveryLabelIsRefresh = reviewState.recovery.includes('refresh')
     // Only offer Retry/Refresh when the selector's recovery set includes it; some states expose none.
     const reviewShowRetryOrRefresh =

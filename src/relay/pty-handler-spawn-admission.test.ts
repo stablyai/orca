@@ -38,6 +38,8 @@ import {
   beginPtyHandlerTest,
   createMockDispatcher,
   createPtyRequestHelpers,
+  createTestPtyHandler,
+  testPtyId,
   endPtyHandlerTest
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
@@ -93,7 +95,7 @@ describe('PtyHandler', () => {
 
   it('spawns a PTY and returns an id', async () => {
     const result = await spawnPty({ cols: 80, rows: 24 })
-    expect(result).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
+    expect(result).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
   })
@@ -112,7 +114,7 @@ describe('PtyHandler', () => {
       agentSessionCreateOperationId: operationId
     })
 
-    expect(replayed).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
+    expect(replayed).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
     expect(mockPtyInstance.kill).not.toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
@@ -166,7 +168,7 @@ describe('PtyHandler', () => {
 
     loadPty.mockResolvedValue({ spawn: mockPtySpawn })
     await expect(dispatcher.callRequest('pty.spawn', request)).resolves.toMatchObject({
-      id: expect.stringMatching(/^pty-/)
+      id: testPtyId(2)
     })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
   })
@@ -207,11 +209,11 @@ describe('PtyHandler', () => {
     })) as Record<string, unknown>
 
     expect(first).toMatchObject({
-      id: 'pty-1',
+      id: testPtyId(1),
       agentSessionEnsure: { disposition: 'created' }
     })
     expect(second).toMatchObject({
-      id: 'pty-1',
+      id: testPtyId(1),
       agentSessionEnsure: { disposition: 'adopted' }
     })
     expect(second.agentSessionEnsure).toMatchObject({
@@ -283,7 +285,9 @@ describe('PtyHandler', () => {
     const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toReversed')
     Reflect.deleteProperty(Array.prototype, 'toReversed')
     try {
-      await expect(dispatcher.callRequest('pty.spawn', {})).resolves.toMatchObject({ id: 'pty-1' })
+      await expect(dispatcher.callRequest('pty.spawn', {})).resolves.toMatchObject({
+        id: testPtyId(1)
+      })
       expect(handler.activePtyCount).toBe(1)
     } finally {
       if (descriptor) {
@@ -295,8 +299,80 @@ describe('PtyHandler', () => {
   it('increments PTY ids on each spawn', async () => {
     const r1 = await dispatcher.callRequest('pty.spawn', {})
     const r2 = await dispatcher.callRequest('pty.spawn', {})
-    expect((r1 as { id: string }).id).toBe('pty-1')
-    expect((r2 as { id: string }).id).toBe('pty-2')
+    expect((r1 as { id: string }).id).toBe(testPtyId(1))
+    expect((r2 as { id: string }).id).toBe(testPtyId(2))
+  })
+
+  it('does not remint a PTY id across handler lifetimes', async () => {
+    const first = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+    await handler.dispose({ waitForPhysicalExit: false })
+    dispatcher = createMockDispatcher()
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+
+    const second = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    expect(first.id).toMatch(/^pty2:[^:]+:1$/)
+    expect(second.id).toMatch(/^pty2:[^:]+:1$/)
+    expect(second.id).not.toBe(first.id)
+  })
+
+  it('escapes the mint epoch so it cannot forge the id separators', async () => {
+    await handler.dispose({ waitForPhysicalExit: false })
+    dispatcher = createMockDispatcher()
+    // Why: the epoch is constructor-supplied. Encoding is what keeps a minted id
+    // exactly three fields, so it can never be read as another epoch/sequence and
+    // can never smuggle the `@@` that app-side SSH id routing splits on.
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher, undefined, 'a:b@@c:9')
+
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    const [prefix, epoch, sequence, ...extra] = spawned.id.split(':')
+    expect(extra).toEqual([])
+    expect(prefix).toBe('pty2')
+    expect(decodeURIComponent(epoch)).toBe('a:b@@c:9')
+    expect(sequence).toBe('1')
+    expect(spawned.id).not.toContain('@@')
+  })
+
+  it('revives a legacy id and advances the legacy sequence', async () => {
+    const state = JSON.stringify([
+      { id: 'pty-7', pid: process.pid, cols: 80, rows: 24, cwd: process.cwd() }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const serialized = (await dispatcher.callRequest('pty.serialize', {
+      ids: ['pty-7']
+    })) as string
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    expect(JSON.parse(serialized)).toMatchObject([{ id: 'pty-7' }])
+    expect(spawned.id).toBe(testPtyId(8))
+  })
+
+  it('does not advance its sequence from a revived foreign mint epoch', async () => {
+    const foreignId = 'pty2:previous-mint-epoch:40'
+    const state = JSON.stringify([
+      { id: foreignId, pid: process.pid, cols: 80, rows: 24, cwd: process.cwd() }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const serialized = (await dispatcher.callRequest('pty.serialize', {
+      ids: [foreignId]
+    })) as string
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    expect(JSON.parse(serialized)).toMatchObject([{ id: foreignId }])
+    expect(spawned.id).toBe(testPtyId(1))
   })
 
   it('admits default-cwd spawns through the worktree removal coordinator', async () => {
@@ -370,9 +446,9 @@ describe('PtyHandler', () => {
 
       const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
       try {
-        await expect(attachPty({ id: 'pty-1', suppressReplayNotification: true })).rejects.toThrow(
-          'PTY "pty-1" not found'
-        )
+        await expect(
+          attachPty({ id: testPtyId(1), suppressReplayNotification: true })
+        ).rejects.toThrow(`PTY "${testPtyId(1)}" not found`)
       } finally {
         aliveSpy.mockRestore()
       }
@@ -477,10 +553,12 @@ describe('PtyHandler', () => {
 
     it('fires for a revived PTY whose creation was admitted before the pool was empty', async () => {
       await spawnPty({ cols: 80, rows: 24, cwd: '/tmp' })
-      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      const state = (await dispatcher.callRequest('pty.serialize', {
+        ids: [testPtyId(1)]
+      })) as string
       await handler.dispose({ waitForPhysicalExit: false })
       dispatcher = createMockDispatcher()
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler = createTestPtyHandler(dispatcher)
       mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
       const poolActive = vi.fn()
       handler.onPtyPoolActive(poolActive)

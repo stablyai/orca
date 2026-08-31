@@ -40,9 +40,14 @@ export type AgentCompletionCoordinatorOptions = {
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
+  // Why: direct SSH/remote authorities publish foreground evidence with their
+  // inventory, so a pane without agent evidence can stay push-driven instead
+  // of scheduling redundant host process-table reads while idle.
+  shouldPollNoEvidenceProcessCadence?: () => boolean
   // Why: on hosts where one inspection forks a whole-process-table scan (local
   // Windows PowerShell/CIM), panes without agent evidence relax to a slow
-  // cadence; cheap hosts (POSIX `ps`, SSH/remote-owned scans) keep full cadence.
+  // cadence; remote authorities can disable no-evidence polling entirely and
+  // re-arm from output/title activity instead.
   isProcessInspectionCostly?: () => boolean
   shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
 }

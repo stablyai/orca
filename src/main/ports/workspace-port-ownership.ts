@@ -8,7 +8,8 @@ import type {
   WorkspacePortProbe,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
-import { scanWorkspacePorts, type WorkspacePortScanOptions } from './local-workspace-port-scanner'
+import { scanWorkspacePorts } from './local-workspace-port-scanner'
+import type { WorkspacePortScanOptions } from './local-workspace-port-scan-state'
 
 export type WorkspacePortProbeInput = WorkspacePortProbe & {
   connectionId?: string | null

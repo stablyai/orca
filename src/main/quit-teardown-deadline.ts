@@ -3,9 +3,9 @@
 // socket) can leave one unsettled forever and make Force Quit the only way
 // out (#9447). Racing a deadline guarantees quit always completes.
 
-// Why: generous enough for daemon checkpoint writes on a slow disk; small
-// enough that a wedged teardown never needs Force Quit.
-export const WILL_QUIT_TEARDOWN_DEADLINE_MS = 20_000
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../shared/quit-teardown-deadline'
+
+export { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../shared/quit-teardown-deadline'
 
 export type NamedQuitTeardown = {
   name: string
@@ -32,4 +32,36 @@ export async function settleTeardownWithinDeadline(
   const outcome = await Promise.race([settled, deadline])
   clearTimeout(timer)
   return outcome === 'deadline' ? [...pendingNames] : []
+}
+
+export type SettledWithinMs<T> =
+  | { outcome: 'settled'; value: T }
+  | { outcome: 'failed'; error: unknown }
+  | { outcome: 'timed-out' }
+
+/**
+ * Races a teardown against a deadline. Why the three-way result rather than a nullable value: a
+ * rejection and a timeout are different diagnoses on the quit path, and collapsing them makes a
+ * genuine failure read as "timed out" in the log. Every teardown here is best-effort, so this never
+ * throws. The timer is unref'd so it can never itself hold the process open.
+ */
+export async function settleWithinMs<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<SettledWithinMs<T>> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise.then(
+        (value): SettledWithinMs<T> => ({ outcome: 'settled', value }),
+        (error): SettledWithinMs<T> => ({ outcome: 'failed', error })
+      ),
+      new Promise<SettledWithinMs<T>>((resolve) => {
+        timer = setTimeout(() => resolve({ outcome: 'timed-out' }), timeoutMs)
+        timer.unref?.()
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
 }

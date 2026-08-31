@@ -7,7 +7,12 @@ import { splitWorktreeId } from '../../shared/worktree/id'
 import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
 import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
 
-type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
+type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
+  /** Distro to mirror the workspace root into when the repo itself sits on a
+   *  Windows drive but this project's git runs in WSL. Omitted = today's
+   *  placement, so any caller that cannot resolve the runtime is unaffected. */
+  wslMirrorDistro?: string
+}
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
 export {
@@ -132,11 +137,11 @@ export async function computeWorktreePathAsync(
 
 async function computeWorkspaceRootAsync(
   repoPath: string,
-  settings: { workspaceDir: string }
+  settings: { workspaceDir: string; wslMirrorDistro?: string }
 ): Promise<string> {
-  const wsl = parseWslPath(repoPath)
-  if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
-    const wslHome = await getWslHomeAsync(wsl.distro)
+  const distro = resolveMirrorDistro(repoPath, settings)
+  if (distro && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
+    const wslHome = await getWslHomeAsync(distro)
     if (wslHome) {
       return win32.join(wslHome, 'orca', 'workspaces')
     }
@@ -144,10 +149,13 @@ async function computeWorkspaceRootAsync(
   return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
 }
 
-export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir: string }): string {
-  const wsl = parseWslPath(repoPath)
-  if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
-    const wslHome = getWslHome(wsl.distro)
+export function computeWorkspaceRoot(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string }
+): string {
+  const distro = resolveMirrorDistro(repoPath, settings)
+  if (distro && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
+    const wslHome = getWslHome(distro)
     if (wslHome) {
       // Why: WSL UNC paths are still Windows paths from Node's perspective.
       // Mirror absolute local desktop workspace roots inside the distro so
@@ -180,11 +188,16 @@ export function computeRemoteWorktreePath(
 
 export function getWorktreePathSettings(
   repo: WorktreeBasePathRepo,
-  settings: WorktreePathSettings
+  settings: WorktreePathSettings,
+  wslMirrorDistro?: string
 ): WorktreePathSettings {
   return {
     nestWorkspaces: settings.nestWorkspaces,
-    workspaceDir: getEffectiveWorktreeBasePath(repo, settings)
+    workspaceDir: getEffectiveWorktreeBasePath(repo, settings),
+    // Why pass it through rather than resolve here: placement has to agree
+    // across create, allowed-roots and watch-targets, so the distro is
+    // resolved once by the caller that owns the store and threaded down.
+    ...(wslMirrorDistro ? { wslMirrorDistro } : {})
   }
 }
 
@@ -236,6 +249,26 @@ function getEffectiveWorktreeBasePath(
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {
   const trimmed = repo.worktreeBasePath?.trim()
   return trimmed || undefined
+}
+
+/**
+ * Which distro's filesystem this repo's worktrees belong on, if any.
+ *
+ * A repo already inside WSL names its own distro. A repo on a Windows drive
+ * names none — but if this project's git runs in WSL, its worktrees still
+ * belong on the Linux side: `git status` stats every working-tree file, and
+ * doing that across the 9p mount is ~20x slower than the same clean tree on
+ * ext4 (`git worktree add` ~26x), with only the gitdir left on the Windows drive.
+ */
+function resolveMirrorDistro(
+  repoPath: string,
+  settings: { wslMirrorDistro?: string }
+): string | undefined {
+  const wsl = parseWslPath(repoPath)
+  if (wsl) {
+    return wsl.distro
+  }
+  return isWindowsAbsolutePathLike(repoPath) ? settings.wslMirrorDistro : undefined
 }
 
 function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: string): boolean {

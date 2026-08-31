@@ -297,7 +297,9 @@ describe('agent sleep coordinator', () => {
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
-    useAppStore.setState({ activeWorktreeId: 'wt-bg' })
+    // Why: returning to the tab between the plan and the confirm is the eligibility change this
+    // must observe. The active worktree is no longer skipped wholesale, so it is no longer a lever.
+    setForegroundTerminalTabIds(['tab-1'])
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(shutdown).not.toHaveBeenCalled()
@@ -631,7 +633,7 @@ describe('agent sleep coordinator', () => {
 
     await vi.advanceTimersByTimeAsync(1000)
     await vi.advanceTimersByTimeAsync(1000)
-    useAppStore.setState({ activeWorktreeId: 'wt-bg' })
+    setForegroundTerminalTabIds(['tab-1'])
     delayed.resolve(runtimeListResult(['pty-1']))
     await Promise.resolve()
 

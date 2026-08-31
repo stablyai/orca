@@ -203,6 +203,36 @@ describe('RuntimeEnvironmentsPane host details', () => {
     ).toBe('disconnected')
   })
 
+  it.each(['closed', 'reconnecting'] as const)(
+    'does not keep a ready details cache green when shared control is %s',
+    (state) => {
+      expect(
+        getRuntimeServerConnectionState(
+          details({
+            status: 'ready',
+            runtimeStatus: {
+              runtimeId: 'runtime-live',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              remoteControl: {
+                state,
+                pendingRequestCount: 0,
+                subscriptionCount: 1,
+                reconnectAttempt: 1,
+                lastConnectedAt: 1,
+                lastClose: null,
+                lastError: null
+              }
+            }
+          })
+        )
+      ).not.toBe('connected')
+    }
+  )
+
   it('explains that selecting a saved server is the explicit default Host mode', () => {
     expect(getActiveServerModeDescription(true)).toContain('Use this computer by default')
     expect(getActiveServerModeDescription(true)).toContain('browser/mobile handoff')

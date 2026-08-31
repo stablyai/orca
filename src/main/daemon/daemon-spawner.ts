@@ -10,6 +10,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './types'
+import { DaemonCrashLoopError, DaemonRespawnThrottle } from './daemon-respawn-throttle'
 
 export type DaemonConnectionInfo = {
   socketPath: string
@@ -44,6 +45,8 @@ export type DaemonLauncher = (
 export type DaemonSpawnerOptions = {
   runtimeDir: string
   launcher: DaemonLauncher
+  /** Test seam; production uses the default window. */
+  respawnThrottle?: DaemonRespawnThrottle
 }
 
 export class DaemonSpawner {
@@ -53,10 +56,12 @@ export class DaemonSpawner {
   private socketPath: string
   private tokenPath: string
   private pidPath: string
+  private respawnThrottle: DaemonRespawnThrottle
 
   constructor(opts: DaemonSpawnerOptions) {
     this.runtimeDir = opts.runtimeDir
     this.launcher = opts.launcher
+    this.respawnThrottle = opts.respawnThrottle ?? new DaemonRespawnThrottle()
     this.socketPath = getDaemonSocketPath(this.runtimeDir)
     this.tokenPath = getDaemonTokenPath(this.runtimeDir)
     this.pidPath = getDaemonPidPath(this.runtimeDir)
@@ -65,6 +70,14 @@ export class DaemonSpawner {
   async ensureRunning(): Promise<DaemonConnectionInfo> {
     if (this.handle) {
       return { socketPath: this.socketPath, tokenPath: this.tokenPath }
+    }
+
+    // Why here and not in the respawn callback: every launch — first, post-death, and
+    // post-restart — funnels through this method, so this is the only place a crash loop
+    // cannot route around.
+    const admission = this.respawnThrottle.admit()
+    if (!admission.allowed) {
+      throw new DaemonCrashLoopError(admission)
     }
 
     // Why: a detached daemon may clean up after its parent exits. A unique
@@ -83,6 +96,17 @@ export class DaemonSpawner {
   // instead of returning the dead socket path.
   resetHandle(): void {
     this.handle = null
+  }
+
+  /**
+   * Forget the crash-loop window.
+   *
+   * Why an explicit call and not "a fork succeeded": a crash loop is a run of successful
+   * forks whose daemons then die, so the fork returning proves nothing. An operator asking
+   * for a restart does mean "try again", and that is the only thing that clears it.
+   */
+  resetRespawnWindow(): void {
+    this.respawnThrottle.reset()
   }
 
   async shutdown(): Promise<void> {

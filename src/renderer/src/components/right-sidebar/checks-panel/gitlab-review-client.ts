@@ -27,6 +27,7 @@ export async function fetchGitLabMRDetailsForChecks(args: {
   repoId?: string
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
   iid: number
+  repoOwnerExecutionHostId?: string
 }): Promise<GitLabWorkItemDetails | null> {
   const target = getActiveRuntimeTarget(args.settings)
   if (target.kind === 'environment') {
@@ -44,6 +45,7 @@ export async function fetchGitLabMRDetailsForChecks(args: {
   return (await window.api.gl.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    repoOwnerExecutionHostId: args.repoOwnerExecutionHostId,
     iid: args.iid,
     type: 'mr'
   })) as GitLabWorkItemDetails | null

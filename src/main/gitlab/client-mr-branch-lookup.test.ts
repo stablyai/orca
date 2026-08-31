@@ -212,9 +212,9 @@ describe('gitlab client — MR operations', () => {
       await expect(getMergeRequestForBranch('/repo', 'feature')).resolves.toBeNull()
     })
 
-    it('falls back to a linked MR iid when the branch lookup misses', async () => {
+    it('resolves a linked MR by iid without querying the branch', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify({
           iid: 9,
           title: 'Linked MR',
@@ -226,15 +226,64 @@ describe('gitlab client — MR operations', () => {
       const mr = await getMergeRequestForBranch('/repo', 'local-review-branch', 9)
       expect(mr?.number).toBe(9)
       expect(mr?.pipelineStatus).toBe('success')
-      expect(glabExecFileAsyncMock).toHaveBeenLastCalledWith(
-        ['api', 'projects/g%2Fp/merge_requests/9'],
+      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/9?with_merge_status_recheck=true'],
         { cwd: '/repo' }
       )
     })
 
-    it('preserves merged state when falling back to a linked MR iid', async () => {
+    it('uses the explicitly linked MR when the branch still matches a different MR', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 2,
+          title: 'Replacement linked MR',
+          state: 'opened',
+          sha: 'head-2',
+          head_pipeline: { status: 'pending' }
+        })
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'qa/real-mr', 2)
+
+      expect(mr).toMatchObject({
+        number: 2,
+        title: 'Replacement linked MR',
+        pipelineStatus: 'pending'
+      })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/2?with_merge_status_recheck=true'],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('uses one exact lookup when the linked MR also matches the branch', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 2,
+          title: 'Already selected MR',
+          state: 'opened',
+          sha: 'head-2',
+          head_pipeline: { status: 'success' }
+        })
+      })
+
+      await expect(
+        getMergeRequestForBranch('/repo', 'qa/replacement-mr', 2)
+      ).resolves.toMatchObject({ number: 2 })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/2?with_merge_status_recheck=true'],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('preserves merged state when resolving a linked MR iid', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify({
           iid: 10,
           title: 'Merged linked MR',
@@ -353,57 +402,44 @@ describe('gitlab client — MR operations', () => {
       expect(mr?.state).toBe('closed')
     })
 
-    it('discards a closed default-branch shadow and refetches the linked MR via the fallback (#9171)', async () => {
+    it('resolves a linked default-branch MR without consulting a branch shadow (#9171)', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
-      glabExecFileAsyncMock
-        .mockResolvedValueOnce({
-          stdout: JSON.stringify([
-            {
-              iid: 7,
-              title: 'Accidental MR from main',
-              state: 'closed',
-              sha: 'stale-main-oid',
-              head_pipeline: { status: 'success' }
-            }
-          ])
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 42,
+          title: 'Linked MR',
+          state: 'merged',
+          pipeline: { status: 'success' }
         })
-        .mockResolvedValueOnce({
-          stdout: JSON.stringify({
-            iid: 42,
-            title: 'Linked MR',
-            state: 'merged',
-            pipeline: { status: 'success' }
-          })
-        })
+      })
 
       const mr = await getMergeRequestForBranch('/repo', 'main', 42)
 
       expect(mr).toMatchObject({ number: 42, state: 'merged' })
-      expect(glabExecFileAsyncMock).toHaveBeenLastCalledWith(
-        ['api', 'projects/g%2Fp/merge_requests/42'],
+      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/42?with_merge_status_recheck=true'],
         { cwd: '/repo' }
       )
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     })
 
-    it('keeps a non-open branch match on the default branch when it IS the linked MR', async () => {
+    it('keeps a linked non-open MR on the default branch', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            iid: 7,
-            title: 'Linked trunk MR',
-            state: 'merged',
-            sha: 'abc',
-            head_pipeline: { status: 'success' }
-          }
-        ])
+        stdout: JSON.stringify({
+          iid: 7,
+          title: 'Linked trunk MR',
+          state: 'merged',
+          sha: 'abc',
+          head_pipeline: { status: 'success' }
+        })
       })
 
       const mr = await getMergeRequestForBranch('/repo', 'main', 7)
 
       expect(mr).toMatchObject({ number: 7, state: 'merged' })
-      // Exempted by linked-number match — no fallback refetch needed.
-      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
     })
 
     it('returns null for an empty / detached-HEAD branch arg', async () => {

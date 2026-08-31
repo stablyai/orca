@@ -1,4 +1,5 @@
 import type { GitStatusEntry } from '../../../shared/git-status-types'
+import { collectGitStatusLineStatInputs } from '../../../shared/git-status-line-stat-inputs'
 import {
   applyLineStats,
   collectUntrackedAdditions,
@@ -6,7 +7,7 @@ import {
   type GitLineStats
 } from '../../../shared/git-uncommitted-line-stats'
 import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitStatusReadOptionsForWorktree } from '../git-runtime-options'
+import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 
 async function runNumstat(
@@ -26,7 +27,7 @@ async function runNumstat(
         '-M'
       ],
       {
-        ...gitStatusReadOptionsForWorktree(worktreePath, options),
+        ...gitReadOptionsForWorktree(worktreePath, options),
         env: gitOptionalLocksDisabledEnv()
       }
     )
@@ -50,11 +51,7 @@ export async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
-  const hasStaged = entries.some((entry) => entry.area === 'staged')
-  const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
-  const untrackedPaths = entries
-    .filter((entry) => entry.area === 'untracked')
-    .map((entry) => entry.path)
+  const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
@@ -62,11 +59,12 @@ export async function attachLineStats(
     collectUntrackedAdditions(worktreePath, untrackedPaths, options.signal)
   ])
   for (const entry of entries) {
+    const area = entry.area
     applyLineStats(
       entry,
-      entry.area === 'staged'
+      area === 'staged'
         ? (stagedStats ?? emptyStats).get(entry.path)
-        : entry.area === 'unstaged'
+        : area === 'unstaged'
           ? (unstagedStats ?? emptyStats).get(entry.path)
           : untrackedStats.get(entry.path)
     )
