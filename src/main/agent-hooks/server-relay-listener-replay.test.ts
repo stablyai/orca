@@ -204,7 +204,8 @@ describe('AgentHookServer listener replay', () => {
           baselineAgentType: 'claude',
           intent: 'plain-escape'
         })
-      ).toBe(true)
+      ).toBe(false)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
     } finally {
       vi.useRealTimers()
     }

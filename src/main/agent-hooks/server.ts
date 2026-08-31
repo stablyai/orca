@@ -1017,6 +1017,10 @@ export class AgentHookServer {
     if (dismissesClaudeQuestion) {
       return this.inferQuestionAnswered(request)
     }
+    // Why: Claude owns Escape routing and its Stop hook reports whether the turn was interrupted.
+    if (agentType === 'claude' && request.intent === 'plain-escape') {
+      return false
+    }
     // Why: inference is a fallback for a missing final hook; a strict baseline match keeps a delayed timer from clobbering any newer hook.
     if (
       payload.state !== 'working' ||
