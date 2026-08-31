@@ -1,6 +1,5 @@
 import type { LinearIssue } from '../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
-import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../shared/linear/issue-read-limits'
 import { buildLinearListIssueFilter } from './issue-list-filter'
 import { mapLinearIssue } from './mappers'
 import {
@@ -90,41 +89,12 @@ export function mapRawIssueForWorkspace(
   }
 }
 
-export async function readIssueConnectionPages(
-  entry: LinearClientForWorkspace,
-  limit: number,
-  loadConnection: LinearIssueConnectionLoader
-): Promise<{ items: LinearIssue[]; hasMore: boolean }> {
-  const items: LinearIssue[] = []
-  let after: string | undefined
-  let hasMore = false
-
-  while (items.length < limit) {
-    // Why: Linear caps connection pages at 50, so larger Orca reads must walk
-    // cursors instead of asking for the whole expanded limit in one request.
-    const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - items.length)
-    const connection = await loadConnection(after ? { first, after } : { first })
-    const nodes = connection?.nodes ?? []
-    items.push(...nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)))
-    hasMore = Boolean(connection?.pageInfo?.hasNextPage)
-
-    const nextCursor = connection?.pageInfo?.endCursor ?? undefined
-    if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
-      break
-    }
-    after = nextCursor
-  }
-
-  return { items, hasMore }
-}
-
 export function getOldestIssueTime(issues: LinearIssue[]): number {
   const oldestIssue = issues.at(-1)
   return oldestIssue ? new Date(oldestIssue.updatedAt).getTime() : Number.POSITIVE_INFINITY
 }
 
 export function getListIssueConnectionLoader(
-  entry: LinearClientForWorkspace,
   filter: LinearListFilter,
   options?: LinearIssueListOptions
 ): LinearIssueConnectionLoader {
@@ -139,8 +109,8 @@ export function getListIssueConnectionLoader(
   })
 
   if (filter === 'assigned') {
-    return async (page) => {
-      const result = await entry.client.client.rawRequest<
+    return async (client, page) => {
+      const result = await client.client.rawRequest<
         LinearIssueConnectionResponse,
         LinearRawVariables
       >(VIEWER_ASSIGNED_ISSUES_QUERY, {
@@ -153,8 +123,8 @@ export function getListIssueConnectionLoader(
   }
 
   if (filter === 'created') {
-    return async (page) => {
-      const result = await entry.client.client.rawRequest<
+    return async (client, page) => {
+      const result = await client.client.rawRequest<
         LinearIssueConnectionResponse,
         LinearRawVariables
       >(VIEWER_CREATED_ISSUES_QUERY, {
@@ -167,8 +137,8 @@ export function getListIssueConnectionLoader(
   }
 
   if (filter === 'completed') {
-    return async (page) => {
-      const result = await entry.client.client.rawRequest<
+    return async (client, page) => {
+      const result = await client.client.rawRequest<
         LinearIssueConnectionResponse,
         LinearRawVariables
       >(VIEWER_ASSIGNED_ISSUES_QUERY, {
@@ -180,8 +150,8 @@ export function getListIssueConnectionLoader(
     }
   }
 
-  return async (page) => {
-    const result = await entry.client.client.rawRequest<
+  return async (client, page) => {
+    const result = await client.client.rawRequest<
       LinearIssueConnectionResponse,
       LinearRawVariables
     >(ALL_ISSUES_QUERY, { ...variables, ...page, filter: filterInput })

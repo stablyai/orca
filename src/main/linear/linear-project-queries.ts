@@ -10,7 +10,6 @@ import { getClients, isAuthError } from './client'
 import {
   CREATE_PROJECT_MUTATION,
   PROJECT_QUERY,
-  PROJECTS_QUERY,
   SEARCH_PROJECTS_QUERY
 } from './linear-project-graphql'
 import type {
@@ -20,41 +19,24 @@ import type {
   ProjectMutationResponse
 } from './linear-project-nodes'
 import {
-  clampLimit,
   coalesce,
   LINEAR_PROJECT_API_PAGE_SIZE_MAX,
   mapProjectDetailForWorkspace,
   mapProjectForWorkspace,
   normalizeConcreteWorkspaceId
 } from './linear-project-models'
-import { readCollection } from './linear-project-collection-read'
+import { readProjectListPages } from './linear-project-list-pagination'
 
 export async function listProjects(
   query: string | undefined,
-  limit = 20,
+  limit: number | null = 20,
   workspaceId?: LinearWorkspaceSelection | null,
   force = false
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
-  const first = clampLimit(limit)
-  const trimmed = query?.trim()
-  const key = `listProjects:${workspaceId ?? 'default'}:${trimmed ?? ''}:${first}`
-  return readCollection(
-    key,
-    workspaceId,
-    async (entry) => {
-      const variables = trimmed ? { term: trimmed, first } : { first, orderBy: 'updatedAt' }
-      const result = await entry.client.client.rawRequest<
-        ProjectConnectionResponse,
-        LinearRawVariables
-      >(trimmed ? SEARCH_PROJECTS_QUERY : PROJECTS_QUERY, variables)
-      const connection = trimmed ? result.data?.searchProjects : result.data?.projects
-      return {
-        items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
-        hasMore: !!connection?.pageInfo?.hasNextPage
-      }
-    },
-    force
-  )
+  const effectiveLimit = limit === null ? null : Math.max(1, Math.floor(limit))
+  const trimmed = query?.trim() || undefined
+  const key = `listProjects:${workspaceId ?? 'default'}:${trimmed ?? ''}:${effectiveLimit ?? 'all'}`
+  return coalesce(key, () => readProjectListPages(trimmed, effectiveLimit, workspaceId), force)
 }
 
 export async function listProjectsByExactName(

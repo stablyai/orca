@@ -66,12 +66,19 @@ export async function searchLinearIssuesForAgents(args: {
     entryFailures
   )
   const merged = perWorkspace.results
-    .flat()
+    .flatMap((result) => result.issues)
     .sort((left, right) => Date.parse(right.updatedAt ?? '') - Date.parse(left.updatedAt ?? ''))
   const limited = merged.slice(0, limit)
-  const limitReached = merged.length > limit
+  const totalCount =
+    perWorkspace.failures.length === 0 &&
+    perWorkspace.results.every((result) => result.totalCount !== undefined)
+      ? perWorkspace.results.reduce((total, result) => total + (result.totalCount ?? 0), 0)
+      : undefined
+  const limitReached =
+    totalCount === undefined ? merged.length > limit : totalCount > limited.length
   return {
     issues: limited,
+    ...(totalCount === undefined ? {} : { totalCount }),
     truncated: limitReached,
     meta: {
       query: args.query,
@@ -249,7 +256,7 @@ async function readSearchWorkspace(
   query: string,
   limit: number,
   workspaceId?: (string & {}) | 'all'
-): Promise<LinearSearchIssueSummary[]> {
+): Promise<{ issues: LinearSearchIssueSummary[]; totalCount?: number }> {
   const response = await withLinearRead(
     entry,
     async () => {
@@ -257,18 +264,23 @@ async function readSearchWorkspace(
         SEARCH_QUERY,
         { term: query, first: limit }
       )
-      return raw.data?.searchIssues?.nodes ?? []
+      return raw.data?.searchIssues ?? { nodes: [] }
     },
     workspaceId
   )
-  return response.map((issue) => ({
-    ...pickSearchIssue(mapIssue(issue)),
-    workspace: {
-      id: entry.workspace.id,
-      name: entry.workspace.organizationName
-    }
-  }))
+  return {
+    issues: (response.nodes ?? []).map((issue) => ({
+      ...pickSearchIssue(mapIssue(issue)),
+      workspace: {
+        id: entry.workspace.id,
+        name: entry.workspace.organizationName
+      }
+    })),
+    ...(response.totalCount === undefined ? {} : { totalCount: response.totalCount })
+  }
 }
+
+type SearchWorkspaceResult = Awaited<ReturnType<typeof readSearchWorkspace>>
 
 async function readSearchWorkspaces(
   entries: LinearClientForWorkspace[],
@@ -276,7 +288,7 @@ async function readSearchWorkspaces(
   limit: number,
   workspaceId?: (string & {}) | 'all',
   initialFailures: WorkspaceReadFailure[] = []
-): Promise<{ results: LinearSearchIssueSummary[][]; failures: WorkspaceReadFailure[] }> {
+): Promise<{ results: SearchWorkspaceResult[]; failures: WorkspaceReadFailure[] }> {
   if (workspaceId && workspaceId !== 'all') {
     return {
       results: [await readSearchWorkspace(entries[0], query, limit, workspaceId)],
@@ -288,7 +300,7 @@ async function readSearchWorkspaces(
     entries.map(async (entry) => readSearchWorkspace(entry, query, limit, workspaceId))
   )
   const attemptedWorkspaceCount = entries.length + initialFailures.length
-  const results: LinearSearchIssueSummary[][] = []
+  const results: SearchWorkspaceResult[] = []
   const failures: WorkspaceReadFailure[] = [...initialFailures]
   for (let index = 0; index < settled.length; index += 1) {
     const result = settled[index]

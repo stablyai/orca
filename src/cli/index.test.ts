@@ -377,6 +377,11 @@ describe('orca root help', () => {
     expect(groupHelp).toContain('orca linear')
     expect(groupHelp).toContain('issue')
     expect(groupHelp).toContain('search')
+    // The group listing is where an agent learns that omitting --limit walks, not clamps.
+    expect(groupHelp).toContain(
+      'list               List Linear issues; omit --limit to walk until exhaustion or a safety backstop'
+    )
+    expect(groupHelp).not.toContain('List Linear issues for task triage')
     expect(groupHelp).not.toContain('--comments')
     expect(groupHelp).not.toContain('--attachments')
 
@@ -412,6 +417,23 @@ describe('orca root help', () => {
       '--limit <n>            Max issues to return; omit to return every match'
     )
     expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
+
+    logSpy.mockClear()
+    await main(['linear', 'list', '--help'], '/tmp/repo')
+    expect(String(logSpy.mock.calls[0][0])).toContain(
+      '--limit <n>            Max issues to return; omit to walk pages until exhaustion or a safety backstop'
+    )
+
+    logSpy.mockClear()
+    await main(['linear', 'project', 'list', '--help'], '/tmp/repo')
+    const projectListHelp = String(logSpy.mock.calls[0][0])
+    expect(projectListHelp).toContain(
+      '--limit <n>            Max projects to return; omit to walk pages until exhaustion or a safety backstop'
+    )
+    expect(projectListHelp).toContain(
+      'List Linear projects; omit --limit to walk until exhaustion or a safety backstop'
+    )
+    expect(projectListHelp).not.toContain('List connected Linear projects')
     expect(callMock).not.toHaveBeenCalled()
   })
 

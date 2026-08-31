@@ -211,6 +211,86 @@ describe('Linear agent project access helpers', () => {
     expect(result.meta).toMatchObject({ limit: 1, returned: 1, hasMore: true })
   })
 
+  it('represents an omitted agent project limit as an exhaustive null limit', async () => {
+    const runtime = new OrcaRuntimeService()
+    const read = vi.spyOn(runtime, 'linearListProjects').mockResolvedValue({
+      items: [{ id: 'project-1', name: 'Launch' }],
+      hasMore: false
+    } as never)
+
+    const result = await runtime.linearProjectListForAgents({})
+
+    expect(read).toHaveBeenCalledWith(undefined, null, undefined, true)
+    expect(result.meta).toMatchObject({ limit: null, returned: 1, hasMore: false })
+  })
+
+  it('represents an omitted agent issue limit as an exhaustive null limit', async () => {
+    const runtime = new OrcaRuntimeService()
+    const read = vi.spyOn(runtime, 'linearListIssues').mockResolvedValue({
+      items: [
+        {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix auth',
+          url: 'https://linear.app/acme/issue/ENG-1',
+          labels: [],
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          workspaceId: 'workspace-1',
+          workspaceName: 'Acme'
+        }
+      ],
+      hasMore: false
+    } as never)
+
+    const result = await runtime.linearIssueListForAgents({})
+
+    expect(read).toHaveBeenCalledWith('assigned', null, undefined, { teamId: undefined })
+    expect(result.meta).toMatchObject({ limit: null, returned: 1, hasMore: false })
+  })
+
+  // Why: an exhausted deadline returns zero rows. Without hasMore the agent reads that as
+  // "this workspace is empty" rather than "the read gave up", which is a silent truncation.
+  it('reports a zero-result deadline exhaustion as truncated, not as an empty project list', async () => {
+    const runtime = new OrcaRuntimeService()
+    vi.spyOn(runtime, 'linearListProjects').mockResolvedValue({
+      items: [],
+      hasMore: true
+    } as never)
+
+    const result = await runtime.linearProjectListForAgents({})
+
+    expect(result.projects).toEqual([])
+    expect(result.truncated).toBe(true)
+    expect(result.meta).toMatchObject({ limit: null, returned: 0, hasMore: true })
+  })
+
+  it('reports a genuinely empty project list as complete', async () => {
+    const runtime = new OrcaRuntimeService()
+    vi.spyOn(runtime, 'linearListProjects').mockResolvedValue({
+      items: [],
+      hasMore: false
+    } as never)
+
+    const result = await runtime.linearProjectListForAgents({})
+
+    expect(result.truncated).toBe(false)
+    expect(result.meta).toMatchObject({ returned: 0, hasMore: false })
+  })
+
+  it('reports a zero-result deadline exhaustion as truncated, not as an empty issue list', async () => {
+    const runtime = new OrcaRuntimeService()
+    vi.spyOn(runtime, 'linearListIssues').mockResolvedValue({
+      items: [],
+      hasMore: true
+    } as never)
+
+    const result = await runtime.linearIssueListForAgents({})
+
+    expect(result.issues).toEqual([])
+    expect(result.truncated).toBe(true)
+    expect(result.meta).toMatchObject({ limit: null, returned: 0, hasMore: true })
+  })
+
   it('passes the resolved project id into agent issue create', async () => {
     vi.resetModules()
     const createIssueForAgent = vi.fn().mockResolvedValue({

@@ -586,11 +586,7 @@ import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
 } from './runtime-graph-reload-lifecycle'
-import {
-  LINEAR_SEARCH_MAX_LIMIT,
-  LINEAR_WRITE_BODY_CAP,
-  clampLinearSearchLimit
-} from '../../shared/linear/agent-access'
+import { LINEAR_SEARCH_MAX_LIMIT, LINEAR_WRITE_BODY_CAP } from '../../shared/linear/agent-access'
 import { isLinearUuid } from '../../shared/linear/uuid'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
@@ -39101,23 +39097,25 @@ export class OrcaRuntimeService {
     limit?: number
     workspaceId?: (string & {}) | 'all'
   }): Promise<LinearProjectListResult> {
-    const limit = clampLinearSearchLimit(params.limit)
+    const limit = params.limit === undefined ? null : Math.max(1, Math.floor(params.limit))
     try {
       const result = await this.linearListProjects(params.query, limit, params.workspaceId, true)
-      const projects = result.items.slice(0, limit).map((project) => ({
-        id: project.id,
-        name: project.name,
-        ...(project.url ? { url: project.url } : {}),
-        ...(project.workspaceId ? { workspaceId: project.workspaceId } : {}),
-        ...(project.workspaceName ? { workspaceName: project.workspaceName } : {}),
-        ...(project.teams ? { teams: project.teams } : {})
-      }))
+      const projects = (limit === null ? result.items : result.items.slice(0, limit)).map(
+        (project) => ({
+          id: project.id,
+          name: project.name,
+          ...(project.url ? { url: project.url } : {}),
+          ...(project.workspaceId ? { workspaceId: project.workspaceId } : {}),
+          ...(project.workspaceName ? { workspaceName: project.workspaceName } : {}),
+          ...(project.teams ? { teams: project.teams } : {})
+        })
+      )
       const workspaceErrors = (result.errors ?? []).map((error) => ({
         workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
         code: this.linearWorkspaceErrorCode(error.type),
         message: sanitizeLinearErrorMessage(error.message)
       }))
-      const hasMore = result.hasMore === true || result.items.length > limit
+      const hasMore = result.hasMore === true || (limit !== null && result.items.length > limit)
       return {
         projects,
         truncated: hasMore,
@@ -39143,13 +39141,13 @@ export class OrcaRuntimeService {
     workspaceId?: (string & {}) | 'all'
   }): Promise<LinearIssueListResult> {
     const filter = params.filter ?? 'assigned'
-    const limit = clampLinearIssueListLimit(params.limit)
+    const limit = params.limit === undefined ? null : Math.max(1, Math.floor(params.limit))
     const team = params.teamInput
       ? await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
       : null
     const workspaceId = team?.workspaceId ?? params.workspaceId
     try {
-      const result = await listLinearIssues(filter, limit, workspaceId, {
+      const result = await this.linearListIssues(filter, limit, workspaceId, {
         teamId: team?.id
       })
       return {
@@ -39287,11 +39285,16 @@ export class OrcaRuntimeService {
 
   linearListIssues(
     filter?: LinearListFilter,
-    limit = 20,
+    limit: number | null = 20,
     workspaceId?: LinearWorkspaceSelection,
     options?: LinearIssueListOptions
   ): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId, options)
+    return listLinearIssues(
+      filter,
+      limit === null ? null : Math.max(1, Math.floor(limit)),
+      workspaceId,
+      options
+    )
   }
 
   linearCreateIssue(
@@ -41168,11 +41171,16 @@ export class OrcaRuntimeService {
 
   linearListProjects(
     query?: string,
-    limit = 20,
+    limit: number | null = 20,
     workspaceId?: LinearWorkspaceSelection,
     force?: boolean
   ): ReturnType<typeof listLinearProjects> {
-    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId, force)
+    return listLinearProjects(
+      query,
+      limit === null ? null : Math.max(1, Math.floor(limit)),
+      workspaceId,
+      force
+    )
   }
 
   linearCreateProject(

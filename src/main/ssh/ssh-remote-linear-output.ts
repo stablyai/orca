@@ -51,7 +51,8 @@ export function formatRemoteLinearCli(result: unknown): { stdout: string; stderr
       stdout: `${appendLinearListTruncation(
         formatLinearIssueRows(result.issues),
         result.issues.length,
-        result.truncated ?? result.meta.limitReached
+        result.truncated ?? result.meta.limitReached,
+        result.totalCount
       )}\n`,
       stderr: linearListWarnings(result, 'Linear search')
     }
@@ -275,7 +276,11 @@ function linearListWarnings(
     warnings.push(`warning: showing first ${meta.returned} Linear issues`)
   }
   if ('limitReached' in meta && meta.limitReached) {
-    warnings.push(`warning: showing first ${meta.returned} Linear issues`)
+    const shown =
+      'totalCount' in result && result.totalCount !== undefined
+        ? `${meta.returned} of ${result.totalCount}`
+        : `first ${meta.returned}`
+    warnings.push(`warning: showing ${shown} Linear issues`)
   }
   for (const error of meta.workspaceErrors ?? []) {
     warnings.push(`warning: ${error.workspace.name} unavailable for ${label}: ${error.message}`)

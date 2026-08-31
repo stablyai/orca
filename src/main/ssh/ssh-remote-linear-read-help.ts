@@ -49,13 +49,13 @@ Commands:
   relation add       Add a Linear issue relation
   relation remove    Remove a Linear issue relation
   issue              Read Linear issue context for agents
-  search             Search connected Linear workspaces
+  search             Search top Linear matches and report the provider total
   team list          List connected Linear teams
   team members       List Linear team members
   team states        List Linear team workflow states
   team labels        List Linear team labels
-  project list       List connected Linear projects
-  list               List Linear issues
+  project list       List Linear projects; omit --limit to walk until exhaustion
+  list               List Linear issues; omit --limit to walk until exhaustion
   assignee set       Set a Linear issue assignee
   assignee clear     Clear a Linear issue assignee
   priority set       Set a Linear issue priority
@@ -154,10 +154,10 @@ const LINEAR_PROJECT_LIST_HELP = `orca linear project list
 
 Usage: orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
 
-List connected Linear projects`
+List Linear projects. Omit --limit to walk until exhaustion or a safety backstop.`
 
 const LINEAR_LIST_HELP = `orca linear list
 
 Usage: orca linear list [--filter assigned|created|all|completed|open] [--team <key|id>] [--limit <n>] [--workspace <id>|all] [--json]
 
-List Linear issues`
+List Linear issues. Omit --limit to walk until exhaustion or a safety backstop.`

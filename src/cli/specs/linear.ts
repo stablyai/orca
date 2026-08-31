@@ -31,7 +31,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['linear', 'search'],
-    summary: 'Search connected Linear workspaces',
+    summary: 'Search top Linear matches and report the provider total',
     usage: 'orca linear search <query> [--limit <n>] [--workspace <id>|all] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'limit', 'workspace', 'query'],
     positionalArgs: ['query'],
@@ -67,7 +67,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['linear', 'project', 'list'],
-    summary: 'List connected Linear projects',
+    summary: 'List Linear projects; omit --limit to walk until exhaustion or a safety backstop',
     usage:
       'orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'query', 'limit', 'workspace'],
@@ -78,7 +78,7 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['linear', 'list'],
-    summary: 'List Linear issues for task triage',
+    summary: 'List Linear issues; omit --limit to walk until exhaustion or a safety backstop',
     usage:
       'orca linear list [--filter assigned|created|all|completed|open] [--team <key|id>] [--limit <n>] [--workspace <id>|all] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'filter', 'team', 'limit', 'workspace'],

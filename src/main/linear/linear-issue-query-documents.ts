@@ -1,3 +1,4 @@
+import type { LinearClient } from '@linear/sdk'
 import type { LinearIssueAttributeFilter } from '../../shared/linear/issue-attribute-filter'
 import type { LinearIssueWriteRecord } from './linear-issue-write-support'
 
@@ -61,6 +62,7 @@ export type LinearIssuePageRequest = {
   after?: string
 }
 export type LinearIssueConnectionLoader = (
+  client: LinearClient,
   page: LinearIssuePageRequest
 ) => Promise<LinearIssueConnection | null | undefined>
 export const LINEAR_ISSUE_NODE_FIELDS = `

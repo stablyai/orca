@@ -92,7 +92,7 @@ export async function tryDispatchRemoteLinearReadCli(
     })
     return await call(dispatcher, 'linear.agentProjectList', {
       query: optionalString(parsed.flags, 'query'),
-      limit: clampLinearSearchLimit(optionalPositiveInteger(parsed.flags, 'limit')),
+      limit: optionalPositiveInteger(parsed.flags, 'limit'),
       workspaceId: optionalString(parsed.flags, 'workspace')
     })
   }

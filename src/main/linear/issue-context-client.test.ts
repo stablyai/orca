@@ -107,9 +107,8 @@ describe('Linear agent issue context client', () => {
     ])
     const { searchLinearIssuesForAgents } = await import('./issue-context-client')
 
-    await expect(
-      searchLinearIssuesForAgents({ query: 'auth', workspaceId: 'all' })
-    ).resolves.toMatchObject({
+    const result = await searchLinearIssuesForAgents({ query: 'auth', workspaceId: 'all' })
+    expect(result).toMatchObject({
       issues: [{ identifier: 'ENG-123', workspace: { id: 'workspace-good' } }],
       meta: {
         returned: 1,
@@ -122,6 +121,56 @@ describe('Linear agent issue context client', () => {
         ]
       }
     })
+    expect(result).not.toHaveProperty('totalCount')
+  })
+
+  it('preserves the provider search total from the raw GraphQL response', async () => {
+    const workingRequest = vi.fn().mockResolvedValue({
+      data: { searchIssues: { nodes: [rawIssue('ENG-123')], totalCount: 349 } }
+    })
+    getClients.mockReturnValue([
+      makeEntry({
+        workspaceId: 'workspace-good',
+        organizationName: 'Good',
+        rawRequest: workingRequest
+      })
+    ])
+    const { searchLinearIssuesForAgents } = await import('./issue-context-client')
+
+    await expect(
+      searchLinearIssuesForAgents({ query: 'auth', limit: 1, workspaceId: 'workspace-good' })
+    ).resolves.toMatchObject({
+      totalCount: 349,
+      truncated: true,
+      meta: { returned: 1, limitReached: true }
+    })
+    expect(workingRequest.mock.calls[0][0]).toContain('totalCount')
+  })
+
+  it('sums complete provider totals across workspaces', async () => {
+    const firstRequest = vi.fn().mockResolvedValue({
+      data: { searchIssues: { nodes: [rawIssue('ENG-1')], totalCount: 10 } }
+    })
+    const secondRequest = vi.fn().mockResolvedValue({
+      data: { searchIssues: { nodes: [rawIssue('ENG-2')], totalCount: 20 } }
+    })
+    getClients.mockReturnValue([
+      makeEntry({
+        workspaceId: 'workspace-1',
+        organizationName: 'One',
+        rawRequest: firstRequest
+      }),
+      makeEntry({
+        workspaceId: 'workspace-2',
+        organizationName: 'Two',
+        rawRequest: secondRequest
+      })
+    ])
+    const { searchLinearIssuesForAgents } = await import('./issue-context-client')
+
+    await expect(
+      searchLinearIssuesForAgents({ query: 'auth', limit: 2, workspaceId: 'all' })
+    ).resolves.toMatchObject({ totalCount: 30, truncated: true })
   })
 
   it('keeps all-workspace search working when one saved credential cannot load', async () => {

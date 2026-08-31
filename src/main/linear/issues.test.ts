@@ -17,6 +17,7 @@ vi.mock('./linear-token-store', () => ({
 }))
 
 vi.mock('./client', () => ({
+  createSignalBoundLinearClient: (entry: LinearClientForWorkspace) => entry.client,
   getClients: (...args: unknown[]) => getClients(...args),
   isAuthError: (...args: unknown[]) => isAuthError(...args)
 }))

@@ -11,6 +11,7 @@ import {
   formatLinearIssue,
   formatLinearMcpIssueList,
   formatLinearProjectList,
+  formatLinearSearch,
   printLinearMcpIssueListWarnings,
   printLinearSearchWarnings
 } from './linear-format'
@@ -37,6 +38,34 @@ describe('linear-format', () => {
     printLinearSearchWarnings(result)
 
     expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it('prints the provider total for a truncated search', () => {
+    const result = {
+      issues: [
+        {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix auth',
+          url: 'https://linear.app/acme/issue/ENG-1',
+          workspace: { id: 'workspace-1', name: 'Acme' }
+        }
+      ],
+      totalCount: 349,
+      truncated: true,
+      meta: {
+        query: 'auth',
+        limit: 1,
+        returned: 1,
+        limitReached: true,
+        partial: false,
+        workspaceErrors: []
+      }
+    } as LinearSearchResult
+
+    expect(formatLinearSearch(result)).toContain('truncated: showing 1 of 349')
+    printLinearSearchWarnings(result)
+    expect(console.error).toHaveBeenCalledWith('warning: showing 1 of 349 Linear issues')
   })
 
   it('binds a list continuation hint to its Linear workspace', () => {
