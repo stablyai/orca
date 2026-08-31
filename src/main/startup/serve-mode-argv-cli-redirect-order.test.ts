@@ -14,7 +14,14 @@ function rewriteAsIndexDoes(argv: string[]): string[] {
 }
 
 describe('serve argv rewrite vs CLI launch redirect ordering', () => {
-  const launchArgv = ['/opt/orca/orca-ide', '--no-sandbox', 'serve', '--port', '7777', '--json']
+  const launchArgv = [
+    '/opt/orca/orca-ide',
+    '--disable-features=Vulkan',
+    'serve',
+    '--port',
+    '7777',
+    '--json'
+  ]
 
   it('leaves direct serve in the main process', () => {
     expect(getCliLaunchArgs(launchArgv, CLI_ENTRY_PATH, REDIRECT_OPTIONS)).toBeNull()
@@ -22,6 +29,7 @@ describe('serve argv rewrite vs CLI launch redirect ordering', () => {
 
   it('rewrites direct serve into the in-process flag shape', () => {
     const rewritten = rewriteAsIndexDoes(launchArgv)
+    expect(rewritten).toContain('--disable-features=Vulkan')
     expect(rewritten).toContain('--serve')
     expect(rewritten).toContain('--serve-port')
     expect(getCliLaunchArgs(rewritten, CLI_ENTRY_PATH, REDIRECT_OPTIONS)).toBeNull()
