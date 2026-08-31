@@ -159,6 +159,34 @@ describe('mission.plan', () => {
     ).rejects.toMatchObject({ code: 'agent_unconfigured' })
   })
 
+  it.each([
+    ['an ambiguous selector', new Error('selector_ambiguous')],
+    ['a remote runtime failure', new Error('remote_runtime_unavailable')]
+  ])('propagates %s from workspace resolution', async (_label, error) => {
+    setup()
+    vi.mocked(runtime.showManagedTerminalWorkspace).mockRejectedValue(error)
+
+    await expect(
+      call({ text: 'Inspect this task.', worktree: 'id:repo::worktree', agent: 'pi' })
+    ).rejects.toBe(error)
+
+    expect(generateTextFromPrompt).not.toHaveBeenCalled()
+  })
+
+  it('maps a missing managed workspace to a helpful mission error', async () => {
+    setup()
+    vi.mocked(runtime.showManagedTerminalWorkspace).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(
+      call({ text: 'Inspect this task.', worktree: 'id:repo::missing', agent: 'pi' })
+    ).rejects.toMatchObject({
+      code: 'selector_not_found',
+      message: 'Mission requires an Orca-managed workspace.'
+    })
+
+    expect(generateTextFromPrompt).not.toHaveBeenCalled()
+  })
+
   it('repairs one invalid planner response before failing the mission', async () => {
     setup()
     vi.mocked(generateTextFromPrompt)
