@@ -8963,7 +8963,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "appBackgroundImage": {
+              "title": "Window Background Image",
+              "description": "Draw an image as a subtle texture across the whole window."
+            }
           }
         },
         "auto": {
@@ -11522,6 +11526,22 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "AppBackgroundImageSetting": {
+          "pickFailed": "Could not load that image.",
+          "title": "Window Background Image",
+          "rowDescription": "Draw an image as a subtle texture across the whole window.",
+          "replaceImage": "Replace Image…",
+          "chooseImage": "Choose Image…",
+          "remove": "Remove",
+          "opacity": "Texture Strength",
+          "opacityDescription": "Controls how visible the image is over the window.",
+          "fit": "Image Fit",
+          "fitDescription": "How the image is scaled to the window.",
+          "fitCover": "Cover",
+          "fitContain": "Contain",
+          "fitStretch": "Stretch",
+          "fitCenter": "Center"
         }
       },
       "right": {

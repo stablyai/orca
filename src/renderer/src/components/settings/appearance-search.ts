@@ -16,6 +16,35 @@ export {
   getUsagePercentageDisplayEntry
 }
 
+export const getAppBackgroundImageEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.appBackgroundImage.title',
+    'Window Background Image'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.appBackgroundImage.description',
+    'Draw an image as a subtle texture across the whole window.'
+  ),
+  keywords: [
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.appBackgroundImage.background',
+      'background'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.appBackgroundImage.image',
+      'image'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.appBackgroundImage.wallpaper',
+      'wallpaper'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.appBackgroundImage.texture',
+      'texture'
+    )
+  ]
+}))
+
 export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.71e06350b4', 'Theme'),
@@ -240,6 +269,7 @@ function buildAppearancePaneSearchEntries(
     ...getTitlebarEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
+    getAppBackgroundImageEntry(),
     ...getAppIconEntries(),
     ...getSystemTrayEntries(options),
     ...getMenuBarIconEntries(options)

@@ -14,12 +14,14 @@ import {
 } from './SettingsFormControls'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
 import {
+  getAppBackgroundImageEntry,
   getLayoutEntries,
   getSidebarEntries,
   getStatusBarToggles,
   getUsagePercentageDisplayEntry
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
+import { AppBackgroundImageSetting } from './AppBackgroundImageSetting'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
@@ -75,6 +77,7 @@ export function AppearanceWindowSidebarSection({
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const appBackgroundImageEntry = getAppBackgroundImageEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
@@ -122,6 +125,16 @@ export function AppearanceWindowSidebarSection({
           forceVisible={forceVisiblePrimary}
         >
           <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={appBackgroundImageEntry.title}
+          description={appBackgroundImageEntry.description}
+          keywords={appBackgroundImageEntry.keywords}
+          className="space-y-2"
+          forceVisible={forceVisiblePrimary}
+        >
+          <AppBackgroundImageSetting settings={settings} updateSettings={updateSettings} />
         </SearchableSetting>
 
         <SearchableSetting
