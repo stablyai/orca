@@ -101,7 +101,7 @@ export function JiraIssueListHost({
   }
 
   return (
-    <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+    <div className="@container flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
         <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           {translate('auto.components.TaskPage.63b2abd3aa', 'Jira issues')}
