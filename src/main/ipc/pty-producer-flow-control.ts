@@ -29,7 +29,6 @@ export class PtyProducerFlowController {
   private lowWatermarkChars: number
   private reassertIntervalMs: number
   private maxPauseHoldMs: number
-  private onPauseCeilingExceeded?: (id: string, heldMs: number) => void
   private pausedAtByPty = new Map<string, number>()
   private pauseCeilingTimerByPty = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -40,7 +39,6 @@ export class PtyProducerFlowController {
       lowWatermarkChars?: number
       reassertIntervalMs?: number
       maxPauseHoldMs?: number
-      onPauseCeilingExceeded?: (id: string, heldMs: number) => void
     } = {}
   ) {
     this.transport = transport
@@ -48,7 +46,6 @@ export class PtyProducerFlowController {
     this.lowWatermarkChars = opts.lowWatermarkChars ?? PRODUCER_FLOW_LOW_WATERMARK_CHARS
     this.reassertIntervalMs = opts.reassertIntervalMs ?? PRODUCER_PAUSE_REASSERT_INTERVAL_MS
     this.maxPauseHoldMs = opts.maxPauseHoldMs ?? PRODUCER_PAUSE_MAX_HOLD_MS
-    this.onPauseCeilingExceeded = opts.onPauseCeilingExceeded
   }
 
   /** Reports the current pending chars for a PTY. Fires pause exactly once at
@@ -105,7 +102,6 @@ export class PtyProducerFlowController {
 
   private armPauseCeiling(id: string): void {
     this.clearPauseCeiling(id)
-    const pausedAt = Date.now()
     const timer = setTimeout(() => {
       this.pauseCeilingTimerByPty.delete(id)
       // Why unconditional: pending is still above LOW here by construction, so
@@ -115,7 +111,6 @@ export class PtyProducerFlowController {
         return
       }
       this.safeResume(id)
-      this.onPauseCeilingExceeded?.(id, Date.now() - pausedAt)
     }, this.maxPauseHoldMs)
     // Why unref: a pending resume timer must never hold the process open at exit.
     timer.unref?.()

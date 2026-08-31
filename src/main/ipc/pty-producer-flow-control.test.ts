@@ -218,18 +218,6 @@ describe('PtyProducerFlowController', () => {
       expect(resumeProducer).toHaveBeenCalledWith('pty-2')
     })
 
-    it('reports the exceeded ceiling for diagnostics', () => {
-      const onPauseCeilingExceeded = vi.fn<(id: string, heldMs: number) => void>()
-      const observed = new PtyProducerFlowController(
-        { pauseProducer, resumeProducer },
-        { onPauseCeilingExceeded }
-      )
-      observed.update('pty-1', HIGH + 1)
-      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS)
-      expect(onPauseCeilingExceeded).toHaveBeenCalledTimes(1)
-      expect(onPauseCeilingExceeded).toHaveBeenCalledWith('pty-1', PRODUCER_PAUSE_MAX_HOLD_MS)
-    })
-
     it('keeps bookkeeping consistent when the ceiling resume throws', () => {
       resumeProducer.mockImplementation(() => {
         throw new Error('provider gone')
