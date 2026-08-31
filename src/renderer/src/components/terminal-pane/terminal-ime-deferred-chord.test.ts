@@ -22,7 +22,7 @@ describe('createTerminalImeDeferredChordSender', () => {
     const send = vi.fn()
     const sender = createTerminalImeDeferredChordSender()
 
-    sender.defer(el, send)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 101 }, el, send)
     expect(send).not.toHaveBeenCalled()
 
     el.dispatchEvent(new Event('compositionend'))
@@ -37,8 +37,8 @@ describe('createTerminalImeDeferredChordSender', () => {
     const second = vi.fn()
     const sender = createTerminalImeDeferredChordSender()
 
-    sender.defer(el, first)
-    sender.defer(el, second)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 102 }, el, first)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 103 }, el, second)
     sender.cancelPending()
 
     expect(removeEventListener).toHaveBeenCalledTimes(4)
@@ -55,7 +55,7 @@ describe('createTerminalImeDeferredChordSender', () => {
     const send = vi.fn()
     const sender = createTerminalImeDeferredChordSender()
 
-    sender.defer(el, send)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 104 }, el, send)
     vi.advanceTimersByTime(TERMINAL_IME_DEFERRED_CHORD_ABANDON_MS - 1)
     expect(send).not.toHaveBeenCalled()
 
@@ -70,12 +70,65 @@ describe('createTerminalImeDeferredChordSender', () => {
     const send = vi.fn()
     const sender = createTerminalImeDeferredChordSender()
 
-    sender.defer(el, send)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 105 }, el, send)
     el.dispatchEvent(new Event('compositionend'))
     vi.advanceTimersByTime(0)
     sender.cancelPending()
     vi.runAllTimers()
 
     expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('absorbs the replay of a held chord exactly once (#17616)', () => {
+    // 2-Set Korean ends the composition on the chord and the platform replays that press
+    // unmarked. Chromium keeps the original timeStamp on a re-dispatch, so the replay is
+    // recognisable as the press it repeats — measured on stock macOS, both ArrowLeft keydowns
+    // of one Option+← over a preedit report the same timeStamp.
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const sender = createTerminalImeDeferredChordSender()
+    const chord = { code: 'ArrowLeft', timeStamp: 23884 }
+
+    sender.defer(chord, el, send)
+
+    expect(sender.absorbRedispatchedChord(chord)).toBe(true)
+    // One press owes one credit, so a second replay is not this chord's and still gets through.
+    expect(sender.absorbRedispatchedChord(chord)).toBe(false)
+  })
+
+  it('lets a different press through while a chord is held', () => {
+    const el = document.createElement('div')
+    const sender = createTerminalImeDeferredChordSender()
+
+    sender.defer({ code: 'ArrowLeft', timeStamp: 23884 }, el, vi.fn())
+
+    // A genuine second press carries its own timeStamp, and another key is not this chord at all.
+    expect(sender.absorbRedispatchedChord({ code: 'ArrowLeft', timeStamp: 23999 })).toBe(false)
+    expect(sender.absorbRedispatchedChord({ code: 'ArrowRight', timeStamp: 23884 })).toBe(false)
+  })
+
+  it('drops the credit once the deferral settles', () => {
+    const el = document.createElement('div')
+    const sender = createTerminalImeDeferredChordSender()
+    const chord = { code: 'ArrowLeft', timeStamp: 23884 }
+
+    sender.defer(chord, el, vi.fn())
+    el.dispatchEvent(new Event('compositionend'))
+    vi.advanceTimersByTime(0)
+
+    // Japanese and Chinese conversions swallow the chord instead of replaying it, so an unspent
+    // credit must not sit waiting to eat an unrelated press later.
+    expect(sender.absorbRedispatchedChord(chord)).toBe(false)
+  })
+
+  it('drops the credit when the chord is abandoned', () => {
+    const el = document.createElement('div')
+    const sender = createTerminalImeDeferredChordSender()
+    const chord = { code: 'ArrowLeft', timeStamp: 23884 }
+
+    sender.defer(chord, el, vi.fn())
+    vi.advanceTimersByTime(TERMINAL_IME_DEFERRED_CHORD_ABANDON_MS)
+
+    expect(sender.absorbRedispatchedChord(chord)).toBe(false)
   })
 })
