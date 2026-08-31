@@ -2473,6 +2473,82 @@
       "demotionRule": "Demote if a reload revision settles more than once, a stale document or competing window can publish, a timer survives settlement, desktop failure stays indefinitely reloading, headless fallback returns after successful promotion, or either isolated Electron journey loses runtime or PTY identity."
     },
     {
+      "id": "runtime.headless-renderer-process-containment",
+      "title": "Headless renderer process death stays isolated from runtime-owned PTYs",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "electron-process-containment",
+      "surfaces": ["headless orca serve", "offscreen browser page", "daemon-backed PTYs"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon"],
+      "coverageNotes": "An isolated headless serve host creates two daemon-backed terminal sessions and one offscreen browser renderer. Exact WebContents and OS-process fencing prevents a fault from reaching an unrelated process. The oracle is host-local and does not claim paired-viewer continuity, renderer reload, systemd cgroup restart persistence, SSH or WSL coverage, or aggregate memory policy.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-5228",
+        "https://github.com/stablyai/orca/issues/16084",
+        "https://github.com/stablyai/orca/pull/16120"
+      ],
+      "invariant": "Killing one exact offscreen Chromium renderer cannot replace or terminate the headless main process, runtime, daemon, or unrelated daemon-backed PTYs during the immediate fault or the reported nine-second incident interval. Every terminal surface binding in the isolated fixture worktree remains identical to baseline by surface, parent-tab, leaf, and PTY identity, and both original PTY processes continue accepting input.",
+      "oracle": "Start an isolated headless serve runtime with zero initial BrowserWindows, create two daemon-backed terminal fixtures, and record main, runtime, daemon, every fixture-worktree terminal surface binding, fixture-process, WebContents, and renderer-process identities. Fence one marked offscreen page by WebContents, URL, and OS process, force that renderer to crash, and require its original process to die. Observe beyond the reported nine-second renderer-victim-to-unit-failure interval while repeatedly requiring no main-process close, unchanged main/runtime/daemon identities, unchanged exact surface-parent-leaf-PTY tuples in the fixture worktree, and I/O through both original fixture processes.",
+      "commands": [
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/headless-serve-renderer-kill-retention.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": ["tests/e2e/headless-serve-renderer-kill-retention.spec.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/headless-serve-renderer-kill-retention.spec.ts",
+          "assertions": [
+            "the exact original renderer process dies after the fenced WebContents fault",
+            "main, runtime, and daemon identities remain unchanged and reachable",
+            "every fixture-worktree terminal surface-parent-leaf-PTY binding remains identical to baseline",
+            "both original PTY processes accept post-fault input"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/headless-serve-renderer-kill-retention.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 34,
+          "summary": "The exact offscreen renderer process died while the headless main process, runtime, daemon, every baseline terminal surface binding in the fixture worktree, and both original PTY processes remained live; repeated stability checkpoints beyond the reported nine-second interval retained post-fault I/O."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "one isolated headless Electron host, one offscreen renderer fault, two daemon-backed PTY fixtures, and a 12-second stability window"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Fresh local macOS runs are green; CI and cross-platform soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The earlier immediate-containment oracle passed on reported v1.4.184 and then-current main e3327c2f31: renderer-only death did not reproduce runtime or session loss in the isolated host topology. The final candidate, rebased onto main 0926c25854, adds exact fixture-worktree surface-binding checks through a 12-second stability window; that extension has candidate evidence only. The process or event that ended the reported unit remains unidentified. Reverting the candidate removes the characterization coverage without changing product behavior."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The change adds test and gate metadata only. Production startup, fault handling, session inventory, and PTY hot paths are unchanged."
+      },
+      "promotionCriteria": [
+        "Pass the changed-spec Ubuntu/Xvfb PR lane.",
+        "Collect at least 100 consecutive CI or soak passes or 14 days without an unexplained flake.",
+        "Add Windows containment evidence if Electron process behavior diverges."
+      ],
+      "knownGaps": [
+        "The fault is an exact WebContents renderer crash, not kernel OOM victim selection or systemd cgroup failure.",
+        "The host-local runtime client proves control-plane reachability but not a separate paired viewer, reconnect, or replay path.",
+        "The test does not require the crashed browser surface to recover; browser-page recovery is a separate lifecycle contract.",
+        "SSH, WSL, folder-workspace, multi-client, mixed-version, and whole-service restart journeys are uncollected; no production or wire behavior changes in this gate."
+      ],
+      "demotionRule": "Demote if the exact renderer fault changes main/runtime/daemon identity, changes any terminal surface-parent-leaf-PTY tuple in the fixture worktree, replaces either fixture process, loses post-fault PTY I/O, or cannot identify the killed renderer unambiguously."
+    },
+    {
       "id": "runtime.websocket-heartbeat-cadence",
       "title": "Runtime WebSockets enter an owned shared heartbeat cadence",
       "maturity": "experimental",

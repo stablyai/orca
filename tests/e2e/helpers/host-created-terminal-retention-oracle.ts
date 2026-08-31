@@ -31,6 +31,12 @@ export type HostTerminalInventory = {
   publicationEpoch: string
   tabIds: string[]
   ptyIdByTabId: Record<string, string | null>
+  terminalSurfaces: {
+    id: string
+    leafId: string
+    parentTabId: string
+    ptyId: string | null
+  }[]
 }
 
 type SessionTabsListResult = {
@@ -38,6 +44,7 @@ type SessionTabsListResult = {
   tabs: {
     id: string
     type: string
+    leafId?: string
     parentTabId?: string
     ptyId?: string | null
   }[]
@@ -183,6 +190,19 @@ export async function readHostTerminalInventory(
     worktree: `id:${worktreeId}`
   })
   const terminals = snapshot.tabs.filter((tab) => tab.type === 'terminal')
+  const terminalSurfaces = terminals
+    .map((tab) => {
+      if (!tab.parentTabId || !tab.leafId) {
+        throw new Error(`Terminal surface ${tab.id} has no parent-tab or leaf identity`)
+      }
+      return {
+        id: tab.id,
+        leafId: tab.leafId,
+        parentTabId: tab.parentTabId,
+        ptyId: tab.ptyId ?? null
+      }
+    })
+    .toSorted((left, right) => left.id.localeCompare(right.id))
   const ptyIdByTabId: Record<string, string | null> = {}
   for (const tab of terminals) {
     const parentTabId = tab.parentTabId ?? tab.id.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]!
@@ -191,7 +211,8 @@ export async function readHostTerminalInventory(
   return {
     publicationEpoch: snapshot.publicationEpoch,
     tabIds: Object.keys(ptyIdByTabId),
-    ptyIdByTabId
+    ptyIdByTabId,
+    terminalSurfaces
   }
 }
 
