@@ -17,6 +17,8 @@ type SubscriptionFrameRouterOptions<TResult> = {
   send: (frame: string) => void
   fail: (error: RemoteRuntimeClientError) => void
   onAuthenticated: () => void
+  // Responses to requests the caller sent over this same socket; unmatched ids stay a hard failure.
+  resolvePendingRequest?: (response: RuntimeRpcResponse<unknown>) => boolean
   callbacks: {
     onResponse: (response: RuntimeRpcResponse<TResult>) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
@@ -113,16 +115,19 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
       return
     }
     const response = parsed.data as RuntimeRpcResponse<TResult>
-    if (response.id !== this.options.requestId) {
-      this.options.fail(
-        new RemoteRuntimeClientError(
-          'invalid_runtime_response',
-          'Remote Orca runtime returned a mismatched response id.'
-        )
-      )
+    if (response.id === this.options.requestId) {
+      this.options.callbacks.onResponse(response)
       return
     }
-    this.options.callbacks.onResponse(response)
+    if (this.options.resolvePendingRequest?.(response as RuntimeRpcResponse<unknown>)) {
+      return
+    }
+    this.options.fail(
+      new RemoteRuntimeClientError(
+        'invalid_runtime_response',
+        'Remote Orca runtime returned a mismatched response id.'
+      )
+    )
   }
 
   private handleBinaryFrame(frame: Uint8Array<ArrayBufferLike>): void {

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 type WorkerFixture = {
   dispatchId: string
@@ -55,7 +56,7 @@ describe('Task/Dispatch lifecycle guards', () => {
     (outcome) => {
       const database = createDatabase()
       const task = database.createTask({ spec: 'legacy mixed split' })
-      const contextOnly = database.createDispatchContext(task.id, 'term_context')
+      const contextOnly = createRootDispatch(database, task.id, 'term_context')
       sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       const worker = startWorker(database, task.id, 'reporter')
 
@@ -75,7 +76,8 @@ describe('Task/Dispatch lifecycle guards', () => {
       })
       expect(database.getActiveDispatchForTerminal('term_context')).toBeUndefined()
       expect(() =>
-        database.createDispatchContext(
+        createRootDispatch(
+          database,
           database.createTask({ spec: 'later context work' }).id,
           'term_context'
         )
@@ -88,7 +90,7 @@ describe('Task/Dispatch lifecycle guards', () => {
     const task = database.createTask({ spec: 'reversed legacy mixed split' })
     const worker = startWorker(database, task.id, 'reversed_reporter')
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
-    const contextOnly = database.createDispatchContext(task.id, 'term_reversed_context')
+    const contextOnly = createRootDispatch(database, task.id, 'term_reversed_context')
 
     expect(
       database.settleWorkerReport({
@@ -175,6 +177,8 @@ describe('Task/Dispatch lifecycle guards', () => {
       const database = createDatabase()
       const task = database.createTask({ spec: `${kind} split start failure` })
       const failed = database.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         startOptions: {},
         ...(kind === 'federated'
@@ -219,9 +223,14 @@ describe('Task/Dispatch lifecycle guards', () => {
     (operation) => {
       const database = createDatabase()
       const task = database.createTask({ spec: `${operation} historical sibling` })
-      const contextOnly = database.createDispatchContext(task.id, `term_${operation}`)
+      const contextOnly = createRootDispatch(database, task.id, `term_${operation}`)
       sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
-      const failed = database.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+      const failed = database.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        taskId: task.id,
+        startOptions: {}
+      })
 
       database.failWorkerStart(failed.dispatch.id, 'start_failed', 'worker failed to start')
       expect(database.getTask(task.id)?.status).toBe('dispatched')
@@ -239,7 +248,8 @@ describe('Task/Dispatch lifecycle guards', () => {
       expect(database.getDispatchContextById(contextOnly.id)?.status).toBe('failed')
       expect(database.getActiveDispatchForTerminal(`term_${operation}`)).toBeUndefined()
       expect(() =>
-        database.createDispatchContext(
+        createRootDispatch(
+          database,
           database.createTask({ spec: `${operation} later work` }).id,
           `term_${operation}`
         )
@@ -305,7 +315,12 @@ describe('Task/Dispatch lifecycle guards', () => {
     const task = database.createTask({ spec: 'uncertain legacy worker split' })
     const live = startWorker(database, task.id, 'uncertain_live')
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
-    const uncertain = database.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const uncertain = database.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     database.markWorkerStartUnknown(uncertain.dispatch.id, 'agent_readiness', 'outcome unknown')
     expect(database.getTask(task.id)?.status).toBe('blocked')
 
@@ -331,7 +346,12 @@ describe('Task/Dispatch lifecycle guards', () => {
       const task = database.createTask({ spec: `${recovery} uncertain sibling` })
       const live = startWorker(database, task.id, `${recovery}_live`)
       sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
-      const uncertain = database.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+      const uncertain = database.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        taskId: task.id,
+        startOptions: {}
+      })
       database.markWorkerStartUnknown(uncertain.dispatch.id, 'agent_readiness', 'outcome unknown')
 
       if (recovery === 'federated-reconcile') {
@@ -381,7 +401,7 @@ describe('Task/Dispatch lifecycle guards', () => {
     const task = database.createTask({ spec: 'corrupt gated task' })
     const gate = database.createGate({ taskId: task.id, question: 'Proceed?' })
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
-    const dispatch = database.createDispatchContext(task.id, 'term_worker')
+    const dispatch = createRootDispatch(database, task.id, 'term_worker')
     sqliteFor(database).prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(task.id)
 
     expect(() => database.resolveGate(gate.id, 'yes')).toThrowError(
@@ -404,7 +424,12 @@ function createDatabase(): OrchestrationDb {
 }
 
 function startWorker(database: OrchestrationDb, taskId: string, name: string): WorkerFixture {
-  const started = database.createStartingWorkerDispatch({ taskId, startOptions: {} })
+  const started = database.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: Number.MAX_SAFE_INTEGER,
+    taskId,
+    startOptions: {}
+  })
   const paneSuffix = name.length.toString(16).padStart(12, '0')
   const paneKey = `tab_${name}:aaaaaaaa-aaaa-4aaa-8aaa-${paneSuffix}`
   const processIncarnation = `${name}:1`

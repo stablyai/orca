@@ -72,9 +72,10 @@ export type PtyConnectionDeps = {
   restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
-  onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onPtyExitRef: React.RefObject<(ptyId: string, exitCode?: number) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onPtyErrorClearedRef?: React.RefObject<(paneId: number, message?: string) => void>
   onPaneProcessDied?: (processExit: PaneProcessExit) => void
   onPtyRecoveryStateRef?: React.RefObject<
     (paneId: number, state: PtyTransportRecoveryState | null) => void
@@ -116,7 +117,17 @@ export type PtyConnectionDeps = {
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
+  /** Stable-leaf variant for async callbacks that may outlive a PaneManager instance. */
+  syncPanePtyLayoutBindingForLeaf?: (
+    leafId: string,
+    ptyId: string | null,
+    sourcePaneId: number
+  ) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
+  /** Stable-leaf variant for async exit callbacks that may outlive a PaneManager instance. */
+  clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
+  /** Settles the captured one-shot startup only after this pane owns a concrete PTY. */
+  onStartupBound?: () => void
   deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
   /** Records a DECSET 2031 subscription seen through main's '2031-subscribe'
    *  fact (paneMode2031 + the mode at subscribe time) so later theme flips push

@@ -26,6 +26,11 @@ describe('install-electron-package-binary', () => {
       writeFakeElectronPackage(projectDir)
       writeFakeElectronGet(projectDir)
       writeFakeExtractor(projectDir, { createExecutable: true })
+      writeFakeElectronDist(projectDir, {
+        version: 'v40.0.0',
+        executableContents: 'old executable',
+        pathContents: 'stale-path'
+      })
 
       const result = runInstallScript(projectDir)
 
@@ -33,9 +38,14 @@ describe('install-electron-package-binary', () => {
       expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toMatch(
         /cacheRoot=.*orca-electron-.*cache/
       )
+      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toContain('force=true')
       expect(readFileSync(join(projectDir, 'node_modules', 'electron', 'path.txt'), 'utf8')).toBe(
         'electron'
       )
+      expect(readFileSync(join(projectDir, 'node_modules/electron/electron.d.ts'), 'utf8')).toBe(
+        'replacement types'
+      )
+      expect(existsSync(join(projectDir, 'node_modules/electron/dist/electron.d.ts'))).toBe(false)
       if (process.platform !== 'win32') {
         expect(
           lstatSync(
@@ -44,6 +54,107 @@ describe('install-electron-package-binary', () => {
         ).toBe(true)
       }
       expect(result.stdout).toContain('Repaired Electron path.txt -> electron')
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('repairs existing Electron path metadata without downloading', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir)
+      writeFakeElectronDist(projectDir)
+
+      const result = runInstallScript(projectDir)
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(join(projectDir, 'node_modules/electron/path.txt'), 'utf8')).toBe(
+        'electron'
+      )
+      expect(result.stdout).toContain('Repaired Electron path.txt -> electron')
+      expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reuses a configured persistent cache without forcing a fresh download', () => {
+    const projectDir = mkTempProject()
+    const cacheRoot = join(projectDir, 'electron-cache')
+
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir)
+      writeFakeExtractor(projectDir, { createExecutable: true })
+
+      const result = runInstallScript(projectDir, {
+        ORCA_ELECTRON_PACKAGE_CACHE_ROOT: cacheRoot
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toContain(
+        `cacheRoot=${cacheRoot} platform=linux arch=x64 force=false`
+      )
+      expect(existsSync(cacheRoot)).toBe(true)
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves an existing Electron distribution when replacement download fails', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir, { downloadFailures: 1, downloadErrorCode: 'EACCES' })
+      writeFakeElectronDist(projectDir, {
+        version: 'v40.0.0',
+        executableContents: 'existing executable',
+        pathContents: 'electron'
+      })
+
+      const result = runInstallScript(projectDir)
+      const electronDir = join(projectDir, 'node_modules/electron')
+
+      expect(result.status).toBe(1)
+      expect(readFileSync(join(electronDir, 'dist/version'), 'utf8')).toBe('v40.0.0')
+      expect(readFileSync(join(electronDir, 'dist/electron'), 'utf8')).toBe('existing executable')
+      expect(readFileSync(join(electronDir, 'path.txt'), 'utf8')).toBe('electron')
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('restores an existing Electron distribution when publishing its type definitions fails', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir)
+      writeFakeExtractor(projectDir, { createExecutable: true })
+      writeFakeElectronDist(projectDir, {
+        version: 'v40.0.0',
+        executableContents: 'existing executable',
+        pathContents: 'electron'
+      })
+      writeFileSync(join(projectDir, 'node_modules/electron/electron.d.ts'), 'existing types')
+      const preloadPath = writeTypeDefPublishFailurePreload(projectDir)
+
+      const result = runInstallScript(projectDir, {
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${preloadPath}`]
+          .filter(Boolean)
+          .join(' ')
+      })
+      const electronDir = join(projectDir, 'node_modules/electron')
+
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('injected Electron type definition publish failure')
+      expect(readFileSync(join(electronDir, 'dist/version'), 'utf8')).toBe('v40.0.0')
+      expect(readFileSync(join(electronDir, 'dist/electron'), 'utf8')).toBe('existing executable')
+      expect(readFileSync(join(electronDir, 'path.txt'), 'utf8')).toBe('electron')
+      expect(readFileSync(join(electronDir, 'electron.d.ts'), 'utf8')).toBe('existing types')
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }
@@ -113,6 +224,35 @@ describe('install-electron-package-binary', () => {
         readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
       ).toHaveLength(2)
       expect(result.stderr).toContain('Transient Electron download failure (ECONNRESET)')
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps a persistent cache root while retrying transient failures', () => {
+    const projectDir = mkTempProject()
+    const cacheRoot = join(projectDir, 'electron-cache')
+
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir, {
+        downloadFailures: 1,
+        downloadErrorCode: 'ECONNRESET'
+      })
+      writeFakeExtractor(projectDir, { createExecutable: true })
+      mkdirSync(cacheRoot, { recursive: true })
+      writeFileSync(join(cacheRoot, 'preserved.marker'), 'keep me')
+
+      const result = runInstallScript(projectDir, {
+        ORCA_ELECTRON_PACKAGE_CACHE_ROOT: cacheRoot,
+        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(existsSync(join(cacheRoot, 'preserved.marker'))).toBe(true)
+      expect(
+        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
+      ).toHaveLength(2)
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }
@@ -298,6 +438,8 @@ function runInstallScript(projectDir, extraEnv = {}) {
     encoding: 'utf8',
     env: {
       ...process.env,
+      ELECTRON_CACHE: undefined,
+      ORCA_ELECTRON_PACKAGE_CACHE_ROOT: undefined,
       npm_config_platform: 'linux',
       npm_config_arch: 'x64',
       ORCA_ELECTRON_PACKAGE_EXTRACTOR: join(projectDir, 'fake-extractor.cjs'),
@@ -329,6 +471,19 @@ module.exports = path.join(__dirname, 'dist', fs.readFileSync(pathFile, 'utf8'))
   )
 }
 
+function writeFakeElectronDist(
+  projectDir,
+  { version = 'v41.5.0', executableContents = '', pathContents } = {}
+) {
+  const electronDir = join(projectDir, 'node_modules', 'electron')
+  mkdirSync(join(electronDir, 'dist'), { recursive: true })
+  writeFileSync(join(electronDir, 'dist/version'), version)
+  writeFileSync(join(electronDir, 'dist/electron'), executableContents)
+  if (pathContents !== undefined) {
+    writeFileSync(join(electronDir, 'path.txt'), pathContents)
+  }
+}
+
 function writeFakeElectronGet(
   projectDir,
   {
@@ -350,7 +505,7 @@ exports.downloadArtifact = async function downloadArtifact(details) {
   downloadAttempt += 1
   appendFileSync(
     'electron-get.log',
-    'cacheRoot=' + details.cacheRoot + ' platform=' + details.platform + ' arch=' + details.arch + '\\n'
+    'cacheRoot=' + details.cacheRoot + ' platform=' + details.platform + ' arch=' + details.arch + ' force=' + details.force + '\\n'
   )
   if (${JSON.stringify(downloadNeverSettles)}) {
     return new Promise(() => {})
@@ -386,6 +541,7 @@ mkdirSync(join(extractDir, 'locales'), { recursive: true })
 if (${JSON.stringify(createExecutable)}) {
   writeFileSync(join(extractDir, 'electron'), '')
   writeFileSync(join(extractDir, 'electron.exe'), '')
+  writeFileSync(join(extractDir, 'electron.d.ts'), 'replacement types')
   writeFileSync(join(extractDir, 'version'), 'v41.5.0')
   if (process.platform !== 'win32') {
     symlinkSync('version', join(extractDir, 'version-link'))
@@ -393,4 +549,27 @@ if (${JSON.stringify(createExecutable)}) {
 }
 `
   )
+}
+
+function writeTypeDefPublishFailurePreload(projectDir) {
+  const preloadPath = join(projectDir, 'type-def-publish-failure.cjs')
+  writeFileSync(
+    preloadPath,
+    `
+const fs = require('node:fs')
+const { syncBuiltinESMExports } = require('node:module')
+const { basename, dirname } = require('node:path')
+const renameSync = fs.renameSync
+fs.renameSync = (source, target) => {
+  if (basename(source) === 'electron.d.ts' && basename(dirname(source)) === 'dist') {
+    const error = new Error('injected Electron type definition publish failure')
+    error.code = 'EACCES'
+    throw error
+  }
+  return renameSync(source, target)
+}
+syncBuiltinESMExports()
+`
+  )
+  return preloadPath
 }

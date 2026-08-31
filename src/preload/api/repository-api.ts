@@ -31,6 +31,7 @@ export type RepositoryApi = {
   add: (args: {
     path: string
     kind?: 'git' | 'folder'
+    displayName?: string
   }) => Promise<{ repo: Repo } | { error: string }>
   remove: (args: { repoId: string }) => Promise<void>
   // Forget a project on one execution host only, leaving the same repo id on other hosts intact.

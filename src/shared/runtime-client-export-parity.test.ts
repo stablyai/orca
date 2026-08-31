@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { PairingOffer } from './pairing'
+import type { RuntimeCapability } from './protocol-version'
 import * as RemoteClient from './remote-runtime-client'
-import type { RemoteRuntimeSocketLivenessOptions } from './remote-runtime-socket-liveness'
 import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from './runtime-rpc-envelope'
 import * as Runtime from './runtime-types'
 
@@ -158,6 +158,7 @@ type RuntimeTypeInventory = [
   Runtime.RuntimeTerminalSplit,
   Runtime.RuntimeTerminalState,
   Runtime.RuntimeTerminalSummary,
+  Runtime.RuntimeTerminalUnavailableReason,
   Runtime.RuntimeTerminalVisualGroupNode,
   Runtime.RuntimeTerminalVisualLayout,
   Runtime.RuntimeTerminalVisualLayoutNode,
@@ -193,7 +194,8 @@ describe('runtime client public export parity', () => {
         params: unknown,
         timeoutMs: number,
         envelope?: RuntimeOrchestrationEnvelope,
-        signal?: AbortSignal
+        signal?: AbortSignal,
+        clientCapabilities?: readonly RuntimeCapability[]
       ) => Promise<RuntimeRpcResponse<TResult>>
     >()
     expectTypeOf(RemoteClient.sendRemoteRuntimeRequestWithStatusPreflight).toEqualTypeOf<
@@ -203,7 +205,8 @@ describe('runtime client public export parity', () => {
         params: unknown,
         timeoutMs: number,
         validateStatus: (response: RuntimeRpcResponse<Runtime.RuntimeStatus>) => void,
-        envelope?: RuntimeOrchestrationEnvelope
+        envelope?: RuntimeOrchestrationEnvelope,
+        clientCapabilities?: readonly RuntimeCapability[]
       ) => Promise<RuntimeRpcResponse<TResult>>
     >()
     expectTypeOf(RemoteClient.subscribeRemoteRuntimeRequest).toEqualTypeOf<
@@ -213,7 +216,7 @@ describe('runtime client public export parity', () => {
         params: unknown,
         timeoutMs: number,
         callbacks: RemoteClient.RemoteRuntimeSubscriptionCallbacks<TResult>,
-        livenessOptions?: RemoteRuntimeSocketLivenessOptions
+        options?: RemoteClient.RemoteRuntimeSubscriptionOptions
       ) => Promise<RemoteClient.RemoteRuntimeSubscription>
     >()
   })
@@ -223,7 +226,11 @@ describe('runtime client public export parity', () => {
       'BROWSER_UNAVAILABLE_ERROR_CODE',
       'COMPUTER_ERROR_CODES',
       'HEADLESS_RUNTIME_WINDOW_ID',
-      'browserUnavailableMessage'
+      'TERMINAL_PTY_DEGRADATION_CAPABILITY',
+      'TERMINAL_UNAVAILABLE_ERROR_CODE',
+      'UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH',
+      'browserUnavailableMessage',
+      'terminalUnavailableMessage'
     ])
     expect(Object.keys(RemoteClient).sort()).toEqual([
       'RemoteRuntimeClientError',

@@ -13,8 +13,20 @@ export const BROWSER_SCREENCAST_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'browser.screencast',
     params: Screencast,
-    handler: async (params, { runtime, connectionId, sendBinary, signal }, emit) =>
-      runtime.browserScreencast(params, { connectionId, sendBinary, signal, emit })
+    handler: async (
+      params,
+      { runtime, connectionId, pairedDeviceId, clientKind, sendBinary, signal },
+      emit
+    ) =>
+      runtime.browserScreencast(params, {
+        connectionId,
+        pairedDeviceId,
+        // Why: the pairing scope is what tells a phone driver apart from a desktop/web viewer of the same stream.
+        clientKind,
+        sendBinary,
+        signal,
+        emit
+      })
   }),
   defineMethod({
     name: 'browser.screencast.unsubscribe',

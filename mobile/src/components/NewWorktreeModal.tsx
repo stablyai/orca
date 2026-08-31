@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Keyboard } from 'react-native'
 import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-branch-selection'
 import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
@@ -7,7 +7,10 @@ import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-mo
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
-import { useRetiredWorktreeNames } from '../worktree/use-retired-worktree-names'
+import {
+  buildRetiredWorktreeNamesRefreshKey,
+  useRetiredWorktreeNames
+} from '../worktree/use-retired-worktree-names'
 import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
 import {
   getMobileWorkspaceRepoBadgeColor,
@@ -30,26 +33,25 @@ import { useNewWorkspaceSetupScript } from './use-new-workspace-setup-script'
 import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-navigation'
 
 export function NewWorktreeModal(props: NewWorktreeModalProps) {
-  const openEpochRef = useRef(0)
-  const wasVisibleRef = useRef(false)
-  const clientEpochRef = useRef({ client: props.client, epoch: 0 })
-
   // Why: each drawer opening is a fresh form session; remounting resets local
   // form state before paint instead of clearing it in a visible-prop Effect.
-  if (props.visible && !wasVisibleRef.current) {
-    openEpochRef.current += 1
-  }
-  wasVisibleRef.current = props.visible
-  if (clientEpochRef.current.client !== props.client) {
-    clientEpochRef.current = { client: props.client, epoch: clientEpochRef.current.epoch + 1 }
+  // State, not a ref: react-native-screens freezes a blurred screen by suspending
+  // this subtree, and a counter bumped during a render React then throws away
+  // would restart the session for an opening that never committed.
+  const [session, setSession] = useState({ openEpoch: 0, visible: props.visible })
+  if (session.visible !== props.visible) {
+    setSession({
+      openEpoch: props.visible ? session.openEpoch + 1 : session.openEpoch,
+      visible: props.visible
+    })
   }
 
-  return (
-    <NewWorktreeModalContent
-      key={`${openEpochRef.current}:${clientEpochRef.current.epoch}`}
-      {...props}
-    />
-  )
+  // Why: key the session on the HOST, never on the RpcClient object. A reconnect,
+  // forceReconnect, or foreground revival swaps that object for the same host
+  // (see useHostClient), and keying on it silently remounted this form mid-edit
+  // and threw away the picked source. Every client-scoped hook below already
+  // drops responses from a superseded client, so no remount is needed for that.
+  return <NewWorktreeModalContent key={`${session.openEpoch}:${props.hostId}`} {...props} />
 }
 
 function NewWorktreeModalContent(props: NewWorktreeModalProps) {
@@ -89,7 +91,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     detectedAgentIds: executionTarget.detectedAgentIds
   })
   const retiredNamesRefreshKey = useMemo(
-    () => (existingWorktreePaths ?? []).toSorted().join('\0'),
+    () => buildRetiredWorktreeNamesRefreshKey(existingWorktreePaths),
     [existingWorktreePaths]
   )
   const retiredWorktreeNames = useRetiredWorktreeNames(

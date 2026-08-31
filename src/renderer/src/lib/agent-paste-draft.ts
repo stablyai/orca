@@ -129,7 +129,8 @@ export async function pasteDraftWhenAgentReady(args: {
     settings,
     ptyId,
     content,
-    submit: submit === true
+    submit: submit === true,
+    agent
   })
 }
 
@@ -168,7 +169,8 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     settings,
     ptyId,
     content,
-    submit: submit === true
+    submit: submit === true,
+    agent
   })
 }
 
@@ -197,11 +199,13 @@ async function sendBracketedPasteToAgent(args: {
   ptyId: string
   content: string
   submit: boolean
+  agent?: TuiAgent
 }): Promise<boolean> {
-  const { settings = useAppStore.getState().settings, ptyId, content, submit } = args
+  const { settings = useAppStore.getState().settings, ptyId, content, submit, agent } = args
+  const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
   try {
-    // Why: paste + Enter must be one transaction, or a concurrent paste on this PTY
-    // can slip between them and submit a half-written prompt.
+    // Why: paste + Enter (+ retry Enter) must be one transaction, or a concurrent
+    // paste on this PTY can slip between them and submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
       const pasted = await sendAgentDraftPasteContentNow(settings, ptyId, content)
       if (!pasted || !submit) {
@@ -212,7 +216,20 @@ async function sendBracketedPasteToAgent(args: {
       // Enter arrive in the same PTY write. Split the submit into the next turn so
       // the TUI processes bracketed-paste termination before handling Enter.
       await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-      return await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+      const submitted = await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+
+      if (submitRetryDelayMs !== undefined) {
+        // Why: agents that render their composer before Enter is live silently eat
+        // the first Enter; the retry is best-effort and never downgrades `submitted`.
+        await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
+        try {
+          await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+        } catch {
+          // Why: a rejected retry leaves the first Enter's verdict untouched.
+        }
+      }
+
+      return submitted
     })
   } catch {
     return false

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_AGENT_SPECS,
-  COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS,
   CUSTOM_AGENT_ID,
   DEFAULT_COMMIT_MESSAGE_AGENT_ID,
   getCommitMessageAgentCapability,
@@ -11,14 +10,17 @@ import {
   isCustomAgentId,
   listCommitMessageAgentCapabilities,
   listCommitMessageAgentIds,
+  resolveCommitMessageAgentChoice
+} from './commit-message-agent-spec'
+import {
+  COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS,
   parseAntigravityModels,
   parseClaudeModels,
   parseCodexModels,
   parseCursorModels,
   parseLineModels,
-  parsePiModels,
-  resolveCommitMessageAgentChoice
-} from './commit-message-agent-spec'
+  parsePiModels
+} from './commit-message-model-parsers'
 
 afterEach(() => {
   vi.restoreAllMocks()

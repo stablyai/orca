@@ -3,6 +3,8 @@ import { is } from '@electron-toolkit/utils'
 import { join } from 'node:path'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
+import { getBrowserClientHostId } from '../browser/browser-client-host-id'
+import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
@@ -116,7 +118,11 @@ export function createMainWindow(
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
-      webviewTag: true
+      webviewTag: true,
+      // Why an argument and not an IPC read: this is the window whose webviews host browser guests,
+      // and it has to know that before it interprets its first session snapshot — earlier than any
+      // handler registration it could wait on.
+      additionalArguments: [formatBrowserClientHostIdArgument(getBrowserClientHostId())]
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id

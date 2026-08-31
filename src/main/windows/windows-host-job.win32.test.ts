@@ -24,9 +24,22 @@ function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    // An inaccessible process is still alive; only a missing pid proves exit.
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
   }
+}
+
+// Job-object teardown is external to fake timers; poll the real process table to a deadline.
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!isAlive(pid)) {
+      return true
+    }
+    await sleep(50)
+  }
+  return !isAlive(pid)
 }
 
 describeOnWindows('host job reaps the tree when the host dies', () => {
@@ -54,7 +67,7 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
         `console.log('ASSIGNED=' + native.assignCurrentProcessToJob());`,
         `const term = pty.spawn('cmd.exe', [], { name: 'xterm', cols: 80, rows: 30, cwd: ${JSON.stringify(dir)}, useConptyDll: true });`,
         `term.onData((d) => { const m = /GC=(\\d+)/.exec(d); if (m) console.log('GRANDCHILD=' + m[1]); });`,
-        `term.write('node -e "const{spawn}=require(\\'child_process\\');const c=spawn(process.execPath,[\\'-e\\',\\'setInterval(()=>{},1000)\\'],{detached:true,stdio:\\'ignore\\'});c.unref();console.log(\\'GC=\\'+c.pid);"\\r');`,
+        `term.write('node -e "const{spawn}=require(\\'child_process\\');const c=spawn(process.execPath,[\\'-e\\',\\'setInterval(()=>{},1000)\\'],{detached:true,windowsHide:true,stdio:\\'ignore\\'});c.unref();console.log(\\'GC=\\'+c.pid);"\\r');`,
         `setTimeout(() => console.log('SHELL=' + term.pid), 4000);`,
         `setInterval(() => {}, 1000);`
       ].join('\n')
@@ -81,12 +94,14 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
 
     // Force-kill only the host: no tree kill, nothing given a chance to unwind.
     // This is the daemon-crash shape.
-    process.kill(host.pid!)
-    await sleep(3_000)
-
+    process.kill(host.pid!, 'SIGKILL')
     try {
-      expect(isAlive(shellPid)).toBe(false)
-      expect(isAlive(grandchildPid)).toBe(false)
+      const [shellExited, grandchildExited] = await Promise.all([
+        waitForProcessExit(shellPid, 15_000),
+        waitForProcessExit(grandchildPid, 15_000)
+      ])
+      expect(shellExited).toBe(true)
+      expect(grandchildExited).toBe(true)
     } finally {
       for (const pid of [shellPid, grandchildPid]) {
         try {

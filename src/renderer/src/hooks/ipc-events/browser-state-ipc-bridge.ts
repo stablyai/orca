@@ -4,6 +4,18 @@ import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 
+/**
+ * A client-hosted page is a local Electron webview on this desktop that happens to belong to a
+ * remote runtime. Its guest events come from this main process, not from the host's tab sync, so
+ * the blanket runtime-active guard on those channels would drop them on the floor.
+ */
+function isClientHostedBrowserPage(browserPageId: string): boolean {
+  return (
+    useAppStore.getState().remoteBrowserPageHandlesByPageId[browserPageId]?.placement?.kind ===
+    'client'
+  )
+}
+
 export function registerBrowserStateIpcBridge(
   unsubs: (() => void)[],
   isRuntimeEnvironmentActive: () => boolean
@@ -28,7 +40,7 @@ export function registerBrowserStateIpcBridge(
   )
   const unsubscribeCertificateFailure = window.api.browser.onCertificateFailureChanged?.(
     ({ browserPageId, failure }) => {
-      if (isRuntimeEnvironmentActive()) {
+      if (isRuntimeEnvironmentActive() && !isClientHostedBrowserPage(browserPageId)) {
         return
       }
       useAppStore.getState().setBrowserPageCertificateFailure(browserPageId, failure)
@@ -77,7 +89,20 @@ export function registerBrowserStateIpcBridge(
       if (!sourcePage || getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
         return
       }
-      store.createBrowserTab(sourcePage.worktreeId, url, { title: url })
+      // Why: the link inherits the opener's cookie jar. Falling back to the default profile would let
+      // a page in an isolated session hand its links to the default one, silently crossing profiles.
+      const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
+        (tab) => tab.id === sourcePage.workspaceId
+      )
+      store.createBrowserTab(sourcePage.worktreeId, url, {
+        title: url,
+        ...(sourceTab
+          ? {
+              sessionProfileId: sourceTab.sessionProfileId,
+              sessionPartition: sourceTab.sessionPartition
+            }
+          : {})
+      })
     })
   )
 }

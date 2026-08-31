@@ -176,6 +176,17 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'request-show'],
+    summary: 'Ask whether one orchestration mutation request already took effect',
+    usage: 'orca orchestration request-show --request <request_id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'request'],
+    notes: [
+      'Read-only: it never starts, retries, or settles anything, so it is safe to run after any lost response.',
+      'completed means the mutation landed and --retry-request replays the recorded outcome instead of starting a second one. pending means the original mutation is still running or Orca restarted before recording its outcome; wait for a live original command, otherwise replay with --retry-request.',
+      'absent means this runtime holds no receipt for that request under your caller identity: it never arrived, it failed before recording anything, or the receipt was pruned. Absent is not proof that nothing happened.'
+    ]
+  },
+  {
     path: ['orchestration', 'dispatch-show'],
     summary: 'Show dispatch context for a task',
     usage:

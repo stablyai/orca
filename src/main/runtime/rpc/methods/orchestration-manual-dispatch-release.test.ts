@@ -158,6 +158,8 @@ describe('manual Dispatch release', () => {
 
   function createSupervisedWorker(): string {
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: createTask('supervised'),
       startOptions: {}
     })

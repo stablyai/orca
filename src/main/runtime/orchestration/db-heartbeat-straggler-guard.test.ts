@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 let db: OrchestrationDb | undefined
 
@@ -13,7 +14,7 @@ function seedHeartbeatedDispatch(): { d: OrchestrationDb; dispatchId: string } {
   const d = new OrchestrationDb(':memory:')
   db = d
   const task = d.createTask({ spec: 'work' })
-  const dispatch = d.createDispatchContext(task.id, 'term_worker')
+  const dispatch = createRootDispatch(d, task.id, 'term_worker')
   d.recordHeartbeat(dispatch.id, '2026-05-03T00:00:00.000Z')
   return { d, dispatchId: dispatch.id }
 }

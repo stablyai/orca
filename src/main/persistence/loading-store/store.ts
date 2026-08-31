@@ -7,7 +7,7 @@ import { agentHookServer } from '../../agent-hooks/server'
 import { ActiveViewPreference } from '../../active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
-import { StoreRuntimeState } from './store-runtime-state'
+import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
 import {
   createStoreDomains,
   installStoreDomainContexts,
@@ -33,7 +33,7 @@ import type { RetiredWorktreeNamePersistence } from './retired-worktree-name-per
 import type { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 
-export type StoreOptions = { dataFile?: string }
+export type StoreOptions = StoreRuntimeOptions
 export type PtyBindingSourceExpectation = {
   worktreeId?: string
   tabId: string

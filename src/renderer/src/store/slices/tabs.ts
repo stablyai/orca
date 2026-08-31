@@ -127,7 +127,12 @@ export type TabsSlice = {
   activateTab: (tabId: string, opts?: { preservePreview?: boolean; worktreeId?: string }) => void
   closeUnifiedTab: (
     tabId: string,
-    opts?: { recordInteraction?: boolean; terminalRetirementHandled?: boolean }
+    opts?: {
+      /** Keep the worktree selected even if this empties it — for closes the user did not ask for. */
+      preserveWorktreeSelection?: boolean
+      recordInteraction?: boolean
+      terminalRetirementHandled?: boolean
+    }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (
     groupId: string,
@@ -635,7 +640,13 @@ export function projectWorktreeTabModelReconciliation(
       return false
     }
     // Why: reconnectable legacy tabs must re-enter the unified model instead of being orphaned.
-    return terminalTabHasReconnectablePty(state, tab.id, tab.ptyId)
+    // A session-scoped unverified-loss marker is also liveness evidence: the
+    // host may have disappeared before it could publish a PTY, so keep the row
+    // visible until a replacement binds or the user closes it.
+    return (
+      terminalTabHasReconnectablePty(state, tab.id, tab.ptyId) ||
+      state.unverifiedPtyLossTabIds[tab.id] === true
+    )
   })
   const orphanTerminalIds = getOrphanTerminalIds(state, worktreeId)
   const ensuredGroupState =
@@ -707,7 +718,7 @@ export function projectWorktreeTabModelReconciliation(
     if (tab.contentType === 'browser') {
       return liveBrowserIds.has(tab.entityId)
     }
-    if (tab.contentType === 'simulator') {
+    if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
       return true
     }
     return liveEditorIds.has(tab.entityId)
@@ -1185,7 +1196,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         nextLayoutByWorktree = collapsedState.layoutByWorktree
         nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
       }
+      // Why: the landing fallback answers "the user emptied this worktree". An unwound create
+      // never added a tab, so it must leave the selection exactly as the click found it.
       const shouldDeactivateWorktree =
+        !opts?.preserveWorktreeSelection &&
         current.activeWorktreeId === worktreeId &&
         nextTabs.length === 0 &&
         (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&

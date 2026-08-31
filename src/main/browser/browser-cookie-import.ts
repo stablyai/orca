@@ -76,6 +76,7 @@ import type {
   BrowserSessionProfileSource
 } from '../../shared/browser-workspace-types'
 import { browserSessionRegistry } from './browser-session-registry'
+import { supportsPendingBrowserCookieImportReplay } from './browser-session-cookie-staging'
 import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain,
@@ -1652,20 +1653,28 @@ export async function importCookiesFromBrowser(
     // Why: #9355 — staging only backs the cold-restart replay for cookies the in-memory
     // import rejects, so losing it must degrade that fallback rather than abort the import.
     let stagingAvailable = false
-    try {
-      mkdirSync(stagingDir, { recursive: true })
-      copyFileWithWindowsRetry(liveCookiesPath, stagingCookiesPath)
-      stagingAvailable = true
-    } catch (err) {
-      const fsErr = err as NodeJS.ErrnoException
+    // Why: a client-hosted route partition is derived at runtime and never reaches the startup
+    // replay, so staging it would only leave a plaintext cookie DB nothing ever consumes.
+    if (!supportsPendingBrowserCookieImportReplay(targetPartition)) {
       diag(
-        `  staging copy unavailable: code=${fsErr.code ?? 'unknown'} errno=${fsErr.errno ?? 'unknown'} syscall=${fsErr.syscall ?? 'unknown'} path=${liveCookiesPath} destination=${stagingCookiesPath}`
+        `  restart fallback unsupported for partition "${targetPartition}" — not staging cookies`
       )
-      // Why: copyFile is non-atomic and can leave a partial DB; delete it so failed imports retain no cookie data.
+    } else {
       try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
+        mkdirSync(stagingDir, { recursive: true })
+        copyFileWithWindowsRetry(liveCookiesPath, stagingCookiesPath)
+        stagingAvailable = true
+      } catch (err) {
+        const fsErr = err as NodeJS.ErrnoException
+        diag(
+          `  staging copy unavailable: code=${fsErr.code ?? 'unknown'} errno=${fsErr.errno ?? 'unknown'} syscall=${fsErr.syscall ?? 'unknown'} path=${liveCookiesPath} destination=${stagingCookiesPath}`
+        )
+        // Why: copyFile is non-atomic and can leave a partial DB; delete it so failed imports retain no cookie data.
+        try {
+          unlinkSync(stagingCookiesPath)
+        } catch {
+          /* best-effort */
+        }
       }
     }
 
@@ -1697,10 +1706,13 @@ export async function importCookiesFromBrowser(
       stagingDb = null
     }
     const discardStagingFile = (): void => {
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
+      // Why: the staged copy holds plaintext cookie values, and SQLite may have left sidecars beside it.
+      for (const suffix of ['', '-wal', '-shm']) {
+        try {
+          unlinkSync(stagingCookiesPath + suffix)
+        } catch {
+          /* best-effort */
+        }
       }
     }
 
@@ -2126,8 +2138,8 @@ export async function importCookiesFromBrowser(
         browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
         diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
       } else if (memoryFailed > 0) {
-        // Why: never register a path that was never written — cold start would replay a missing
-        // or partial DB over the live partition.
+        // Why: never register a path that was never written or can never be replayed — cold start
+        // would replay a missing or partial DB over the live partition.
         browserSessionRegistry.clearPendingCookieImport(targetPartition)
         discardStagingFile()
         diag(`  ${memoryFailed} cookies need a restart but staging is unavailable — skipped`)

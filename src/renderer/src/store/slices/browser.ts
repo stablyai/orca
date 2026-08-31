@@ -8,13 +8,26 @@ import type {
   BrowserHistoryEntry,
   BrowserLoadError,
   BrowserPage,
+  BrowserPageDocLocation,
   BrowserSessionProfile,
   BrowserSessionProfileCreateOptions,
   BrowserViewportPresetId,
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
+import {
+  GRAB_BUDGET,
+  type BrowserAnnotationIntent,
+  type BrowserPageAnnotation
+} from '../../../../shared/browser-grab-types'
+import {
+  clearClientHostedBrowserCloseIntents,
+  isDurableClientHostedBrowserHandle,
+  recordClientHostedBrowserCloseIntents,
+  type ClientHostedBrowserCloseIntentsByEnvironment,
+  type PendingClientHostedBrowserClose
+} from '@/runtime/client-hosted-browser-close-intents'
+import { isBrowserPageDefinitivelyGone } from '@/runtime/client-hosted-browser-close-intent-replay'
 import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
@@ -23,7 +36,30 @@ import {
   normalizeBrowserHistoryEntries,
   normalizeBrowserHistoryUrl
 } from '../../../../shared/workspace-session-browser-history'
+import {
+  MAX_WORKSPACE_DOC_HISTORY_ENTRIES,
+  normalizeWorkspaceDocHistoryEntries,
+  normalizeWorkspaceDocHistoryTitle,
+  type WorkspaceDocHistoryEntry
+} from '../../../../shared/workspace-doc-history'
+import { browserPageDocLocationsEqual } from '../../../../shared/browser-page-doc-location'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
+import {
+  browserWorkspaceMirrorFieldsEqual,
+  buildBrowserPage,
+  buildWorkspaceFromPage,
+  findPage,
+  findWorkspace,
+  mirrorWorkspaceFromActivePage,
+  normalizeBrowserTitle,
+  normalizeUrl
+} from './browser-page-records'
+import {
+  planBrowserPageConversion,
+  type BrowserPageConversionLeg,
+  type BrowserPageConversionTarget
+} from './browser-page-conversion'
+import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import {
   getRecentlyClosedTabPosition,
   restoreRecentlyClosedTabPosition,
@@ -33,6 +69,7 @@ import { pickNeighbor } from './tab-group-state'
 import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import type {
   BrowserDetectProfilesResult,
   BrowserProfileClearDefaultCookiesResult,
@@ -44,14 +81,14 @@ import type {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import {
-  getExecutionHostLabel,
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getHostSettingOverride } from '../../../../shared/host-setting-overrides'
+import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 import {
   getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree
@@ -77,12 +114,16 @@ type CreateBrowserTabOptions = {
   // Explicit "New Tab" focuses the address bar even with a real home URL; link-opened tabs leave it unset.
   focusAddressBar?: boolean
   browserRuntimeEnvironmentId?: string | null
+  /** Creates a page that shows a workspace document instead of a URL. */
+  docLocation?: BrowserPageDocLocation
 }
 
 type CreateBrowserPageOptions = {
   activate?: boolean
   title?: string
   browserRuntimeEnvironmentId?: string | null
+  /** Creates a page that shows a workspace document instead of a URL. */
+  docLocation?: BrowserPageDocLocation
 }
 
 type BrowserTabPageState = {
@@ -122,19 +163,78 @@ function sanitizeBrowserPageAnnotation(annotation: BrowserPageAnnotation): Brows
 export type RemoteBrowserPageHandle = {
   environmentId: string
   remotePageId: string
+  placement?: RuntimeBrowserPlacement
+  /** Optimistically staged by this client; the host has not published the page yet. */
+  staged?: true
+  /**
+   * This client expects to host the staged page itself. The real placement is minted host-side and
+   * only arrives with the snapshot, so the pane needs this to mount as the right kind of pane from
+   * the first frame instead of swapping components at adoption.
+   */
+  stagedClientHosted?: true
+  /**
+   * Rebuilt at hydration from the persisted page row rather than observed from a host snapshot. The
+   * page id is real, but nothing has confirmed the host still has it, so the row is exempt from the
+   * absent-from-snapshot cull until the first snapshot that publishes it clears this.
+   */
+  restoredFromSession?: true
+  /** The restored page was hosted by this desktop, so it must not restore as a streamed pane. */
+  restoredClientHosted?: true
+}
+
+/** Rebuild the remote page handles a restored session implies. No placement is seeded: the
+ *  persisted generations belong to the host lease that died with the last run, and the first host
+ *  snapshot is what supplies the live one.
+ *
+ *  Client-hosted rows only. A server-hosted page lives on the runtime, which may have restarted or
+ *  been redeployed while this desktop was closed; a seeded handle sends its pane down the adopt
+ *  branch, and the browser_tab_not_found that comes back deletes the row. With no handle the pane
+ *  creates a fresh page at the URL the row persisted, which is what the user left behind. */
+function buildRestoredRemoteBrowserPageHandles(
+  browserPagesByWorkspace: Record<string, BrowserPage[]>
+): Record<string, RemoteBrowserPageHandle> {
+  const handles: Record<string, RemoteBrowserPageHandle> = {}
+  for (const pages of Object.values(browserPagesByWorkspace)) {
+    for (const page of pages) {
+      if (
+        !page.browserRuntimeEnvironmentId ||
+        !page.remoteBrowserPageId ||
+        !page.remoteBrowserPageClientHosted
+      ) {
+        continue
+      }
+      handles[page.id] = {
+        environmentId: page.browserRuntimeEnvironmentId,
+        remotePageId: page.remoteBrowserPageId,
+        restoredFromSession: true,
+        restoredClientHosted: true
+      }
+    }
+  }
+  return handles
 }
 
 export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
   executionHostId: ExecutionHostId
   executionHostLabel: string
+  // Why: for a remote environment the import silently runs on either machine; toasts must say which.
+  executionMachine: 'client' | 'remote'
+  executionRemoteEnvironment: boolean
 }
 
 function retainCookieImportExecutionHost(
   result: BrowserCookieImportResult,
   executionHostId: ExecutionHostId,
-  executionHostLabel: string
+  executionHostLabel: string,
+  executionMachine: 'client' | 'remote'
 ): BrowserCookieImportExecutionResult {
-  return { ...result, executionHostId, executionHostLabel }
+  return {
+    ...result,
+    executionHostId,
+    executionHostLabel,
+    executionMachine,
+    executionRemoteEnvironment: parseExecutionHostId(executionHostId)?.kind === 'runtime'
+  }
 }
 
 export type BrowserSlice = {
@@ -143,6 +243,20 @@ export type BrowserSlice = {
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
   browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
+  /**
+   * Closes of client-hosted pages their owning runtime never heard, keyed by environment.
+   *
+   * Durable because the runtime persists the pages themselves: a close swallowed while the host
+   * was down would otherwise be undone by that host's next start.
+   */
+  clientHostedBrowserCloseIntentsByEnvironment: ClientHostedBrowserCloseIntentsByEnvironment
+  recordClientHostedBrowserCloseIntents: (
+    closes: readonly PendingClientHostedBrowserClose[]
+  ) => void
+  clearClientHostedBrowserCloseIntents: (
+    environmentId: string,
+    browserPageIds: readonly string[]
+  ) => void
   activeBrowserTabId: string | null
   activeBrowserTabIdByWorktree: Record<string, string | null>
   recentlyClosedBrowserTabsByWorktree: Record<string, ClosedBrowserWorkspaceSnapshot[]>
@@ -155,8 +269,12 @@ export type BrowserSlice = {
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
   openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
-  openBrowserProfileTabInActiveWorkspace: (url: string, profileId: string) => Promise<boolean>
-  closeBrowserTab: (tabId: string) => void
+  /** `profileId: null` uses the workspace default profile. */
+  openBrowserProfileTabInActiveWorkspace: (
+    url: string,
+    profileId: string | null
+  ) => Promise<boolean>
+  closeBrowserTab: (tabId: string, options?: { reason?: 'cleanup' }) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
   setActiveBrowserTab: (tabId: string) => void
@@ -166,6 +284,14 @@ export type BrowserSlice = {
     options?: CreateBrowserPageOptions
   ) => BrowserPage | null
   closeBrowserPage: (pageId: string) => void
+  // Why replacement and not mutation: a page's kind (doc vs web) is immutable for its life, so the
+  // address bar converts by replacing the page — fresh id, same workspace row — keeping the two
+  // main-process registry halves disjoint by construction.
+  convertBrowserPage: (
+    pageId: string,
+    target: BrowserPageConversionTarget,
+    options?: { leg?: BrowserPageConversionLeg }
+  ) => BrowserPage | null
   reopenClosedBrowserPage: (workspaceId: string) => BrowserPage | null
   setActiveBrowserPage: (workspaceId: string, pageId: string) => void
   // Focus that never yanks the user across worktrees: per-worktree slots always update, globals only when targeting the active worktree.
@@ -193,6 +319,11 @@ export type BrowserSlice = {
     viewportPresetId: BrowserViewportPresetId | null
   ) => void
   addBrowserPageAnnotation: (annotation: BrowserPageAnnotation) => void
+  updateBrowserPageAnnotation: (
+    pageId: string,
+    annotationId: string,
+    patch: { comment: string; intent: BrowserAnnotationIntent }
+  ) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
   hydrateBrowserSession: (
@@ -230,6 +361,9 @@ export type BrowserSlice = {
     selectedProfile: string
   }[]
   detectedBrowsersLoaded: boolean
+  // Why: which machine answered detection for a remote environment, so import menus can say where
+  // the import will read and store; null while browser settings target the local host.
+  detectedBrowsersHost: { machine: 'client' | 'remote'; hostLabel: string } | null
   fetchDetectedBrowsers: () => Promise<void>
   importCookiesFromBrowser: (
     profileId: string,
@@ -239,56 +373,23 @@ export type BrowserSlice = {
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string) => void
+  workspaceDocHistory: WorkspaceDocHistoryEntry[]
+  /** A visit bumps recency and count; a title-only refresh (bump: false) renames the row. */
+  recordWorkspaceDocVisit: (
+    docLocation: BrowserPageDocLocation,
+    title: string | null,
+    options?: { bump?: boolean }
+  ) => void
   clearBrowserHistory: () => void
   defaultBrowserSessionProfileId: string | null
   defaultBrowserSessionProfileIdByHostId: Partial<Record<ExecutionHostId, string | null>>
   setDefaultBrowserSessionProfileId: (profileId: string | null) => void
 }
 
-function normalizeUrl(url: string): string {
-  const trimmed = url.trim()
-  if (trimmed.length === 0) {
-    return 'about:blank'
-  }
-  // Why: redact at this single URL sink so the Kagi bearer token can't reach BrowserPage.url, which is persisted to disk.
-  return redactKagiSessionToken(trimmed)
-}
-
-function normalizeBrowserTitle(title: string | null | undefined, url: string): string {
-  if (
-    url === 'about:blank' ||
-    url === ORCA_BROWSER_BLANK_URL ||
-    title === 'about:blank' ||
-    title === ORCA_BROWSER_BLANK_URL ||
-    !title
-  ) {
-    // Why: don't surface the internal blank-guest URL as a title (leaks an impl detail, looks broken); show "New Tab" instead.
-    return 'New Tab'
-  }
-  return title
-}
-
 function getBrowserSettingsHostId(
   state: Pick<AppState, 'browserSessionHostIdOverride' | 'settings'>
 ): ExecutionHostId {
   return state.browserSessionHostIdOverride ?? getSettingsFocusedExecutionHostId(state.settings)
-}
-
-function getBrowserSettingsHostLabel(state: AppState, hostId: ExecutionHostId): string {
-  const override = getHostSettingOverride(state.settings, hostId, 'displayLabel')
-  if (override) {
-    return override
-  }
-  const parsed = parseExecutionHostId(hostId)
-  if (parsed?.kind === 'runtime') {
-    const name = state.runtimeEnvironments
-      ?.find((environment) => environment.id === parsed.environmentId)
-      ?.name.trim()
-    if (name) {
-      return name
-    }
-  }
-  return getExecutionHostLabel(hostId)
 }
 
 function getBrowserSettingsRuntimeEnvironmentId(
@@ -375,7 +476,10 @@ function browserImportStateForHostUpdate(
 
 function closeRemoteBrowserPageInOwningEnvironment(
   worktreeId: string,
-  handle: RemoteBrowserPageHandle
+  handle: RemoteBrowserPageHandle,
+  // Why a callback and not the store: this is module scope, and the recording action lives on the
+  // slice this file is still defining.
+  recordCloseIntents: (closes: readonly PendingClientHostedBrowserClose[]) => void
 ): void {
   const target: RuntimeClientTarget = { kind: 'environment', environmentId: handle.environmentId }
   void callRuntimeRpc(
@@ -383,112 +487,17 @@ function closeRemoteBrowserPageInOwningEnvironment(
     'browser.tabClose',
     { worktree: toRuntimeWorktreeSelector(worktreeId), page: handle.remotePageId },
     { timeoutMs: 15_000 }
-  ).catch(() => {})
-}
-
-function buildBrowserPage(
-  workspaceId: string,
-  worktreeId: string,
-  url: string,
-  title?: string,
-  browserRuntimeEnvironmentId?: string | null,
-  browserPageId?: string
-): BrowserPage {
-  const normalizedUrl = normalizeUrl(url)
-  return {
-    id: browserPageId ?? createBrowserUuid(),
-    workspaceId,
-    worktreeId,
-    url: normalizedUrl,
-    title: normalizeBrowserTitle(title, normalizedUrl),
-    // Why: blank pages mount an inert guest (no real navigation); marking them loading would flash the loading affordance.
-    loading: normalizedUrl !== 'about:blank' && normalizedUrl !== ORCA_BROWSER_BLANK_URL,
-    faviconUrl: null,
-    canGoBack: false,
-    canGoForward: false,
-    loadError: null,
-    createdAt: Date.now(),
-    ...(browserRuntimeEnvironmentId !== undefined ? { browserRuntimeEnvironmentId } : {})
-  }
-}
-
-function buildWorkspaceFromPage(
-  id: string,
-  worktreeId: string,
-  page: BrowserPage,
-  pageIds: string[],
-  sessionProfileId?: string | null,
-  sessionPartition?: string | null
-): BrowserWorkspace {
-  return {
-    id,
-    worktreeId,
-    sessionProfileId: sessionProfileId ?? null,
-    sessionPartition: sessionPartition ?? null,
-    activePageId: page.id,
-    pageIds,
-    url: page.url,
-    title: page.title,
-    loading: page.loading,
-    faviconUrl: page.faviconUrl,
-    canGoBack: page.canGoBack,
-    canGoForward: page.canGoForward,
-    loadError: page.loadError,
-    createdAt: page.createdAt
-  }
-}
-
-function mirrorWorkspaceFromActivePage(
-  workspace: BrowserWorkspace,
-  pages: BrowserPage[]
-): BrowserWorkspace {
-  const activePage = pages.find((page) => page.id === workspace.activePageId) ?? null
-  if (!activePage) {
-    return {
-      ...workspace,
-      activePageId: null,
-      pageIds: pages.map((page) => page.id),
-      url: 'about:blank',
-      title: translate('auto.store.slices.browser.08fc23631d', 'Browser'),
-      loading: false,
-      faviconUrl: null,
-      canGoBack: false,
-      canGoForward: false,
-      loadError: null
+  ).catch((error) => {
+    // A close the runtime never heard is a resurrection waiting to happen: the runtime persists
+    // client-hosted pages, so a durable intent replays this same RPC on the next reconnect.
+    // A definitive page-unknown answer means there is nothing left to resurrect.
+    if (!isDurableClientHostedBrowserHandle(handle) || isBrowserPageDefinitivelyGone(error)) {
+      return
     }
-  }
-  return {
-    ...workspace,
-    activePageId: activePage.id,
-    pageIds: pages.map((page) => page.id),
-    url: activePage.url,
-    title: activePage.title,
-    loading: activePage.loading,
-    faviconUrl: activePage.faviconUrl,
-    canGoBack: activePage.canGoBack,
-    canGoForward: activePage.canGoForward,
-    loadError: activePage.loadError
-  }
-}
-
-function browserWorkspaceMirrorFieldsEqual(
-  workspace: BrowserWorkspace,
-  mirrored: BrowserWorkspace
-): boolean {
-  const workspacePageIds = workspace.pageIds ?? []
-  const mirroredPageIds = mirrored.pageIds ?? []
-  return (
-    workspace.activePageId === mirrored.activePageId &&
-    workspacePageIds.length === mirroredPageIds.length &&
-    workspacePageIds.every((pageId, index) => pageId === mirroredPageIds[index]) &&
-    workspace.url === mirrored.url &&
-    workspace.title === mirrored.title &&
-    workspace.loading === mirrored.loading &&
-    workspace.faviconUrl === mirrored.faviconUrl &&
-    workspace.canGoBack === mirrored.canGoBack &&
-    workspace.canGoForward === mirrored.canGoForward &&
-    workspace.loadError === mirrored.loadError
-  )
+    recordCloseIntents([
+      { environmentId: handle.environmentId, browserPageId: handle.remotePageId, worktreeId }
+    ])
+  })
 }
 
 function getFallbackTabTypeForWorktree(
@@ -509,54 +518,13 @@ function getFallbackTabTypeForWorktree(
   return 'terminal'
 }
 
-const browserWorkspaceByIdCache = new WeakMap<
-  Record<string, BrowserWorkspace[]>,
-  Map<string, BrowserWorkspace>
->()
-const browserPageByIdCache = new WeakMap<Record<string, BrowserPage[]>, Map<string, BrowserPage>>()
-
-function findWorkspace(
-  browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
-  workspaceId: string
-): BrowserWorkspace | null {
-  const cached = browserWorkspaceByIdCache.get(browserTabsByWorktree)
-  if (cached) {
-    return cached.get(workspaceId) ?? null
-  }
-  const workspaceById = new Map<string, BrowserWorkspace>()
-  for (const workspaces of Object.values(browserTabsByWorktree)) {
-    for (const workspace of workspaces) {
-      workspaceById.set(workspace.id, workspace)
-    }
-  }
-  browserWorkspaceByIdCache.set(browserTabsByWorktree, workspaceById)
-  return workspaceById.get(workspaceId) ?? null
-}
-
-function findPage(
-  browserPagesByWorkspace: Record<string, BrowserPage[]>,
-  pageId: string
-): BrowserPage | null {
-  const cached = browserPageByIdCache.get(browserPagesByWorkspace)
-  if (cached) {
-    return cached.get(pageId) ?? null
-  }
-  const pageById = new Map<string, BrowserPage>()
-  for (const pages of Object.values(browserPagesByWorkspace)) {
-    for (const page of pages) {
-      pageById.set(page.id, page)
-    }
-  }
-  browserPageByIdCache.set(browserPagesByWorkspace, pageById)
-  return pageById.get(pageId) ?? null
-}
-
 export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = (set, get) => ({
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
   browserCertificateFailuresByPageId: {},
   browserAnnotationsByPageId: {},
   remoteBrowserPageHandlesByPageId: {},
+  clientHostedBrowserCloseIntentsByEnvironment: {},
   activeBrowserTabId: null,
   activeBrowserTabIdByWorktree: {},
   recentlyClosedBrowserTabsByWorktree: {},
@@ -568,8 +536,30 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   browserSessionHostIdOverride: null,
   browserSessionImportState: null,
   browserUrlHistory: [],
+  workspaceDocHistory: [],
   defaultBrowserSessionProfileId: null,
   defaultBrowserSessionProfileIdByHostId: {},
+
+  recordClientHostedBrowserCloseIntents: (closes) => {
+    set((s) => {
+      const next = recordClientHostedBrowserCloseIntents(
+        s.clientHostedBrowserCloseIntentsByEnvironment,
+        closes,
+        Date.now()
+      )
+      return next ? { clientHostedBrowserCloseIntentsByEnvironment: next } : {}
+    })
+  },
+
+  clearClientHostedBrowserCloseIntents: (environmentId, browserPageIds) => {
+    set((s) => {
+      const next = clearClientHostedBrowserCloseIntents(
+        s.clientHostedBrowserCloseIntentsByEnvironment,
+        { environmentId, browserPageIds, now: Date.now() }
+      )
+      return next ? { clientHostedBrowserCloseIntentsByEnvironment: next } : {}
+    })
+  },
 
   setBrowserSessionHostId: async (hostId) => {
     const parsed = parseExecutionHostId(hostId)
@@ -583,7 +573,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       defaultBrowserSessionProfileId: s.defaultBrowserSessionProfileIdByHostId[nextHostId] ?? null,
       browserSessionImportState: null,
       detectedBrowsers: [],
-      detectedBrowsersLoaded: false
+      detectedBrowsersLoaded: false,
+      detectedBrowsersHost: null
     }))
     await Promise.all([get().fetchBrowserSessionProfiles(), get().fetchDetectedBrowsers()])
   },
@@ -615,7 +606,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       url,
       options?.title,
       options?.browserRuntimeEnvironmentId,
-      browserPageId
+      browserPageId,
+      options?.docLocation
     )
     // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
     const sessionProfileId =
@@ -660,6 +652,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const shouldFocusFloatingTab = shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const shouldFocusAddressBar =
         (shouldUpdateGlobalActiveSurface || shouldFocusFloatingTab) &&
+        // Why the doc check and not just the url: a document page is blank by construction, and
+        // the blank url is exactly what marks a New Tab as wanting the address bar it does not have.
+        !page.docLocation &&
         (options?.focusAddressBar ??
           (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
 
@@ -740,7 +735,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           worktreeId,
           environmentId: runtimeEnvironmentId,
           url: defaultUrl,
-          targetGroupId: groupId
+          // Why: desktop pane groups are client-owned — the local reconciler only honors a
+          // recorded clientTargetGroupId; targetGroupId steers snapshot-driven clients instead.
+          targetGroupId: groupId,
+          clientTargetGroupId: groupId
         })
         if (created) {
           get().recordFeatureInteraction('browser-tab-created')
@@ -803,8 +801,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
     return true
   },
-  closeBrowserTab: (tabId) => {
+  closeBrowserTab: (tabId, options) => {
+    // Why: a cleanup close unwinds a tab that never finished being created — it owns no host
+    // page to close and must not enter the reopen stack as if the user had closed something.
+    const isCleanup = options?.reason === 'cleanup'
     let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
+    // Why collected rather than released inside the reducer: revoking is main-process work, and a
+    // grant is the only authority the preview scheme honors — a closed document must stop being
+    // readable, and it must stop being readable even if the reducer bails out below.
+    let docPageIdsToRelease: string[] = []
     let activeBrowserWorktreeIdToNotify: string | null = null
     set((s) => {
       let owningWorktreeId: string | null = null
@@ -836,10 +841,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         delete nextBrowserAnnotationsByPageId[page.id]
         delete nextBrowserCertificateFailuresByPageId[page.id]
       }
-      remotePagesToClose = closedPages.flatMap((page) => {
-        const handle = s.remoteBrowserPageHandlesByPageId[page.id]
-        return handle ? [{ worktreeId: page.worktreeId, handle }] : []
-      })
+      docPageIdsToRelease = closedPages.filter((page) => page.docLocation).map((page) => page.id)
+      remotePagesToClose = isCleanup
+        ? []
+        : closedPages.flatMap((page) => {
+            const handle = s.remoteBrowserPageHandlesByPageId[page.id]
+            return handle ? [{ worktreeId: page.worktreeId, handle }] : []
+          })
       const nextRemoteBrowserPageHandlesByPageId = {
         ...s.remoteBrowserPageHandlesByPageId
       }
@@ -884,21 +892,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       }
 
       const nextRecentlyClosedBrowserTabsByWorktree = { ...s.recentlyClosedBrowserTabsByWorktree }
-      const existingSnapshots = nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] ?? []
-      const position = getRecentlyClosedTabPosition(s, owningWorktreeId, tabId)
-      nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] = [
-        {
-          workspace: closedWorkspace,
-          pages: closedPages,
-          ...(position ? { position } : {})
-        },
-        ...existingSnapshots.filter((entry) => entry.workspace.id !== closedWorkspace.id)
-      ].slice(0, 10)
-      const nextRecentlyClosedTabKindsByWorktree = pushRecentlyClosedTabKind(
-        s.recentlyClosedTabKindsByWorktree,
-        owningWorktreeId,
-        'browser'
-      )
+      if (!isCleanup) {
+        const existingSnapshots = nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] ?? []
+        const position = getRecentlyClosedTabPosition(s, owningWorktreeId, tabId)
+        nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] = [
+          {
+            workspace: closedWorkspace,
+            pages: closedPages,
+            ...(position ? { position } : {})
+          },
+          ...existingSnapshots.filter((entry) => entry.workspace.id !== closedWorkspace.id)
+        ].slice(0, 10)
+      }
+      const nextRecentlyClosedTabKindsByWorktree = isCleanup
+        ? s.recentlyClosedTabKindsByWorktree
+        : pushRecentlyClosedTabKind(s.recentlyClosedTabKindsByWorktree, owningWorktreeId, 'browser')
 
       const nextRecentlyClosedBrowserPagesByWorkspace = {
         ...s.recentlyClosedBrowserPagesByWorkspace
@@ -939,7 +947,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
 
     for (const remotePage of remotePagesToClose) {
-      closeRemoteBrowserPageInOwningEnvironment(remotePage.worktreeId, remotePage.handle)
+      closeRemoteBrowserPageInOwningEnvironment(
+        remotePage.worktreeId,
+        remotePage.handle,
+        get().recordClientHostedBrowserCloseIntents
+      )
+    }
+
+    for (const docPageId of docPageIdsToRelease) {
+      releaseDocPreviewGrant(docPageId)
     }
 
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
@@ -947,7 +963,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         (entry) => entry.contentType === 'browser' && entry.entityId === tabId
       )
       if (workspaceItem) {
-        get().closeUnifiedTab(workspaceItem.id)
+        get().closeUnifiedTab(
+          workspaceItem.id,
+          isCleanup ? { preserveWorktreeSelection: true, recordInteraction: false } : undefined
+        )
       }
     }
 
@@ -1039,6 +1058,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activate: true,
         sessionProfileId,
         sessionPartition,
+        ...(snap.docLocation ? { docLocation: snap.docLocation } : {}),
         targetGroupId: entryToRestore.position?.groupId
       })
       restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
@@ -1053,14 +1073,16 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       sessionProfileId,
       sessionPartition,
       targetGroupId: entryToRestore.position?.groupId,
-      browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId
+      browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId,
+      ...(firstPage.docLocation ? { docLocation: firstPage.docLocation } : {})
     })
 
     for (const p of restPages) {
       get().createBrowserPage(restored.id, p.url, {
         activate: false,
         title: p.title,
-        browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId
+        browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId,
+        ...(p.docLocation ? { docLocation: p.docLocation } : {})
       })
     }
 
@@ -1140,7 +1162,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       workspace.worktreeId,
       url,
       options?.title,
-      options?.browserRuntimeEnvironmentId
+      options?.browserRuntimeEnvironmentId,
+      undefined,
+      options?.docLocation
     )
 
     set((s) => {
@@ -1161,6 +1185,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         s.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspaceId
       const shouldFocusAddressBar =
         shouldUpdateGlobalActiveSurface &&
+        !page.docLocation &&
         (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL)
 
       return {
@@ -1170,8 +1195,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         },
         browserTabsByWorktree: {
           ...s.browserTabsByWorktree,
-          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
-            tab.id === workspaceId ? nextWorkspace : tab
+          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
+            (tab) => (tab.id === workspaceId ? nextWorkspace : tab)
           )
         },
         pendingAddressBarFocusByPageId: shouldFocusAddressBar
@@ -1203,6 +1228,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   closeBrowserPage: (pageId) => {
     let closedWorkspaceIdForLabel: string | null = null
+    let docPageIdToRelease: string | null = null
     const remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
     set((s) => {
       const page = findPage(s.browserPagesByWorkspace, pageId)
@@ -1214,6 +1240,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         return s
       }
       closedWorkspaceIdForLabel = page.workspaceId
+      docPageIdToRelease = page.docLocation ? page.id : null
       const currentPages = s.browserPagesByWorkspace[workspace.id] ?? []
       const nextPages = currentPages.filter((entry) => entry.id !== pageId)
       const closedIdx = currentPages.findIndex((entry) => entry.id === pageId)
@@ -1251,8 +1278,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         },
         browserTabsByWorktree: {
           ...s.browserTabsByWorktree,
-          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
-            tab.id === workspace.id ? nextWorkspace : tab
+          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
+            (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
           )
         },
         recentlyClosedBrowserPagesByWorkspace: {
@@ -1281,7 +1308,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
 
     for (const remotePage of remotePagesToClose) {
-      closeRemoteBrowserPageInOwningEnvironment(remotePage.worktreeId, remotePage.handle)
+      closeRemoteBrowserPageInOwningEnvironment(
+        remotePage.worktreeId,
+        remotePage.handle,
+        get().recordClientHostedBrowserCloseIntents
+      )
+    }
+
+    if (docPageIdToRelease) {
+      releaseDocPreviewGrant(docPageIdToRelease)
     }
 
     const closedWorkspaceId = closedWorkspaceIdForLabel
@@ -1295,6 +1330,110 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (item && workspace) {
       get().setTabLabel(item.id, workspace.title)
     }
+  },
+
+  convertBrowserPage: (pageId, target, options) => {
+    // Why the same assert as createBrowserTab: a conversion materializes a browser surface the
+    // same way a creation does, and a paired web client that cannot host one must refuse here too.
+    // Ownership is resolved ONCE, on the plan's own terms — property-present-undefined means
+    // worktree-inferred — so the assert and the plan cannot disagree about what is being built.
+    const oldPageForOwnership = findPage(get().browserPagesByWorkspace, pageId)
+    const declaredOwnership =
+      target.kind === 'workspace-doc'
+        ? null
+        : 'browserRuntimeEnvironmentId' in target
+          ? target.browserRuntimeEnvironmentId
+          : (oldPageForOwnership?.browserRuntimeEnvironmentId ?? null)
+    assertManagedBrowserMaterializationAllowed(
+      get(),
+      declaredOwnership !== undefined
+        ? declaredOwnership
+        : oldPageForOwnership
+          ? (getRuntimeEnvironmentIdForWorktree(get(), oldPageForOwnership.worktreeId) ?? null)
+          : null
+    )
+    let converted: BrowserPage | null = null
+    let docPageIdToRelease: string | null = null
+    let remotePageToClose: { worktreeId: string; handle: RemoteBrowserPageHandle } | null = null
+    set((s) => {
+      const plan = planBrowserPageConversion(s, pageId, target, options)
+      if (!plan) {
+        return s
+      }
+      converted = plan.newPage
+      // Why collected rather than released inside the reducer: revoking is main-process work, and
+      // it must happen exactly once even if a later set() retries the reducer.
+      if (plan.oldPage.docLocation) {
+        docPageIdToRelease = plan.oldPage.id
+      }
+      const remoteHandle = s.remoteBrowserPageHandlesByPageId[plan.oldPage.id]
+      if (remoteHandle) {
+        remotePageToClose = { worktreeId: plan.oldPage.worktreeId, handle: remoteHandle }
+      }
+      const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
+      delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
+      const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+      delete nextBrowserAnnotationsByPageId[plan.oldPage.id]
+      const nextBrowserCertificateFailuresByPageId = { ...s.browserCertificateFailuresByPageId }
+      delete nextBrowserCertificateFailuresByPageId[plan.oldPage.id]
+      return {
+        browserPagesByWorkspace: {
+          ...s.browserPagesByWorkspace,
+          [plan.workspace.id]: plan.nextPages
+        },
+        browserTabsByWorktree: {
+          ...s.browserTabsByWorktree,
+          [plan.workspace.worktreeId]: (
+            s.browserTabsByWorktree[plan.workspace.worktreeId] ?? []
+          ).map((tab) => (tab.id === plan.workspace.id ? plan.nextWorkspace : tab))
+        },
+        pendingAddressBarFocusByPageId: Object.fromEntries(
+          Object.entries(s.pendingAddressBarFocusByPageId).filter(
+            ([pendingPageId]) => pendingPageId !== plan.oldPage.id
+          )
+        ),
+        pendingAddressBarFocusByTabId: Object.fromEntries(
+          Object.entries(s.pendingAddressBarFocusByTabId).filter(
+            ([pendingPageId]) => pendingPageId !== plan.oldPage.id
+          )
+        ),
+        remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
+        browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
+        browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
+      }
+    })
+    // Why the casts: the assignments happen inside set()'s callback, which TS's flow analysis does
+    // not track, so the initializers' null narrowing would otherwise read these as never.
+    const newPage = converted as BrowserPage | null
+    const remoteClose = remotePageToClose as {
+      worktreeId: string
+      handle: RemoteBrowserPageHandle
+    } | null
+    if (!newPage) {
+      return null
+    }
+    if (remoteClose) {
+      closeRemoteBrowserPageInOwningEnvironment(
+        remoteClose.worktreeId,
+        remoteClose.handle,
+        get().recordClientHostedBrowserCloseIntents
+      )
+    }
+    // Why after the reducer: a closed document must stop being readable, and the grant is the only
+    // authority the preview scheme honors — but the store row has to stop naming it first.
+    if (docPageIdToRelease) {
+      releaseDocPreviewGrant(docPageIdToRelease)
+    }
+    const workspaceAfter = findWorkspace(get().browserTabsByWorktree, newPage.workspaceId)
+    if (workspaceAfter?.activePageId === newPage.id) {
+      const item = Object.values(get().unifiedTabsByWorktree)
+        .flat()
+        .find((entry) => entry.contentType === 'browser' && entry.entityId === newPage.workspaceId)
+      if (item) {
+        get().setTabLabel(item.id, newPage.title)
+      }
+    }
+    return newPage
   },
 
   reopenClosedBrowserPage: (workspaceId) => {
@@ -1322,7 +1461,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     return get().createBrowserPage(workspaceId, pageToRestore.url, {
       title: pageToRestore.title,
       activate: true,
-      browserRuntimeEnvironmentId: pageToRestore.browserRuntimeEnvironmentId
+      browserRuntimeEnvironmentId: pageToRestore.browserRuntimeEnvironmentId,
+      ...(pageToRestore.docLocation ? { docLocation: pageToRestore.docLocation } : {})
     })
   },
 
@@ -1346,8 +1486,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return {
         browserTabsByWorktree: {
           ...s.browserTabsByWorktree,
-          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
-            tab.id === workspaceId ? nextWorkspace : tab
+          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
+            (tab) => (tab.id === workspaceId ? nextWorkspace : tab)
           )
         }
       }
@@ -1478,7 +1618,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const nextPage = {
         ...page,
         title:
-          updates.title === undefined ? page.title : normalizeBrowserTitle(updates.title, page.url),
+          updates.title === undefined
+            ? page.title
+            : normalizeBrowserTitle(updates.title, page.url, page.docLocation),
         loading: updates.loading ?? page.loading,
         faviconUrl: updates.faviconUrl === undefined ? page.faviconUrl : updates.faviconUrl,
         canGoBack: updates.canGoBack ?? page.canGoBack,
@@ -1542,8 +1684,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!browserWorkspaceMirrorFieldsEqual(workspace, nextWorkspace)) {
         nextState.browserTabsByWorktree = {
           ...s.browserTabsByWorktree,
-          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
-            tab.id === workspace.id ? nextWorkspace : tab
+          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
+            (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
           )
         }
       }
@@ -1606,15 +1748,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!workspace) {
         return s
       }
+      // Why a document page keeps its blank url here too: this is the third door onto a page's url,
+      // and a document's url is blank by construction. A grant committed here would reach
+      // persistence, the publish boundary and the address bar, exactly as at the other two doors.
+      const nextPageUrl = page.docLocation ? ORCA_BROWSER_BLANK_URL : nextUrl
       // Why: annotations point at DOM coords of the loaded document; a real URL change invalidates those markers.
-      const shouldClearAnnotations = normalizeUrl(page.url) !== nextUrl
+      const shouldClearAnnotations = normalizeUrl(page.url) !== nextPageUrl
       const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
         entry.id === pageId
           ? {
               ...entry,
-              url: nextUrl,
-              title: normalizeBrowserTitle(entry.title, nextUrl),
-              loading: true,
+              url: nextPageUrl,
+              title: normalizeBrowserTitle(entry.title, nextPageUrl, entry.docLocation),
+              // Why not simply true: a document page's guest is inert, so there is nothing to wait
+              // for and the loading affordance would never clear.
+              loading: !entry.docLocation,
               loadError: options?.preserveLoadError ? entry.loadError : null
             }
           : entry
@@ -1633,8 +1781,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         },
         browserTabsByWorktree: {
           ...s.browserTabsByWorktree,
-          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
-            tab.id === workspace.id ? nextWorkspace : tab
+          [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map(
+            (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
           )
         },
         ...(shouldClearAnnotations
@@ -1703,6 +1851,24 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         browserAnnotationsByPageId: {
           ...s.browserAnnotationsByPageId,
           [annotation.browserPageId]: next
+        }
+      }
+    }),
+
+  updateBrowserPageAnnotation: (pageId, annotationId, patch) =>
+    set((s) => {
+      const existing = s.browserAnnotationsByPageId[pageId] ?? []
+      const target = existing.find((annotation) => annotation.id === annotationId)
+      if (!target) {
+        return s
+      }
+      const updated = sanitizeBrowserPageAnnotation({ ...target, ...patch })
+      return {
+        browserAnnotationsByPageId: {
+          ...s.browserAnnotationsByPageId,
+          [pageId]: existing.map((annotation) =>
+            annotation.id === annotationId ? updated : annotation
+          )
         }
       }
     }),
@@ -1798,7 +1964,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
                   canGoBack: tab.canGoBack,
                   canGoForward: tab.canGoForward,
                   loadError: tab.loadError ?? null,
-                  createdAt: tab.createdAt
+                  createdAt: tab.createdAt,
+                  // Why the tab's copy is authority here: this branch runs when the page array was
+                  // salvaged away, and without it a restored document page comes back as a blank
+                  // New Tab under a strip entry still naming the document.
+                  docLocation: tab.docLocation ?? null
                 } satisfies BrowserPage
               ]
           const nextPages = persistedPages.map((page) => {
@@ -1811,7 +1981,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               ...persistedPage,
               workspaceId: tab.id,
               worktreeId,
-              url: normalizeUrl(page.url),
+              // Why re-asserted on restore: the same invariant creation enforces. A session written
+              // by an older or hand-edited build could carry a grant URL here, and it would name a
+              // grant that died with the process that minted it.
+              url: page.docLocation ? ORCA_BROWSER_BLANK_URL : normalizeUrl(page.url),
               loading: false,
               loadError: page.loadError ?? null
             }
@@ -1906,14 +2079,23 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activeBrowserTabId,
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         activeTabType,
-        remoteBrowserPageHandlesByPageId: {},
+        remoteBrowserPageHandlesByPageId:
+          buildRestoredRemoteBrowserPageHandles(browserPagesByWorkspace),
         browserCertificateFailuresByPageId: {},
         browserAnnotationsByPageId: {},
-        browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? [])
+        browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? []),
+        workspaceDocHistory: normalizeWorkspaceDocHistoryEntries(session.workspaceDocHistory ?? []),
+        // Why restored before the rows are: a close the host never heard must outlive the relaunch
+        // that also restores the row it closed, or the restore silently wins.
+        clientHostedBrowserCloseIntentsByEnvironment:
+          session.clientHostedBrowserCloseIntentsByEnvironment ?? {}
       }
     })
 
     const state = get()
+    // Why here and not in the startup chain: the seeded handles are the only record that this
+    // desktop was hosting pages, and the runtime only hands them back once it sees an attach.
+    void ensureBrowserClientHostsForRestoredPages(state)
     for (const [worktreeId, browserTabs] of Object.entries(state.browserTabsByWorktree)) {
       for (const bt of browserTabs) {
         const exists = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
@@ -1964,7 +2146,18 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           undefined,
           { timeoutMs: 15_000 }
         )
-        set((s) => profileListByHostUpdate(s, result.profiles, hostId))
+        // Why: client-hosted imports never touch the server, so the server's
+        // records can't carry the "imported from Chrome" badge — this desktop
+        // remembers what it imported into each environment's jar and overlays it.
+        const clientImportSources = await window.api.browser
+          .sessionClientRouteImportSources?.({ environmentId: runtimeEnvironmentId })
+          .catch(() => ({}))
+        const profiles = result.profiles.map((profile) =>
+          !profile.source && clientImportSources?.[profile.id]
+            ? { ...profile, source: clientImportSources[profile.id] }
+            : profile
+        )
+        set((s) => profileListByHostUpdate(s, profiles, hostId))
       } catch {
         set((s) => profileListByHostUpdate(s, [], hostId))
       }
@@ -2088,7 +2281,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   importCookiesToProfile: async (profileId) => {
     const initialState = get()
     const hostId = getBrowserSettingsHostId(initialState)
-    const executionHostLabel = getBrowserSettingsHostLabel(initialState, hostId)
+    const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
     if (getBrowserSettingsRuntimeEnvironmentId(initialState)) {
       const reason = translate(
         'auto.store.slices.browser.remoteCookieImportUnavailable',
@@ -2105,7 +2298,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return retainCookieImportExecutionHost(
         { ok: false as const, reason },
         hostId,
-        executionHostLabel
+        executionHostLabel,
+        'client'
       )
     }
     set((state) =>
@@ -2145,7 +2339,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           })
         )
       }
-      return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
+      return retainCookieImportExecutionHost(result, hostId, executionHostLabel, 'client')
     } catch (err) {
       const reason = String((err as Error)?.message ?? err)
       set((state) =>
@@ -2159,7 +2353,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return retainCookieImportExecutionHost(
         { ok: false as const, reason },
         hostId,
-        executionHostLabel
+        executionHostLabel,
+        'client'
       )
     }
   },
@@ -2170,27 +2365,43 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   detectedBrowsers: [],
   detectedBrowsersLoaded: false,
+  detectedBrowsersHost: null,
 
   fetchDetectedBrowsers: async () => {
     const hostId = getBrowserSettingsHostId(get())
     const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
     if (runtimeEnvironmentId) {
+      const hostLabel = selectExecutionHostDisplayLabel(get(), hostId)
       try {
-        const result = await callRuntimeRpc<BrowserDetectProfilesResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
-          'browser.profileDetectBrowsers',
-          undefined,
-          { timeoutMs: 15_000 }
-        )
+        // Why: the import runs on whichever machine hosts the pages, so the picker must offer that
+        // machine's browsers -- client-hosted means this desktop, not the (usually headless) remote.
+        const clientHostBrowsers = await window.api.browser.sessionDetectBrowsersForClientHost({
+          environmentId: runtimeEnvironmentId
+        })
+        const browsers =
+          clientHostBrowsers ??
+          (
+            await callRuntimeRpc<BrowserDetectProfilesResult>(
+              { kind: 'environment', environmentId: runtimeEnvironmentId },
+              'browser.profileDetectBrowsers',
+              undefined,
+              { timeoutMs: 15_000 }
+            )
+          ).browsers
+        // Why: retain which machine answered so import menus can say where imports read and store.
+        const detectedBrowsersHost = {
+          machine: clientHostBrowsers ? ('client' as const) : ('remote' as const),
+          hostLabel
+        }
         set((s) =>
           getBrowserSettingsHostId(s) === hostId
-            ? { detectedBrowsers: result.browsers, detectedBrowsersLoaded: true }
+            ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true, detectedBrowsersHost }
             : {}
         )
       } catch {
         set((s) =>
           getBrowserSettingsHostId(s) === hostId
-            ? { detectedBrowsers: [], detectedBrowsersLoaded: true }
+            ? { detectedBrowsers: [], detectedBrowsersLoaded: true, detectedBrowsersHost: null }
             : {}
         )
       }
@@ -2208,7 +2419,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       }[]
       set((s) =>
         getBrowserSettingsHostId(s) === hostId
-          ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true }
+          ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true, detectedBrowsersHost: null }
           : {}
       )
     } catch {
@@ -2220,7 +2431,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
     const initialState = get()
     const hostId = getBrowserSettingsHostId(initialState)
-    const executionHostLabel = getBrowserSettingsHostLabel(initialState, hostId)
+    const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
     const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
     if (runtimeEnvironmentId) {
       set((state) =>
@@ -2231,13 +2442,26 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           error: null
         })
       )
+      // Why: tracked across the try so a failed fallback RPC still reports the machine it ran on.
+      let ranOnClient = false
       try {
-        const result = await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
-          'browser.profileImportFromBrowser',
-          { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
-          { timeoutMs: 30_000 }
-        )
+        // Why: client-hosted pages render on this desktop, so their logins live
+        // here -- detecting and importing on the headless remote finds nothing.
+        const clientHostResult = await window.api.browser.sessionImportFromBrowserForClientHost({
+          environmentId: runtimeEnvironmentId,
+          profileId,
+          browserFamily,
+          browserProfile
+        })
+        ranOnClient = clientHostResult != null
+        const result =
+          clientHostResult ??
+          (await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
+            { kind: 'environment', environmentId: runtimeEnvironmentId },
+            'browser.profileImportFromBrowser',
+            { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
+            { timeoutMs: 30_000 }
+          ))
         if (result.ok) {
           set((state) =>
             browserImportStateForHostUpdate(state, hostId, {
@@ -2262,7 +2486,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
             })
           )
         }
-        return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
+        return retainCookieImportExecutionHost(
+          result,
+          hostId,
+          executionHostLabel,
+          ranOnClient ? 'client' : 'remote'
+        )
       } catch (err) {
         const reason = String((err as Error)?.message ?? err)
         set((state) =>
@@ -2276,7 +2505,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         return retainCookieImportExecutionHost(
           { ok: false as const, reason },
           hostId,
-          executionHostLabel
+          executionHostLabel,
+          ranOnClient ? 'client' : 'remote'
         )
       }
     }
@@ -2319,7 +2549,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           })
         )
       }
-      return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
+      return retainCookieImportExecutionHost(result, hostId, executionHostLabel, 'client')
     } catch (err) {
       const reason = String((err as Error)?.message ?? err)
       set((state) =>
@@ -2333,7 +2563,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return retainCookieImportExecutionHost(
         { ok: false as const, reason },
         hostId,
-        executionHostLabel
+        executionHostLabel,
+        'client'
       )
     }
   },
@@ -2369,6 +2600,44 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
+  recordWorkspaceDocVisit: (docLocation, title, options) => {
+    const bump = options?.bump ?? true
+    set((s) => {
+      const now = Date.now()
+      const existing = s.workspaceDocHistory.find((entry) =>
+        browserPageDocLocationsEqual(entry.docLocation, docLocation)
+      )
+      if (!existing && !bump) {
+        // A title refresh for a document never visited records nothing.
+        return s
+      }
+      const normalizedTitle = normalizeWorkspaceDocHistoryTitle(
+        title ?? existing?.title,
+        docLocation
+      )
+      const next: WorkspaceDocHistoryEntry[] = existing
+        ? s.workspaceDocHistory.map((entry) =>
+            entry === existing
+              ? {
+                  ...entry,
+                  title: normalizedTitle,
+                  ...(bump ? { lastVisitedAt: now, visitCount: entry.visitCount + 1 } : {})
+                }
+              : entry
+          )
+        : [
+            { docLocation, title: normalizedTitle, lastVisitedAt: now, visitCount: 1 },
+            ...s.workspaceDocHistory
+          ]
+      return {
+        workspaceDocHistory:
+          next.length > MAX_WORKSPACE_DOC_HISTORY_ENTRIES
+            ? normalizeWorkspaceDocHistoryEntries(next)
+            : next
+      }
+    })
+  },
+
   addBrowserHistoryEntry: (url, title) => {
     const safeUrl = redactKagiSessionToken(url)
     if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
@@ -2402,5 +2671,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
   },
 
-  clearBrowserHistory: () => set({ browserUrlHistory: [] })
+  // One clear for both sources: the dropdown presents them as one history.
+  clearBrowserHistory: () => set({ browserUrlHistory: [], workspaceDocHistory: [] })
 })

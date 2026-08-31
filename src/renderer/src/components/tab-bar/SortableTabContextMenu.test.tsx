@@ -207,6 +207,13 @@ describe('requestActiveTerminalPaneSplit', () => {
 })
 
 describe('SortableTabContextMenu', () => {
+  it('does not expose a native/terminal view switch', () => {
+    const { container } = renderMenu()
+
+    expect(container.textContent).not.toContain('Switch to terminal view')
+    expect(container.textContent).not.toContain('Switch to chat view')
+  })
+
   it('dispatches split requests and activates inactive terminal tabs first', () => {
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
     const { container, onActivate } = renderMenu({ isActive: false })

@@ -416,8 +416,14 @@ describe('registerPtyHandlers', () => {
       baseEnv: expect.any(Object)
     })
   })
-  it('does not echo launch config for provider reattach results', async () => {
-    const spawn = vi.fn(async () => ({ id: 'ssh-reattach', isReattach: true }))
+  it('restores daemon launch identity without minting renderer authority on reattach', async () => {
+    const incarnationId = 'ssh-reattach-incarnation'
+    const spawn = vi.fn(async () => ({
+      id: 'ssh-reattach',
+      incarnationId,
+      isReattach: true as const,
+      launchAgent: 'codex' as const
+    }))
     registerSshPtyProvider('ssh-reattach-1', {
       spawn,
       write: vi.fn(),
@@ -439,17 +445,30 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn(),
       acknowledgeDataEvent: vi.fn()
     } as never)
+    const registerPty = vi.fn()
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
-      registerPreAllocatedHandleForPty: vi.fn()
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty
     }
+    const tabId = 'tab-reattach'
+    const leafId = '77777777-7777-4777-8777-777777777777'
+    const worktreeId = 'repo-1::/tmp/reattach'
 
     registerPtyHandlers(mainWindow as never, runtime as never)
-    const result = (await handlers.get('pty:spawn')!(null, {
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
       cols: 80,
       rows: 24,
       connectionId: 'ssh-reattach-1',
+      worktreeId,
+      tabId,
+      leafId,
+      env: {
+        ORCA_PANE_KEY: makePaneKey(tabId, leafId),
+        ORCA_TAB_ID: tabId,
+        ORCA_WORKTREE_ID: worktreeId
+      },
       launchConfig: {
         agentCommand: 'codex --model gpt-5',
         agentArgs: '--model gpt-5',
@@ -459,6 +478,18 @@ describe('registerPtyHandlers', () => {
 
     expect(result).toMatchObject({ id: 'ssh-reattach', isReattach: true })
     expect(result.launchConfig).toBeUndefined()
+    expect(registerPty).toHaveBeenCalledWith(
+      'ssh-reattach',
+      worktreeId,
+      'ssh-reattach-1',
+      expect.objectContaining({
+        tabId,
+        leafId,
+        incarnationId,
+        providerReattachLaunchIdentity: { incarnationId, launchAgent: 'codex' }
+      }),
+      undefined
+    )
   })
   it('reuses the runtime background handle in local PTY spawn env', async () => {
     type RuntimeSpawnController = {

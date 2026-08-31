@@ -8,7 +8,7 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 import { resolveWorktreeBaseCommitOid } from '../worktree-base-ref-probe'
 import { loadBranchChanges } from './branch-change-entries'
 import {
-  countAheadCommits,
+  countCompareDivergence,
   resolveCompareRef,
   resolveMergeBase,
   resolveRefOid
@@ -65,6 +65,7 @@ export async function getBranchCompare(
       // Why: an unborn branch (new remote worktree) has no changes yet; a compare error would look broken.
       summary.changedFiles = 0
       summary.commitsAhead = 0
+      summary.commitsBehind = 0
       summary.status = 'ready'
       return { summary, entries: [] }
     }
@@ -94,12 +95,13 @@ export async function getBranchCompare(
   }
 
   try {
-    const [entries, commitsAhead] = await Promise.all([
+    const [entries, divergence] = await Promise.all([
       loadBranchChanges(worktreePath, mergeBase, headOid, options),
-      countAheadCommits(worktreePath, baseOid, headOid, options)
+      countCompareDivergence(worktreePath, baseOid, headOid, options)
     ])
     summary.changedFiles = entries.length
-    summary.commitsAhead = commitsAhead
+    summary.commitsAhead = divergence.ahead
+    summary.commitsBehind = divergence.behind
     summary.status = 'ready'
     return { summary, entries }
   } catch (error) {

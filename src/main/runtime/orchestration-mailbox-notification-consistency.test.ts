@@ -28,6 +28,7 @@ import {
 } from './orchestration-mailbox-notification-test-harness'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
+import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -750,7 +751,7 @@ describe('orchestration notification mailbox consistency', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const task = db.createTask({ spec: 'Worker task', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, TERMINAL_HANDLE, PANE_KEY)
+    const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
     for (let index = 0; index < 50; index += 1) {
       insertDirectRunMessage(db, run.id, `Worker status ${index}`)
     }

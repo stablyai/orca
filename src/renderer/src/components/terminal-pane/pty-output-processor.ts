@@ -35,6 +35,8 @@ export type ProcessPtyOutputOptions = {
   pendingEscapeTailAnsi?: string
   kittyKeyboardFlags?: number
   snapshotSeq?: number
+  alternateScreen?: boolean
+  terminalOwner?: 'shell'
 }
 
 function removeSuppressedCursorNativeTitles(
@@ -211,7 +213,11 @@ export function createPtyOutputProcessor({
         ...(options.kittyKeyboardFlags !== undefined
           ? { kittyKeyboardFlags: options.kittyKeyboardFlags }
           : {}),
-        ...(options.snapshotSeq !== undefined ? { snapshotSeq: options.snapshotSeq } : {})
+        ...(options.snapshotSeq !== undefined ? { snapshotSeq: options.snapshotSeq } : {}),
+        ...(options.alternateScreen !== undefined
+          ? { alternateScreen: options.alternateScreen }
+          : {}),
+        ...(options.terminalOwner ? { terminalOwner: options.terminalOwner } : {})
       }
       if (Object.keys(replayMeta).length > 0) {
         callbacks.onReplayData(data, replayMeta)

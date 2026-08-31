@@ -162,6 +162,8 @@ export async function publishLegacyBinaryInitialSnapshot(
     truncated: initialOutputOverflowed,
     truncatedByByteBudget: serialized?.truncatedByByteBudget,
     oscLinks: serialized?.oscLinks,
+    alternateScreen: serialized?.alternateScreen,
+    terminalOwner: serialized?.terminalOwner,
     data: serialized?.data ?? ''
   })
   console.log('[mobile-terminal-stream] snapshot', {

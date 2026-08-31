@@ -255,7 +255,9 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
             : null
         if (
           isEditableKeyboardTarget(e.target) ||
-          element?.closest('[data-slot="select-trigger"], [data-slot="select-content"]')
+          element?.closest(
+            '[data-slot="select-trigger"], [data-slot="select-content"], [data-slot="annotation-edit"]'
+          )
         ) {
           return
         }

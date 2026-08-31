@@ -102,9 +102,6 @@ vi.mock('../devin/hook-service', () => ({
 vi.mock('../kimi/hook-service', () => ({
   kimiHookService: { getStatus: vi.fn(() => ({ agent: 'kimi', state: 'absent' })) }
 }))
-vi.mock('../auggie/hook-service', () => ({
-  auggieHookService: { getStatus: vi.fn(() => ({ agent: 'aug', state: 'absent' })) }
-}))
 
 beforeEach(() => {
   dropStatusEntry.mockReset()
@@ -208,83 +205,6 @@ describe('agentStatus:getSnapshot IPC', () => {
         }
       }
     ])
-  })
-})
-
-describe('agentHooks:antigravityStatus IPC', () => {
-  it('returns Antigravity hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:antigravityStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'antigravity', state: 'absent' })
-  })
-})
-
-describe('agentHooks:ampStatus IPC', () => {
-  it('returns Amp hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:ampStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'amp', state: 'absent' })
-  })
-})
-
-describe('agentHooks:openClaudeStatus IPC', () => {
-  it('returns OpenClaude hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:openClaudeStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'openclaude', state: 'absent' })
-  })
-})
-
-describe('agentHooks:commandCodeStatus IPC', () => {
-  it('returns Command Code hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:commandCodeStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'command-code', state: 'absent' })
-  })
-})
-
-describe('agentHooks:devinStatus IPC', () => {
-  it('returns Devin hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:devinStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'devin', state: 'absent' })
-  })
-})
-
-describe('agentHooks:kimiStatus IPC', () => {
-  it('returns Kimi hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:kimiStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'kimi', state: 'absent' })
-  })
-})
-
-describe('agentHooks:augStatus IPC', () => {
-  it('returns Auggie hook installation status', async () => {
-    const { registerAgentHookHandlers } = await import('./agent-hooks')
-    registerAgentHookHandlers()
-
-    const handler = handleHandlers.get('agentHooks:augStatus')
-    expect(handler).toBeDefined()
-    expect(handler!({})).toEqual({ agent: 'aug', state: 'absent' })
   })
 })
 

@@ -19,7 +19,8 @@ import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './nat
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indicator'
+import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-provider-frame-summary'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -67,9 +68,7 @@ function ImageAttachmentRefs({ blocks }: { blocks: NativeChatBlock[] }): React.J
   )
 }
 
-/** Inline controls for an agent message (mobile AgentControls parity): copy the
- *  message's prose, and scroll so this message's top aligns to the viewport top.
- *  Reveals on hover / keyboard focus like the prior copy affordance. */
+/** Footer controls for an agent message: copy its prose or align it to the viewport top. */
 function AgentControls({
   markdown,
   onScrollToTop,
@@ -119,6 +118,34 @@ function TypingIndicatorRow(): React.JSX.Element {
   )
 }
 
+export function ProviderFrameRow({ block }: { block: NativeChatBlock }): React.JSX.Element | null {
+  if (block.type !== 'text' || !block.providerFrame) {
+    return null
+  }
+  const frame = block.providerFrame
+  return (
+    <details className="group text-xs text-muted-foreground">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <span className="transition-transform group-open:rotate-90">›</span>
+        <span className="font-medium text-foreground">{frame.provider}</span>
+        <span className="truncate">{nativeChatProviderFrameSummary(block)}</span>
+        {frame.payload.truncated ? (
+          <span>
+            ·{' '}
+            {translate('components.native-chat.providerFrame.byteLength', '{{value0}} bytes', {
+              value0: frame.payload.byteLength
+            })}
+          </span>
+        ) : null}
+      </summary>
+      <pre className="scrollbar-sleek mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-xs text-foreground">
+        {frame.payload.head}
+        {frame.payload.truncated ? '\n…' : ''}
+      </pre>
+    </details>
+  )
+}
+
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
  *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
@@ -145,6 +172,7 @@ function MessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
+  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -157,6 +185,14 @@ function MessageRow({
   // After all hooks, so hook order stays unconditional.
   if (markdown.length === 0 && !hasImages && tools.length === 0) {
     return null
+  }
+
+  if (providerFrame) {
+    return (
+      <div ref={rowRef}>
+        <ProviderFrameRow block={providerFrame} />
+      </div>
+    )
   }
 
   if (isUser) {
@@ -205,19 +241,12 @@ function MessageRow({
     <div
       ref={rowRef}
       className={cn(
-        'group relative max-w-full text-sm leading-relaxed text-foreground',
+        'group relative max-w-full select-text text-sm leading-relaxed text-foreground',
         // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
       )}
     >
-      {showControls ? (
-        <AgentControls
-          markdown={markdown}
-          onScrollToTop={scrollToTop}
-          className="absolute -top-8 right-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-        />
-      ) : null}
       <ImageAttachmentRefs blocks={prose} />
       {markdown ? (
         <CommentMarkdown
@@ -229,6 +258,13 @@ function MessageRow({
         />
       ) : null}
       {tools.length > 0 ? <NativeChatToolRun blocks={tools} expandSignal={expandSignal} /> : null}
+      {showControls ? (
+        <AgentControls
+          markdown={markdown}
+          onScrollToTop={scrollToTop}
+          className="pointer-events-none mt-1 -mb-5 w-fit select-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+        />
+      ) : null}
     </div>
   )
 }
@@ -265,17 +301,12 @@ export function NativeChatMessageList({
 
   const { hasMore, loadingEarlier, loadEarlier } = session
 
-  // Strip harness noise (task-notifications, system reminders, slash-command
-  // envelopes) before folding so they don't render as the user's own bubbles —
-  // matching the mobile chat. Then fold each turn's tool activity into the
-  // assistant message it belongs to, ordered stably, so a turn's tools collapse
-  // under one run.
+  // Keep hidden harness turns as fold boundaries, then strip them before render.
   const messages = useMemo(
-    () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
+    () => stripNoiseMessages(foldToolMessages(orderNativeChatMessages(session.messages))),
     [session.messages]
   )
-  const showTypingIndicator =
-    isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
+  const showTypingIndicator = shouldShowNativeChatTypingIndicator({ messages, isWorking })
 
   // When an older page prepends, the scroll content grows above the viewport.
   // Capture the pre-render scroll height so the layout effect can restore the

@@ -1,5 +1,10 @@
 import type { CliStatusResult } from '../shared/runtime-types'
 import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
+import {
+  matchAutomationOwnerConflict,
+  stripAutomationOwnerConflictCode
+} from '../shared/automation-owner-conflict'
+import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
@@ -47,7 +52,10 @@ export {
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,
-  formatAutomationShow,
+  formatAutomationShow
+} from './automation-format'
+export type { AutomationListPayload, AutomationShowPayload } from './automation-format'
+export {
   formatEnvironment,
   formatEnvironmentList,
   formatMemorySnapshot,
@@ -84,6 +92,11 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
   // Why: error-specific recovery must win over the generic computer fallback.
+  // Classified from the whole error, not just `.code`: a hop that flattens the class leaves only the token.
+  const conflict = automationOwnerConflictRecovery(matchAutomationOwnerConflict(error))
+  if (conflict) {
+    return formatMessageWithNextSteps(stripAutomationOwnerConflictCode(message), conflict.nextSteps)
+  }
   if (error instanceof RuntimeClientError) {
     const nextSteps = nextStepsFromData(error.data)
     if (nextSteps.length > 0) {
@@ -119,14 +132,18 @@ function hasOrchestrationRequestId(data: unknown): boolean {
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
   if (json) {
     if (error instanceof RuntimeRpcFailureError) {
-      console.log(JSON.stringify(error.response, null, 2))
+      console.log(JSON.stringify(withAutomationOwnerConflictRecovery(error.response), null, 2))
     } else {
       const response: RuntimeRpcFailure = {
         id: 'local',
         ok: false,
         error: {
-          code: error instanceof RuntimeClientError ? error.code : 'runtime_error',
-          message: error instanceof Error ? error.message : String(error),
+          code:
+            matchAutomationOwnerConflict(error) ??
+            (error instanceof RuntimeClientError ? error.code : 'runtime_error'),
+          message: stripAutomationOwnerConflictCode(
+            error instanceof Error ? error.message : String(error)
+          ),
           data: localCliErrorData(error, context)
         },
         _meta: {
@@ -137,6 +154,25 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
     }
   } else {
     console.error(formatCliError(error, context))
+  }
+}
+
+/** Machine-readable half of the same recovery the human message carries. */
+function withAutomationOwnerConflictRecovery(response: RuntimeRpcFailure): RuntimeRpcFailure {
+  const code = matchAutomationOwnerConflict(response)
+  const conflict = automationOwnerConflictRecovery(code)
+  if (!conflict || !code) {
+    return response
+  }
+  return {
+    ...response,
+    error: {
+      ...response.error,
+      // Restores the classification a flattening hop dropped, so --json consumers read the conflict, not the transport.
+      code,
+      message: stripAutomationOwnerConflictCode(response.error.message),
+      data: response.error.data ?? conflict
+    }
   }
 }
 
@@ -164,6 +200,10 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
   // Why: error-specific recovery must win over the generic computer fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
     return error.data
+  }
+  const conflict = automationOwnerConflictRecovery(matchAutomationOwnerConflict(error))
+  if (conflict) {
+    return conflict
   }
   if (
     error instanceof RuntimeClientError &&

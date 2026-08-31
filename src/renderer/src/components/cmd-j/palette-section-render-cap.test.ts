@@ -3,6 +3,7 @@ import {
   capPaletteSection,
   layoutMultiPrimaryPaletteSections,
   orderMultiPrimaryPaletteItems,
+  PALETTE_SECTION_EXPAND_STEP,
   PALETTE_SECTION_RENDER_CAP,
   softSplitPaletteSection,
   TYPED_QUERY_LEADING_PREVIEW,
@@ -10,6 +11,12 @@ import {
 } from './palette-section-render-cap'
 
 const range = (count: number): number[] => Array.from({ length: count }, (_, index) => index)
+
+describe('PALETTE_SECTION_EXPAND_STEP', () => {
+  it('is configured to 20 entries per expansion step', () => {
+    expect(PALETTE_SECTION_EXPAND_STEP).toBe(20)
+  })
+})
 
 describe('capPaletteSection', () => {
   it('returns the original array reference when nothing overflows', () => {
@@ -82,6 +89,7 @@ describe('layoutMultiPrimaryPaletteSections', () => {
 
     expect(layout.leadingPreview).toEqual(range(TYPED_QUERY_LEADING_PREVIEW))
     expect(layout.leadingMoreCount).toBe(6)
+    expect(layout.leadingHardOverflowCount).toBe(0)
     expect(layout.trailingFloor).toEqual([100, 101, 102])
     expect(layout.trailingFloor).toHaveLength(TYPED_QUERY_TRAILING_FLOOR)
     expect(layout.trailingRest).toEqual([103, 104])
@@ -100,6 +108,7 @@ describe('layoutMultiPrimaryPaletteSections', () => {
     expect(layout.trailingRest).toEqual([])
     expect(layout.trailingMoreCount).toBe(0)
     expect(layout.trailingHardOverflowCount).toBe(0)
+    expect(layout.leadingHardOverflowCount).toBe(0)
   })
 
   it('reports trailing hard-cap overflow without counting scrollable rest', () => {
@@ -114,6 +123,33 @@ describe('layoutMultiPrimaryPaletteSections', () => {
     )
     expect(layout.trailingMoreCount).toBe(80 - TYPED_QUERY_TRAILING_FLOOR)
     expect(layout.trailingHardOverflowCount).toBe(80 - PALETTE_SECTION_RENDER_CAP)
+  })
+
+  it('reports leading hard-cap overflow for remainder past leadingHardCap', () => {
+    const layout = layoutMultiPrimaryPaletteSections({
+      leadingItems: range(80),
+      trailingItems: range(5).map((n) => n + 1000),
+      leadingHardCap: 50
+    })
+
+    expect(layout.leadingPreview).toHaveLength(TYPED_QUERY_LEADING_PREVIEW)
+    expect(layout.leadingRest).toHaveLength(50 - TYPED_QUERY_LEADING_PREVIEW)
+    expect(layout.leadingMoreCount).toBe(80 - TYPED_QUERY_LEADING_PREVIEW)
+    expect(layout.leadingHardOverflowCount).toBe(30)
+  })
+
+  it('supports expanded preview and cap counts on demand', () => {
+    const layout = layoutMultiPrimaryPaletteSections({
+      leadingItems: range(80),
+      trailingItems: range(10).map((n) => n + 1000),
+      leadingPreviewCount: TYPED_QUERY_LEADING_PREVIEW + 20,
+      leadingHardCap: 70
+    })
+
+    expect(layout.leadingPreview).toHaveLength(26)
+    expect(layout.leadingRest).toHaveLength(70 - 26)
+    expect(layout.leadingMoreCount).toBe(80 - 26)
+    expect(layout.leadingHardOverflowCount).toBe(10)
   })
 })
 

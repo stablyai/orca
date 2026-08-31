@@ -34,6 +34,7 @@ export const RUNTIME_ENV_ALLOWLIST = [
 // dropping one hides every session of a user who relocated that agent's home.
 const AGENT_ROOT_ENV_ALLOWLIST = [
   'CODEX_HOME',
+  'CLINE_SESSION_DATA_DIR',
   'COPILOT_HOME',
   'DEVIN_HOME',
   'GROK_HOME',

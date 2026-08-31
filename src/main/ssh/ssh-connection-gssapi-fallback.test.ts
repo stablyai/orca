@@ -200,7 +200,12 @@ describe('SshConnection', () => {
       'echo ORCA-SYSTEM-SSH-OK',
       expect.objectContaining({ wrapCommand: false })
     )
-    expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'password', expect.any(String))
+    expect(onCredentialRequest).toHaveBeenCalledWith(
+      'target-1',
+      'password',
+      'example.com',
+      expect.any(AbortSignal)
+    )
   })
 
   it('tries the GSSAPI probe before prompting for an encrypted key passphrase', async () => {

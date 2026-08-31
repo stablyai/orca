@@ -34,6 +34,7 @@ vi.mock('@/lib/language-detect', () => ({
 // unit tests. Mock it so these tests only assert on routing (browser tab vs.
 // openFile), not on activation internals.
 vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))
 

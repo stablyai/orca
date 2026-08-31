@@ -3,11 +3,22 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import { admitCloseActiveTabPayload } from './close-active-tab-payload-admission'
+import type { CloseActiveTabPayload } from './api/ui-command-event-api'
 import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
 } from '../shared/skill-delete-contract'
+import {
+  DOC_PREVIEW_EXTERNAL_LINK_CHANNEL,
+  DOC_PREVIEW_LOAD_FAILURE_CHANNEL,
+  DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
+  DOC_PREVIEW_MINT_GRANT_CHANNEL,
+  DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
+  type DocPreviewFailure
+} from '../shared/doc-preview-scheme'
+import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -21,8 +32,8 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
+import type { AgentSessionPtyWriteRefusal } from '../shared/agent-session-pty-write-admission'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
@@ -45,7 +56,9 @@ import type {
   SshConfigHostResolution,
   SshConfigImportResult,
   SshTargetAddResult,
+  SshTargetCreateInput,
   SshTarget,
+  SshTargetUpdateInput,
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
@@ -172,6 +185,7 @@ import type {
   SkillUpdateRun,
   SkillUpdateStartResult
 } from '../shared/skill-freshness'
+import type { ClientHostedBrowserRowsEvent } from '../shared/client-hosted-browser-rows'
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
@@ -262,6 +276,7 @@ import type {
   PluginHostInstallSource,
   PluginHostListEntry,
   PluginHostLogLine,
+  ExternalAutomationManagerResult,
   PreloadApi
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
@@ -270,24 +285,27 @@ import {
   type KeyboardLayoutChangeEvent
 } from '../shared/keyboard-layout-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
+import { createBrowserClientPageRendererRequests } from './browser-client-page-renderer-requests'
+import { readBrowserClientHostIdArgument } from '../shared/browser-client-host-id-argument'
 import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
-  Automation,
-  AutomationCreateInput,
   AutomationDispatchRequest,
   AutomationDispatchResult,
-  ExternalAutomationCreateInput,
-  ExternalAutomationActionInput,
-  ExternalAutomationManager,
-  ExternalAutomationRunsInput,
   ExternalAutomationRunsPage,
-  ExternalAutomationUpdateInput,
   AutomationRun,
-  AutomationPrecheckResult,
-  AutomationUpdateInput
+  AutomationPrecheckResult
 } from '../shared/automations-types'
+import type { AutomationOwnerRef } from '../shared/automation-owner-ref'
+import type {
+  ScopedExternalManagerActionRequest,
+  ScopedExternalManagerCreateRequest,
+  ScopedExternalManagerListRequest,
+  ScopedExternalManagerRunsRequest,
+  ScopedExternalManagerUpdateRequest
+} from '../shared/external-automation-scope'
+import type { AutomationsChangedPayload } from '../shared/runtime-client-events'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import type {
   AiVaultDeleteSessionArgs,
@@ -336,7 +354,9 @@ import type {
   ReactErrorBoundaryReportResult
 } from '../shared/crash-reporting'
 import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
+import type { RendererProcessMemory } from '../shared/renderer-process-memory'
 import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
+import { readRendererProcessMemory } from './renderer-process-memory-reader'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import {
   prepareAndInvokeAppRestart,
@@ -529,6 +549,10 @@ document.addEventListener(
 
 const startupDiagnosticsEnabled = process.env.ORCA_STARTUP_DIAGNOSTICS === '1'
 const browserFindSubscriptions = createBrowserFindSubscriptions()
+const browserClientPageRendererRequests = createBrowserClientPageRendererRequests({
+  ipc: ipcRenderer,
+  isTopFrame: () => window.top === window
+})
 
 ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
   browserFindSubscriptions.dispatch(source)
@@ -568,6 +592,8 @@ const api = {
     },
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+    prepareTerminalStartupRestoration: (): Promise<void> =>
+      ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
     recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
       ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
     startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
@@ -1036,6 +1062,8 @@ const api = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
+      /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
+      incarnationId?: string
       launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
       snapshotCols?: number
@@ -1044,6 +1072,7 @@ const api = {
       snapshotFrameAnsi?: string
       snapshotFrameRestoreAnsi?: string
       snapshotKittyKeyboardFlags?: number
+      snapshotTerminalOwner?: 'shell'
       snapshotSeq?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
@@ -1059,9 +1088,17 @@ const api = {
     },
     writeAccepted: (id: string, data: string): Promise<boolean> =>
       ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-    onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
-        callback(payload)
+    onWriteUnavailable: (
+      callback: (payload: {
+        id: string
+        /** Set only when a durable agent-session lease refused the write; absent otherwise. */
+        agentSessionRefusal?: AgentSessionPtyWriteRefusal
+      }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
+      ): void => callback(payload)
       ipcRenderer.on('pty:writeUnavailable', handler)
       return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
     },
@@ -1166,6 +1203,7 @@ const api = {
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
       kittyKeyboardFlags?: number
+      terminalOwner?: 'shell'
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -1280,10 +1318,23 @@ const api = {
       ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
 
     onExit: (
-      callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
+      callback: (data: {
+        id: string
+        code: number
+        preserveRendererBinding?: boolean
+        /** Which lifetime of `id` died; absent when the execution host predates the field. */
+        incarnationId?: string
+      }) => void
     ): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; code: number }) =>
-        callback(data)
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          id: string
+          code: number
+          preserveRendererBinding?: boolean
+          incarnationId?: string
+        }
+      ) => callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
     },
@@ -1382,7 +1433,8 @@ const api = {
       ipcRenderer.invoke('crashReports:submit', args),
     copyLatestDiagnostics: (args?: CrashReportCopyDiagnosticsArgs) =>
       ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
-    readHeapStatistics: (): RendererHeapStatistics | null => readRendererHeapStatistics()
+    readHeapStatistics: (): RendererHeapStatistics | null => readRendererHeapStatistics(),
+    readProcessMemory: (): Promise<RendererProcessMemory | null> => readRendererProcessMemory()
   },
 
   export: {
@@ -1413,8 +1465,10 @@ const api = {
       currentHeadOid?: string | null
     }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
-    refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:refreshPRNow', args),
+    refreshPRNow: (args: {
+      candidate: GitHubPRRefreshCandidate
+      reason?: GitHubPRRefreshReason
+    }): Promise<unknown> => ipcRenderer.invoke('gh:refreshPRNow', args),
 
     enqueuePRRefresh: (args: {
       candidate: GitHubPRRefreshCandidate
@@ -1625,6 +1679,15 @@ const api = {
       prRepo?: GitHubOwnerRepo | null
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:updatePRState', args),
+
+    markPRReadyForReview: (args: {
+      repoPath: string
+      repoId?: string
+      sourceContext?: TaskSourceContext | null
+      prNumber: number
+      prRepo?: GitHubOwnerRepo | null
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:markPRReadyForReview', args),
 
     requestPRReviewers: (args: {
       repoPath: string
@@ -2051,6 +2114,8 @@ const api = {
       query?: string
       siteId?: string
     }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsers', args),
+    searchUsers: (args?: { query?: string; siteId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('jira:searchUsers', args),
 
     listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listTransitions', args),
@@ -2248,35 +2313,6 @@ const api = {
   codexConfigSync: {
     status: (): Promise<CodexConfigSyncStatus> => ipcRenderer.invoke('codexConfigSync:status')
   },
-  agentHooks: {
-    claudeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:claudeStatus'),
-    openClaudeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:openClaudeStatus'),
-    codexStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:codexStatus'),
-    geminiStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:geminiStatus'),
-    antigravityStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:antigravityStatus'),
-    ampStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:ampStatus'),
-    cursorStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:cursorStatus'),
-    droidStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:droidStatus'),
-    commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:commandCodeStatus'),
-    grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
-    devinStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:devinStatus'),
-    copilotStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:copilotStatus'),
-    hermesStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:hermesStatus'),
-    kimiStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:kimiStatus'),
-    augStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:augStatus')
-  },
-
   agentTrust: {
     markTrusted: (args: {
       preset: 'cursor' | 'copilot' | 'codex'
@@ -2687,6 +2723,8 @@ const api = {
   },
 
   browser: {
+    onClientPageRendererRequest: browserClientPageRendererRequests.subscribe,
+    readClientHostId: (): string | null => readBrowserClientHostIdArgument(process.argv),
     registerGuest: (args: {
       browserPageId: string
       workspaceId: string
@@ -2742,6 +2780,9 @@ const api = {
 
     setAnnotationViewportBridge: (args): Promise<boolean> =>
       ipcRenderer.invoke('browser:setAnnotationViewportBridge', args),
+
+    publishClientPageMetadata: (args) =>
+      ipcRenderer.invoke('browser:publishClientPageMetadata', args),
 
     onGuestLoadFailed: (
       callback: (args: {
@@ -2859,6 +2900,7 @@ const api = {
         downloadId: string
         status: 'completed' | 'canceled' | 'failed'
         savePath: string | null
+        remoteDestination?: { workspaceRelativePath: string; hostLabel: string }
         error: string | null
       }) => void
     ): (() => void) => {
@@ -2869,6 +2911,7 @@ const api = {
           downloadId: string
           status: 'completed' | 'canceled' | 'failed'
           savePath: string | null
+          remoteDestination?: { workspaceRelativePath: string; hostLabel: string }
           error: string | null
         }
       ) => callback(data)
@@ -3009,6 +3052,13 @@ const api = {
     sessionListProfiles: (): Promise<unknown[]> =>
       ipcRenderer.invoke('browser:session:listProfiles'),
 
+    prepareSshWorkspacePartition: (args: {
+      targetId: string
+      browserProfileId?: string
+      skipProbe?: boolean
+    }): Promise<{ partition: string }> =>
+      ipcRenderer.invoke('browser:prepareSshWorkspacePartition', args),
+
     sessionCreateProfile: (args: {
       scope: 'default' | 'isolated' | 'imported'
       label: string
@@ -3030,12 +3080,31 @@ const api = {
     sessionDetectBrowsers: (): Promise<unknown[]> =>
       ipcRenderer.invoke('browser:session:detectBrowsers'),
 
+    sessionDetectBrowsersForClientHost: (args: {
+      environmentId: string
+    }): Promise<unknown[] | null> =>
+      ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
+
     sessionImportFromBrowser: (args: {
       profileId: string
       browserFamily: string
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }
     > => ipcRenderer.invoke('browser:session:importFromBrowser', args),
+
+    sessionImportFromBrowserForClientHost: (args: {
+      environmentId: string
+      profileId: string
+      browserFamily: string
+      browserProfile?: string
+    }): Promise<
+      { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string } | null
+    > => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
+
+    sessionClientRouteImportSources: (args: {
+      environmentId: string
+    }): Promise<Record<string, unknown>> =>
+      ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
 
     sessionClearDefaultCookies: (): Promise<boolean> =>
       ipcRenderer.invoke('browser:session:clearDefaultCookies'),
@@ -3274,6 +3343,27 @@ const api = {
     }
   } satisfies PreloadApi['updater'],
 
+  docPreview: {
+    mintGrant: (request: DocPreviewGrantRequest): Promise<{ grantId: string; url: string }> =>
+      ipcRenderer.invoke(DOC_PREVIEW_MINT_GRANT_CHANNEL, request),
+    revokeGrant: (grantId: string): Promise<boolean> =>
+      ipcRenderer.invoke(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, grantId),
+    authorizeDirectory: (grantId: string, relativePath: string): Promise<boolean> =>
+      ipcRenderer.invoke(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL, grantId, relativePath),
+    onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { url: string }): void =>
+        callback(payload)
+      ipcRenderer.on(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+    },
+    onLoadFailure: (callback: (payload: DocPreviewFailure) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: DocPreviewFailure): void =>
+        callback(payload)
+      ipcRenderer.on(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+    }
+  },
+
   notebook: {
     runPythonCell: (args: {
       filePath: string
@@ -3497,7 +3587,9 @@ const api = {
     status: (args: {
       worktreePath: string
       connectionId?: string
+      admissionTier?: 'interactive' | 'status' | 'background'
       includeIgnored?: boolean
+      includeLineStats?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
       reuseLineStats?: boolean
       branchLineTotalMergeBase?: string
@@ -3548,6 +3640,7 @@ const api = {
       worktreePath: string
       baseRef: string
       connectionId?: string
+      admissionTier?: 'interactive' | 'status' | 'background'
     }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
     commitCompare: (args: {
       worktreePath: string
@@ -3694,6 +3787,8 @@ const api = {
   ui: {
     get: () => ipcRenderer.invoke('ui:get'),
     set: (args) => ipcRenderer.invoke('ui:set', args),
+    // Same channel: the local invoke already rejects when main fails to apply.
+    setWithAck: (args) => ipcRenderer.invoke('ui:set', args),
     recordFeatureInteraction: (id) => ipcRenderer.invoke('ui:recordFeatureInteraction', id),
     onStateChanged: (callback: (ui: PersistedUIState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, ui: PersistedUIState): void =>
@@ -3935,8 +4030,15 @@ const api = {
       ipcRenderer.on('ui:hardReloadBrowserPage', listener)
       return () => ipcRenderer.removeListener('ui:hardReloadBrowserPage', listener)
     },
-    onCloseActiveTab: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
+    onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload?: unknown): void => {
+        const admitted = admitCloseActiveTabPayload(payload)
+        if (admitted.kind === 'legacy') {
+          callback()
+        } else if (admitted.kind === 'source') {
+          callback(admitted.payload)
+        }
+      }
       ipcRenderer.on('ui:closeActiveTab', listener)
       return () => ipcRenderer.removeListener('ui:closeActiveTab', listener)
     },
@@ -4124,7 +4226,10 @@ const api = {
         paneRuntimeId: number
         direction: 'horizontal' | 'vertical'
         command?: string
+        worktreeId?: string
+        sourceLeafId?: string
         telemetrySource?: TerminalPaneSplitSource
+        newLeafId?: string
       }) => void
     ): (() => void) => {
       const listener = (
@@ -4134,7 +4239,10 @@ const api = {
           paneRuntimeId: number
           direction: 'horizontal' | 'vertical'
           command?: string
+          worktreeId?: string
+          sourceLeafId?: string
           telemetrySource?: TerminalPaneSplitSource
+          newLeafId?: string
         }
       ) => callback(data)
       ipcRenderer.on('ui:splitTerminal', listener)
@@ -4514,6 +4622,31 @@ const api = {
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
     call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
       ipcRenderer.invoke('runtime:call', args),
+    subscribe: async (
+      args: { method: string; params?: unknown },
+      callback: (response: RuntimeRpcResponse<unknown>) => void
+    ): Promise<RuntimeEnvironmentSubscriptionHandle> => {
+      const subscriptionId = `desktop-${crypto.randomUUID()}`
+      const channel = `runtime:subscription:${subscriptionId}`
+      const listener = (_event: Electron.IpcRendererEvent, response: RuntimeRpcResponse<unknown>) =>
+        callback(response)
+      ipcRenderer.on(channel, listener)
+      try {
+        await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
+      } catch (error) {
+        ipcRenderer.removeListener(channel, listener)
+        throw error
+      }
+      return {
+        unsubscribe: () => {
+          ipcRenderer.removeListener(channel, listener)
+          ipcRenderer.send('runtime:unsubscribe', { subscriptionId })
+        },
+        sendBinary: () => {
+          throw new Error('Local runtime subscriptions do not accept binary input')
+        }
+      }
+    },
     getTerminalFitOverrides: (): Promise<
       { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
@@ -4529,6 +4662,10 @@ const api = {
         driver: RuntimeBrowserDriverState
       }[]
     > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
+    getBrowserRemoteViewerPages: (): Promise<string[]> =>
+      ipcRenderer.invoke('runtime:getBrowserRemoteViewerPages'),
+    getClientHostedBrowserRows: (): Promise<ClientHostedBrowserRowsEvent[]> =>
+      ipcRenderer.invoke('runtime:getClientHostedBrowserRows'),
     restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
       ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
     reclaimBrowserForDesktop: (browserPageId: string): Promise<{ reclaimed: boolean }> =>
@@ -4588,6 +4725,27 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('runtime:browserDriverChanged', listener)
       return () => ipcRenderer.removeListener('runtime:browserDriverChanged', listener)
+    },
+    onBrowserRemoteViewersChanged: (
+      callback: (event: { browserPageId: string; hasRemoteViewers: boolean }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          browserPageId: string
+          hasRemoteViewers: boolean
+        }
+      ) => callback(data)
+      ipcRenderer.on('runtime:browserRemoteViewersChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:browserRemoteViewersChanged', listener)
+    },
+    onClientHostedBrowserRowsChanged: (
+      callback: (event: ClientHostedBrowserRowsEvent) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: ClientHostedBrowserRowsEvent) =>
+        callback(data)
+      ipcRenderer.on('runtime:clientHostedBrowserRowsChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:clientHostedBrowserRowsChanged', listener)
     }
   },
 
@@ -4621,8 +4779,13 @@ const api = {
     getStatus: (args: {
       selector: string
       timeoutMs?: number
+      observeOnly?: true
     }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
       ipcRenderer.invoke('runtimeEnvironments:getStatus', args),
+    retryControlConnection: (args: { selector: string }): Promise<void> =>
+      ipcRenderer.invoke('runtimeEnvironments:retryControlConnection', args),
+    prepareBrowserClientHostPlacement: (args) =>
+      ipcRenderer.invoke('runtimeEnvironments:prepareBrowserClientHostPlacement', args),
     retryConnectionsNow: (): Promise<void> =>
       ipcRenderer.invoke('runtimeEnvironments:retryConnectionsNow'),
     call: (args: {
@@ -4694,13 +4857,11 @@ const api = {
     listRemovedTargetLabels: (): Promise<Record<string, string>> =>
       ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
 
-    addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTargetAddResult> =>
+    addTarget: (args: { target: SshTargetCreateInput }): Promise<SshTargetAddResult> =>
       ipcRenderer.invoke('ssh:addTarget', args),
 
-    updateTarget: (args: {
-      id: string
-      updates: Partial<Omit<SshTarget, 'id'>>
-    }): Promise<SshTarget> => ipcRenderer.invoke('ssh:updateTarget', args),
+    updateTarget: (args: { id: string; updates: SshTargetUpdateInput }): Promise<SshTarget> =>
+      ipcRenderer.invoke('ssh:updateTarget', args),
 
     removeTarget: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:removeTarget', args),
@@ -4824,7 +4985,7 @@ const api = {
       callback: (data: {
         requestId: string
         targetId: string
-        kind: 'passphrase' | 'password'
+        kind: 'passphrase' | 'password' | 'keyboard-interactive'
         detail: string
       }) => void
     ): (() => void) => {
@@ -4833,7 +4994,7 @@ const api = {
         data: {
           requestId: string
           targetId: string
-          kind: 'passphrase' | 'password'
+          kind: 'passphrase' | 'password' | 'keyboard-interactive'
           detail: string
         }
       ) => callback(data)
@@ -4852,27 +5013,25 @@ const api = {
       ipcRenderer.invoke('ssh:submitCredential', args)
   },
 
+  // Orca automation CRUD rides the local runtime RPC surface (`runtime:call`),
+  // so only external-manager and dispatch-loop plumbing stays on IPC.
   automations: {
-    list: (): Promise<Automation[]> => ipcRenderer.invoke('automations:list'),
-    listRuns: (args?: { automationId?: string }): Promise<AutomationRun[]> =>
-      ipcRenderer.invoke('automations:listRuns', args),
-    listExternalManagers: (): Promise<ExternalAutomationManager[]> =>
-      ipcRenderer.invoke('automations:listExternalManagers'),
-    listExternalRuns: (input: ExternalAutomationRunsInput): Promise<ExternalAutomationRunsPage> =>
-      ipcRenderer.invoke('automations:listExternalRuns', input),
-    createExternal: (input: ExternalAutomationCreateInput): Promise<void> =>
-      ipcRenderer.invoke('automations:createExternal', input),
-    updateExternal: (input: ExternalAutomationUpdateInput): Promise<void> =>
-      ipcRenderer.invoke('automations:updateExternal', input),
-    runExternalAction: (input: ExternalAutomationActionInput): Promise<void> =>
-      ipcRenderer.invoke('automations:runExternalAction', input),
-    create: (input: AutomationCreateInput): Promise<Automation> =>
-      ipcRenderer.invoke('automations:create', input),
-    update: (args: { id: string; updates: AutomationUpdateInput }): Promise<Automation> =>
-      ipcRenderer.invoke('automations:update', args),
-    delete: (args: { id: string }): Promise<void> => ipcRenderer.invoke('automations:delete', args),
-    runNow: (args: { id: string }): Promise<AutomationRun> =>
-      ipcRenderer.invoke('automations:runNow', args),
+    listExternalManagerForOwner: (
+      request: ScopedExternalManagerListRequest
+    ): Promise<ExternalAutomationManagerResult> =>
+      ipcRenderer.invoke('automations:listExternalManagerForOwner', request),
+    listExternalRunsForOwner: (
+      request: ScopedExternalManagerRunsRequest
+    ): Promise<ExternalAutomationRunsPage> =>
+      ipcRenderer.invoke('automations:listExternalRunsForOwner', request),
+    createExternalForOwner: (request: ScopedExternalManagerCreateRequest): Promise<void> =>
+      ipcRenderer.invoke('automations:createExternalForOwner', request),
+    updateExternalForOwner: (request: ScopedExternalManagerUpdateRequest): Promise<void> =>
+      ipcRenderer.invoke('automations:updateExternalForOwner', request),
+    runExternalActionForOwner: (request: ScopedExternalManagerActionRequest): Promise<void> =>
+      ipcRenderer.invoke('automations:runExternalActionForOwner', request),
+    retainExternalScopes: (request: { owners: readonly AutomationOwnerRef[] }): Promise<void> =>
+      ipcRenderer.invoke('automations:retainExternalScopes', request),
     runPrecheck: (args: {
       automationId: string
       runId: string
@@ -4888,6 +5047,12 @@ const api = {
         callback(request)
       ipcRenderer.on('automations:dispatchRequested', listener)
       return () => ipcRenderer.removeListener('automations:dispatchRequested', listener)
+    },
+    onChanged: (callback: (payload: AutomationsChangedPayload) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: AutomationsChangedPayload) =>
+        callback(payload)
+      ipcRenderer.on('automations:changed', listener)
+      return () => ipcRenderer.removeListener('automations:changed', listener)
     }
   },
 

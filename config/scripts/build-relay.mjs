@@ -23,6 +23,8 @@ import { join } from 'node:path'
 import {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
+  RELAY_WINDOWS_PROCESS_TREE_FILENAME,
+  relayOptionalArtifactFilenames,
   isWindowsRelayPlatform,
   relayArtifactFilenames
 } from '../../src/shared/relay-artifacts.ts'
@@ -55,6 +57,38 @@ const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
   'relay-assets',
   NODE_PTY_CONSOLE_LIST_PATCH_FILENAME
 )
+// Written by build-windows-process-tree-relay-addon.mjs, which only runs on a
+// Windows machine.
+const WINDOWS_PROCESS_TREE_BUILD_DIR = join(ROOT, '.build', 'windows-process-tree')
+
+// Which Windows arches must have the addon, as a comma-separated list ('all' for
+// every arch). Per-arch rather than a flag because arm64 needs the MSVC ARM64
+// cross toolset, an optional VS component: where it is absent that relay should
+// fall back to the scan, not fail the release the x64 relay is riding on.
+const REQUIRED_ADDON_ARCHES = (process.env.ORCA_REQUIRE_RELAY_NATIVE_ADDONS ?? '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+
+function stageWindowsProcessTreeAddon(platform, outDir) {
+  if (!isWindowsRelayPlatform(platform)) {
+    return
+  }
+  const arch = platform.slice('win32-'.length)
+  const source = join(WINDOWS_PROCESS_TREE_BUILD_DIR, arch, RELAY_WINDOWS_PROCESS_TREE_FILENAME)
+  if (!existsSync(source)) {
+    if (REQUIRED_ADDON_ARCHES.includes(arch) || REQUIRED_ADDON_ARCHES.includes('all')) {
+      throw new Error(
+        `Relay ${platform} needs ${source}. Run: node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${arch} (Windows only).`
+      )
+    }
+    console.log(
+      `Relay ${platform}: no ${RELAY_WINDOWS_PROCESS_TREE_FILENAME}; relay will use the PowerShell scan.`
+    )
+    return
+  }
+  copyFileSync(source, join(outDir, RELAY_WINDOWS_PROCESS_TREE_FILENAME))
+}
 
 // Why: lets the packaging contract test build into a temp tree instead of
 // clobbering a developer's out/relay or racing tests that read it.
@@ -92,6 +126,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
       join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
     )
   }
+  stageWindowsProcessTreeAddon(platform, outDir)
 
   await build({
     entryPoints: [WATCHER_ENTRY],
@@ -172,12 +207,25 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     }
     hash.update(readFileSync(artifactPath))
   }
+  // Why hashed only when present: a relay carrying the native addon answers
+  // differently from one that falls back to the scan, so the two must not share
+  // an immutable directory -- but a build without it is still valid.
+  for (const filename of relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform))) {
+    const artifactPath = join(outDir, filename)
+    if (existsSync(artifactPath)) {
+      hash.update(readFileSync(artifactPath))
+    }
+  }
   const contentHash = hash.digest('hex').slice(0, 12)
 
   // Close the loop: an artifact emitted here but absent from the manifest would
   // ship unhashed and unprobed — exactly how the WSL helper went missing.
   const emitted = readdirSync(outDir).filter((name) => name !== RELAY_VERSION_FILENAME)
-  const undeclared = emitted.filter((name) => !expected.includes(name))
+  const declared = [
+    ...expected,
+    ...relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform))
+  ]
+  const undeclared = emitted.filter((name) => !declared.includes(name))
   if (undeclared.length > 0) {
     throw new Error(
       `Relay ${platform} emitted undeclared artifacts: ${undeclared.join(', ')}. ` +
@@ -194,11 +242,12 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
 // so a single platform-independent bundle suffices; it ships inside the
 // Windows app via the same out/relay extraResources mapping.
 {
-  const wslEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
+  const wslHookEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
+  const wslBrowserNetworkEntry = join(ROOT, 'src', 'relay', 'wsl-browser-network-relay.ts')
   const outDir = join(OUT_ROOT, 'wsl')
   mkdirSync(outDir, { recursive: true })
   await build({
-    entryPoints: [wslEntry],
+    entryPoints: [wslHookEntry],
     bundle: true,
     platform: 'node',
     target: 'node18',
@@ -214,6 +263,27 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
   const hash = createHash('sha256').update(content).digest('hex').slice(0, 12)
   writeFileSync(join(outDir, '.version'), `${RELAY_VERSION}+${hash}`)
   console.log(`Built WSL hook relay → ${outDir}/wsl-agent-hook-relay.js`)
+
+  await build({
+    entryPoints: [wslBrowserNetworkEntry],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, 'wsl-browser-network-relay.js'),
+    sourcemap: false,
+    minify: true,
+    define: {
+      'process.env.NODE_ENV': '"production"'
+    }
+  })
+  const browserNetworkContent = readFileSync(join(outDir, 'wsl-browser-network-relay.js'))
+  const browserNetworkHash = createHash('sha256')
+    .update(browserNetworkContent)
+    .digest('hex')
+    .slice(0, 12)
+  writeFileSync(join(outDir, '.browser-network-version'), `${RELAY_VERSION}+${browserNetworkHash}`)
+  console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-relay.js`)
 }
 
 console.log('Relay build complete.')

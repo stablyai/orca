@@ -1,7 +1,21 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import {
+  EXPECTED_NATIVE_IME_TESTS,
+  IME_ENGAGEMENT_RECEIPT_ENV,
+  verifyImeEngagementReceipts
+} from './terminal-ime-engagement-receipt.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const scriptPath = import.meta.filename
@@ -113,6 +127,7 @@ async function waitForHangulEngine(ibusProcess) {
 }
 
 async function runInsideSession(evidenceDir) {
+  const receiptPath = path.join(evidenceDir, 'ime-engagement-receipt.jsonl')
   const ibusLogPath = path.join(evidenceDir, 'ibus-daemon.log')
   const ibusLogFd = openSync(ibusLogPath, 'w')
   const windowManagerLogPath = path.join(evidenceDir, 'xfwm4.log')
@@ -191,7 +206,11 @@ async function runInsideSession(evidenceDir) {
         env: {
           ...process.env,
           ORCA_E2E_FORWARD_APP_LOGS: '1',
-          ORCA_E2E_NATIVE_IBUS_HANGUL: '1'
+          ORCA_E2E_NATIVE_IBUS_HANGUL: '1',
+          [IME_ENGAGEMENT_RECEIPT_ENV]: receiptPath,
+          // Why: native IBus key injection only reaches a window the window manager
+          // has focused, so this run opts out of the background-launch policy.
+          ORCA_E2E_FOREGROUND: '1'
         },
         stdio: 'inherit'
       }
@@ -227,6 +246,12 @@ async function runInsideSession(evidenceDir) {
       path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-processes.json'),
       `${JSON.stringify(evidence, null, 2)}\n`
     )
+    if (existsSync(receiptPath)) {
+      copyFileSync(
+        receiptPath,
+        path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-engagement.jsonl')
+      )
+    }
   }
 
   if (evidence.ibusGroupAfterCleanup.length > 0) {
@@ -239,6 +264,24 @@ async function runInsideSession(evidenceDir) {
       `Owned window-manager processes survived cleanup: ${evidence.windowManagerGroupAfterCleanup.join('; ')}`
     )
   }
+
+  // Why unconditionally, and not only when Playwright failed: a skipped test reports as a pass,
+  // so exit code 0 is exactly the state this check exists to distrust.
+  const receiptText = existsSync(receiptPath) ? readFileSync(receiptPath, 'utf8') : ''
+  const engagementProblems = verifyImeEngagementReceipts(receiptText, EXPECTED_NATIVE_IME_TESTS)
+  if (engagementProblems.length > 0) {
+    for (const problem of engagementProblems) {
+      console.error(`::error title=Native IME never engaged::${problem}`)
+    }
+    console.error(
+      '[terminal-ime] the run produced no proof an input method engaged; treating it as a failure' +
+        ` even though Playwright exited ${testExitCode}`
+    )
+    return 1
+  }
+  console.error(
+    `[terminal-ime] engagement receipts verified for ${EXPECTED_NATIVE_IME_TESTS.length} tests`
+  )
   return testExitCode
 }
 

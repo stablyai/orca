@@ -5,6 +5,10 @@ import {
   getHostedReviewCacheKey,
   linkedReviewHintKey
 } from '../slices/hosted-review-cache-identity'
+import {
+  hasNewerHostedReviewCacheEntry,
+  withHostedReviewCacheEntry
+} from '../slices/hosted-review-cache-state'
 import type { GitHubPRFallbackSource } from './cache-model'
 
 export function githubHostedReviewFallbackPRNumber(
@@ -65,20 +69,6 @@ export function linkedReviewHintKeyForNoGitHubPR(
       : linkedReviewHintKey({ linkedGitHubPR: entry.data.number })
   }
   return entry?.linkedReviewHintKey
-}
-
-export function hasNewerHostedReviewCacheEntry(
-  cache: AppState['hostedReviewCache'],
-  cacheKey: string,
-  requestStartedAt: number,
-  requestStartedEntry: AppState['hostedReviewCache'][string] | undefined
-): boolean {
-  const entry = cache[cacheKey]
-  return (
-    entry !== undefined &&
-    (entry.fetchedAt > requestStartedAt ||
-      (entry.fetchedAt === requestStartedAt && entry !== requestStartedEntry))
-  )
 }
 
 export function syncHostedReviewCacheFromGitHubPRResult(args: {
@@ -155,18 +145,17 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
       hostedReviewEntry?.branchLookupGitHubPRNumber === args.pr.number)
       ? args.pr.number
       : undefined
+  // Why: the key embeds the branch, so this write path grows with every distinct
+  // (host, repo, branch) a session refreshes. Share the hosted-review slice's bound.
   return {
-    cache: {
-      ...args.cache,
-      [hostedReviewCacheKey]: {
-        data: args.pr ? hostedReviewInfoFromGitHubPRInfo(args.pr) : null,
-        fetchedAt: args.fetchedAt,
-        linkedReviewHintKey: args.pr
-          ? linkedReviewHintKey({ linkedGitHubPR: args.pr.number })
-          : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry),
-        ...(branchLookupGitHubPRNumber !== undefined ? { branchLookupGitHubPRNumber } : {})
-      }
-    },
+    cache: withHostedReviewCacheEntry(args.cache, hostedReviewCacheKey, {
+      data: args.pr ? hostedReviewInfoFromGitHubPRInfo(args.pr) : null,
+      fetchedAt: args.fetchedAt,
+      linkedReviewHintKey: args.pr
+        ? linkedReviewHintKey({ linkedGitHubPR: args.pr.number })
+        : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry),
+      ...(branchLookupGitHubPRNumber !== undefined ? { branchLookupGitHubPRNumber } : {})
+    }),
     accepted: true
   }
 }

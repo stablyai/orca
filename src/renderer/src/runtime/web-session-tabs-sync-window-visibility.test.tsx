@@ -40,6 +40,7 @@ import { useAppStore } from '@/store'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
 import {
   acceptReplayedWebSessionTabsSnapshot,
   _getWebSessionTabsRecoveryTrackingCountsForTest,
@@ -48,6 +49,7 @@ import {
   useWebSessionTabsSync,
   WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS
 } from './web-session-tabs-sync'
+import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 import {
   WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_BACKOFF_LIMIT,
   WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS
@@ -58,7 +60,7 @@ const ENV_B = 'env-b'
 const WORKTREE = 'repo-a::worktree-a'
 const REVISION_A = 101
 const REVISION_B = 201
-const MIRROR_KEY = `${ENV_A}\u0001runtime-a\u00011\u0001${REVISION_A}\u0000${ENV_B}\u0001runtime-b\u00012\u0001${REVISION_B}`
+const MIRROR_KEY = `${ENV_A}\u0001runtime-a\u00010\u0001${REVISION_A}\u0000${ENV_B}\u0001runtime-b\u00010\u0001${REVISION_B}`
 const initialState = useAppStore.getInitialState()
 
 type RuntimeSubscribe = typeof window.api.runtimeEnvironments.subscribe
@@ -74,12 +76,27 @@ type Deferred<T> = {
 }
 
 const subscriptions: RuntimeSubscription[] = []
-const runtimeCall = vi.fn(async () => ({
+const runtimeCall = vi.fn(async (_args: { method: string }) => ({
   id: 'list-all',
   ok: true as const,
   result: { snapshots: [] },
   _meta: { runtimeId: 'runtime-test' }
 }))
+
+/** Why: an inventory that publishes nothing now buys one `terminal.list`
+ *  readiness probe before it may settle the mirror, so a bare call count no
+ *  longer says which questions the client asked (STA-5377). */
+function runtimeCallMethods(): string[] {
+  return runtimeCall.mock.calls.map(([args]) => args.method).sort()
+}
+
+/** Both seeded environments answer an empty inventory, so each owes a probe. */
+const EMPTY_INVENTORY_CALLS = [
+  'session.tabs.listAll',
+  'session.tabs.listAll',
+  'terminal.list',
+  'terminal.list'
+]
 const runtimeSubscribe = vi.fn<RuntimeSubscribe>(async (request, callbacks) => {
   const unsubscribe = vi.fn()
   subscriptions.push({ request, callbacks, unsubscribe })
@@ -213,6 +230,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     })
     setDocumentVisibility('visible')
     resetWebSessionTabsSnapshotFreshnessForTests()
+    clearHostLiveTerminalProbesForTests()
     seedRemoteMirrorState()
   })
 
@@ -221,6 +239,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     useAppStore.setState(initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
+    clearRuntimeEnvironmentConnectionGenerationsForTests()
     resetStaleDocumentVisibilityForTesting()
     setDocumentVisibility('visible')
     vi.useRealTimers()
@@ -230,7 +249,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
 
-    expect(runtimeCall).toHaveBeenCalledTimes(2)
+    expect(runtimeCallMethods()).toEqual(EMPTY_INVENTORY_CALLS)
     expect(runtimeSubscribe).toHaveBeenCalledTimes(3)
     expect(subscriptions.map(({ request }) => request.method).sort()).toEqual([
       'session.tabs.subscribe',
@@ -251,7 +270,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS))
     await act(settle)
     expect(runtimeSubscribe).toHaveBeenCalledTimes(6)
-    expect(runtimeCall).toHaveBeenCalledTimes(2)
+    expect(runtimeCallMethods()).toEqual(EMPTY_INVENTORY_CALLS)
 
     act(() => {
       setDocumentVisibility('hidden')
@@ -342,7 +361,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     act(() => setDocumentVisibility('visible'))
     act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS))
     await act(settle)
-    expect(runtimeCall).toHaveBeenCalledTimes(2)
+    expect(runtimeCallMethods()).toEqual(EMPTY_INVENTORY_CALLS)
     expect(runtimeSubscribe).toHaveBeenCalledTimes(3)
     hook.unmount()
   })
@@ -610,7 +629,7 @@ describe('useWebSessionTabsSync window visibility', () => {
       vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
     })
     mocks.runtimeSessionMirrorEnvironmentKey.mockReturnValue(
-      MIRROR_KEY.replace('runtime-b\u00012', 'runtime-b\u00013')
+      MIRROR_KEY.replace('runtime-b\u00010', 'runtime-b\u00013')
     )
     hook.rerender()
     await act(settle)
@@ -778,7 +797,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toBeUndefined()
 
     mocks.runtimeSessionMirrorEnvironmentKey.mockReturnValue(
-      MIRROR_KEY.replace('runtime-b\u00012', 'runtime-b\u00013')
+      MIRROR_KEY.replace('runtime-b\u00010', 'runtime-b\u00013')
     )
     hook.rerender()
     await act(settle)

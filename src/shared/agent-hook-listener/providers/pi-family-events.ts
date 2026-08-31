@@ -28,19 +28,23 @@ export function normalizePiCompatibleEvent(
     ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
       (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
+  const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
+  const isOmpApprovalResolution = agentType === 'omp' && eventName === 'tool_approval_resolved'
 
-  const stateName = isPiCompatibleAsk
-    ? 'blocked'
-    : eventName === 'before_agent_start' ||
-        eventName === 'agent_start' ||
-        eventName === 'tool_call' ||
-        eventName === 'tool_execution_start' ||
-        eventName === 'tool_execution_end' ||
-        eventName === 'message_end'
-      ? 'working'
-      : eventName === 'agent_end'
-        ? 'done'
-        : null
+  const stateName =
+    isPiCompatibleAsk || isOmpApprovalRequest
+      ? 'blocked'
+      : isOmpApprovalResolution ||
+          eventName === 'before_agent_start' ||
+          eventName === 'agent_start' ||
+          eventName === 'tool_call' ||
+          eventName === 'tool_execution_start' ||
+          eventName === 'tool_execution_end' ||
+          eventName === 'message_end'
+        ? 'working'
+        : eventName === 'agent_end'
+          ? 'done'
+          : null
 
   if (!stateName) {
     return null

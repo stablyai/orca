@@ -499,3 +499,29 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.closeTab).not.toHaveBeenCalledWith('tab-c')
   })
 })
+
+describe('FloatingTerminalPanel tab drag wiring', () => {
+  beforeEach(setupFloatingTerminalPanelTest)
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('hosts the tab strip in a drag context so floating tabs can be reordered', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' })])
+
+    const element = await renderPanel(true)
+    const dragContext = findByTypeName(element, 'FloatingWorkspaceTabDragContext')
+
+    expect(dragContext.props.enabled).toBe(true)
+    expect(findByTypeName(dragContext.props.children, 'TabBar')).toBeDefined()
+  })
+
+  it('leaves the drag context inactive while the closed panel stays mounted', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+
+    const element = await renderPanel(false)
+
+    expect(findByTypeName(element, 'FloatingWorkspaceTabDragContext').props.enabled).toBe(false)
+  })
+})

@@ -30,6 +30,7 @@ import {
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import { translate } from '@/i18n/i18n'
 import { PRCommentGroupView } from './comment-group'
+import { useNow } from '@/hooks/use-now'
 
 export type PRCommentsListDisplayMode = 'triage' | 'timeline'
 export const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']
@@ -118,6 +119,7 @@ export function useCommentsListState({
   }
 
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
+  const now = useNow(60_000, comments.length > 0)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [displayMode, setDisplayMode] = useState<PRCommentsListDisplayMode>('triage')
   const [replyingCommentId, setReplyingCommentId] = useState<number | null>(null)
@@ -231,6 +233,7 @@ export function useCommentsListState({
         selectionControl={renderSelectionControl(group)}
         actionState={actionState}
         isQueued={isQueued}
+        now={now}
         replyDisabled={commentsDisabled}
         replyDisabledReason={commentsDisabledReason}
         presentation={presentation}
@@ -305,6 +308,7 @@ export function useCommentsListState({
     canShowResolveWithAI,
     startAddComment,
     renderCommentGroup,
-    renderAddCommentComposer
+    renderAddCommentComposer,
+    now
   }
 }

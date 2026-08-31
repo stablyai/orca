@@ -18,6 +18,31 @@ function request(id: string, method: string, params: unknown): RpcRequest {
   return { id, authToken: 'test-token', method, params }
 }
 
+function visibleSessionTab(worktree: string, tabId: string) {
+  return {
+    worktree,
+    publicationEpoch: 'epoch-1',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: tabId,
+    activeTabType: 'browser' as const,
+    tabs: [
+      {
+        type: 'browser' as const,
+        id: tabId,
+        title: 'Browser',
+        browserWorkspaceId: tabId,
+        browserPageId: tabId,
+        url: 'about:blank',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        isActive: true
+      }
+    ]
+  }
+}
+
 describe('runtime close attribution topology', () => {
   const records: SpanRecord[] = []
 
@@ -40,6 +65,9 @@ describe('runtime close attribution topology', () => {
     const runtime = {
       getRuntimeId: () => 'runtime-owner-1',
       closeMobileSessionTab,
+      listMobileSessionTabs: vi.fn(async (worktree: string) =>
+        visibleSessionTab(worktree, worktree.endsWith('a') ? 'tab-a' : 'tab-b')
+      ),
       refuseUnattributedMobileSessionTabClose: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -110,6 +138,9 @@ describe('runtime close attribution topology', () => {
     const closeMobileSessionTab = vi.fn().mockResolvedValue({ closed: true })
     const runtime = {
       getRuntimeId: () => 'runtime-owner-2',
+      listMobileSessionTabs: vi.fn(async (worktree: string) =>
+        visibleSessionTab(worktree, worktree.endsWith('a') ? 'tab-a' : 'tab-b')
+      ),
       closeMobileSessionTab
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })

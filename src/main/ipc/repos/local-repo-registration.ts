@@ -17,7 +17,8 @@ import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation
 export async function addLocalRepoFromPath(
   store: Store,
   path: string,
-  kind: 'git' | 'folder' = 'git'
+  kind: 'git' | 'folder' = 'git',
+  displayName?: string
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git') {
@@ -76,7 +77,7 @@ export async function addLocalRepoFromPath(
   const repo: Repo = {
     id: randomUUID(),
     path: resolvedPath,
-    displayName: getRepoName(resolvedPath),
+    displayName: displayName?.trim() || getRepoName(resolvedPath),
     badgeColor: DEFAULT_REPO_BADGE_COLOR,
     ...detected,
     addedAt: Date.now(),

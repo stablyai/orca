@@ -13,6 +13,17 @@ function setMobileSessionSnapshot(
   ).mobileSessionTabsByWorktree.set(snapshot.worktree, snapshot)
 }
 
+function getMobileSessionSnapshot(
+  runtime: OrcaRuntimeService,
+  worktree: string
+): RuntimeMobileSessionTabsSnapshot | undefined {
+  return (
+    runtime as unknown as {
+      mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
+    }
+  ).mobileSessionTabsByWorktree.get(worktree)
+}
+
 function terminalTab() {
   return {
     type: 'terminal' as const,
@@ -50,6 +61,154 @@ function browserTab({
 }
 
 describe('session tab move validation', () => {
+  it('preserves a structured tab across renderer-authored snapshot sync', () => {
+    const runtime = new OrcaRuntimeService()
+    const structured = {
+      type: 'agent-session' as const,
+      id: 'agent-session:session-a',
+      title: 'Codex Chat',
+      sessionId: 'session-a',
+      agent: 'codex' as const,
+      isActive: false
+    }
+    setMobileSessionSnapshot(runtime, {
+      worktree: 'wt-1',
+      publicationEpoch: 'structured-epoch',
+      snapshotVersion: 2,
+      activeGroupId: 'group-1',
+      activeTabId: 'terminal-tab::leaf-1',
+      activeTabType: 'terminal',
+      tabGroups: [
+        {
+          id: 'group-1',
+          activeTabId: 'terminal-tab',
+          tabOrder: ['terminal-tab', structured.id]
+        }
+      ],
+      tabs: [terminalTab(), structured]
+    })
+    const incoming: RuntimeMobileSessionTabsSnapshot = {
+      worktree: 'wt-1',
+      publicationEpoch: 'renderer-epoch',
+      snapshotVersion: 1,
+      activeGroupId: 'group-1',
+      activeTabId: 'terminal-tab::leaf-1',
+      activeTabType: 'terminal',
+      tabGroups: [{ id: 'group-1', activeTabId: 'terminal-tab', tabOrder: ['terminal-tab'] }],
+      tabs: [terminalTab()]
+    }
+
+    ;(
+      runtime as unknown as {
+        syncMobileSessionTabs(snapshots: RuntimeMobileSessionTabsSnapshot[]): Set<string>
+      }
+    ).syncMobileSessionTabs([incoming])
+
+    const snapshot = getMobileSessionSnapshot(runtime, 'wt-1')
+    expect(snapshot?.tabs).toContainEqual(structured)
+    expect(snapshot?.tabGroups?.[0]?.tabOrder).toEqual(['terminal-tab', 'agent-session:session-a'])
+  })
+
+  it('publishes a structured tab into the active group instead of the first group', () => {
+    const runtime = new OrcaRuntimeService()
+    setMobileSessionSnapshot(runtime, {
+      worktree: 'wt-1',
+      publicationEpoch: 'epoch-1',
+      snapshotVersion: 1,
+      activeGroupId: 'group-2',
+      activeTabId: 'file-tab',
+      activeTabType: 'file',
+      tabGroups: [
+        { id: 'group-1', activeTabId: 'terminal-tab', tabOrder: ['terminal-tab'] },
+        { id: 'group-2', activeTabId: 'file-tab', tabOrder: ['file-tab'] }
+      ],
+      tabs: [
+        terminalTab(),
+        {
+          type: 'file',
+          id: 'file-tab',
+          title: 'README.md',
+          filePath: 'README.md',
+          relativePath: 'README.md',
+          language: 'markdown',
+          isDirty: false,
+          isActive: true
+        }
+      ]
+    })
+
+    runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'wt-1',
+      sessionId: 'session-a',
+      agent: 'codex',
+      activate: true
+    })
+
+    const snapshot = getMobileSessionSnapshot(runtime, 'wt-1')
+    expect(snapshot?.activeGroupId).toBe('group-2')
+    expect(snapshot?.tabGroups?.[0]?.tabOrder).toEqual(['terminal-tab'])
+    expect(snapshot?.tabGroups?.[1]).toMatchObject({
+      activeTabId: 'agent-session:session-a',
+      tabOrder: ['file-tab', 'agent-session:session-a']
+    })
+  })
+
+  it('preserves a capability-hidden structured tab during an old-client reorder', async () => {
+    const runtime = new OrcaRuntimeService()
+    const moveSessionTab = vi.fn()
+    runtime.setNotifier({ moveSessionTab } as never)
+    setMobileSessionSnapshot(runtime, {
+      worktree: 'wt-1',
+      publicationEpoch: 'epoch-1',
+      snapshotVersion: 1,
+      activeGroupId: 'group-1',
+      activeTabId: 'terminal-tab::leaf-1',
+      activeTabType: 'terminal',
+      tabGroups: [
+        {
+          id: 'group-1',
+          activeTabId: 'terminal-tab',
+          tabOrder: ['terminal-tab', 'agent-session:session-a', 'file-tab']
+        }
+      ],
+      tabs: [
+        terminalTab(),
+        {
+          type: 'agent-session',
+          id: 'agent-session:session-a',
+          title: 'Codex Chat',
+          sessionId: 'session-a',
+          agent: 'codex',
+          isActive: false
+        },
+        {
+          type: 'file',
+          id: 'file-tab',
+          title: 'README.md',
+          filePath: 'README.md',
+          relativePath: 'README.md',
+          language: 'markdown',
+          isDirty: false,
+          isActive: false
+        }
+      ]
+    })
+
+    await runtime.moveMobileSessionTab('id:wt-1', {
+      kind: 'reorder',
+      tabId: 'file-tab',
+      targetGroupId: 'group-1',
+      tabOrder: ['file-tab', 'terminal-tab']
+    })
+
+    expect(moveSessionTab).toHaveBeenCalledWith('wt-1', {
+      kind: 'reorder',
+      tabId: 'file-tab',
+      targetGroupId: 'group-1',
+      tabOrder: ['file-tab', 'agent-session:session-a', 'terminal-tab']
+    })
+  })
+
   it('validates reorder moves against sanitized visible tab groups', async () => {
     const runtime = new OrcaRuntimeService()
     const moveSessionTab = vi.fn()

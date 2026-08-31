@@ -243,10 +243,33 @@ describe('Store.migrateWorktreeIdentity', () => {
       },
       activeFileIdByWorktree: { [OLD]: '/ws/cunner/a.ts' },
       browserTabsByWorktree: {
-        [OLD]: [{ id: 'browser1', worktreeId: OLD, title: 'Browser', url: 'about:blank' }]
+        [OLD]: [
+          {
+            id: 'browser1',
+            worktreeId: OLD,
+            title: 'Browser',
+            url: 'about:blank',
+            docLocation: {
+              kind: 'workspace-doc',
+              worktreeId: OLD,
+              filePath: '/ws/cunner/docs/report.html'
+            }
+          }
+        ]
       },
       browserPagesByWorkspace: {
-        browser1: [{ id: 'page1', workspaceId: 'browser1', worktreeId: OLD }]
+        browser1: [
+          {
+            id: 'page1',
+            workspaceId: 'browser1',
+            worktreeId: OLD,
+            docLocation: {
+              kind: 'workspace-doc',
+              worktreeId: OLD,
+              filePath: '/ws/cunner/docs/report.html'
+            }
+          }
+        ]
       },
       activeBrowserTabIdByWorktree: { [OLD]: 'browser1' },
       activeTabTypeByWorktree: { [OLD]: 'browser' },
@@ -327,6 +350,16 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(session.browserTabsByWorktree?.[OLD]).toBeUndefined()
     expect(session.browserTabsByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(session.browserPagesByWorkspace?.browser1?.[0]?.worktreeId).toBe(NEW)
+    expect(session.browserTabsByWorktree?.[NEW]?.[0]?.docLocation).toEqual({
+      kind: 'workspace-doc',
+      worktreeId: NEW,
+      filePath: '/ws/worktree-creation-spinner/docs/report.html'
+    })
+    expect(session.browserPagesByWorkspace?.browser1?.[0]?.docLocation).toEqual({
+      kind: 'workspace-doc',
+      worktreeId: NEW,
+      filePath: '/ws/worktree-creation-spinner/docs/report.html'
+    })
     expect(session.activeBrowserTabIdByWorktree?.[NEW]).toBe('browser1')
     expect(session.activeTabTypeByWorktree?.[NEW]).toBe('browser')
     expect(session.activeWorktreeId).toBe(NEW)

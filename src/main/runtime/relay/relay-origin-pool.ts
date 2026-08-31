@@ -171,6 +171,7 @@ export class RelayOriginPool {
         // verifies this and admits through its reconnect fast lane.
         reconnect: true,
         preferredRegion,
+        isCurrent: () => this.isCurrent(),
         fetch: this.options.fetch
       })
       this.assertCurrent()

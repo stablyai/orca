@@ -60,6 +60,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     panelContextKey,
     pr,
     prCacheKey,
+    prRefreshStateNow,
     prCachedHasPR,
     prGenerationRecords,
     prNumber,
@@ -248,7 +249,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     gitSnapshotMatches:
       eligibilityGitFingerprint !== null &&
       hostedReviewCreationSnapshot?.gitFingerprint === eligibilityGitFingerprint,
-    now: Date.now()
+    now: prRefreshStateNow
   }
   const confirmedReadiness = computeChecksPanelConfirmedReadiness(confirmedReadinessInput)
   // A hard error persists until a qualifying eligibility request clears it; queued/in-flight status no longer un-hides Create.

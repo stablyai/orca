@@ -7,10 +7,14 @@ import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
   getGeneratedWorktreeCreateRetryCandidate,
-  isRetryableWorktreeCreateConflict,
-  WORKTREE_CREATE_DEDUPE_TTL_MS
+  isRetryableWorktreeCreateConflict
 } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
+import {
+  getWorktreeCreateReplayWindowMs,
+  type WorktreeCreateIdempotencyProbe,
+  type WorktreeCreateIdempotencySupport
+} from './worktree-create-idempotency-policy'
 
 // Why: server-side collision checks (branch already exists locally / on a remote
 // / already has PR #N) can fire even after a pre-flight basename dedupe —
@@ -36,17 +40,6 @@ const WORKTREE_CREATE_CUTOVER_MAX_RETRIES = 5
 // finished the worktree. Replay on the same clientMutationId instead.
 const WORKTREE_CREATE_AMBIGUOUS_MAX_RETRIES = 2
 
-// Why: the host keeps a settled create's dedupe record for WORKTREE_CREATE_DEDUPE_TTL_MS
-// after it resolves; a replay that lands later misses it and the host's suffix loop
-// builds a SECOND worktree — and for folder workspaces a second one with the SAME name
-// and no collision check at all. So a replay is bounded by how stale our knowledge of the
-// host is, and that has to be measured in WALL CLOCK: iOS/Android suspend JS timers while
-// the app is backgrounded, so any ceiling derived from timer intervals — a watchdog probe
-// budget, a request timeout — can be arbitrarily wrong across a background cycle, which is
-// exactly when a create sits ambiguous for minutes.
-const WORKTREE_CREATE_REPLAY_FLIGHT_MARGIN_MS = 10_000
-export const WORKTREE_CREATE_AMBIGUOUS_REPLAY_WINDOW_MS =
-  WORKTREE_CREATE_DEDUPE_TTL_MS - WORKTREE_CREATE_REPLAY_FLIGHT_MARGIN_MS
 // Bounded so the Create spinner doesn't sit for the whole window; the deadline still caps it.
 export const WORKTREE_CREATE_AMBIGUOUS_RECONNECT_WAIT_MS = 20_000
 
@@ -55,7 +48,7 @@ export type CreateWorktreeWithNameRetryArgs = {
   baseName: string
   nameWasGenerated?: boolean
   buildParams: (name: string) => Record<string, unknown>
-  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
+  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   maxAttempts?: number
   // Injected in tests; production mints a fresh idempotency key per candidate.
   mintMutationId?: () => string
@@ -72,7 +65,7 @@ export async function createWorktreeWithNameRetry(
   const { client, baseName, buildParams } = args
   // Why: creating before status.get settles would silently disable safe replay
   // during the exact slow-network window this path is meant to recover from.
-  const supportsIdempotentCutoverRetry = await args.supportsIdempotentCutoverRetry
+  const worktreeCreateIdempotency = await args.worktreeCreateIdempotency
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   let lastError: string | null = null
@@ -84,14 +77,10 @@ export async function createWorktreeWithNameRetry(
     // Why: older hosts strip unknown fields, so only stamp and replay when the
     // host advertises idempotency. One key per candidate makes cutover retries
     // safe while a name-collision bump remains a genuinely new create.
-    const params = supportsIdempotentCutoverRetry
+    const params = worktreeCreateIdempotency
       ? { ...candidateParams, clientMutationId: mintMutationId() }
       : candidateParams
-    const response = await sendWorktreeCreateResilient(
-      client,
-      params,
-      supportsIdempotentCutoverRetry
-    )
+    const response = await sendWorktreeCreateResilient(client, params, worktreeCreateIdempotency)
     if (response.ok) {
       const result = (response as RpcSuccess).result as { worktree: { id: string } }
       return { worktreeId: result.worktree.id, name: candidateName }
@@ -112,7 +101,7 @@ export async function createWorktreeWithNameRetry(
 async function sendWorktreeCreateResilient(
   client: RpcClient,
   params: Record<string, unknown>,
-  supportsIdempotentCutoverRetry: boolean
+  worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false
 ): Promise<RpcResponse> {
   let migrationRetry = 0
   let ambiguousRetry = 0
@@ -124,7 +113,7 @@ async function sendWorktreeCreateResilient(
         timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
       })
     } catch (error) {
-      if (!supportsIdempotentCutoverRetry) {
+      if (!worktreeCreateIdempotency) {
         throw error
       }
       if (isLogicalClientCutoverError(error)) {
@@ -152,7 +141,7 @@ async function sendWorktreeCreateResilient(
       }
       // Computed once: a later ambiguity reads a fresher lastInboundAt from the
       // replacement session, which would push the deadline past the record it respects.
-      replayDeadlineAt ??= resolveReplayDeadline(client, firstSentAt)
+      replayDeadlineAt ??= resolveReplayDeadline(client, firstSentAt, worktreeCreateIdempotency)
       const remainingWindowMs = replayDeadlineAt - Date.now()
       if (remainingWindowMs <= 0) {
         throw error
@@ -179,10 +168,14 @@ async function sendWorktreeCreateResilient(
 // so it stays honest across a suspension in a way a timer budget cannot; the send is the
 // fallback, and a sound floor either way, because the host cannot resolve a create it has
 // not yet received.
-function resolveReplayDeadline(client: RpcClient, firstSentAt: number): number {
+function resolveReplayDeadline(
+  client: RpcClient,
+  firstSentAt: number,
+  support: WorktreeCreateIdempotencySupport
+): number {
   const lastInboundAt = client.getLastInboundAt?.() ?? null
   const anchor = lastInboundAt !== null && lastInboundAt > firstSentAt ? lastInboundAt : firstSentAt
-  return anchor + WORKTREE_CREATE_AMBIGUOUS_REPLAY_WINDOW_MS
+  return anchor + getWorktreeCreateReplayWindowMs(support)
 }
 
 function defaultWorktreeCreateMutationId(): string {

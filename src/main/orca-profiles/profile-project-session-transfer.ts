@@ -1,6 +1,11 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { BrowserPage, BrowserWorkspace } from '../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserPageDocLocation,
+  BrowserWorkspace
+} from '../../shared/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../shared/browser-page-doc-location'
 import type { Tab, TabGroup } from '../../shared/tab-types'
 import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type {
@@ -8,6 +13,7 @@ import type {
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { SESSION_FIELDS_COPIED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import {
   isRepoWorktreeId,
   rekeyOwnerKey,
@@ -75,9 +81,6 @@ export function extractSessionForTransfer(
   transferred.openFilesByWorktree = mapOwnerRecord(source.openFilesByWorktree, (files) =>
     files.map((file) => rekeyOpenFile(file, oldRepoId, newRepoId))
   )
-  transferred.activeFileIdByWorktree = mapOwnerRecord(source.activeFileIdByWorktree, (value) =>
-    structuredClone(value)
-  )
   transferred.browserTabsByWorktree = mapOwnerRecord(source.browserTabsByWorktree, (tabs) =>
     tabs.map((tab) => {
       copiedBrowserWorkspaceIds.add(tab.id)
@@ -90,39 +93,20 @@ export function extractSessionForTransfer(
     oldRepoId,
     newRepoId
   )
-  transferred.activeBrowserTabIdByWorktree = mapOwnerRecord(
-    source.activeBrowserTabIdByWorktree,
-    (value) => structuredClone(value)
-  )
-  transferred.activeTabTypeByWorktree = mapOwnerRecord(source.activeTabTypeByWorktree, (value) =>
-    structuredClone(value)
-  )
-  transferred.activeTabIdByWorktree = mapOwnerRecord(source.activeTabIdByWorktree, (value) =>
-    structuredClone(value)
-  )
+  // Driven by the census so a field cannot be added to the session type and forgotten here. The
+  // census is also where a field's deliberate non-transfer is recorded -- notably the runtime's
+  // client-hosted rows, which name a paired device this payload does not carry.
+  for (const field of SESSION_FIELDS_COPIED_BY_OWNER_KEY) {
+    const record = source[field] as Record<string, unknown> | undefined
+    ;(transferred as Record<string, unknown>)[field] = mapOwnerRecord(record, (value) =>
+      structuredClone(value)
+    )
+  }
   transferred.unifiedTabs = mapOwnerRecord(source.unifiedTabs, (tabs) =>
     tabs.map((tab) => rekeyUnifiedTab(tab, oldRepoId, newRepoId))
   )
   transferred.tabGroups = mapOwnerRecord(source.tabGroups, (groups) =>
     groups.map((group) => rekeyTabGroup(group, oldRepoId, newRepoId))
-  )
-  transferred.tabGroupLayouts = mapOwnerRecord(source.tabGroupLayouts, (value) =>
-    structuredClone(value)
-  )
-  transferred.activeGroupIdByWorktree = mapOwnerRecord(source.activeGroupIdByWorktree, (value) =>
-    structuredClone(value)
-  )
-  transferred.lastVisitedAtByWorktreeId = mapOwnerRecord(
-    source.lastVisitedAtByWorktreeId,
-    (value) => structuredClone(value)
-  )
-  transferred.defaultTerminalTabsAppliedByWorktreeId = mapOwnerRecord(
-    source.defaultTerminalTabsAppliedByWorktreeId,
-    (value) => structuredClone(value)
-  )
-  transferred.terminalTopologyRevisionByRepoId = mapOwnerRecord(
-    source.terminalTopologyRevisionByRepoId,
-    (value) => value
   )
   transferred.terminalLayoutsByTabId = {}
   for (const tabId of copiedTerminalTabIds) {
@@ -196,6 +180,9 @@ function rekeyBrowserWorkspace(
   return {
     ...structuredClone(workspace),
     worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, workspace.worktreeId),
+    ...(workspace.docLocation
+      ? { docLocation: rekeyBrowserDocLocation(workspace.docLocation, oldRepoId, newRepoId) }
+      : {}),
     // Why: both the session profile and the resolved partition string are
     // source-profile-scoped; carrying either across would point the restored
     // pane at a partition the target profile's allowlist rejects.
@@ -207,8 +194,20 @@ function rekeyBrowserWorkspace(
 function rekeyBrowserPage(page: BrowserPage, oldRepoId: string, newRepoId: string): BrowserPage {
   return {
     ...structuredClone(page),
-    worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, page.worktreeId)
+    worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, page.worktreeId),
+    ...(page.docLocation
+      ? { docLocation: rekeyBrowserDocLocation(page.docLocation, oldRepoId, newRepoId) }
+      : {})
   }
+}
+
+function rekeyBrowserDocLocation(
+  location: BrowserPageDocLocation,
+  oldRepoId: string,
+  newRepoId: string
+): BrowserPageDocLocation {
+  const nextWorktreeId = rekeyWorktreeId(oldRepoId, newRepoId, location.worktreeId)
+  return remapBrowserPageDocLocation(location, location.worktreeId, nextWorktreeId)
 }
 
 function copyBrowserPages(

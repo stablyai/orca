@@ -8,12 +8,15 @@ type BrowserFindProps = {
   isOpen: boolean
   onClose: () => void
   webviewRef: React.RefObject<Electron.WebviewTag | null>
+  /** Bumped whenever the pane swaps in a new guest under the same mount; rebinds the listener. */
+  guestGeneration?: number | null
 }
 
 export default function BrowserFind({
   isOpen,
   onClose,
-  webviewRef
+  webviewRef,
+  guestGeneration = null
 }: BrowserFindProps): React.JSX.Element | null {
   const inputRef = useRef<HTMLInputElement>(null)
   const wasOpenRef = useRef(isOpen)
@@ -110,11 +113,11 @@ export default function BrowserFind({
     return () => window.clearTimeout(id)
   }, [isOpen, requestQuery, safeFindInPage, safeStopFindInPage])
 
-  // Why: this effect captures `webviewRef.current` into a local variable, so
-  // if the webview element were replaced while `isOpen` stays true the listener
-  // would be on a stale node. This is safe because BrowserPane closes the find
-  // bar (`setFindOpen(false)`) on every full navigation (`did-navigate`) and on
-  // tab deactivation, which toggles `isOpen` and re-runs this effect.
+  // Why the generation is a dependency: this effect captures `webviewRef.current` into a local
+  // variable, so a webview replaced while `isOpen` stays true would leave the listener on a dead
+  // node and find would silently stop counting. Navigation and tab deactivation close the bar and
+  // cover their own cases, but a client-hosted pane re-attaches a new guest in place on a host
+  // restart without either happening.
   useEffect(() => {
     const webview = webviewRef.current
     if (!webview || !isOpen) {
@@ -133,7 +136,7 @@ export default function BrowserFind({
         // Why: webview may be destroyed during cleanup.
       }
     }
-  }, [webviewRef, isOpen])
+  }, [webviewRef, isOpen, guestGeneration])
 
   if ((!isOpen || !requestQuery) && (activeMatch !== 0 || totalMatches !== 0)) {
     setActiveMatch(0)

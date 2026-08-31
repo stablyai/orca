@@ -209,6 +209,32 @@ export function connectPanePty(
   installAgentTaskCompleteNotify(session)
   installDirectSshRetryStatus(session)
   installPtyInputRecovery(session)
+  // Async reattach/exit callbacks can outlive the PaneManager that created
+  // them. Keep their layout writes keyed by the durable leaf identity and
+  // admit them only while this transport still owns the pane slot.
+  const isCurrentPaneTransport = (): boolean =>
+    !session.disposed &&
+    session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+  session.syncPanePtyLayoutBinding = (ptyId: string | null): void => {
+    if (!isCurrentPaneTransport()) {
+      return
+    }
+    if (session.deps.syncPanePtyLayoutBindingForLeaf) {
+      session.deps.syncPanePtyLayoutBindingForLeaf(session.pane.leafId, ptyId, session.pane.id)
+      return
+    }
+    session.deps.syncPanePtyLayoutBinding(session.pane.id, ptyId)
+  }
+  session.clearExitedPanePtyLayoutBinding = (exitedPtyId: string): void => {
+    if (!isCurrentPaneTransport()) {
+      return
+    }
+    if (session.deps.clearExitedPanePtyLayoutBindingForLeaf) {
+      session.deps.clearExitedPanePtyLayoutBindingForLeaf(session.pane.leafId, exitedPtyId)
+      return
+    }
+    session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, exitedPtyId)
+  }
   installPtyInputForward(session)
   installPtyResizeGeometry(session)
   installRunDeferredConnect(session)

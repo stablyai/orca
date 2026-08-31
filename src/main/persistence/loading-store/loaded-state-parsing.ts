@@ -27,6 +27,7 @@ import {
   normalizeWorktreeLinkedItemMetadata
 } from '../tracking-repos/worktree-metadata-normalization'
 import { backfillLegacyAutomationContexts } from '../scheduling-automations/automation-context-migration'
+import { migrateAutomationOwners } from '../../automations/automation-owner-migration'
 import {
   ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH,
   normalizeSshPtyConsumerRecovery
@@ -41,13 +42,17 @@ import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-setting
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedProfileState } from './normalize-loaded-profile-state'
 
+type PersistenceStartupDetails = Record<string, unknown> | (() => Record<string, unknown>)
+
 function logPersistenceStartupMilestone(
   event: string,
-  details: Record<string, unknown> = {}
+  details: PersistenceStartupDetails = {}
 ): void {
-  if (isStartupDiagnosticsEnabled()) {
-    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  if (!isStartupDiagnosticsEnabled()) {
+    return
   }
+  const resolvedDetails = typeof details === 'function' ? details() : details
+  logStartupDiagnostic(event, { t: Math.round(performance.now()), ...resolvedDetails })
 }
 
 import type { StoreRuntimeState } from './store-runtime-state'
@@ -60,6 +65,7 @@ type LoadedStateParsingOperationsRuntime = Pick<
   | 'githubCacheDirty'
   | 'loadNeedsSave'
   | 'protectedSecrets'
+  | 'storageAuthority'
   | 'terminalScrollbackSnapshotStorage'
 >
 
@@ -221,6 +227,25 @@ export class LoadedStateParsingOperations {
       automationRuns: automationContextMigration.state.automationRuns
     }
 
+    const automationOwnerMigration = migrateAutomationOwners({
+      automations: result.automations,
+      sshTargets: result.sshTargets,
+      repos,
+      folderWorkspaces: result.folderWorkspaces,
+      projectGroups: result.projectGroups,
+      sshTargetGenerationCounter: result.sshTargetGenerationCounter,
+      storageAuthority: this.runtime.storageAuthority
+    })
+    if (automationOwnerMigration.changed) {
+      this.runtime.loadNeedsSave = true
+    }
+    result = {
+      ...result,
+      automations: automationOwnerMigration.automations,
+      sshTargets: automationOwnerMigration.sshTargets,
+      sshTargetGenerationCounter: automationOwnerMigration.sshTargetGenerationCounter
+    }
+
     const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({
       ...result,
       repos,
@@ -258,10 +283,10 @@ export class LoadedStateParsingOperations {
       migrated.githubCache = readGithubCacheSnapshot(this.runtime.dataFile) ?? migrated.githubCache
     }
 
-    logPersistenceStartupMilestone('persistence-load-done', {
+    logPersistenceStartupMilestone('persistence-load-done', () => ({
       repos: migrated.repos.length,
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
-    })
+    }))
     return migrated
   }
 }

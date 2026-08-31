@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import type React from 'react'
 import { ArrowUpRight, RefreshCw } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
@@ -42,7 +43,10 @@ function CommitFileRow({
       onClick={(event) => onOpen(entry, toSourceControlRowOpenEvent(event))}
       onDoubleClick={(event) => onOpen(entry, toPermanentSourceControlRowOpenEvent(event))}
     >
-      <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
+      {createElement(FileIcon, {
+        className: 'size-3.5 shrink-0',
+        style: { color: STATUS_COLORS[status] }
+      })}
       <span className="min-w-0 flex-1 truncate">
         <span className="text-foreground">{fileName}</span>
         {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}

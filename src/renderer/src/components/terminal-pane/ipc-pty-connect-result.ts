@@ -25,6 +25,9 @@ export function projectIpcPtyConnectResult(
       ...(spawnResult.snapshotFrameRestoreAnsi !== undefined
         ? { snapshotFrameRestoreAnsi: spawnResult.snapshotFrameRestoreAnsi }
         : {}),
+      ...(spawnResult.snapshotTerminalOwner
+        ? { snapshotTerminalOwner: spawnResult.snapshotTerminalOwner }
+        : {}),
       isAlternateScreen: spawnResult.isAlternateScreen,
       sessionExpired: spawnResult.sessionExpired,
       coldRestore: spawnResult.coldRestore,

@@ -17,6 +17,9 @@ src/**/*.d.ts
 
 # Dependencies
 node_modules/
+# Why: the trailing-slash form matches directories only, so a node_modules SYMLINK (how agent
+# worktrees share an install) slipped past a bulk `git add` and got committed — twice.
+node_modules
 
 # Build output
 dist/
@@ -89,19 +92,23 @@ design-docs/
 # and the tracked reference docs linked from AGENTS.md / README.md).
 docs/**
 !docs/
+# The deployable docs app is source, not local engineering notes.
+!docs/site/
+!docs/site/**
 !docs/assets/
 !docs/assets/**
 !docs/readme/
 !docs/readme/**
 !docs/STYLEGUIDE.md
 !docs/agent-skill-sharing-implementation-checklist.md
-!docs/agent-skill-sharing-installation-plan.md
-!docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
+!docs/reference/ime-regression-checklist.md
 !docs/reference/linux-glibc-compatibility.md
+!docs/reference/macos-press-and-hold.md
+!docs/reference/orcad-operations.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/windows-process-enumeration.md
 !docs/reference/wsl-runner-verification.md
@@ -113,6 +120,7 @@ docs/**
 !docs/reference/windows-setup-shell.md
 !docs/reference/worktree-scan-fingerprint.md
 !docs/reference/wsl-command-execution.md
+!docs/reference/wsl-probe-failure-semantics.md
 !docs/reference/xterm-patch-regeneration.md
 
 # Stably CLI (only docs/ are tracked)

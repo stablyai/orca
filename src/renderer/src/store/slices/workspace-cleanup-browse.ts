@@ -31,8 +31,7 @@ export const createWorkspaceCleanupBrowseSlice: StateCreator<
 
   updateWorkspaceCleanupBrowseState: (next) => {
     set((state) => ({
-      workspaceCleanupBrowse:
-        typeof next === 'function' ? next(state.workspaceCleanupBrowse) : next
+      workspaceCleanupBrowse: typeof next === 'function' ? next(state.workspaceCleanupBrowse) : next
     }))
     if (persistTimer !== null) {
       clearTimeout(persistTimer)

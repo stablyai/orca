@@ -112,7 +112,10 @@ export function _getPRRefreshAliasCountForTests(key: string): number {
   return queue.aliasCount(key)
 }
 
-export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {
+export async function refreshPRNow(
+  candidate: GitHubPRRefreshCandidate,
+  reason: GitHubPRRefreshReason = 'manual'
+): Promise<PRRefreshOutcome> {
   const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
   const existing = queue.get(key)
@@ -128,7 +131,7 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
       message: `Cannot refresh PR for this worktree: ${skippedReason}`,
       fetchedAt: Date.now()
     }
-    events.broadcast({ aliases: [alias], reason: 'manual', status: 'skipped', skippedReason })
+    events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason })
     return outcome
   }
 
@@ -139,14 +142,14 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
       key,
       candidate,
       aliases: aliasMap,
-      reason: 'manual',
+      reason,
       priority: 40,
       dueAt: gateUntil,
       queuedAt: queue.nextOrder()
     })
     events.broadcast({
       aliases,
-      reason: 'manual',
+      reason,
       status: 'paused',
       pausedUntil: gateUntil,
       skippedReason: 'rate-limit'
@@ -165,17 +168,14 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   queue.delete(key)
   const requestSequence = events.nextSequence()
   const requestStartedAt = Date.now()
-  events.broadcast(
-    { aliases, reason: 'manual', status: 'in-flight', requestStartedAt },
-    requestSequence
-  )
+  events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
   const outcome = await getPRForBranchOutcome(
     candidate.repoPath,
     candidate.branch,
     candidate.linkedPRNumber ?? null,
     candidate.connectionId ?? null,
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-    ...hostedReviewOptionArgs(candidate)
+    ...hostedReviewOptionArgs(candidate, reason)
   )
   let plannedRetryAt: number | undefined
   let broadcastOutcome = outcome
@@ -186,12 +186,14 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   events.observe(candidate, outcome)
   retry.noteManualGate(key, broadcastOutcome)
   events.broadcast(
-    { aliases, reason: 'manual', outcome: broadcastOutcome, requestStartedAt },
+    { aliases, reason, outcome: broadcastOutcome, requestStartedAt },
     requestSequence
   )
   drainer.scheduleVisibleFollowUp(key, candidate, outcome, 40, aliases, undefined, {
     plannedRetryAt,
-    pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS
+    ...(reason === 'manual'
+      ? { pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS }
+      : {})
   })
   return broadcastOutcome
 }

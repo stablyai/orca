@@ -120,7 +120,7 @@ export class PaneManager {
       }
     }
     // Why: atlas recovery must reach every live manager — see
-    // resetAllTerminalWebglAtlases for the shared-atlas rationale.
+    // resetAndRefreshAllTerminalWebglAtlases for the shared-atlas rationale.
     registerLivePaneManager(this)
   }
 

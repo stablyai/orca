@@ -1,4 +1,6 @@
+import { recordClosedTerminalTabTombstone } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
 import {
   getRecentlyClosedTabPosition,
@@ -13,6 +15,7 @@ import {
 } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
+import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -58,6 +61,23 @@ export function createTerminalTabCloseActions(
             next[wId] = after
           }
         }
+        // Why `user` and not retiresSession: a tombstone outlives the host's own record, so the only
+        // thing it may ever say is "the user closed this". A pty-exit close is the process ending,
+        // and a `cleanup` close retires a tab the app itself created — neither is that claim.
+        // Why a non-local worktree only: the tombstone is read solely by the direct-SSH pull merge,
+        // and a definitively local tab would just consume the map's cap. An unresolved repo
+        // (undefined, not null) still records — losing the tombstone reinstates the resurrection.
+        const nextClosedTombstones =
+          closeReason === 'user' &&
+          closedWorktreeId &&
+          getConnectionIdFromState(s, closedWorktreeId) !== null
+            ? recordClosedTerminalTabTombstone(
+                s.closedTerminalTabTombstonesByTabId,
+                tabId,
+                closedWorktreeId,
+                Date.now()
+              )
+            : s.closedTerminalTabTombstonesByTabId
         // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
         const closedPosition =
           closedWorktreeId && closedTab
@@ -102,6 +122,9 @@ export function createTerminalTabCloseActions(
           ...s.directSshPaneRetryHistoryByTabId
         }
         delete nextDirectSshPaneRetryHistoryByTabId[tabId]
+        const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [
+          tabId
+        ])
         // Why: keep the same reference when the closing tab had no unread flag, so unrelated closes don't force full-state selector re-eval.
         let nextUnreadTerminalTabs = s.unreadTerminalTabs
         if (s.unreadTerminalTabs[tabId]) {
@@ -204,8 +227,14 @@ export function createTerminalTabCloseActions(
           directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
           directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId,
           directSshPaneRetryHistoryByTabId: nextDirectSshPaneRetryHistoryByTabId,
+          ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
+            ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
+            : {}),
           ...(nextSleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
             ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessionsByPaneKey }
+            : {}),
+          ...(nextClosedTombstones !== s.closedTerminalTabTombstonesByTabId
+            ? { closedTerminalTabTombstonesByTabId: nextClosedTombstones }
             : {}),
           // Why: skip writing unreadTerminalTabs when unchanged to avoid a no-op state allocation that re-evaluates full-state selectors. Mirrors tabs.ts.
           ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs

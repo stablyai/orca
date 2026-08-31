@@ -21,7 +21,7 @@
 // itself becomes a `noopSpan` that swallows all calls — call sites do not
 // need to branch on whether tracing is on.
 
-import { withSpan, type ActiveSpan } from './tracer'
+import { startSpan, withSpan, type ActiveSpan } from './tracer'
 
 const GIT_FAST_SUCCESS_THRESHOLD_MS = 250
 const GIT_FAST_SUCCESS_WINDOW_MS = 60_000
@@ -173,15 +173,28 @@ export type GitSpanArgs = {
 /** Wrap a git execution in a `git.exec` span. Git accepts global options before
  *  the subcommand; promoting the parsed command to its own attribute makes it
  *  grep-friendly without copying the full args array into dashboards. */
-export async function withGitSpan<T>(meta: GitSpanArgs, fn: () => Promise<T>): Promise<T> {
+export async function withGitSpan<T>(
+  meta: GitSpanArgs,
+  fn: (span: ActiveSpan) => Promise<T>
+): Promise<T> {
   return withSpan(
     'git.exec',
     async (span) => {
       addGitAttributes(span, meta)
-      return await fn()
+      return await fn(span)
     },
     { attributes: { kind: 'git' }, shouldRecord: (record) => shouldRecordGitSpan(meta, record) }
   )
+}
+
+/** Start a git span whose lifetime follows a returned ChildProcess. */
+export function startGitSpan(meta: GitSpanArgs): ActiveSpan {
+  const span = startSpan('git.exec', {
+    attributes: { kind: 'git' },
+    shouldRecord: (record) => shouldRecordGitSpan(meta, record)
+  })
+  addGitAttributes(span, meta)
+  return span
 }
 
 export type WorktreeSpanArgs = {
