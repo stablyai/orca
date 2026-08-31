@@ -229,7 +229,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
     const pairingProvider = this.mobileRelayPairingProvider
-    const pairingContext =
+    const relayPairingContext =
       pairingProvider && authenticatedSocket
         ? {
             getEndpoints: (params: PairingGetEndpointsParams) =>
@@ -251,6 +251,11 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
                 params
               )
           }
+        : undefined
+    const hostPairingContext = this.getPairingContext()
+    const pairingContext =
+      hostPairingContext || relayPairingContext
+        ? { ...hostPairingContext, ...relayPairingContext }
         : undefined
     try {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {

@@ -14,7 +14,6 @@ import { REGISTER_DEVICE_KEY_METHOD } from '../../../../../shared/remote-runtime
 import { EXCHANGE_PAIRING_TICKET_METHOD } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-capability'
 import { ExchangePairingTicketParamsSchema } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
 import {
-  PairingCreateOfferParamsSchema,
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
@@ -30,10 +29,14 @@ export const PAIRING_METHODS = [
     permission: 'pairing-admin',
     params: PairingCreateOfferParamsSchema,
     handler: async (params, ctx) => {
-      if (!ctx.pairingOffers) {
+      // Owner transports mint through pairingOffers. A headless Unix socket also passes createOffer.
+      if (ctx.pairingOffers) {
+        return await ctx.pairingOffers.create(params)
+      }
+      if (!ctx.pairing?.createOffer) {
         throw new Error('pairing_context_unavailable')
       }
-      return await ctx.pairingOffers.create(params)
+      return ctx.pairing.createOffer(params)
     }
   }),
   defineMethod({
@@ -56,19 +59,6 @@ export const PAIRING_METHODS = [
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.provisionRelay(params)
-    }
-  }),
-  // Why: headless / already-running hosts mint grants without the Settings UI path.
-  // Must stay off MOBILE_RPC_METHOD_ALLOWLIST so phones cannot escalate to new runtime grants.
-  defineMethod({
-    name: 'pairing.createOffer',
-    permission: 'pairing-admin',
-    params: PairingCreateOfferParamsSchema,
-    handler: (params, ctx) => {
-      if (!ctx.pairing?.createOffer) {
-        throw new Error('pairing_context_unavailable')
-      }
-      return ctx.pairing.createOffer(params)
     }
   }),
   defineMethod({

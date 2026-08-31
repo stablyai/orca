@@ -6,7 +6,6 @@ import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
-  PairingCreateOfferParams,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
@@ -37,7 +36,7 @@ import type {
 } from '../../../shared/remote-runtime/pairing/device-key-registration-contract'
 import type {
   PairingCreateOfferParams,
-  PairingCreateOfferResult
+  PairingCreateOfferResult as OwnerPairingCreateOfferResult
 } from '../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
 import type {
   ExchangePairingTicketParams,
@@ -73,7 +72,7 @@ export type PairingRpcContext = {
 
 // Mints new pairing credentials, so only the host owner's local transport provides it.
 export type PairingOffersRpcContext = {
-  create(params: PairingCreateOfferParams): Promise<PairingCreateOfferResult>
+  create(params: PairingCreateOfferParams): Promise<OwnerPairingCreateOfferResult>
 }
 
 export type RpcEnvelopeMeta = {

@@ -71,7 +71,6 @@ describe('pairing RPC methods', () => {
         'pairing.createOffer',
         {
           address: '100.64.1.20',
-          name: 'Headless grant',
           rotate: true,
           scope: 'runtime'
         },
@@ -82,24 +81,28 @@ describe('pairing RPC methods', () => {
       result: {
         available: true,
         pairingUrl: 'orca://pair?code=test',
-        deviceId: 'device-1'
+        endpoint: 'ws://100.64.1.20:6768',
+        deviceId: 'device-1',
+        webClientUrl:
+          'http://100.64.1.20:6768/web-index.html#pairing=orca%3A%2F%2Fpair%3Fcode%3Dtest'
       }
     })
     expect(createOffer).toHaveBeenCalledWith({
       address: '100.64.1.20',
-      name: 'Headless grant',
       rotate: true,
       scope: 'runtime'
     })
   })
 
   it('rejects pairing.createOffer without host minting context', async () => {
-    await expect(dispatchPairing('pairing.createOffer', {}, undefined)).resolves.toMatchObject({
+    await expect(
+      dispatchPairing('pairing.createOffer', { scope: 'runtime' }, undefined)
+    ).resolves.toMatchObject({
       ok: false,
       error: { message: 'pairing_context_unavailable' }
     })
     await expect(
-      dispatchPairing('pairing.createOffer', {}, { getEndpoints: vi.fn() })
+      dispatchPairing('pairing.createOffer', { scope: 'runtime' }, { getEndpoints: vi.fn() })
     ).resolves.toMatchObject({
       ok: false,
       error: { message: 'pairing_context_unavailable' }
