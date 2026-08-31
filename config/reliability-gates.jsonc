@@ -14164,16 +14164,18 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Deterministic local tests execute the exact injected mobile replay/generation gate, the React Native query classifier, stale-subscription sender, server-side single-responder election, query-reply RPC semantics, and live-output capture during async mobile fit. The provider write path is shared, but no live iOS/Android, SSH, WSL, or multi-device run is registered yet.",
+      "coverageNotes": "Deterministic local tests execute the exact injected mobile replay/generation gate, the React Native query classifier, stale-subscription sender, server-side single-responder election from live stream registrations, headless fallback while a mobile view is unfitted or has no live stream, query-reply RPC semantics, subscriber-driven provider attach for an unfitted mobile stream, and live-output capture during async mobile fit. The provider write path is shared, but no live iOS/Android, SSH, WSL, or multi-device run is registered yet.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8128",
-        "https://github.com/stablyai/orca/pull/8206"
+        "https://github.com/stablyai/orca/pull/8206",
+        "https://github.com/stablyai/orca/issues/16242"
       ],
-      "invariant": "Snapshot and replacement-terminal replay answer no terminal queries; every live query delivered to subscribed mobile views has at most one current responder; a live query queued behind replay is answered after the replay boundary; terminal-generated replies never transfer the user-input floor.",
-      "oracle": "The injected gate emits zero replies during replay, exactly one after its live boundary, and ignores a superseded generation; native routing rejects ordinary input; the sender rejects disconnected or unsubscribed handles; runtime election accepts only the earliest active mobile subscriber and promotes its survivor; terminal.send writes only validated query grammar without mobileTookFloor; legacy binary subscribe captures a query while phone-fit is still pending and emits it after the snapshot.",
+      "invariant": "Snapshot and replacement-terminal replay answer no terminal queries; every live query has exactly one current responder, including before a mobile view is phone-fitted and while a mobile record holds no live stream; a live query queued behind replay is answered after the replay boundary; terminal-generated replies never transfer the user-input floor.",
+      "oracle": "The injected gate emits zero replies during replay, exactly one after its live boundary, and ignores a superseded generation; native routing rejects ordinary input; the sender rejects disconnected or unsubscribed handles; runtime election accepts only the earliest phone-fitted mobile subscriber that still holds a live stream and promotes its survivor; mobile presence alone, an unfitted stream, and a fitted record whose stream has closed all leave main authoritative; an unfitted mobile stream still drives subscriber-driven provider attach, and a mobile record without a stream still blocks daemon thinning; terminal.send writes only validated query grammar without mobileTookFloor; legacy binary subscribe captures a query while phone-fit is still pending and emits it after the snapshot.",
       "commands": [
         "pnpm --dir mobile exec vitest run --root .. mobile/src/terminal/terminal-webview-query-reply.test.ts mobile/src/terminal/terminal-webview-query-reply-routing.test.ts mobile/src/terminal/mobile-terminal-query-reply.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/mobile-presence-lock.test.ts src/shared/terminal-query-reply.test.ts src/shared/terminal-reply-query-scan.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-query-responder.test.ts src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-terminal-input-gating.test.ts"
       ],
       "testFiles": [
@@ -14183,6 +14185,8 @@
         "src/main/runtime/rpc/terminal-send.test.ts",
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
         "src/main/runtime/mobile-presence-lock.test.ts",
+        "src/main/runtime/terminal-query-responder.test.ts",
+        "src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
         "src/shared/terminal-query-reply.test.ts",
         "src/shared/terminal-reply-query-scan.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-terminal-input-gating.test.ts"
@@ -14210,6 +14214,27 @@
           "assertions": [
             "live terminal data and view authority register before asynchronous mobile fit",
             "a query received during that await is retained and emitted after the snapshot"
+          ]
+        },
+        {
+          "file": "src/main/runtime/terminal-query-responder.test.ts",
+          "assertions": [
+            "mobile presence alone does not transfer query authority away from main",
+            "main stays authoritative until a streaming mobile view is phone-fitted, and regains authority when that stream releases",
+            "raw preview presence preserves delivery without suppressing main"
+          ]
+        },
+        {
+          "file": "src/main/runtime/mobile-presence-lock.test.ts",
+          "assertions": [
+            "a native-chat cover or pre-stream record leaves main authoritative but still blocks daemon thinning",
+            "the surviving stream is promoted when the elder record loses its stream"
+          ]
+        },
+        {
+          "file": "src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
+          "assertions": [
+            "an unfitted mobile stream, which holds no query authority, still retries provider attach when daemon inventory becomes ready"
           ]
         },
         {
@@ -14263,7 +14288,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "No polling, scans, timers, or output fanout were added. The WebView adds one disposable onData listener; native/RPC work occurs only for xterm data and is grammar-filtered; responder election is O(1) from Map insertion order; pre-fit output uses the existing capped pending-output queue."
+        "evidence": "No polling, scans, timers, subprocesses, or output fanout were added. Subscription setup adds one ref-count update on an existing per-PTY map; the per-chunk suppression check exits on a single map lookup when no mobile stream is attached; native/RPC work occurs only for xterm data and is grammar-filtered; pre-fit output uses the existing capped pending-output queue."
       },
       "promotionCriteria": [
         "Attach an intentional-break artifact for the pre-fit capture and multi-mobile election assertions.",

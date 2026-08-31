@@ -112,7 +112,10 @@ export async function initializeMultiplexStream(
     stream.outputBatcher.push(data, meta)
   })
   // Why: a multiplexed stream feeds a remote xterm view with query authority, so the main model responder yields while attached (terminal-query-authority.md).
-  const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
+  const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
+    ptyId,
+    isMobile ? request.client?.id : undefined
+  )
   stream.unsubscribeData = () => {
     releaseViewSubscriber()
     unsubscribeStreamData()

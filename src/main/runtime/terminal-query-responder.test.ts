@@ -265,10 +265,40 @@ describe('reply ownership matrix', () => {
     expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(false)
   })
 
-  it('treats mobile subscriber records as remote view subscribers', async () => {
-    const { runtime } = createResponderRuntime()
+  it('does not transfer query authority from mobile presence alone', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-mob')
+    await runtime.handleMobileSubscribe('pty-mob', 'client-1', { cols: 40, rows: 20 })
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-mob')).toBe(false)
+
+    runtime.onPtyData('pty-mob', DA1, Date.now())
+    await settle(runtime, 'pty-mob')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+  })
+
+  it('keeps main authoritative until a streaming mobile view is phone-fitted', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-mob')
+    await runtime.handleMobileSubscribe('pty-mob', 'client-1')
+    const release = runtime.registerRemoteTerminalViewSubscriber('pty-mob', 'client-1')
+
+    expect(runtime.hasRawTerminalViewSubscriber('pty-mob')).toBe(true)
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-mob')).toBe(false)
+    runtime.onPtyData('pty-mob', DA1, Date.now())
+    await settle(runtime, 'pty-mob')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+
     await runtime.handleMobileSubscribe('pty-mob', 'client-1', { cols: 40, rows: 20 })
     expect(runtime.hasRemoteTerminalViewSubscriber('pty-mob')).toBe(true)
+    runtime.onPtyData('pty-mob', DA1, Date.now())
+    await settle(runtime, 'pty-mob')
+    expect(replies).toHaveLength(1)
+
+    release()
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-mob')).toBe(false)
+    runtime.onPtyData('pty-mob', DA1, Date.now())
+    await settle(runtime, 'pty-mob')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c', '\x1b[?1;2c'])
   })
 
   it('answers a dropped-chunk query exactly once', async () => {

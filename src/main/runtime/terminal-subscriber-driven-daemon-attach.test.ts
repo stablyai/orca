@@ -217,7 +217,8 @@ function sendSubscribe(
   harness: ReturnType<typeof startMultiplex>,
   streamId: number,
   terminal: string,
-  clientId = 'client-desktop'
+  clientId = 'client-desktop',
+  clientType: 'desktop' | 'mobile' = 'desktop'
 ): void {
   harness.handlers.get(0)?.(
     decodeTerminalStreamFrame(
@@ -228,7 +229,7 @@ function sendSubscribe(
         payload: encodeTerminalStreamJson({
           streamId,
           terminal,
-          client: { id: clientId, type: 'desktop' }
+          client: { id: clientId, type: clientType }
         })
       })
     )!
@@ -437,6 +438,34 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
         false
       )
     )
+    expect(model.emitData(PTY_ID, 'after inventory\r\n')).toBe(true)
+    await vi.waitFor(() => expect(outputText(harness)).toContain('after inventory'))
+  })
+
+  it('retries an unfitted mobile subscriber when provider inventory becomes ready', async () => {
+    // A mobile stream holds no query authority before phone fit, so the attach
+    // retry must key on stream presence rather than reply ownership (#16242).
+    const { runtime, model, handle } = setupNeverAttachedDaemonSession({
+      snapshotCapable: false
+    })
+    model.sessions.delete(PTY_ID)
+    const refuseFirstAttach = model.deferNextAttach(false)
+    const harness = startMultiplex(runtime, 'conn-phone')
+    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
+
+    sendSubscribe(harness, 1, handle, 'client-phone', 'mobile')
+    await waitForSubscribed(harness, 1)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    expect(runtime.hasRemoteTerminalViewSubscriber(PTY_ID)).toBe(false)
+    expect(runtime.hasRawTerminalViewSubscriber(PTY_ID)).toBe(true)
+
+    model.sessions.set(PTY_ID, { cols: 100, rows: 30, attached: false, screen: '' })
+    await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
+    await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
+    expect([...internals(runtime).subscriberDrivenProviderAttachInventoryWaiters]).toEqual([PTY_ID])
+    refuseFirstAttach()
+
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
     expect(model.emitData(PTY_ID, 'after inventory\r\n')).toBe(true)
     await vi.waitFor(() => expect(outputText(harness)).toContain('after inventory'))
   })

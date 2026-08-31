@@ -139,7 +139,8 @@ describe('terminal subscribe buffering', () => {
 
     await vi.waitFor(() => expect(runtime.handleMobileSubscribe).toHaveBeenCalled())
     expect(dataListener).toBeDefined()
-    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith('pty-1')
+    // A mobile stream registers under its client id so the responder election can find it.
+    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith('pty-1', 'phone-1')
     dataListener?.('\x1b[6n', { seq: 4, rawLength: 4 })
     resolveMobileSubscribe()
 

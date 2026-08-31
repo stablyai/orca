@@ -333,10 +333,13 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     const { runtime } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     await runtime.handleMobileSubscribe('pty-1', 'phone-B', { cols: 38, rows: 18 })
+    const releaseA = runtime.registerRemoteTerminalViewSubscriber('pty-1', 'phone-A')
+    runtime.registerRemoteTerminalViewSubscriber('pty-1', 'phone-B')
 
     expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-A')).toBe(true)
     expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-B')).toBe(false)
 
+    releaseA()
     runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
     expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-B')).toBe(true)
 
@@ -352,6 +355,8 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     await vi.advanceTimersByTimeAsync(10)
     await runtime.handleMobileSubscribe('pty-1', 'phone-B', { cols: 38, rows: 18 })
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    runtime.registerRemoteTerminalViewSubscriber('pty-1', 'phone-A')
+    runtime.registerRemoteTerminalViewSubscriber('pty-1', 'phone-B')
 
     expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-A')).toBe(true)
     expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-B')).toBe(false)
@@ -368,9 +373,40 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     runtime.markMobileActor('pty-1', 'phone-B')
     runtime.setMobileDisplayMode('pty-1', 'auto')
     await runtime.applyMobileDisplayMode('pty-1')
+    runtime.registerRemoteTerminalViewSubscriber('pty-1', 'phone-A')
+    runtime.registerRemoteTerminalViewSubscriber('pty-1', 'phone-B')
 
     expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-A')).toBe(false)
     expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-B')).toBe(true)
+  })
+
+  it('promotes the surviving stream when the elder record loses its stream', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-elder', { cols: 45, rows: 20 })
+    await vi.advanceTimersByTimeAsync(10)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-survivor', { cols: 38, rows: 18 })
+    const releaseElder = runtime.registerRemoteTerminalViewSubscriber('pty-1', 'phone-elder')
+    runtime.registerRemoteTerminalViewSubscriber('pty-1', 'phone-survivor')
+
+    expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-elder')).toBe(true)
+
+    // A grace-window record with no live stream cannot answer, so it must not hold authority.
+    releaseElder()
+    expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-elder')).toBe(false)
+    expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-survivor')).toBe(true)
+  })
+
+  it('leaves a native-chat cover or pre-stream record answerable by main but unthinnable', async () => {
+    const { runtime } = createRuntime()
+    // A lease-only cover, and any mobile view before its stream arms, hold a
+    // record but no stream.
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+
+    expect(runtime.isMobileTerminalQueryReplyAuthority('pty-1', 'phone-A')).toBe(false)
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-1')).toBe(false)
+    // Why: it answers nothing, but it is still a viewer — the daemon must not
+    // thin the stream main is modelling on its behalf.
+    expect(runtime.hasRawTerminalViewSubscriber('pty-1')).toBe(true)
   })
 
   it('most-recent actor wins active phone-fit dims (B subscribes after A)', async () => {
