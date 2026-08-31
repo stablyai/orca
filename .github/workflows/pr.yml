@@ -134,6 +134,9 @@ jobs:
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet
 
+      - name: Enforce the LF line-ending policy on executable artifacts
+        run: pnpm run check:line-ending-policy
+
       # Why both: the ratchet proves nothing reachable from the runtime imports electron,
       # which is a property of the import graph. This proves the Node artifact it enables
       # actually boots, pairs, creates a worktree and round-trips a real PTY.

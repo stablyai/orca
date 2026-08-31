@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -45,9 +46,24 @@ describe('verify packaged plugin resources', () => {
 
   // The tree is hashed by raw bytes, so a CRLF checkout on Windows breaks the
   // pinned hash. These two guard the `.gitattributes` eol=lf pin that prevents it.
-  it('pins the launch tree to LF so Windows checkouts hash identically', async () => {
-    const attributes = await readFile(join(process.cwd(), '.gitattributes'), 'utf8')
-    expect(attributes).toContain('/resources/plugins/** text eol=lf')
+  // Asserted through check-attr, not against the text of `.gitattributes`: what matters
+  // is the attribute Git resolves, whichever rule supplies it. `text` is asserted as
+  // well as `eol` — under `-text` Git copies the blob verbatim, so an LF checkout would
+  // depend on the blob staying LF rather than on the pin.
+  it('pins the launch tree to LF so Windows checkouts hash identically', () => {
+    const resolved = spawnSync(
+      'git',
+      ['check-attr', 'text', 'eol', '--', 'resources/plugins/launch/bundled-plugins.json'],
+      { cwd: process.cwd(), encoding: 'utf8' }
+    )
+    expect(resolved.status).toBe(0)
+    const [text, eol] = resolved.stdout
+      .trim()
+      .split('\n')
+      .map((line) => line.split(': ').at(-1))
+    // `auto` or `set`: either means Git converts on checkout. `unset` (`-text`) does not.
+    expect(['auto', 'set']).toContain(text)
+    expect(eol).toBe('lf')
   })
 
   it('rejects a CRLF checkout of the launch tree', async () => {

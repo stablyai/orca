@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -12,7 +12,6 @@ import {
   assertAliasContract,
   buildArtifacts,
   frontmatterBlock,
-  normalizeMarkdown,
   parseFrontmatter,
   toPosixRelativePath,
   verifyArtifacts,
@@ -244,14 +243,36 @@ describe('bundled skill guide generator', () => {
     )
   })
 
-  it('pins guide sources, projections, and embedded output to LF in Git', async () => {
-    const attributes = await readFile(path.join(projectDir, '.gitattributes'), 'utf8')
-    expect(normalizeMarkdown(attributes)).toContain('/skill-guides/*.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain('/skill-stubs/*.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain('/skills/*/SKILL.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain(
-      '/src/cli/bundled-skill-guides.ts text eol=lf\n'
+  // Asserted through check-attr, not against the text of `.gitattributes`: the guides
+  // are compared byte-for-byte, so what matters is what Git resolves for them —
+  // whichever rule supplies it.
+  it('pins guide sources, projections, and embedded output to LF in Git', () => {
+    const pinned = [
+      'skill-guides/orca-cli.md',
+      'skill-stubs/orca-cli.md',
+      'skills/computer-use/SKILL.md',
+      'src/cli/bundled-skill-guides.ts'
+    ]
+    const resolved = spawnSync('git', ['check-attr', 'text', 'eol', '--', ...pinned], {
+      cwd: projectDir,
+      encoding: 'utf8'
+    })
+    expect(resolved.status).toBe(0)
+    // `text` too: under `-text` Git copies the blob verbatim, so LF would depend on the
+    // blob rather than on the pin. `auto` and `set` both convert; `unset` does not.
+    const byFile = new Map(
+      resolved.stdout
+        .trim()
+        .split('\n')
+        .map((line) => {
+          const [file, attr, value] = line.split(': ')
+          return [`${file} ${attr}`, value]
+        })
     )
+    for (const file of pinned) {
+      expect(['auto', 'set']).toContain(byFile.get(`${file} text`))
+      expect(byFile.get(`${file} eol`)).toBe('lf')
+    }
   })
 
   it('reports stale outputs and write mode repairs all projections', async () => {
