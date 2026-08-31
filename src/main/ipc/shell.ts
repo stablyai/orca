@@ -8,6 +8,11 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
+import {
+  applicationPickerOptions,
+  extractApplicationIcon,
+  type PickedApplicationIcon
+} from '../application-icon-extraction'
 import type { Store } from '../persistence'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
@@ -281,6 +286,14 @@ export function registerShellHandlers(store: Store): void {
       }
     }
   )
+
+  ipcMain.handle('shell:pickOpenInAppIcon', async (): Promise<PickedApplicationIcon | null> => {
+    const result = await dialog.showOpenDialog(applicationPickerOptions(process.platform))
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+    return extractApplicationIcon(result.filePaths[0])
+  })
 
   ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({

@@ -684,6 +684,26 @@
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
               "173553f73a": "VS Code"
+            },
+            "icon": {
+              "set": {
+                "appWindow": "App",
+                "code": "Code",
+                "terminal": "Terminal",
+                "editor": "Editor",
+                "braces": "Braces",
+                "notes": "Notes",
+                "panels": "Panels",
+                "agent": "Agent",
+                "ai": "AI",
+                "database": "Database",
+                "browser": "Browser",
+                "files": "Files",
+                "launch": "Launch",
+                "tools": "Tools",
+                "design": "Design",
+                "box": "Box"
+              }
             }
           }
         },
@@ -11512,6 +11532,13 @@
               "disconnectFailed": "Could not remove the saved Bitbucket credential."
             }
           }
+        },
+        "OpenInAppIconPicker": {
+          "changeIcon": "Change app icon",
+          "useIcon": "Use {{value0}} icon",
+          "useDefaultIcon": "Use default icon",
+          "chooseApplicationFailed": "Could not read that application icon.",
+          "chooseApplication": "Use an installed app's icon…"
         },
         "GlobalWorktreeVisibilitySourcesSetting": {
           "saveFailed": "Could not save visibility defaults.",

@@ -2615,6 +2615,9 @@ const api = {
     pickRepoIconImage: (): Promise<{ dataUrl: string; fileName: string } | null> =>
       ipcRenderer.invoke('shell:pickRepoIconImage'),
 
+    pickOpenInAppIcon: (): Promise<{ dataUrl: string; label: string } | null> =>
+      ipcRenderer.invoke('shell:pickOpenInAppIcon'),
+
     pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
 
     pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
