@@ -52,6 +52,7 @@ describe('headless serve shutdown PR gate', () => {
       (step) => step.name === 'Verify AppImage CLI registration and serve signal shutdown'
     )
 
+    expect(workflow.jobs.package['timeout-minutes']).toBe(90)
     expect(packageStep.run).toContain('--linux AppImage --x64 --publish never')
     expect(shutdownStep.run).toBe(
       'node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage'

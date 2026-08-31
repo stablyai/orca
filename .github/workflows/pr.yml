@@ -620,7 +620,8 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Let the serial Docker gates reach their own deadlines and report cleanup failures.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
