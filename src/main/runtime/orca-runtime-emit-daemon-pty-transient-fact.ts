@@ -58,6 +58,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    this.ompPromptReadinessByPtyId.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
   }
 

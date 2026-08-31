@@ -128,6 +128,9 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     waitText: string,
     lastOutputAt: number | null
   ): boolean {
+    if (ptyId && this.getPtyAgent(ptyId) === 'omp') {
+      return this.ompPromptReadinessByPtyId.get(ptyId)?.ready === true
+    }
     const hasCodexPrompt = findCodexReadyPromptIndex(waitText.toLowerCase()) !== null
     if (!ptyId) {
       return !hasCodexPrompt || this.isSettledReadyPromptPreview(waitText, lastOutputAt)

@@ -192,6 +192,8 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
       workingSequence: lifecycle?.workingSequence ?? 0,
+      ompInputSequence: this.ompPromptReadinessByPtyId.get(ptyId)?.submittedSequence ?? 0,
+      ompInputFingerprint: this.ompPromptReadinessByPtyId.get(ptyId)?.submittedFingerprint ?? null,
       explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
       terminalWorkingSequence: this.agentPromptTerminalWorkingSequenceByPtyId.get(ptyId) ?? 0,
       outputSequence,

@@ -73,6 +73,10 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
   }
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+    // Raw chunks already apply readiness and command-finished frames in byte order.
+    if (!this.ptyTitleTrackersByPtyId.get(ptyId)?.applyingChunk) {
+      this.ompPromptReadinessByPtyId.get(ptyId)?.reset()
+    }
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return

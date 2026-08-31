@@ -191,6 +191,13 @@ export function buildPtyHostEnv(
       source: 'ORCA_OMP_SOURCE_AGENT_DIR'
     })
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    // Why: prompt submission waits for OMP's composer-ready OSC marker even
+    // when status hooks are disabled. Reinstall only that profile-owned
+    // sentinel for explicit OMP and bare shells; non-OMP launches retain the
+    // hooks-disabled contract and receive no OMP extension.
+    if (shouldPrepareOmpShadow) {
+      Object.assign(baseEnv, piTitlebarExtensionService.buildOmpPromptReadinessEnv())
+    }
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
   }

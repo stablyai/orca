@@ -15,6 +15,9 @@ export type AgentPromptActivity = Readonly<{
   generation: number
   permissionSequence: number
   workingSequence: number
+  /** OMP receipts bind a real interactive input to the same agent-start prompt. */
+  ompInputSequence?: number
+  ompInputFingerprint?: string | null
   /** When the hook's current `working` turn began; reaches the runtime with no window and no
    *  title coverage. Pinned across same-state pings, so a refresh alone cannot move it. */
   explicitWorkingStartedAt: number | null
@@ -34,6 +37,7 @@ type AgentPromptVerificationOptions = {
   readActivity: () => AgentPromptActivity
   timeoutMs?: number
   signal?: AbortSignal
+  expectedOmpPromptFingerprint?: string
 }
 
 export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undefined): number {
@@ -79,7 +83,9 @@ export async function verifyAgentPromptSubmission(
     const current = options.readActivity()
     assertSamePromptGeneration(options.baseline, current)
     assertPromptNotBlocked(options.baseline, current)
-    if (agentPromptEffectObserved(options.baseline, current)) {
+    if (
+      agentPromptEffectObserved(options.baseline, current, options.expectedOmpPromptFingerprint)
+    ) {
       return
     }
     await waitForAgentPromptPoll(options.signal)
@@ -88,7 +94,7 @@ export async function verifyAgentPromptSubmission(
   const current = options.readActivity()
   assertSamePromptGeneration(options.baseline, current)
   assertPromptNotBlocked(options.baseline, current)
-  if (agentPromptEffectObserved(options.baseline, current)) {
+  if (agentPromptEffectObserved(options.baseline, current, options.expectedOmpPromptFingerprint)) {
     return
   }
   throw new Error(AGENT_PROMPT_STALLED_ERROR)
@@ -96,8 +102,18 @@ export async function verifyAgentPromptSubmission(
 
 function agentPromptEffectObserved(
   baseline: AgentPromptActivity,
-  current: AgentPromptActivity
+  current: AgentPromptActivity,
+  expectedOmpPromptFingerprint?: string
 ): boolean {
+  // Why: autonomous OMP turns also emit working titles/status/before_agent_start.
+  // Only a fresh receipt for this exact interactive prompt proves our input landed.
+  if (baseline.agent === 'omp' || current.agent === 'omp') {
+    return (
+      expectedOmpPromptFingerprint !== undefined &&
+      current.ompInputFingerprint === expectedOmpPromptFingerprint &&
+      (current.ompInputSequence ?? 0) > (baseline.ompInputSequence ?? 0)
+    )
+  }
   if (baseline.agent === 'codex' || current.agent === 'codex') {
     return current.terminalWorkingSequence > baseline.terminalWorkingSequence
   }
