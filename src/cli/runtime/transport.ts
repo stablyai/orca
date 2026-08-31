@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
-import { RuntimeClientError, type RuntimeRpcResponse } from './types'
+import { RuntimeClientError, RuntimeTransportError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 
 export async function sendRequest<TResult>(
@@ -66,12 +66,17 @@ export async function sendRequest<TResult>(
     }
 
     socket.setEncoding('utf8')
-    socket.once('error', () => {
+    // Why: STA-3969 — the errno is the whole diagnosis (ENOENT = endpoint gone,
+    // EACCES = visible but barred), so keep it instead of collapsing every
+    // connect failure into one message the caller cannot act on.
+    socket.once('error', (error: NodeJS.ErrnoException) => {
       finish({
         ok: false,
-        error: new RuntimeClientError(
+        error: new RuntimeTransportError(
           'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
+          'Could not connect to the running Orca app. Restart Orca and try again.',
+          'connect',
+          error.code ?? null
         )
       })
     })
@@ -82,9 +87,10 @@ export async function sendRequest<TResult>(
     socket.once('close', () => {
       finish({
         ok: false,
-        error: new RuntimeClientError(
+        error: new RuntimeTransportError(
           'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+          'The Orca runtime closed the connection before responding. Restart Orca and try again.',
+          'peer_closed'
         )
       })
     })

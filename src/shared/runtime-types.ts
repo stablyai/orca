@@ -109,6 +109,8 @@ export type {
 } from './runtime-capability-degradation'
 export type {
   CliRuntimeState,
+  CliRuntimeUnreachableCode,
+  CliRuntimeUnreachableReason,
   CliStatusResult,
   DeviceScope,
   RuntimeBrowserDriverState,

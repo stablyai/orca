@@ -100,6 +100,28 @@ export type CliRuntimeState =
   | 'ready'
   | 'graph_not_ready'
   | 'stale_bootstrap'
+  // Why: STA-3969 — the CLI reached a definite failure talking to a published
+  // endpoint. Per docs/reference/ssh-execution-boundary.md a socket that failed
+  // is not an observation of the runtime, so it may not be reported as 'starting'.
+  | 'unreachable'
+
+export type CliRuntimeUnreachableCode =
+  | 'endpoint_missing'
+  | 'endpoint_permission_denied'
+  | 'connection_refused'
+  | 'connection_closed'
+  | 'request_timeout'
+  | 'request_rejected'
+  | 'invalid_response'
+  | 'unknown'
+
+export type CliRuntimeUnreachableReason = {
+  code: CliRuntimeUnreachableCode
+  message: string
+  endpoint: string
+  endpointKind: 'unix' | 'named-pipe'
+  osErrorCode?: string
+}
 
 export type CliStatusResult = {
   target?: { kind: 'local' } | { kind: 'environment'; environment: string }
@@ -116,9 +138,12 @@ export type CliStatusResult = {
     remoteUpdateSupport?: RemoteServerUpdateSupport
     capabilities?: RuntimeCapability[]
     degradations?: RuntimeDegradation[]
+    // Why: present exactly when state is 'unreachable' — the cause is the whole
+    // point of the state, and without it the caller is back to guessing.
+    unreachableReason?: CliRuntimeUnreachableReason
   }
   graph: {
-    state: RuntimeGraphStatus | 'not_running' | 'starting'
+    state: RuntimeGraphStatus | 'not_running' | 'starting' | 'unreachable'
   }
 }
 

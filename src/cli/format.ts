@@ -246,7 +246,15 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
-    `graphState: ${status.graph.state}`
+    `graphState: ${status.graph.state}`,
+    // Why: STA-3969 — an unreachable runtime is only actionable if the plain-text
+    // output carries the cause, not just the state word.
+    ...(status.runtime.unreachableReason
+      ? [
+          `unreachableCode: ${status.runtime.unreachableReason.code}`,
+          `unreachableDetail: ${status.runtime.unreachableReason.message}`
+        ]
+      : [])
   ].join('\n')
 }
 

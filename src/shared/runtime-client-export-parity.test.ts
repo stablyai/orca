@@ -68,6 +68,8 @@ type RuntimeTypeInventory = [
   Runtime.BrowserViewportResult,
   Runtime.BrowserWaitResult,
   Runtime.CliRuntimeState,
+  Runtime.CliRuntimeUnreachableCode,
+  Runtime.CliRuntimeUnreachableReason,
   Runtime.CliStatusResult,
   Runtime.ComputerActionMetadata,
   Runtime.ComputerActionResult,

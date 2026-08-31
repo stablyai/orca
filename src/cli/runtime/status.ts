@@ -7,6 +7,9 @@ import {
   resolveDesktopWindowStatus
 } from '../../shared/cli-app-status-projection'
 import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import { classifyLocalRuntimeUnreachable } from './local-runtime-unreachable-reason'
+
+const STATUS_REQUEST_TIMEOUT_MS = 1000
 
 export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
@@ -36,7 +39,12 @@ export async function getCliStatus(
   }
 
   try {
-    const response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
+    const response = await sendRequest<RuntimeStatus>(
+      metadata,
+      'status.get',
+      undefined,
+      STATUS_REQUEST_TIMEOUT_MS
+    )
     if (response.ok === false) {
       throw new RuntimeRpcFailureError(response)
     }
@@ -63,21 +71,31 @@ export async function getCliStatus(
         state: graphState
       }
     })
-  } catch {
+  } catch (error) {
     const running = isProcessRunning(metadata.pid)
+    if (!running) {
+      return buildCliStatusResponse({
+        app: { running: false, pid: null },
+        runtime: { state: 'stale_bootstrap', reachable: false, runtimeId: null },
+        graph: { state: 'not_running' }
+      })
+    }
+    // Why: STA-3969 — metadata naming this endpoint is only written after the
+    // runtime's transport is listening, so a live app plus a failed request is a
+    // reachability failure, never a start in progress. Report the cause.
     return buildCliStatusResponse({
-      app: {
-        running,
-        pid: running ? metadata.pid : null
-      },
+      app: { running: true, pid: metadata.pid },
       runtime: {
-        state: running ? 'starting' : 'stale_bootstrap',
+        state: 'unreachable',
         reachable: false,
-        runtimeId: null
+        runtimeId: null,
+        unreachableReason: classifyLocalRuntimeUnreachable(
+          error,
+          transport,
+          STATUS_REQUEST_TIMEOUT_MS
+        )
       },
-      graph: {
-        state: running ? 'starting' : 'not_running'
-      }
+      graph: { state: 'unreachable' }
     })
   }
 }
