@@ -75,6 +75,9 @@ function getLinkedReviewNumberForProvider(
       return worktree.linkedAzureDevOpsPR ?? null
     case 'gitea':
       return worktree.linkedGiteaPR ?? null
+    // Custom-server reviews aren't persisted by number (discovered by branch).
+    case 'custom':
+      return null
     case 'unsupported':
       return null
   }

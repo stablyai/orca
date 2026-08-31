@@ -6,7 +6,8 @@ import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 export function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
-  return review.provider === 'gitlab' ? 'MR' : 'PR'
+  // Custom servers are GitLab-compatible in v1, so they use merge-request copy.
+  return review.provider === 'gitlab' || review.provider === 'custom' ? 'MR' : 'PR'
 }
 
 export function getProviderName(review: WorktreeCardPrDisplay): string {
@@ -21,6 +22,9 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
   }
   if (review.provider === 'gitea') {
     return 'Gitea'
+  }
+  if (review.provider === 'custom') {
+    return 'Custom git server'
   }
   return 'GitHub'
 }
@@ -72,7 +76,9 @@ export function ReviewIcon({
   variant?: 'provider' | 'generic'
 }): React.JSX.Element {
   const providerIcon =
-    variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+    variant === 'provider' && (review.provider === 'gitlab' || review.provider === 'custom')
+      ? GitMerge
+      : PullRequestIcon
   const Icon = getReviewStateIcon(review.state) ?? providerIcon
   return createElement(Icon, {
     className: cn(className, getCheckTone(review) ?? getStateTone(review.state))

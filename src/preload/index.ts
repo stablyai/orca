@@ -2230,6 +2230,14 @@ const api = {
       ipcRenderer.invoke('localhostWorktreeLabels:register', args)
   } satisfies PreloadApi['localhostWorktreeLabels'],
 
+  customGitServer: {
+    list: () => ipcRenderer.invoke('customGitServer:list'),
+    save: (draft) => ipcRenderer.invoke('customGitServer:save', draft),
+    remove: (args) => ipcRenderer.invoke('customGitServer:remove', args),
+    test: (draft) => ipcRenderer.invoke('customGitServer:test', draft),
+    status: () => ipcRenderer.invoke('customGitServer:status')
+  } satisfies PreloadApi['customGitServer'],
+
   keybindings: {
     get: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:get'),
     ensureFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:ensureFile'),

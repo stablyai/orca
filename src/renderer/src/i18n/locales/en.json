@@ -139,6 +139,48 @@
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
       }
     },
+
+    "customGitServer": {
+      "title": "Custom git servers",
+      "description": "Add self-hosted or internal git servers (e.g. git.example.com) for pull/merge requests and review status.",
+      "add": "Add custom git server",
+      "addHint": "Enter the server host, API base URL, and a token.",
+      "checking": "Checking configured servers…",
+      "edit": "Edit {{value0}}",
+      "providerName": "Custom git server",
+      "field": {
+        "name": "Name",
+        "host": "Host",
+        "apiBaseUrl": "API base URL",
+        "apiType": "API type",
+        "token": "Token"
+      },
+      "placeholder": {
+        "name": "My Git Server",
+        "host": "git.example.com",
+        "apiBaseUrl": "https://git.example.com"
+      },
+      "token": {
+        "keep": "Leave blank to keep existing token",
+        "new": "Personal access token",
+        "help": "Stored locally and encrypted when your OS keychain is available."
+      },
+      "test": {
+        "ok": "Connection succeeded",
+        "okAccount": "Connected as {{value0}}"
+      },
+      "action": {
+        "add": "Add custom git server",
+        "cancel": "Cancel",
+        "edit": "Edit",
+        "remove": "Remove",
+        "save": "Save",
+        "test": "Test connection"
+      },
+      "error": {
+        "remove": "Failed to remove server"
+      }
+    },
     "browser": {
       "clientHostedRemote": {
         "title": "Host remote browser pages on this device",

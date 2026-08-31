@@ -38,7 +38,7 @@ const HostedReviewCreationEligibility = z.object({
 const HostedReviewCreate = z.object({
   repo: requiredString('Missing repo selector'),
   worktree: z.string().min(1, 'Missing worktree selector').optional(),
-  provider: z.enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported']),
+  provider: z.enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'custom', 'unsupported']),
   base: requiredString('Missing base branch'),
   head: z.string().optional(),
   title: requiredString('Missing title'),

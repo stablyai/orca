@@ -3,6 +3,7 @@ import type { HostedReviewCreationProvider } from '../../shared/hosted-review-cr
 import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-request-creation'
 import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-request-creation'
 import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
+import { isCustomGitServerAuthenticatedForRepo } from '../custom-git-server/repository-ref'
 import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
 import { acquire, ghExecFileAsync, release } from '../github/gh-utils'
 import { getProjectSlug } from '../gitlab/client'
@@ -105,6 +106,16 @@ export function reviewCopy(provider: HostedReviewProvider): {
       authInstruction: 'Connect Bitbucket in Settings > Integrations'
     }
   }
+  if (provider === 'custom') {
+    // GitLab-compatible custom servers use merge requests; token lives in the
+    // per-server credential store, configured from Settings → Integrations.
+    return {
+      shortLabel: 'MR',
+      reviewLabel: 'merge request',
+      providerName: 'custom git server',
+      authInstruction: 'Add a token for this server in Settings → Integrations'
+    }
+  }
   return {
     shortLabel: 'PR',
     reviewLabel: 'pull request',
@@ -132,6 +143,13 @@ export async function isProviderAuthenticated(
     // Why: falling through to the GitHub check made Create PR unusable for
     // anyone with Bitbucket connected but no `gh auth login`.
     return isBitbucketReviewCreationAuthenticated()
+  }
+  if (provider === 'custom') {
+    return isCustomGitServerAuthenticatedForRepo(
+      repoPath,
+      connectionId,
+      getHostedReviewLocalGitOptions(options)
+    )
   }
   return isGitHubAuthenticated(repoPath, connectionId, options)
 }

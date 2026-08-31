@@ -54,6 +54,7 @@ vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsAuthStatus: getAzureDevOpsAuthStatusMock
 }))
 vi.mock('../gitea/client', () => ({ getGiteaAuthStatus: getGiteaAuthStatusMock }))
+vi.mock('../custom-git-server/store', () => ({ getCustomGitServerStatuses: async () => [] }))
 
 // Isolate the subprocess-spawn assertion from the fs-based install-dir fallback.
 vi.mock('./local-agent-install-dir-detection', () => ({

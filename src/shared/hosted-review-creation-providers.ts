@@ -6,6 +6,7 @@ export type HostedReviewCreationProvider =
   | 'bitbucket'
   | 'azure-devops'
   | 'gitea'
+  | 'custom'
 
 export function supportsHostedReviewCreation(
   provider: HostedReviewProvider | null | undefined
@@ -15,7 +16,8 @@ export function supportsHostedReviewCreation(
     provider === 'gitlab' ||
     provider === 'bitbucket' ||
     provider === 'azure-devops' ||
-    provider === 'gitea'
+    provider === 'gitea' ||
+    provider === 'custom'
   )
 }
 

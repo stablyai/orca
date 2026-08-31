@@ -169,6 +169,8 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
         githubHeadRef(baseRepo, headRepo, headBranch)
       )}?expand=1`
     case 'gitlab':
+    case 'custom':
+      // Custom servers are GitLab-compatible in v1 — same new-MR URL shape.
       // Why: the source branch lives in the head repo, so the New-MR page must
       // be opened on that project — a fork's branch is invisible to the base
       // project and its /-/merge_requests/new page would 404 the source_branch.

@@ -13,6 +13,7 @@ import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
 import { createPreflightSlice } from './slices/preflight'
 import { createJiraSlice } from './slices/jira'
+import { createCustomGitServerSlice } from './slices/custom-git-server'
 import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
@@ -59,6 +60,7 @@ import {
 } from '@/lib/renderer-memory-profile'
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 
+
 export const useAppStore = create<AppState>()(
   withReactCommitCascadeWriteProbe((...a) => {
     // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
@@ -77,6 +79,7 @@ export const useAppStore = create<AppState>()(
       ...createLinearSlice(...a),
       ...createPreflightSlice(...a),
       ...createJiraSlice(...a),
+      ...createCustomGitServerSlice(...a),
       ...createEditorSlice(...a),
       ...createStatsSlice(...a),
       ...createMemorySlice(...a),

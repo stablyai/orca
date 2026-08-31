@@ -176,6 +176,7 @@ describe('forge provider interface', () => {
     expect(
       FORGE_PROVIDERS.map((provider) => [provider.id, provider.supportsReviewCreation])
     ).toEqual([
+      ['custom', true],
       ['gitlab', true],
       ['github', true],
       ['bitbucket', true],

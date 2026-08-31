@@ -31,6 +31,18 @@ export function localizedHostedReviewCopy(
       providerName: translate('auto.i18n.hostedReview.copy.91b5c8d7e6', 'GitLab')
     }
   }
+  if (provider === 'custom') {
+    // Custom servers are GitLab-compatible in v1, so they use merge-request copy.
+    return {
+      shortLabel: translate('auto.i18n.hostedReview.copy.c4e8f1a2b9', 'MR'),
+      reviewLabel: translate('auto.i18n.hostedReview.copy.b3d7e0f1a8', 'merge request'),
+      titleLabel: translate('auto.i18n.hostedReview.copy.a2c6d9e0f7', 'Merge Request'),
+      providerName: translate(
+        'settings.customGitServer.providerName',
+        'Custom git server'
+      )
+    }
+  }
   if (provider === 'azure-devops') {
     return {
       shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
