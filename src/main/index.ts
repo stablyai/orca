@@ -344,7 +344,10 @@ import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/head
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { createRuntimeAutomationRunTerminalObserver } from './automations/runtime-terminal-run-observer'
 import { AgentAwakeService } from './agent-awake-service'
-import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
+import {
+  normalizeComputerAwakeMode,
+  normalizeMacosAwakeEngine
+} from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { stopStructuredAgentSessionRuntime } from './runtime/structured-agent-session-runtime'
@@ -386,7 +389,6 @@ import { startPreGoneProcessMetricsSampling } from './crash-reporting/process-go
 import { resolveExpectedTeardownScope } from './crash-reporting/expected-teardown-state'
 import {
   advanceSyntheticTitleSpinnerEntries,
-  getSyntheticTitleSpinnerPaneKeyToStop,
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
@@ -453,6 +455,13 @@ let pluginKillListService: PluginKillListService | null = null
 let pluginMarketplaceService: PluginMarketplaceService | null = null
 let pluginMarketplaceInstaller: PluginMarketplaceInstaller | null = null
 let keybindings: KeybindingService | null = null
+
+function disposeAgentAwakeService(): void {
+  unsubscribeAgentAwakeStatusChanges?.()
+  unsubscribeAgentAwakeStatusChanges = null
+  agentAwakeService?.dispose()
+  agentAwakeService = null
+}
 
 function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   pluginService?.emitEvent(
@@ -2209,18 +2218,6 @@ registerPaneKeyTeardownListener((paneKey) => {
   stopSyntheticTitleSpinner(paneKey)
 })
 
-// Why: the spinner is a stand-in for a live hook status, so it must retire with the row it
-// stands in for — otherwise a pane whose status was cleared or dismissed keeps rotating a
-// working title long after the agent finished (#13890). Both paths are covered: the
-// pane-scoped clear fan-out, and user dismissal, which never routes through it.
-agentHookServer.subscribePaneStatusClear((clear) => {
-  const paneKey = getSyntheticTitleSpinnerPaneKeyToStop(clear)
-  if (paneKey) {
-    stopSyntheticTitleSpinner(paneKey)
-  }
-})
-agentHookServer.subscribeStatusDrop(stopSyntheticTitleSpinner)
-
 function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return
@@ -2601,6 +2598,12 @@ void app.whenReady().then(async () => {
       store.getSettings().keepComputerAwakeWhileAgentsRun
     )
   )
+  // Paired web cannot consume observation status, so headless serve keeps private assertions only.
+  if (!isServeMode) {
+    agentAwakeService.setMacosEngine(
+      normalizeMacosAwakeEngine(store.getSettings().computerAwakeMacosEngine)
+    )
+  }
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
@@ -3597,6 +3600,8 @@ void app.whenReady().then(async () => {
 
 // Why: app.exit() skips Electron quit events, so keep its log child from surviving forced exits.
 process.once('exit', stopTccPromptNotice)
+// Why: app.exit() also skips the committed quit phase; synchronous assertion cleanup is safe here.
+process.once('exit', disposeAgentAwakeService)
 
 app.on('before-quit', () => {
   if (isQuittingForUpdate()) {
@@ -3607,10 +3612,6 @@ app.on('before-quit', () => {
   isQuitting = true
   desktopRelayService?.fenceAndCloseNow()
   runtimeRpc?.setMobileRelayPairingProvider(null)
-  unsubscribeAgentAwakeStatusChanges?.()
-  unsubscribeAgentAwakeStatusChanges = null
-  agentAwakeService?.dispose()
-  agentAwakeService = null
   // Why: defer PTY cleanup to will-quit so the renderer captures scrollback before PTY-exit events unmount TerminalPane (dropping its capture callbacks).
   rateLimits?.stop()
 })
@@ -3635,6 +3636,7 @@ app.on('will-quit', (e) => {
   if (!quitTeardownStartGate.tryStart(e)) {
     return
   }
+  disposeAgentAwakeService()
   unsubscribeSystemResumeBroadcast?.()
   unsubscribeSystemResumeBroadcast = null
   // Why: renderer guards can still cancel before this committed phase; `log stream` must survive those vetoes.

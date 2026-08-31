@@ -15,6 +15,18 @@ async function getSettings(page: Page): Promise<GlobalSettings> {
   return page.evaluate(() => window.api.settings.get())
 }
 
+async function readAmphetamineInstalled(page: Page): Promise<boolean> {
+  await page.evaluate(() => window.api.agentAwake.probeAmphetamine())
+  const installed = await page.evaluate(async () => {
+    const status = await window.api.agentAwake.getStatus()
+    return status.amphetamineInstalled
+  })
+  if (typeof installed !== 'boolean') {
+    throw new Error('Amphetamine installation status remained unknown after an explicit probe')
+  }
+  return installed
+}
+
 async function setKeepAwake(page: Page, enabled: boolean): Promise<void> {
   await page.evaluate(async (enabled) => {
     const nextSettings = await window.api.settings.set({
@@ -223,5 +235,60 @@ test.describe('Agent awake setting', () => {
           stops: expect.arrayContaining(startedIds.map((id) => expect.objectContaining({ id })))
         })
       )
+  })
+})
+
+test.describe('macOS Amphetamine integration setting', () => {
+  test.skip(process.platform !== 'darwin', 'the Amphetamine integration is macOS only')
+
+  test.beforeEach(async ({ orcaPage }) => {
+    await waitForSessionReady(orcaPage)
+  })
+
+  test('shows the read-only integration and persists an installed choice', async ({ orcaPage }) => {
+    await openSettings(orcaPage)
+    await dismissTransientAnnouncement(orcaPage)
+    await orcaPage.getByPlaceholder('Search settings').fill('Amphetamine')
+
+    const integrationModes = orcaPage.getByRole('radiogroup', {
+      name: 'Amphetamine integration'
+    })
+    const integrationSetting = integrationModes.locator('xpath=ancestor::section[1]')
+    const builtInOnly = integrationModes.getByRole('radio', { name: 'Built-in only' })
+    const addAmphetamine = integrationModes.getByRole('radio', { name: 'Add Amphetamine' })
+    await expect(builtInOnly).toHaveAttribute('aria-checked', 'true')
+    await expect(addAmphetamine).toBeVisible()
+    await expect(integrationSetting).toContainText(
+      'When keep-awake is active, Orca uses Caffeinate.'
+    )
+    await expect(integrationSetting).toContainText(
+      'Closed-display behavior depends on Amphetamine and macOS settings.'
+    )
+
+    const installed = await readAmphetamineInstalled(orcaPage)
+    if (installed) {
+      await expect(addAmphetamine).not.toHaveAttribute('aria-disabled', 'true')
+      await addAmphetamine.click()
+      await expect(addAmphetamine).toHaveAttribute('aria-checked', 'true')
+      await expect
+        .poll(async () => (await getSettings(orcaPage)).computerAwakeMacosEngine, {
+          timeout: 5_000,
+          message: 'Amphetamine integration choice did not persist'
+        })
+        .toBe('amphetamine')
+    } else {
+      await expect(addAmphetamine).toHaveAttribute('aria-disabled', 'true')
+      await expect(integrationSetting).toContainText(
+        'Install Amphetamine to observe a session you start manually or with a Trigger.'
+      )
+      // Keep E2E read-only by proving the App Store action without activating it.
+      await expect(orcaPage.getByRole('button', { name: 'Get Amphetamine…' })).toBeVisible()
+      await expect(orcaPage.getByRole('button', { name: 'Check again' })).toBeVisible()
+    }
+
+    const proofPath = process.env.ORCA_AMPHETAMINE_SETTINGS_PROOF_PATH
+    if (proofPath) {
+      await integrationSetting.screenshot({ path: proofPath, animations: 'disabled' })
+    }
   })
 })

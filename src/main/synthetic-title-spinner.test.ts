@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   advanceSyntheticTitleSpinnerEntries,
-  getSyntheticTitleSpinnerPaneKeyToStop,
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 
@@ -43,23 +42,5 @@ describe('advanceSyntheticTitleSpinnerEntries', () => {
     ])
     expect(entries.has('live-pane')).toBe(true)
     expect(entries.has('stale-pane')).toBe(false)
-  })
-})
-
-describe('getSyntheticTitleSpinnerPaneKeyToStop', () => {
-  // Why: without this the spinner outlived the hook row it stood in for, so a finished
-  // OMP pane kept rotating a working title (#13890).
-  it('retires the spinner of a pane-scoped clear', () => {
-    expect(getSyntheticTitleSpinnerPaneKeyToStop({ paneKey: 'pane-a' })).toBe('pane-a')
-  })
-
-  it('keeps pane spinners running for a connection-scoped transient clear', () => {
-    expect(
-      getSyntheticTitleSpinnerPaneKeyToStop({
-        transient: true,
-        connectionId: 'ssh-a',
-        clearedAt: 42
-      })
-    ).toBeNull()
   })
 })

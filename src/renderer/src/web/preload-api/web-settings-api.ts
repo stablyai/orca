@@ -102,6 +102,7 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
     agentAwake: {
+      probeAmphetamine: async () => undefined,
       getStatus: async () => {
         const settings = getStoredSettings()
         return {

@@ -5,7 +5,7 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
-import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import {
   isFreshNonDoneAgentStatus,
   type AgentStatusEntry
@@ -40,13 +40,15 @@ function hasFreshActiveHookStatus(
   snapshot: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'agentType'> | undefined,
   explicitTitleAgentType: string | null
 ): boolean {
-  // Why: pick-a-winner ownership would treat a Pi idle title as a different
-  // agent than a live OMP hook. Same-group titles are wrapper frames, not reuse.
+  const activeHookAgentForTitle = resolveCompatibleAgentTypeForOwner(
+    snapshot?.agentType,
+    explicitTitleAgentType
+  )
   const titleNamesDifferentKnownAgent =
     explicitTitleAgentType &&
     snapshot?.agentType &&
     snapshot.agentType !== 'unknown' &&
-    !shareCompatibleTitleIdentityGroup(snapshot.agentType, explicitTitleAgentType)
+    activeHookAgentForTitle !== explicitTitleAgentType
   return Boolean(isFreshNonDoneAgentStatus(snapshot) && !titleNamesDifferentKnownAgent)
 }
 

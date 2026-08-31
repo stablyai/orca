@@ -1,5 +1,8 @@
 import { translate } from '@/i18n/i18n'
-import type { ComputerAwakeMode } from '../../../../shared/computer-awake-mode'
+import type {
+  AmphetamineUnavailableReason,
+  ComputerAwakeMode
+} from '../../../../shared/computer-awake-mode'
 import { searchKeywords } from './settings-search-keywords'
 
 const AGENT_AWAKE_TITLE_KEY = 'auto.components.settings.agent-awake-copy.modeTitle'
@@ -60,4 +63,43 @@ export function getAgentAwakeSearchKeywords(
         ])
       ]
     : keywords
+}
+
+export function getAmphetamineIntegrationTitle(): string {
+  return translate(
+    'auto.components.settings.AgentAwakeSetting.integrationTitle',
+    'Amphetamine integration'
+  )
+}
+
+export function getAmphetamineIntegrationDescription(
+  amphetamineInstalled?: boolean,
+  unavailableReason?: AmphetamineUnavailableReason
+): string {
+  if (amphetamineInstalled === false || unavailableReason === 'not-installed') {
+    return translate(
+      'auto.components.settings.AgentAwakeSetting.integrationDescriptionMissing',
+      'When keep-awake is active, Orca uses Caffeinate. Install Amphetamine to let Orca observe a session you start manually or with a Trigger; Orca never starts or stops it.'
+    )
+  }
+  if (unavailableReason === 'automation-denied') {
+    return translate(
+      'auto.components.settings.AgentAwakeSetting.integrationDescriptionDenied',
+      'When keep-awake is active, Orca uses Caffeinate. Orca only observes Amphetamine session activity. Allow Orca in System Settings › Privacy & Security › Automation, then check again.'
+    )
+  }
+  return translate(
+    'auto.components.settings.AgentAwakeSetting.integrationDescription',
+    'When keep-awake is active, Orca uses Caffeinate. Optionally observe a session you start manually or with an Amphetamine Trigger; Orca never starts or stops it.'
+  )
+}
+
+export function getAmphetamineIntegrationSearchKeywords(): string[] {
+  return searchKeywords([
+    { key: 'auto.components.settings.agents.search.66b6b82eb4', fallback: 'awake' },
+    { key: 'auto.components.settings.agents.search.845ad9128a', fallback: 'power' },
+    { key: 'auto.components.settings.agents.search.caffeinate', fallback: 'Caffeinate' },
+    { key: 'auto.components.settings.agents.search.amphetamine', fallback: 'Amphetamine' },
+    { key: 'auto.components.settings.agents.search.macos', fallback: 'macOS' }
+  ])
 }

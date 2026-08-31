@@ -8,35 +8,20 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import {
-  getJiraCreateAllowedValueLabel,
-  isJiraScalarUserCreateField
-} from '@/components/task-page-jira-create-fields'
-import { JiraUserPicker } from '@/components/jira-user-picker'
+import { getJiraCreateAllowedValueLabel } from '@/components/task-page-jira-create-fields'
 import { translate } from '@/i18n/i18n'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { JiraCreateField, JiraUser } from '../../../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { JiraCreateField } from '../../../../../shared/jira-types'
 
-/** Renders the required create fields, choosing a picker, select, or text input per schema. */
 export function NewJiraIssueCustomFields({
   visibleJiraCreateFields,
   newJiraIssueCustomFieldValues,
   setNewJiraIssueCustomFieldValues,
-  newJiraIssueSubmitting,
-  jiraUserFieldSelections,
-  setJiraUserFieldSelections,
-  providerSettings,
-  siteId
+  newJiraIssueSubmitting
 }: {
   visibleJiraCreateFields: JiraCreateField[]
   newJiraIssueCustomFieldValues: Record<string, string>
   setNewJiraIssueCustomFieldValues: React.Dispatch<React.SetStateAction<Record<string, string>>>
   newJiraIssueSubmitting: boolean
-  jiraUserFieldSelections: Record<string, JiraUser>
-  setJiraUserFieldSelections: React.Dispatch<React.SetStateAction<Record<string, JiraUser>>>
-  providerSettings: TaskSourceContext | GlobalSettings | null
-  siteId?: string | null
 }): React.JSX.Element | null {
   if (visibleJiraCreateFields.length === 0) {
     return null
@@ -48,23 +33,7 @@ export function NewJiraIssueCustomFields({
         return (
           <div key={field.key} className="flex min-w-0 flex-col gap-1">
             <label className="text-[11px] font-medium text-muted-foreground">{field.name}</label>
-            {isJiraScalarUserCreateField(field) && !field.allowedValues?.length ? (
-              <JiraUserPicker
-                providerSettings={providerSettings}
-                siteId={siteId}
-                value={fieldValue}
-                selectedUser={jiraUserFieldSelections[field.key] ?? null}
-                onSelect={(user) => {
-                  setNewJiraIssueCustomFieldValues((prev) => ({
-                    ...prev,
-                    [field.key]: user.accountId
-                  }))
-                  setJiraUserFieldSelections((prev) => ({ ...prev, [field.key]: user }))
-                }}
-                disabled={newJiraIssueSubmitting}
-                label={field.name}
-              />
-            ) : field.allowedValues?.length && field.schema?.type !== 'array' ? (
+            {field.allowedValues?.length && field.schema?.type !== 'array' ? (
               <Select
                 value={fieldValue}
                 onValueChange={(value) =>

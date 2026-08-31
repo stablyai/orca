@@ -7805,7 +7805,10 @@
             "agentPermissions": "智能体权限",
             "agentPermissionsDescription": "在 Yolo 和手动之间切换智能体权限默认值。",
             "agentRuntime": "智能体运行时",
-            "agentRuntimeDescription": "选择默认在 Windows 还是 WSL 中检测并启动智能体。"
+            "agentRuntimeDescription": "选择默认在 Windows 还是 WSL 中检测并启动智能体。",
+            "caffeinate": "Caffeinate",
+            "amphetamine": "Amphetamine",
+            "macos": "macOS"
           }
         },
         "appearance": {

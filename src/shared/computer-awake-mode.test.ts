@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { computerAwakeSettingsForMode, normalizeComputerAwakeMode } from './computer-awake-mode'
+import {
+  computerAwakeSettingsForMacosEngine,
+  computerAwakeSettingsForMode,
+  normalizeComputerAwakeMode,
+  normalizeMacosAwakeEngine
+} from './computer-awake-mode'
 
 describe('computer awake mode', () => {
   it('maps the legacy enabled setting to Auto', () => {
@@ -28,6 +33,22 @@ describe('computer awake mode', () => {
     expect(computerAwakeSettingsForMode('off')).toEqual({
       computerAwakeMode: 'off',
       keepComputerAwakeWhileAgentsRun: false
+    })
+  })
+
+  it('normalizes the persisted macOS integration preference', () => {
+    expect(normalizeMacosAwakeEngine('amphetamine')).toBe('amphetamine')
+    expect(normalizeMacosAwakeEngine('caffeinate')).toBe('caffeinate')
+    expect(normalizeMacosAwakeEngine(undefined)).toBe('caffeinate')
+    expect(normalizeMacosAwakeEngine('unknown')).toBe('caffeinate')
+  })
+
+  it('writes the compatible macOS integration field', () => {
+    expect(computerAwakeSettingsForMacosEngine('amphetamine')).toEqual({
+      computerAwakeMacosEngine: 'amphetamine'
+    })
+    expect(computerAwakeSettingsForMacosEngine('caffeinate')).toEqual({
+      computerAwakeMacosEngine: 'caffeinate'
     })
   })
 })

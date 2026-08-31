@@ -380,6 +380,17 @@ describe('registerSettingsHandlers', () => {
     expect(agentAwakeService.setMode).toHaveBeenCalledWith('auto')
   })
 
+  it('exposes an explicit Amphetamine installation re-probe', async () => {
+    const probeAmphetamine = vi.fn().mockResolvedValue(true)
+    registerSettingsHandlers(store as never, { probeAmphetamine } as never)
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'agentAwake:probeAmphetamine'
+    )?.[1] as () => Promise<boolean | undefined>
+
+    await expect(handler()).resolves.toBe(true)
+    expect(probeAmphetamine).toHaveBeenCalledOnce()
+  })
+
   it('does not notify the agent awake service for unrelated setting changes', () => {
     const agentAwakeService = { setMode: vi.fn() }
     store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })

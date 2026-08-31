@@ -262,13 +262,29 @@ describe('startup ordering', () => {
     const willQuit = source.slice(willQuitStart, windowAllClosedStart)
     const commitIndex = willQuit.indexOf('quitTeardownStartGate.tryStart(e)')
     const disposeIndex = willQuit.indexOf('unsubscribeSystemResumeBroadcast?.()')
+    const awakeDisposeIndex = willQuit.indexOf('disposeAgentAwakeService()')
 
     expect(beforeQuitStart).toBeGreaterThanOrEqual(0)
     expect(willQuitStart).toBeGreaterThan(beforeQuitStart)
     expect(windowAllClosedStart).toBeGreaterThan(willQuitStart)
     expect(beforeQuit).not.toContain('unsubscribeSystemResumeBroadcast')
+    expect(beforeQuit).not.toContain('disposeAgentAwakeService')
     expect(commitIndex).toBeGreaterThanOrEqual(0)
     expect(disposeIndex).toBeGreaterThan(commitIndex)
+    expect(awakeDisposeIndex).toBeGreaterThan(commitIndex)
+    expect(source).toContain("process.once('exit', disposeAgentAwakeService)")
+  })
+
+  it('keeps optional Amphetamine observation out of headless serve', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const awakeStart = source.indexOf('agentAwakeService = new AgentAwakeService()')
+    const awakeEnd = source.indexOf('agentAwakeService.setStatuses([])', awakeStart)
+    const awakeInitialization = source.slice(awakeStart, awakeEnd)
+
+    expect(awakeStart).toBeGreaterThanOrEqual(0)
+    expect(awakeEnd).toBeGreaterThan(awakeStart)
+    expect(awakeInitialization).toContain('if (!isServeMode) {')
+    expect(awakeInitialization).toContain('agentAwakeService.setMacosEngine(')
   })
 
   it('joins structured agent sessions to the committed quit barrier', () => {

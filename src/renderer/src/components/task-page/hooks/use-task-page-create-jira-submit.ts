@@ -3,10 +3,7 @@ import { toast } from 'sonner'
 
 import { translate } from '@/i18n/i18n'
 import { jiraCreateIssue, jiraGetIssue } from '@/runtime/runtime-jira-client'
-import {
-  buildJiraCreateCustomFields,
-  getJiraUserCreateFieldKeys
-} from '@/components/task-page-jira-create-fields'
+import { buildJiraCreateCustomFields } from '@/components/task-page-jira-create-fields'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type {
   JiraCreateField,
@@ -16,7 +13,6 @@ import type {
 } from '../../../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 
-/** Builds the create payload and submits it, flagging which keys hold user ids. */
 export function useTaskPageCreateJiraSubmit({
   newJiraIssueTargetProject,
   newJiraIssueTargetType,
@@ -76,7 +72,6 @@ export function useTaskPageCreateJiraSubmit({
       visibleJiraCreateFields,
       newJiraIssueCustomFieldValues
     )
-    const userFieldKeys = getJiraUserCreateFieldKeys(visibleJiraCreateFields)
     setNewJiraIssueSubmitting(true)
     const submitProviderRuntimeContextKey = providerRuntimeContextKey
     try {
@@ -86,8 +81,7 @@ export function useTaskPageCreateJiraSubmit({
         issueTypeId: newJiraIssueTargetType.id,
         title,
         description: newJiraIssueBody || undefined,
-        customFields,
-        userFieldKeys: userFieldKeys.length > 0 ? userFieldKeys : undefined
+        customFields
       })
       if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
         return

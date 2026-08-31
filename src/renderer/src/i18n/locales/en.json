@@ -3894,10 +3894,28 @@
               }
             }
           },
+          "AwakeEnginePicker": {
+            "label": "Amphetamine integration",
+            "builtInOnly": "Built-in only",
+            "caffeinateDescription": "When keep-awake is active, Orca uses Caffeinate.",
+            "addAmphetamine": "Add Amphetamine",
+            "amphetamineDescription": "Observes a session you start manually or with a Trigger. Closed-display behavior depends on Amphetamine and macOS settings.",
+            "missingDescription": "Install Amphetamine to observe a session you start manually or with a Trigger. Closed-display behavior depends on Amphetamine and macOS settings.",
+            "automationDenied": "When keep-awake is active, Orca uses Caffeinate. Orca only observes Amphetamine session activity. Allow Orca in System Settings \u203a Privacy & Security \u203a Automation, then check again.",
+            "getAmphetamine": "Get Amphetamine…",
+            "checkAgain": "Check again",
+            "checking": "Checking…",
+            "checkFailed": "Couldn’t check for Amphetamine. Try again.",
+            "openFailed": "Couldn’t open the Amphetamine listing. Try again."
+          },
           "CaffeinateStatusSegment": {
             "active": "Active",
             "inactive": "Inactive",
-            "ariaLabel": "{{title}}, {{status}}",
+            "ariaLabel": "Caffeinate, {{status}}",
+            "ariaLabelEngine": "{{engine}}, {{status}}",
+            "title": "Caffeinate",
+            "keepAwake": "Keep awake",
+            "caffeinateWithAmphetamine": "Caffeinate + Amphetamine",
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
@@ -8766,6 +8784,9 @@
             "719f53350c": "path",
             "839e82c81f": "detect",
             "f622b8eb2a": "linux",
+            "caffeinate": "Caffeinate",
+            "amphetamine": "Amphetamine",
+            "macos": "macOS",
             "d608654c03": "wsl",
             "77c02fa3c3": "windows",
             "d2952dfd74": "location",
@@ -11415,7 +11436,18 @@
         "AgentAwakeSetting": {
           "on": "On",
           "auto": "Agent",
-          "off": "Off"
+          "off": "Off",
+          "builtInOnly": "Built-in only",
+          "addAmphetamine": "Add Amphetamine",
+          "integrationTitle": "Amphetamine integration",
+          "integrationDescription": "When keep-awake is active, Orca uses Caffeinate. Add Amphetamine to observe a session you start manually or with a Trigger. Closed-display behavior depends on Amphetamine and macOS settings.",
+          "integrationDescriptionMissing": "When keep-awake is active, Orca uses Caffeinate. Install Amphetamine to observe a session you start manually or with a Trigger. Closed-display behavior depends on Amphetamine and macOS settings.",
+          "integrationDescriptionDenied": "When keep-awake is active, Orca uses Caffeinate. Orca only observes Amphetamine session activity. Allow Orca in System Settings \u203a Privacy & Security \u203a Automation, then check again.",
+          "getAmphetamine": "Get Amphetamine…",
+          "checkAgain": "Check again",
+          "checking": "Checking…",
+          "checkFailed": "Couldn’t check for Amphetamine. Try again.",
+          "openFailed": "Couldn’t open the Amphetamine listing. Try again."
         },
         "shareSkills": {
           "title": "Share Skills",
@@ -15273,18 +15305,6 @@
                   }
                 }
               }
-            },
-            "browser": {
-              "page": {
-                "annotation": {
-                  "tray": {
-                    "09a7c1df70": "Edit annotation {{value0}}",
-                    "c16f932cb3": "Save",
-                    "024467ceac": "Cancel",
-                    "449d2c2629": "Annotation intent"
-                  }
-                }
-              }
             }
           },
           "navigate": {
@@ -16536,11 +16556,6 @@
     }
   },
   "components": {
-    "jiraUserPicker": {
-      "select": "Select {{value0}}",
-      "search": "Search users",
-      "empty": "No users found"
-    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",

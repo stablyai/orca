@@ -1,12 +1,20 @@
-import { powerMonitor, powerSaveBlocker } from 'electron'
+import { powerMonitor } from 'electron'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import {
   normalizeComputerAwakeMode,
   type ComputerAwakeMode,
-  type ComputerAwakeStatus
+  type ComputerAwakeStatus,
+  type MacosAwakeEngine
 } from '../shared/computer-awake-mode'
+import { AgentAwakePowerSaveBlocker, type PowerSaveBlocker } from './agent-awake-power-save-blocker'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
-import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
+import {
+  MacosAwakeEngineRouter,
+  type AmphetamineSessionObserver,
+  type PlatformAwakeAssertion
+} from './macos-awake-engine'
+
+export type { AmphetamineSessionObserver, PlatformAwakeAssertion }
 
 export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
 
@@ -16,18 +24,6 @@ export type AgentAwakeStatus = {
   observedInCurrentRuntime: boolean
 }
 
-type PowerSaveBlocker = {
-  start: (type: 'prevent-app-suspension' | 'prevent-display-sleep') => number
-  stop: (id: number) => void
-  isStarted: (id: number) => boolean
-}
-
-type PlatformAwakeAssertion = {
-  start: (reason: string) => void
-  stop: (reason: string) => void
-  dispose: () => void
-}
-
 type PowerMonitorEventSource = {
   on: (event: 'resume', listener: () => void) => void
   off: (event: 'resume', listener: () => void) => void
@@ -35,32 +31,35 @@ type PowerMonitorEventSource = {
 
 type Logger = Pick<Console, 'debug' | 'warn'>
 
-type AgentAwakeServiceOptions = {
+export type AgentAwakeServiceOptions = {
   blocker?: PowerSaveBlocker
+  detectAmphetamine?: (signal?: AbortSignal) => Promise<boolean | undefined>
   linuxAssertion?: PlatformAwakeAssertion
   logger?: Logger
+  macosAmphetamineObserver?: AmphetamineSessionObserver
   macosAssertion?: PlatformAwakeAssertion
   now?: () => number
+  platform?: NodeJS.Platform
   powerMonitor?: PowerMonitorEventSource | null
 }
 
 export class AgentAwakeService {
+  private disposed = false
   private mode: ComputerAwakeMode = 'off'
   private statuses: AgentAwakeStatus[] = []
-  private blockerId: number | null = null
   private staleTimer: ReturnType<typeof setTimeout> | null = null
   private readonly statusListeners = new Set<(status: ComputerAwakeStatus) => void>()
   private lastPublishedStatus: ComputerAwakeStatus | null = null
-  private readonly blocker: PowerSaveBlocker
+  private readonly blocker: AgentAwakePowerSaveBlocker
   private readonly linuxAssertion: PlatformAwakeAssertion
   private readonly logger: Logger
-  private readonly macosAssertion: PlatformAwakeAssertion
+  private readonly macos: MacosAwakeEngineRouter
   private readonly now: () => number
   private readonly unsubscribeResume: (() => void) | null
 
   constructor(options: AgentAwakeServiceOptions = {}) {
-    this.blocker = options.blocker ?? powerSaveBlocker
     this.logger = options.logger ?? console
+    this.blocker = new AgentAwakePowerSaveBlocker(options.blocker, this.logger)
     this.now = options.now ?? Date.now
     // Windows lid close is intentionally not modeled as an assertion here:
     // keeping it awake requires mutating the user's global power plan.
@@ -71,13 +70,15 @@ export class AgentAwakeService {
         now: this.now,
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
-    this.macosAssertion =
-      options.macosAssertion ??
-      new MacosSystemSleepAssertion({
-        logger: this.logger,
-        now: this.now,
-        onUnexpectedFailure: (reason) => this.refresh(reason)
-      })
+    this.macos = new MacosAwakeEngineRouter({
+      amphetamineObserver: options.macosAmphetamineObserver,
+      caffeinateAssertion: options.macosAssertion,
+      detectAmphetamine: options.detectAmphetamine,
+      logger: this.logger,
+      now: this.now,
+      onNeedsRefresh: (reason) => this.refresh(reason),
+      platform: options.platform
+    })
     const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
     if (resumeSource) {
       const onResume = () => this.refresh('power-resume')
@@ -93,6 +94,9 @@ export class AgentAwakeService {
   }
 
   setMode(mode: ComputerAwakeMode): void {
+    if (this.disposed) {
+      return
+    }
     const normalized = normalizeComputerAwakeMode(mode)
     if (this.mode === normalized) {
       return
@@ -101,33 +105,68 @@ export class AgentAwakeService {
     this.refresh('settings-change')
   }
 
+  setMacosEngine(engine: MacosAwakeEngine): void {
+    if (this.disposed) {
+      return
+    }
+    if (this.macos.setEngine(engine)) {
+      this.refresh('macos-engine-change')
+    }
+  }
+
+  probeAmphetamine(): Promise<boolean | undefined> {
+    if (this.disposed) {
+      return Promise.resolve(undefined)
+    }
+    return this.macos.retryUnavailable()
+  }
+
   setStatuses(statuses: AgentAwakeStatus[]): void {
+    if (this.disposed) {
+      return
+    }
     this.statuses = statuses.map((status) => ({ ...status }))
     this.refresh('status-change')
   }
 
   getStatus(): ComputerAwakeStatus {
+    // The picker asks for status when it first renders; that is the cheapest
+    // moment to learn whether Amphetamine exists, rather than at every launch.
+    if (!this.disposed) {
+      void this.macos.probeInstalledIfUnknown()
+    }
     const workingAgentCount = this.getEligibleRunningStatusCount()
-    return {
+    return this.decorateStatus({
       mode: this.mode,
       active: this.mode === 'on' || (this.mode === 'auto' && workingAgentCount > 0)
-    }
+    })
   }
 
   subscribe(listener: (status: ComputerAwakeStatus) => void): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     this.statusListeners.add(listener)
     return () => this.statusListeners.delete(listener)
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
     this.clearStaleTimer()
     this.unsubscribeResume?.()
     this.stopBlocker('dispose')
-    this.macosAssertion.dispose()
+    this.macos.dispose()
     this.linuxAssertion.dispose()
+    this.statusListeners.clear()
   }
 
   private refresh(reason: string): void {
+    if (this.disposed) {
+      return
+    }
     this.scheduleStaleTimer()
     const runningStatusCount = this.getEligibleRunningStatusCount()
     const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
@@ -144,10 +183,15 @@ export class AgentAwakeService {
   }
 
   private publishStatus(active: boolean): void {
-    const status = { mode: this.mode, active }
+    const status = this.decorateStatus({ mode: this.mode, active })
     if (
       this.lastPublishedStatus?.mode === status.mode &&
-      this.lastPublishedStatus.active === status.active
+      this.lastPublishedStatus.active === status.active &&
+      this.lastPublishedStatus.macosEngine === status.macosEngine &&
+      this.lastPublishedStatus.amphetamineInstalled === status.amphetamineInstalled &&
+      this.lastPublishedStatus.amphetamineUnavailableReason ===
+        status.amphetamineUnavailableReason &&
+      this.lastPublishedStatus.amphetamineActive === status.amphetamineActive
     ) {
       return
     }
@@ -210,35 +254,22 @@ export class AgentAwakeService {
   }
 
   private startBlocker(reason: string, runningStatusCount: number): void {
-    if (this.blockerId !== null) {
-      if (this.reconcileBlocker('start-reconcile')) {
-        return
-      }
-    }
-    try {
-      const id = this.blocker.start('prevent-display-sleep')
-      this.blockerId = id
-      this.reconcileBlocker('post-start')
-    } catch (err) {
-      this.logger.warn('[agent-awake] failed to start blocker', {
-        reason,
-        mode: this.mode,
-        runningStatusCount,
-        error: err
-      })
-    }
+    this.blocker.start(reason, { mode: this.mode, runningStatusCount })
+  }
+
+  private decorateStatus(status: {
+    mode: ComputerAwakeMode
+    active: boolean
+  }): ComputerAwakeStatus {
+    return { ...status, ...this.macos.statusFields() }
   }
 
   private startMacosAssertion(reason: string): void {
-    try {
-      this.macosAssertion.start(reason)
-    } catch (err) {
-      this.logger.warn('[agent-awake] failed to start macOS system sleep assertion', {
-        reason,
-        mode: this.mode,
-        error: err
-      })
-    }
+    this.macos.start(reason)
+  }
+
+  private stopMacosAssertion(reason: string): void {
+    this.macos.stop(reason)
   }
 
   private startLinuxAssertion(reason: string): void {
@@ -246,18 +277,6 @@ export class AgentAwakeService {
       this.linuxAssertion.start(reason)
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start Linux lid sleep assertion', {
-        reason,
-        mode: this.mode,
-        error: err
-      })
-    }
-  }
-
-  private stopMacosAssertion(reason: string): void {
-    try {
-      this.macosAssertion.stop(reason)
-    } catch (err) {
-      this.logger.warn('[agent-awake] failed to stop macOS system sleep assertion', {
         reason,
         mode: this.mode,
         error: err
@@ -278,42 +297,6 @@ export class AgentAwakeService {
   }
 
   private stopBlocker(reason: string, runningStatusCount = 0): void {
-    if (this.blockerId === null) {
-      return
-    }
-    const id = this.blockerId
-    try {
-      this.blocker.stop(id)
-    } catch (err) {
-      this.logger.warn('[agent-awake] failed to stop blocker', {
-        reason,
-        mode: this.mode,
-        runningStatusCount,
-        blockerId: id,
-        error: err
-      })
-    }
-    this.reconcileBlocker('post-stop')
-  }
-
-  private reconcileBlocker(reason: string): boolean {
-    if (this.blockerId === null) {
-      return false
-    }
-    const id = this.blockerId
-    try {
-      const isStarted = this.blocker.isStarted(id)
-      if (!isStarted) {
-        this.blockerId = null
-      }
-      return isStarted
-    } catch (err) {
-      this.logger.warn('[agent-awake] failed to reconcile blocker', {
-        reason,
-        blockerId: id,
-        error: err
-      })
-      return true
-    }
+    this.blocker.stop(reason, { mode: this.mode, runningStatusCount })
   }
 }

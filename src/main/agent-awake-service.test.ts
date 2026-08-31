@@ -85,6 +85,8 @@ function createService(
     linuxAssertion,
     macosAssertion,
     now,
+    // Pinned: the published status grows macOS engine fields on darwin only.
+    platform: 'linux',
     powerMonitor,
     logger: {
       debug: vi.fn(),
@@ -308,6 +310,24 @@ describe('AgentAwakeService', () => {
 
     expect(blocker.stop).toHaveBeenCalledTimes(1)
     expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(macosAssertion.dispose).toHaveBeenCalledTimes(1)
+    expect(linuxAssertion.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('cannot restart resources or dispose twice after teardown', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
+
+    service.dispose()
+    service.setMode('on')
+    service.setStatuses([workingStatus()])
+    service.dispose()
+
+    expect(blocker.start).not.toHaveBeenCalled()
+    expect(macosAssertion.start).not.toHaveBeenCalled()
+    expect(linuxAssertion.start).not.toHaveBeenCalled()
     expect(macosAssertion.dispose).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.dispose).toHaveBeenCalledTimes(1)
   })

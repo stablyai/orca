@@ -53,5 +53,7 @@ export type AgentTrustApi = {
 
 export type AgentAwakeApi = {
   getStatus: () => Promise<ComputerAwakeStatus>
+  /** Re-check installation or Automation access after the user fixes availability. */
+  probeAmphetamine: () => Promise<boolean | undefined>
   onChanged: (callback: (status: ComputerAwakeStatus) => void) => () => void
 }

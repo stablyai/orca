@@ -254,7 +254,9 @@ describe('AgentsPane', () => {
   it('hides desktop-only awake modes in paired web clients', () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     try {
-      expect(renderPane(getDefaultSettings('/tmp'))).not.toContain('Keep computer awake')
+      const markup = renderPane(getDefaultSettings('/tmp'))
+      expect(markup).not.toContain('Keep computer awake')
+      expect(markup).not.toContain('Amphetamine integration')
       expect(
         matchesSettingsSearch('awake', getAgentsPaneSearchEntries({ includeAgentAwake: false }))
       ).toBe(false)

@@ -34,6 +34,7 @@ import type {
 } from '../shared/terminal-preview'
 import type { AgentSessionPtyWriteRefusal } from '../shared/agent-session-pty-write-admission'
 import type { CliInstallStatus } from '../shared/cli-install-types'
+import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
@@ -2114,8 +2115,6 @@ const api = {
       query?: string
       siteId?: string
     }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsers', args),
-    searchUsers: (args?: { query?: string; siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:searchUsers', args),
 
     listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('jira:listTransitions', args),
@@ -2217,6 +2216,8 @@ const api = {
 
   agentAwake: {
     getStatus: (): Promise<ComputerAwakeStatus> => ipcRenderer.invoke('agentAwake:getStatus'),
+    probeAmphetamine: (): Promise<boolean | undefined> =>
+      ipcRenderer.invoke('agentAwake:probeAmphetamine'),
     onChanged: (callback: (status: ComputerAwakeStatus) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: ComputerAwakeStatus): void =>
         callback(status)
@@ -2313,6 +2314,34 @@ const api = {
   codexConfigSync: {
     status: (): Promise<CodexConfigSyncStatus> => ipcRenderer.invoke('codexConfigSync:status')
   },
+  agentHooks: {
+    claudeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:claudeStatus'),
+    openClaudeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:openClaudeStatus'),
+    codexStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:codexStatus'),
+    geminiStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:geminiStatus'),
+    antigravityStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:antigravityStatus'),
+    ampStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:ampStatus'),
+    cursorStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:cursorStatus'),
+    droidStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:droidStatus'),
+    commandCodeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:commandCodeStatus'),
+    grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
+    devinStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:devinStatus'),
+    copilotStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:copilotStatus'),
+    hermesStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:hermesStatus'),
+    kimiStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:kimiStatus')
+  },
+
   agentTrust: {
     markTrusted: (args: {
       preset: 'cursor' | 'copilot' | 'codex'

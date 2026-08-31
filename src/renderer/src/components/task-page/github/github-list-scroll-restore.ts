@@ -40,7 +40,6 @@ export function startGitHubListScrollRestore({
   restoreWriteRef.current = null
   let frame: number | null = null
   let observer: ResizeObserver | null = null
-  let mutationObserver: MutationObserver | null = null
   const stop = (): void => {
     if (frame !== null) {
       window.cancelAnimationFrame(frame)
@@ -48,8 +47,6 @@ export function startGitHubListScrollRestore({
     }
     observer?.disconnect()
     observer = null
-    mutationObserver?.disconnect()
-    mutationObserver = null
   }
   const restore = (): void => {
     const element = scrollElementRef.current
@@ -75,10 +72,6 @@ export function startGitHubListScrollRestore({
   for (const child of scrollElement.children) {
     observer.observe(child)
   }
-  // Rows can mount after this layout effect (for example when a cached page settles),
-  // so observe child-list changes to cover elements that were not present initially.
-  mutationObserver = new MutationObserver(restore)
-  mutationObserver.observe(scrollElement, { childList: true, subtree: true })
   restore()
   if (pendingRestoreRef.current === target) {
     frame = window.requestAnimationFrame(restore)

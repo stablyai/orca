@@ -8,7 +8,6 @@ export {
   listAssignableUsers,
   listCreateFields,
   listIssueTypes,
-  listPriorities,
-  searchUsers
+  listPriorities
 } from './jira-issue-create-metadata'
 export { getProjectStatusOrder, listTransitions } from './jira-transition-queries'

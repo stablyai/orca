@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { resolveTabAgentFromSignals } from './use-tab-agent'
 
 // Pi/OMP share a title-identity group: OMP wraps Pi and emits Pi-compatible
 // wrapper title frames. These tests pin how the tab-icon resolver keeps an

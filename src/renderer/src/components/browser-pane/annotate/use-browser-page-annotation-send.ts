@@ -10,10 +10,7 @@ import {
 } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type {
-  BrowserAnnotationIntent,
-  BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
+import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
 import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
 import { EMPTY_BROWSER_ANNOTATIONS } from '../describe-page/browser-annotation-geometry'
 
@@ -36,11 +33,6 @@ export function useBrowserPageAnnotationSend({
   handleCopyBrowserAnnotations: () => void
   handleClearBrowserAnnotations: () => void
   handleDeleteBrowserAnnotation: (annotationId: string) => void
-  handleUpdateBrowserAnnotation: (
-    annotationId: string,
-    comment: string,
-    intent: BrowserAnnotationIntent
-  ) => void
   handleBrowserAnnotationsSentToAgent: () => void
   activeGroupId: string | undefined
 } {
@@ -64,7 +56,6 @@ export function useBrowserPageAnnotationSend({
   const annotationBannerSendOpen = activeAgentSendTargetModeId === annotationBannerSendModeId
   const annotationTraySendOpen = activeAgentSendTargetModeId === annotationTraySendModeId
   const deleteBrowserPageAnnotation = useAppStore((s) => s.deleteBrowserPageAnnotation)
-  const updateBrowserPageAnnotation = useAppStore((s) => s.updateBrowserPageAnnotation)
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
@@ -183,14 +174,6 @@ export function useBrowserPageAnnotationSend({
     ]
   )
 
-  const handleUpdateBrowserAnnotation = useCallback(
-    (annotationId: string, comment: string, intent: BrowserAnnotationIntent): void => {
-      updateBrowserPageAnnotation(browserTabId, annotationId, { comment, intent })
-      recordFeatureInteraction('browser-annotations')
-    },
-    [browserTabId, recordFeatureInteraction, updateBrowserPageAnnotation]
-  )
-
   return {
     browserAnnotations,
     browserAnnotationsPrompt,
@@ -204,7 +187,6 @@ export function useBrowserPageAnnotationSend({
     handleCopyBrowserAnnotations,
     handleClearBrowserAnnotations,
     handleDeleteBrowserAnnotation,
-    handleUpdateBrowserAnnotation,
     handleBrowserAnnotationsSentToAgent,
     activeGroupId
   }

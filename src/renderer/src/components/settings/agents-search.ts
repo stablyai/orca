@@ -1,6 +1,9 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   getAgentAwakeDescription,
+  getAmphetamineIntegrationDescription,
+  getAmphetamineIntegrationSearchKeywords,
+  getAmphetamineIntegrationTitle,
   getAgentAwakeSearchKeywords,
   getAgentAwakeTitle
 } from './agent-awake-copy'
@@ -61,10 +64,12 @@ function expandAgentSearchText(value: string): string[] {
 
 type AgentsPaneSearchOptions = {
   includeAgentAwake?: boolean
+  includeAmphetamineIntegration?: boolean
   includeAgentRuntime?: boolean
 }
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
+const AMPHETAMINE_INTEGRATION_SEARCH_ENTRY_ID = 'amphetamine-integration'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 
 const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
@@ -120,6 +125,12 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentAwakeSearchKeywords()
   },
   {
+    title: getAmphetamineIntegrationTitle(),
+    id: AMPHETAMINE_INTEGRATION_SEARCH_ENTRY_ID,
+    description: getAmphetamineIntegrationDescription(),
+    keywords: getAmphetamineIntegrationSearchKeywords()
+  },
+  {
     title: translate(
       'auto.components.settings.agents.search.agentPermissions',
       'Agent Permissions'
@@ -145,12 +156,21 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
 
 export function getAgentsPaneSearchEntries({
   includeAgentAwake = true,
+  // The integration is a sub-setting of keep-awake, so they share visibility.
+  includeAmphetamineIntegration = includeAgentAwake,
   includeAgentRuntime = true
 }: AgentsPaneSearchOptions = {}) {
-  const entries = getAllAgentsPaneSearchEntries()
-  return entries.filter(
-    (entry) =>
-      (!('id' in entry) || entry.id !== AGENT_RUNTIME_SEARCH_ENTRY_ID || includeAgentRuntime) &&
-      (!('id' in entry) || entry.id !== AGENT_AWAKE_SEARCH_ENTRY_ID || includeAgentAwake)
+  const excluded = new Set<string>()
+  if (!includeAgentRuntime) {
+    excluded.add(AGENT_RUNTIME_SEARCH_ENTRY_ID)
+  }
+  if (!includeAgentAwake) {
+    excluded.add(AGENT_AWAKE_SEARCH_ENTRY_ID)
+  }
+  if (!includeAmphetamineIntegration) {
+    excluded.add(AMPHETAMINE_INTEGRATION_SEARCH_ENTRY_ID)
+  }
+  return getAllAgentsPaneSearchEntries().filter(
+    (entry) => !('id' in entry) || !excluded.has(entry.id)
   )
 }

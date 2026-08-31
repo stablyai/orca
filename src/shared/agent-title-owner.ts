@@ -18,11 +18,6 @@ type TitleProfileMatch = {
 
 type TitleLabelProfileMatch = Pick<TitleProfileMatch, 'profile'>
 
-export type CompatibleAgentOwnerOptions = {
-  /** Whether the owner comes from explicit launch intent. */
-  ownerIsLaunch?: boolean
-}
-
 const COMPATIBLE_IDLE_TITLE_RE = /(?<![\w./\\-])(?:ready|idle|done)(?![\w-])/i
 
 /**
@@ -119,8 +114,7 @@ function hasIdleSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile)
  */
 export function resolveCompatibleAgentTypeForOwner(
   incomingAgentType: AgentType | null | undefined,
-  ownerAgentType: AgentType | null | undefined,
-  _options?: CompatibleAgentOwnerOptions
+  ownerAgentType: AgentType | null | undefined
 ): AgentType | undefined {
   if (!incomingAgentType) {
     return undefined
@@ -143,8 +137,7 @@ export function resolveCompatibleAgentTypeForOwner(
  */
 export function normalizeCompatibleAgentTitleForOwner(
   title: string,
-  ownerAgentType: AgentType | null | undefined,
-  _options?: CompatibleAgentOwnerOptions
+  ownerAgentType: AgentType | null | undefined
 ): string {
   const ownerProfile = getSyntheticAgentTitleProfile(ownerAgentType)
   if (!ownerProfile?.titleIdentityGroup) {
@@ -195,16 +188,11 @@ export function normalizeCompatibleAgentTitleForOwner(
  */
 export function normalizeCompatibleAgentStatusEntryForOwner(
   entry: AgentStatusEntry,
-  ownerAgentType: AgentType | null | undefined,
-  options?: CompatibleAgentOwnerOptions
+  ownerAgentType: AgentType | null | undefined
 ): AgentStatusEntry {
-  const agentType = resolveCompatibleAgentTypeForOwner(entry.agentType, ownerAgentType, options)
+  const agentType = resolveCompatibleAgentTypeForOwner(entry.agentType, ownerAgentType)
   const terminalTitle = entry.terminalTitle
-    ? normalizeCompatibleAgentTitleForOwner(
-        entry.terminalTitle,
-        agentType ?? ownerAgentType,
-        options
-      )
+    ? normalizeCompatibleAgentTitleForOwner(entry.terminalTitle, agentType ?? ownerAgentType)
     : entry.terminalTitle
   if (agentType === entry.agentType && terminalTitle === entry.terminalTitle) {
     return entry
@@ -214,20 +202,4 @@ export function normalizeCompatibleAgentStatusEntryForOwner(
     ...(agentType ? { agentType } : {}),
     ...(terminalTitle ? { terminalTitle } : {})
   }
-}
-
-/** Returns whether two agents share the same title identity group. */
-export function shareCompatibleTitleIdentityGroup(
-  left: AgentType | null | undefined,
-  right: AgentType | null | undefined
-): boolean {
-  if (!left || !right) {
-    return false
-  }
-  if (left === right) {
-    return true
-  }
-  const leftGroup = getSyntheticAgentTitleProfile(left)?.titleIdentityGroup
-  const rightGroup = getSyntheticAgentTitleProfile(right)?.titleIdentityGroup
-  return Boolean(leftGroup && leftGroup === rightGroup)
 }

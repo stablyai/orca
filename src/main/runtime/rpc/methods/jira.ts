@@ -56,8 +56,7 @@ const CreateIssue = z.object({
   issueTypeId: requiredString('Issue type is required'),
   title: requiredString('Title is required'),
   description: OptionalPlainString,
-  customFields: z.record(z.string(), z.unknown()).optional(),
-  userFieldKeys: z.array(z.string()).optional()
+  customFields: z.record(z.string(), z.unknown()).optional()
 })
 
 const IssueUpdate = z.object({
@@ -95,17 +94,11 @@ const AssignableUsers = z.object({
   siteId: OptionalString
 })
 
-const UserSearch = z.object({
-  query: OptionalPlainString,
-  siteId: OptionalString
-})
-
 const ProjectStatusOrder = z.object({
   projectKey: requiredString('Project key is required'),
   siteId: OptionalString
 })
 
-/** Emits a Jira result over RPC, normalizing it to the shape clients decode. */
 function emitJiraPayload(value: unknown, emit: (result: unknown) => void): void {
   const payload = JSON.stringify(value)
   if (payload.length > JIRA_PAYLOAD_MAX_CHARS) {
@@ -200,8 +193,7 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
         issueTypeId: params.issueTypeId.trim(),
         title: params.title.trim(),
         description: params.description?.trim() || undefined,
-        customFields: params.customFields,
-        userFieldKeys: params.userFieldKeys
+        customFields: params.customFields
       })
   }),
   defineMethod({
@@ -260,11 +252,6 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
     params: AssignableUsers,
     handler: async (params, { runtime }) =>
       runtime.jiraListAssignableUsers(params.key.trim(), params.query, params.siteId)
-  }),
-  defineMethod({
-    name: 'jira.searchUsers',
-    params: UserSearch,
-    handler: async (params, { runtime }) => runtime.jiraSearchUsers(params.query, params.siteId)
   }),
   defineMethod({
     name: 'jira.listTransitions',

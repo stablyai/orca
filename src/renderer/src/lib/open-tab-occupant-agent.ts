@@ -14,7 +14,7 @@ import {
   resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { resolveTabAgentFromSignals } from './use-tab-agent'
 
 export type OpenTabOccupantAgentInput = {
   tabId: string

@@ -202,7 +202,6 @@ export type AgentHookAuthorityAttestation = Readonly<{
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 type ProviderSessionChangeListener = (providerSessions: AgentHookProviderSessionIdentity[]) => void
 type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
-type StatusDropListener = (paneKey: string) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
   stablePaneKey: string
@@ -713,7 +712,6 @@ export class AgentHookServer {
   private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
   private paneStatusClearListeners = new Set<PaneStatusClearListener>()
-  private statusDropListeners = new Set<StatusDropListener>()
   private statusChangeListeners = new Set<StatusChangeListener>()
   private providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
   // Why: setListener is a single slot owned by the main-window fanout; the
@@ -873,27 +871,6 @@ export class AgentHookServer {
     this.paneStatusClearListeners.add(listener)
     return () => {
       this.paneStatusClearListeners.delete(listener)
-    }
-  }
-
-  /** Multi-subscriber tap on definitive live-row deletions. `dropStatusEntry` is a user
-   *  dismissal, so it never routes through the pane-status-clear fan-out — pane-owned
-   *  cleanup (synthetic spinners) still has to retire with the row it was driving. */
-  subscribeStatusDrop(listener: StatusDropListener): () => void {
-    this.statusDropListeners.add(listener)
-    return () => {
-      this.statusDropListeners.delete(listener)
-    }
-  }
-
-  private emitStatusDropped(paneKey: string): void {
-    for (const listener of this.statusDropListeners) {
-      // Why: matches every other fan-out here — one throwing subscriber must not strand the rest.
-      try {
-        listener(paneKey)
-      } catch (err) {
-        console.error('[agent-hooks] status-drop listener threw', err)
-      }
     }
   }
 
@@ -2795,7 +2772,6 @@ export class AgentHookServer {
     }
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
-    this.emitStatusDropped(deleted.paneKey)
   }
 
   /** Retire panes whose owning process is certifiably dead.

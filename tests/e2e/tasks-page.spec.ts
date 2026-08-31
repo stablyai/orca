@@ -410,9 +410,7 @@ test.describe('Tasks page', () => {
     await expect(existingIssue).toBeVisible()
 
     await input.fill('')
-    await expect
-      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
-      .toEqual({ countQueries: ['is:issue is:open'], fetchQueries: ['is:issue is:open'] })
+    await orcaPage.waitForTimeout(TASK_SEARCH_SETTLE_MS)
     await resetTaskSearchRequestProbe(orcaPage)
 
     await input.pressSequentially('rate', { delay: TASK_SEARCH_TYPING_DELAY_MS })

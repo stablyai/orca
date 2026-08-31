@@ -7762,7 +7762,10 @@
             "agentPermissions": "Agent 권한",
             "agentPermissionsDescription": "agent 권한 기본값을 Yolo와 수동 사이에서 전환합니다.",
             "agentRuntime": "Agent 런타임",
-            "agentRuntimeDescription": "기본적으로 Windows 또는 WSL에서 agents를 감지하고 시작할지 선택합니다."
+            "agentRuntimeDescription": "기본적으로 Windows 또는 WSL에서 agents를 감지하고 시작할지 선택합니다.",
+            "caffeinate": "Caffeinate",
+            "amphetamine": "Amphetamine",
+            "macos": "macOS"
           }
         },
         "appearance": {

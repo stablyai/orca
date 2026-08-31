@@ -67,7 +67,7 @@ import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner
 } from '../../../shared/agent-title-owner'
-import { resolvePaneAgentOwnerRecord } from '../../../shared/pane-agent-owner'
+import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { readBrowserClientHostId } from './browser-client-host-identity'
@@ -1181,7 +1181,7 @@ function buildMirroredTerminalTabs(
     }
     const launchAgent =
       activeSurface.launchAgent ?? surfaces.find((surface) => surface.launchAgent)?.launchAgent
-    const ownerRecord = resolvePaneAgentOwnerRecord({
+    const ownerAgent = resolvePaneAgentOwner({
       launchAgent,
       hookAgent: activeSurface.agentStatus?.agentType,
       siblingHookAgent: surfaces.find((surface) => surface.agentStatus?.agentType)?.agentStatus
@@ -1189,8 +1189,7 @@ function buildMirroredTerminalTabs(
     })
     const title = normalizeCompatibleAgentTitleForOwner(
       activeSurface.title.trim() || surfaces[0]?.title.trim() || 'Terminal',
-      ownerRecord?.agent,
-      { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
+      ownerAgent
     )
     const existing =
       existingById.get(localTabId) ??
@@ -1263,14 +1262,12 @@ function remapHostAgentStatus(
   if (!paneKey) {
     return null
   }
-  const ownerRecord = resolvePaneAgentOwnerRecord({
+  const ownerAgent = resolvePaneAgentOwner({
     launchAgent: retainedSurface?.launchAgent ?? surface.launchAgent,
     hookAgent: surface.agentStatus.agentType
   })
   return {
-    ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerRecord?.agent, {
-      ownerIsLaunch: ownerRecord?.ownerIsLaunch === true
-    }),
+    ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerAgent),
     paneKey,
     tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
   }

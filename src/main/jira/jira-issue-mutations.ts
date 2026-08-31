@@ -2,8 +2,7 @@ import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
   JiraIssueUpdate,
-  JiraMutationResult,
-  JiraSite
+  JiraMutationResult
 } from '../../shared/jira-types'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest } from './authenticated-request'
@@ -11,30 +10,6 @@ import { clearToken, getClients, isAuthError } from './client'
 import { issueUrl, toBodyText } from './jira-issue-mapping'
 import type { JiraRecord } from './jira-record-pages'
 
-/**
- * Wraps a user id in the reference object the site expects: `{accountId}` on
- * Cloud, `{name}` on Server/DC, which identifies users by username and whose
- * ids `mapUser` stores in the accountId slot.
- */
-export function userFieldRef(site: JiraSite, id: string | null): JiraRecord {
-  return site.authType === 'server' ? { name: id } : { accountId: id }
-}
-
-/**
- * Shapes a user-typed create value (scalar or array) into Jira's user reference
- * objects. Jira rejects a bare string here and reports the field as missing.
- */
-function toUserFieldValue(site: JiraSite, value: unknown): unknown {
-  if (typeof value === 'string') {
-    return userFieldRef(site, value)
-  }
-  if (Array.isArray(value)) {
-    return value.map((member) => (typeof member === 'string' ? userFieldRef(site, member) : member))
-  }
-  return value
-}
-
-/** Creates an issue, shaping the customFields keys named by `userFieldKeys`. */
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {
   const entry = getClients(args.siteId)[0]
   if (!entry) {
@@ -55,12 +30,11 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
     if (args.description?.trim()) {
       fields.description = toBodyText(entry.site, args.description.trim())
     }
-    const userFieldKeys = new Set(args.userFieldKeys ?? [])
     for (const [fieldKey, value] of Object.entries(args.customFields ?? {})) {
       if (!fieldKey || value === undefined || value === null || value === '') {
         continue
       }
-      fields[fieldKey] = userFieldKeys.has(fieldKey) ? toUserFieldValue(entry.site, value) : value
+      fields[fieldKey] = value
     }
     const created = await jiraRequest<{ id: string; key: string; self: string }>(
       entry,
@@ -82,7 +56,6 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
   }
 }
 
-/** Applies field, assignee, and transition updates to an existing issue. */
 export async function updateIssue(
   key: string,
   updates: JiraIssueUpdate,
@@ -112,7 +85,12 @@ export async function updateIssue(
       })
     }
     if (updates.assigneeAccountId !== undefined) {
-      const assigneeBody = userFieldRef(entry.site, updates.assigneeAccountId)
+      // Server/DC identifies assignees by username (`name`), not accountId;
+      // mapUser stores the Server username in the accountId slot.
+      const assigneeBody =
+        entry.site.authType === 'server'
+          ? { name: updates.assigneeAccountId }
+          : { accountId: updates.assigneeAccountId }
       await jiraRequest(entry, `${issueBase}/assignee`, {
         method: 'PUT',
         body: JSON.stringify(assigneeBody)

@@ -127,6 +127,23 @@ describe('web settings preload API', () => {
     )
   })
 
+  it('keeps the paired-web Amphetamine API inert', async () => {
+    const { api } = await installApi('Mac')
+    const onChanged = vi.fn()
+
+    await api.settings.set({ computerAwakeMacosEngine: 'amphetamine' })
+    const unsubscribe = api.agentAwake.onChanged(onChanged)
+
+    await expect(api.agentAwake.getStatus()).resolves.toEqual({
+      mode: 'off',
+      active: false,
+      macosEngine: 'amphetamine'
+    })
+    await expect(api.agentAwake.probeAmphetamine()).resolves.toBeUndefined()
+    expect(onChanged).not.toHaveBeenCalled()
+    expect(unsubscribe()).toBeUndefined()
+  })
+
   it('migrates OSC 52 clipboard writes on for stored web settings once', async () => {
     // Why: the web store is a second, independent settings store — the constants-level
     // default flip only reaches profiles that never persisted the old `false` (#10567).
