@@ -498,6 +498,44 @@ describe('spawn', () => {
     })
   })
 
+  it('moves the relay CLI bin dir to the front of PATH when it is already present later', async () => {
+    mux.request.mockResolvedValue({ id: 'pty-bridge' })
+    provider = new SshPtyProvider('conn-1', mux as never, {
+      binDir: '/home/user/.orca-relay/bin',
+      relayDir: '/home/user/.orca-relay/relay-v1',
+      nodePath: '/usr/bin/node',
+      sockPath: '/home/user/.orca-relay/relay.sock'
+    })
+
+    await provider.spawn({
+      cols: 120,
+      rows: 40,
+      env: { PATH: '/usr/local/bin:/home/user/.orca-relay/bin:/usr/bin' }
+    })
+
+    const spawnCall = mux.request.mock.calls.find((call) => call[0] === 'pty.spawn')
+    expect(spawnCall?.[1]?.env?.PATH).toBe('/home/user/.orca-relay/bin:/usr/local/bin:/usr/bin')
+  })
+
+  it('keeps PATH unchanged when the relay CLI bin dir is already first', async () => {
+    mux.request.mockResolvedValue({ id: 'pty-bridge' })
+    provider = new SshPtyProvider('conn-1', mux as never, {
+      binDir: '/home/user/.orca-relay/bin',
+      relayDir: '/home/user/.orca-relay/relay-v1',
+      nodePath: '/usr/bin/node',
+      sockPath: '/home/user/.orca-relay/relay.sock'
+    })
+
+    await provider.spawn({
+      cols: 120,
+      rows: 40,
+      env: { PATH: '/home/user/.orca-relay/bin:/usr/local/bin:/usr/bin' }
+    })
+
+    const spawnCall = mux.request.mock.calls.find((call) => call[0] === 'pty.spawn')
+    expect(spawnCall?.[1]?.env?.PATH).toBe('/home/user/.orca-relay/bin:/usr/local/bin:/usr/bin')
+  })
+
   it('uses Windows PATH delimiters for native Windows SSH bridge env', async () => {
     mux.request.mockResolvedValue({ id: 'pty-bridge' })
     provider = new SshPtyProvider('conn-1', mux as never, {

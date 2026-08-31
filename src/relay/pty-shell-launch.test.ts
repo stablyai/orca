@@ -312,6 +312,48 @@ describe('getRelayShellLaunchConfig', () => {
     expectBashOsc133Lifecycle(output)
   })
 
+  // Why: presence alone is not enough. Agents must resolve `orca` to the relay
+  // shim even when a host-installed Orca CLI sits earlier in PATH (#8608).
+  itWithBash('re-fronts the relay CLI bin dir when user startup files bury it in PATH', () => {
+    const relayBinDir = join(homeDir, '.orca-relay', 'bin')
+    mkdirSync(relayBinDir, { recursive: true })
+    writeFileSync(
+      join(homeDir, '.bash_profile'),
+      `export PATH="/usr/local/bin:$PATH:${relayBinDir}"\n`
+    )
+    const config = getRelayShellLaunchConfig('/bin/bash', {
+      HOME: homeDir,
+      ORCA_REMOTE_CLI_BIN_DIR: relayBinDir
+    })
+
+    const output = runInteractiveBashRcfile(
+      config.args[1] as string,
+      homeDir,
+      'case "$PATH" in "$ORCA_REMOTE_CLI_BIN_DIR":*) echo PATH_FRONT_OK ;; *) echo PATH_FRONT_BAD ;; esac\nexit 0\n'
+    )
+
+    expect(output).toContain('PATH_FRONT_OK')
+    expect(output).not.toContain('PATH_FRONT_BAD')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'promotes the relay CLI bin dir to the PATH front in the zsh wrapper',
+    () => {
+      getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: homeDir,
+        ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin'
+      })
+      const zshenv = readFileSync(
+        join(homeDir, '.orca-relay', 'shell-ready', 'zsh', '.zshenv'),
+        'utf8'
+      )
+      const frontGuard =
+        'case "$PATH" in "${ORCA_REMOTE_CLI_BIN_DIR}"|"${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac'
+
+      expect(zshenv).toContain(frontGuard)
+    }
+  )
+
   itWithBash('emits lifecycle for foreground text ending like an internal hook', () => {
     const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })
     const input = 'echo user:__orca_osc133_prompt_done\nfalse\nexit 0\n'
