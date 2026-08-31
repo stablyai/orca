@@ -245,7 +245,7 @@ async function superviseMission(input: {
 function getUnresolvedStartFailure(
   tasks: readonly RuntimeTask[],
   startFailures: ReadonlyMap<string, unknown>
-): unknown | null {
+): unknown {
   for (const [taskId, error] of startFailures) {
     const task = tasks.find((candidate) => candidate.id === taskId)
     if (task?.status !== 'completed') {
