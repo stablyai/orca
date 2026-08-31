@@ -13,8 +13,8 @@ import { getIcaclsExePath } from '../win32-utils'
  *
  * Why: six 1.4.184 reports show the GPU and renderer children both dying at init
  * with 0x80000003 and nothing to distinguish them from any other CHECK. An install
- * tree carrying an orphan S-1-15-2-* package ACE with no S-1-15-2-1/-2 to satisfy
- * it reproduces exactly that signature (10/10 launches), and an additive grant of
+ * tree carrying an orphan S-1-15-2-* package ACE with no S-1-15-2-2 to satisfy it
+ * reproduces exactly that signature (10/10 launches), and an additive grant of
  * S-1-15-2-2 clears it — see electron/electron#51761. This records whether a
  * machine is in that state so the next crash report answers the question itself.
  *
@@ -32,13 +32,18 @@ const PROBE_BUDGET_MS = 5_000
 
 /** Raw S-1-15-2-* means icacls could not resolve it — locale-independent. */
 const RAW_PACKAGE_SID = /\bS-1-15-2-[0-9-]+\b/i
-const WELL_KNOWN_PACKAGE_SIDS = new Set(['s-1-15-2-1', 's-1-15-2-2'])
+/** ALL RESTRICTED APPLICATION PACKAGES: the only one an LPAC child's token carries. */
+const RESTRICTED_PACKAGES_SID = 's-1-15-2-2'
+const WELL_KNOWN_PACKAGE_SIDS = new Set(['s-1-15-2-1', RESTRICTED_PACKAGES_SID])
 // icacls localizes these; the raw SID form is never printed for them. Orphan
 // detection stays SID-form and locale-independent, but this check is not — so we
 // report whether the output looked English at all, making a locale-induced
 // false positive recognizable instead of silent.
 const WELL_KNOWN_PACKAGE_NAMES = /ALL (RESTRICTED )?APPLICATION PACKAGES/i
-const ENGLISH_PRINCIPAL = /\b(NT AUTHORITY|BUILTIN|APPLICATION PACKAGE AUTHORITY)\b/i
+const RESTRICTED_PACKAGE_NAME = /ALL RESTRICTED APPLICATION PACKAGES/i
+// Not BUILTIN: fr-FR and es-ES print it verbatim while localizing the package
+// names, so it is evidence of nothing. SYSTEM's ACE is on every install tree.
+const ENGLISH_PRINCIPAL = /\b(NT AUTHORITY|APPLICATION PACKAGE AUTHORITY)\b/i
 // Why: an ACE that denies, or only propagates to children, grants nothing on this
 // object — so it cannot satisfy an orphan the way the reproduced fix did.
 const NON_GRANTING_FLAGS = /\((?:DENY|IO)\)/i
@@ -57,6 +62,7 @@ export type WindowsInstallDirAclProbeOptions = {
 type AclFacts = {
   orphanPackageSids: string[]
   hasWellKnownPackageGrant: boolean
+  hasRestrictedPackageGrant: boolean
   sawEnglishPrincipal: boolean
 }
 
@@ -96,6 +102,7 @@ function readDacl(spawnFn: typeof spawn, target: string, deadlineMs: number): Pr
 function collectAclFacts(daclOutput: string): AclFacts {
   const orphanPackageSids: string[] = []
   let hasWellKnownPackageGrant = false
+  let hasRestrictedPackageGrant = false
   let sawEnglishPrincipal = false
   for (const line of daclOutput.split(/\r?\n/)) {
     if (ENGLISH_PRINCIPAL.test(line)) {
@@ -108,17 +115,29 @@ function collectAclFacts(daclOutput: string): AclFacts {
       continue
     }
     const [, principal, flags] = ace
-    const sid = RAW_PACKAGE_SID.exec(principal)?.[0]
-    if (sid && !WELL_KNOWN_PACKAGE_SIDS.has(sid.toLowerCase())) {
-      orphanPackageSids.push(sid)
+    const rawSid = RAW_PACKAGE_SID.exec(principal)?.[0]
+    const sid = rawSid?.toLowerCase()
+    if (rawSid && !WELL_KNOWN_PACKAGE_SIDS.has(rawSid.toLowerCase())) {
+      orphanPackageSids.push(rawSid)
       continue
     }
     const isWellKnown = sid !== undefined || WELL_KNOWN_PACKAGE_NAMES.test(principal)
-    if (isWellKnown && !NON_GRANTING_FLAGS.test(flags)) {
-      hasWellKnownPackageGrant = true
+    if (!isWellKnown || NON_GRANTING_FLAGS.test(flags)) {
+      continue
+    }
+    hasWellKnownPackageGrant = true
+    // S-1-15-2-1 is absent from an LPAC token, so only the restricted grant can
+    // satisfy the orphan for the children that actually died.
+    if (sid === RESTRICTED_PACKAGES_SID || (!sid && RESTRICTED_PACKAGE_NAME.test(principal))) {
+      hasRestrictedPackageGrant = true
     }
   }
-  return { orphanPackageSids, hasWellKnownPackageGrant, sawEnglishPrincipal }
+  return {
+    orphanPackageSids,
+    hasWellKnownPackageGrant,
+    hasRestrictedPackageGrant,
+    sawEnglishPrincipal
+  }
 }
 
 function resolveTargets(installDir: string, fileExists: (path: string) => boolean): string[] {
@@ -143,11 +162,12 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
     const facts = outputs.map(collectAclFacts)
     const orphans = [...new Set(facts.flatMap((f) => f.orphanPackageSids))]
     const hasWellKnownPackageGrant = facts.some((f) => f.hasWellKnownPackageGrant)
+    const hasRestrictedPackageGrant = facts.some((f) => f.hasRestrictedPackageGrant)
     // Why per target: a grant on the directory does not grant on the module file,
     // and the reproduced failure is a per-file content read. Merging would let a
     // grant on one target mask its absence on the other.
     const poisoned = facts.some(
-      (f) => f.orphanPackageSids.length > 0 && !f.hasWellKnownPackageGrant
+      (f) => f.orphanPackageSids.length > 0 && !f.hasRestrictedPackageGrant
     )
     data = outputs.every((out) => out === '')
       ? { status: 'failed', reason: 'all-targets-unreadable' }
@@ -159,6 +179,9 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
           // identify the tool that left it, which is the point of recording it.
           orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
           hasWellKnownPackageGrant,
+          // The verdict rides on this one; the -1-only shape (a Program Files
+          // default) still leaves every LPAC child locked out.
+          hasRestrictedPackageGrant,
           // False positives are possible on a non-English Windows, where the
           // well-known ACE resolves to a localized name this cannot match.
           wellKnownNameCheckReliable: facts.some((f) => f.sawEnglishPrincipal),

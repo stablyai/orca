@@ -6,6 +6,7 @@ import os from 'node:os'
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   nativeTheme,
@@ -230,6 +231,11 @@ import {
 } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { probeWindowsInstallDirAcl } from './startup/windows-install-dir-acl-probe'
+import {
+  describeInstallDirAclPoison,
+  startWindowsInstallDirAclRepairIfPoisoned
+} from './startup/windows-install-dir-acl-recovery'
+import { presentRendererRecoveryPrompt } from './window/renderer-recovery-prompt'
 import { neutralizeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { registerServeSignalHandlers } from './startup/serve-signal-handlers'
@@ -1523,7 +1529,15 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     })
     // Why here: read-only, and the install DACL is the one thing a 0x80000003
     // child death cannot tell us about itself. See electron/electron#51761.
-    probeWindowsInstallDirAcl({ isServeMode })
+    probeWindowsInstallDirAcl({
+      isServeMode,
+      onDone: (data) =>
+        startWindowsInstallDirAclRepairIfPoisoned(data, {
+          isServeMode,
+          userDataPath: app.getPath('userData'),
+          appVersion: app.getVersion()
+        })
+    })
   }
 
   const window = createMainWindow(store, {
@@ -1555,7 +1569,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         exitCode: details.exitCode ?? null,
         recentRecoveryCount
       })
-      void presentRendererRecoveryPrompt(recentRecoveryCount)
+      void showRendererRecoveryPrompt(recentRecoveryCount)
     },
     deferLoad: true,
     ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
@@ -1845,30 +1859,29 @@ function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
 }
 
 // Why: on renderer crash-loop the breaker stops auto-reloading and the window goes blank, so a main-process dialog is the only retry/quit surface.
-async function presentRendererRecoveryPrompt(recentRecoveryCount: number): Promise<void> {
-  if (isQuitting) {
-    return
-  }
-  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
-  const options = {
-    type: 'error' as const,
-    buttons: ['Reload', 'Quit'],
-    defaultId: 0,
-    cancelId: 1,
-    title: 'Orca keeps failing to load',
-    message: 'The app window crashed repeatedly and stopped reloading automatically.',
-    detail: `Orca tried to recover ${recentRecoveryCount} times in a row without success. This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.`
-  }
-  const { response } = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options)
-  if (response === 0 && mainWindow && !mainWindow.isDestroyed()) {
-    recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
-    loadMainWindow(mainWindow)
-  } else if (response === 1) {
-    isQuitting = true
-    app.quit()
-  }
+async function showRendererRecoveryPrompt(recentRecoveryCount: number): Promise<void> {
+  await presentRendererRecoveryPrompt({
+    recentRecoveryCount,
+    isQuitting: () => isQuitting,
+    diagnose: describeInstallDirAclPoison,
+    showMessageBox: (options) => {
+      const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+      return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
+    },
+    copyToClipboard: (text) => clipboard.writeText(text),
+    reload: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return
+      }
+      recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
+      // Why: leave the breaker open so a re-crash re-raises this prompt instead of resuming the auto-reload loop.
+      loadMainWindow(mainWindow)
+    },
+    quit: () => {
+      isQuitting = true
+      app.quit()
+    }
+  })
 }
 
 function getGpuFallbackEnvironment(): GpuFallbackEnvironment {
