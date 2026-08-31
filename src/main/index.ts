@@ -2609,6 +2609,7 @@ void app.whenReady().then(async () => {
       store.getSettings().keepComputerAwakeWhileAgentsRun
     )
   )
+  agentAwakeService.setKeepScreenOn(store.getSettings().computerAwakeKeepsScreenOn === true)
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()

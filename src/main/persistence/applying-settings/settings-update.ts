@@ -75,6 +75,9 @@ export function updateSettings(
   if ('agentSkillSharingEnabled' in updates) {
     sanitizedUpdates.agentSkillSharingEnabled = updates.agentSkillSharingEnabled === true
   }
+  if ('computerAwakeKeepsScreenOn' in updates) {
+    sanitizedUpdates.computerAwakeKeepsScreenOn = updates.computerAwakeKeepsScreenOn === true
+  }
   if ('nestedWorkerMaxDepth' in updates) {
     sanitizedUpdates.nestedWorkerMaxDepth = resolveNestedWorkerMaxDepth({
       nestedWorkerMaxDepth: updates.nestedWorkerMaxDepth

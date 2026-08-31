@@ -7761,6 +7761,7 @@
             "affbf130f6": "trabajando",
             "0d1c334987": "tapa",
             "ff8de8a2ad": "pantalla",
+            "7c4e1b9a03": "pantalla",
             "0d752916f8": "hooks",
             "6984d4291a": "estado",
             "13b20636a6": "esperando",
@@ -9285,9 +9286,8 @@
           }
         },
         "agent-awake-copy": {
-          "e5995ce268": "Mantener la computadora activa mientras los agentes están trabajando",
-          "95d3031db2": "Mantiene esta computadora y la pantalla activas mientras los agentes están trabajando. El comportamiento al cerrar la tapa sigue la configuración de energía de este dispositivo.",
-          "a42f6fbdd8": "Mantiene esta computadora y la pantalla activas mientras los agentes están trabajando. Orca también le pide a este dispositivo que permanezca activo cuando la tapa está cerrada, sujeto a su política de energía.",
+          "keepScreenOn": "Mantener la pantalla encendida",
+          "keepScreenOnDescription": "De lo contrario, la pantalla se apaga como de costumbre",
           "modeTitle": "Mantener la computadora activa"
         },
         "AgentAwakeSetting": {

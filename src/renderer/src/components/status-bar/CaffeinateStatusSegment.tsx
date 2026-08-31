@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Coffee } from 'lucide-react'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -13,7 +14,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAppStore } from '@/store'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { translate } from '@/i18n/i18n'
-import { getAgentAwakeModeLabel, getAgentAwakeTitle } from '../settings/agent-awake-copy'
+import {
+  getAgentAwakeKeepScreenOnDescription,
+  getAgentAwakeKeepScreenOnLabel,
+  getAgentAwakeModeLabel,
+  getAgentAwakeTitle
+} from '../settings/agent-awake-copy'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
@@ -81,8 +87,15 @@ export function CaffeinateStatusSegment({
     { title, status: statusText }
   )
 
+  const keepScreenOn = settings?.computerAwakeKeepsScreenOn === true
+
   const setMode = (nextMode: string): void => {
     void updateSettings(computerAwakeSettingsForMode(normalizeComputerAwakeMode(nextMode)))
+  }
+
+  // Why: write only this key — routing it through computerAwakeSettingsForMode would rewrite the mode too.
+  const setKeepScreenOn = (next: boolean): void => {
+    void updateSettings({ computerAwakeKeepsScreenOn: next })
   }
 
   return (
@@ -160,6 +173,22 @@ export function CaffeinateStatusSegment({
             </span>
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={keepScreenOn}
+          disabled={mode === 'off'}
+          // Why: keep the menu open so the check visibly lands before it closes.
+          onSelect={(event) => event.preventDefault()}
+          onCheckedChange={setKeepScreenOn}
+          className="py-1.5"
+        >
+          <span className="flex flex-col">
+            <span>{getAgentAwakeKeepScreenOnLabel()}</span>
+            <span className="text-[11px] font-normal text-muted-foreground">
+              {getAgentAwakeKeepScreenOnDescription()}
+            </span>
+          </span>
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

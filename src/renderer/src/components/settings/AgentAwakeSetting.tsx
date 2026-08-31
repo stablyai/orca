@@ -2,12 +2,14 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import {
   getAgentAwakeDescription,
+  getAgentAwakeKeepScreenOnDescription,
+  getAgentAwakeKeepScreenOnLabel,
   getAgentAwakeModeLabel,
   getAgentAwakeSearchKeywords,
   getAgentAwakeTitle
 } from './agent-awake-copy'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsSegmentedControl, SettingsSwitchRow } from './SettingsFormControls'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
@@ -32,6 +34,7 @@ export function AgentAwakeSetting({
   const setMode = (nextMode: ComputerAwakeMode): void => {
     updateSettings(computerAwakeSettingsForMode(nextMode))
   }
+  const keepScreenOn = settings.computerAwakeKeepsScreenOn === true
 
   return (
     <section className="space-y-3">
@@ -66,6 +69,13 @@ export function AgentAwakeSetting({
             ]}
           />
         </div>
+        <SettingsSwitchRow
+          label={getAgentAwakeKeepScreenOnLabel()}
+          description={getAgentAwakeKeepScreenOnDescription()}
+          checked={keepScreenOn}
+          disabled={mode === 'off'}
+          onChange={() => updateSettings({ computerAwakeKeepsScreenOn: !keepScreenOn })}
+        />
       </SearchableSetting>
     </section>
   )

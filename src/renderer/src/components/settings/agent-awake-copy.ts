@@ -7,9 +7,23 @@ const AGENT_AWAKE_DESCRIPTION_WINDOWS_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionWindows'
 const AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionDefault'
+const AGENT_AWAKE_KEEP_SCREEN_ON_KEY = 'auto.components.settings.agent-awake-copy.keepScreenOn'
+const AGENT_AWAKE_KEEP_SCREEN_ON_DESCRIPTION_KEY =
+  'auto.components.settings.agent-awake-copy.keepScreenOnDescription'
 
 export function getAgentAwakeTitle(): string {
   return translate(AGENT_AWAKE_TITLE_KEY, 'Keep computer awake')
+}
+
+export function getAgentAwakeKeepScreenOnLabel(): string {
+  return translate(AGENT_AWAKE_KEEP_SCREEN_ON_KEY, 'Keep screen on')
+}
+
+export function getAgentAwakeKeepScreenOnDescription(): string {
+  return translate(
+    AGENT_AWAKE_KEEP_SCREEN_ON_DESCRIPTION_KEY,
+    'Otherwise the screen sleeps as usual'
+  )
 }
 
 export function getAgentAwakeModeLabel(mode: ComputerAwakeMode): string {
@@ -49,7 +63,8 @@ export function getAgentAwakeSearchKeywords(
     { key: 'auto.components.settings.agents.search.48f84d10f1', fallback: 'running' },
     { key: 'auto.components.settings.agents.search.affbf130f6', fallback: 'working' },
     { key: 'auto.components.settings.agents.search.0d1c334987', fallback: 'lid' },
-    { key: 'auto.components.settings.agents.search.ff8de8a2ad', fallback: 'display' }
+    { key: 'auto.components.settings.agents.search.ff8de8a2ad', fallback: 'display' },
+    { key: 'auto.components.settings.agents.search.7c4e1b9a03', fallback: 'screen' }
   ])
 
   return userAgent.includes('Linux')

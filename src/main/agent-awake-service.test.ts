@@ -118,9 +118,90 @@ describe('AgentAwakeService', () => {
     service.setStatuses([workingStatus()])
 
     expect(blocker.start).toHaveBeenCalledTimes(1)
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds a system-only assertion by default, so the screen sleeps like plain caffeinate', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
+
+    service.setMode('on')
+
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
+    expect(blocker.start).not.toHaveBeenCalledWith('prevent-display-sleep')
+    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+    expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('pins the display only when the screen opt-in is set', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setKeepScreenOn(true)
+    service.setMode('on')
+
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+  })
+
+  it('swaps a live blocker to the other type when the screen opt-in changes', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
+
+    service.setMode('on')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
+
+    service.setKeepScreenOn(true)
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-display-sleep')
+    expect(blocker.startedIds.size).toBe(1)
+    // Why: the flag varies the blocker scope only — the system assertions are never released.
+    expect(macosAssertion.stop).not.toHaveBeenCalled()
+    expect(linuxAssertion.stop).not.toHaveBeenCalled()
+  })
+
+  it('keeps the live blocker instead of stranding it when a scope change fails to release', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setMode('on')
+    blocker.stop.mockImplementation(() => {
+      throw new Error('stop failed')
+    })
+    service.setKeepScreenOn(true)
+
+    // Why: a second blocker here would leave the first one running with nothing tracking its id.
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+    expect(blocker.startedIds.size).toBe(1)
+  })
+
+  it('leaves a live blocker alone when the screen opt-in is set to its current value', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setMode('on')
+    service.setKeepScreenOn(false)
+
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+    expect(blocker.stop).not.toHaveBeenCalled()
+  })
+
+  it('releases the display assertion when the screen opt-in is turned back off', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setKeepScreenOn(true)
+    service.setMode('on')
+    service.setKeepScreenOn(false)
+
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-app-suspension')
+    expect(blocker.startedIds.size).toBe(1)
   })
 
   it('stays awake in On mode without a working agent', () => {
@@ -129,7 +210,7 @@ describe('AgentAwakeService', () => {
 
     service.setMode('on')
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(service.getStatus()).toEqual({ mode: 'on', active: true })
   })
 

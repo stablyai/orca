@@ -226,6 +226,9 @@ export function registerSettingsHandlers(
         normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
       )
     }
+    if ('computerAwakeKeepsScreenOn' in sanitizedArgs) {
+      agentAwakeService?.setKeepScreenOn(result.computerAwakeKeepsScreenOn === true)
+    }
     const hookSettingChanged =
       ('agentStatusHooksEnabled' in sanitizedArgs &&
         before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||

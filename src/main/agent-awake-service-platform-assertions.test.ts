@@ -92,7 +92,7 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
@@ -126,7 +126,7 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
