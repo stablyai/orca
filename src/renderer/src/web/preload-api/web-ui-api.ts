@@ -157,6 +157,9 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     consumePendingOpenSettings: () => Promise.resolve(false),
     onOpenSkillShare: () => noopUnsubscribe,
     consumePendingSkillShare: () => Promise.resolve(null),
+    // Web client has no native launch surface, so folder-launch intents never arrive.
+    onOpenWorkspacePath: () => noopUnsubscribe,
+    notifyWorkspacePathBridgeReady: () => {},
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,

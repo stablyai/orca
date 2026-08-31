@@ -224,6 +224,11 @@ import { settledDiffCache } from './git/source-control/git-read-cache-invalidati
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { SkillShareDeepLinkState } from './startup/skill-share-deep-link-state'
 import {
+  extractWorkspacePathFromArgv,
+  resolveExistingDirectoryPath,
+  WorkspacePathLaunchQueue
+} from './startup/workspace-path-launch'
+import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
   logStartupMilestone
@@ -469,6 +474,9 @@ const recoveryReloadInFlight = createWebContentsTimedFlag()
 // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlag()
 const skillShareDeepLinks = new SkillShareDeepLinkState()
+const workspacePathLaunchQueue = new WorkspacePathLaunchQueue()
+// Why explicit handshake: loading heuristics cannot tell whether the bridge's listener is attached.
+let workspacePathBridgeAttached = false
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
@@ -790,10 +798,32 @@ function focusExistingWindow(): void {
   })
 }
 
+/**
+ * Hands a validated folder-launch intent to the renderer: pushed live once the
+ * bridge has signalled readiness, otherwise queued for that handshake so no
+ * launch is lost to a renderer that has not attached listeners yet.
+ */
+function deliverWorkspacePathLaunch(folderPath: string): void {
+  if (mainWindow && !mainWindow.isDestroyed() && workspacePathBridgeAttached) {
+    mainWindow.webContents.send('ui:openWorkspacePath', folderPath)
+    return
+  }
+  workspacePathLaunchQueue.queue(folderPath)
+}
+
+/** Extracts the first existing-directory argument from launch argv and opens it as a project. */
+function openWorkspacePathFromArgv(argv: readonly string[]): void {
+  const folderPath = extractWorkspacePathFromArgv(argv, { isPackaged: app.isPackaged })
+  if (folderPath) {
+    deliverWorkspacePathLaunch(folderPath)
+  }
+}
+
 function requestDesktopActivation(argv: readonly string[] = []): void {
   skillShareDeepLinks.capture(argv, (shareId) => {
     mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
+  openWorkspacePathFromArgv(argv)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
@@ -809,7 +839,16 @@ app.on('open-url', (event, url) => {
   requestDesktopActivation([url])
 })
 
+// Why: Finder/Dock folder opens (`open -a Orca <dir>`) arrive as open-file events instead of argv.
+app.on('open-file', (_event, filePath) => {
+  const folderPath = resolveExistingDirectoryPath(filePath)
+  if (folderPath) {
+    deliverWorkspacePathLaunch(folderPath)
+  }
+})
+
 skillShareDeepLinks.capture(process.argv)
+openWorkspacePathFromArgv(process.argv)
 
 const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => mainWindow,
@@ -1053,6 +1092,18 @@ ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
 
 ipcMain.handle('ui:consumePendingSkillShare', () => {
   return skillShareDeepLinks.consume()
+})
+
+ipcMain.on('ui:workspacePathBridgeReady', (event) => {
+  // Why: popouts share this preload but never register the workspace listener, so only the main window may claim readiness.
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+    return
+  }
+  workspacePathBridgeAttached = true
+  // Why direct to sender: these queued launches belong to whichever renderer just attached.
+  for (const folderPath of workspacePathLaunchQueue.drain()) {
+    event.sender.send('ui:openWorkspacePath', folderPath)
+  }
 })
 
 ipcMain.handle(
@@ -1709,6 +1760,13 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     stopAllSyntheticTitleSpinners()
   })
   mainWindow = window
+  // Why: a reload tears the folder-launch listener down; readiness must be re-earned via the bridge handshake.
+  window.webContents.on('did-start-loading', () => {
+    workspacePathBridgeAttached = false
+  })
+  window.webContents.on('destroyed', () => {
+    workspacePathBridgeAttached = false
+  })
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
