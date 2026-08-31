@@ -46,8 +46,15 @@ type ProbeOutcome =
   | { kind: 'resolved'; environment: WslGuestEnvironment }
   | { kind: 'rejected' }
   | { kind: 'transient' }
+  | { kind: 'canceled' }
 
-const inFlight = new Map<string, Promise<WslGuestEnvironment | null>>()
+type InFlightProbe = {
+  promise: Promise<WslGuestEnvironment | null>
+  controller: AbortController
+  waiters: number
+}
+
+const inFlight = new Map<string, InFlightProbe>()
 const resolved = new Map<string, WslGuestEnvironment>()
 const retryAfter = new Map<string, number>()
 // The budget the cached probe actually had. A caller with materially more time
@@ -74,7 +81,8 @@ function parseProbePayload(payload: string | null): WslGuestEnvironment | null {
 
 async function probeGuestEnvironment(
   distro: string | undefined,
-  budgetMs: number
+  budgetMs: number,
+  signal: AbortSignal
 ): Promise<ProbeOutcome> {
   // Resolve `env` rather than assume /usr/bin/env: a distro that moved it would
   // otherwise fail every later call.
@@ -92,8 +100,12 @@ async function probeGuestEnvironment(
     // and the NUL-separated payload below is read through NUL-riddled text.
     env: { ...process.env, WSL_UTF8: '1' },
     timeoutMs: Math.min(PROBE_TIMEOUT_MS, budgetMs),
-    maxOutputBytes: PROBE_MAX_OUTPUT_BYTES
+    maxOutputBytes: PROBE_MAX_OUTPUT_BYTES,
+    signal
   })
+  if (signal.aborted) {
+    return { kind: 'canceled' }
+  }
   if (result.timedOut) {
     return { kind: 'transient' }
   }
@@ -114,6 +126,46 @@ function cacheKey(distro: string | undefined): string {
   return distro ?? ''
 }
 
+function waitForProbe(
+  key: string,
+  probe: InFlightProbe,
+  budgetMs: number,
+  signal?: AbortSignal
+): Promise<WslGuestEnvironment | null> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason)
+  }
+  probe.waiters += 1
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (action: () => void, canceled = false): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      probe.waiters -= 1
+      if (canceled && probe.waiters === 0 && inFlight.get(key) === probe) {
+        inFlight.delete(key)
+        probe.controller.abort(signal?.reason)
+      }
+      action()
+    }
+    const onAbort = (): void => finish(() => reject(signal?.reason), true)
+    const timer = setTimeout(() => finish(() => resolve(null)), budgetMs)
+    timer.unref?.()
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
+    probe.promise.then(
+      (environment) => finish(() => resolve(environment)),
+      (error: unknown) => finish(() => reject(error))
+    )
+  })
+}
+
 /** Null means "could not ask", never "has no PATH" -- callers fall back. */
 export function getWslGuestEnvironment(
   distro: string | undefined,
@@ -122,9 +174,14 @@ export function getWslGuestEnvironment(
    * timer, so a 5s caller could reach `runProcess` with 1ms left and report a
    * timeout for a command that would have taken milliseconds.
    */
-  budgetMs = PROBE_TIMEOUT_MS
+  budgetMs = PROBE_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<WslGuestEnvironment | null> {
   const key = cacheKey(distro)
+  const cached = resolved.get(key)
+  if (cached) {
+    return Promise.resolve(cached)
+  }
   const retry = retryAfter.get(key)
   if (retry !== undefined && Date.now() >= retry) {
     inFlight.delete(key)
@@ -154,24 +211,26 @@ export function getWslGuestEnvironment(
     // Why race: joining an in-flight probe used to mean waiting out the
     // *starter's* budget, so a joiner could reach its own command with 1ms --
     // the exact hazard the budget plumbing was added to remove.
-    return Promise.race([
-      existing,
-      new Promise<null>((resolve) => {
-        const timer = setTimeout(() => resolve(null), budgetMs)
-        timer.unref?.()
-      })
-    ])
+    return waitForProbe(key, existing, budgetMs, signal)
   }
   // Store before awaiting so a burst collapses into one probe.
   // Why catch: runProcess REJECTS when the child cannot be started (ENOENT on a
   // host without System32\wsl.exe, EAGAIN under memory pressure). Uncaught, the
   // rejected promise stays in `inFlight` and every later call re-throws it for
   // the process lifetime -- all WSL features wedged until restart.
-  const probe = probeGuestEnvironment(distro, budgetMs)
-    .catch((): ProbeOutcome => ({ kind: 'transient' }))
+  const controller = new AbortController()
+  let entry: InFlightProbe
+  const promise = probeGuestEnvironment(distro, budgetMs, controller.signal)
+    .catch(
+      (): ProbeOutcome => (controller.signal.aborted ? { kind: 'canceled' } : { kind: 'transient' })
+    )
     .then((outcome) => {
-      if (inFlight.get(key) !== probe) {
+      if (inFlight.get(key) !== entry) {
         return outcome.kind === 'resolved' ? outcome.environment : null
+      }
+      if (outcome.kind === 'canceled') {
+        inFlight.delete(key)
+        return null
       }
       if (outcome.kind === 'resolved') {
         resolved.set(key, outcome.environment)
@@ -187,13 +246,14 @@ export function getWslGuestEnvironment(
       // Why drop the entry: keeping a null-resolving promise in `inFlight` made
       // `retryAfter` the only way back, and the probe cap left the 1.5x budget
       // escape unreachable. Deleting it lets the window alone gate the re-probe.
-      if (outcome.kind === 'transient' && inFlight.get(key) === probe) {
+      if (outcome.kind === 'transient' && inFlight.get(key) === entry) {
         inFlight.delete(key)
       }
       return null
     })
-  inFlight.set(key, probe)
-  return probe
+  entry = { promise, controller, waiters: 0 }
+  inFlight.set(key, entry)
+  return waitForProbe(key, entry, budgetMs, signal)
 }
 
 /** Needed so a tool installed inside a running distro appears without a restart. */
@@ -202,6 +262,9 @@ export function invalidateWslGuestEnvironment(distro?: string, all = false): voi
   // default distro, so overloading it to mean "all" made a default-distro
   // Refresh evict every distro and pay a login shell for each.
   if (all) {
+    for (const probe of inFlight.values()) {
+      probe.controller.abort()
+    }
     inFlight.clear()
     resolved.clear()
     retryAfter.clear()
@@ -209,6 +272,7 @@ export function invalidateWslGuestEnvironment(distro?: string, all = false): voi
     return
   }
   const key = cacheKey(distro)
+  inFlight.get(key)?.controller.abort()
   inFlight.delete(key)
   resolved.delete(key)
   retryAfter.delete(key)
@@ -228,7 +292,7 @@ export function seedWslGuestEnvironmentForTests(
   environment: WslGuestEnvironment
 ): void {
   const key = cacheKey(distro)
-  inFlight.set(key, Promise.resolve(environment))
+  inFlight.delete(key)
   resolved.set(key, environment)
   retryAfter.delete(key)
 }

@@ -12,18 +12,23 @@ export type WslProcessGroupTermination = ProcessTerminationBarrier & {
   stripControlOutput: (stderr: string) => string
 }
 
-export function createWslProcessGroupTermination(distro: string): WslProcessGroupTermination {
+export function createWslProcessGroupTermination(
+  distro: string | undefined
+): WslProcessGroupTermination {
   const marker = `__ORCA_WSL_PROCESS_GROUP_${randomUUID()}__=`
   let processGroupId: number | null = null
+  let observedDistro: string | null = null
   let stderrTail = ''
 
   const observeStderr = (chunk: Buffer | string): void => {
     const combined = `${stderrTail}${chunk.toString()}`
-    const match = combined.match(new RegExp(`${marker}(\\d+)\\r?\\n`))
+    const match = combined.match(new RegExp(`${marker}(\\d+)(?:\\t([^\\r\\n]*))?\\r?\\n`))
     stderrTail = combined.slice(-512)
     const parsed = match ? Number(match[1]) : 0
-    if (Number.isSafeInteger(parsed) && parsed > 1) {
+    const reportedDistro = match?.[2]?.trim() || null
+    if (Number.isSafeInteger(parsed) && parsed > 1 && (distro || reportedDistro)) {
       processGroupId = parsed
+      observedDistro = distro ?? reportedDistro
     }
   }
 
@@ -46,7 +51,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     const result = await runWslProcess({
       script,
       args: [String(processGroupId)],
-      distro,
+      ...(observedDistro ? { distro: observedDistro } : {}),
       loginPath: 'none',
       timeoutMs: GUEST_TERMINATION_COMMAND_TIMEOUT_MS,
       maxOutputBytes: 1_024
@@ -60,7 +65,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     force: () => terminate('KILL'),
     wrapGuestArgs: (args) => {
       const reportGroup = [
-        `printf '%s%s\\n' ${quotePosixShell(marker)} "$$" >&2`,
+        `printf '%s%s\\t%s\\n' ${quotePosixShell(marker)} "$$" "${'$'}{WSL_DISTRO_NAME:-}" >&2`,
         'exec "$@"'
       ].join('\n')
       // Why probe rather than assume: BusyBox `setsid` has no `--wait`, so there
@@ -75,6 +80,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
       ].join('\n')
       return ['sh', '-c', script, 'orca-wsl-process-group', ...args]
     },
-    stripControlOutput: (stderr) => stderr.replace(new RegExp(`${marker}\\d+\\r?\\n?`, 'g'), '')
+    stripControlOutput: (stderr) =>
+      stderr.replace(new RegExp(`${marker}\\d+(?:\\t[^\\r\\n]*)?\\r?\\n?`, 'g'), '')
   }
 }

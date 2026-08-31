@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
@@ -292,6 +293,63 @@ describe('timeout budget', () => {
     const passed = runProcessMock.mock.calls.at(-1)?.[0].timeoutMs as number
     expect(passed).toBeGreaterThan(1_000)
     expect(passed).toBeLessThanOrEqual(5_000)
+  })
+})
+
+describe('probe cancellation', () => {
+  it('does not start an environment probe for an already-aborted call', async () => {
+    const controller = new AbortController()
+    const reason = new Error('refresh already canceled')
+    controller.abort(reason)
+
+    await expect(
+      runWslProcess({
+        loginPath: 'preferred',
+        program: '/bin/true',
+        signal: controller.signal
+      })
+    ).rejects.toBe(reason)
+    expect(runProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting for a shared environment probe without starting the command', async () => {
+    let releaseProbe!: (value: {
+      code: number
+      signal: null
+      stdout: string
+      stderr: string
+      timedOut: boolean
+    }) => void
+    runProcessMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseProbe = resolve
+        })
+    )
+    const controller = new AbortController()
+    const reason = new Error('refresh canceled')
+    const operation = runWslProcess({
+      loginPath: 'preferred',
+      program: '/bin/true',
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(runProcessMock).toHaveBeenCalledOnce())
+
+    controller.abort(reason)
+    const outcome = await Promise.race([
+      operation.then(
+        () => 'resolved' as const,
+        (error: unknown) => error
+      ),
+      new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 50))
+    ])
+    releaseProbe({ code: 1, signal: null, stdout: '', stderr: '', timedOut: false })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(outcome).toBe(reason)
+    expect(runProcessMock).toHaveBeenCalledOnce()
+    expect(runProcessMock.mock.calls[0]?.[0]?.signal.aborted).toBe(true)
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
   })
 })
 

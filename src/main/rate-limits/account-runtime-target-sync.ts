@@ -3,10 +3,15 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { getInitialClaudeRateLimitTarget } from './claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './codex-rate-limit-target'
+import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 
 type AccountRuntimeRateLimitService = Pick<
   RateLimitService,
-  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget'
+  | 'getState'
+  | 'refresh'
+  | 'refreshClaudeForTarget'
+  | 'refreshCodexForTarget'
+  | 'setAntigravityFetchTarget'
 >
 
 type RuntimeTarget = {
@@ -29,13 +34,21 @@ export function createAccountRuntimeTargetSettingsSync(
     const nextSettingsTargets = getSettingsTargets(settings, platform)
     const claudePolicyChanged = !isSameTarget(settingsTargets.claude, nextSettingsTargets.claude)
     const codexPolicyChanged = !isSameTarget(settingsTargets.codex, nextSettingsTargets.codex)
+    const antigravityPolicyChanged = !isSameTarget(
+      settingsTargets.antigravity,
+      nextSettingsTargets.antigravity
+    )
     settingsTargets = nextSettingsTargets
-    if (!claudePolicyChanged && !codexPolicyChanged) {
+    if (!claudePolicyChanged && !codexPolicyChanged && !antigravityPolicyChanged) {
       return
     }
 
     const current = rateLimits.getState()
     const refreshes: Promise<RateLimitState>[] = []
+    if (antigravityPolicyChanged) {
+      rateLimits.setAntigravityFetchTarget(nextSettingsTargets.antigravity)
+      refreshes.push(rateLimits.refresh())
+    }
     if (claudePolicyChanged && !isSameTarget(current.claudeTarget, nextSettingsTargets.claude)) {
       refreshes.push(rateLimits.refreshClaudeForTarget(nextSettingsTargets.claude))
     }
@@ -50,7 +63,8 @@ export function createAccountRuntimeTargetSettingsSync(
 function getSettingsTargets(settings: GlobalSettings, platform: NodeJS.Platform) {
   return {
     claude: getInitialClaudeRateLimitTarget(settings, platform),
-    codex: getInitialCodexRateLimitTarget(settings, platform)
+    codex: getInitialCodexRateLimitTarget(settings, platform),
+    antigravity: resolveLocalAccountRuntimeTarget(settings, platform)
   }
 }
 

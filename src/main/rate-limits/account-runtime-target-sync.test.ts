@@ -10,13 +10,15 @@ function createServiceTargets(
   const state = { claudeTarget, codexTarget } as RateLimitState
   return {
     getState: vi.fn(() => state),
+    refresh: vi.fn(async () => state),
     refreshClaudeForTarget: vi.fn(async () => state),
-    refreshCodexForTarget: vi.fn(async () => state)
+    refreshCodexForTarget: vi.fn(async () => state),
+    setAntigravityFetchTarget: vi.fn()
   }
 }
 
 describe('createAccountRuntimeTargetSettingsSync', () => {
-  it('retargets only Claude and Codex when auto changes to WSL', async () => {
+  it('retargets and refreshes runtime-backed providers when auto changes to WSL', async () => {
     const service = createServiceTargets(
       { runtime: 'host', wslDistro: null },
       { runtime: 'host', wslDistro: null }
@@ -42,6 +44,8 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
     expect(service.refreshClaudeForTarget).toHaveBeenCalledWith(expectedTarget)
     expect(service.refreshCodexForTarget).toHaveBeenCalledOnce()
     expect(service.refreshCodexForTarget).toHaveBeenCalledWith(expectedTarget)
+    expect(service.setAntigravityFetchTarget).toHaveBeenCalledWith(expectedTarget)
+    expect(service.refresh).toHaveBeenCalledOnce()
   })
 
   it('does no work for unrelated settings updates', async () => {
@@ -57,6 +61,8 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
     expect(service.getState).not.toHaveBeenCalled()
     expect(service.refreshClaudeForTarget).not.toHaveBeenCalled()
     expect(service.refreshCodexForTarget).not.toHaveBeenCalled()
+    expect(service.setAntigravityFetchTarget).not.toHaveBeenCalled()
+    expect(service.refresh).not.toHaveBeenCalled()
   })
 
   it('preserves a manual runtime when the settings-derived policy does not change', async () => {
@@ -82,9 +88,11 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
     expect(service.getState).not.toHaveBeenCalled()
     expect(service.refreshClaudeForTarget).not.toHaveBeenCalled()
     expect(service.refreshCodexForTarget).not.toHaveBeenCalled()
+    expect(service.setAntigravityFetchTarget).not.toHaveBeenCalled()
+    expect(service.refresh).not.toHaveBeenCalled()
   })
 
-  it('refreshes only the provider whose current target differs', async () => {
+  it('skips targeted refreshes for providers already on the next runtime', async () => {
     const service = createServiceTargets(
       { runtime: 'host', wslDistro: null },
       { runtime: 'wsl', wslDistro: 'Ubuntu' }
@@ -104,5 +112,10 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
     expect(service.refreshClaudeForTarget).not.toHaveBeenCalled()
     expect(service.refreshCodexForTarget).toHaveBeenCalledOnce()
     expect(service.refreshCodexForTarget).toHaveBeenCalledWith({ runtime: 'host' })
+    expect(service.setAntigravityFetchTarget).toHaveBeenCalledWith({
+      runtime: 'host',
+      wslDistro: null
+    })
+    expect(service.refresh).toHaveBeenCalledOnce()
   })
 })

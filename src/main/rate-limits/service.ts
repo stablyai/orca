@@ -20,7 +20,7 @@ import {
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
-import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -215,6 +215,7 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private antigravityFetchGeneration = 0
   // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
   private lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   private opencodeFetchGeneration = 0
@@ -230,6 +231,10 @@ export class RateLimitService {
   private kimiHomeResolver: KimiHomeResolver | null = null
   private claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   private claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
+    runtime: 'host',
+    wslDistro: null
+  }
+  private antigravityFetchTarget: RateLimitRuntimeTarget = {
     runtime: 'host',
     wslDistro: null
   }
@@ -301,6 +306,23 @@ export class RateLimitService {
 
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
+  }
+
+  setAntigravityFetchTarget(target: RateLimitRuntimeTarget): void {
+    const nextTarget: RateLimitRuntimeTarget = {
+      runtime: target.runtime,
+      wslDistro: target.runtime === 'wsl' ? target.wslDistro : null
+    }
+    if (this.isSameRateLimitTarget(this.antigravityFetchTarget, nextTarget)) {
+      return
+    }
+    this.antigravityFetchTarget = nextTarget
+    this.antigravityFetchGeneration += 1
+    this.activeFailureStreakByProvider.antigravity = 0
+    this.updateState({
+      ...this.state,
+      antigravity: this.withFetchingStatus(null, 'antigravity')
+    })
   }
 
   setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
@@ -1308,6 +1330,13 @@ export class RateLimitService {
     return left.runtime === right.runtime && left.wslDistro === right.wslDistro
   }
 
+  private isSameRateLimitTarget(
+    left: RateLimitRuntimeTarget,
+    right: RateLimitRuntimeTarget
+  ): boolean {
+    return left.runtime === right.runtime && left.wslDistro === right.wslDistro
+  }
+
   private getCodexProvenance(
     target: NormalizedCodexAccountSelectionTarget,
     codexHomePath: string | null
@@ -1614,6 +1643,8 @@ export class RateLimitService {
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
+    const antigravityTarget = this.antigravityFetchTarget
+    const antigravityGeneration = this.antigravityFetchGeneration
     const previousState = this.state
     // Why: a skipped Codex poll must not stop the other providers' cycle, so gate
     // only the Codex slot instead of returning early (#STA-4422).
@@ -1689,40 +1720,48 @@ export class RateLimitService {
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
-        codexFetchGated
-          ? Promise.resolve(previousState.codex as ProviderRateLimits)
-          : (missingWslCodexHome ??
-            fetchCodexRateLimits({
-              codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-              signal
-            })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
-          cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      antigravityResult
+    ] = await Promise.allSettled([
+      claudeFetchGated
+        ? Promise.resolve(previousState.claude as ProviderRateLimits)
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          }),
+      codexFetchGated
+        ? Promise.resolve(previousState.codex as ProviderRateLimits)
+        : (missingWslCodexHome ??
+          fetchCodexRateLimits({
+            codexHomePath,
+            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            signal
+          })),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(
+        cookie,
+        workspaceIdOverride || undefined,
+        this.networkProxySettingsResolver?.()
+      ),
+      this.fetchKimiWithResolvedHome(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
+          }),
+      fetchAntigravityRateLimits({ signal, target: antigravityTarget })
+    ])
 
     if (signal.aborted) {
       return
@@ -1767,8 +1806,20 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
+    const antigravity =
+      antigravityResult.status === 'fulfilled'
+        ? antigravityResult.value
+        : ({
+            provider: 'antigravity',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              antigravityResult.reason instanceof Error
+                ? antigravityResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
@@ -1836,6 +1887,9 @@ export class RateLimitService {
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyAntigravity =
+      antigravityGeneration === this.antigravityFetchGeneration &&
+      this.isSameRateLimitTarget(antigravityTarget, this.antigravityFetchTarget)
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -1844,7 +1898,9 @@ export class RateLimitService {
       this.trackActiveFailureStreak('codex', codex)
     }
     this.trackActiveFailureStreak('gemini', gemini)
-    this.trackActiveFailureStreak('antigravity', antigravity)
+    if (shouldApplyAntigravity) {
+      this.trackActiveFailureStreak('antigravity', antigravity)
+    }
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -1871,7 +1927,9 @@ export class RateLimitService {
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
+      antigravity: shouldApplyAntigravity
+        ? this.applyStalePolicy(antigravity, previousState.antigravity)
+        : this.state.antigravity,
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax

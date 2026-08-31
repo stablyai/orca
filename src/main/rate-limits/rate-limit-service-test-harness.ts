@@ -4,6 +4,7 @@ import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -89,6 +90,9 @@ export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+  vi.mocked(fetchAntigravityRateLimits).mockImplementation(async () =>
+    unavailableProvider('antigravity')
+  )
 }
 
 /** Shared `beforeEach` body: healthy stubs for every provider the service polls. */
@@ -106,6 +110,9 @@ export function resetRateLimitProviderMocks(): void {
     error: null,
     status: 'unavailable'
   })
+  vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(
+    unavailableProvider('antigravity', 'Antigravity usage is not available.')
+  )
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
 }

@@ -51,7 +51,7 @@ describe('WSL process-group termination', () => {
     const termination = createWslProcessGroupTermination('Ubuntu')
     const wrapped = termination.wrapGuestArgs(['git', 'fetch']).join(' ')
     const marker = wrapped.match(/(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/)?.[1]
-    termination.observeStderr?.(Buffer.from(`${marker}4321\n`))
+    termination.observeStderr?.(Buffer.from(`${marker}4321\t\n`))
 
     await termination.signal({} as ChildProcess)
 
@@ -64,6 +64,28 @@ describe('WSL process-group termination', () => {
     expect(spec.loginPath).toBe('none')
     expect(spec.timeoutMs).toBeGreaterThan(0)
     expect(spec.script).toContain('kill -TERM')
+  })
+
+  it('terminates a default-distro command in the distro that reported the group', async () => {
+    const termination = createWslProcessGroupTermination(undefined)
+    const wrapped = termination.wrapGuestArgs(['git', 'fetch']).join(' ')
+    const marker = wrapped.match(/(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/)?.[1]
+    termination.observeStderr?.(Buffer.from(`${marker}4321\tUbuntu-24.04\n`))
+
+    await expect(termination.signal({} as ChildProcess)).resolves.toBe(true)
+
+    expect(runWslProcessMock.mock.calls[0]?.[0]?.distro).toBe('Ubuntu-24.04')
+    expect(termination.stripControlOutput(`${marker}4321\tUbuntu-24.04\n`)).toBe('')
+  })
+
+  it('does not target a re-resolved default distro without a reported distro identity', async () => {
+    const termination = createWslProcessGroupTermination(undefined)
+    const wrapped = termination.wrapGuestArgs(['git', 'fetch']).join(' ')
+    const marker = wrapped.match(/(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/)?.[1]
+    termination.observeStderr?.(Buffer.from(`${marker}4321\n`))
+
+    await expect(termination.signal({} as ChildProcess)).resolves.toBe(false)
+    expect(runWslProcessMock).not.toHaveBeenCalled()
   })
 
   it('does not claim termination before the guest reports its identity', async () => {

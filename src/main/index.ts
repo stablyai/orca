@@ -241,6 +241,7 @@ import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
+import { resolveLocalAccountRuntimeTarget } from '../shared/local-account-runtime'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import {
@@ -2773,6 +2774,7 @@ void app.whenReady().then(async () => {
   // usage fetch must read the WSL-side credentials when that's the configured runtime (#12370).
   rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store!.getSettings())))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
+  rateLimits.setAntigravityFetchTarget(resolveLocalAccountRuntimeTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,
     store.getSettings()

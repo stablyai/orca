@@ -63,7 +63,7 @@ export type ProviderRateLimits = {
   fableWeekly?: RateLimitWindow | null
   /** 30-day monthly window (OpenCode Go, Grok unified billing), null if not available. */
   monthly?: RateLimitWindow | null
-  /** Named per-model buckets (Gemini only). */
+  /** Named per-model or provider-pool buckets. */
   buckets?: RateLimitBucket[]
   /** Available earned Codex rate-limit reset credits, if reported. */
   rateLimitResetCredits?: {

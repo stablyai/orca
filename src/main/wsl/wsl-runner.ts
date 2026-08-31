@@ -1,6 +1,6 @@
 import { addWslEnvKeys } from '../../shared/wsl-env'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess, type ProcessTerminationBarrier } from '../../shared/child-process/run-process'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
 import { resolveWslExecutablePath } from './wsl-executable-path'
@@ -71,6 +71,11 @@ export type WslSpec = WslCommand & {
   env?: Readonly<Record<string, string>>
   timeoutMs?: number
   maxOutputBytes?: number
+  signal?: AbortSignal
+  terminationBarrier?: ProcessTerminationBarrier & {
+    wrapGuestArgs: (args: readonly string[]) => string[]
+    stripControlOutput: (stderr: string) => string
+  }
 }
 
 export type WslResult = {
@@ -194,6 +199,9 @@ function buildGuestArgv(
  * flag on 19 of 23 sites -- existed only because that case used to throw.
  */
 export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
+  if (spec.signal?.aborted) {
+    throw spec.signal.reason
+  }
   if (spec.program !== undefined) {
     assertNotShellString(spec.program)
   }
@@ -209,7 +217,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   const remainingForProbe = deadline - Date.now()
   const probeBudgetMs = Math.max(1, Math.min(4_000, Math.floor(remainingForProbe / 2)))
   const environment = wantsEnvironment
-    ? await getWslGuestEnvironment(spec.distro, probeBudgetMs)
+    ? await getWslGuestEnvironment(spec.distro, probeBudgetMs, spec.signal)
     : null
 
   // Probe failure must NOT fall back to the login shell. That lane sources
@@ -220,7 +228,9 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // Build the argv form first and measure it: the env prefix is part of the
   // budget, so only the finished line can say whether argv fits. Resolved once
   // here because the argv shape and the stdin payload must agree.
-  const argvForm = buildGuestArgv(environment, spec, 'argv')
+  const wrapForTermination = (argv: string[]): string[] =>
+    spec.terminationBarrier?.wrapGuestArgs(argv) ?? argv
+  const argvForm = wrapForTermination(buildGuestArgv(environment, spec, 'argv'))
   // Measure what is actually spawned: `wsl.exe` and `-d <distro> --exec` are
   // prepended after this point and are part of the same budget.
   const fullLine = [resolveWslExecutablePath(), ...buildWslExecArgs(spec.distro, argvForm)]
@@ -231,7 +241,8 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     spec.script !== undefined && commandLineLength(fullLine) > MAX_COMMAND_LINE_CHARS
       ? 'stdin'
       : 'argv'
-  const argv = delivery === 'argv' ? argvForm : buildGuestArgv(environment, spec, 'stdin')
+  const argv =
+    delivery === 'argv' ? argvForm : wrapForTermination(buildGuestArgv(environment, spec, 'stdin'))
 
   // One budget for the whole call: the probe used to run on its own 10s timer
   // ahead of the timed leg, so a 5s caller could wait 15s.
@@ -242,14 +253,16 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     env: buildHostEnv(spec.env),
     input: delivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,
-    maxOutputBytes: spec.maxOutputBytes
+    maxOutputBytes: spec.maxOutputBytes,
+    signal: spec.signal,
+    terminationBarrier: spec.terminationBarrier
   })
 
   return {
     environmentResolved: !wantsEnvironment || environment !== null,
     code: result.code,
     stdout: result.stdout,
-    stderr: result.stderr,
+    stderr: spec.terminationBarrier?.stripControlOutput(result.stderr) ?? result.stderr,
     timedOut: result.timedOut
   }
 }

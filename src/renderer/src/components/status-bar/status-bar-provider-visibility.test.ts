@@ -121,11 +121,9 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
-    // Why: antigravity durability requires the Gemini OAuth opt-in; the
-    // checked item alone must not suppress the usage setup CTA.
-    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
-      false
-    )
+    // Why: Antigravity quota is read from `agy` itself now, so the checked item
+    // (set only after PATH detection finds `agy`) is durable usage setup on its own.
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
   })
@@ -160,21 +158,21 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
   })
 
-  it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
+  it('treats the checked Antigravity item alone as the durable Antigravity signal', () => {
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
     ).toBe(true)
-    // Why: the snapshot mirrors the Gemini fetch — without the OAuth opt-in it
-    // is permanently unavailable, so the checked item alone is not durable.
+    // Why: Antigravity quota no longer comes from the Gemini fetch, so requiring the
+    // Gemini opt-in would hide a working segment from every Antigravity-only user (#9122).
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(false)
+    ).toBe(true)
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
@@ -324,7 +322,7 @@ describe('getVisibleUsageProvider', () => {
     ).toBe(null)
   })
 
-  it('keeps Antigravity visible while the snapshot is pending when checked and Gemini OAuth is on', () => {
+  it('keeps Antigravity visible while the snapshot is pending when its item is checked', () => {
     const visible = getVisibleUsageProvider(
       'antigravity',
       null,
@@ -338,24 +336,42 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
-  it('hides Antigravity while Gemini OAuth is off even when its status item is checked', () => {
-    // Why: without the OAuth opt-in the mirrored snapshot is permanently
-    // 'unavailable'; the default-on item must not pin a dead bar.
+  it('keeps Antigravity visible with the Gemini opt-in off', () => {
+    // Why: an Antigravity-only user never enables Gemini CLI OAuth, and their quota is
+    // now readable without it — gating on Gemini would hide a working segment (#9122).
     expect(
       getVisibleUsageProvider(
         'antigravity',
         null,
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(null)
+    ).toMatchObject({ provider: 'antigravity', status: 'fetching' })
+    // Why: a *running* but signed-out `agy` is actionable, so that segment stays visible.
     expect(
       getVisibleUsageProvider(
         'antigravity',
         provider('unavailable', {
           provider: 'antigravity',
-          error: 'Gemini CLI OAuth is disabled in settings'
+          error: 'Antigravity usage is not available. Sign in with the Antigravity CLI (agy).',
+          usageMetadata: { source: 'cli', failureKind: 'missing-credentials' }
         }),
         usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toMatchObject({ provider: 'antigravity', status: 'unavailable' })
+  })
+
+  // Why: `agy` is a per-session CLI. "Installed but not running" is the normal resting state and
+  // must not pin a permanent warning bar — that is the dead bar the old Gemini gate prevented.
+  it('hides Antigravity when no Agy language server is running', () => {
+    expect(
+      getVisibleUsageProvider(
+        'antigravity',
+        provider('unavailable', {
+          provider: 'antigravity',
+          error: 'Antigravity usage is not available. Start the Antigravity CLI (agy).',
+          usageMetadata: { source: 'cli', failureKind: 'cli-unavailable' }
+        }),
+        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
     ).toBe(null)
   })
@@ -499,9 +515,9 @@ describe('isUsageEmptyState', () => {
     ).toBe(false)
   })
 
-  it('still shows the setup CTA when Antigravity is checked but Gemini OAuth is off', () => {
-    // Why: the default-on Antigravity item is not configured usage on its own;
-    // it must not hide the teaching CTA from users who set nothing up.
+  it('hides the setup CTA when Antigravity is checked and the Gemini opt-in is off', () => {
+    // Why: a detected `agy` with its item checked *is* configured usage now, so the
+    // teaching CTA would be telling the user to set up something already working.
     expect(
       isUsageEmptyState(
         {
@@ -516,6 +532,6 @@ describe('isUsageEmptyState', () => {
         },
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(true)
+    ).toBe(false)
   })
 })

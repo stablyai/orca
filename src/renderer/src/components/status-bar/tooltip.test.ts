@@ -327,6 +327,54 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('does not append a duplicate weekly summary to Antigravity native buckets', () => {
+    const weekly = {
+      usedPercent: 50,
+      windowMinutes: 10080,
+      resetsAt: 1_800_000,
+      resetDescription: null
+    }
+    const p: ProviderRateLimits = {
+      provider: 'antigravity',
+      session: { usedPercent: 90, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly,
+      buckets: [
+        {
+          name: 'Gemini Models · 5h',
+          usedPercent: 20,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        { name: 'Gemini Models · 7d', ...weekly },
+        {
+          name: 'Claude and GPT models · 5h',
+          usedPercent: 90,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'Claude and GPT models · 7d',
+          usedPercent: 0,
+          windowMinutes: 10080,
+          resetsAt: 2_000_000,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    expect(getWindowSections(p).map((section) => section.label)).toEqual([
+      'Gemini Models · 5h',
+      'Gemini Models · 7d',
+      'Claude and GPT models · 5h',
+      'Claude and GPT models · 7d'
+    ])
+  })
+
   it('returns session and weekly when buckets are absent', () => {
     const p: ProviderRateLimits = {
       provider: 'claude',
