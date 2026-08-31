@@ -388,7 +388,10 @@ describe('orchestration skill guidance', () => {
       'if a stronger model or effort is genuinely needed, ask the user through `ask` or a decision gate.'
     )
     expect(workerLoop).toContain(
-      'If worker-start fails with `agent_unconfigured`, no default worker agent is configured: retry that launch with an explicit `--agent` and tell the user to set a default worker agent in Settings > Orchestration.'
+      "If worker-start fails with `agent_unconfigured`, no default worker agent is configured and the coordinator has no basis to pick one: stop and ask the user which agent to launch, in the coordinator's own turn, the same way you would for a stronger model or effort, then retry that launch with the user's answer as an explicit `--agent`."
+    )
+    expect(workerLoop).toContain(
+      'Never resolve `agent_unconfigured` by choosing an agent yourself, and tell the user to set a default worker agent in Settings > Orchestration so later launches stay flag-free.'
     )
     expect(workerLoop).toContain(
       'This is missing-configuration recovery, not permission to override defaults.'
