@@ -82,6 +82,13 @@ describe('headless serve shutdown PR gate', () => {
     expect(signalCase).not.toContain('tail --pid=')
   })
 
+  it('gives owned shutdown state a bounded cleanup grace', () => {
+    expect(signalCase).toContain('for shutdown_poll in {0..50}; do')
+    expect(signalCase).toContain('[[ -z "$listener_after" && -z "$owned_residue" ]]')
+    expect(signalCase).toContain('((${#survivors[@]} == 0))')
+    expect(signalCase).toContain('((shutdown_poll < 50)) && sleep 0.1')
+  })
+
   it('checks that a serving-electron signal target owns the ready socket', () => {
     const ssRecord =
       'LISTEN 0 128 127.0.0.1:41235 0.0.0.0:* users:(("orca-ide",pid=23,fd=7),("orca-ide",pid=25,fd=8))'

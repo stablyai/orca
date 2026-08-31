@@ -180,17 +180,25 @@ fi
 kill "$watchdog_pid" 2>/dev/null || true
 wait "$watchdog_pid" 2>/dev/null || true
 
-listener_after=$(ss -H -ltnp "sport = :$bound_port" || true)
-survivors=()
-for pid in "${tree_pids[@]}"; do
-  if [[ -r "/proc/$pid/stat" ]] \
-    && [[ $(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true) == "${tree_start_ticks[$pid]}" ]] \
-    && ps -o stat= -p "$pid" 2>/dev/null | grep -qv '^Z'; then
-    survivors+=("$pid")
+# Crashpad can exit just after Electron; poll all owned shutdown state for up to 5s.
+for shutdown_poll in {0..50}; do
+  listener_after=$(ss -H -ltnp "sport = :$bound_port" || true)
+  survivors=()
+  for pid in "${tree_pids[@]}"; do
+    if [[ -r "/proc/$pid/stat" ]] \
+      && [[ $(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true) == "${tree_start_ticks[$pid]}" ]] \
+      && ps -o stat= -p "$pid" 2>/dev/null | grep -qv '^Z'; then
+      survivors+=("$pid")
+    fi
+  done
+  owned_residue=$(ps -eo pid=,ppid=,stat=,args= | awk -v state="$state_dir" \
+    '($0 ~ state || $0 ~ /\/artifacts\/root\/orca-ide/ || $0 ~ /[X]vfb :99 /) && $0 !~ /awk -v state=/ {print}' || true)
+  if [[ -z "$listener_after" && -z "$owned_residue" ]] \
+    && ((${#survivors[@]} == 0)); then
+    break
   fi
+  ((shutdown_poll < 50)) && sleep 0.1
 done
-owned_residue=$(ps -eo pid=,ppid=,stat=,args= | awk -v state="$state_dir" \
-  '($0 ~ state || $0 ~ /\/artifacts\/root\/orca-ide/ || $0 ~ /[X]vfb :99 /) && $0 !~ /awk -v state=/ {print}' || true)
 
 canary_alive=false
 if kill -0 "$canary_pid" 2>/dev/null \
