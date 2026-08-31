@@ -72,6 +72,7 @@ describe('PR workflow parallelism', () => {
     )
     expect(sharedTest.strategy.matrix.shard_total).toEqual([8])
     expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
+    expect(installStep.with['cache-electron-package']).toBe('true')
     expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
     for (const testFile of nativeShellContractFiles) {
       expect(testStep.run).toContain(`--exclude=${testFile}`)
@@ -283,6 +284,11 @@ describe('PR workflow parallelism', () => {
     expect(installFor('package').with['native-runtime']).toBe('electron')
     expect(installFor('package_windows').with['native-runtime']).toBe('node')
     expect(installFor('package_windows').with['persist-native-cache']).toBe('false')
+    expect(
+      workflow.jobs.package_windows.steps.find(
+        (step) => step.name === 'Save compiled Node native modules'
+      ).if
+    ).toBe("steps.deps.outputs.native-cache-hit != 'true'")
 
     expect(dependencyAction.inputs['persist-native-cache'].default).toBe('true')
     expect(
@@ -351,7 +357,9 @@ describe('PR workflow parallelism', () => {
       expect(cacheStep.with.key).toContain('${{ inputs.native-runtime }}')
       expect(cacheStep.with.key).toContain('${{ runner.os }}')
       expect(cacheStep.with.key).toContain('${{ runner.arch }}')
-      expect(cacheStep.with.key).toContain('steps.requested-node.outputs.node-version')
+      expect(cacheStep.with.key).toContain(
+        'steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version'
+      )
       expect(cacheStep.with.key).toContain('steps.native-cache-scope.outputs.scope')
       expect(cacheStep.with.key).toContain('config/patches/node-pty@1.1.0.patch')
       expect(cacheStep.with.key).toContain(
@@ -365,12 +373,31 @@ describe('PR workflow parallelism', () => {
       expect(cacheStep.with.path).toContain('@vscode+windows-process-tree@')
       expect(cacheStep.with['restore-keys']).toBeUndefined()
     }
+    expect(steps[cacheIndex].id).toBe('native-cache-restore')
+    expect(restoreOnly.id).toBe('native-cache-restore-only')
     const cacheScope = steps.find((step) => step.name === 'Resolve native cache scope')
     expect(cacheScope.if).toBe("inputs.native-runtime != 'none'")
     expect(cacheScope.run).toContain('/etc/os-release')
     expect(dependencyAction.outputs['native-cache-scope'].value).toBe(
       '${{ steps.native-cache-scope.outputs.scope }}'
     )
+    expect(dependencyAction.outputs['native-cache-hit'].value).toContain(
+      'steps.native-cache-restore.outputs.cache-hit'
+    )
+    expect(dependencyAction.outputs['native-cache-hit'].value).toContain(
+      'steps.native-cache-restore-only.outputs.cache-hit'
+    )
+    const electronCache = steps.find((step) => step.name === 'Cache Electron package archive')
+    const electronCacheResolution = steps.find(
+      (step) => step.name === 'Resolve Electron package cache'
+    )
+    expect(electronCacheResolution.if).toBe(
+      "inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'"
+    )
+    expect(electronCache.if).toBe(electronCacheResolution.if)
+    expect(electronCache.uses).toBe('actions/cache@v5')
+    expect(electronCache.with.key).toContain('steps.electron-package-cache.outputs.version')
+    expect(dependencyAction.inputs['cache-electron-package'].default).toBe('false')
   })
 
   it('reuses TypeScript incremental state across typecheck runs', () => {
@@ -381,13 +408,15 @@ describe('PR workflow parallelism', () => {
     expect(cacheIndex).toBeGreaterThanOrEqual(0)
     expect(cacheIndex).toBeLessThan(checkIndex)
     expect(steps[cacheIndex].with.path).toBe('config/*.tsbuildinfo')
-    // Why restore-keys matter here: an exact-key miss is the normal case (the key is
-    // per-SHA), so without them the cache would never once be read.
+    // Why restore-keys matter here: the base SHA key is shared by every commit in a PR,
+    // but actions/cache keeps the first successful graph until the base or config changes.
     expect(steps[cacheIndex].with['restore-keys']).toBeTruthy()
     // The buildinfo is only reusable while the compiler options that produced it hold.
     expect(steps[cacheIndex].with.key).toContain(
       "hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json')"
     )
+    expect(steps[cacheIndex].with.key).toContain('github.event.pull_request.base.sha')
+    expect(steps[cacheIndex].with['restore-keys']).not.toContain('tsbuildinfo-${{ runner.os }}-\n')
   })
 
   it('checks out full history without historical blobs', () => {

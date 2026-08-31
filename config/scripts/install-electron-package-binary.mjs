@@ -125,7 +125,9 @@ function repairElectronPathFile() {
 async function installElectronPackageBinary() {
   const electronDistDir = resolve(electronPackageDir, 'dist')
   const tempDir = mkdtempSync(resolve(tmpdir(), 'orca-electron-'))
-  const cacheRoot = join(tempDir, 'cache')
+  const persistentCacheRoot =
+    process.env.ORCA_ELECTRON_PACKAGE_CACHE_ROOT || process.env.ELECTRON_CACHE || null
+  const cacheRoot = persistentCacheRoot ?? join(tempDir, 'cache')
   const extractDir = join(tempDir, 'extract')
 
   try {
@@ -135,11 +137,13 @@ async function installElectronPackageBinary() {
       platform: targetPlatform,
       arch: targetArch,
       cacheRoot,
-      force: true,
+      force: !persistentCacheRoot,
       tempDirectory: tempDir,
       ...(shouldUseRemoteChecksums() ? {} : { checksums: electronRequire('./checksums.json') })
     }
-    const zipPath = await downloadElectronArtifactWithRetry(downloadOptions)
+    const zipPath = await downloadElectronArtifactWithRetry(downloadOptions, {
+      cacheRootIsPersistent: Boolean(persistentCacheRoot)
+    })
 
     // Why: CI has observed partial extracts directly under node_modules/electron
     // that leave only dist/locales. Verify in temp before replacing package dist.
@@ -159,7 +163,7 @@ async function installElectronPackageBinary() {
   }
 }
 
-async function downloadElectronArtifactWithRetry(downloadOptions) {
+async function downloadElectronArtifactWithRetry(downloadOptions, { cacheRootIsPersistent }) {
   const retryDelays = getDownloadRetryDelays()
 
   for (let attempt = 0; ; attempt += 1) {
@@ -175,7 +179,9 @@ async function downloadElectronArtifactWithRetry(downloadOptions) {
         `[electron-package] Transient Electron download failure (${formatDownloadError(error)}); ` +
           `retrying in ${retryDelay}ms (${attempt + 2}/${retryDelays.length + 1}).`
       )
-      rmSync(downloadOptions.cacheRoot, { recursive: true, force: true })
+      if (!cacheRootIsPersistent) {
+        rmSync(downloadOptions.cacheRoot, { recursive: true, force: true })
+      }
       await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelay))
     }
   }

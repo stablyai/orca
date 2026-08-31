@@ -6,6 +6,17 @@ import { parse } from 'yaml'
 const projectDir = resolve(import.meta.dirname, '../..')
 
 describe('computer-use e2e workflow', () => {
+  it('cancels superseded pull request runs without cancelling scheduled runs', () => {
+    const workflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
+    )
+
+    expect(workflow.concurrency).toEqual({
+      group: 'computer-e2e-${{ github.event.pull_request.number || github.ref }}',
+      'cancel-in-progress': "${{ github.event_name == 'pull_request' }}"
+    })
+  })
+
   it('runs computer-use e2e files serially because they share desktop focus', () => {
     const config = readFileSync(join(projectDir, 'tests/e2e/vitest.config.ts'), 'utf8')
 
@@ -121,6 +132,29 @@ describe('computer-use e2e workflow', () => {
     }
   })
 
+  it('keeps Linux native imports available without installing the GUI-only stack in PR smoke', () => {
+    const workflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
+    )
+    const nativeSmokeInstall = workflow.jobs['native-smoke'].steps.find(
+      (step) => step.if === "runner.os == 'Linux'"
+    )
+    const scheduledLinuxInstall = workflow.jobs.linux.steps.find((step) =>
+      step.run?.includes('apt-get install')
+    )
+
+    expect(nativeSmokeInstall.run).toContain('python3')
+    expect(nativeSmokeInstall.run).toContain('python3-gi')
+    expect(nativeSmokeInstall.run).toContain('gir1.2-atspi-2.0')
+    expect(nativeSmokeInstall.run).toContain('at-spi2-core')
+    expect(nativeSmokeInstall.run).not.toContain('gedit')
+    expect(nativeSmokeInstall.run).not.toContain('xvfb')
+    expect(nativeSmokeInstall.run).not.toContain('xdotool')
+    expect(scheduledLinuxInstall.run).toContain('gedit')
+    expect(scheduledLinuxInstall.run).toContain('xvfb')
+    expect(scheduledLinuxInstall.run).toContain('xdotool')
+  })
+
   it('builds and tests the macOS helper on every trigger without hosted TCC e2e', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
@@ -210,7 +244,7 @@ describe('computer-use e2e workflow', () => {
     )
     const steps = workflow.jobs['native-smoke'].steps
     const runs = steps.map((step) => step.run).filter((run) => typeof run === 'string')
-    const buildIndex = runs.indexOf('pnpm build:electron-vite')
+    const buildIndex = runs.indexOf('pnpm run build:electron-vite:parallel')
     const daemonSmokeIndex = runs.indexOf('node config/scripts/daemon-boot-smoke.mjs')
 
     expect(daemonSmokeIndex, 'native-smoke must boot the built daemon').toBeGreaterThanOrEqual(0)
@@ -226,7 +260,9 @@ describe('computer-use e2e workflow', () => {
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
     )
     const steps = workflow.jobs['native-smoke'].steps
-    const buildIndex = steps.findIndex((step) => step.run === 'pnpm build:electron-vite')
+    const buildIndex = steps.findIndex(
+      (step) => step.run === 'pnpm run build:electron-vite:parallel'
+    )
     const reproIndex = steps.findIndex(
       (step) => step.run === 'node config/scripts/windows-daemon-workspace-close-repro.mjs'
     )
@@ -275,7 +311,7 @@ describe('computer-use e2e workflow', () => {
       const runs = workflow.jobs[jobName].steps
         .map((step) => step.run)
         .filter((run) => typeof run === 'string')
-      const buildIndex = runs.indexOf('pnpm build:electron-vite')
+      const buildIndex = runs.indexOf('pnpm run build:electron-vite:parallel')
       const e2eIndexes = runs
         .map((run, index) => (run.includes('test:e2e:computer') ? index : -1))
         .filter((index) => index >= 0)

@@ -1,5 +1,5 @@
 name: Install Node dependencies
-description: Installs the Node toolchain and repository dependencies for CI jobs.
+description: Installs the Node toolchain and repository dependencies for CI jobs, with optional Electron archive caching.
 
 inputs:
   native-runtime:
@@ -14,6 +14,10 @@ inputs:
     description: Save restored native modules at job end. Set false when a later step overwrites the same path with a different ABI.
     required: false
     default: 'true'
+  cache-electron-package:
+    description: Cache the Electron package archive and export ELECTRON_CACHE for following steps.
+    required: false
+    default: 'false'
 
 outputs:
   node-version:
@@ -22,6 +26,9 @@ outputs:
   native-cache-scope:
     description: Operating-system image scope used by the native module cache.
     value: ${{ steps.native-cache-scope.outputs.scope }}
+  native-cache-hit:
+    description: Whether the compiled native module cache was restored.
+    value: ${{ steps.native-cache-restore.outputs.cache-hit || steps.native-cache-restore-only.outputs.cache-hit }}
 
 runs:
   using: composite
@@ -90,6 +97,32 @@ runs:
           git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
         fi
 
+    - name: Resolve Electron package cache
+      id: electron-package-cache
+      if: inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS" in
+          Linux) cache_root="$HOME/.cache/electron" ;;
+          macOS) cache_root="$HOME/Library/Caches/electron" ;;
+          Windows) cache_root="${LOCALAPPDATA:-$HOME/AppData/Local}/electron/Cache" ;;
+          *)
+            echo "::error::Unsupported runner OS for Electron cache: $RUNNER_OS"
+            exit 2
+            ;;
+        esac
+        printf 'cache-root=%s\n' "$cache_root" >> "$GITHUB_OUTPUT"
+        printf 'ELECTRON_CACHE=%s\n' "$cache_root" >> "$GITHUB_ENV"
+        printf 'version=%s\n' "$(node -p "require('./node_modules/electron/package.json').version")" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Electron package archive
+      if: inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.electron-package-cache.outputs.cache-root }}
+        key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
+
     # Why cached: `--ignore-scripts` leaves node-pty without build/Release, so
     # ensure-native-runtime node-gyp-compiles it in every job that asks for a runtime.
     # The artifacts are ABI-bound, so the key carries the target runtime, the resolved
@@ -112,6 +145,7 @@ runs:
         echo "scope=$scope" >> "$GITHUB_OUTPUT"
 
     - name: Restore compiled native modules
+      id: native-cache-restore
       if: inputs.native-runtime != 'none' && inputs.persist-native-cache != 'false'
       uses: actions/cache@v5
       with:
@@ -119,9 +153,10 @@ runs:
           node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
           node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
           node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.default-node.outputs.node-version }}${{ steps.requested-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
     - name: Restore compiled native modules without saving
+      id: native-cache-restore-only
       if: inputs.native-runtime != 'none' && inputs.persist-native-cache == 'false'
       uses: actions/cache/restore@v5
       with:
@@ -129,7 +164,7 @@ runs:
           node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
           node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
           node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.default-node.outputs.node-version }}${{ steps.requested-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
     - name: Prepare native runtime
       if: inputs.native-runtime != 'none'

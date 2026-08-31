@@ -215,16 +215,16 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
 
       # Why: every project is `composite`, so tsc already writes a .tsbuildinfo that lets
-      # the next run skip unchanged files. CI threw it away each time. The key is per-SHA
-      # so each run saves its own; restore-keys inherit the newest prior graph to diff against.
+      # the next run skip unchanged files. Share one cache entry across commits while the
+      # PR base stays stable; actions/cache keeps the first successful graph and the
+      # compiler still invalidates stale files from its content hashes.
       - name: Cache TypeScript incremental state
         uses: actions/cache@v5
         with:
           path: config/*.tsbuildinfo
-          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.event.pull_request.base.sha }}
           restore-keys: |
             tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
-            tsbuildinfo-${{ runner.os }}-
 
       - run: pnpm run typecheck
 
@@ -630,9 +630,7 @@ jobs:
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
-          path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
+          path: ~/.cache/electron-builder
           key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-builder-linux-
@@ -723,6 +721,7 @@ jobs:
           persist-native-cache: 'false'
 
       - name: Save compiled Node native modules
+        if: steps.deps.outputs.native-cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: |

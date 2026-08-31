@@ -32,6 +32,7 @@ jobs:
         with:
           native-runtime: node
           node-version: ${{ matrix.node }}
+          cache-electron-package: 'true'
 
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
