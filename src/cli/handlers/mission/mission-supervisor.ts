@@ -6,6 +6,12 @@ import {
   type MissionAttentionReporter
 } from './mission-attention-reporting'
 import { prepareMissionTasks } from './mission-task-materialization'
+import {
+  isNoEffectStartFailure,
+  markNoEffectFailuresSettled,
+  MissionWorkerStartFailure,
+  type MissionWorkerStartResult
+} from './mission-start-failure'
 
 export type MissionAdmission = {
   acceptedTypes: string[]
@@ -96,6 +102,7 @@ async function superviseMission(input: {
     const unresolvedStartFailure = getUnresolvedStartFailure(tasks, startFailures)
     if (completed.length + failed.length === tasks.length) {
       if (unresolvedStartFailure) {
+        markNoEffectFailuresSettled(startFailures)
         throw unresolvedStartFailure
       }
       return {
@@ -201,14 +208,6 @@ function getUnresolvedStartFailure(
   return null
 }
 
-type MissionWorkerStartResult = {
-  taskId: string
-  dispatchId: string
-  state: string
-  failedStage?: string
-  lastError?: string
-}
-
 const RETRYABLE_WORKER_START_STAGES = new Set(['terminal_create', 'agent_readiness'])
 
 async function startMissionWorker(
@@ -225,6 +224,7 @@ async function startMissionWorker(
   const candidates = input.agentCandidates?.length ? input.agentCandidates : [input.agent]
   const failures: string[] = []
   let retryOf: string | undefined
+  let allAttemptsHaveNoResidualEffects = true
 
   for (const [index, agent] of candidates.entries()) {
     try {
@@ -243,6 +243,7 @@ async function startMissionWorker(
       if (worker.result.state === 'ready') {
         return
       }
+      allAttemptsHaveNoResidualEffects &&= isNoEffectStartFailure(worker.result)
 
       const reason =
         worker.result.lastError ?? `Worker ${worker.result.dispatchId} failed to become ready.`
@@ -252,10 +253,11 @@ async function startMissionWorker(
         retryOf = worker.result.dispatchId
         continue
       }
-      throw new RuntimeClientError('mission_worker_start_failed', reason)
+      throw new MissionWorkerStartFailure(reason, allAttemptsHaveNoResidualEffects)
     } catch (error) {
       const hasNext = index + 1 < candidates.length
       if (hasNext && error instanceof RuntimeClientError && error.code === 'agent_unconfigured') {
+        allAttemptsHaveNoResidualEffects = false
         failures.push(`${agent}: ${error.message}`)
         continue
       }
