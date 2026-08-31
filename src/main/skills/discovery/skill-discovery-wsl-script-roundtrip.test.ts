@@ -7,6 +7,10 @@ import { describe, expect, it } from 'vitest'
 import type { SkillScanRoot } from './skill-discovery-sources'
 import { buildWslSkillDiscoveryCommand } from './skill-discovery-wsl'
 import { parseWslSkillDiscoveryOutput } from './skill-discovery-wsl-observation'
+import {
+  buildWslCustomSlashCommandDiscoveryCommand,
+  parseWslCustomSlashCommandOutput
+} from './custom-slash-command-discovery-wsl'
 
 const run = promisify(execFile)
 
@@ -49,5 +53,32 @@ describe.skipIf(process.platform === 'win32')('WSL skill discovery script round-
       expect(skill.directoryPath).toBe(skill.skillFilePath.slice(0, -'/SKILL.md'.length))
     }
     expect(result.scannedAt).toBe(42)
+  })
+
+  it('parses back the custom slash commands the generated script emits', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'orca-wsl-roundtrip-'))
+    const projectCommands = join(base, 'repo', '.claude', 'commands')
+    await mkdir(join(projectCommands, 'opsx'), { recursive: true })
+    await writeFile(
+      join(projectCommands, 'opsx', 'apply.md'),
+      '---\ndescription: Apply an OpenSpec change\n---\n'
+    )
+    await writeFile(join(projectCommands, 'standalone.md'), '# Standalone\n\nRun it.\n')
+    await writeFile(join(projectCommands, 'notes.txt'), 'not a command')
+    const commandRoots = [
+      { path: projectCommands, scope: 'project' as const },
+      { path: join(base, 'absent-commands'), scope: 'user' as const }
+    ]
+
+    const { stdout } = await run(
+      'bash',
+      ['-c', buildWslCustomSlashCommandDiscoveryCommand(commandRoots)],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+    )
+    const commands = parseWslCustomSlashCommandOutput(stdout, commandRoots)
+
+    expect(commands.map((command) => command.name)).toEqual(['opsx:apply', 'standalone'])
+    expect(commands[0].description).toBe('Apply an OpenSpec change')
+    expect(commands[0].scope).toBe('project')
   })
 })

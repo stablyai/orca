@@ -47,6 +47,10 @@ import {
   bundledSkillNames,
   requestedBundledSkillName
 } from '../../../shared/skills/bundled/bundled-skill-names'
+import {
+  clearCustomSlashCommandScanCache,
+  discoverCustomSlashCommands
+} from './custom-slash-command-discovery'
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
@@ -65,6 +69,7 @@ const lastKnownRootScans = new Map<string, { skills: ScannedSkill[]; recordedAt:
 /** Invalidate after skill mutations. */
 export function clearSkillRootScanCache(): void {
   rootScans.clear()
+  clearCustomSlashCommandScanCache()
   // Mutation invalidates retained pre-mutation answers too.
   lastKnownRootScans.clear()
 }
@@ -244,12 +249,13 @@ export async function discoverSkills(args: {
       : undefined
   const gateStopped = args.readStoppedWslRootsFor !== 'all'
   const mayReadStopped = stoppedRootReader(args.readStoppedWslRootsFor)
-  const pluginCwdStopped =
+  const cwdStopped = async (cwd: string | undefined): Promise<boolean> =>
     gateStopped &&
-    pluginCwd !== undefined &&
-    !mayReadStopped(pluginCwd) &&
-    wslDistroForPath(pluginCwd) !== null &&
-    (await isOnStoppedWslDistro(pluginCwd))
+    cwd !== undefined &&
+    !mayReadStopped(cwd) &&
+    wslDistroForPath(cwd) !== null &&
+    (await isOnStoppedWslDistro(cwd))
+  const pluginCwdStopped = await cwdStopped(pluginCwd)
   const candidateRoots = [
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     ...(pluginCwd && !pluginCwdStopped
@@ -268,8 +274,13 @@ export async function discoverSkills(args: {
       : { readable: candidateRoots, unavailable: [] }
   const roots = readable.filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   args.signal?.throwIfAborted()
-  const scans = await waitForPromiseWithSignal(
-    Promise.all(roots.map((root) => scanRootShared(root, refresh))),
+  const commandsCwd = args.includeCwd !== false ? args.cwd : undefined
+  const scanCommands = commandsCwd !== undefined && !(await cwdStopped(commandsCwd))
+  const [scans, commands] = await waitForPromiseWithSignal(
+    Promise.all([
+      Promise.all(roots.map((root) => scanRootShared(root, refresh))),
+      scanCommands ? discoverCustomSlashCommands({ homeDir, cwd: commandsCwd, refresh }) : []
+    ]),
     args.signal
   )
   const sources: SkillDiscoverySource[] = [
@@ -328,6 +339,7 @@ export async function discoverSkills(args: {
   return {
     skills,
     sources: sortSkillDiscoverySources(sources),
-    scannedAt: Date.now()
+    scannedAt: Date.now(),
+    commands
   }
 }
