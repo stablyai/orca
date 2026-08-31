@@ -1,5 +1,11 @@
 import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
 import { isDevCliInvocation } from '../orchestration/runtime-compatibility'
+import {
+  reportMissionAttentionToStderr,
+  type MissionAttentionMessage,
+  type MissionAttentionReporter
+} from './mission-attention-reporting'
+import { prepareMissionTasks } from './mission-task-materialization'
 
 export type MissionAdmission = {
   acceptedTypes: string[]
@@ -58,85 +64,10 @@ export async function executeMissionRun(input: {
   agentCandidates?: readonly string[]
   tasks: readonly MissionTask[]
   maxConcurrency: number
+  onAttention?: MissionAttentionReporter
 }): Promise<MissionSummary> {
-  const taskIdsByKey = await materializeMissionTasks(
-    input.client,
-    input.tasks,
-    input.runId,
-    input.from
-  )
-  await configureMissionCollaboration(
-    input.client,
-    input.tasks,
-    taskIdsByKey,
-    input.runId,
-    input.from
-  )
+  await prepareMissionTasks(input.client, input.tasks, input.runId, input.from)
   return superviseMission(input)
-}
-
-async function materializeMissionTasks(
-  client: RuntimeClient,
-  tasks: readonly MissionTask[],
-  runId: string,
-  from: string
-): Promise<Map<string, string>> {
-  const ordered = orderTasksForCreation(tasks)
-  const taskIdsByKey = new Map<string, string>()
-  for (const task of ordered) {
-    const deps = task.deps.map((key) => {
-      const dependencyId = taskIdsByKey.get(key)
-      if (!dependencyId) {
-        throw new RuntimeClientError('mission_plan_invalid', `Unknown Mission dependency: ${key}`)
-      }
-      return dependencyId
-    })
-    const created = await client.call<{ task: { id: string; status: string } }>(
-      'orchestration.taskCreate',
-      {
-        spec: task.spec,
-        taskTitle: task.key,
-        displayName: task.key,
-        deps: JSON.stringify(deps),
-        run: runId,
-        callerTerminalHandle: from
-      }
-    )
-    taskIdsByKey.set(task.key, created.result.task.id)
-  }
-  return taskIdsByKey
-}
-
-async function configureMissionCollaboration(
-  client: RuntimeClient,
-  tasks: readonly MissionTask[],
-  taskIdsByKey: ReadonlyMap<string, string>,
-  runId: string,
-  from: string
-): Promise<void> {
-  if (!tasks.some(hasCollaborationIntent)) {
-    return
-  }
-  await client.call('orchestration.collaborationConfigure', {
-    run: runId,
-    from,
-    steps: tasks.map((task) => ({
-      taskId: taskIdsByKey.get(task.key),
-      ...(task.publishesTo ? { publishesTo: task.publishesTo } : {}),
-      ...(task.requiredPublishesTo ? { requiredPublishesTo: task.requiredPublishesTo } : {}),
-      ...(task.subscribesTo ? { subscribesTo: task.subscribesTo } : {}),
-      ...(task.admission ? { admission: task.admission } : {})
-    }))
-  })
-}
-
-function hasCollaborationIntent(task: MissionTask): boolean {
-  return Boolean(
-    task.publishesTo?.length ||
-    task.requiredPublishesTo?.length ||
-    task.subscribesTo?.length ||
-    task.admission
-  )
 }
 
 async function superviseMission(input: {
@@ -148,9 +79,12 @@ async function superviseMission(input: {
   agent: string
   agentCandidates?: readonly string[]
   maxConcurrency: number
+  onAttention?: MissionAttentionReporter
 }): Promise<MissionSummary> {
   const startAttempted = new Set<string>()
   const startFailures = new Map<string, unknown>()
+  const notifiedAttentionDeliveries = new Set<string>()
+  const onAttention = input.onAttention ?? reportMissionAttentionToStderr
   for (;;) {
     const listed = await input.client.call<{ tasks: RuntimeTask[]; count: number }>(
       'orchestration.taskList',
@@ -213,6 +147,7 @@ async function superviseMission(input: {
 
     const waited = await input.client.call<{
       deliveryId: string | null
+      messages?: MissionAttentionMessage[]
       timedOut?: boolean
       cancelled?: boolean
       connectionLost?: boolean
@@ -221,7 +156,7 @@ async function superviseMission(input: {
       run: input.runId,
       wait: true,
       timeoutMs: MISSION_WAIT_TIMEOUT_MS,
-      types: 'worker_done,escalation'
+      types: 'worker_done,escalation,question'
     })
     if (waited.result.cancelled) {
       throw new RuntimeClientError(
@@ -232,6 +167,17 @@ async function superviseMission(input: {
       )
     }
     if (waited.result.deliveryId) {
+      const attention = (waited.result.messages ?? []).filter(
+        (message) => message.type === 'escalation' || message.type === 'question'
+      )
+      if (attention.length > 0 && !notifiedAttentionDeliveries.has(waited.result.deliveryId)) {
+        await onAttention({
+          runId: input.runId,
+          deliveryId: waited.result.deliveryId,
+          messages: attention
+        })
+        notifiedAttentionDeliveries.add(waited.result.deliveryId)
+      }
       await input.client.call('orchestration.check', {
         terminal: input.from,
         run: input.runId,
@@ -282,15 +228,18 @@ async function startMissionWorker(
 
   for (const [index, agent] of candidates.entries()) {
     try {
-      const worker = await input.client.call<MissionWorkerStartResult>('orchestration.workerStart', {
-        task: taskId,
-        run: input.runId,
-        from: input.from,
-        worktree: input.worktree,
-        agent,
-        ...(retryOf ? { retryOf } : {}),
-        devMode: isDevCliInvocation()
-      })
+      const worker = await input.client.call<MissionWorkerStartResult>(
+        'orchestration.workerStart',
+        {
+          task: taskId,
+          run: input.runId,
+          from: input.from,
+          worktree: input.worktree,
+          agent,
+          ...(retryOf ? { retryOf } : {}),
+          devMode: isDevCliInvocation()
+        }
+      )
       if (worker.result.state === 'ready') {
         return
       }
@@ -318,37 +267,4 @@ async function startMissionWorker(
     'mission_worker_start_failed',
     `No mission agent could start task ${taskId}: ${failures.join('; ')}`
   )
-}
-
-function orderTasksForCreation(tasks: readonly MissionTask[]): MissionTask[] {
-  const byKey = new Map(tasks.map((task) => [task.key, task]))
-  for (const task of tasks) {
-    const missing = task.deps.find((dependency) => !byKey.has(dependency))
-    if (missing) {
-      throw new RuntimeClientError(
-        'mission_plan_invalid',
-        `Unknown Mission dependency ${missing} in task ${task.key}.`
-      )
-    }
-  }
-
-  const ordered: MissionTask[] = []
-  const emitted = new Set<string>()
-  while (ordered.length < tasks.length) {
-    const before = ordered.length
-    for (const task of tasks) {
-      if (emitted.has(task.key) || !task.deps.every((dependency) => emitted.has(dependency))) {
-        continue
-      }
-      emitted.add(task.key)
-      ordered.push(task)
-    }
-    if (ordered.length === before) {
-      throw new RuntimeClientError(
-        'mission_plan_invalid',
-        'Mission task dependency cycle detected.'
-      )
-    }
-  }
-  return ordered
 }
