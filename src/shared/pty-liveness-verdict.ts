@@ -11,6 +11,44 @@ export type PtyLivenessVerdict =
   | { status: 'live'; ptyIds: string[] }
   | { status: 'unverifiable'; reason: string }
 
+/**
+ * A pane-presence observation resolved from the controller's synchronous
+ * per-id `hasPty` answer, for a pane a successful aggregate inventory did not
+ * list.
+ *
+ * `exited` requires a confirmed answer: an observed `false` from the pane's
+ * controller, or a controller with no per-id probe at all — there the
+ * successful inventory that failed to list the pane stays the authority. A
+ * `null` answer means the probe exists but could not be answered (a failed
+ * provider lookup, a probe-less provider behind the adapter); that is
+ * `unverifiable`, never absence.
+ */
+export type PtyPresenceObservation =
+  | { status: 'live' }
+  | { status: 'exited' }
+  | { status: 'unverifiable'; reason: string }
+
+/** A presence answer with the doubt arm excluded: the only shape a demotion decision may consume. */
+export type ConfirmedPtyPresence = Exclude<PtyPresenceObservation, { status: 'unverifiable' }>
+
+export function resolveUnlistedPtyPresence(
+  hasPtyAnswer: boolean | null | undefined,
+  unverifiableReason: string
+): PtyPresenceObservation {
+  if (hasPtyAnswer === true) {
+    return { status: 'live' }
+  }
+  if (hasPtyAnswer === null) {
+    return { status: 'unverifiable', reason: unverifiableReason }
+  }
+  return { status: 'exited' }
+}
+
+/** Typed demotion gate: `unverifiable` is not assignable here, so doubt cannot demote. */
+export function isConfirmedPtyAbsence(presence: ConfirmedPtyPresence): boolean {
+  return presence.status === 'exited'
+}
+
 export const SSH_PROVIDER_UNREGISTERED_REASON = 'its SSH provider is no longer registered'
 export const NO_OBSERVING_PROVIDER_REASON = 'no registered provider can observe its host'
 export const SSH_EXIT_UNCONFIRMED_REASON = 'the owning SSH host did not confirm the PTY exit'
