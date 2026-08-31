@@ -72,6 +72,17 @@ const skillFreshnessResources = {
   from: 'resources/skills',
   to: 'skills'
 }
+// Why: agent-browser resolves its version-matched skill catalog beside the binary.
+const agentBrowserSkillResources = [
+  {
+    from: 'node_modules/agent-browser/skills/agent-browser',
+    to: 'skills/agent-browser'
+  },
+  {
+    from: 'node_modules/agent-browser/skill-data',
+    to: 'skill-data'
+  }
+]
 // Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
 // apps. Keeping relay assets as extraResources makes them real directories
 // instead of paths hidden inside app.asar.
@@ -89,7 +100,12 @@ const bundledPluginResources = {
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const commonExtraResources = [relayExtraResource, bundledPluginResources, skillFreshnessResources]
+const commonExtraResources = [
+  relayExtraResource,
+  bundledPluginResources,
+  skillFreshnessResources,
+  ...agentBrowserSkillResources
+]
 // Why: native speech addons must be real files outside app.asar; copy only the
 // package matching the artifact target instead of every optional variant.
 const macSpeechNativeResource = {

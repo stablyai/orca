@@ -118,12 +118,22 @@ describe('electron-builder config', () => {
       to: 'plugins/launch'
     })
     for (const platform of ['mac', 'linux', 'win']) {
-      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
-        from: 'resources/skills',
-        to: 'skills'
-      })
       expect(electronBuilderConfig[platform].extraResources).toEqual(
-        expect.arrayContaining([bundledPluginResources])
+        expect.arrayContaining([
+          {
+            from: 'resources/skills',
+            to: 'skills'
+          },
+          {
+            from: 'node_modules/agent-browser/skills/agent-browser',
+            to: 'skills/agent-browser'
+          },
+          {
+            from: 'node_modules/agent-browser/skill-data',
+            to: 'skill-data'
+          },
+          bundledPluginResources
+        ])
       )
     }
     expect(electronBuilderConfig.mac.extraResources).toEqual(
