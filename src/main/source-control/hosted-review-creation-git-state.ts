@@ -73,12 +73,18 @@ function parseSuffixRemoteRefs(output: string, base: string, remotes: readonly s
     if (!shortRef.includes('/')) {
       continue
     }
+    // The replaced query was `refs/remotes/*/<base>`, where `*` cannot cross a
+    // slash. `show-ref -- <base>` matches a suffix at any depth, so require the
+    // remote component to be exactly one segment; otherwise a branch named
+    // `origin/feature/main` would answer a query for `main`.
+    const isSingleRemoteSegmentMatch =
+      shortRef.endsWith(`/${base}`) && shortRef.split('/').length === base.split('/').length + 1
     if (
       isRemoteHeadRef(shortRef, remotes) ||
       // A bare `HEAD` denotes the remote's symbolic slot, not every branch
       // whose final component happens to be `HEAD` (for example `feature/HEAD`).
       (base === 'HEAD' && shortRef.endsWith('/HEAD')) ||
-      (shortRef !== base && !shortRef.endsWith(`/${base}`))
+      (shortRef !== base && !isSingleRemoteSegmentMatch)
     ) {
       continue
     }

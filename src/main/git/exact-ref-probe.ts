@@ -21,11 +21,20 @@ type ExactRefPresence = 'present' | 'absent' | 'unknown'
 const EXACT_REF_PROBE_CONCURRENCY = 8
 
 export function isShowRefNoMatchError(error: unknown): boolean {
-  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : undefined
   // Git reports a missing ref as numeric exit status 1. Keep string-valued
   // transport/error codes (including a relay that happens to use `"1"`) in
   // the unknown bucket so SSH loss cannot look like an absent ref.
-  return code === 1
+  if (record?.code !== 1) {
+    return false
+  }
+  // `--quiet` makes Git print nothing for a missing ref, but a wrapper that
+  // also exits 1 always explains itself: `wsl.exe` on a dead distro, a relay
+  // transport error. Empty stderr is what separates proven absence from a
+  // probe that never ran. A runner that reports no stderr at all (the SSH
+  // provider) keeps its existing exit-code contract.
+  const stderr = record.stderr
+  return stderr === undefined || stderr === null || String(stderr).trim().length === 0
 }
 
 function commandOptions(options: ExactRefProbeExecOptions): ExactRefProbeExecOptions | undefined {

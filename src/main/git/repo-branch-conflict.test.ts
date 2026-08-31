@@ -122,7 +122,9 @@ describe('getBranchConflictKindViaExec', () => {
 
     await expect(getBranchConflictKindViaExec(exec, 'feature')).resolves.toBeNull()
     expect(probeCount).toBe(12)
-    expect(maxActiveProbes).toBeLessThanOrEqual(8)
+    // Equality, not a ceiling: 12 candidates saturate the pool, so a regression
+    // to serial probing has to fail here.
+    expect(maxActiveProbes).toBe(8)
   })
 
   it('does not turn an invalid branch name into a ref glob', async () => {

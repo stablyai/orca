@@ -68,7 +68,9 @@ describe('probeExactRefs', () => {
     await probeExactRefs(runGit, refs)
 
     expect(runGit).toHaveBeenCalledTimes(20)
-    expect(maxActive).toBeLessThanOrEqual(8)
+    // Equality, not a ceiling: 20 refs saturate the pool, so a regression to
+    // serial probing has to fail here.
+    expect(maxActive).toBe(8)
   })
 })
 
@@ -88,5 +90,42 @@ describe('probeAnyExactRef', () => {
       unknown: false
     })
     expect(runGit.mock.calls.length).toBeLessThanOrEqual(8)
+  })
+  it('treats exit 1 with stderr as an inconclusive probe, not an absent ref', async () => {
+    // Why: `wsl.exe` exits 1 for its own launch failures. Reading that as
+    // absence would collapse `unverifiable` into `exited`.
+    const runGit = vi.fn(async () => {
+      throw Object.assign(new Error('wsl fail'), {
+        code: 1,
+        stderr: 'There is no distribution with the supplied name.'
+      })
+    })
+
+    const result = await probeExactRefs(runGit, ['refs/remotes/origin/main'])
+
+    expect(result.unknownRefs).toEqual(['refs/remotes/origin/main'])
+    expect(result.absentRefs).toEqual([])
+  })
+
+  it('still reads a quiet exit 1 as an absent ref', async () => {
+    const runGit = vi.fn(async () => {
+      throw Object.assign(new Error('missing'), { code: 1, stderr: '' })
+    })
+
+    const result = await probeExactRefs(runGit, ['refs/remotes/origin/main'])
+
+    expect(result.absentRefs).toEqual(['refs/remotes/origin/main'])
+    expect(result.unknownRefs).toEqual([])
+  })
+
+  it('keeps the exit-code contract for a runner that reports no stderr', async () => {
+    // The SSH provider rejects without a stderr field; absence must still resolve.
+    const runGit = vi.fn(async () => {
+      throw Object.assign(new Error('missing'), { code: 1 })
+    })
+
+    const result = await probeExactRefs(runGit, ['refs/remotes/origin/main'])
+
+    expect(result.absentRefs).toEqual(['refs/remotes/origin/main'])
   })
 })

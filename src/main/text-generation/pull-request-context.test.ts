@@ -283,7 +283,9 @@ describe('getPullRequestDraftContext', () => {
     })
 
     expect(exactProbeCount).toBe(22)
-    expect(maxActiveProbes).toBeLessThanOrEqual(8)
+    // Equality, not a ceiling: 22 candidates saturate the pool, so a regression
+    // to serial probing has to fail here.
+    expect(maxActiveProbes).toBe(8)
   })
 
   it('resolves a unique slash-containing remote with an exact probe', async () => {
