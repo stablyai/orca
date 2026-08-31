@@ -27,12 +27,17 @@ const APPIMAGE_DESKTOP_FLAGS = new Set(['--no-sandbox'])
 const CLI_FLAGS_WITH_VALUES = new Set(['--environment', '--pairing-code'])
 // Why: the main tsconfig cannot import the CLI project, but AppImage direct
 // launches need a conservative allow-list before bypassing the GUI startup.
-const APPIMAGE_CLI_COMMAND_NAMES = [
+// Exported so the Linux CLI sandbox gate can reuse the same command names.
+export const APPIMAGE_CLI_COMMAND_NAMES = [
+  'account',
   'agent',
+  'agent-context',
+  'artifacts',
   'automations',
   'back',
   'capture',
   'check',
+  'claude-teams',
   'clear',
   'click',
   'clipboard',
@@ -40,9 +45,11 @@ const APPIMAGE_CLI_COMMAND_NAMES = [
   'console',
   'cookie',
   'dblclick',
+  'diagnostics',
   'dialog',
   'download',
   'drag',
+  'emulator',
   'environment',
   'eval',
   'exec',
@@ -61,11 +68,13 @@ const APPIMAGE_CLI_COMMAND_NAMES = [
   'intercept',
   'is',
   'keypress',
+  'linear',
   'mouse',
   'network',
   'open',
   'orchestration',
   'pdf',
+  'project',
   'reload',
   'repo',
   'screenshot',
@@ -75,6 +84,7 @@ const APPIMAGE_CLI_COMMAND_NAMES = [
   'select-all',
   'serve',
   'set',
+  'skills',
   'snapshot',
   'status',
   'storage',
@@ -84,6 +94,7 @@ const APPIMAGE_CLI_COMMAND_NAMES = [
   'uncheck',
   'upload',
   'viewport',
+  'vm',
   'wait',
   'worktree'
 ]
@@ -160,7 +171,9 @@ export function getAppImageCliArgs(
   return firstPositional && commandNames.has(firstPositional) ? cliArgs : null
 }
 
-function findFirstCommandCandidate(args: string[]): string | null {
+// Why: exported so the Linux CLI sandbox gate reuses the same positional-command
+// scan (skipping global flags and their values) as the AppImage redirect.
+export function findFirstCommandCandidate(args: string[]): string | null {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (!arg.startsWith('-')) {
@@ -174,7 +187,7 @@ function findFirstCommandCandidate(args: string[]): string | null {
   return null
 }
 
-function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env }
   childEnv.ORCA_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
   childEnv.ORCA_NODE_REPL_EXTERNAL_MODULE = env.NODE_REPL_EXTERNAL_MODULE ?? ''
