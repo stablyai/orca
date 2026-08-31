@@ -18,6 +18,7 @@ const {
   verifyPackagedNodePtyJobOwnership
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -110,6 +111,7 @@ module.exports = {
   appId,
   productName: 'Orca',
   protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  toolsets: { appimage: '1.0.3' },
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
     : localBuildVersion
@@ -230,6 +232,11 @@ module.exports = {
     'node_modules/zod/**',
     'node_modules/yaml/**'
   ],
+  artifactBuildCompleted: ({ file, arch }) => {
+    if (file.endsWith('.AppImage')) {
+      verifyStaticAppImagePackage(file, arch)
+    }
+  },
   afterPack: async (context) => {
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
     // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
