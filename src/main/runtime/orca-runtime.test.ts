@@ -16573,6 +16573,46 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('closes a background terminal that failed adoption before persistence', async () => {
+    const emptySession = makeWorkspaceSessionWithHeadlessTerminal({
+      activeTabId: null,
+      activeTabIdByWorktree: {},
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      terminalLayoutsByTabId: {}
+    })
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(emptySession)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-unadopted' })
+    const kill = vi.fn(() => true)
+    const closeTerminal = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      revealTerminalSession: vi.fn().mockRejectedValue(new Error('Renderer timed out')),
+      closeTerminal
+    } as never)
+
+    try {
+      const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      await expect(runtime.closeTerminalTab(created.handle)).resolves.toMatchObject({
+        handle: created.handle,
+        tabId: created.tabId,
+        closeMode: 'tab'
+      })
+      expect(kill).toHaveBeenCalledWith('pty-unadopted')
+      expect(closeTerminal).toHaveBeenCalledWith(created.tabId)
+      expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('returns an actionable warning when default discoverability has no renderer notifier', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService(store)

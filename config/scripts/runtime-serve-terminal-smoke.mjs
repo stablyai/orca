@@ -17,6 +17,7 @@
  *   - the server emits its ready payload with a pairing offer,
  *   - a paired client can list worktrees and create a terminal,
  *   - a command run in that terminal produces its output,
+ *   - the CLI can close that runtime-owned terminal tab and remove it from listings,
  *   - the server exits when asked.
  * Optional `--browser` assertions:
  *   - create, navigate, evaluate, and screenshot through the selected host provider.
@@ -151,6 +152,18 @@ async function waitForNonce(pairingCode, terminalHandle, nonce) {
     const read = orca(pairingCode, ['terminal', 'read', '--terminal', terminalHandle])
     const tail = (read?.terminal?.tail ?? []).map((entry) => String(entry)).join('\n')
     if (tail.includes(nonce)) {
+      return true
+    }
+    await new Promise((r) => setTimeout(r, 1_000))
+  }
+  return false
+}
+
+async function waitForTerminalRemoval(pairingCode, worktreeId, terminalHandle) {
+  const deadline = Date.now() + OUTPUT_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    const listed = orca(pairingCode, ['terminal', 'list', '--worktree', worktreeId])
+    if (!listed?.terminals?.some((terminal) => terminal.handle === terminalHandle)) {
       return true
     }
     await new Promise((r) => setTimeout(r, 1_000))
@@ -347,6 +360,21 @@ async function main() {
       )
     }
     log('terminal round trip OK')
+
+    const closed = orca(pairingCode, [
+      'terminal',
+      'close',
+      '--terminal',
+      terminal.handle,
+      '--tab'
+    ])?.close
+    if (closed?.handle !== terminal.handle) {
+      throw new Error('terminal.close --tab returned no matching close receipt')
+    }
+    if (!(await waitForTerminalRemoval(pairingCode, created.id, terminal.handle))) {
+      throw new Error(`closed terminal ${terminal.handle} remained in terminal.list`)
+    }
+    log('terminal close OK')
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error))
   } finally {
