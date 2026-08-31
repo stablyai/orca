@@ -451,6 +451,7 @@ describe('Store', () => {
               id: 'luna',
               name: 'Codex Luna',
               baseAgent: 'codex',
+              baseAgentExecutable: 'codex',
               executable: 'codex',
               args: ['--model', 'luna']
             },
@@ -466,6 +467,7 @@ describe('Store', () => {
         id: 'luna',
         name: 'Codex Luna',
         baseAgent: 'codex',
+        baseAgentExecutable: 'codex',
         executable: 'codex',
         args: ['--model', 'luna']
       }
@@ -476,7 +478,8 @@ describe('Store', () => {
         {
           id: 'tool',
           name: 'Dhimanex',
-          baseAgent: 'not-real',
+          baseAgent: 'codex',
+          baseAgentExecutable: 'codex',
           executable: 'dhimanex',
           args: ['']
         },

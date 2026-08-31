@@ -13,6 +13,7 @@ describe('custom agent profiles', () => {
           id: ' luna ',
           name: ' Codex Luna ',
           baseAgent: 'codex',
+          baseAgentExecutable: ' codex ',
           executable: ' codex ',
           args: ['--model', 'luna', '']
         },
@@ -28,6 +29,7 @@ describe('custom agent profiles', () => {
         id: 'luna',
         name: 'Codex Luna',
         baseAgent: 'codex',
+        baseAgentExecutable: 'codex',
         executable: 'codex',
         args: ['--model', 'luna', '']
       },
@@ -40,12 +42,13 @@ describe('custom agent profiles', () => {
     ])
   })
 
-  it('keeps only known built-in identity', () => {
+  it('keeps only known built-in identity bound to the duplicated executable', () => {
     expect(
       normalizeCustomAgentProfile({
         id: 'luna',
         name: 'Codex Luna',
         baseAgent: 'codex',
+        baseAgentExecutable: 'codex',
         executable: 'codex',
         args: ['--model', 'luna']
       })
@@ -53,6 +56,7 @@ describe('custom agent profiles', () => {
       id: 'luna',
       name: 'Codex Luna',
       baseAgent: 'codex',
+      baseAgentExecutable: 'codex',
       executable: 'codex',
       args: ['--model', 'luna']
     })
@@ -61,10 +65,21 @@ describe('custom agent profiles', () => {
         id: 'custom',
         name: 'Custom',
         baseAgent: 'not-real',
+        baseAgentExecutable: 'custom',
         executable: 'custom',
         args: []
       })
     ).toEqual({ id: 'custom', name: 'Custom', executable: 'custom', args: [] })
+    expect(
+      normalizeCustomAgentProfile({
+        id: 'repointed',
+        name: 'Repointed',
+        baseAgent: 'codex',
+        baseAgentExecutable: 'codex',
+        executable: 'claude',
+        args: []
+      })
+    ).toEqual({ id: 'repointed', name: 'Repointed', executable: 'claude', args: [] })
   })
 
   it('drops malformed, duplicate, and control-character-bearing profiles', () => {

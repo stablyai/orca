@@ -24,6 +24,7 @@ export type CustomAgentProfile = {
   id: string
   name: string
   baseAgent?: TuiAgent
+  baseAgentExecutable?: string
   executable: string
   args: readonly string[]
 }
@@ -68,6 +69,7 @@ export function normalizeCustomAgentProfile(value: unknown): CustomAgentProfile 
   const id = boundedSafeString(row.id, PROFILE_ID_MAX, true)
   const name = boundedSafeString(row.name, PROFILE_NAME_MAX, true)
   const executable = boundedSafeString(row.executable, EXECUTABLE_MAX, true)
+  const baseAgentExecutable = boundedSafeString(row.baseAgentExecutable, EXECUTABLE_MAX, true)
   const args = normalizeArguments(row.args)
   if (!id || !name || !executable || !args) {
     return null
@@ -76,10 +78,12 @@ export function normalizeCustomAgentProfile(value: unknown): CustomAgentProfile 
   if (4 * Math.ceil(argvBytes / 3) > WINDOWS_ENV_VALUE_CHARS_MAX) {
     return null
   }
+  const baseAgent =
+    isTuiAgent(row.baseAgent) && baseAgentExecutable === executable ? row.baseAgent : null
   return {
     id,
     name,
-    ...(isTuiAgent(row.baseAgent) ? { baseAgent: row.baseAgent } : {}),
+    ...(baseAgent ? { baseAgent, baseAgentExecutable: executable } : {}),
     executable,
     args
   }

@@ -24,6 +24,7 @@ describe('custom agent profile drafts', () => {
       id: 'profile-id',
       name: 'Codex copy 2',
       baseAgent: 'codex',
+      baseAgentExecutable: 'codex',
       executable: 'codex',
       args: ['--model', 'luna pro']
     })
@@ -62,6 +63,7 @@ describe('custom agent profile drafts', () => {
       })
     ).toEqual(
       expect.objectContaining({
+        baseAgentExecutable: 'C:\\Program Files\\Codex\\codex.exe',
         executable: 'C:\\Program Files\\Codex\\codex.exe',
         args: ['--config', '\\\\server\\share\\codex.toml', 'C:\\tools\\profile.toml']
       })

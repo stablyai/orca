@@ -15,6 +15,7 @@ const codexLunaProfile = {
   id: 'codex-luna',
   name: 'Codex Luna',
   baseAgent: 'codex' as const,
+  baseAgentExecutable: 'codex',
   executable: 'codex',
   args: ['--model', 'luna']
 }
@@ -24,11 +25,19 @@ const genericProfile = {
   executable: 'dhimanex',
   args: ['--fast']
 }
+const repointedProfile = {
+  id: 'repointed',
+  name: 'Repointed',
+  baseAgent: 'codex' as const,
+  baseAgentExecutable: 'codex',
+  executable: 'claude',
+  args: []
+}
 
 const store = {
   settings: {
     terminalWindowsShell: 'powershell.exe',
-    customAgentProfiles: [codexLunaProfile, genericProfile]
+    customAgentProfiles: [codexLunaProfile, genericProfile, repointedProfile]
   },
   sshConnectionStates: new Map(),
   sshStateByEnvironment: new Map(),
@@ -101,6 +110,20 @@ describe('launchCustomAgentInNewTab', () => {
     })
     expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: "'dhimanex' '--fast'"
+    })
+  })
+
+  it('does not claim stale identity after the executable changes', async () => {
+    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
+
+    launchCustomAgentInNewTab({ profileId: 'repointed', worktreeId: 'wt-1' })
+
+    expect(mocks.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      quickCommandLabel: 'Repointed',
+      viewMode: 'terminal'
+    })
+    expect(mocks.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: "'claude'"
     })
   })
 

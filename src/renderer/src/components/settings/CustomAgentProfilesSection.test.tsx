@@ -71,6 +71,37 @@ describe('CustomAgentProfilesSection', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
+  it('drops duplicated identity when the executable changes', async () => {
+    const user = userEvent.setup()
+    const onProfilesChange = vi.fn().mockResolvedValue(undefined)
+    renderWithTooltips(
+      <CustomAgentProfilesSection
+        profiles={[
+          {
+            id: 'codex-luna',
+            name: 'Codex Luna',
+            baseAgent: 'codex',
+            baseAgentExecutable: 'codex',
+            executable: 'codex',
+            args: ['--model', 'luna']
+          }
+        ]}
+        catalog={getAgentCatalog()}
+        onProfilesChange={onProfilesChange}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Edit Codex Luna' }))
+    await user.clear(screen.getByLabelText('Executable'))
+    await user.type(screen.getByLabelText('Executable'), 'claude')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(onProfilesChange).toHaveBeenCalledTimes(1))
+    expect(onProfilesChange).toHaveBeenCalledWith([
+      { id: 'codex-luna', name: 'Codex Luna', executable: 'claude', args: ['--model', 'luna'] }
+    ])
+  })
+
   it('keeps a failed checked write visible in the editor', async () => {
     const user = userEvent.setup()
     renderWithTooltips(
