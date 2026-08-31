@@ -2,37 +2,48 @@ import type { CloseTerminalPaneDetail } from '@/constants/terminal'
 import { detachTerminalLayoutLeaf } from '@/components/terminal-pane/terminal-layout-leaf-detach'
 import type { AppState } from '@/store'
 import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-
-type LegacyWorkerTerminalRecoveryEvent = {
-  paneKey: string
-  resolution: 'adopted' | 'exited' | 'rolled_back'
-  ptyId?: string
-}
+import type { LegacyWorkerTerminalRecoveryEvent } from '../../../shared/agent-status-types'
 
 export type LegacyWorkerTerminalRecoveryAction =
   | { kind: 'clear-sleeping'; paneKey: string }
   | { kind: 'rollback-surface'; detail: CloseTerminalPaneDetail }
+  | { kind: 'set-automatic-resume-block'; paneKey: string; worktreeId: string; blocked: boolean }
   | { kind: 'ignore' }
 
 export function resolveLegacyWorkerTerminalRecoveryAction(
   event: LegacyWorkerTerminalRecoveryEvent
 ): LegacyWorkerTerminalRecoveryAction {
-  if (event.resolution !== 'rolled_back') {
+  if (event.resolution === 'adopted' || event.resolution === 'exited') {
     return { kind: 'clear-sleeping', paneKey: event.paneKey }
   }
-  const pane = parsePaneKey(event.paneKey)
-  return pane && event.ptyId
-    ? {
-        kind: 'rollback-surface',
-        detail: {
-          tabId: pane.tabId,
-          leafId: pane.leafId,
-          preservePty: true,
-          retireSurface: true,
-          expectedPtyId: event.ptyId
+  if (event.resolution === 'fenced' || event.resolution === 'unfenced') {
+    // Why: the fence survives release failures, so it must never land on — or lift from — a
+    // pane-key alias whose record belongs to another workspace.
+    return event.worktreeId
+      ? {
+          kind: 'set-automatic-resume-block',
+          paneKey: event.paneKey,
+          worktreeId: event.worktreeId,
+          blocked: event.resolution === 'fenced'
         }
-      }
-    : { kind: 'ignore' }
+      : { kind: 'ignore' }
+  }
+  if (event.resolution === 'rolled_back') {
+    const pane = parsePaneKey(event.paneKey)
+    return pane && event.ptyId
+      ? {
+          kind: 'rollback-surface',
+          detail: {
+            tabId: pane.tabId,
+            leafId: pane.leafId,
+            preservePty: true,
+            retireSurface: true,
+            expectedPtyId: event.ptyId
+          }
+        }
+      : { kind: 'ignore' }
+  }
+  return { kind: 'ignore' }
 }
 
 type LegacyWorkerTerminalRecoveryStore = Pick<

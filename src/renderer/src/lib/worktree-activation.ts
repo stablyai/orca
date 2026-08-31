@@ -258,7 +258,18 @@ export function activateAndRevealWorktree(
     void gateWorktreeAgentActivation(worktreeId).then((outcome) => {
       const currentState = useAppStore.getState()
       if (outcome === 'empty' && currentState.activeWorktreeId === worktreeId) {
-        ensureWorktreeHasInitialTerminal(currentState, worktreeId)
+        // Why: same reseed authority as the ungated branch below — an explicit activation is a
+        // request for a surface, so the closed-last-tab tombstone must not outlive it (a worker
+        // tab retired by orchestration leaves exactly that tombstone).
+        ensureWorktreeHasInitialTerminal(
+          currentState,
+          worktreeId,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { reseedEmptiedWorkspace: opts?.providesInitialSurface !== true }
+        )
       }
     })
   }

@@ -267,9 +267,11 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       }
     )
 
+    // Why: the fixture drives the turn to `done`, and the checkpoint carries that real state —
+    // restating `working` is the ghost-resume lie #16308 removed.
     const expectedRecovery = {
       origin: 'live',
-      state: 'working',
+      state: 'done',
       providerSessionId: PROVIDER_SESSION_ID
     }
     await expect

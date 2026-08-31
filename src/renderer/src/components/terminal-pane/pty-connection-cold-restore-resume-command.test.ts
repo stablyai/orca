@@ -436,6 +436,63 @@ describe('connectPanePty', () => {
     }
   }
 
+  // Why (STA-4577): a settled orchestration worker keeps a live `done` resume anchor until
+  // release retires it; returning to the workspace must not cold-restore its provider session.
+  it('does not resume a settled worker whose dispatch fenced automatic resume', async () => {
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const paneKey = makePaneKey('tab-1', LEAF_2)
+      const transport = createMockTransport('restored-session')
+      transport.getPtyId.mockImplementation(() => 'restored-session')
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'restored-session' }] },
+        settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
+        sleepingAgentSessionsByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'codex-session-1' },
+            prompt: '',
+            state: 'done',
+            origin: 'live',
+            capturedAt: 1,
+            updatedAt: 1,
+            automaticResumeBlockedBy: 'legacy-orchestration-worker'
+          }
+        }
+      } as StoreState
+      const deps = createDeps({
+        restoredLeafId: LEAF_2,
+        restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
+      })
+      vi.mocked(window.api.pty.declarePendingPaneSerializer).mockResolvedValue(1)
+
+      connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+      await flushAsyncTicks(20)
+      for (const fn of pendingTimeouts) {
+        fn()
+      }
+      await flushAsyncTicks(10)
+
+      expect(transport.connect).not.toHaveBeenCalled()
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
+
   it('quotes a cold-restore resume command for a cmd.exe Windows tab', async () => {
     await expect(runWindowsColdRestoreResume({ terminalWindowsShell: 'cmd.exe' })).resolves.toBe(
       'codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"'

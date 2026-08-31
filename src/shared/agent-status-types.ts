@@ -421,3 +421,27 @@ export function parseAgentStatusPayload(json: string): ParsedAgentStatusPayload 
     return null
   }
 }
+
+/**
+ * How main resolved a supervised worker terminal for the renderer.
+ * `fenced` blocks automatic provider resume on a settled-but-unreleased worker pane and `unfenced`
+ * lifts it once the dispatch is released, retained, or gone; the other three retire the recovery
+ * record once the terminal's fate is proven.
+ */
+export type LegacyWorkerTerminalRecoveryResolutionKind =
+  | 'adopted'
+  | 'exited'
+  | 'rolled_back'
+  | 'fenced'
+  | 'unfenced'
+
+export type LegacyWorkerTerminalRecoveryEvent = {
+  paneKey: string
+  resolution: LegacyWorkerTerminalRecoveryResolutionKind
+  ptyId?: string
+  /**
+   * Present on `fenced`/`unfenced`: the dispatch's own worktree, so the renderer can reject a
+   * pane-key alias.
+   */
+  worktreeId?: string
+}

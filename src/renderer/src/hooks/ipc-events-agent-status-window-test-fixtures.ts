@@ -2,6 +2,7 @@ import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import type {
   AgentStatusClearIpcPayload,
+  LegacyWorkerTerminalRecoveryEvent,
   MigrationUnsupportedPtyEntry
 } from '../../../shared/agent-status-types'
 import type { AgentStatusSetData } from './ipc-events-agent-status-store-test-fixtures'
@@ -10,7 +11,7 @@ export function buildWindowApi(args: {
   onSet: (cb: (data: AgentStatusSetData) => void) => () => void
   onClear?: (cb: (data: AgentStatusClearIpcPayload) => void) => () => void
   onLegacyWorkerTerminalRecovery?: (
-    cb: (data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void
+    cb: (data: LegacyWorkerTerminalRecoveryEvent) => void
   ) => () => void
   getSnapshot?: () => Promise<AgentStatusSetData[]>
   getMigrationUnsupportedSnapshot?: () => Promise<MigrationUnsupportedPtyEntry[]>

@@ -8,6 +8,7 @@ import {
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
 import { useAppStore } from '../../store'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { resolvePaneKey } from './agent-status-routing'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
@@ -121,6 +122,12 @@ export function registerAgentStatusListeners(args: {
         rollbackLegacyWorkerTerminalSurfaceInStore(useAppStore.getState(), action.detail)
       } else if (action.kind === 'clear-sleeping') {
         useAppStore.getState().clearSleepingAgentSession(action.paneKey)
+      } else if (action.kind === 'set-automatic-resume-block') {
+        const store = useAppStore.getState()
+        const record = store.sleepingAgentSessionsByPaneKey[action.paneKey]
+        if (record && worktreeIdsEqual(record.worktreeId, action.worktreeId)) {
+          store.setSleepingAgentAutomaticResumeBlocked(action.paneKey, action.blocked)
+        }
       }
     })
   if (unsubscribeLegacyWorkerTerminalRecovery) {

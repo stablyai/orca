@@ -38,6 +38,54 @@ describe('legacy worker terminal recovery events', () => {
     })
   })
 
+  it('blocks automatic resume for a fenced settled worker pane', () => {
+    expect(
+      resolveLegacyWorkerTerminalRecoveryAction({
+        paneKey: `legacy-worker:${LEAF_ID}`,
+        resolution: 'fenced',
+        worktreeId: 'repo::/workspace'
+      })
+    ).toEqual({
+      kind: 'set-automatic-resume-block',
+      paneKey: `legacy-worker:${LEAF_ID}`,
+      worktreeId: 'repo::/workspace',
+      blocked: true
+    })
+  })
+
+  it('lifts the fence once the dispatch stops claiming the pane', () => {
+    expect(
+      resolveLegacyWorkerTerminalRecoveryAction({
+        paneKey: `legacy-worker:${LEAF_ID}`,
+        resolution: 'unfenced',
+        worktreeId: 'repo::/workspace'
+      })
+    ).toEqual({
+      kind: 'set-automatic-resume-block',
+      paneKey: `legacy-worker:${LEAF_ID}`,
+      worktreeId: 'repo::/workspace',
+      blocked: false
+    })
+  })
+
+  it('ignores a fence that names no worktree to verify the pane against', () => {
+    expect(
+      resolveLegacyWorkerTerminalRecoveryAction({
+        paneKey: `legacy-worker:${LEAF_ID}`,
+        resolution: 'fenced'
+      })
+    ).toEqual({ kind: 'ignore' })
+  })
+
+  it('ignores a resolution kind it does not understand', () => {
+    expect(
+      resolveLegacyWorkerTerminalRecoveryAction({
+        paneKey: `legacy-worker:${LEAF_ID}`,
+        resolution: 'teleported' as never
+      })
+    ).toEqual({ kind: 'ignore' })
+  })
+
   it('removes an unmounted split surface only when its PTY identity still matches', () => {
     const setTabLayout = vi.fn()
     const clearTabPtyId = vi.fn()

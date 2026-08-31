@@ -143,11 +143,12 @@ export function registerRuntimeWindowLifecycle(
           reject(new Error('runtime_unavailable'))
         }
       }),
-    resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
+    resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, identity) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
         paneKey,
         resolution,
-        ...(ptyId ? { ptyId } : {})
+        ...(identity?.ptyId ? { ptyId: identity.ptyId } : {}),
+        ...(identity?.worktreeId ? { worktreeId: identity.worktreeId } : {})
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
       send('ui:splitTerminal', {

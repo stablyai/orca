@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
+import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
@@ -22,6 +23,21 @@ function seedClosedLastTerminal(worktreeId: string): void {
   useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
   const { renderableTabCount } = useAppStore.getState().reconcileWorktreeTabModel(worktreeId)
   expect(renderableTabCount).toBe(0)
+}
+
+/** Makes `canInspectAgentActivationInventory()` true with nothing to adopt, so activation routes
+ *  through the agent gate and it settles on `empty`. */
+function stubReachableEmptyAgentInventory(): void {
+  useAppStore.setState({ workspaceSessionReady: true, terminalStartupRestorationReady: true })
+  vi.stubGlobal('window', {
+    api: {
+      runtime: { call: vi.fn().mockResolvedValue({ ok: true, result: { snapshots: [] } }) },
+      pty: { listSessions: vi.fn().mockResolvedValue([]) }
+    },
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  })
 }
 
 describe('activating a workspace whose last terminal was closed', () => {
@@ -92,6 +108,39 @@ describe('activating a workspace whose last terminal was closed', () => {
 
     expect(result).not.toBe(false)
     expect(result === false ? null : result.primaryTabId).toBeNull()
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+  })
+
+  // Why (STA-4577): an orchestration-retired worker tab leaves the same empty row, and with the
+  // agent inventory reachable activation defers seeding to the gate. The gated branch must carry
+  // the same re-seed authority as the ungated one below, or the workspace opens with no pane and
+  // no way to get one back. Every other case here runs ungated, because vitest has no window.api.
+  it('re-seeds through the agent-activation gate, not only on the ungated path', async () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    stubReachableEmptyAgentInventory()
+
+    const result = activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
+
+    expect(result).not.toBe(false)
+    expect(result === false ? null : result.primaryTabId).toBeNull()
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+  })
+
+  it('leaves the row empty on the gated path when the caller opens its own surface', async () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    stubReachableEmptyAgentInventory()
+
+    activateAndRevealWorktree(worktree.id, {
+      providesInitialSurface: true,
+      notifyHostRuntime: false
+    })
+
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
   })
 

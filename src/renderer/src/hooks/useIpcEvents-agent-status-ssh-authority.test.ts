@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LegacyWorkerTerminalRecoveryEvent } from '../../../shared/agent-status-types'
 import { buildStoreState } from './ipc-events-agent-status-store-test-fixtures'
 import {
   buildWindowApi,
@@ -20,12 +21,24 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('retires the exact sleeping record after adopted or exited legacy worker recovery', async () => {
     const clearSleepingAgentSession = vi.fn()
     const setSleepingAgentAutomaticResumeBlocked = vi.fn()
-    let listener:
-      | ((data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void)
-      | undefined
+    const settledWorkerPaneKey = 'tab-settled:leaf-settled'
+    let listener: ((data: LegacyWorkerTerminalRecoveryEvent) => void) | undefined
     const storeState = buildStoreState({
       clearSleepingAgentSession,
-      setSleepingAgentAutomaticResumeBlocked
+      setSleepingAgentAutomaticResumeBlocked,
+      sleepingAgentSessionsByPaneKey: {
+        [settledWorkerPaneKey]: {
+          paneKey: settledWorkerPaneKey,
+          worktreeId: 'repo::/workspace',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          prompt: '',
+          state: 'done',
+          origin: 'live',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
     })
 
     stubReactSyncEffect()
@@ -60,6 +73,38 @@ describe('useIpcEvents agent status snapshot integration', () => {
     listener?.({ paneKey: 'tab-exited:leaf-exited', resolution: 'exited' })
     expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-exited:leaf-exited')
     expect(setSleepingAgentAutomaticResumeBlocked).not.toHaveBeenCalled()
+
+    // A settled worker is fenced in place: the resume anchor is kept, never resumed.
+    clearSleepingAgentSession.mockClear()
+    listener?.({
+      paneKey: settledWorkerPaneKey,
+      resolution: 'fenced',
+      worktreeId: 'repo::/workspace'
+    })
+    expect(setSleepingAgentAutomaticResumeBlocked).toHaveBeenCalledWith(settledWorkerPaneKey, true)
+    expect(clearSleepingAgentSession).not.toHaveBeenCalled()
+
+    setSleepingAgentAutomaticResumeBlocked.mockClear()
+    listener?.({
+      paneKey: settledWorkerPaneKey,
+      resolution: 'fenced',
+      worktreeId: 'repo::/other-workspace'
+    })
+    listener?.({
+      paneKey: 'tab-unknown:leaf-unknown',
+      resolution: 'fenced',
+      worktreeId: 'repo::/workspace'
+    })
+    expect(setSleepingAgentAutomaticResumeBlocked).not.toHaveBeenCalled()
+
+    // Release, retain, or dispatch pruning retires the fence so the pane can spawn again.
+    listener?.({
+      paneKey: settledWorkerPaneKey,
+      resolution: 'unfenced',
+      worktreeId: 'repo::/workspace'
+    })
+    expect(setSleepingAgentAutomaticResumeBlocked).toHaveBeenCalledWith(settledWorkerPaneKey, false)
+    expect(clearSleepingAgentSession).not.toHaveBeenCalled()
   })
 
   it.each([

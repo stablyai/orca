@@ -1,6 +1,7 @@
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
+  LegacyWorkerTerminalRecoveryEvent,
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
@@ -21,11 +22,7 @@ export type AgentStatusApi = {
   onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
   onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void) => () => void
   onLegacyWorkerTerminalRecovery: (
-    callback: (data: {
-      paneKey: string
-      resolution: 'adopted' | 'exited' | 'rolled_back'
-      ptyId?: string
-    }) => void
+    callback: (data: LegacyWorkerTerminalRecoveryEvent) => void
   ) => () => void
   getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
   /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */

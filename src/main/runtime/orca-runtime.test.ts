@@ -22316,6 +22316,154 @@ describe('OrcaRuntimeService', () => {
     expect(harness.resolveLegacyWorkerTerminalRecovery).not.toHaveBeenCalled()
   })
 
+  // Why (STA-4577): between worker_done and release the pane still holds a resumable provider
+  // session, so returning to the workspace would cold-restore it unless the fence lands first.
+  it('pushes the automatic-resume fence to the renderer for a settled worker pane', () => {
+    const workerPaneKey = `legacy-settled:${HEADLESS_LEAF_ID}`
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      sleepingAgentSessionsByPaneKey: {
+        [workerPaneKey]: {
+          paneKey: workerPaneKey,
+          tabId: 'legacy-settled',
+          worktreeId: TEST_WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'legacy-settled-session' },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live'
+        }
+      }
+    }
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: () => undefined,
+      listLegacyWorkerTerminalRecoveryRows: () => [
+        {
+          dispatch_id: 'dispatch-settled',
+          task_id: 'task-settled',
+          dispatch_status: 'completed',
+          contract_version: 0,
+          assignee_handle: 'term_settled',
+          assignee_pane_key: workerPaneKey,
+          process_incarnation: null,
+          worker_state: 'succeeded',
+          worktree_id: TEST_WORKTREE_ID,
+          agent_terminal_handle: 'term_settled'
+        }
+      ]
+    } as unknown as OrchestrationDb)
+    const resolveLegacyWorkerTerminalRecovery = vi.fn()
+    runtime.setNotifier({ resolveLegacyWorkerTerminalRecovery } as never)
+
+    const plan = runtime.prepareLegacyWorkerTerminalRecovery()
+
+    expect(plan.candidates).toEqual([])
+    expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'fenced', {
+      worktreeId: TEST_WORKTREE_ID
+    })
+    expect(
+      getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
+    ).toBe('legacy-orchestration-worker')
+  })
+
+  // Why (STA-4577): `startFreshSpawn` refuses any fenced pane, so a fence that outlived its
+  // dispatch — release proven, user retained, or row pruned — would strand an unusable terminal.
+  it('lifts the automatic-resume fence once no dispatch claims the pane', () => {
+    const workerPaneKey = `legacy-retired:${HEADLESS_LEAF_ID}`
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      sleepingAgentSessionsByPaneKey: {
+        [workerPaneKey]: {
+          paneKey: workerPaneKey,
+          tabId: 'legacy-retired',
+          worktreeId: TEST_WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'legacy-retired-session' },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live',
+          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+        }
+      }
+    }
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const listLegacyWorkerTerminalRecoveryRows = vi.fn(() => [])
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: () => undefined,
+      listLegacyWorkerTerminalRecoveryRows
+    } as unknown as OrchestrationDb)
+    const resolveLegacyWorkerTerminalRecovery = vi.fn()
+    runtime.setNotifier({ resolveLegacyWorkerTerminalRecovery } as never)
+
+    runtime.prepareLegacyWorkerTerminalRecovery()
+
+    expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'unfenced', {
+      worktreeId: TEST_WORKTREE_ID
+    })
+    expect(
+      getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
+    ).toBeUndefined()
+  })
+
+  // Why: an unreadable plan is not evidence the dispatch retired, so the fence must survive it.
+  it('keeps the automatic-resume fence when the recovery plan cannot be read', () => {
+    const workerPaneKey = `legacy-unreadable:${HEADLESS_LEAF_ID}`
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      sleepingAgentSessionsByPaneKey: {
+        [workerPaneKey]: {
+          paneKey: workerPaneKey,
+          tabId: 'legacy-unreadable',
+          worktreeId: TEST_WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'legacy-unreadable-session' },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live',
+          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+        }
+      }
+    }
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: () => undefined,
+      listLegacyWorkerTerminalRecoveryRows: () => {
+        throw new Error('orchestration_db_unavailable')
+      }
+    } as unknown as OrchestrationDb)
+    const resolveLegacyWorkerTerminalRecovery = vi.fn()
+    runtime.setNotifier({ resolveLegacyWorkerTerminalRecovery } as never)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      expect(runtime.prepareLegacyWorkerTerminalRecovery()).toEqual({
+        blockedPanes: [],
+        candidates: [],
+        ambiguousDispatchIds: []
+      })
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(resolveLegacyWorkerTerminalRecovery).not.toHaveBeenCalled()
+    expect(
+      getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
+    ).toBe('legacy-orchestration-worker')
+  })
+
   it('reconciles a same-id process replacement before headless adoption', async () => {
     const exactProcess = {
       id: 'pty-post-reveal',
@@ -22350,7 +22498,7 @@ describe('OrcaRuntimeService', () => {
     expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
       harness.workerPaneKey,
       'rolled_back',
-      harness.ptyId
+      { ptyId: harness.ptyId }
     )
     expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
       harness.workerPaneKey,
@@ -22418,7 +22566,7 @@ describe('OrcaRuntimeService', () => {
     expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
       harness.workerPaneKey,
       'rolled_back',
-      harness.ptyId
+      { ptyId: harness.ptyId }
     )
     expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
       harness.workerPaneKey,
@@ -22639,7 +22787,7 @@ describe('OrcaRuntimeService', () => {
       expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
         workerPaneKey,
         'rolled_back',
-        'pty-missing-worker'
+        { ptyId: 'pty-missing-worker' }
       )
       expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'exited')
     } finally {
@@ -22748,7 +22896,7 @@ describe('OrcaRuntimeService', () => {
       expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
         workerPaneKey,
         'rolled_back',
-        'pty-missing-retry'
+        { ptyId: 'pty-missing-retry' }
       )
       expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'exited')
       warn.mockRestore()
