@@ -8,6 +8,7 @@ import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/ide
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { MirroredTerminalTab, ReadyTerminalSurface } from './state'
 import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
@@ -134,8 +135,8 @@ export function buildMirroredTerminalTabs(
         }
       }
     }
-    const launchAgent =
-      activeSurface.launchAgent ?? surfaces.find((surface) => surface.launchAgent)?.launchAgent
+    const launchAgentSurface = surfaces.find((surface) => surface.launchAgent)
+    const launchAgent = activeSurface.launchAgent ?? launchAgentSurface?.launchAgent
     const ownerRecord = resolvePaneAgentOwnerRecord({
       launchAgent,
       hookAgent: activeSurface.agentStatus?.agentType,
@@ -157,6 +158,12 @@ export function buildMirroredTerminalTabs(
       : existing?.aiVaultTitle
     // The host's titles rank its session names in, so when it clears a name none of the retained ones is a safe placeholder.
     const sessionNameCleared = hostResolvesSessionTitle && !sessionTitle && !!existing?.aiVaultTitle
+    const launchAgentLeafId =
+      launchAgentSurface && isTerminalLeafId(launchAgentSurface.leafId)
+        ? launchAgentSurface.leafId
+        : launchAgent && existing?.launchAgentLeafId && isTerminalLeafId(existing.launchAgentLeafId)
+          ? existing.launchAgentLeafId
+          : undefined
     // Idle headless panes publish default Terminal; retain known title until a ready surface supplies one.
     const hostTitle = activeSurface.title.trim() || surfaces[0]?.title.trim() || ''
     const hostTitleIsPlaceholder =
@@ -211,7 +218,8 @@ export function buildMirroredTerminalTabs(
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
         // Why: launchAgent is host-owned lifecycle metadata; once the host omits it, don't resurrect stale startup intent.
-        ...(launchAgent ? { launchAgent } : {})
+        ...(launchAgent ? { launchAgent } : {}),
+        ...(launchAgentLeafId ? { launchAgentLeafId } : {})
       },
       hostTabId: parentTabId,
       ptyIds,

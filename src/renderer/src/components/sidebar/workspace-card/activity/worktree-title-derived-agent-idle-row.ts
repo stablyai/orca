@@ -1,11 +1,11 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentType
-} from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+} from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 export function buildTitleDerivedIdleAgentRow(args: {
   paneKey: string
