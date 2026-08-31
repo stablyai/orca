@@ -209,23 +209,6 @@ function formatRemoteReport(remote: RemoteAgentHookInstallReport): string {
   return [header, ...agentLines].join('\n')
 }
 
-/** Reads remote status only from a reachable runtime. Transport failures must
- * surface instead of being converted into a misleading local-only success. */
-async function fetchRuntimeHookStatuses(client: RuntimeClient): Promise<{
-  local: AgentHookInstallStatus[]
-  remotes: RemoteAgentHookInstallReport[]
-} | null> {
-  const status = await client.getCliStatus()
-  if (!status.result.runtime.reachable) {
-    return null
-  }
-  const response = await client.call<{
-    local: AgentHookInstallStatus[]
-    remotes: RemoteAgentHookInstallReport[]
-  }>('agentHooks.status', undefined, { timeoutMs: 10_000 })
-  return response.result
-}
-
 async function setAgentHooksEnabled(
   client: RuntimeClient,
   enabled: boolean

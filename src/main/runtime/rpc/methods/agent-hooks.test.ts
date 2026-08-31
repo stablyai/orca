@@ -79,9 +79,10 @@ describe('agent hook RPC methods', () => {
     getManagedAgentHookStatusesMock.mockReturnValue(local)
     getActiveSshAgentHookInstallReportsMock.mockReturnValue(remotes)
 
-    await expect(statusMethod().handler(undefined, { runtime: runtimeWithSettings() })).resolves.toEqual(
-      { local, remotes }
-    )
+    expect(statusMethod().handler(undefined, { runtime: runtimeWithSettings() })).toEqual({
+      local,
+      remotes
+    })
   })
 
   it('installs the pane-selected WSL home once and returns its status', async () => {
