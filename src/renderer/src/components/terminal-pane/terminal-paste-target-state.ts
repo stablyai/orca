@@ -71,7 +71,7 @@ export function isTerminalPanePasteFocusCurrent({
   return paneContainer.contains(activeElement) && isXtermHelperTextarea(activeElement)
 }
 
-function isInertDocumentFocus(element: Element | null): boolean {
+export function isInertDocumentFocus(element: Element | null): boolean {
   if (!element) {
     return true
   }

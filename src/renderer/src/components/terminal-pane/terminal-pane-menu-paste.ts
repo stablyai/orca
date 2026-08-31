@@ -10,7 +10,10 @@ import {
   type TerminalPasteSource,
   type TerminalPasteTextOptions
 } from './terminal-paste-coordinator'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import {
+  formatTerminalPasteExecutionError,
+  TERMINAL_CLIPBOARD_READ_UNAVAILABLE_MESSAGE
+} from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
@@ -144,7 +147,8 @@ export const pasteTerminalPaneMenuClipboard = async (
     onImagePasteError: (error) => {
       const detail = error instanceof Error ? error.message : String(error)
       onPasteError(`Image paste failed: ${detail}`)
-    }
+    },
+    onClipboardReadUnavailable: () => onPasteError(TERMINAL_CLIPBOARD_READ_UNAVAILABLE_MESSAGE)
   })
   if (result.status !== 'pasted') {
     return

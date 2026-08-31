@@ -25,6 +25,7 @@ type PasteTerminalClipboardDeps = {
   protectedMultilineTextPasteOptions?: TerminalPasteTextOptions
   onTextPasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
+  onClipboardReadUnavailable?: (error: unknown) => void
 }
 
 export type TerminalClipboardPasteResult =
@@ -33,6 +34,7 @@ export type TerminalClipboardPasteResult =
       status: 'skipped'
       reason:
         | 'empty'
+        | 'clipboard-read-failed'
         | 'image-paste-failed'
         | 'image-paste-rejected'
         | 'text-paste-failed'
@@ -49,9 +51,14 @@ export async function pasteTerminalClipboard({
   forceBracketedMultilineTextPaste = false,
   protectedMultilineTextPasteOptions,
   onTextPasteError,
-  onImagePasteError
+  onImagePasteError,
+  onClipboardReadUnavailable
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
   let text = ''
+  // Why: a failed read is `unavailable`, never `empty`. Holding the error keeps
+  // the image path reachable for image-only clipboards without letting a real
+  // read failure be reported to the user as "you copied nothing".
+  let readFailure: { error: unknown } | null = null
   try {
     text = await readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
   } catch (error) {
@@ -61,6 +68,7 @@ export async function pasteTerminalClipboard({
     }
     // Why: browser clipboard text reads can fail for image-only clipboards.
     // Still try the image path so Cmd/Ctrl+V works for screenshots.
+    readFailure = { error }
   }
   if (text) {
     try {
@@ -81,6 +89,10 @@ export async function pasteTerminalClipboard({
   try {
     const filePath = await saveClipboardImageAsTempFile({ connectionId, runtimeEnvironmentId })
     if (!filePath) {
+      if (readFailure) {
+        onClipboardReadUnavailable?.(readFailure.error)
+        return { status: 'skipped', reason: 'clipboard-read-failed' }
+      }
       return { status: 'skipped', reason: 'empty' }
     }
     const result = await pasteText(filePath, {
