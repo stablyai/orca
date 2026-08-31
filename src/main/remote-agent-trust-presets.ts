@@ -7,6 +7,7 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators
 } from '../shared/cross-platform-path'
+import { cursorWorkspaceSlug } from '../shared/cursor-workspace-slug'
 
 export async function markRemoteAgentWorkspaceTrusted(args: {
   preset: AgentTrustPreset
@@ -100,7 +101,7 @@ async function markRemoteCursorWorkspaceTrusted(
   remoteHome: string,
   workspacePath: string
 ): Promise<void> {
-  const slug = workspacePath.replace(/^[\\/]+/, '').replace(/[\\/:*?"<>|]+/g, '-')
+  const slug = cursorWorkspaceSlug(workspacePath)
   if (!slug) {
     return
   }

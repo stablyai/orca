@@ -735,6 +735,47 @@ describe('scanRemoteAiVaultSessions', () => {
     ])
   })
 
+  it('backfills an older cwd-null Cursor transcript through its project slug', async () => {
+    const provider = new MemoryRemoteProvider()
+    provider.addFile(
+      '/home/ada/.codex/sessions/other.jsonl',
+      codexTranscript({
+        sessionId: 'other-session',
+        title: 'Other workspace',
+        cwd: '/home/ada/other',
+        timestamp: '2026-07-04T05:00:00.000Z'
+      }),
+      50
+    )
+    provider.addFile(
+      '/home/ada/.cursor/projects/home-ada-repo/agent-transcripts/cursor-scoped.jsonl',
+      jsonLines([
+        {
+          role: 'user',
+          timestamp: '2026-07-04T01:00:00.000Z',
+          message: { content: 'Scoped Cursor workspace' }
+        }
+      ]),
+      10
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      limit: 1,
+      scopePaths: ['/home/ada/repo']
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions.map((session) => session.sessionId)).toEqual([
+      'other-session',
+      'cursor-scoped'
+    ])
+    expect(result.sessions[1]?.cwd).toBeNull()
+  })
+
   it('keeps looking past newer out-of-scope candidates during scoped backfill', async () => {
     const provider = new MemoryRemoteProvider()
     for (const [sessionId, mtimeMs, hour] of [

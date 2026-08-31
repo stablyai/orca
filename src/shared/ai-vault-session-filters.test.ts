@@ -197,4 +197,129 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
   it('builds preview search text from conversation turns', () => {
     expect(sessionPreviewSearchText(baseSession)).toContain('scope tabs')
   })
+
+  it('groups a Cursor session with a recognisable workspace path, not Unknown location', () => {
+    const cursorSession: AiVaultSession = {
+      ...baseSession,
+      id: 'cursor:opc',
+      agent: 'cursor',
+      sessionId: '83e98eef-916b-4d99-95bf-bc66fab9741e',
+      cwd: 'C:\\Dev\\simulations\\opc',
+      filePath:
+        'C:\\Users\\ada\\.cursor\\projects\\c-Dev-simulations-opc\\agent-transcripts\\83e98eef-916b-4d99-95bf-bc66fab9741e.jsonl'
+    }
+    const groups = groupAiVaultSessions([cursorSession], 'folder')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].label).toBe('simulations/opc')
+    expect(groups[0].label).not.toBe('Unknown location')
+  })
+
+  it('keeps Cursor sessions in Workspace scope via the project slug when cwd is missing', () => {
+    const cursorSession: AiVaultSession = {
+      ...baseSession,
+      id: 'cursor:legacy',
+      agent: 'cursor',
+      sessionId: 'sid',
+      cwd: null,
+      filePath:
+        'C:\\Users\\neil\\.cursor\\projects\\c-Users-neil-orca-workspaces-orca-pr-13935-internal-review\\agent-transcripts\\sid.jsonl'
+    }
+    expect(
+      filterAiVaultSessions([cursorSession], {
+        query: '',
+        agents: ['cursor'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: ['C:\\Users\\neil\\orca\\workspaces\\orca\\pr-13935-internal-review'],
+        hideEmptySessions: true
+      }).map((session) => session.id)
+    ).toEqual(['cursor:legacy'])
+  })
+
+  it('matches case and separator variants of the same Windows Cursor workspace', () => {
+    const cursorSession: AiVaultSession = {
+      ...baseSession,
+      id: 'cursor:opc',
+      agent: 'cursor',
+      sessionId: 'sid',
+      cwd: null,
+      filePath:
+        'C:\\Users\\ada\\.cursor\\projects\\c-Dev-simulations-opc\\agent-transcripts\\sid.jsonl'
+    }
+    const workspaceFilters = {
+      query: '',
+      agents: ['cursor'] as const,
+      scope: 'workspace' as const,
+      sort: 'updated' as const,
+      hideEmptySessions: true
+    }
+    expect(
+      filterAiVaultSessions([cursorSession], {
+        ...workspaceFilters,
+        activeWorktreePaths: ['C:\\Dev\\simulations\\opc']
+      }).map((session) => session.id)
+    ).toEqual(['cursor:opc'])
+    expect(
+      filterAiVaultSessions([cursorSession], {
+        ...workspaceFilters,
+        activeWorktreePaths: ['c:/dev/simulations/opc']
+      }).map((session) => session.id)
+    ).toEqual(['cursor:opc'])
+  })
+
+  it('does not override an authoritative cwd with a colliding Cursor project slug', () => {
+    const cursorSession: AiVaultSession = {
+      ...baseSession,
+      id: 'cursor:authoritative-cwd',
+      agent: 'cursor',
+      sessionId: 'sid',
+      cwd: 'C:\\Dev\\other',
+      filePath:
+        'C:\\Users\\ada\\.cursor\\projects\\c-Dev-simulations-opc\\agent-transcripts\\sid.jsonl'
+    }
+    expect(
+      filterAiVaultSessions([cursorSession], {
+        query: '',
+        agents: ['cursor'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: ['C:\\Dev\\simulations\\opc'],
+        hideEmptySessions: true
+      })
+    ).toEqual([])
+  })
+
+  it('does not guess a genuinely unlocated session into the active workspace', () => {
+    const unlocated: AiVaultSession = {
+      ...baseSession,
+      id: 'cursor:unknown',
+      agent: 'cursor',
+      sessionId: 'sid',
+      cwd: null,
+      filePath: 'C:\\Users\\ada\\.cursor\\projects\\agent-transcripts\\sid.jsonl'
+    }
+    expect(
+      filterAiVaultSessions([unlocated], {
+        query: '',
+        agents: ['cursor'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: ['C:\\Dev\\simulations\\opc'],
+        hideEmptySessions: true
+      })
+    ).toEqual([])
+    expect(groupAiVaultSessions([unlocated], 'folder').map((group) => group.label)).toEqual([
+      'Unknown location'
+    ])
+  })
+
+  it('leaves Claude and Codex folder grouping on their recorded cwd', () => {
+    const groups = groupAiVaultSessions([baseSession, otherSession], 'folder')
+    expect(
+      groups.map((group) => ({ label: group.label, agents: group.sessions.map((s) => s.agent) }))
+    ).toEqual([
+      { label: 'repo/app', agents: ['claude'] },
+      { label: 'packages/ui', agents: ['codex'] }
+    ])
+  })
 })

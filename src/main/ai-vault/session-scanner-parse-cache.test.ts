@@ -2,11 +2,13 @@ import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { cursorWorkspaceSlug } from '../../shared/cursor-workspace-slug'
 import {
   parseAgentSessionFileCached,
   resetSessionParseCacheForTests,
   createSessionParseStats
 } from './session-scanner-parse-cache'
+import { resetCursorTrustedCwdCacheForTests } from './session-scanner-cursor-project-cwd'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
 
@@ -14,6 +16,7 @@ let tempRoots: string[] = []
 
 beforeEach(() => {
   resetSessionParseCacheForTests()
+  resetCursorTrustedCwdCacheForTests()
 })
 
 afterEach(async () => {
@@ -36,6 +39,20 @@ async function claudeCandidate(path: string): Promise<SessionFileCandidate> {
     sizeBytes: fileStat.size
   }
   return { agent: 'claude', file, codexHome: null }
+}
+
+async function cursorCandidate(path: string): Promise<SessionFileCandidate> {
+  const fileStat = await stat(path)
+  return {
+    agent: 'cursor',
+    file: {
+      path,
+      mtimeMs: fileStat.mtimeMs,
+      modifiedAt: fileStat.mtime.toISOString(),
+      sizeBytes: fileStat.size
+    },
+    codexHome: null
+  }
 }
 
 function userRecord(index: number, text: string): string {
@@ -90,6 +107,38 @@ describe('parseAgentSessionFileCached', () => {
     expect(stats.fullParses).toBe(1)
     expect(stats.reused).toBe(1)
     expect(stats.incremental).toBe(0)
+  })
+
+  it('refreshes Cursor cwd when a trust marker appears beside a cached transcript', async () => {
+    const root = await makeTempDir()
+    const workspace = join(root, 'repo')
+    const projectDir = join(root, '.cursor', 'projects', cursorWorkspaceSlug(workspace))
+    const path = join(projectDir, 'agent-transcripts', 'cursor-session.jsonl')
+    await mkdir(join(projectDir, 'agent-transcripts'), { recursive: true })
+    await mkdir(workspace, { recursive: true })
+    await writeFile(
+      path,
+      `${JSON.stringify({
+        role: 'user',
+        timestamp: '2026-08-12T00:00:00.000Z',
+        message: { content: 'cached question' }
+      })}\n`
+    )
+
+    const stats = createSessionParseStats()
+    const candidate = await cursorCandidate(path)
+    const first = await parseAgentSessionFileCached(candidate, process.platform, stats)
+    await writeFile(
+      join(projectDir, '.workspace-trusted'),
+      JSON.stringify({ workspacePath: workspace })
+    )
+    resetCursorTrustedCwdCacheForTests()
+    const second = await parseAgentSessionFileCached(candidate, process.platform, stats)
+
+    expect(first?.cwd).toBeNull()
+    expect(second?.cwd).toBe(workspace)
+    expect(stats.fullParses).toBe(1)
+    expect(stats.reused).toBe(1)
   })
 
   it('incrementally parses appended lines and matches a cold parse exactly', async () => {
