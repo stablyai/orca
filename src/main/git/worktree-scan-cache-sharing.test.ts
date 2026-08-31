@@ -229,6 +229,29 @@ describe('listWorktrees in-flight sharing', () => {
     await expect(strict).rejects.toThrow('git timed out.')
   })
 
+  it('keeps listWorktreesStrict unshared for post-mutation verification', async () => {
+    // Why: a raw `git worktree prune` never bumps the scan generation, so a
+    // coalesced strict read could return the pre-prune row and report a
+    // successful removal as a stale registration.
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    const resolvers: (() => void)[] = []
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(() => resolve({ stdout: scanOutput }))
+        })
+    )
+
+    const first = listWorktreesStrict('/repo')
+    const second = listWorktreesStrict('/repo')
+    for (const resolve of resolvers) {
+      resolve()
+    }
+    await Promise.all([first, second])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it('does not share scans across different timeout contracts', async () => {
     const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     gitExecFileAsyncMock.mockResolvedValue({ stdout: scanOutput })
