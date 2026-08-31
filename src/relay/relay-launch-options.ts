@@ -12,6 +12,12 @@ export const RELAY_EMPTY_DETACHED_STARTUP_GRACE_MS = parseNonNegativeIntEnv(
 // Why: a relay holding zero PTYs preserves nothing, so an unlimited grace only accumulates idle daemons.
 // The env override is test-only — the remote relay is launched over a non-interactive SSH exec channel that carries no client env.
 export const RELAY_IDLE_GRACE_MS = parseNonNegativeIntEnv('ORCA_RELAY_IDLE_GRACE_MS', 15 * 60_000)
+// Why days, not minutes: this window must outlast a laptop closed over a long weekend, while still
+// bounding a relay whose client will never return — an Orca update strands the whole version dir.
+export const RELAY_ABANDONED_GRACE_MS = parseNonNegativeIntEnv(
+  'ORCA_RELAY_ABANDONED_GRACE_MS',
+  7 * 24 * 60 * 60_000
+)
 
 export type RelayLaunchOptions = {
   graceTimeMs: number

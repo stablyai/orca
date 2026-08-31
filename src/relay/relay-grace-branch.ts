@@ -3,6 +3,7 @@ export type RelayGraceBranch =
   | 'shutdown-deferred'
   | 'startup-empty-detached'
   | 'idle-no-ptys'
+  | 'abandoned-no-client'
   | 'configured'
 
 export type RelayGraceDecisionInput = {
@@ -12,10 +13,14 @@ export type RelayGraceDecisionInput = {
   relayIdle: boolean
   detached: boolean
   hasAcceptedSocketClient: boolean
+  /** A client is attached right now — distinct from `hasAcceptedSocketClient`, which stays true after it leaves. */
+  hasConnectedSocketClient: boolean
   activePtyCount: number
   retryDeferredShutdown: boolean
   emptyDetachedStartupGraceMs: number
   idleRelayGraceMs: number
+  /** Upper bound on an unlimited grace once no client is left to come back for the PTYs. */
+  abandonedRelayGraceMs: number
 }
 
 export type RelayGraceDecision = {
@@ -117,6 +122,12 @@ export function decideRelayGrace(input: RelayGraceDecisionInput): RelayGraceDeci
   // Why: a spawn parked mid-creation is not in the pool yet, so capping on it would kill the live
   // shell it is about to produce.
   const idleNoPtys = input.relayIdle && input.configuredGraceMs === 0
+  // Why bound the unlimited grace: an Orca update deploys a new version dir and leaves this relay
+  // running, and cross-version isolation means its client can never reattach. Unbounded, every past
+  // version keeps its PTYs forever — on macOS that walks the host into kern.tty.ptmx_max and no new
+  // terminal can spawn anywhere. A client that does come back cancels the window.
+  const abandonedNoClient =
+    !input.relayIdle && input.configuredGraceMs === 0 && !input.hasConnectedSocketClient
 
   const branch: RelayGraceBranch = input.retryDeferredShutdown
     ? 'shutdown-deferred'
@@ -124,7 +135,9 @@ export function decideRelayGrace(input: RelayGraceDecisionInput): RelayGraceDeci
       ? 'startup-empty-detached'
       : idleNoPtys
         ? 'idle-no-ptys'
-        : 'configured'
+        : abandonedNoClient
+          ? 'abandoned-no-client'
+          : 'configured'
 
   const timeoutMs =
     branch === 'startup-empty-detached'
@@ -135,7 +148,9 @@ export function decideRelayGrace(input: RelayGraceDecisionInput): RelayGraceDeci
         // branch must supply its own bound or the shipped grace=0 default arms no retry at all.
         branch === 'idle-no-ptys' || branch === 'shutdown-deferred'
         ? input.idleRelayGraceMs
-        : input.configuredGraceMs
+        : branch === 'abandoned-no-client'
+          ? input.abandonedRelayGraceMs
+          : input.configuredGraceMs
 
   return { branch, timeoutMs }
 }
