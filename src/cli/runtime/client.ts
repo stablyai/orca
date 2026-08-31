@@ -244,7 +244,7 @@ export class RuntimeClient {
     if (initial.result.app.desktopWindowStatus === 'blocked') {
       throwDesktopActivationBlocked()
     }
-    launchOrcaApp()
+    launchOrcaApp(this.userDataPath)
     if (initial.result.app.desktopWindowStatus === 'available') {
       return initial
     }
