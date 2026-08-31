@@ -149,7 +149,8 @@ async function superviseMission(input: {
   agentCandidates?: readonly string[]
   maxConcurrency: number
 }): Promise<MissionSummary> {
-  const started = new Set<string>()
+  const startAttempted = new Set<string>()
+  const startFailures = new Map<string, unknown>()
   for (;;) {
     const listed = await input.client.call<{ tasks: RuntimeTask[]; count: number }>(
       'orchestration.taskList',
@@ -158,7 +159,11 @@ async function superviseMission(input: {
     const tasks = listed.result.tasks
     const completed = tasks.filter((task) => task.status === 'completed')
     const failed = tasks.filter((task) => task.status === 'failed')
+    const unresolvedStartFailure = getUnresolvedStartFailure(tasks, startFailures)
     if (completed.length + failed.length === tasks.length) {
+      if (unresolvedStartFailure) {
+        throw unresolvedStartFailure
+      }
       return {
         mission: input.mission,
         runId: input.runId,
@@ -172,20 +177,31 @@ async function superviseMission(input: {
     const capacity =
       input.maxConcurrency - tasks.filter((task) => task.status === 'dispatched').length
     const wave = tasks
-      .filter((task) => task.status === 'ready' && !started.has(task.id))
+      .filter((task) => task.status === 'ready' && !startAttempted.has(task.id))
       .slice(0, Math.max(0, capacity))
     if (wave.length > 0) {
-      await Promise.all(
+      const startedWave = await Promise.allSettled(
         wave.map(async (task) => {
-          await startMissionWorker(input, task.id)
-          started.add(task.id)
+          try {
+            await startMissionWorker(input, task.id)
+          } finally {
+            startAttempted.add(task.id)
+          }
         })
       )
+      for (const [index, result] of startedWave.entries()) {
+        if (result.status === 'rejected') {
+          startFailures.set(wave[index]!.id, result.reason)
+        }
+      }
       continue
     }
 
     const active = tasks.some((task) => task.status === 'dispatched')
     if (!active) {
+      if (unresolvedStartFailure) {
+        throw unresolvedStartFailure
+      }
       const blocked = tasks.filter((task) => task.status === 'blocked')
       throw new RuntimeClientError(
         'mission_stalled',
@@ -224,6 +240,19 @@ async function superviseMission(input: {
       })
     }
   }
+}
+
+function getUnresolvedStartFailure(
+  tasks: readonly RuntimeTask[],
+  startFailures: ReadonlyMap<string, unknown>
+): unknown | null {
+  for (const [taskId, error] of startFailures) {
+    const task = tasks.find((candidate) => candidate.id === taskId)
+    if (task?.status !== 'completed') {
+      return error
+    }
+  }
+  return null
 }
 
 type MissionWorkerStartResult = {

@@ -37,7 +37,10 @@ export const MISSION_METHODS: RpcMethod[] = [
 
       try {
         await runtime.showManagedTerminalWorkspace(params.worktree)
-      } catch {
+      } catch (error) {
+        if (!(error instanceof Error) || error.message !== 'selector_not_found') {
+          throw error
+        }
         throw new OrchestrationError(
           'selector_not_found',
           'Mission requires an Orca-managed workspace.'
