@@ -21,6 +21,8 @@ import {
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
+import { fetchAntigravityRateLimits } from './antigravity-cli-usage'
+import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -228,6 +230,7 @@ export class RateLimitService {
   }
   // Why: resolved per cycle — the local-account runtime policy can flip between fetches.
   private kimiHomeResolver: KimiHomeResolver | null = null
+  private antigravityRuntimeTargetResolver: (() => LocalAccountRuntimeTarget) | null = null
   private claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   private claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',
@@ -284,6 +287,10 @@ export class RateLimitService {
 
   setKimiHomeResolver(resolver: KimiHomeResolver): void {
     this.kimiHomeResolver = resolver
+  }
+
+  setAntigravityRuntimeTargetResolver(resolver: () => LocalAccountRuntimeTarget): void {
+    this.antigravityRuntimeTargetResolver = resolver
   }
 
   // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
@@ -1308,6 +1315,13 @@ export class RateLimitService {
     return left.runtime === right.runtime && left.wslDistro === right.wslDistro
   }
 
+  private isSameAntigravityTarget(
+    left: LocalAccountRuntimeTarget | undefined,
+    right: LocalAccountRuntimeTarget | undefined
+  ): boolean {
+    return left?.runtime === right?.runtime && left?.wslDistro === right?.wslDistro
+  }
+
   private getCodexProvenance(
     target: NormalizedCodexAccountSelectionTarget,
     codexHomePath: string | null
@@ -1688,41 +1702,53 @@ export class RateLimitService {
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
+    const antigravityTarget = this.antigravityRuntimeTargetResolver?.()
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
-        codexFetchGated
-          ? Promise.resolve(previousState.codex as ProviderRateLimits)
-          : (missingWslCodexHome ??
-            fetchCodexRateLimits({
-              codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-              signal
-            })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
-          cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      antigravityResult
+    ] = await Promise.allSettled([
+      claudeFetchGated
+        ? Promise.resolve(previousState.claude as ProviderRateLimits)
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          }),
+      codexFetchGated
+        ? Promise.resolve(previousState.codex as ProviderRateLimits)
+        : (missingWslCodexHome ??
+          fetchCodexRateLimits({
+            codexHomePath,
+            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            signal
+          })),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(
+        cookie,
+        workspaceIdOverride || undefined,
+        this.networkProxySettingsResolver?.()
+      ),
+      this.fetchKimiWithResolvedHome(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
+          }),
+      fetchAntigravityRateLimits({
+        target: antigravityTarget,
+        signal
+      })
+    ])
 
     if (signal.aborted) {
       return
@@ -1767,8 +1793,25 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
+    // Why: `agy` keeps its token in the OS keyring, so the CLI is the only source that
+    // describes real Antigravity quota. The Gemini mirror stays as the fallback for machines
+    // where the Antigravity CLI is not installed; a signed-out CLI still answers for itself,
+    // because blaming a missing Gemini sign-in would send the user to a dead product.
+    // A mid-flight runtime switch means this answer describes the runtime we left; keep the
+    // previous reading and let the next refresh ask the runtime that is current now.
+    const antigravityTargetStale = !this.isSameAntigravityTarget(
+      antigravityTarget,
+      this.antigravityRuntimeTargetResolver?.()
+    )
+    const antigravityCli =
+      !antigravityTargetStale && antigravityResult.status === 'fulfilled'
+        ? antigravityResult.value
+        : null
+    const antigravity = antigravityTargetStale
+      ? (previousState.antigravity ?? deriveAntigravityRateLimits(gemini))
+      : antigravityCli && antigravityCli.usageMetadata?.failureKind !== 'cli-unavailable'
+        ? antigravityCli
+        : deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'

@@ -4,6 +4,7 @@ import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchAntigravityRateLimits } from './antigravity-cli-usage'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -95,6 +96,16 @@ export function mockFreshBackgroundProviderFetches(): void {
 export function resetRateLimitProviderMocks(): void {
   vi.clearAllMocks()
   vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
+  // Default to a machine without the Antigravity CLI, which is the mirror path.
+  vi.mocked(fetchAntigravityRateLimits).mockResolvedValue({
+    provider: 'antigravity',
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error: 'Antigravity CLI not found.',
+    status: 'unavailable',
+    usageMetadata: { source: 'cli', failureKind: 'cli-unavailable' }
+  })
   vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
   vi.mocked(fetchKimiRateLimits).mockResolvedValue(okProvider('kimi', 0, Date.now()))
   vi.mocked(fetchMiniMaxRateLimits).mockResolvedValue(okProvider('minimax', 0, Date.now()))
