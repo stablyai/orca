@@ -41,10 +41,11 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           '  const sessionId = sessionManager?.getSessionId?.()',
           '  const sessionFile = sessionManager?.getSessionFile?.()',
           "  runtimeOmpSessionMetadata = typeof sessionId === 'string' && sessionId && typeof sessionFile === 'string' && sessionFile ? { session_id: sessionId } : {}",
+          '  updateModelMetadata(ctx)',
           '}',
           '',
           'function getPostSessionMetadata(ompRuntime: boolean): Record<string, unknown> {',
-          '  return ompRuntime ? runtimeOmpSessionMetadata : sessionMetadata',
+          '  return ompRuntime ? { ...runtimeOmpSessionMetadata, ...modelMetadata } : sessionMetadata',
           '}',
           '',
           'function getPersistedSessionMetadata(): Record<string, unknown> {',
@@ -73,13 +74,34 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           '',
           'function updateRuntimeOmpSessionMetadata(ctx: unknown): void {',
           '  updateSessionMetadata(ctx)',
+          '  updateModelMetadata(ctx)',
           '}',
           '',
           'function getPostSessionMetadata(_ompRuntime: boolean): Record<string, unknown> {',
-          '  return sessionMetadata',
+          '  return { ...sessionMetadata, ...modelMetadata }',
           '}',
           ''
         ]
+  // Why: OMP emits no model_select of its own, so the active model is re-read from
+  // the event context on every post; the pane's status then always carries it.
+  // Reported only under the OMP runtime — Pi has no chat surface consuming it yet.
+  const modelMetadataSourceLines = [
+    'let modelMetadata: Record<string, unknown> = {}',
+    '',
+    '// Why: pi and OMP expose the active model as { provider, id } on both the event',
+    '// context and model_select events; the joined selector is what /model accepts back.',
+    'function updateModelMetadata(source: unknown): void {',
+    '  try {',
+    '    const model = (source as { model?: { provider?: unknown; id?: unknown } | null } | null)?.model',
+    "    const provider = typeof model?.provider === 'string' ? model.provider : ''",
+    "    const id = typeof model?.id === 'string' ? model.id : ''",
+    "    if (provider && id) modelMetadata = { model: provider + '/' + id }",
+    '  } catch {',
+    '    // Why: a throwing model getter must never break status delivery.',
+    '  }',
+    '}'
+  ]
+
   // Why: Pi resumes from an existing transcript; OMP resumes directly by session id (#8962).
   const payloadLine =
     kind !== 'omp'
@@ -102,6 +124,8 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'const HOOK_POST_TIMEOUT_MS = 1000',
     'let activePost = false',
     'let pendingPost: { hookEventName: string; extra: Record<string, unknown>; metadata: Record<string, unknown>; ompRuntime: boolean } | null = null',
+    ...modelMetadataSourceLines,
+    '',
     ...sessionMetadataSourceLines,
     '',
     '// Why: re-reading the endpoint file on every event is cheap (small file,',

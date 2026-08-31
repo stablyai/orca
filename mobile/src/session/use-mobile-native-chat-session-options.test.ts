@@ -73,6 +73,36 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(api!.snapshot).toEqual([])
   })
 
+  it('shows an OMP session under the model its hook reported', () => {
+    // OMP seeds no models, so the pill exists only once the hook names one.
+    mount({ agent: 'omp' })
+    expect(api!.snapshot).toEqual([])
+    update({ reportedModel: 'deepseek/deepseek-v4-pro' })
+    const model = api!.snapshot[0]!
+    expect(model).toMatchObject({ id: 'model', category: 'model', valueSource: 'reported' })
+    expect(model.kind).toMatchObject({
+      type: 'select',
+      currentValue: 'deepseek/deepseek-v4-pro',
+      choices: [{ value: 'deepseek/deepseek-v4-pro', label: 'deepseek/deepseek-v4-pro' }]
+    })
+  })
+
+  it('switches an OMP session with /model <selector>', async () => {
+    mount({ agent: 'omp', reportedModel: 'deepseek/deepseek-v4-pro' })
+    let applied: boolean | undefined
+    await act(async () => {
+      applied = await api!.setOption('model', 'minimax-cn/MiniMax-M3')
+    })
+    expect(applied).toBe(true)
+    expect(dispatchCommand).toHaveBeenCalledWith('/model minimax-cn/MiniMax-M3')
+    const model = api!.snapshot[0]!
+    expect(model).toMatchObject({ valueSource: 'dispatched' })
+    expect(model.kind).toMatchObject({ currentValue: 'minimax-cn/MiniMax-M3' })
+    // The hook confirming the switch is the next report; a changed value is evidence.
+    update({ reportedModel: 'minimax-cn/MiniMax-M3' })
+    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
+  })
+
   it('applies a model pick through the catalog modelApply command', async () => {
     mount()
     let applied: boolean | undefined

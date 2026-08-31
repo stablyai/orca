@@ -154,6 +154,11 @@ export function matchNativeChatCatalogModelId(
   if (!normalized) {
     return null
   }
+  // Why: a catalog with no seed (OMP) has nothing to match against, yet the hook's
+  // `provider/id` IS the selector the CLI accepts back — keep it as the tracked row.
+  if (catalog.models.length === 0) {
+    return reported.trim()
+  }
   const exact = catalog.models.find((model) => model.id.toLowerCase() === normalized)
   if (exact) {
     return exact.id

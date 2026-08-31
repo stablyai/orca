@@ -22,6 +22,19 @@ export function normalizePiCompatibleEvent(
     return null
   }
 
+  // Why: the OMP extension stamps `provider/id` on every post; Pi posts carry none.
+  const model = readString(hookPayload, 'model')
+  if (eventName === 'model_select') {
+    // Why: a model switch happens between turns, so it must ride on the pane's last
+    // known status instead of inventing a state — and before any status exists there
+    // is nothing for a model to describe.
+    const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
+    if (!model || !previous || previous.agentType !== agentType) {
+      return null
+    }
+    return normalizeAgentStatusPayload({ ...previous, model })
+  }
+
   // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
   const toolName = readString(hookPayload, 'tool_name')
   const isPiCompatibleAsk =
@@ -63,6 +76,7 @@ export function normalizePiCompatibleEvent(
       resetOnNewTurn: isNewTurnEvent(agentType, eventName)
     }),
     agentType,
+    model,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,

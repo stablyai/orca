@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { _internals } from './server'
+import { agentHookServer, _internals } from './server'
 import { buildBody } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -27,6 +27,86 @@ afterEach(() => {
 })
 
 describe('Pi hook normalization', () => {
+  it('carries the model an OMP post stamps on the pane status', () => {
+    const started = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({
+        hook_event_name: 'before_agent_start',
+        prompt: 'status for omp',
+        model: 'deepseek/deepseek-v4-pro'
+      }),
+      'production'
+    )
+    expect(started?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'omp',
+      model: 'deepseek/deepseek-v4-pro'
+    })
+
+    // Pi posts carry no model, and none is invented for them.
+    const pi = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'status for pi' }),
+      'production'
+    )
+    expect(pi?.payload.model).toBeUndefined()
+  })
+
+  it('model_select re-emits the last OMP status under the new model', () => {
+    const started = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({
+        hook_event_name: 'agent_end',
+        prompt: 'status for omp',
+        model: 'deepseek/deepseek-v4-pro'
+      }),
+      'production'
+    )
+    expect(started).not.toBeNull()
+    if (!started) {
+      throw new Error('expected OMP agent_end to normalize')
+    }
+    agentHookServer.ingestRemote(
+      {
+        paneKey: started.paneKey,
+        tabId: started.tabId,
+        worktreeId: started.worktreeId,
+        payload: started.payload
+      },
+      'conn-1'
+    )
+
+    const switched = _internals.normalizeHookPayload(
+      'omp',
+      buildBody({ hook_event_name: 'model_select', model: 'minimax-cn/MiniMax-M3' }),
+      'production'
+    )
+    // Why: a switch between turns changes the model, never the state or the prompt.
+    expect(switched?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'status for omp',
+      agentType: 'omp',
+      model: 'minimax-cn/MiniMax-M3'
+    })
+  })
+
+  it('model_select before any status has nothing to describe', () => {
+    expect(
+      _internals.normalizeHookPayload(
+        'omp',
+        buildBody({ hook_event_name: 'model_select', model: 'minimax-cn/MiniMax-M3' }),
+        'production'
+      )
+    ).toBeNull()
+    expect(
+      _internals.normalizeHookPayload(
+        'omp',
+        buildBody({ hook_event_name: 'model_select' }),
+        'production'
+      )
+    ).toBeNull()
+  })
+
   it('before_agent_start maps to working and captures the prompt', () => {
     const result = _internals.normalizeHookPayload(
       'pi',
