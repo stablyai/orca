@@ -185,10 +185,19 @@ describe('per-job path classification', () => {
     for (const file of [
       'config/docker/cli-launch-contract/Dockerfile',
       'config/docker/cli-launch-contract/run-cli-case.sh',
-      'config/scripts/run-linux-cli-launch-contract-docker.mjs'
+      'config/docker/headless-serve-shutdown/Dockerfile',
+      'config/scripts/run-linux-cli-launch-contract-docker.mjs',
+      'config/scripts/static-appimage-package-contract.cjs'
     ]) {
       expectClassification([file], { package: true })
     }
+  })
+
+  it('runs both package jobs when the shared skills runtime verifier changes', () => {
+    expectClassification(['config/scripts/verify-skills-cli-runtime.cjs'], {
+      package: true,
+      package_windows: true
+    })
   })
 
   it('runs shell contracts when live-shell inputs change', () => {
