@@ -123,6 +123,36 @@ describe('OrchestrationDb worker Dispatch state', () => {
     expect(d.getTask(task.id)?.status).toBe('ready')
   })
 
+  it('preserves branch provenance when worker authority only reports a worktree', () => {
+    const d = createDb()
+    const task = d.createTask({
+      spec: 'worker',
+      worktreeId: 'repo::worktree',
+      branch: 'feature/work'
+    })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: { topology: 'current', agent: 'codex' }
+    })
+
+    d.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'tab_worker:leaf_worker',
+      processIncarnation: 'runtime:pty:1',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: []
+    })
+
+    expect(d.getTask(task.id)).toMatchObject({
+      worktree_id: 'repo::worktree',
+      branch: 'feature/work'
+    })
+  })
+
   it('commits worker-start mutation acceptance with the starting Dispatch', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'atomic acceptance' })
@@ -195,6 +225,33 @@ describe('OrchestrationDb worker Dispatch state', () => {
       residual_resources: expect.stringContaining('term_worker')
     })
     expect(d.getTask(task.id)?.status).toBe('failed')
+  })
+
+  it('preserves branch provenance when worker stage only reports a worktree', () => {
+    const d = createDb()
+    const task = d.createTask({
+      spec: 'worker',
+      worktreeId: 'repo::worktree',
+      branch: 'feature/work'
+    })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
+
+    d.recordWorkerStage({
+      dispatchId: started.dispatch.id,
+      stage: 'terminal_created',
+      worktreeId: 'repo::worktree',
+      effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }]
+    })
+
+    expect(d.getTask(task.id)).toMatchObject({
+      worktree_id: 'repo::worktree',
+      branch: 'feature/work'
+    })
   })
 
   it('allows retry only from the Task current terminal Dispatch', () => {

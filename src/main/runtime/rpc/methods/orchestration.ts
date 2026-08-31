@@ -229,6 +229,7 @@ const TaskListParams = z.object({
   // Why: server-side truncation keeps --brief cheap over SSH/relay instead of shipping full specs the CLI throws away.
   brief: OptionalBoolean,
   run: OptionalString,
+  worktree: OptionalString,
   callerTerminalHandle: OptionalString
 })
 
@@ -436,6 +437,24 @@ function rejectFederatedExplicitTarget(params: { to?: string; run?: string }): v
       'invalid_argument',
       'Federated Dispatch messages route to their Run home; omit --to and --run.'
     )
+  }
+}
+
+async function resolveTaskTerminalProvenance(
+  runtime: OrcaRuntimeService,
+  terminalHandle?: string | null
+): Promise<{ worktreeId?: string; branch?: string | null }> {
+  if (!terminalHandle) {
+    return {}
+  }
+  try {
+    const terminal = await runtime.showTerminal(terminalHandle)
+    return {
+      worktreeId: terminal.worktreeId,
+      branch: terminal.branch || null
+    }
+  } catch {
+    return {}
   }
 }
 
@@ -1483,9 +1502,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.taskCreate',
     params: TaskCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: async (
+      params,
+      { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
+      const provenance = await resolveTaskTerminalProvenance(runtime, params.callerTerminalHandle)
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
@@ -1503,6 +1526,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         deps,
         parentId: params.parent,
         createdByTerminalHandle: params.callerTerminalHandle,
+        worktreeId: provenance.worktreeId,
+        branch: provenance.branch ?? undefined,
         ...(creatorAuthority?.paneKey && creatorAuthority.processIncarnation
           ? {
               createdByPaneKey: creatorAuthority.paneKey,
@@ -1536,7 +1561,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready,
-        runId: run.id
+        runId: run.id,
+        worktreeId: params.worktree
       })
       const tasks = joined.map((row) => {
         const { assignee_handle, dispatch_id, ...base } = row
@@ -1642,6 +1668,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       if (task.status !== 'ready') {
         throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
       }
+      const provenance = await resolveTaskTerminalProvenance(runtime, to)
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
       if (params.inject) {
@@ -1675,6 +1702,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         creator: resolveDispatchCreator(runtime, params.from),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
+      db.updateTaskProvenance(task.id, provenance)
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
             dispatchId: ctx.id,

@@ -101,6 +101,7 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+    this.updateTaskProvenance(dispatch.task_id, { worktreeId: params.worktreeId })
     if (params.terminalOwnership && !this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
       if (params.terminalOwnership === 'created') {
         this.createWorkerTerminalResourceStatement({

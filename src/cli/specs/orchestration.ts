@@ -145,8 +145,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-list'],
     summary: 'List orchestration tasks',
     usage:
-      'orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'run', 'from'],
+      'orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--worktree <worktree_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'run', 'worktree', 'from'],
     notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
   },
   {

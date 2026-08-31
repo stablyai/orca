@@ -97,6 +97,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
   parent_id     TEXT,
   created_by_terminal_handle TEXT,
+  worktree_id    TEXT,
+  branch         TEXT,
   created_by_pane_key TEXT,
   created_by_process_incarnation TEXT,
   created_by_run_generation INTEGER,
@@ -116,6 +118,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_worktree ON tasks(worktree_id);
 
 CREATE TABLE IF NOT EXISTS dispatch_contexts (
   id                  TEXT PRIMARY KEY,
