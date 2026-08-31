@@ -14,16 +14,12 @@ async function hasGitRefAsync(exec: GitExec, ref: string): Promise<boolean> {
 }
 
 async function listRemoteNamesViaExec(exec: GitExec): Promise<string[]> {
-  try {
-    const { stdout } = await exec(['remote'])
-    return stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .sort((a, b) => b.length - a.length)
-  } catch {
-    return []
-  }
+  const { stdout } = await exec(['remote'])
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
 }
 
 /** Run branch-conflict policy through the host that owns Git execution. */
@@ -36,21 +32,20 @@ export async function getBranchConflictKindViaExec(
     return 'local'
   }
 
-  try {
-    const remoteNames = await listRemoteNamesViaExec(exec)
-    const { stdout } = await exec(['for-each-ref', '--format=%(refname)', 'refs/remotes'])
-    const hasRemoteConflict = stdout.split(/\r?\n/).some((ref) => {
-      const trimmed = ref.trim()
-      if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
-        return false
-      }
-      return resolveConfiguredRemoteBranchName(trimmed, remoteNames) === branchName
-    })
+  // A successful empty list proves that no remotes are configured. A failed list is not that
+  // answer, so keep it outside the fail-soft ref scan and let the execution error propagate.
+  const remoteNames = await listRemoteNamesViaExec(exec)
 
-    return hasRemoteConflict ? 'remote' : null
-  } catch {
-    return null
-  }
+  const { stdout } = await exec(['for-each-ref', '--format=%(refname)', 'refs/remotes'])
+  const hasRemoteConflict = stdout.split(/\r?\n/).some((ref) => {
+    const trimmed = ref.trim()
+    if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
+      return false
+    }
+    return resolveConfiguredRemoteBranchName(trimmed, remoteNames) === branchName
+  })
+
+  return hasRemoteConflict ? 'remote' : null
 }
 
 export function getBranchConflictKind(

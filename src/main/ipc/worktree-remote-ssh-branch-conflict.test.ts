@@ -72,4 +72,26 @@ describe('getSshBranchConflictKind remote ownership', () => {
       getSshBranchConflictKind(provider, '/srv/repo', 'my-task', 'origin/main')
     ).resolves.toBe('remote')
   })
+
+  it('propagates a failed remote listing instead of treating it as no remotes', async () => {
+    const listingFailure = new Error('ssh: remote listing unavailable')
+    const provider: ConflictProvider = {
+      exec: vi.fn(async (args: string[]) => {
+        if (args[0] === 'rev-parse') {
+          throw new Error('missing local ref')
+        }
+        if (args[0] === 'remote') {
+          throw listingFailure
+        }
+        if (args[0] === 'for-each-ref') {
+          return { stdout: 'refs/remotes/origin/my-task\n', stderr: '' }
+        }
+        throw new Error(`unexpected git ${args.join(' ')}`)
+      })
+    }
+
+    await expect(
+      getSshBranchConflictKind(provider, '/srv/repo', 'my-task', 'origin/main')
+    ).rejects.toBe(listingFailure)
+  })
 })
