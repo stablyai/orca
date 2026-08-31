@@ -60,7 +60,7 @@ describe('resolveBrowserCandidate', () => {
     const res = resolveBrowserCandidate(candidate('Aside', 'at.studio.AsideBrowser'), {
       knownBrowsers: [],
       appSupportRoot: APP_SUPPORT,
-      existsSync: existsSync as never
+      existsSync
     })
     expect(res.status).toBe('resolved')
     if (res.status !== 'resolved') {

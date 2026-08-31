@@ -179,4 +179,63 @@ describe('browser session profile IPC', () => {
       expect.objectContaining({ browserFamily: 'custom', profileName: 'Default' })
     )
   })
+
+  it('refuses an ambiguous custom import when customBrowserId is omitted', async () => {
+    getProfileMock.mockReturnValue({ id: 'default', partition: 'persist:default' })
+    const vivaldi = {
+      family: 'custom',
+      label: 'Vivaldi',
+      cookiesPath: '/vivaldi/Cookies',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default',
+      customBrowserId: 'com.vivaldi.Vivaldi'
+    }
+    const opera = {
+      family: 'custom',
+      label: 'Opera',
+      cookiesPath: '/opera/Cookies',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default',
+      customBrowserId: 'com.operasoftware.Opera'
+    }
+    detectAllBrowsersMock.mockResolvedValue([vivaldi, opera])
+    const importHandler = getHandler('browser:session:importFromBrowser')
+
+    const result = await importHandler(
+      { sender: trustedSender },
+      { profileId: 'default', browserFamily: 'custom' }
+    )
+
+    // Without a customBrowserId the shared 'custom' family can't identify one browser.
+    expect(result).toMatchObject({ ok: false })
+    expect(importCookiesFromBrowserMock).not.toHaveBeenCalled()
+  })
+
+  it('persists the browser name as sourceLabel when importing a custom browser', async () => {
+    getProfileMock.mockReturnValue({ id: 'default', partition: 'persist:default' })
+    importCookiesFromBrowserMock.mockResolvedValue({
+      ok: true,
+      summary: { totalCookies: 1, importedCookies: 1, skippedCookies: 0, domains: [] }
+    })
+    const aside = {
+      family: 'custom',
+      label: 'Aside',
+      cookiesPath: '/aside/Cookies',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default',
+      customBrowserId: 'at.studio.AsideBrowser'
+    }
+    detectAllBrowsersMock.mockResolvedValue([aside])
+    const importHandler = getHandler('browser:session:importFromBrowser')
+
+    await importHandler(
+      { sender: trustedSender },
+      { profileId: 'default', browserFamily: 'custom', customBrowserId: 'at.studio.AsideBrowser' }
+    )
+
+    expect(updateProfileSourceMock).toHaveBeenCalledWith(
+      'default',
+      expect.objectContaining({ browserFamily: 'custom', sourceLabel: 'Aside' })
+    )
+  })
 })

@@ -1568,11 +1568,19 @@ export class RuntimeBrowserCommands {
     }
 
     const browsers = await detectAllBrowsers()
-    // Why: custom browsers all share family 'custom', so a customBrowserId request must match on
-    // that id; older clients omit it and fall back to family match.
-    let browser = params.customBrowserId
-      ? browsers.find((candidate) => candidate.customBrowserId === params.customBrowserId)
-      : browsers.find((candidate) => candidate.family === params.browserFamily)
+    // Why: custom browsers all share family 'custom', so a customBrowserId request must
+    // match on that id; without one, refuse an ambiguous family match rather than importing
+    // the wrong browser. Older clients that omit it still work when exactly one matches.
+    const matches = params.customBrowserId
+      ? browsers.filter((candidate) => candidate.customBrowserId === params.customBrowserId)
+      : browsers.filter((candidate) => candidate.family === params.browserFamily)
+    if (!params.customBrowserId && params.browserFamily === 'custom' && matches.length > 1) {
+      return {
+        ok: false,
+        reason: 'Multiple custom browsers detected; customBrowserId is required.'
+      }
+    }
+    let browser = matches[0]
     if (!browser) {
       return { ok: false, reason: 'Browser not found on this system.' }
     }
@@ -1600,6 +1608,9 @@ export class RuntimeBrowserCommands {
       browser.selectedProfile
     browserSessionRegistry.updateProfileSource(params.profileId, {
       browserFamily: browser.family,
+      // Why: custom browsers share family 'custom'; persist their real name so
+      // Settings distinguishes them (browserSourceLabel prefers sourceLabel).
+      ...(browser.family === 'custom' ? { sourceLabel: browser.label } : {}),
       profileName,
       importedAt: Date.now()
     })

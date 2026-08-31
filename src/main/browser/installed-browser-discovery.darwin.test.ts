@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as fsModule from 'node:fs'
-import type { DiscoveredBrowserCandidate } from './installed-browser-discovery'
+import type {
+  DiscoveredBrowserCandidate,
+  ExistsSync,
+  ReadTextFileSync
+} from './installed-browser-discovery'
 
 // Why: this module never touches Electron, but mirror the browser-cookie-import
 // suites' electron mock so the shared main-process import graph stays inert.
@@ -68,8 +71,8 @@ describe('filterChromiumCandidates — darwin', () => {
     const { filterChromiumCandidates } = await import('./installed-browser-discovery')
 
     // Aside/Comet on the modern Network/Cookies path, Chrome on the legacy Cookies path.
-    const existsSync = ((rawPath: fsModule.PathLike): boolean => {
-      const p = slashPath(String(rawPath))
+    const existsSync: ExistsSync = (rawPath) => {
+      const p = slashPath(rawPath)
       if (p.endsWith('Aside/Local State')) {
         return true
       }
@@ -92,7 +95,7 @@ describe('filterChromiumCandidates — darwin', () => {
         return true
       }
       return false
-    }) as typeof fsModule.existsSync
+    }
 
     const kept = filterChromiumCandidates(MACHINE_CANDIDATES, {
       appSupportRoot: APP_SUPPORT_ROOT,
@@ -107,11 +110,8 @@ describe('filterChromiumCandidates — darwin', () => {
   it('drops a candidate whose Local State exists but has no resolvable cookies DB', async () => {
     const { filterChromiumCandidates } = await import('./installed-browser-discovery')
 
-    const existsSync = ((rawPath: fsModule.PathLike): boolean => {
-      const p = slashPath(String(rawPath))
-      // Local State present, but neither cookies path resolves.
-      return p.endsWith('Comet/Local State')
-    }) as typeof fsModule.existsSync
+    // Local State present, but neither cookies path resolves.
+    const existsSync: ExistsSync = (rawPath) => slashPath(rawPath).endsWith('Comet/Local State')
 
     const kept = filterChromiumCandidates(MACHINE_CANDIDATES, {
       appSupportRoot: APP_SUPPORT_ROOT,
@@ -119,5 +119,49 @@ describe('filterChromiumCandidates — darwin', () => {
     })
 
     expect(kept.find((c) => c.displayName === 'Comet')).toBeUndefined()
+  })
+})
+
+describe('firstChromiumProfileWithCookies — non-Default profiles', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  const DATA_DIR = `${APP_SUPPORT_ROOT}/Ghosty`
+
+  it('selects a non-Default profile when Default has no cookies', async () => {
+    const { firstChromiumProfileWithCookies } = await import('./installed-browser-discovery')
+    const existsSync: ExistsSync = (rawPath) => {
+      const p = slashPath(rawPath)
+      if (p.endsWith('Ghosty/Local State')) {
+        return true
+      }
+      // Only Profile 1 owns a cookies DB (legacy path); Default has none.
+      return p.endsWith('Ghosty/Profile 1/Cookies')
+    }
+    const readFileSync: ReadTextFileSync = () =>
+      JSON.stringify({
+        profile: { info_cache: { Default: { name: 'Personal' }, 'Profile 1': { name: 'Work' } } }
+      })
+
+    const info = firstChromiumProfileWithCookies(DATA_DIR, { existsSync, readFileSync })
+
+    expect(info?.selectedProfile).toBe('Profile 1')
+    expect(info?.profiles.map((p) => p.directory).sort()).toEqual(['Default', 'Profile 1'])
+    expect(slashPath(info?.cookiesPath ?? '')).toBe(
+      '/Users/test/Library/Application Support/Ghosty/Profile 1/Cookies'
+    )
+  })
+
+  it('returns null when the data dir has no Local State', async () => {
+    const { firstChromiumProfileWithCookies } = await import('./installed-browser-discovery')
+    const existsSync: ExistsSync = () => false
+    expect(firstChromiumProfileWithCookies(DATA_DIR, { existsSync })).toBeNull()
+  })
+
+  it('returns null when no profile owns a cookies DB', async () => {
+    const { firstChromiumProfileWithCookies } = await import('./installed-browser-discovery')
+    const existsSync: ExistsSync = (rawPath) => slashPath(rawPath).endsWith('Ghosty/Local State')
+    expect(firstChromiumProfileWithCookies(DATA_DIR, { existsSync })).toBeNull()
   })
 })

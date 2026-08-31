@@ -1,4 +1,8 @@
-import { execFileSync } from 'node:child_process'
+// Why: namespace import (not `{ execFile }`) so tests that partially mock
+// node:child_process (execFileSync only) still load this transitively-imported module —
+// execFile is only touched when runOsascript actually runs.
+import * as childProcess from 'node:child_process'
+import { promisify } from 'node:util'
 import type { DiscoveredBrowserCandidate } from './installed-browser-discovery'
 
 // JXA (osascript) calling LaunchServices: enumerate apps registered to open https —
@@ -22,11 +26,16 @@ for (var i = 0; i < n; i++) {
 JSON.stringify(out);
 `
 
-function runOsascript(): string {
-  return execFileSync('osascript', ['-l', 'JavaScript', '-e', HTTPS_HANDLERS_JXA], {
-    encoding: 'utf-8',
-    timeout: 5_000
-  })
+// Why: async so detection never blocks the main/runtime event loop — this runs on
+// every detect/import call and JXA/AppKit spin-up can take a moment.
+async function runOsascript(): Promise<string> {
+  const execFileAsync = promisify(childProcess.execFile)
+  const { stdout } = await execFileAsync(
+    'osascript',
+    ['-l', 'JavaScript', '-e', HTTPS_HANDLERS_JXA],
+    { timeout: 5_000 }
+  )
+  return stdout.toString()
 }
 
 function isCandidate(value: unknown): value is DiscoveredBrowserCandidate {
@@ -43,12 +52,12 @@ function isCandidate(value: unknown): value is DiscoveredBrowserCandidate {
 
 // Parse the osascript JSON into candidates; any malformed output degrades to [].
 // `run` is injectable so the parsing is unit-tested without touching the OS.
-export function queryHttpsHandlersMacOS(
-  run: () => string = runOsascript
-): DiscoveredBrowserCandidate[] {
+export async function queryHttpsHandlersMacOS(
+  run: () => Promise<string> = runOsascript
+): Promise<DiscoveredBrowserCandidate[]> {
   let parsed: unknown
   try {
-    parsed = JSON.parse(run())
+    parsed = JSON.parse(await run())
   } catch {
     return []
   }

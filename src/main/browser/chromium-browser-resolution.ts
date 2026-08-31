@@ -1,9 +1,6 @@
 import { existsSync as realExistsSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  resolveChromiumCookiesPath,
-  type DiscoveredBrowserCandidate
-} from './installed-browser-discovery'
+import type { DiscoveredBrowserCandidate, ExistsSync } from './installed-browser-discovery'
 
 // A hardcoded, maintained browser entry with its data dir already resolved.
 export type KnownBrowserEntry = {
@@ -41,7 +38,7 @@ export function resolveBrowserCandidate(
   opts: {
     knownBrowsers: KnownBrowserEntry[]
     appSupportRoot: string
-    existsSync?: typeof realExistsSync
+    existsSync?: ExistsSync
   }
 ): BrowserResolution {
   const existsSync = opts.existsSync ?? realExistsSync
@@ -63,10 +60,9 @@ export function resolveBrowserCandidate(
   }
 
   // (b) Standard convention: <AppSupport>/<Name>, keychain "<Name> Safe Storage".
-  if (
-    existsSync(join(conventionDir, 'Local State')) &&
-    resolveChromiumCookiesPath(join(conventionDir, 'Default'), existsSync) !== null
-  ) {
+  // Whether a usable cookies profile exists is determined downstream (profilesFor),
+  // so any Chromium data dir (has Local State) resolves by convention here.
+  if (existsSync(join(conventionDir, 'Local State'))) {
     return {
       status: 'resolved',
       browser: {

@@ -16,7 +16,7 @@ import {
 import { readFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 // Why: write the diag log to userData, not world-readable /tmp, so only the current user can read it.
 let _diagLog: string | null = null
@@ -115,6 +115,7 @@ import { copyFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import {
   discoverInstalledBrowsers,
   filterChromiumCandidates,
+  firstChromiumProfileWithCookies,
   type DiscoveredBrowserCandidate
 } from './installed-browser-discovery'
 import { customBrowsersFromCandidates } from './custom-browser-detection'
@@ -437,12 +438,11 @@ function resolveDefaultHttpsHandlersQuery(): () => Promise<DiscoveredBrowserCand
       // Bad env → ignore and fall back to the real OS query.
     }
   }
-  return () => Promise.resolve(queryHttpsHandlersMacOS())
+  return () => queryHttpsHandlersMacOS()
 }
 
-// Hardcoded detection plus macOS auto-discovery of other installed Chromium browsers.
-// The OS URL-handler query is deferred behind an empty stub, so today this equals
-// detectInstalledBrowsers() until the real query is wired in.
+// Hardcoded detection plus macOS auto-discovery of installed Chromium browsers via the
+// OS URL-handler query. Returns the hardcoded set unchanged on non-macOS.
 export async function detectAllBrowsers(opts?: {
   queryHttpsHandlers?: () => Promise<DiscoveredBrowserCandidate[]>
 }): Promise<DetectedBrowser[]> {
@@ -475,10 +475,33 @@ export async function detectAllBrowsers(opts?: {
     knownBrowsers,
     appSupportRoot,
     existsSync,
-    cookiesPathFor: (dataDir) =>
-      resolveChromiumCookiesPath(join(dataDir, 'Default')) ?? join(dataDir, 'Default', 'Cookies')
+    profilesFor: (dataDir) => firstChromiumProfileWithCookies(dataDir, { existsSync, readFileSync })
   })
-  return [...hardcoded, ...customs]
+  // Why: dedup by cookies DB path so two discovered browsers resolving to the same
+  // store never appear twice (hardcoded-vs-discovered is already dropped upstream).
+  const seenCookies = new Set<string>()
+  return [...hardcoded, ...customs].filter((browser) => {
+    if (seenCookies.has(browser.cookiesPath)) {
+      return false
+    }
+    seenCookies.add(browser.cookiesPath)
+    return true
+  })
+}
+
+// Derive a custom browser's data root from its cookies path + selected profile:
+// <root>/<selectedProfile>/Cookies or <root>/<selectedProfile>/Network/Cookies.
+// Why the 'Network' check is unambiguous: Chromium never names a profile dir 'Network'
+// (it's a reserved sub-folder), so a 'Network' path segment is always the DB sub-dir.
+function customBrowserRoot(browser: DetectedBrowser): string | null {
+  let profileDir = dirname(browser.cookiesPath)
+  if (basename(profileDir) === 'Network') {
+    profileDir = dirname(profileDir)
+  }
+  if (basename(profileDir) !== browser.selectedProfile) {
+    return null
+  }
+  return dirname(profileDir)
 }
 
 export function selectBrowserProfile(
@@ -498,6 +521,18 @@ export function selectBrowserProfile(
       return null
     }
     return { ...browser, cookiesPath, selectedProfile: profileDirectory }
+  }
+
+  if (browser.family === 'custom') {
+    const customRoot = customBrowserRoot(browser)
+    if (!customRoot) {
+      return null
+    }
+    const customCookiesPath = resolveChromiumCookiesPath(join(customRoot, profileDirectory))
+    if (!customCookiesPath) {
+      return null
+    }
+    return { ...browser, cookiesPath: customCookiesPath, selectedProfile: profileDirectory }
   }
 
   const browserDef = CHROMIUM_BROWSERS.find((b) => b.family === browser.family)

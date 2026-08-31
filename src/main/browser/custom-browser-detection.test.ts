@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { customBrowsersFromCandidates } from './custom-browser-detection'
 import type { KnownBrowserEntry } from './chromium-browser-resolution'
-import type { DiscoveredBrowserCandidate } from './installed-browser-discovery'
+import type {
+  ChromiumProfilesWithCookies,
+  DiscoveredBrowserCandidate
+} from './installed-browser-discovery'
 
 const APP_SUPPORT = '/Users/test/Library/Application Support'
 
@@ -12,21 +15,24 @@ function candidate(
   return { bundleId, displayName, appPath: `/Applications/${displayName}.app` }
 }
 
-function cookiesPathFor(dataDir: string): string {
-  return `${dataDir}/Default/Cookies`
+// Default-profile resolver for candidates that own a Default cookie store.
+function defaultProfilesFor(dataDir: string): ChromiumProfilesWithCookies {
+  return {
+    profiles: [{ name: 'Default', directory: 'Default' }],
+    selectedProfile: 'Default',
+    cookiesPath: `${dataDir}/Default/Cookies`
+  }
 }
 
 describe('customBrowsersFromCandidates', () => {
   it('turns a convention-resolvable candidate into a custom DetectedBrowser', () => {
-    const existsSync = (p: string): boolean => {
-      const n = p.replace(/\\/g, '/')
-      return n.endsWith('/Aside/Local State') || n.endsWith('/Aside/Default/Cookies')
-    }
+    const existsSync = (p: string): boolean =>
+      p.replace(/\\/g, '/').endsWith('Application Support/Aside/Local State')
     const out = customBrowsersFromCandidates([candidate('Aside', 'at.studio.AsideBrowser')], {
       knownBrowsers: [],
       appSupportRoot: APP_SUPPORT,
       existsSync,
-      cookiesPathFor
+      profilesFor: defaultProfilesFor
     })
     expect(out).toHaveLength(1)
     expect(out[0].family).toBe('custom')
@@ -34,12 +40,35 @@ describe('customBrowsersFromCandidates', () => {
     expect(out[0].keychainService).toBe('Aside Safe Storage')
     expect(out[0].keychainAccount).toBe('Aside')
     expect(out[0].customBrowserId).toBe('at.studio.AsideBrowser')
+    expect(out[0].selectedProfile).toBe('Default')
     expect(out[0].cookiesPath.replace(/\\/g, '/')).toBe(
       '/Users/test/Library/Application Support/Aside/Default/Cookies'
     )
   })
 
-  it('drops a candidate matching a hardcoded known entry (dedup — already in the hardcoded list)', () => {
+  it('honors a non-Default selected profile from the resolver', () => {
+    const existsSync = (p: string): boolean =>
+      p.replace(/\\/g, '/').endsWith('Application Support/Ghosty/Local State')
+    const out = customBrowsersFromCandidates([candidate('Ghosty')], {
+      knownBrowsers: [],
+      appSupportRoot: APP_SUPPORT,
+      existsSync,
+      profilesFor: (dataDir) => ({
+        profiles: [
+          { name: 'Default', directory: 'Default' },
+          { name: 'Work', directory: 'Profile 1' }
+        ],
+        selectedProfile: 'Profile 1',
+        cookiesPath: `${dataDir}/Profile 1/Network/Cookies`
+      })
+    })
+    expect(out).toHaveLength(1)
+    expect(out[0].selectedProfile).toBe('Profile 1')
+    expect(out[0].profiles.map((p) => p.directory)).toEqual(['Default', 'Profile 1'])
+    expect(out[0].cookiesPath.replace(/\\/g, '/')).toContain('Ghosty/Profile 1/Network/Cookies')
+  })
+
+  it('drops a candidate matching a hardcoded known entry (dedup)', () => {
     const known: KnownBrowserEntry = {
       family: 'edge',
       label: 'Microsoft Edge',
@@ -51,7 +80,7 @@ describe('customBrowsersFromCandidates', () => {
       knownBrowsers: [known],
       appSupportRoot: APP_SUPPORT,
       existsSync: () => true,
-      cookiesPathFor
+      profilesFor: defaultProfilesFor
     })
     expect(out).toHaveLength(0)
   })
@@ -61,7 +90,17 @@ describe('customBrowsersFromCandidates', () => {
       knownBrowsers: [],
       appSupportRoot: APP_SUPPORT,
       existsSync: () => false,
-      cookiesPathFor
+      profilesFor: defaultProfilesFor
+    })
+    expect(out).toHaveLength(0)
+  })
+
+  it('drops a resolved candidate whose data dir owns no profile with cookies', () => {
+    const out = customBrowsersFromCandidates([candidate('Empty')], {
+      knownBrowsers: [],
+      appSupportRoot: APP_SUPPORT,
+      existsSync: () => true,
+      profilesFor: () => null
     })
     expect(out).toHaveLength(0)
   })
