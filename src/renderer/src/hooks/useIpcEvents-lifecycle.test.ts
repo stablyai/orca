@@ -28,6 +28,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'runtime.onNativeChatLaunchDraftResolved',
   'runtime.onTerminalDriverChanged',
   'runtime.onTerminalFitOverrideChanged',
+  'runtimeEnvironments.onChanged',
   'settings.onChanged',
   'ssh.onCredentialRequest',
   'ssh.onCredentialResolved',
@@ -102,6 +103,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
 const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'ui.onMobileMarkdownRequest',
   'automations.onChanged',
+  'runtimeEnvironments.onChanged',
   'repos.onChanged',
   'worktrees.onChanged',
   'worktrees.onHeadIdentitiesChanged',

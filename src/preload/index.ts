@@ -4784,6 +4784,11 @@ const api = {
       ipcRenderer.invoke('runtimeEnvironments:prepareBrowserClientHostPlacement', args),
     retryConnectionsNow: (): Promise<void> =>
       ipcRenderer.invoke('runtimeEnvironments:retryConnectionsNow'),
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('runtimeEnvironments:changed', listener)
+      return () => ipcRenderer.removeListener('runtimeEnvironments:changed', listener)
+    },
     call: (args: {
       selector: string
       method: string

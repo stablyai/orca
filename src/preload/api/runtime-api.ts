@@ -106,6 +106,8 @@ export type RuntimeApi = {
     ) => Promise<BrowserPageCreationPlacement>
     // Why: system resume / browser online advance pending shared-control reconnect timers only.
     retryConnectionsNow?: () => Promise<void>
+    // Fires when the saved-environments store changes on disk (e.g. `orca environment add`).
+    onChanged?: (callback: () => void) => () => void
     call: (args: {
       selector: string
       method: string

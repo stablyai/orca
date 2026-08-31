@@ -335,5 +335,17 @@ export function registerRuntimeClientIpcBridge(
   unsubs.push(runtimeClientEventsSync.stop)
   unsubs.push(runtimeProjectRefreshScheduler.stop)
 
+  // Why: `orca environment add/rm` rewrites the store outside the app. Re-hydrate so the
+  // server (and, via the store subscription above, its projects) surfaces without a
+  // Settings visit. Optional-chained: minimal window.api assemblies omit it.
+  const onRuntimeEnvironmentsChanged = window.api.runtimeEnvironments?.onChanged
+  if (onRuntimeEnvironmentsChanged) {
+    unsubs.push(
+      onRuntimeEnvironmentsChanged(() => {
+        void useAppStore.getState().hydrateRuntimeEnvironmentStatuses()
+      })
+    )
+  }
+
   return unsubscribeRuntimeEnvironmentStore
 }
