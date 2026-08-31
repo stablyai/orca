@@ -36,7 +36,11 @@ describe('PTY provider process inspection', () => {
     await expect(inspectPtyProviderProcessForRenderer(provider, 'pty-missing')).resolves.toEqual({
       foregroundProcess: null,
       hasChildProcesses: false,
-      unavailable: true
+      unavailable: true,
+      processEvidence: {
+        foreground: { verdict: 'unverifiable', reason: 'pty no longer exists' },
+        children: { verdict: 'unverifiable', reason: 'pty no longer exists' }
+      }
     })
   })
 
@@ -71,7 +75,11 @@ describe('PTY provider process inspection', () => {
 
     await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual({
       foregroundProcess: 'codex',
-      hasChildProcesses: true
+      hasChildProcesses: true,
+      processEvidence: {
+        foreground: { verdict: 'live', processName: 'codex' },
+        children: { verdict: 'live' }
+      }
     })
   })
 })

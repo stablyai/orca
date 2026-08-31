@@ -226,7 +226,11 @@ it('preserves unavailable inspection from the owning legacy daemon', async () =>
   await expect(router.inspectProcess('legacy-session')).resolves.toEqual({
     foregroundProcess: null,
     hasChildProcesses: true,
-    unavailable: true
+    unavailable: true,
+    processEvidence: {
+      foreground: { verdict: 'unverifiable', reason: 'peer omitted process inspection evidence' },
+      children: { verdict: 'unverifiable', reason: 'peer omitted process inspection evidence' }
+    }
   })
 })
 

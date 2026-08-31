@@ -229,6 +229,31 @@ describe('LocalPtyProvider', () => {
       await expect(foreground).resolves.toBeNull()
     })
 
+    it('publishes mixed evidence when exit lands during an inspection', async () => {
+      let resolveScan!: (resolution: { available: boolean; processName: string | null }) => void
+      resolveAgentForegroundProcessMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveScan = resolve
+        })
+      )
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const inspection = provider.inspectProcess(id)
+      // The node-pty exit callback clears the provider maps while the
+      // foreground process-table read is still in flight.
+      exitCb?.({ exitCode: 0 })
+      resolveScan({ available: true, processName: null })
+
+      await expect(inspection).resolves.toMatchObject({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        processEvidence: {
+          foreground: { verdict: 'unverifiable' },
+          children: { verdict: 'exited' }
+        }
+      })
+    })
+
     it('confirms a still-active agent from job membership without a whole-table scan', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       mockProc.process = 'powershell.exe'

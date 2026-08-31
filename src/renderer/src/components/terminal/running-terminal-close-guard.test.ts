@@ -140,7 +140,11 @@ describe('guardRunningTerminalClose', () => {
   it('closes an idle terminal without a prompt', async () => {
     inspectRuntimeTerminalProcessMock.mockResolvedValue({
       foregroundProcess: 'zsh',
-      hasChildProcesses: false
+      hasChildProcesses: false,
+      processEvidence: {
+        foreground: { verdict: 'exited', processName: 'zsh' },
+        children: { verdict: 'exited' }
+      }
     })
     const onClose = vi.fn()
 
@@ -149,6 +153,38 @@ describe('guardRunningTerminalClose', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(visibleRequest()).toBeNull()
+  })
+
+  it('prompts when foreground evidence is unverifiable even if children report exited', async () => {
+    inspectRuntimeTerminalProcessMock.mockResolvedValue({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      processEvidence: {
+        foreground: { verdict: 'unverifiable', reason: 'exit raced the foreground read' },
+        children: { verdict: 'exited' }
+      }
+    })
+    const onClose = vi.fn()
+
+    guard(onClose)
+    await settleProbe()
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
+  })
+
+  it('prompts when a remote result omits processEvidence instead of treating it as idle', async () => {
+    inspectRuntimeTerminalProcessMock.mockResolvedValue({
+      foregroundProcess: 'zsh',
+      hasChildProcesses: false
+    })
+    const onClose = vi.fn()
+
+    guard(onClose)
+    await settleProbe()
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
   })
 
   it('defers a busy terminal behind a confirmation that carries the tab label', async () => {
@@ -192,7 +228,7 @@ describe('guardRunningTerminalClose', () => {
     expect(visibleRequest()).toBeNull()
   })
 
-  it('fails open when a remote handle reports the inspection as unavailable', async () => {
+  it('prompts when a remote handle reports the inspection as unavailable', async () => {
     inspectRuntimeTerminalProcessMock.mockResolvedValue({
       foregroundProcess: null,
       hasChildProcesses: true,
@@ -203,8 +239,8 @@ describe('guardRunningTerminalClose', () => {
     guard(onClose)
     await settleProbe()
 
-    expect(onClose).toHaveBeenCalledTimes(1)
-    expect(visibleRequest()).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
   })
 
   it('prompts once for a split tab where only the second pane is busy', async () => {
@@ -239,7 +275,17 @@ describe('guardRunningTerminalClose', () => {
     })
     inspectRuntimeTerminalProcessMock.mockImplementation(async (_settings, ptyId: string) => ({
       foregroundProcess: ptyId === 'pty-a' ? 'npm' : 'zsh',
-      hasChildProcesses: ptyId === 'pty-a'
+      hasChildProcesses: ptyId === 'pty-a',
+      processEvidence:
+        ptyId === 'pty-a'
+          ? {
+              foreground: { verdict: 'live', processName: 'npm' },
+              children: { verdict: 'live' }
+            }
+          : {
+              foreground: { verdict: 'exited', processName: 'zsh' },
+              children: { verdict: 'exited' }
+            }
     }))
 
     guard()

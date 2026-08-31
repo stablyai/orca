@@ -96,9 +96,20 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
   it('keyboard Cmd+W path probes for running child processes before closing', () => {
     const source = readFileSync(join(__dirname, '../terminal-pane/TerminalPane.tsx'), 'utf8')
     const handler = source.slice(source.indexOf('const handleRequestClosePane'))
-    expect(handler.slice(0, handler.indexOf('useImperativeHandle'))).toContain(
-      'inspectRuntimeTerminalProcess'
-    )
+    const body = handler.slice(0, handler.indexOf('useImperativeHandle'))
+    expect(body).toContain('inspectRuntimeTerminalProcess')
+    expect(body).toContain('resolveTerminalProcessCloseVerdict')
+    expect(body).not.toContain('process.hasChildProcesses')
+  })
+
+  it('native window close uses the composite verdict for every local PTY', () => {
+    const source = readFileSync(join(__dirname, '../Terminal.tsx'), 'utf8')
+    const handler = source.slice(source.indexOf('const proceedToNativeWindowClose'))
+    const body = handler.slice(0, handler.indexOf('const waitForFileClosed'))
+
+    expect(body).toContain('inspectRuntimeTerminalProcess')
+    expect(body).toContain('resolveTerminalProcessCloseVerdict')
+    expect(body).not.toContain('results.some(Boolean)')
   })
 
   // Control: the harness does observe a guard when one exists — pinning blocks the same mouse close.

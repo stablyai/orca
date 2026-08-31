@@ -6,19 +6,14 @@ import {
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-process-inspection'
+import {
+  combinePtyProcessInspectionVerdict,
+  readPtyProcessInspectionEvidence
+} from '../../../../shared/pty-process-inspection-evidence'
 
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
-const SHELL_PROCESS_NAMES = new Set([
-  'bash',
-  'cmd',
-  'fish',
-  'nu',
-  'powershell',
-  'pwsh',
-  'sh',
-  'zsh'
-])
 const AGENT_PROCESS_NAMES = new Set([
   'aider',
   'amp',
@@ -158,7 +153,7 @@ export function hasWorkingTitleAgent(
 export async function probeTerminalLiveness(
   state: AppState,
   tabs: { id: string; title: string }[]
-): Promise<'idle' | 'running' | 'unknown'> {
+): Promise<'idle' | 'running' | 'unverifiable'> {
   const ptyChecks = tabs.flatMap((tab) =>
     (state.ptyIdsByTabId[tab.id] ?? []).map((ptyId) => ({ tab, ptyId }))
   )
@@ -169,12 +164,22 @@ export async function probeTerminalLiveness(
   let unknown = false
   for (const { tab, ptyId } of ptyChecks) {
     try {
-      const [hasChildProcesses, foregroundProcess] = await Promise.all([
-        window.api.pty.hasChildProcesses(ptyId),
-        window.api.pty.getForegroundProcess(ptyId)
-      ])
-      const processName = normalizeProcessName(foregroundProcess)
-      if (!hasChildProcesses && (!processName || SHELL_PROCESS_NAMES.has(processName))) {
+      const inspection = await inspectTerminalProcessForCleanup(state.settings, ptyId)
+      if (inspection.unavailable === true) {
+        unknown = true
+        continue
+      }
+      const evidence = readPtyProcessInspectionEvidence(inspection)
+      const verdict = combinePtyProcessInspectionVerdict(evidence)
+      if (verdict === 'unverifiable') {
+        unknown = true
+        continue
+      }
+      const processName =
+        evidence.foreground.verdict === 'unverifiable'
+          ? null
+          : normalizeProcessName(evidence.foreground.processName)
+      if (verdict === 'exited') {
         continue
       }
       if (
@@ -190,7 +195,23 @@ export async function probeTerminalLiveness(
     }
   }
 
-  return unknown ? 'unknown' : 'idle'
+  return unknown ? 'unverifiable' : 'idle'
+}
+
+async function inspectTerminalProcessForCleanup(
+  settings: AppState['settings'],
+  ptyId: string
+): Promise<Awaited<ReturnType<typeof inspectRuntimeTerminalProcess>>> {
+  // Test/web preloads may expose only the legacy pair; retain that route while
+  // desktop and runtime hosts use the atomic evidence-bearing inspection.
+  if (typeof window.api.pty.inspectProcess === 'function') {
+    return inspectRuntimeTerminalProcess(settings, ptyId)
+  }
+  const [hasChildProcesses, foregroundProcess] = await Promise.all([
+    window.api.pty.hasChildProcesses(ptyId),
+    window.api.pty.getForegroundProcess(ptyId)
+  ])
+  return { foregroundProcess, hasChildProcesses }
 }
 
 function hasIdleAgentTitleForPty(

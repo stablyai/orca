@@ -638,6 +638,11 @@ import {
 } from '../../shared/terminal-quick-commands'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import {
+  buildPtyProcessInspectionWireResult,
+  ensurePtyProcessInspectionEvidence,
+  type PtyProcessInspectionEvidence
+} from '../../shared/pty-process-inspection-evidence'
+import {
   buildAgentDraftLaunchPlan,
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan
@@ -2145,9 +2150,12 @@ type RuntimePtyController = {
   markReversibleStops?(ptyIds: readonly string[]): () => void
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
-  inspectProcess?(
-    ptyId: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }>
+  inspectProcess?(ptyId: string): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+    unavailable?: true
+    processEvidence?: PtyProcessInspectionEvidence
+  }>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>
   hasChildProcesses?(ptyId: string): Promise<boolean>
@@ -24225,19 +24233,27 @@ export class OrcaRuntimeService {
     return { removed: true }
   }
 
-  async inspectTerminalProcess(
-    terminalSelector: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }> {
+  async inspectTerminalProcess(terminalSelector: string): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+    unavailable?: true
+    processEvidence?: PtyProcessInspectionEvidence
+  }> {
     const leaf = this.resolveLiveLeafForHandle(terminalSelector)
     if (!leaf?.ptyId || !this.ptyController) {
       throw new Error('terminal_gone')
     }
     if (this.ptyController.inspectProcess) {
-      return this.ptyController.inspectProcess(leaf.ptyId)
+      return ensurePtyProcessInspectionEvidence(await this.ptyController.inspectProcess(leaf.ptyId))
     }
     const foregroundProcess = await this.ptyController.getForegroundProcess(leaf.ptyId)
     const hasChildProcesses = (await this.ptyController.hasChildProcesses?.(leaf.ptyId)) ?? false
-    return { foregroundProcess, hasChildProcesses }
+    return buildPtyProcessInspectionWireResult(
+      foregroundProcess !== null && !isShellProcess(foregroundProcess)
+        ? { verdict: 'live', processName: foregroundProcess }
+        : { verdict: 'exited', processName: foregroundProcess },
+      hasChildProcesses ? { verdict: 'live' } : { verdict: 'exited' }
+    )
   }
 
   reorderRepos(orderedIds: string[]): { status: 'applied' | 'rejected' } {

@@ -13486,7 +13486,11 @@ describe('OrcaRuntimeService', () => {
     const inspection = {
       foregroundProcess: null,
       hasChildProcesses: true,
-      unavailable: true as const
+      unavailable: true as const,
+      processEvidence: {
+        foreground: { verdict: 'unverifiable' as const, reason: 'daemon unavailable' },
+        children: { verdict: 'unverifiable' as const, reason: 'daemon unavailable' }
+      }
     }
     const inspectProcess = vi.fn(async () => inspection)
     const getForegroundProcess = vi.fn(async () => null)

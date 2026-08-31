@@ -176,7 +176,15 @@ describe('runtime terminal owner routing', () => {
           { activeRuntimeEnvironmentId: 'env-2' },
           'remote:env-1@@terminal-stale'
         )
-      ).resolves.toEqual({ foregroundProcess: null, hasChildProcesses: false, unavailable: true })
+      ).resolves.toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        unavailable: true,
+        processEvidence: {
+          foreground: { verdict: 'unverifiable', reason: 'remote terminal route unavailable' },
+          children: { verdict: 'unverifiable', reason: 'remote terminal route unavailable' }
+        }
+      })
     }
   )
 

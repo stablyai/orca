@@ -21,6 +21,10 @@ import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { isShellProcess } from '../../shared/agent-detection'
 import { TerminalAttachCanceledError } from './daemon-errors'
+import {
+  buildPtyProcessInspectionWireResult,
+  type PtyProcessInspectionWireResult
+} from '../../shared/pty-process-inspection-evidence'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
@@ -214,15 +218,15 @@ export class TerminalHost {
     return session.getForegroundProcess()
   }
 
-  inspectProcess(sessionId: string): {
-    foregroundProcess: string | null
-    hasChildProcesses: boolean
-  } {
+  inspectProcess(sessionId: string): PtyProcessInspectionWireResult {
     const foregroundProcess = this.getAliveSession(sessionId).getForegroundProcess()
-    return {
-      foregroundProcess,
-      hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess)
-    }
+    const foreground =
+      foregroundProcess !== null && !isShellProcess(foregroundProcess)
+        ? { verdict: 'live' as const, processName: foregroundProcess }
+        : { verdict: 'exited' as const, processName: foregroundProcess }
+    const children =
+      foreground.verdict === 'live' ? { verdict: 'live' as const } : { verdict: 'exited' as const }
+    return buildPtyProcessInspectionWireResult(foreground, children)
   }
 
   async confirmForegroundProcess(sessionId: string): Promise<string | null> {

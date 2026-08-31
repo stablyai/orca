@@ -48,6 +48,8 @@ import {
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import type { TuiAgent } from '../shared/tui-agent'
+import { isShellProcess } from '../shared/shell-process-detection'
+import { buildPtyProcessInspectionWireResult } from '../shared/pty-process-inspection-evidence'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { terminatePtyJob } from '../main/windows/windows-pty-job'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
@@ -2351,10 +2353,7 @@ export class PtyHandler {
     return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
   }
 
-  private async inspectProcess(params: Record<string, unknown>): Promise<{
-    foregroundProcess: string | null
-    hasChildProcesses: boolean
-  }> {
+  private async inspectProcess(params: Record<string, unknown>) {
     const id = params.id as string
     const managed = this.ptys.get(id)
     if (!managed || managed.disposed) {
@@ -2364,10 +2363,14 @@ export class PtyHandler {
       managed.pty.pid,
       managed.pty.process || null
     )
-    return {
-      foregroundProcess,
-      hasChildProcesses: await processHasChildren(managed.pty.pid)
-    }
+    const foreground =
+      foregroundProcess !== null && !isShellProcess(foregroundProcess)
+        ? { verdict: 'live' as const, processName: foregroundProcess }
+        : { verdict: 'exited' as const, processName: foregroundProcess }
+    const children = (await processHasChildren(managed.pty.pid))
+      ? { verdict: 'live' as const }
+      : { verdict: 'exited' as const }
+    return buildPtyProcessInspectionWireResult(foreground, children)
   }
 
   private async listProcesses(): Promise<PtyProcessSummary[]> {

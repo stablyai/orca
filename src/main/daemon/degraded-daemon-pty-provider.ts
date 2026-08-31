@@ -1,7 +1,6 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
-import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -19,6 +18,7 @@ import {
 } from './degraded-daemon-session-routing'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
 import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
+import { inspectDegradedDaemonPtyProcess } from './degraded-daemon-pty-process-inspection'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
@@ -187,9 +187,11 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.providerFor(id).getForegroundProcess(id)
   }
   inspectProcess(id: string) {
-    return this.hasPty(id)
-      ? inspectPtyProviderProcess(this.providerFor(id), id)
-      : Promise.reject(new Error('terminal_gone'))
+    return inspectDegradedDaemonPtyProcess(
+      id,
+      (ptyId) => this.hasPty(ptyId),
+      (ptyId) => this.providerFor(ptyId)
+    )
   }
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).confirmForegroundProcess?.(id) ?? null

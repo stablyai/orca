@@ -9,6 +9,7 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { ensurePtyProcessInspectionEvidence } from '../../shared/pty-process-inspection-evidence'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
@@ -178,7 +179,9 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async inspectProcess(id: string): Promise<PtyProcessInspection> {
-    return this.adapterForInspection(id).inspectProcess(id)
+    return ensurePtyProcessInspectionEvidence(
+      await this.adapterForInspection(id).inspectProcess(id)
+    )
   }
 
   async confirmForegroundProcess(id: string): Promise<string | null> {

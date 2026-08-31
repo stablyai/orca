@@ -263,6 +263,14 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     // flight there is no window in which its word could be fabricated.
     await expect(
       handlers.get('pty:inspectProcess')!(null, { id: 'never-spawned-pty' })
-    ).resolves.toEqual({ foregroundProcess: null, hasChildProcesses: false, unavailable: true })
+    ).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      unavailable: true,
+      processEvidence: {
+        foreground: { verdict: 'unverifiable', reason: 'pty no longer exists' },
+        children: { verdict: 'unverifiable', reason: 'pty no longer exists' }
+      }
+    })
   })
 })

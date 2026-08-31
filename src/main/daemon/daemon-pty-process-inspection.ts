@@ -8,6 +8,10 @@ import {
   type SessionInfo
 } from './types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import {
+  buildPtyProcessInspectionWireResult,
+  type PtyForegroundProcessEvidence
+} from '../../shared/pty-process-inspection-evidence'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
   // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
@@ -24,7 +28,18 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
 
   async inspectProcess(id: string): Promise<PtyProcessInspection> {
     if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
-      return { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        unavailable: true,
+        processEvidence: {
+          foreground: {
+            verdict: 'unverifiable',
+            reason: 'daemon lacks process inspection support'
+          },
+          children: { verdict: 'unverifiable', reason: 'daemon lacks process inspection support' }
+        }
+      }
     }
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
       // Why: pre-v27 daemons survive an in-place app update; compose the inspection client-side from the
@@ -34,15 +49,15 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       const { foregroundProcess } = await this.client.request<{
         foregroundProcess: string | null
       }>('getForegroundProcess', { sessionId: id })
-      return {
-        foregroundProcess,
-        hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
-      }
+      const foreground = classifyDaemonForegroundProcess(foregroundProcess)
+      return buildPtyProcessInspectionWireResult(
+        foreground,
+        this.hasChildProcessesFromForeground(foregroundProcess)
+          ? { verdict: 'live' }
+          : { verdict: 'exited' }
+      )
     }
-    return this.client.request<{
-      foregroundProcess: string | null
-      hasChildProcesses: boolean
-    }>('inspectProcess', { sessionId: id })
+    return this.client.request<PtyProcessInspection>('inspectProcess', { sessionId: id })
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {
@@ -185,4 +200,12 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       }
     })
   }
+}
+
+function classifyDaemonForegroundProcess(
+  foregroundProcess: string | null
+): PtyForegroundProcessEvidence {
+  return foregroundProcess !== null && !isShellProcess(foregroundProcess)
+    ? { verdict: 'live', processName: foregroundProcess }
+    : { verdict: 'exited', processName: foregroundProcess }
 }

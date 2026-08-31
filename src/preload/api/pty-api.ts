@@ -5,6 +5,7 @@ import type {
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
+import type { PtyProcessInspectionEvidence } from '../../shared/pty-process-inspection-evidence'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type {
@@ -113,6 +114,7 @@ export type PtyApi = {
     foregroundProcess: string | null
     hasChildProcesses: boolean
     unavailable?: true
+    processEvidence?: PtyProcessInspectionEvidence
   }>
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>

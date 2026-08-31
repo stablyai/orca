@@ -10,6 +10,10 @@ import {
   ptyProcesses,
   ptyShellName
 } from './local-pty-provider-state'
+import {
+  classifyLocalForegroundEvidence,
+  type LocalForegroundObservation
+} from './local-pty-process-evidence'
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import {
   canRevalidateCachedAgentWithoutScan,
@@ -35,11 +39,19 @@ export async function hasLocalPtyChildProcesses(id: string): Promise<boolean> {
   }
 }
 
+/** Legacy callers receive only the observed/stable process name. */
 export async function getLocalPtyForegroundProcess(id: string): Promise<string | null> {
+  return (await observeLocalPtyForegroundProcess(id)).processName
+}
+
+/** Foreground process plus whether the execution host actually answered. */
+export async function observeLocalPtyForegroundProcess(
+  id: string
+): Promise<LocalForegroundObservation> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     ptyLastRecognizedForeground.delete(id)
-    return null
+    return { processName: null, evidence: { verdict: 'exited', processName: null } }
   }
   const fallbackProcess = resolveForegroundFallbackProcess(
     proc.process || null,
@@ -60,7 +72,10 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     try {
       const paneProcessIds = readWindowsPtyJobProcessIds(proc)
       if (ptyProcesses.get(id) !== proc) {
-        return null
+        return {
+          processName: null,
+          evidence: { verdict: 'unverifiable', reason: 'pty replaced during inspection' }
+        }
       }
       const verdict = judgeCachedAgentJobEvidence({
         jobProcessIds: paneProcessIds,
@@ -70,7 +85,10 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
         identityAgeMs: Date.now() - (cachedEntry?.at ?? 0)
       })
       if (verdict === 'confirmed' || verdict === 'unproven') {
-        return cachedAgent
+        return {
+          processName: cachedAgent,
+          evidence: classifyLocalForegroundEvidence(cachedAgent, true)
+        }
       }
       if (verdict === 'exited') {
         // The shell stands alone in a complete, inescapable job list: no
@@ -102,7 +120,10 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     )
     // Why: the scan can outlive PTY teardown/id reuse; stale results must not resurrect cache for a foreign id.
     if (ptyProcesses.get(id) !== proc) {
-      return null
+      return {
+        processName: null,
+        evidence: { verdict: 'unverifiable', reason: 'pty replaced during inspection' }
+      }
     }
     // Why: a degraded scan reporting shell-as-foreground fires a false "agent done"; keep last recognized agent instead.
     const lastRecognizedAgent = ptyLastRecognizedForeground.get(id)?.name ?? null
@@ -141,13 +162,32 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     } else if (!stable.lastRecognizedAgent) {
       ptyLastRecognizedForeground.delete(id)
     }
-    return stable.processName
+    if (!stableResolution.available) {
+      return {
+        processName: stable.processName,
+        evidence: {
+          verdict: 'unverifiable',
+          reason: paneMembershipUnavailable
+            ? 'pane membership read unavailable'
+            : 'process table scan degraded'
+        }
+      }
+    }
+    return {
+      processName: stable.processName,
+      evidence: classifyLocalForegroundEvidence(stable.processName, true)
+    }
   } catch {
     if (ptyProcesses.get(id) !== proc) {
-      return null
+      return {
+        processName: null,
+        evidence: { verdict: 'unverifiable', reason: 'pty replaced during inspection' }
+      }
     }
-    // Why: an inspection error is a degraded read; fall back to last recognized agent (null reads as an exit).
-    return ptyLastRecognizedForeground.get(id)?.name ?? null
+    return {
+      processName: ptyLastRecognizedForeground.get(id)?.name ?? null,
+      evidence: { verdict: 'unverifiable', reason: 'foreground inspection threw' }
+    }
   }
 }
 

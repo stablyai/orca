@@ -20,6 +20,7 @@ import {
 } from '../shared/doc-preview-scheme'
 import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { AppIdentity } from '../shared/app-identity'
+import type { PtyProcessInspectionEvidence } from '../shared/pty-process-inspection-evidence'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
@@ -1252,6 +1253,7 @@ const api = {
       foregroundProcess: string | null
       hasChildProcesses: boolean
       unavailable?: true
+      processEvidence?: PtyProcessInspectionEvidence
     }> => ipcRenderer.invoke('pty:inspectProcess', { id }),
     confirmForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),

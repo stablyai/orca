@@ -93,6 +93,21 @@ describe('PtyHandler', () => {
     )
   })
 
+  it('publishes evidence alongside relay process inspection scalars', async () => {
+    await spawnPty({ cols: 80, rows: 24 })
+    vi.spyOn(ptyShellUtils, 'getForegroundProcessName').mockResolvedValue('codex')
+    vi.mocked(ptyShellUtils.processHasChildren).mockResolvedValue(true)
+
+    await expect(dispatcher.callRequest('pty.inspectProcess', { id: 'pty-1' })).resolves.toEqual({
+      foregroundProcess: 'codex',
+      hasChildProcesses: true,
+      processEvidence: {
+        foreground: { verdict: 'live', processName: 'codex' },
+        children: { verdict: 'live' }
+      }
+    })
+  })
+
   it('spawns a PTY and returns an id', async () => {
     const result = await spawnPty({ cols: 80, rows: 24 })
     expect(result).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })

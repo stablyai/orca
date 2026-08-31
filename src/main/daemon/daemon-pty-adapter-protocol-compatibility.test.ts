@@ -727,7 +727,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await expect(legacy.inspectProcess('sess-a')).resolves.toEqual({
         foregroundProcess: null,
         hasChildProcesses: true,
-        unavailable: true
+        unavailable: true,
+        processEvidence: {
+          foreground: {
+            verdict: 'unverifiable',
+            reason: 'daemon lacks process inspection support'
+          },
+          children: { verdict: 'unverifiable', reason: 'daemon lacks process inspection support' }
+        }
       })
       await expect(legacy.getForegroundProcess('sess-a')).resolves.toBeNull()
       await expect(legacy.hasChildProcesses('sess-a')).resolves.toBe(true)
@@ -745,7 +752,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: 'codex',
-        hasChildProcesses: true
+        hasChildProcesses: true,
+        processEvidence: {
+          foreground: { verdict: 'live', processName: 'codex' },
+          children: { verdict: 'live' }
+        }
       })
       expect(request).toHaveBeenCalledWith('getForegroundProcess', { sessionId: 'sess-a' })
       expect(request).not.toHaveBeenCalledWith('inspectProcess', expect.anything())
@@ -761,7 +772,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: 'bash',
-        hasChildProcesses: false
+        hasChildProcesses: false,
+        processEvidence: {
+          foreground: { verdict: 'exited', processName: 'bash' },
+          children: { verdict: 'exited' }
+        }
       })
 
       legacy.dispose()
@@ -775,7 +790,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: null,
-        hasChildProcesses: false
+        hasChildProcesses: false,
+        processEvidence: {
+          foreground: { verdict: 'exited', processName: null },
+          children: { verdict: 'exited' }
+        }
       })
 
       legacy.dispose()

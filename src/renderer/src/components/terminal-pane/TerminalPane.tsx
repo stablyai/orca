@@ -57,6 +57,7 @@ import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
+import { resolveTerminalProcessCloseVerdict } from '../terminal/terminal-process-close-decision'
 import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
 import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
@@ -1340,10 +1341,8 @@ function TerminalPane(
         .then((process) => {
           clearTimeout(probeTimeout)
           decide(() => {
-            if (
-              !process.hasChildProcesses ||
-              settings?.skipCloseTerminalWithRunningProcessConfirm
-            ) {
+            const verdict = resolveTerminalProcessCloseVerdict(process)
+            if (verdict === 'exited' || settings?.skipCloseTerminalWithRunningProcessConfirm) {
               executeClosePane(paneId)
             } else {
               confirmClose()

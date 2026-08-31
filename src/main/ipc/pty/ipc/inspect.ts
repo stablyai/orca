@@ -170,14 +170,30 @@ export function installPtyInspectIpcHandlers(deps: {
   ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) => {
     // Why: same routing hazard as pty:hasPty — an unroutable id must read as unavailable, not as a local-provider answer or a raised IPC error.
     if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true as const }
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        unavailable: true as const,
+        processEvidence: {
+          foreground: { verdict: 'unverifiable', reason: 'pty route unavailable' },
+          children: { verdict: 'unverifiable', reason: 'pty route unavailable' }
+        }
+      }
     }
     // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, so
     // nothing it reports about one is an observation; the post-swap owner must
     // answer completion-sensitive inspection.
     await awaitSwapWindow(args.id)
     if (!hasPtyProviderForInspection(args.id)) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true as const }
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        unavailable: true as const,
+        processEvidence: {
+          foreground: { verdict: 'unverifiable', reason: 'pty route unavailable' },
+          children: { verdict: 'unverifiable', reason: 'pty route unavailable' }
+        }
+      }
     }
     return inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
   })

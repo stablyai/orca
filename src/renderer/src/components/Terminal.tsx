@@ -150,7 +150,11 @@ import {
   useActivityTerminalPortals,
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import {
+  inspectRuntimeTerminalProcess,
+  isRemoteRuntimePtyId
+} from '@/runtime/runtime-terminal-inspection'
+import { resolveTerminalProcessCloseVerdict } from './terminal/terminal-process-close-decision'
 import {
   activateWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab,
@@ -560,15 +564,21 @@ function Terminal(): React.JSX.Element | null {
           }
         )
         if (localPtyIds.length > 0) {
-          void Promise.all(localPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
-            (results) => {
-              if (results.some(Boolean)) {
-                setWindowCloseDialogOpen(true)
-              } else {
-                confirmNativeWindowClose()
-              }
+          // Keep this local-only filter deliberate: SSH terminals detach and persist through the relay.
+          void Promise.allSettled(
+            localPtyIds.map((id) => inspectRuntimeTerminalProcess(state.settings, id))
+          ).then((results) => {
+            const hasBusyPty = results.some(
+              (result) =>
+                result.status === 'fulfilled' &&
+                resolveTerminalProcessCloseVerdict(result.value) !== 'exited'
+            )
+            if (hasBusyPty) {
+              setWindowCloseDialogOpen(true)
+            } else {
+              confirmNativeWindowClose()
             }
-          )
+          })
           return
         }
       }

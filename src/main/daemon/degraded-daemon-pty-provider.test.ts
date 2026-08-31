@@ -288,7 +288,11 @@ it('preserves unavailable inspection from an owning daemon', async () => {
   await expect(provider.inspectProcess('daemon-session')).resolves.toEqual({
     foregroundProcess: null,
     hasChildProcesses: true,
-    unavailable: true
+    unavailable: true,
+    processEvidence: {
+      foreground: { verdict: 'unverifiable', reason: 'peer omitted process inspection evidence' },
+      children: { verdict: 'unverifiable', reason: 'peer omitted process inspection evidence' }
+    }
   })
 })
 
