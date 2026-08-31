@@ -246,7 +246,14 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     }
     if (!preservesAbnormalSshSurface) {
       for (const surface of exitedSurfaces) {
-        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
+        this.failActiveDispatchOnExit(
+          surface.handle,
+          surface.paneKey,
+          exitCode,
+          exitCause,
+          pty?.incarnationId ? `${ptyId}:${incarnationId}` : null,
+          processDeathCertified
+        )
       }
     }
     this.pruneDisconnectedPtyRecords()

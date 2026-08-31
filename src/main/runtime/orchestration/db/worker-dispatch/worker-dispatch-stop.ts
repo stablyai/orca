@@ -93,20 +93,25 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
+    if (worker?.state === 'stopped' && dispatch) {
+      this.db.exec('COMMIT')
+      return worker
+    }
     if (!worker || !dispatch || worker.state !== 'stopping') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
     this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET state = 'stopped', stage = 'process_stopped', updated_at = datetime('now')
+         SET state = 'stopped', stage = 'process_stopped', last_error = NULL, updated_at = datetime('now')
          WHERE dispatch_id = ? AND state = 'stopping'`
       )
       .run(dispatchId)
     this.db
       .prepare(
         `UPDATE dispatch_contexts
-         SET status = 'failed', completed_at = datetime('now'), last_failure = 'stopped'
+         SET status = 'failed', completed_at = datetime('now'), last_failure = 'stopped',
+             termination_reason = 'operator_close'
          WHERE id = ? AND status IN ('pending', 'dispatched')`
       )
       .run(dispatchId)
@@ -203,6 +208,10 @@ export function markWorkerStopUnknown(
   reason: string
 ): WorkerDispatchRow {
   const worker = this.getWorkerDispatch(dispatchId)
+  // The owning host's confirmed exit cannot be downgraded by a later close error.
+  if (worker?.state === 'stopped') {
+    return worker
+  }
   if (!worker || worker.state !== 'stopping') {
     throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
   }
