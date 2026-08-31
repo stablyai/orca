@@ -21,7 +21,7 @@ import type {
   WorkspaceHostScope,
   WorktreeCardProperty
 } from './ui-chrome-types'
-import type { WorkspaceStatusDefinition } from './worktree/types'
+import type { WorkspaceStatus, WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
 
 export type PersistedUIState = {
@@ -73,6 +73,8 @@ export type PersistedUIState = {
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
+  /** Selected workspace-status ids for the sidebar/board status filter; empty/absent means every status is shown. */
+  filterWorkspaceStatuses?: WorkspaceStatus[]
   collapsedGroups: string[]
   uiZoomLevel: number
   editorFontZoomLevel: number

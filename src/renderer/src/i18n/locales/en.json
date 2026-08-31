@@ -5270,6 +5270,12 @@
           "19e32d0e5f": "Open folder picker to add a project",
           "abc62b6328": "Add Project"
         },
+        "SidebarStatusFilterSection": {
+          "allStatuses": "All statuses",
+          "selectedStatusesCount": "{{value0}} statuses",
+          "status": "Status",
+          "clear": "Clear"
+        },
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "Hide default branch",
           "ed1611b65b": "Hide sleeping",

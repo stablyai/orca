@@ -28,6 +28,7 @@ function makeBaseline(overrides: Partial<PersistedUIWriteBaseline> = {}): Persis
     alwaysShowDefaultBranchWorkspace: true,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
+    filterWorkspaceStatuses: [],
     acknowledgedAgentsByPaneKey: {},
     ...overrides
   }

@@ -21,7 +21,12 @@ import {
   getVisibleWorkspaceHostIdSet,
   worktreeMatchesVisibleHost
 } from './visible-worktree-host-scope'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type {
+  Worktree,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../shared/worktree/types'
+import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
@@ -33,10 +38,7 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import {
-  getCyclicProjectedWorktreeLineageIds,
-  getLineageRenderInfo
-} from './worktree-lineage-projection'
+import { addVisibleLineageAncestors } from './visible-worktree-lineage-ancestors'
 import {
   computeRenderedSidebarWorktreeOrder,
   computeRenderedSidebarWorktrees
@@ -47,7 +49,6 @@ import {
   isWorkspaceFromOtherDevice
 } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
-import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 /**
  * Whether the "Hide sleeping" sweep must keep this row (#8873).
@@ -63,6 +64,13 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
  */
 type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]
+  /**
+   * Selected workspace-status ids; empty shows every status. Paired with
+   * `workspaceStatuses` so the predicate resolves each worktree's effective
+   * status (falling back to the catalog default) exactly like the board.
+   */
+  filterWorkspaceStatuses?: readonly WorkspaceStatus[]
+  workspaceStatuses?: readonly WorkspaceStatusDefinition[]
   showSleepingWorkspaces: boolean
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
   ptyIdsByTabId: Record<string, string[]> | null
@@ -141,6 +149,16 @@ export function computeVisibleWorktrees(
     all = all.filter((w) => selectedRepoIds.has(w.repoId))
   }
 
+  // Filter by workspace (card) status. Empty selection shows every status.
+  // Why guarded on workspaceStatuses: resolving a worktree's effective status
+  // needs the live catalog; without it every row would fall back to the
+  // default id and silently narrow the list to a single status.
+  if (opts.filterWorkspaceStatuses?.length && opts.workspaceStatuses) {
+    const selectedStatuses = new Set(opts.filterWorkspaceStatuses)
+    const statuses = opts.workspaceStatuses
+    all = all.filter((w) => selectedStatuses.has(getWorkspaceStatus(w, statuses)))
+  }
+
   if (!opts.showSleepingWorkspaces) {
     // Why no !hideDefaultBranchWorkspace term: that filter already ran above, so
     // an explicit hide still wins over the exemption.
@@ -180,41 +198,6 @@ export function computeVisibleWorktrees(
   return opts.injectLineageAncestors === false
     ? all
     : addVisibleLineageAncestors(all, lineageAncestorById, opts.worktreeLineageById)
-}
-
-function addVisibleLineageAncestors(
-  worktrees: Worktree[],
-  worktreeById: Map<string, Worktree>,
-  lineageById: Record<string, WorktreeLineage>
-): Worktree[] {
-  const result: Worktree[] = []
-  const included = new Set<string>()
-  const visiting = new Set<string>()
-  const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeById)
-
-  const addWithAncestors = (worktree: Worktree): void => {
-    const identity = getWorktreeHostIdentity(worktree)
-    if (included.has(identity) || visiting.has(identity)) {
-      return
-    }
-    visiting.add(identity)
-    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeById, cyclicLineageIds)
-    if (lineage.state === 'valid') {
-      // Why: sidebar lineage is structural. If a filtered child is visible,
-      // its valid parent must be rendered too so the hierarchy remains legible.
-      addWithAncestors(lineage.parent)
-    }
-    visiting.delete(identity)
-    if (!included.has(identity)) {
-      included.add(identity)
-      result.push(worktree)
-    }
-  }
-
-  for (const worktree of worktrees) {
-    addWithAncestors(worktree)
-  }
-  return result
 }
 
 export function computeVisibleWorktreeIds(
@@ -301,6 +284,8 @@ export function getVisibleWorktreeIds(): string[] {
 
   const visibleIds = computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
+    filterWorkspaceStatuses: state.filterWorkspaceStatuses,
+    workspaceStatuses: state.workspaceStatuses,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,

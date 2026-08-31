@@ -30,6 +30,7 @@ describe('useVisibleSidebarWorktrees', () => {
         filterState: {
           showSleepingWorkspaces: true,
           filterRepoIds: [],
+          filterWorkspaceStatuses: [],
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
           hideCliCreatedWorkspaces: false,
@@ -65,6 +66,7 @@ describe('useVisibleSidebarWorktrees', () => {
         filterState: {
           showSleepingWorkspaces: true,
           filterRepoIds: [],
+          filterWorkspaceStatuses: [],
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
           hideCliCreatedWorkspaces: false,

@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 
 /**
  * Mirror-shaped snapshot of the fields the debounced persisted-UI writer owns.
@@ -28,6 +29,7 @@ export type PersistedUIWriteBaseline = {
   alwaysShowDefaultBranchWorkspace: boolean
   showDotfilesByWorktree: Record<string, boolean>
   filterRepoIds: readonly string[]
+  filterWorkspaceStatuses: WorkspaceStatus[]
   acknowledgedAgentsByPaneKey: Record<string, number>
 }
 
@@ -55,6 +57,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   alwaysShowDefaultBranchWorkspace: true,
   showDotfilesByWorktree: true,
   filterRepoIds: true,
+  filterWorkspaceStatuses: true,
   acknowledgedAgentsByPaneKey: true
 } satisfies Record<keyof PersistedUIWriteBaseline, true>
 
@@ -92,7 +95,9 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
 }
 
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
-  if (field === 'filterRepoIds') {
+  if (field === 'filterRepoIds' || field === 'filterWorkspaceStatuses') {
+    // Why content equality: the sanitizer rebuilds these arrays on every hydration, so identity
+    // comparison would echo an unchanged filter back to main on each broadcast.
     return stringArrayEqual(a as readonly string[], b as readonly string[])
   }
   if (field === 'showDotfilesByWorktree' || field === 'acknowledgedAgentsByPaneKey') {

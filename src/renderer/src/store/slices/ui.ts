@@ -30,7 +30,10 @@ import type {
   WorktreeCardProperty
 } from '../../../../shared/ui-chrome-types'
 import type { ChangelogData, UpdateStatus } from '../../../../shared/update-status-types'
-import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../shared/worktree/types'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -106,7 +109,8 @@ import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   cloneDefaultWorkspaceStatuses,
-  normalizeWorkspaceStatuses
+  normalizeWorkspaceStatuses,
+  sanitizeFilterWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../../shared/combined-diff-file-tree-width'
@@ -946,6 +950,9 @@ export type UISlice = {
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
+  /** Selected workspace-status ids; empty means every status is shown. */
+  filterWorkspaceStatuses: WorkspaceStatus[]
+  setFilterWorkspaceStatuses: (ids: WorkspaceStatus[]) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
@@ -2232,6 +2239,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   filterRepoIds: [],
   setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
+  // Why: bare set — persists only via the debounced window.api.ui.set writer in App.tsx.
+  filterWorkspaceStatuses: [],
+  setFilterWorkspaceStatuses: (ids) => set({ filterWorkspaceStatuses: ids }),
+
   collapsedGroups: new Set<string>(),
   toggleCollapsedGroup: (key) =>
     set((s) => {
@@ -2280,8 +2291,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   workspaceStatuses: cloneDefaultWorkspaceStatuses(),
   setWorkspaceStatuses: (statuses) => {
     const normalized = normalizeWorkspaceStatuses(statuses)
-    window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
-    set({ workspaceStatuses: normalized })
+    // Why: drop filter ids for statuses this edit deleted/renamed, so a stale
+    // selection can't silently empty the sidebar while the badge reads "all".
+    const filterWorkspaceStatuses = sanitizeFilterWorkspaceStatuses(
+      get().filterWorkspaceStatuses,
+      normalized
+    )
+    window.api.ui
+      .set({ workspaceStatuses: normalized, filterWorkspaceStatuses })
+      .catch(console.error)
+    set({ workspaceStatuses: normalized, filterWorkspaceStatuses })
   },
 
   workspaceBoardOpacity: 1,
@@ -2661,6 +2680,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
         agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
+        // Why: validate against the same normalized catalog so a filter for a
+        // since-deleted custom status can't hide every workspace on restart.
+        filterWorkspaceStatuses: sanitizeFilterWorkspaceStatuses(
+          ui.filterWorkspaceStatuses,
+          normalizeWorkspaceStatuses(ui.workspaceStatuses)
+        ),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
