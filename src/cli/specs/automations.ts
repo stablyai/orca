@@ -58,6 +58,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --project with --host, or --project-host-setup, to run on a specific project host setup.',
       '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
+      'The --provider agent must be enabled in Settings > Agents on the selected runtime; inspect `orca agent roster --json` before choosing from detected binaries.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
@@ -84,6 +85,9 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       ...AUTOMATION_STATE_FLAGS
     ],
     positionalArgs: ['id'],
+    notes: [
+      'Changing --provider requires an enabled agent from `orca agent roster --json` on the selected runtime.'
+    ],
     examples: [
       'orca automations edit 2f9e... --disabled',
       'orca automations edit --id 2f9e... --trigger "30 * * * *" --json'

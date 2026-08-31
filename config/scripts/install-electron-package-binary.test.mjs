@@ -250,7 +250,9 @@ describe('install-electron-package-binary', () => {
 
       expect(result.status, result.stderr).toBe(0)
       expect(existsSync(join(cacheRoot, 'preserved.marker'))).toBe(true)
-      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')).toHaveLength(2)
+      expect(
+        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
+      ).toHaveLength(2)
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }

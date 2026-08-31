@@ -96,7 +96,7 @@ function writePersistedState(dataPath: string, state: PersistedState): void {
   }
 }
 
-function readHookSettingsFromDisk(): Pick<
+export function readHookSettingsFromDisk(): Pick<
   GlobalSettings,
   'agentStatusHooksEnabled' | 'disabledTuiAgents'
 > {
@@ -107,7 +107,7 @@ function readHookSettingsFromDisk(): Pick<
   }
 }
 
-async function readHookSettings(
+export async function readHookSettings(
   client: RuntimeClient
 ): Promise<Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>> {
   try {

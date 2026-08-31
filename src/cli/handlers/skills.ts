@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { CommandHandler } from '../dispatch'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { getRepeatedStringFlag } from '../flags'
 import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
@@ -19,6 +19,8 @@ import {
   buildAgentFeatureSkillInstallArgs,
   buildAgentFeatureSkillUpdateArgs
 } from '../../shared/agent-feature-install-commands'
+import { buildTuiAgentRoster } from '../../shared/tui-agent-selection'
+import { readHookSettings, readHookSettingsFromDisk } from './agent-hooks'
 
 type BundledSkillGuide = {
   name: string
@@ -158,19 +160,21 @@ function runNpxSkills(args: string[]): Promise<number> {
 
 type SkillMutationVerb = 'install' | 'update'
 
-/** Agents Orca can see on this host, as `skills --agent` keys. */
-function detectSkillsCliAgentKeys(): string[] {
+/** Agents Orca can see on this host, before skills CLI key mapping. */
+function detectSkillsCliAgents() {
   const runtime = process.platform
   const probes = getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, runtime)
-  const detected = resolveDetectedTuiAgentIds(
+  return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     detectCommandsInInstallDirs(probes),
     runtime
   )
-  return detected.length === 0 ? [] : toSkillsCliAgentKeys(detected)
 }
 
-function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[] {
+async function resolveInstallAgentKeys(
+  flags: Map<string, string | boolean>,
+  getClient: () => RuntimeClient
+): Promise<string[]> {
   const requested = flags.get('agent')
   if (flags.has('agent') && typeof requested !== 'string') {
     throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
@@ -204,16 +208,24 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
     }
     return keys
   }
-  const detected = detectSkillsCliAgentKeys()
+  const detectedAgents = detectSkillsCliAgents()
+  const client = getClient()
+  const settings = client.isRemote ? readHookSettingsFromDisk() : await readHookSettings(client)
+  const roster = buildTuiAgentRoster({
+    defaultTuiAgent: null,
+    disabledTuiAgents: settings.disabledTuiAgents
+  })
+  const enabled = new Set(roster.enabled)
+  const detected = detectedAgents.filter((agent) => enabled.has(agent))
   if (detected.length > 0) {
-    return detected
+    return toSkillsCliAgentKeys(detected)
   }
   // Why: without --agent, `skills add -y` falls into its own zero-detected branch
   // and installs into every agent it knows (~75), creating config directories for
   // agents this host does not have. Say so instead.
   throw new RuntimeClientError(
     'invalid_environment',
-    'No coding agent detected on this host, so there is no install target. Pass ' +
+    'No enabled coding agent detected on this host, so there is no install target. Pass ' +
       '--agent <name>[,<name>...] to choose targets explicitly — --agent universal ' +
       'writes only the shared .agents/skills directory that Orca reads.'
   )
@@ -250,7 +262,8 @@ function formatSkillSelectionHelp(verb: SkillMutationVerb, skillNames: string[])
 }
 
 function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
-  return async ({ flags, json }) => {
+  return async (ctx) => {
+    const { flags, json } = ctx
     // Why: keep the large generated table off the eager handler registry path.
     const { BUNDLED_SKILL_GUIDES } = await import('../bundled-skill-guides.js')
     const guides = canonicalGuides(BUNDLED_SKILL_GUIDES)
@@ -280,7 +293,7 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
 
     const global = flags.get('local') !== true
     // Why: install scopes its targets; update only refreshes what is already placed.
-    const agents = verb === 'install' ? resolveInstallAgentKeys(flags) : []
+    const agents = verb === 'install' ? await resolveInstallAgentKeys(flags, () => ctx.client) : []
     const npxArgs = buildNpxSkillsArgs(verb, skillNames, global, agents)
     const command = formatNpxCommand(npxArgs)
     const dryRun = flags.get('dry-run') === true

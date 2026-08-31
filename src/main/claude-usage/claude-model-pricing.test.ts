@@ -37,8 +37,8 @@ describe('estimateCostUsd cache-write TTL rates', () => {
   })
 
   it('never lowers a legacy long-context estimate as writes shift to 1-hour', () => {
-    const costs = [0, 50_000, 100_000, 200_000, 300_000, 400_000].map(
-      (write1h) => estimateCostUsd('claude-sonnet-4-5', 0, 0, 0, 400_000, write1h)!
+    const costs = [0, 50_000, 100_000, 200_000, 300_000, 400_000].map((write1h) =>
+      estimateCostUsd('claude-sonnet-4-5', 0, 0, 0, 400_000, write1h)!
     )
     for (let index = 1; index < costs.length; index++) {
       expect(costs[index]).toBeGreaterThan(costs[index - 1])

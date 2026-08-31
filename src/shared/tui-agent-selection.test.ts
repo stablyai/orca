@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { GlobalSettings } from './global-settings-types'
 import {
+  buildTuiAgentRoster,
   haveSameDisabledTuiAgents,
   normalizeDisabledTuiAgents,
-  pickTuiAgent
+  pickTuiAgent,
+  TUI_AGENT_AUTO_PICK_ORDER
 } from './tui-agent-selection'
 
 describe('pickTuiAgent', () => {
@@ -23,6 +26,34 @@ describe('pickTuiAgent', () => {
   it('ignores disabled preferred and fallback agents', () => {
     expect(pickTuiAgent('codex', ['claude', 'codex'], ['codex'])).toBe('claude')
     expect(pickTuiAgent(null, ['claude', 'codex'], ['claude', 'codex'])).toBeNull()
+  })
+})
+
+describe('buildTuiAgentRoster', () => {
+  it('orders enabled and disabled agents by the desktop catalog', () => {
+    const roster = buildTuiAgentRoster({
+      defaultTuiAgent: 'codex',
+      disabledTuiAgents: ['codex', 'claude']
+    })
+
+    expect(roster).toEqual({
+      enabled: TUI_AGENT_AUTO_PICK_ORDER.filter((agent) => agent !== 'claude' && agent !== 'codex'),
+      disabled: ['claude', 'codex'],
+      default: 'codex'
+    })
+  })
+
+  it('maps blank and absent defaults to null', () => {
+    expect(
+      buildTuiAgentRoster({ defaultTuiAgent: 'blank', disabledTuiAgents: [] }).default
+    ).toBeNull()
+    expect(buildTuiAgentRoster({ defaultTuiAgent: null, disabledTuiAgents: [] }).default).toBeNull()
+    expect(
+      buildTuiAgentRoster({
+        defaultTuiAgent: 'not-an-agent',
+        disabledTuiAgents: []
+      } as unknown as Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>).default
+    ).toBeNull()
   })
 })
 

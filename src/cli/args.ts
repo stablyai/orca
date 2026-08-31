@@ -154,6 +154,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   }
   if (
     [
+      'agent',
       'account',
       'artifacts',
       'automations',

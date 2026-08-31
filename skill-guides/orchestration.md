@@ -364,6 +364,8 @@ Wait only for `tui-idle` when needed to avoid losing the prompt. Do not monitor 
 
 Choose the worker location before creating a terminal. `Fresh worker` means a fresh agent session, not a new git worktree. For parallel work, create one fresh agent terminal per worker in the same required worktree, falling back to the active worktree when none is named. If the task says current worktree only, depends on uncommitted files/artifacts, or must validate/PR the current branch, keep every worker in the active worktree:
 
+Read `orca agent roster --json` from the execution host before choosing a fresh worker launcher. Detected or installed agents can still be disabled in Settings; `worker-start --agent`, `worktree create --agent`, known-TUI `terminal create --command`, and automation provider changes all refuse disabled launchers with `agent_unconfigured`. Never route around that refusal by creating the same TUI manually. `worker-start --terminal` may attach to a terminal a human already opened.
+
 ```bash
 orca terminal create --worktree active --title <task-name> --command "codex" --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
@@ -378,7 +380,7 @@ For every new worktree, pass `--setup run` so any configured repository setup ho
 
 ```bash
 orca worktree create --name <task-name> --agent codex --setup run --json
-# or: --agent claude | omp | pi | grok | ...
+# or: another id listed under `enabled` by `orca agent roster --json`
 # Read <handle> from agentTerminalHandle, falling back to startupTerminal.handle.
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
@@ -403,7 +405,7 @@ orca terminal read --terminal <handle> --json
 orca terminal send --terminal <handle> --text <text> --enter --json
 ```
 
-If an older CLI rejects `worktree create --agent`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex" --json` or `--command "claude"`.
+If an older CLI rejects `worktree create --agent`, first confirm the requested id is enabled in `orca agent roster --json`, then create the worktree normally and run `orca terminal create --worktree <selector> --command "<requested-agent>" --json`. Do not use this fallback to bypass `agent_unconfigured`.
 
 Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding tasks can take 15-60 minutes. During supervision, use rolling `check --wait` windows. If a window returns no matching message, inspect `task-list`, `terminal read`, or `terminal wait --for tui-idle` as a liveness checkpoint; if the terminal is still working or producing activity, keep waiting instead of retrying the task.
 

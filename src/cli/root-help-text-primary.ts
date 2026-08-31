@@ -13,6 +13,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Agent Discovery:',
   '  agent-context             Print the machine-readable command schema for agents',
+  '  agent roster              List coding agents enabled on the selected Orca runtime',
   '',
   'Accounts:',
   '  account add               Add a managed Claude or Codex account on this Orca host',

@@ -1,3 +1,4 @@
+import type { GlobalSettings } from './global-settings-types'
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgent } from './tui-agent-config'
 
@@ -45,6 +46,23 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
 // Why: fresh installs should expose Claude Agent Teams in agent pickers; the
 // persistence migration separately preserves the old hidden default for legacy profiles.
 export const DEFAULT_DISABLED_TUI_AGENTS = [] as const satisfies readonly TuiAgent[]
+
+export type TuiAgentRoster = {
+  enabled: TuiAgent[]
+  disabled: TuiAgent[]
+  default: TuiAgent | null
+}
+
+export function buildTuiAgentRoster(
+  settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>
+): TuiAgentRoster {
+  const disabledSet = new Set(normalizeDisabledTuiAgents(settings.disabledTuiAgents))
+  return {
+    enabled: filterEnabledTuiAgents(TUI_AGENT_AUTO_PICK_ORDER, settings.disabledTuiAgents),
+    disabled: TUI_AGENT_AUTO_PICK_ORDER.filter((agent) => disabledSet.has(agent)),
+    default: isTuiAgent(settings.defaultTuiAgent) ? settings.defaultTuiAgent : null
+  }
+}
 
 export function pickTuiAgent(
   preferred: TuiAgent | 'blank' | null | undefined,

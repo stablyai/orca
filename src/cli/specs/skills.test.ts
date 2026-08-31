@@ -23,4 +23,10 @@ describe('skill command specs', () => {
       'Only discovered skill directories can be selected'
     )
   })
+
+  it('describes skills install targets as enabled detected agents', () => {
+    expect(formatCommandHelp(spec('skills install'))).toContain(
+      'Comma-separated install targets; default is enabled detected agents'
+    )
+  })
 })

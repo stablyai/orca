@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -35,7 +36,8 @@ function makeStore(existingAutomations: Automation[] = []) {
       nestWorkspaces: false,
       refreshLocalBaseRefOnWorktreeCreate: false,
       branchPrefix: '',
-      branchPrefixCustom: ''
+      branchPrefixCustom: '',
+      disabledTuiAgents: [] as TuiAgent[]
     })),
     getAllWorktreeMeta: vi.fn(() => new Map()),
     getWorktreeMeta: vi.fn(),
@@ -102,6 +104,38 @@ describe('OrcaRuntimeService automation methods', () => {
       undefined
     )
     expect(automation.id).toBe('auto-1')
+  })
+
+  it('refuses disabled providers when creating or editing automations', async () => {
+    const store = makeStore([existingAutomation])
+    store.getSettings.mockReturnValue({
+      workspaceDir: '/tmp',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: '',
+      branchPrefixCustom: '',
+      disabledTuiAgents: ['codex']
+    })
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(
+      runtime.createAutomation({
+        name: 'Disabled review',
+        prompt: 'Review changes',
+        agentId: 'codex',
+        repo: 'repo-1',
+        workspaceMode: 'new_per_run',
+        setupDecision: 'skip',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    ).rejects.toMatchObject({ code: 'agent_unconfigured' })
+    await expect(runtime.updateAutomation('auto-1', { agentId: 'codex' })).rejects.toMatchObject({
+      code: 'agent_unconfigured'
+    })
+
+    expect(store.createAutomation).not.toHaveBeenCalled()
+    expect(store.updateAutomation).not.toHaveBeenCalled()
   })
 
   it('rejects a run context that names a different repo path', async () => {

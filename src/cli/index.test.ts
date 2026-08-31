@@ -288,6 +288,10 @@ describe('orca root help', () => {
     await main([], '/tmp/repo')
 
     expect(logSpy.mock.calls.flat().join('\n')).toContain('agent-context')
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'agent roster              List coding agents enabled on the selected Orca runtime'
+    )
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('orca agent roster [--json]')
     logSpy.mockRestore()
   })
 

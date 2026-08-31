@@ -75,6 +75,21 @@ describe('orca CLI skill guidance', () => {
     )
   })
 
+  it('distinguishes enabled launchers from detected agents', () => {
+    const cliSkill = readSkill()
+    const orchestrationSkill = readSkill(orchestrationSkillPath)
+
+    for (const skill of [cliSkill, orchestrationSkill]) {
+      expect(skill).toContain('agent roster --json')
+      expect(skill).toContain('agent_unconfigured')
+    }
+    for (const skill of [cliSkill, orchestrationSkill]) {
+      expect(skill).toContain('--command "<requested-agent>"')
+    }
+    expect(cliSkill).toContain('Installed or detected binaries are not necessarily enabled')
+    expect(orchestrationSkill).toContain('Never route around that refusal')
+  })
+
   it('requires full worktree ids across bundled agent guidance', () => {
     const cliSkill = readSkill()
     const orchestrationSkill = readSkill(orchestrationSkillPath)

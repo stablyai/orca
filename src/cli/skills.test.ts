@@ -10,12 +10,14 @@ const {
   detectCommandsMock,
   guideModuleLoadMock,
   resolveCliCommandMock,
+  runtimeCallMock,
   runtimeClientConstructorMock,
   spawnMock
 } = vi.hoisted(() => ({
   detectCommandsMock: vi.fn(() => new Set<string>(['claude'])),
   guideModuleLoadMock: vi.fn(),
   resolveCliCommandMock: vi.fn(() => 'npx'),
+  runtimeCallMock: vi.fn(),
   runtimeClientConstructorMock: vi.fn(),
   spawnMock: vi.fn()
 }))
@@ -78,6 +80,9 @@ vi.mock('./runtime-client', async () => {
     constructor() {
       runtimeClientConstructorMock()
     }
+    call<T>(...args: unknown[]): Promise<{ result: T }> {
+      return runtimeCallMock(...args) as Promise<{ result: T }>
+    }
   }
 
   return {
@@ -100,6 +105,15 @@ describe('orca skills CLI', () => {
     resolveCliCommandMock.mockReturnValue('npx')
     detectCommandsMock.mockReset()
     detectCommandsMock.mockReturnValue(new Set<string>(['claude']))
+    runtimeCallMock.mockReset()
+    runtimeCallMock.mockResolvedValue({
+      result: {
+        settings: {
+          defaultTuiAgent: null,
+          disabledTuiAgents: []
+        }
+      }
+    })
     spawnMock.mockReset()
     process.exitCode = undefined
   })
@@ -397,7 +411,7 @@ describe('orca skills CLI', () => {
   })
 
   it('runs npx without --global for --local', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -429,7 +443,7 @@ describe('orca skills CLI', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     vi.stubEnv('ComSpec', 'C:\\Windows\\System32\\cmd.exe')
     resolveCliCommandMock.mockReturnValue('C:\\Program Files\\nodejs\\npx.cmd')
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -464,7 +478,7 @@ describe('orca skills CLI', () => {
   it('spawns a resolved npx path directly when it is not a .cmd shim', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     resolveCliCommandMock.mockReturnValue('C:\\Program Files\\nodejs\\npx.exe')
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -480,7 +494,7 @@ describe('orca skills CLI', () => {
   })
 
   it('resolves a legacy topic alias to the canonical skill name for install', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -510,7 +524,7 @@ describe('orca skills CLI', () => {
   })
 
   it('runs npx for --all and forwards its exit code', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -545,7 +559,7 @@ describe('orca skills CLI', () => {
   })
 
   it('propagates a spawn error as a nonzero exit', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
@@ -615,7 +629,7 @@ describe('orca skills CLI', () => {
   })
 
   it('runs local updates with explicit project scope', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -665,7 +679,7 @@ describe('orca skills CLI', () => {
       writeFileSync(join(npxBin, name), '')
       chmodSync(join(npxBin, name), 0o755)
     }
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     resolveCliCommandMock.mockReturnValue(join(npxBin, 'npx'))
     vi.stubEnv('PATH', `/usr/bin${delimiter}/bin`)
@@ -691,7 +705,7 @@ describe('orca skills CLI', () => {
     const npxBin = mkdtempSync(join(tmpdir(), 'orca-npx-bare-'))
     writeFileSync(join(npxBin, 'npx'), '')
     chmodSync(join(npxBin, 'npx'), 0o755)
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     resolveCliCommandMock.mockReturnValue(join(npxBin, 'npx'))
     vi.stubEnv('PATH', `/usr/bin${delimiter}/bin`)
@@ -722,7 +736,7 @@ describe('orca skills CLI', () => {
   })
 
   it('runs npx from a Program Files (x86) install instead of refusing it', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     vi.stubEnv('ComSpec', 'C:\\Windows\\System32\\cmd.exe')
@@ -740,7 +754,7 @@ describe('orca skills CLI', () => {
   })
 
   it('never puts the current directory on the child PATH when npx is unresolvable', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     // Why: resolveCliCommand returns the bare name when it finds nothing, and
     // dirname('npx') is '.', which would run ./npx out of the caller's checkout.
@@ -768,11 +782,11 @@ describe('orca skills CLI', () => {
     // knows (~75), creating config dirs for agents the host does not have.
     expect(spawnMock).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
-    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('No coding agent detected')
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('No enabled coding agent detected')
   })
 
   it('honours an explicit --agent list without probing the host', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     detectCommandsMock.mockReturnValue(new Set<string>())
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
@@ -792,21 +806,8 @@ describe('orca skills CLI', () => {
     expect(detectCommandsMock).not.toHaveBeenCalled()
   })
 
-  it('maps detected agents onto the skills CLI namespace, not Orca ids', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-    detectCommandsMock.mockReturnValue(new Set<string>(['claude', 'cursor-agent', 'rovo']))
-
-    await main(['skills', 'install', '--skill', 'alpha', '--dry-run'], '/tmp/repo')
-
-    // Why: `skills add` exits 1 on an unknown --agent, and the ids differ —
-    // Orca's `claude` is `claude-code` and its `rovo` is `rovodev`.
-    expect(stdoutText(stdoutSpy)).toContain(
-      '--agent claude-code --agent cursor --agent rovodev --agent universal'
-    )
-  })
-
   it('never sends --agent for an update, and never refuses on a bare host', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     // Why: update refreshes what is already placed, so the no-agent refusal that
     // guards install must not reach it.
@@ -877,7 +878,7 @@ describe('orca skills CLI', () => {
   })
 
   it('accumulates a repeated --skill instead of keeping only the last one', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -929,7 +930,7 @@ describe('orca skills CLI', () => {
   })
 
   it('reports the command it is about to run on stderr', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -945,7 +946,7 @@ describe('orca skills CLI', () => {
   })
 
   it('runs npx skills update for --all and forwards its exit code', async () => {
-    const child = createFakeChild()
+    const child = new EventEmitter()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -991,8 +992,4 @@ describe('orca skills CLI', () => {
 
 function stdoutText(spy: ReturnType<typeof vi.spyOn>): string {
   return spy.mock.calls.map((call) => String(call[0])).join('')
-}
-
-function createFakeChild(): EventEmitter {
-  return new EventEmitter()
 }
