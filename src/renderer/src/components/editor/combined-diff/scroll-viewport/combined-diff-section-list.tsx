@@ -8,6 +8,7 @@ import type { DiffSectionItemProps } from '../../diff-section-item-props'
 import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
 import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import type { DiffSection } from '../../diff-section-types'
+import type { CombinedDiffFileTreeMode } from '../resolve-changes/combined-diff-section-identity'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
 
 export function CombinedDiffSectionList({
@@ -16,9 +17,7 @@ export function CombinedDiffSectionList({
   diffCommentsForWorktree,
   file,
   handleSectionSaveRef,
-  isAllMode,
-  isBranchMode,
-  isCommitMode,
+  mode,
   isDark,
   loadSection,
   markDirectScrollInput,
@@ -44,9 +43,7 @@ export function CombinedDiffSectionList({
   diffCommentsForWorktree: DiffComment[]
   file: OpenFile
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']
-  isAllMode: boolean
-  isBranchMode: boolean
-  isCommitMode: boolean
+  mode: CombinedDiffFileTreeMode
   isDark: boolean
   loadSection: (index: number) => void
   markDirectScrollInput: () => void
@@ -67,6 +64,9 @@ export function CombinedDiffSectionList({
   toggleSection: (index: number) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): React.JSX.Element {
+  const isAllMode = mode === 'all'
+  const isBranchMode = mode === 'branch'
+  const isCommitMode = mode === 'commit'
   return (
     <div className="relative min-w-0 flex-1">
       <div

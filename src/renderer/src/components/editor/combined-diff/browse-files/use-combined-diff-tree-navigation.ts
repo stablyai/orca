@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { DiffSection } from '../../diff-section-types'
@@ -41,7 +41,9 @@ export function useCombinedDiffTreeNavigation({
     [sections]
   )
   const sectionIndexByKeyRef = useRef<ReadonlyMap<string, number>>(sectionIndexByKey)
-  sectionIndexByKeyRef.current = sectionIndexByKey
+  useLayoutEffect(() => {
+    sectionIndexByKeyRef.current = sectionIndexByKey
+  }, [sectionIndexByKey])
 
   const [activeTreeSectionState, setActiveTreeSectionState] = useState<{
     entrySignature: string

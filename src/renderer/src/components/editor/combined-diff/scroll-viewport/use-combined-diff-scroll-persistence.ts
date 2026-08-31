@@ -19,7 +19,6 @@ export function useCombinedDiffScrollPersistence({
   scrollAnchorRef,
   scrollContainerRef,
   scrollOffsetRef,
-  sectionCount,
   sectionHeights,
   sections,
   setClampRestoreCount,
@@ -34,7 +33,6 @@ export function useCombinedDiffScrollPersistence({
   scrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.RefObject<number>
-  sectionCount: number
   sectionHeights: Record<number, number>
   sections: DiffSection[]
   setClampRestoreCount: React.Dispatch<React.SetStateAction<number>>
@@ -48,6 +46,7 @@ export function useCombinedDiffScrollPersistence({
     if (!container) {
       return
     }
+    const latestDomScrollAnchor = latestDomScrollAnchorRef.current
 
     const cached = combinedDiffViewStateCache.get(viewStateKey)
     if (cached && cached.entrySignature === entrySignature) {
@@ -149,8 +148,8 @@ export function useCombinedDiffScrollPersistence({
     container.addEventListener('scroll', handleScroll)
     return () => {
       cancelScheduledAnchorPersist()
-      if (latestDomScrollAnchorRef.current) {
-        scrollAnchorRef.current = latestDomScrollAnchorRef.current
+      if (latestDomScrollAnchor) {
+        scrollAnchorRef.current = latestDomScrollAnchor
       }
       updateCachedScrollPosition({
         recordDomAnchor: false,
@@ -171,7 +170,6 @@ export function useCombinedDiffScrollPersistence({
     scrollAnchorRef,
     scrollContainerRef,
     scrollOffsetRef,
-    sectionCount,
     setClampRestoreCount,
     updateScrollbar,
     writeScrollAnchor,

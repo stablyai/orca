@@ -32,8 +32,8 @@ export function useCombinedDiffNotesActions({
   )
   const previewDiffComments = React.useMemo(
     () =>
-      [...diffCommentsForWorktree]
-        .sort((a, b) => a.filePath.localeCompare(b.filePath) || a.lineNumber - b.lineNumber)
+      diffCommentsForWorktree
+        .toSorted((a, b) => a.filePath.localeCompare(b.filePath) || a.lineNumber - b.lineNumber)
         .slice(0, 4),
     [diffCommentsForWorktree]
   )
@@ -112,7 +112,7 @@ export function useCombinedDiffNotesActions({
       } else {
         toast.error(
           translate(
-            'auto.components.editor.CombinedDiffViewer.45cf23b418',
+            'auto.components.editor.CombinedDiffViewer.failedToClearNotes',
             'Failed to clear notes.'
           )
         )

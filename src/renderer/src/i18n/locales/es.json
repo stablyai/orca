@@ -12774,6 +12774,7 @@
           "fd8892b120": "No hay cambios para mostrar",
           "eb5f40e49c": "Esta vista de diff excluye los conflictos sin resolver porque el pipeline normal de diff de dos vías no es seguro para conflictos.",
           "45cf23b418": "No se pudieron borrar las notas.",
+          "failedToClearNotes": "No se pudieron borrar las notas.",
           "0fb870a0fe": "notas",
           "8ab3248fd8": "nota",
           "ec5053c7f5": "Lado a lado",

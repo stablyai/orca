@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import type { DiffSection } from '../../diff-section-types'
 import {
   createCombinedDiffLoadScheduler,
@@ -45,14 +45,18 @@ export function useCombinedDiffSectionLoadRegistry(
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
   const retrySectionRef = useRef<(index: number) => void>(() => {})
   const requestSectionReloadRef = useRef<(index: number) => void>(() => {})
-  const loadSchedulerRef = useRef(
-    createCombinedDiffLoadScheduler({
+  const loadSchedulerRef = useRef<CombinedDiffLoadScheduler>(null!)
+  if (loadSchedulerRef.current === null) {
+    loadSchedulerRef.current = createCombinedDiffLoadScheduler({
       loadSection: (index) => loadSectionRef.current(index)
     })
-  )
-  sectionsRef.current = sections
+  }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    sectionsRef.current = sections
+  }, [sections])
+
+  useLayoutEffect(() => {
     // Why: React StrictMode replays effect cleanup in dev; reset revives the scheduler for the replayed mount.
     const scheduler = loadSchedulerRef.current
     const reloadTimers = reloadTimersRef.current

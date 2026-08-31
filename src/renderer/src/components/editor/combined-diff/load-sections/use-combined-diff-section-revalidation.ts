@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { DiffSection } from '../../diff-section-types'
@@ -11,14 +11,12 @@ import {
   getCombinedDiffFileTreeSectionKey,
   type CombinedDiffFileTreeMode
 } from '../resolve-changes/combined-diff-section-identity'
-import type { CombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 
 // Why: git status and on-disk writes both revalidate loaded rows; one hook owns both watches so
 // they cannot disagree about which sections are eligible.
 export function useCombinedDiffSectionRevalidation({
   file,
   gitStatusEntries,
-  registry,
   requestSectionReload,
   sectionIndexByKeyRef,
   sections,
@@ -27,45 +25,18 @@ export function useCombinedDiffSectionRevalidation({
 }: {
   file: OpenFile
   gitStatusEntries: GitStatusEntry[]
-  registry: CombinedDiffSectionLoadRegistry
   requestSectionReload: (index: number) => void
   sectionIndexByKeyRef: React.RefObject<ReadonlyMap<string, number>>
   sections: DiffSection[]
   shouldAutoReloadFromGitStatus: boolean
   treeMode: CombinedDiffFileTreeMode
 }): string {
-  const { loadedIndicesRef } = registry
   const combinedGitStatusSignature = React.useMemo(() => {
     if (!shouldAutoReloadFromGitStatus) {
       return ''
     }
     return buildCombinedGitStatusSignature(sections, gitStatusEntries)
   }, [gitStatusEntries, sections, shouldAutoReloadFromGitStatus])
-  const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!shouldAutoReloadFromGitStatus) {
-      prevCombinedGitStatusSignatureRef.current = null
-      return
-    }
-    if (prevCombinedGitStatusSignatureRef.current === null) {
-      prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
-      return
-    }
-    if (prevCombinedGitStatusSignatureRef.current === combinedGitStatusSignature) {
-      return
-    }
-    prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
-    for (const index of loadedIndicesRef.current) {
-      requestSectionReload(index)
-    }
-  }, [
-    combinedGitStatusSignature,
-    loadedIndicesRef,
-    requestSectionReload,
-    shouldAutoReloadFromGitStatus
-  ])
-
   useEffect(() => {
     if (treeMode !== 'all' && treeMode !== 'uncommitted') {
       return

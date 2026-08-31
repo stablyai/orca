@@ -17,6 +17,10 @@ import {
 export const NO_EXTENSION_KEY = '(no extension)'
 export const COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES = 2 * 1024
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function isCombinedDiffFileTreeQueryTooLarge(
   query: string,
   maxBytes = COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES
@@ -59,6 +63,7 @@ export function getFilteredCombinedDiffFileTreeEntries({
   }
   const trimmedQuery = query.trim()
   const normalizedQuery = trimmedQuery.toLowerCase()
+  const queryPattern = normalizedQuery.length > 0 ? new RegExp(escapeRegExp(normalizedQuery)) : null
   return entries.filter((entry) => {
     if (excludedExtensions.has(getEntryExtension(entry))) {
       return false
@@ -66,7 +71,7 @@ export function getFilteredCombinedDiffFileTreeEntries({
     if (!includeViewed && viewedSectionKeys.has(getCombinedDiffFileTreeSectionKey(mode, entry))) {
       return false
     }
-    return normalizedQuery.length === 0 || getEntrySearchText(entry).includes(normalizedQuery)
+    return queryPattern === null || queryPattern.test(getEntrySearchText(entry))
   })
 }
 

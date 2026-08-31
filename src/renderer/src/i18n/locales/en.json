@@ -14258,6 +14258,7 @@
           "fd8892b120": "No changes to display",
           "eb5f40e49c": "This diff view excludes unresolved conflicts because the normal two-way diff pipeline is not conflict-safe.",
           "45cf23b418": "Failed to clear notes.",
+          "failedToClearNotes": "Failed to clear notes.",
           "0fb870a0fe": "notes",
           "8ab3248fd8": "note",
           "ec5053c7f5": "Side by Side",

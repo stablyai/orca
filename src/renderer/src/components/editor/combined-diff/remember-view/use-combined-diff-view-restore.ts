@@ -39,7 +39,7 @@ export function useCombinedDiffViewRestore({
   setGeneration: React.Dispatch<React.SetStateAction<number>>
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
-  setSideBySide: React.Dispatch<React.SetStateAction<boolean>>
+  setSideBySide: (sideBySide: boolean) => void
   viewStateKey: string
 }): CombinedDiffViewRestore {
   const {

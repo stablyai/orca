@@ -145,6 +145,7 @@ export function CombinedDiffToolbar({
       <div className="flex shrink-0 items-center gap-2">
         {file.combinedAlternate && (
           <button
+            type="button"
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             onClick={onOpenAlternateDiff}
           >
@@ -160,6 +161,7 @@ export function CombinedDiffToolbar({
           </button>
         )}
         <button
+          type="button"
           className="w-20 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
         >
@@ -168,6 +170,7 @@ export function CombinedDiffToolbar({
             : translate('auto.components.editor.CombinedDiffViewer.ea08dae15b', 'Collapse All')}
         </button>
         <button
+          type="button"
           className="w-24 px-2 py-0.5 text-center text-xs rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
           onClick={toggleSideBySide}
         >
@@ -176,6 +179,7 @@ export function CombinedDiffToolbar({
             : translate('auto.components.editor.CombinedDiffViewer.ec5053c7f5', 'Side by Side')}
         </button>
         <button
+          type="button"
           className={`inline-flex h-6 items-center gap-1 rounded border border-border px-2 text-xs transition-colors hover:text-foreground ${
             diffWordWrap === true ? 'bg-accent text-foreground' : 'text-muted-foreground'
           }`}

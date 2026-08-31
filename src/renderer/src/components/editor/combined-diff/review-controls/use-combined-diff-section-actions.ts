@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
@@ -240,7 +240,9 @@ export function useCombinedDiffSectionActions({
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)
-  handleSectionSaveRef.current = handleSectionSave
+  useLayoutEffect(() => {
+    handleSectionSaveRef.current = handleSectionSave
+  }, [handleSectionSave])
 
   return { handleSectionSaveRef, modifiedEditorsRef, openSection, openSectionPreview }
 }

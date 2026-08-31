@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type React from 'react'
 import type { DiffSection } from '../../diff-section-types'
 import { combinedDiffViewPreferences } from '../remember-view/combined-diff-view-memory'
@@ -9,7 +9,7 @@ export type CombinedDiffViewPreferences = {
   fileTreeCollapsed: boolean
   setAllSectionsCollapsed: (collapsed: boolean) => void
   setFileTreeCollapsed: (collapsed: boolean) => void
-  setSideBySide: React.Dispatch<React.SetStateAction<boolean>>
+  setSideBySide: (sideBySide: boolean) => void
   sideBySide: boolean
   toggleDiffWordWrap: () => void
   toggleSideBySide: () => void
@@ -31,34 +31,24 @@ export function useCombinedDiffViewPreferences({
   updateSettings: (patch: { diffWordWrap: boolean }) => unknown
 }): CombinedDiffViewPreferences {
   const { loadSchedulerRef, loadedIndicesRef, sectionsRef } = registry
-  const [sideBySide, setSideBySide] = useState(
-    () => combinedDiffViewPreferences.sideBySide ?? diffDefaultView === 'side-by-side'
-  )
-  const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(
-    () =>
-      // Why: the tree is opt-in; only an explicit saved setting should open it while settings are still loading.
-      combinedDiffViewPreferences.fileTreeCollapsed ?? combinedDiffFileTreeVisibleByDefault !== true
-  )
-
-  // Why: seed from Settings until the user picks a toolbar mode this session, then follow that choice over the global default.
-  useEffect(() => {
-    if (diffDefaultView !== undefined && combinedDiffViewPreferences.sideBySide === null) {
-      setSideBySide(diffDefaultView === 'side-by-side')
-    }
-  }, [diffDefaultView])
-
-  useEffect(() => {
-    if (
-      combinedDiffFileTreeVisibleByDefault !== undefined &&
-      combinedDiffViewPreferences.fileTreeCollapsed === null
-    ) {
-      setFileTreeCollapsedState(combinedDiffFileTreeVisibleByDefault === false)
-    }
-  }, [combinedDiffFileTreeVisibleByDefault])
+  const [sideBySideOverride, setSideBySideOverride] = useState<boolean | null>(null)
+  const sideBySide =
+    sideBySideOverride ??
+    combinedDiffViewPreferences.sideBySide ??
+    diffDefaultView === 'side-by-side'
+  const [fileTreeCollapsedOverride, setFileTreeCollapsedOverride] = useState<boolean | null>(null)
+  // Why: the tree is opt-in; only an explicit saved setting should open it while settings are still loading.
+  const fileTreeCollapsed =
+    fileTreeCollapsedOverride ??
+    combinedDiffViewPreferences.fileTreeCollapsed ??
+    combinedDiffFileTreeVisibleByDefault !== true
+  const setSideBySide = useCallback((next: boolean): void => {
+    setSideBySideOverride(next)
+  }, [])
 
   const setFileTreeCollapsed = useCallback((collapsed: boolean) => {
     combinedDiffViewPreferences.fileTreeCollapsed = collapsed
-    setFileTreeCollapsedState(collapsed)
+    setFileTreeCollapsedOverride(collapsed)
   }, [])
 
   const setAllSectionsCollapsed = useCallback(
@@ -83,7 +73,7 @@ export function useCombinedDiffViewPreferences({
     const next = !sideBySide
     combinedDiffViewPreferences.sideBySide = next
     setSideBySide(next)
-  }, [sideBySide])
+  }, [setSideBySide, sideBySide])
 
   const toggleDiffWordWrap = useCallback(() => {
     void updateSettings({ diffWordWrap: diffWordWrap !== true })
