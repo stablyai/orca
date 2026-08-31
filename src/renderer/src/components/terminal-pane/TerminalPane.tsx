@@ -237,8 +237,10 @@ import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import {
+  captureTerminalPanePasteFocusSnapshot,
   isTerminalPanePasteFocusCurrent,
-  isTerminalPanePasteTargetCurrent
+  isTerminalPanePasteTargetCurrent,
+  type TerminalPanePasteFocusSnapshot
 } from './terminal-paste-target-state'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 import {
@@ -2083,7 +2085,7 @@ function TerminalPane(
     const executePanePasteText = async (
       pane: ManagedPane,
       source: TerminalPasteSource,
-      activeElementAtDispatch: Element | null,
+      focusAtDispatch: TerminalPanePasteFocusSnapshot,
       text: string,
       options?: TerminalPasteTextOptions
     ): Promise<void> => {
@@ -2124,7 +2126,7 @@ function TerminalPane(
           }
           return isTerminalPanePasteFocusCurrent({
             requireSameFocusedElement: keyboardOwnedPaste,
-            activeElementAtDispatch,
+            focusAtDispatch,
             paneContainer: pane.container
           })
         },
@@ -2175,7 +2177,7 @@ function TerminalPane(
         useAppStore.getState(),
         worktreeId
       )
-      const activeElementAtDispatch = document.activeElement
+      const focusAtDispatch = captureTerminalPanePasteFocusSnapshot(pane.container)
       void pasteTerminalClipboard({
         readClipboardText,
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -2183,7 +2185,7 @@ function TerminalPane(
         runtimeEnvironmentId,
         protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
         pasteText: (text, options) =>
-          executePanePasteText(pane, source, activeElementAtDispatch, text, options),
+          executePanePasteText(pane, source, focusAtDispatch, text, options),
         onTextPasteError: () =>
           setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
         onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
@@ -2318,6 +2320,10 @@ function TerminalPane(
       if (!pane) {
         return
       }
+      const focusAtDispatch = captureTerminalPanePasteFocusSnapshot(
+        pane.container,
+        activeElementAtDispatch
+      )
       const connectionId = getConnectionId(worktreeId) ?? null
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         useAppStore.getState(),
@@ -2330,7 +2336,7 @@ function TerminalPane(
         runtimeEnvironmentId,
         protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
         pasteText: (text, options) =>
-          executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
+          executePanePasteText(pane, 'app-menu', focusAtDispatch, text, options),
         onTextPasteError: () =>
           setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
         onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))

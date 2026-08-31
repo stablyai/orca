@@ -38,23 +38,39 @@ export function isTerminalPanePasteTargetCurrent({
   )
 }
 
+export type TerminalPanePasteFocusSnapshot = {
+  element: Element | null
+  ownedByPane: boolean
+}
+
+export function captureTerminalPanePasteFocusSnapshot(
+  paneContainer: Element,
+  element: Element | null = typeof document === 'undefined' ? null : document.activeElement
+): TerminalPanePasteFocusSnapshot {
+  return {
+    element,
+    ownedByPane: element === null || paneContainer.contains(element)
+  }
+}
+
 export type TerminalPanePasteFocusState = {
   requireSameFocusedElement: boolean
-  activeElementAtDispatch: Element | null
+  focusAtDispatch: TerminalPanePasteFocusSnapshot
   paneContainer: Element
   activeElement?: Element | null
 }
 
 export function isTerminalPanePasteFocusCurrent({
   requireSameFocusedElement,
-  activeElementAtDispatch,
+  focusAtDispatch,
   paneContainer,
   activeElement = typeof document === 'undefined' ? null : document.activeElement
 }: TerminalPanePasteFocusState): boolean {
+  const activeElementAtDispatch = focusAtDispatch.element
   if (!requireSameFocusedElement || activeElementAtDispatch === null) {
     return true
   }
-  if (!paneContainer.contains(activeElementAtDispatch)) {
+  if (!focusAtDispatch.ownedByPane) {
     return false
   }
   if (activeElement === activeElementAtDispatch) {

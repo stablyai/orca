@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  captureTerminalPanePasteFocusSnapshot,
   isTerminalPanePasteFocusCurrent,
   isTerminalPanePasteTargetCurrent
 } from './terminal-paste-target-state'
@@ -121,7 +122,7 @@ describe('terminal paste target state', () => {
     expect(
       isTerminalPanePasteFocusCurrent({
         requireSameFocusedElement: true,
-        activeElementAtDispatch: terminalInput,
+        focusAtDispatch: { element: terminalInput, ownedByPane: true },
         paneContainer,
         activeElement: terminalInput
       })
@@ -136,7 +137,7 @@ describe('terminal paste target state', () => {
     expect(
       isTerminalPanePasteFocusCurrent({
         requireSameFocusedElement: true,
-        activeElementAtDispatch: terminalInput,
+        focusAtDispatch: { element: terminalInput, ownedByPane: true },
         paneContainer,
         activeElement: renameInput
       })
@@ -151,7 +152,7 @@ describe('terminal paste target state', () => {
     expect(
       isTerminalPanePasteFocusCurrent({
         requireSameFocusedElement: true,
-        activeElementAtDispatch: terminalInput,
+        focusAtDispatch: { element: terminalInput, ownedByPane: true },
         paneContainer,
         activeElement: body
       })
@@ -161,16 +162,40 @@ describe('terminal paste target state', () => {
   it('keeps keyboard-owned paste current when xterm replaces its helper textarea', () => {
     const originalTerminalInput = makeElement('textarea', ['xterm-helper-textarea'])
     const replacementTerminalInput = makeElement('textarea', ['xterm-helper-textarea'])
-    const paneContainer = makePaneContainerFor([originalTerminalInput, replacementTerminalInput])
+    let acceptedElements: readonly Element[] = [originalTerminalInput]
+    const paneContainer = {
+      contains: vi.fn((element: Element | null) => acceptedElements.includes(element as Element))
+    } as unknown as Element
+    const focusAtDispatch = captureTerminalPanePasteFocusSnapshot(
+      paneContainer,
+      originalTerminalInput
+    )
+    acceptedElements = [replacementTerminalInput]
 
+    expect(focusAtDispatch.ownedByPane).toBe(true)
     expect(
       isTerminalPanePasteFocusCurrent({
         requireSameFocusedElement: true,
-        activeElementAtDispatch: originalTerminalInput,
+        focusAtDispatch,
         paneContainer,
         activeElement: replacementTerminalInput
       })
     ).toBe(true)
+  })
+
+  it('rejects a replacement helper when the dispatch focus was never owned by the pane', () => {
+    const outsideInput = makeElement('input')
+    const replacementTerminalInput = makeElement('textarea', ['xterm-helper-textarea'])
+    const paneContainer = makePaneContainerFor([replacementTerminalInput])
+
+    expect(
+      isTerminalPanePasteFocusCurrent({
+        requireSameFocusedElement: true,
+        focusAtDispatch: { element: outsideInput, ownedByPane: false },
+        paneContainer,
+        activeElement: replacementTerminalInput
+      })
+    ).toBe(false)
   })
 
   it('rejects keyboard-owned paste when focus moves to another control in the pane', () => {
@@ -181,7 +206,7 @@ describe('terminal paste target state', () => {
     expect(
       isTerminalPanePasteFocusCurrent({
         requireSameFocusedElement: true,
-        activeElementAtDispatch: terminalInput,
+        focusAtDispatch: { element: terminalInput, ownedByPane: true },
         paneContainer,
         activeElement: searchInput
       })
@@ -196,7 +221,7 @@ describe('terminal paste target state', () => {
     expect(
       isTerminalPanePasteFocusCurrent({
         requireSameFocusedElement: false,
-        activeElementAtDispatch: terminalInput,
+        focusAtDispatch: { element: terminalInput, ownedByPane: true },
         paneContainer,
         activeElement: otherInput
       })
