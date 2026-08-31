@@ -12,6 +12,7 @@ type OmpModelRow = {
   name?: unknown
 }
 
+/** The outermost JSON value on stdout, or null when none parses. */
 function parseJsonObject(stdout: string): unknown {
   const trimmed = stdout.trim()
   try {

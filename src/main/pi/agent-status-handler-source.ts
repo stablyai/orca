@@ -1,7 +1,8 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
-// Why: keep the generated handler registrations separate from hook transport;
-// both are independently sizeable and the installed extension concatenates them.
+/** The `pi.on(...)` registrations of the status extension, as source lines.
+ *  Why: kept separate from hook transport; both are independently sizeable and
+ *  the installed extension concatenates them. */
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
   const sessionStartHandler =
     kind !== 'omp'

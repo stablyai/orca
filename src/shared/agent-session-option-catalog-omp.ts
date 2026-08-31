@@ -2,8 +2,9 @@ import { hasFlag } from './agent-cli-flag-detection'
 import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
 import { parseOmpModelList } from './omp-model-list-probe'
 
-// The enrichment gate reads only `listModels`' presence; the probe itself parses
-// through `agent-model-probe-spec.ts`, so keep this private to that gate.
+/** Catalog rows for `omp models --json` output; every OMP model carries no options.
+ *  The enrichment gate reads only `listModels`' presence; the probe itself parses
+ *  through `agent-model-probe-spec.ts`, so keep this private to that gate. */
 function parseOmpCatalogModels(stdout: string): CatalogModel[] {
   return parseOmpModelList(stdout).map((model) => ({ ...model, options: [] }))
 }

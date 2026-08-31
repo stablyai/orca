@@ -90,6 +90,9 @@ function activeModels(
   return withTrackedNativeChatModel(catalog, catalog.models, record)
 }
 
+/** Model and session-option state for the active mobile chat tab: builds the
+ *  picker snapshot from the agent's catalog, seeds it from the hook-reported
+ *  model, and dispatches picks as the agent's own slash commands. */
 export function useMobileNativeChatSessionOptions(args: {
   agent: string | null
   /** Stable per-tab scope (host + worktree + tab), or null when no tab is active. */

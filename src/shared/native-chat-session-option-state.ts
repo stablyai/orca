@@ -146,6 +146,9 @@ export function applyNativeChatReportedSessionOptions(
   return changed
 }
 
+/** Resolves a hook-reported model string to a catalog id: exact id, then label,
+ *  then the longest id the report contains. A catalog that seeds no models keeps
+ *  the report itself. Null when nothing matches. */
 export function matchNativeChatCatalogModelId(
   catalog: AgentSessionOptionCatalog,
   reported: string

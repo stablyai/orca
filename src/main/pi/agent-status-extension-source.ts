@@ -17,6 +17,9 @@ import { getPiAgentStatusWslCurlSourceLines } from './agent-status-wsl-curl-sour
 
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
+/** Source of the status extension installed into a Pi-family agent's extension
+ *  dir: it POSTs lifecycle, tool, and (under OMP) model events to Orca's hook
+ *  endpoint. Returned as one self-contained string — it runs inside the agent. */
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
   // Why: OMP needs the file only to reject ephemeral sessions; disclose just its resume id.
   const sessionMetadataSourceLines =

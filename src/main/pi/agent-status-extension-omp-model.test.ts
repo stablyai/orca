@@ -2,14 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 
+/** The `payload` of every hook POST the extension made, in order. */
 function postedPayloads(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown>[] {
   return fetchMock.mock.calls.map(
     (call) => JSON.parse(String(call[1]?.body)).payload as Record<string, unknown>
   )
 }
 
-// Why: delivery is latest-only behind one in-flight post, so back-to-back hooks
-// must drain before the next one or the pending slot swallows the earlier post.
+/** Waits until `count` posts have been delivered.
+ *  Why: delivery is latest-only behind one in-flight post, so back-to-back hooks
+ *  must drain before the next one or the pending slot swallows the earlier post. */
 async function settled(fetchMock: ReturnType<typeof vi.fn>, count: number): Promise<void> {
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(count))
 }
