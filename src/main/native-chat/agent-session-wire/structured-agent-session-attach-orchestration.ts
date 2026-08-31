@@ -58,7 +58,7 @@ export function attachStructuredAgentSession(
         eventSink.close()
         context.runtimeState.discardEventSink(sessionId)
       },
-      onAttached: (attached) => {
+      onAttached: async (attached) => {
         const fence = context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
         const previousFence = context.sessions.get(sessionId)?.fence
         context.sessions.set(sessionId, {
@@ -79,6 +79,10 @@ export function attachStructuredAgentSession(
           fence,
           publish: () => context.subscribers.publish(sessionId, attached.journal)
         })
+        // Why: binding re-queues what the reaped child buffered — including the
+        // tombstone ending its turn. The page this attach returns must not still
+        // report a turn this same attach just ended.
+        await eventSink.drained()
       }
     })
     // Why: a failed attach that left no session behind must not strand a bound sink; the runtime

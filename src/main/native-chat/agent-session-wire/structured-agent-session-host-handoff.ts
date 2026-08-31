@@ -220,6 +220,9 @@ async function acquireNativeHandoffOwner(
     fence: proved.lease.runtimeFence,
     publish: () => host.subscribers.publish(input.sessionId, session.journal)
   })
+  // Why: same rule as the attach path — the snapshot below must not fan out the
+  // reaped child's turn as still running.
+  await eventSink.drained()
   host.subscribers.snapshot(input.sessionId, session.journal, proved.lease.runtimeFence)
   return proved
 }

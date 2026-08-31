@@ -605,8 +605,18 @@ describe('a structured codex session over agentSession.*', () => {
         current: { model: 'gpt-live', effort: 'high' }
       }
     })
-    // The journal belongs to the session, not to the process that just died.
+    // The journal belongs to the session, not to the process that just died —
+    // and the takeover reaped the old child, so the page it hands back must
+    // already show that turn ended rather than still running.
     expect(resumed.page.items.map(textOf)).toContain('Two files.')
+    expect(resumed.page.items.map((item) => item.body?.kind)).toEqual([
+      'message',
+      'message',
+      'tool-call',
+      'approval',
+      'status',
+      'message'
+    ])
 
     // ── page history ────────────────────────────────────────────────────────
     const tail = await historyPage('tail', { limit: 2 })

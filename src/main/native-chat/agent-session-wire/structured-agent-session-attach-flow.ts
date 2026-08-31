@@ -47,7 +47,7 @@ export type AttachFlowInput = {
   /** Registers the opened journal and fans out to subscribers before the caller
    *  sees the result, so no client can send against a session the host has not
    *  finished publishing. */
-  onAttached: (attached: AttachedJournal) => void
+  onAttached: (attached: AttachedJournal) => Promise<void> | void
   /** Handed to the adapter so it can journal what the provider streams. The
    *  host owns it and binds it to the journal inside `onAttached`. */
   eventSink?: StructuredAgentSessionEventSink
@@ -171,7 +171,7 @@ export async function performAttach(
       journalRoot: input.journalRoot,
       adapter: input.adapter
     })
-    input.onAttached(attached)
+    await input.onAttached(attached)
     await store.recordOperationOutcome({
       callerKey: input.callerKey,
       operationId: params.envelope.clientOperationId,
