@@ -5,7 +5,10 @@ import { RuntimeClientError } from '../../runtime-client'
 import { orchestrationMigrationData } from '../../../shared/orchestration-rpc-contract'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import {
+  resolveCoordinatorTerminalHandle,
+  resolveOptionalCallerTerminalHandle
+} from './terminal-identity'
 
 export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
@@ -46,6 +49,9 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
     const from = showPreamble
       ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
       : undefined
+    // Why: carries caller identity for the Run scoping in #14898; best-effort because the runtime still
+    // ignores it, so requiring it now would break headless reads for no functional gain.
+    const callerTerminalHandle = from ?? (await resolveOptionalCallerTerminalHandle(flags, client))
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string } | null
       preamble?: string
@@ -53,6 +59,7 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
       task: getRequiredStringFlag(flags, 'task'),
       preamble: showPreamble,
       from,
+      callerTerminalHandle,
       devMode: isDevCliInvocation()
     })
     printResult(result, json, (value) => {

@@ -117,6 +117,28 @@ function getClientErrorMessage(err: unknown): string | undefined {
   return typeof message === 'string' ? message : undefined
 }
 
+// Why: identity is advisory on reads until the runtime scopes on it, so a read that used to
+// succeed must never start failing. Deliberately skips the focus-based active-terminal fallback:
+// a remote or headless caller would otherwise be attributed to whichever pane happens to be focused.
+export async function resolveOptionalCallerTerminalHandle(
+  flags: Map<string, string | boolean>,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  const explicit = getOptionalStringFlag(flags, 'from')
+  if (explicit) {
+    return explicit
+  }
+  const envHandle = process.env.ORCA_TERMINAL_HANDLE
+  try {
+    if (envHandle && envHandle.length > 0 && (await isLiveTerminalHandle(envHandle, client))) {
+      return envHandle
+    }
+    return await resolveOrchestrationPaneTerminalHandle(client, { optional: true })
+  } catch {
+    return undefined
+  }
+}
+
 export async function resolveCoordinatorTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
