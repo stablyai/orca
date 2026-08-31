@@ -106,7 +106,10 @@ describe('pairing RPC methods', () => {
       result: {
         available: true,
         pairingUrl: 'orca://pair?code=test',
-        deviceId: 'device-1'
+        endpoint: 'ws://100.64.1.20:6768',
+        deviceId: 'device-1',
+        webClientUrl:
+          'http://100.64.1.20:6768/web-index.html#pairing=orca%3A%2F%2Fpair%3Fcode%3Dtest'
       }
     })
     expect(createOffer).toHaveBeenCalledWith({
