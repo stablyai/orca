@@ -1,11 +1,17 @@
+import { conversationNameFromLiveTitle } from './agent-row-conversation-name'
+import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 import type { Tab } from './tab-types'
 import type { TerminalTab } from './terminal-tab-types'
-import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
 
 export function resolveTerminalTabTitle(
   tab: Pick<
     TerminalTab,
-    'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title'
+    | 'customTitle'
+    | 'quickCommandLabel'
+    | 'aiVaultTitle'
+    | 'generatedTitle'
+    | 'title'
+    | 'defaultTitle'
   >,
   generatedTitlesEnabled: boolean,
   fallback = ''
@@ -16,6 +22,7 @@ export function resolveTerminalTabTitle(
     tab.quickCommandLabel?.trim() ||
     (isMeaningfulOpenCodeTerminalTitle(liveTitle) ? liveTitle : '') ||
     tab.aiVaultTitle?.title.trim() ||
+    conversationNameFromLiveTitle(liveTitle, null, tab.defaultTitle) ||
     (generatedTitlesEnabled ? tab.generatedTitle?.trim() : '') ||
     liveTitle ||
     fallback
@@ -35,6 +42,7 @@ export function resolveUnifiedTabLabel(
     tab?.quickCommandLabel?.trim() ||
     (isMeaningfulOpenCodeTerminalTitle(liveLabel) ? liveLabel : '') ||
     tab?.aiVaultTitle?.title.trim() ||
+    conversationNameFromLiveTitle(liveLabel, null) ||
     (generatedTitlesEnabled ? tab?.generatedLabel?.trim() : '') ||
     liveLabel ||
     fallback

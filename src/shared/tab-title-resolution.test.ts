@@ -11,7 +11,7 @@ describe('tab title resolution', () => {
     ).toBe('Claude working')
   })
 
-  it('places generated titles between manual and live titles when enabled', () => {
+  it('places generated titles between manual and status live titles when enabled', () => {
     expect(
       resolveTerminalTabTitle(
         { customTitle: null, generatedTitle: 'Refactor auth', title: 'Claude working' },
@@ -24,6 +24,19 @@ describe('tab title resolution', () => {
         true
       )
     ).toBe('Payments')
+  })
+
+  it('uses a meaningful live title ahead of a generated first-prompt title', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'Upload the Kimi-K3 model to GitHub',
+          title: 'Refactor auth middleware'
+        },
+        true
+      )
+    ).toBe('Refactor auth middleware')
   })
 
   it('uses meaningful native OpenCode session titles before generated titles', () => {
@@ -90,6 +103,76 @@ describe('tab title resolution', () => {
     ).toBe('Repair provider-native tab titles')
   })
 
+  it('keeps AI Vault titles above a meaningful live title, which still beats generated', () => {
+    const aiVaultTitle = {
+      agent: 'codex' as const,
+      sessionId: 'codex-session',
+      title: 'Vault conversation'
+    }
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          aiVaultTitle,
+          generatedTitle: 'First prompt title',
+          title: 'Investigate replay bug'
+        },
+        true
+      )
+    ).toBe('Vault conversation')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'First prompt title',
+          title: 'Investigate replay bug'
+        },
+        true
+      )
+    ).toBe('Investigate replay bug')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'First prompt title',
+          title: 'Claude working'
+        },
+        true
+      )
+    ).toBe('First prompt title')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'First prompt title',
+          title: '⠋ Codex is thinking'
+        },
+        true
+      )
+    ).toBe('First prompt title')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'First prompt title',
+          title: '⠋ - Waiting for response… - grok'
+        },
+        true
+      )
+    ).toBe('First prompt title')
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          aiVaultTitle,
+          generatedLabel: 'First prompt title',
+          label: 'Investigate replay bug'
+        },
+        true
+      )
+    ).toBe('Vault conversation')
+  })
+
   it('keeps manual and quick-command labels ahead of AI Vault titles', () => {
     const aiVaultTitle = {
       agent: 'claude' as const,
@@ -152,6 +235,19 @@ describe('tab title resolution', () => {
         true
       )
     ).toBe('Fix flaky tests')
+  })
+
+  it('uses a meaningful live unified label ahead of a generated label', () => {
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          generatedLabel: 'Upload the Kimi-K3 model to GitHub',
+          label: 'Refactor auth middleware'
+        },
+        true
+      )
+    ).toBe('Refactor auth middleware')
   })
 
   it('uses quick command labels before generated unified labels', () => {

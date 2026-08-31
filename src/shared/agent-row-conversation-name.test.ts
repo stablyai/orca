@@ -31,10 +31,51 @@ describe('getAgentRowConversationName', () => {
     )
   })
 
-  it('uses the generated title only when generated titles are enabled', () => {
-    const tab = makeTab({ generatedTitle: 'Fix intake flow', title: '✳ Investigate replay bug' })
-    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
+  it('uses a meaningful live title ahead of a generated first-prompt title', () => {
+    const tab = makeTab({
+      generatedTitle: 'Upload the Kimi-K3 model to GitHub',
+      title: '✳ Investigate replay bug'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Investigate replay bug')
     expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Investigate replay bug')
+  })
+
+  it('falls back to the generated title when the live title is only status', () => {
+    const tab = makeTab({ generatedTitle: 'Fix intake flow', title: '✳ Claude working' })
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
+    expect(getAgentRowConversationName(tab, 'claude', false)).toBeNull()
+  })
+
+  it('falls back to the generated title for Codex is-thinking OSC frames', () => {
+    const tab = makeTab({ generatedTitle: 'Fix intake flow', title: '⠋ Codex is thinking' })
+    expect(getAgentRowConversationName(tab, 'codex', true)).toBe('Fix intake flow')
+    expect(getAgentRowConversationName(tab, 'codex', false)).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ generatedTitle: 'Fix intake flow', title: '⠋ Codex is thinking' }),
+        null,
+        true
+      )
+    ).toBe('Fix intake flow')
+  })
+
+  it('falls back to the generated title for Grok rotating working frames', () => {
+    const tab = makeTab({
+      generatedTitle: 'Fix intake flow',
+      title: '⠋ - Waiting for response… - grok'
+    })
+    expect(getAgentRowConversationName(tab, 'grok', true)).toBe('Fix intake flow')
+    expect(getAgentRowConversationName(tab, 'grok', false)).toBeNull()
+  })
+
+  it('heals a persisted first-prompt name when a later live conversation name is present', () => {
+    const tab = makeTab({
+      generatedTitle: 'Upload the Kimi-K3 model to GitHub',
+      title: 'Recent Project Progress Status Inquiry - grok'
+    })
+    expect(getAgentRowConversationName(tab, 'grok', true)).toBe(
+      'Recent Project Progress Status Inquiry - grok'
+    )
   })
 
   it('names a split pane from its own live title, not the tab title', () => {
@@ -72,6 +113,17 @@ describe('getAgentRowConversationName', () => {
     expect(
       getAgentRowConversationName(makeTab({ title: '⠋ Refactor replay guard' }), 'codex', false)
     ).toBe('Refactor replay guard')
+  })
+
+  it('rejects spinner plus a single project token instead of treating it as a name', () => {
+    expect(getAgentRowConversationName(makeTab({ title: '⠋ albacore' }), 'codex', false)).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ generatedTitle: 'Fix intake flow', title: '⠋ albacore' }),
+        'codex',
+        true
+      )
+    ).toBe('Fix intake flow')
   })
 
   it('rejects spinner+cwd titles instead of surfacing paths as names', () => {

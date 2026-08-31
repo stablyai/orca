@@ -161,6 +161,14 @@ describe('resolvePinnedTabLabel', () => {
             quickCommandLabel: null,
             generatedLabel: null,
             label: ' Plain '
+          },
+          {
+            id: 'e',
+            entityId: 'ee',
+            customLabel: null,
+            quickCommandLabel: null,
+            generatedLabel: ' Gen only ',
+            label: null
           }
         ]
       } as unknown as AppState['unifiedTabsByWorktree']
@@ -168,8 +176,9 @@ describe('resolvePinnedTabLabel', () => {
 
     expect(resolvePinnedTabLabel(state, 'wt-1', 'a')).toBe('Custom')
     expect(resolvePinnedTabLabel(state, 'wt-1', 'b')).toBe('Run tests')
-    expect(resolvePinnedTabLabel(state, 'wt-1', 'ec')).toBe('Gen')
+    expect(resolvePinnedTabLabel(state, 'wt-1', 'ec')).toBe('Plain')
     expect(resolvePinnedTabLabel(state, 'wt-1', 'ed')).toBe('Plain')
+    expect(resolvePinnedTabLabel(state, 'wt-1', 'ee')).toBe('Gen only')
   })
 
   it('falls back to the live label when generated tab titles are disabled', () => {

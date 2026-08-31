@@ -2135,6 +2135,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
       let completionRefreshWorktreeId: string | null = null
       let suppressedInheritedTerminalStatus = false
+      let replaceGeneratedTitleOnProviderSessionChange = false
       const generatedTitleEntry: { current: AgentStatusEntry | null } = { current: null }
       set((s) => {
         const existing = s.agentStatusByPaneKey[paneKey]
@@ -2276,6 +2277,18 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             metadata?.providerSession,
             existingProviderSession
           )
+        // Why: done→working (/clear) drops existingProviderSession so a reused
+        // pane cannot inherit a finished id. The previous entry's id is still
+        // the signal that this first-prompt title belongs to another session.
+        replaceGeneratedTitleOnProviderSessionChange = Boolean(
+          existing?.providerSession &&
+          metadata?.providerSession &&
+          !agentProviderSessionsEqual(
+            identity.agentType,
+            metadata.providerSession,
+            existing.providerSession
+          )
+        )
         const statusTabId =
           routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
         const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
@@ -2603,7 +2616,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           liveDispatchTaskId !== stickyOrchestrationTaskId
         )
         const shouldReplaceGeneratedTitle =
-          hasMatchingOrchestrationLabels || isNewDispatchAgainstStickyOrchestration
+          hasMatchingOrchestrationLabels ||
+          isNewDispatchAgainstStickyOrchestration ||
+          replaceGeneratedTitleOnProviderSessionChange
         // Why: setAgentStatus is high-frequency, so only parse dispatch preambles when a title write is actually possible.
         const mayWriteGeneratedTitle =
           get().settings?.tabAutoGenerateTitle === true &&

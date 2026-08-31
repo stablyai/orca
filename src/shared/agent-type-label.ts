@@ -2,7 +2,7 @@ import type { AgentType } from './agent-status-types'
 
 // Shared so the desktop renderer and the mobile app show the same agent name
 // (e.g. native chat's empty state on both surfaces) from one source of truth.
-const WELL_KNOWN_LABELS: Record<string, string> = {
+export const WELL_KNOWN_AGENT_TYPE_LABELS: Record<string, string> = {
   claude: 'Claude',
   openclaude: 'OpenClaude',
   codex: 'Codex',
@@ -32,5 +32,5 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
     return 'Agent'
   }
   // Capitalize well-known names nicely; pass through custom names as-is
-  return WELL_KNOWN_LABELS[agentType] ?? agentType
+  return WELL_KNOWN_AGENT_TYPE_LABELS[agentType] ?? agentType
 }
