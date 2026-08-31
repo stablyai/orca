@@ -1,9 +1,9 @@
 import { destroyPersistentWebview } from '@/components/browser-pane/host-guest/webview-registry'
 import {
-  guardPinnedTabClose,
+  guardTabClose,
   isUnifiedTabPinned,
-  resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
+  resolveTabLabel
+} from '../../store/tab-close-guard'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
@@ -161,9 +161,9 @@ export function registerBrowserRequestIpcBridge(
         }
         const closeBrowserWorkspaceWithReply = (worktreeId: string, workspaceId: string): void => {
           const currentStore = useAppStore.getState()
-          guardPinnedTabClose({
+          guardTabClose({
             isPinned: isUnifiedTabPinned(currentStore, worktreeId, workspaceId),
-            tabLabel: resolvePinnedTabLabel(currentStore, worktreeId, workspaceId),
+            tabLabel: resolveTabLabel(currentStore, worktreeId, workspaceId),
             onClose: () => {
               useAppStore.getState().closeBrowserTab(workspaceId)
               window.api.ui.replyTabClose({ requestId: data.requestId })

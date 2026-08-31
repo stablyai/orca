@@ -2861,7 +2861,10 @@
             "0d1963f4a6": "このタブはピン留めされています。本当に閉じますか？",
             "dont_ask_again": "ピン留めしたタブについて今後確認しない",
             "0b38ee2f86": "キャンセル",
-            "c337c9d75c": "閉じる"
+            "c337c9d75c": "閉じる",
+            "close_any_title": "タブを閉じますか？",
+            "close_any_description": "このタブを閉じてもよろしいですか？",
+            "dont_ask_again_any": "タブを閉じるときに今後確認しない"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "{{value0}} の認証に失敗しました。このターミナルセッションを続行するには再接続してください。",
@@ -6032,7 +6035,10 @@
           "5cb5475664": "ピン留めしたタブを閉じる前に確認",
           "36b2a5dc6d": "ピン留めしたタブを閉じる前に確認ダイアログを表示します。",
           "projectRuntime": "プロジェクトのランタイム",
-          "projectRuntimeDescription": "個別に指定していないローカル Windows プロジェクトの既定のランタイム。"
+          "projectRuntimeDescription": "個別に指定していないローカル Windows プロジェクトの既定のランタイム。",
+          "confirm_close_any_title": "タブを閉じる前に確認",
+          "confirm_close_any_description": "タブを閉じる前に確認ダイアログを表示します。",
+          "confirm_close_any_kw": "任意"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "サポートありがとうございます!",
@@ -8424,7 +8430,10 @@
             "editorFontFamily": "エディターフォント",
             "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合はターミナルフォントに従います。",
             "externalWorktrees": "外部ワークツリー",
-            "externalWorktreesDescription": "Orca 外で作成されたワークツリーをデフォルトで表示するかどうかを選択します。"
+            "externalWorktreesDescription": "Orca 外で作成されたワークツリーをデフォルトで表示するかどうかを選択します。",
+            "confirm_close_any_title": "タブを閉じる前に確認",
+            "confirm_close_any_description": "タブを閉じる前に確認ダイアログを表示します。",
+            "confirm_close_any_kw": "任意"
           }
         },
         "git": {

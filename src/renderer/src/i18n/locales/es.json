@@ -2861,7 +2861,10 @@
             "0d1963f4a6": "Esta pestaña está fijada. ¿Seguro que quieres cerrarla?",
             "dont_ask_again": "No volver a preguntar por pestañas fijadas",
             "0b38ee2f86": "Cancelar",
-            "c337c9d75c": "Cerrar"
+            "c337c9d75c": "Cerrar",
+            "close_any_title": "¿Cerrar pestaña?",
+            "close_any_description": "¿Seguro que quieres cerrar esta pestaña?",
+            "dont_ask_again_any": "No volver a preguntar al cerrar pestañas"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "Error de autenticación en {{value0}}. Vuelve a conectar para continuar esta sesión de terminal.",
@@ -6047,7 +6050,10 @@
           "5cb5475664": "Confirmar antes de cerrar pestañas fijadas",
           "36b2a5dc6d": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
           "projectRuntime": "Runtime del proyecto",
-          "projectRuntimeDescription": "Runtime predeterminado para proyectos locales de Windows que no lo sobrescriben."
+          "projectRuntimeDescription": "Runtime predeterminado para proyectos locales de Windows que no lo sobrescriben.",
+          "confirm_close_any_title": "Confirmar antes de cerrar cualquier pestaña",
+          "confirm_close_any_description": "Muestra un diálogo de confirmación antes de cerrar cualquier pestaña.",
+          "confirm_close_any_kw": "cualquiera"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "¡Gracias por el apoyo!",
@@ -8402,7 +8408,10 @@
             "editorFontFamily": "Fuente del editor",
             "editorFontFamilyDesc": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal.",
             "externalWorktrees": "Worktrees externos",
-            "externalWorktreesDescription": "Elige si los worktrees creados fuera de Orca aparecen de forma predeterminada."
+            "externalWorktreesDescription": "Elige si los worktrees creados fuera de Orca aparecen de forma predeterminada.",
+            "confirm_close_any_title": "Confirmar antes de cerrar cualquier pestaña",
+            "confirm_close_any_description": "Muestra un diálogo de confirmación antes de cerrar cualquier pestaña.",
+            "confirm_close_any_kw": "cualquiera"
           }
         },
         "git": {

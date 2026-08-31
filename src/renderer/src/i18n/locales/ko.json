@@ -2866,7 +2866,10 @@
             "0d1963f4a6": "이 탭은 고정되어 있습니다. 정말 닫으시겠어요?",
             "dont_ask_again": "고정된 탭에 대해 다시 묻지 않기",
             "0b38ee2f86": "취소",
-            "c337c9d75c": "닫기"
+            "c337c9d75c": "닫기",
+            "close_any_title": "탭을 닫을까요?",
+            "close_any_description": "이 탭을 정말 닫으시겠어요?",
+            "dont_ask_again_any": "탭을 닫을 때 다시 묻지 않기"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "{{value0}} 인증에 실패했습니다. 이 터미널 세션을 계속하려면 다시 연결하세요.",
@@ -6024,7 +6027,10 @@
           "5cb5475664": "고정된 탭을 닫기 전에 확인",
           "36b2a5dc6d": "고정된 탭을 닫기 전에 확인 대화상자를 표시합니다.",
           "projectRuntime": "프로젝트 런타임",
-          "projectRuntimeDescription": "별도로 재정의하지 않은 로컬 Windows 프로젝트의 기본 런타임입니다."
+          "projectRuntimeDescription": "별도로 재정의하지 않은 로컬 Windows 프로젝트의 기본 런타임입니다.",
+          "confirm_close_any_title": "모든 탭을 닫기 전에 확인",
+          "confirm_close_any_description": "탭을 닫기 전에 확인 대화상자를 표시합니다.",
+          "confirm_close_any_kw": "모든"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "지원해 주셔서 감사합니다!",
@@ -8379,7 +8385,10 @@
             "editorFontFamily": "편집기 글꼴",
             "editorFontFamilyDesc": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다.",
             "externalWorktrees": "외부 작업 트리",
-            "externalWorktreesDescription": "Orca 외부에서 만든 작업 트리를 기본적으로 표시할지 선택합니다."
+            "externalWorktreesDescription": "Orca 외부에서 만든 작업 트리를 기본적으로 표시할지 선택합니다.",
+            "confirm_close_any_title": "모든 탭을 닫기 전에 확인",
+            "confirm_close_any_description": "탭을 닫기 전에 확인 대화상자를 표시합니다.",
+            "confirm_close_any_kw": "모든"
           }
         },
         "git": {

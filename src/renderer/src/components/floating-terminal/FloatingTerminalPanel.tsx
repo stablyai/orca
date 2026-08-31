@@ -59,7 +59,7 @@ import {
   type FloatingWorkspaceGuestSelectIndexDetail
 } from '@/lib/floating-workspace-guest-bridge'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
-import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import { guardTabClose, resolveTabLabel } from '@/store/tab-close-guard'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
@@ -939,13 +939,14 @@ export function FloatingTerminalPanel({
       }
       if (item.contentType === 'terminal') {
         // closeTerminalTab runs its own pin guard + post-confirm force-reenter; arm on actual close.
-        closeTerminalTab(item.entityId, { onClosed: armIfEmptying })
+        closeTerminalTab(item.entityId, { userInitiated: true, onClosed: armIfEmptying })
         return
       }
       const state = useAppStore.getState()
-      guardPinnedTabClose({
+      guardTabClose({
         isPinned: item.isPinned === true,
-        tabLabel: resolvePinnedTabLabel(state, FLOATING_TERMINAL_WORKTREE_ID, visibleId),
+        tabLabel: resolveTabLabel(state, FLOATING_TERMINAL_WORKTREE_ID, visibleId),
+        userInitiated: true,
         onClose: () => {
           const latest = useAppStore.getState()
           if (item.contentType === 'browser') {

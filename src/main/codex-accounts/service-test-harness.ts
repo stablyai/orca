@@ -138,6 +138,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
     confirmClosePinnedTab: true,
+    confirmCloseAnyTab: false,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     terminalJISYenToBackslash: false,

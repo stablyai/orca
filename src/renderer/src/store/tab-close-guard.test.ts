@@ -10,16 +10,12 @@ vi.mock('@/store', () => ({
   }
 }))
 
-import {
-  guardPinnedTabClose,
-  isUnifiedTabPinned,
-  resolvePinnedTabLabel
-} from './pinned-tab-close-guard'
+import { guardTabClose, isUnifiedTabPinned, resolveTabLabel } from './tab-close-guard'
 import type { AppState } from './types'
 
 function makeState(overrides: Partial<AppState>): AppState {
   return {
-    settings: { confirmClosePinnedTab: true },
+    settings: { confirmClosePinnedTab: true, confirmCloseAnyTab: false },
     unifiedTabsByWorktree: {},
     requestPinnedTabCloseConfirm: vi.fn(),
     cancelPinnedTabCloseRequest: vi.fn(),
@@ -27,37 +23,41 @@ function makeState(overrides: Partial<AppState>): AppState {
   } as unknown as AppState
 }
 
-describe('guardPinnedTabClose', () => {
+describe('guardTabClose', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('closes immediately for a non-pinned tab without touching the store', () => {
+  it('closes immediately for a non-pinned tab when neither confirm setting applies', () => {
     const onClose = vi.fn()
     const requestPinnedTabCloseConfirm = vi.fn()
     getStateMock.mockReturnValue(makeState({ requestPinnedTabCloseConfirm }))
 
-    guardPinnedTabClose({ isPinned: false, tabLabel: 'Docs', onClose })
+    guardTabClose({ isPinned: false, tabLabel: 'Docs', onClose })
 
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
   })
 
-  it('requests confirmation for a pinned tab when the setting is on', () => {
+  it('requests a pinned confirmation for a pinned tab when the setting is on', () => {
     const onClose = vi.fn()
     const requestPinnedTabCloseConfirm = vi.fn()
     getStateMock.mockReturnValue(
       makeState({
-        settings: { confirmClosePinnedTab: true } as AppState['settings'],
+        settings: {
+          confirmClosePinnedTab: true,
+          confirmCloseAnyTab: false
+        } as AppState['settings'],
         requestPinnedTabCloseConfirm
       })
     )
 
-    guardPinnedTabClose({ isPinned: true, tabLabel: 'Docs', onClose })
+    guardTabClose({ isPinned: true, tabLabel: 'Docs', onClose })
 
     expect(onClose).not.toHaveBeenCalled()
     expect(requestPinnedTabCloseConfirm).toHaveBeenCalledWith({
       tabLabel: 'Docs',
+      variant: 'pinned',
       onConfirm: onClose
     })
   })
@@ -68,15 +68,19 @@ describe('guardPinnedTabClose', () => {
     const requestPinnedTabCloseConfirm = vi.fn()
     getStateMock.mockReturnValue(
       makeState({
-        settings: { confirmClosePinnedTab: true } as AppState['settings'],
+        settings: {
+          confirmClosePinnedTab: true,
+          confirmCloseAnyTab: false
+        } as AppState['settings'],
         requestPinnedTabCloseConfirm
       })
     )
 
-    guardPinnedTabClose({ isPinned: true, tabLabel: 'Docs', onClose, onCancel })
+    guardTabClose({ isPinned: true, tabLabel: 'Docs', onClose, onCancel })
 
     expect(requestPinnedTabCloseConfirm).toHaveBeenCalledWith({
       tabLabel: 'Docs',
+      variant: 'pinned',
       onConfirm: onClose,
       onCancel
     })
@@ -86,42 +90,117 @@ describe('guardPinnedTabClose', () => {
     const cancelPinnedTabCloseRequest = vi.fn()
     getStateMock.mockReturnValue(makeState({ cancelPinnedTabCloseRequest }))
 
-    const cancel = guardPinnedTabClose({ isPinned: true, tabLabel: 'Docs', onClose: vi.fn() })
+    const cancel = guardTabClose({ isPinned: true, tabLabel: 'Docs', onClose: vi.fn() })
     const request = getStateMock().requestPinnedTabCloseConfirm.mock.calls[0][0]
     cancel?.()
 
     expect(cancelPinnedTabCloseRequest).toHaveBeenCalledWith(request)
   })
 
-  it('closes a pinned tab immediately when the setting is off', () => {
+  it('closes a pinned tab immediately when both settings are off', () => {
     const onClose = vi.fn()
     const requestPinnedTabCloseConfirm = vi.fn()
     getStateMock.mockReturnValue(
       makeState({
-        settings: { confirmClosePinnedTab: false } as AppState['settings'],
+        settings: {
+          confirmClosePinnedTab: false,
+          confirmCloseAnyTab: false
+        } as AppState['settings'],
         requestPinnedTabCloseConfirm
       })
     )
 
-    guardPinnedTabClose({ isPinned: true, tabLabel: 'Docs', onClose })
+    guardTabClose({ isPinned: true, tabLabel: 'Docs', onClose })
 
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
   })
 
-  it('defaults to confirming when settings are not loaded yet', () => {
+  it('defaults to confirming pinned tabs when settings are not loaded yet', () => {
     const onClose = vi.fn()
     const requestPinnedTabCloseConfirm = vi.fn()
     getStateMock.mockReturnValue(makeState({ settings: null, requestPinnedTabCloseConfirm }))
 
-    guardPinnedTabClose({ isPinned: true, tabLabel: 'Docs', onClose })
+    guardTabClose({ isPinned: true, tabLabel: 'Docs', onClose })
 
     expect(onClose).not.toHaveBeenCalled()
     expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+    expect(requestPinnedTabCloseConfirm.mock.calls[0][0]).toMatchObject({ variant: 'pinned' })
+  })
+
+  it('requests an any-tab confirmation for a non-pinned tab when confirmCloseAnyTab is on and userInitiated', () => {
+    const onClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+    getStateMock.mockReturnValue(
+      makeState({
+        settings: { confirmClosePinnedTab: true, confirmCloseAnyTab: true } as AppState['settings'],
+        requestPinnedTabCloseConfirm
+      })
+    )
+
+    guardTabClose({ isPinned: false, tabLabel: 'Docs', userInitiated: true, onClose })
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledWith({
+      tabLabel: 'Docs',
+      variant: 'any',
+      onConfirm: onClose
+    })
+  })
+
+  it('does not open the any-tab dialog for a non-user-initiated close', () => {
+    const onClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+    getStateMock.mockReturnValue(
+      makeState({
+        settings: { confirmClosePinnedTab: true, confirmCloseAnyTab: true } as AppState['settings'],
+        requestPinnedTabCloseConfirm
+      })
+    )
+
+    // Why: lifecycle/CLI/remote closes omit userInitiated and must close immediately.
+    guardTabClose({ isPinned: false, tabLabel: 'Docs', onClose })
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
+  })
+
+  it('prefers the pinned variant when a pinned tab also matches confirmCloseAnyTab', () => {
+    const onClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+    getStateMock.mockReturnValue(
+      makeState({
+        settings: { confirmClosePinnedTab: true, confirmCloseAnyTab: true } as AppState['settings'],
+        requestPinnedTabCloseConfirm
+      })
+    )
+
+    guardTabClose({ isPinned: true, tabLabel: 'Docs', userInitiated: true, onClose })
+
+    expect(requestPinnedTabCloseConfirm.mock.calls[0][0]).toMatchObject({ variant: 'pinned' })
+  })
+
+  it('confirms via the any-tab variant for a pinned tab when only confirmCloseAnyTab is on', () => {
+    const onClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+    getStateMock.mockReturnValue(
+      makeState({
+        settings: {
+          confirmClosePinnedTab: false,
+          confirmCloseAnyTab: true
+        } as AppState['settings'],
+        requestPinnedTabCloseConfirm
+      })
+    )
+
+    guardTabClose({ isPinned: true, tabLabel: 'Docs', userInitiated: true, onClose })
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm.mock.calls[0][0]).toMatchObject({ variant: 'any' })
   })
 })
 
-describe('resolvePinnedTabLabel', () => {
+describe('resolveTabLabel', () => {
   it('uses the same label priority as the tab strip', () => {
     const state = makeState({
       settings: {
@@ -166,10 +245,10 @@ describe('resolvePinnedTabLabel', () => {
       } as unknown as AppState['unifiedTabsByWorktree']
     })
 
-    expect(resolvePinnedTabLabel(state, 'wt-1', 'a')).toBe('Custom')
-    expect(resolvePinnedTabLabel(state, 'wt-1', 'b')).toBe('Run tests')
-    expect(resolvePinnedTabLabel(state, 'wt-1', 'ec')).toBe('Gen')
-    expect(resolvePinnedTabLabel(state, 'wt-1', 'ed')).toBe('Plain')
+    expect(resolveTabLabel(state, 'wt-1', 'a')).toBe('Custom')
+    expect(resolveTabLabel(state, 'wt-1', 'b')).toBe('Run tests')
+    expect(resolveTabLabel(state, 'wt-1', 'ec')).toBe('Gen')
+    expect(resolveTabLabel(state, 'wt-1', 'ed')).toBe('Plain')
   })
 
   it('falls back to the live label when generated tab titles are disabled', () => {
@@ -192,11 +271,11 @@ describe('resolvePinnedTabLabel', () => {
       } as unknown as AppState['unifiedTabsByWorktree']
     })
 
-    expect(resolvePinnedTabLabel(state, 'wt-1', 'a')).toBe('Plain')
+    expect(resolveTabLabel(state, 'wt-1', 'a')).toBe('Plain')
   })
 
   it('returns an empty string when the tab is not found', () => {
-    expect(resolvePinnedTabLabel(makeState({}), 'wt-1', 'missing')).toBe('')
+    expect(resolveTabLabel(makeState({}), 'wt-1', 'missing')).toBe('')
   })
 })
 

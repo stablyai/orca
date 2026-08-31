@@ -7,10 +7,10 @@ import {
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
 import {
-  guardPinnedTabClose,
+  guardTabClose,
   isUnifiedTabPinned,
-  resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
+  resolveTabLabel
+} from '../../store/tab-close-guard'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import {
   createFloatingWorkspaceTerminalTab,
@@ -145,10 +145,13 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
             }
           }
         }
-        if (worktreeId && isUnifiedTabPinned(store, worktreeId, tabId)) {
-          guardPinnedTabClose({
-            isPinned: true,
-            tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
+        const pinned = Boolean(worktreeId) && isUnifiedTabPinned(store, worktreeId!, tabId)
+        const confirmAny = store.settings?.confirmCloseAnyTab ?? false
+        if (worktreeId && (pinned || confirmAny)) {
+          guardTabClose({
+            isPinned: pinned,
+            tabLabel: resolveTabLabel(store, worktreeId, tabId),
+            userInitiated: true,
             onClose: closeActiveBrowserTab
           })
           return

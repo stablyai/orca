@@ -151,6 +151,25 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
       ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.confirm_close_any_title',
+      'Confirm before closing any tab'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.confirm_close_any_description',
+      'Show a confirmation dialog before any tab is closed.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.confirm_close_any_kw',
+        'any'
+      )
+    ]
   }
 ])
 

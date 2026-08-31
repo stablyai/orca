@@ -6,10 +6,10 @@ import {
   SESSION_TAB_CLOSE_TIMEOUT_ERROR
 } from '../../../../shared/session-tab-close'
 import {
-  guardPinnedTabClose,
+  guardTabClose,
   isUnifiedTabPinned,
-  resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
+  resolveTabLabel
+} from '../../store/tab-close-guard'
 import { useAppStore } from '../../store'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 
@@ -19,16 +19,16 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       const store = useAppStore.getState()
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
       if (browserTarget) {
-        guardPinnedTabClose({
+        guardTabClose({
           isPinned: isUnifiedTabPinned(store, worktreeId, browserTarget.workspaceId),
-          tabLabel: resolvePinnedTabLabel(store, worktreeId, browserTarget.workspaceId),
+          tabLabel: resolveTabLabel(store, worktreeId, browserTarget.workspaceId),
           onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
         })
         return
       }
-      guardPinnedTabClose({
+      guardTabClose({
         isPinned: isUnifiedTabPinned(store, worktreeId, tabId),
-        tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
+        tabLabel: resolveTabLabel(store, worktreeId, tabId),
         onClose: () => {
           const currentStore = useAppStore.getState()
           closeMobileSessionTabInStore(currentStore, worktreeId, tabId)
@@ -81,9 +81,9 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         }
       }
       const visibleId = browserTarget?.workspaceId ?? tabId
-      cancelConfirmation = guardPinnedTabClose({
+      cancelConfirmation = guardTabClose({
         isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
-        tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
+        tabLabel: resolveTabLabel(store, worktreeId, visibleId),
         onClose: closeAndRespond,
         onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR)
       })

@@ -8,6 +8,7 @@ import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
+import { guardTabClose, resolveTabLabel } from '../../store/tab-close-guard'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -107,7 +108,7 @@ export function useTabGroupTabCloseCommands({
   )
 
   const closeItem = useCallback(
-    (itemId: string, opts?: { skipEmptyCheck?: boolean }) => {
+    (itemId: string, opts?: { skipEmptyCheck?: boolean; userInitiated?: boolean }) => {
       const item = groupTabs.find((candidate) => candidate.id === itemId)
       if (!item) {
         return
@@ -115,6 +116,9 @@ export function useTabGroupTabCloseCommands({
       if (item.isPinned) {
         return
       }
+      // Why: single-tab close gestures default to user-initiated; only these open
+      // the confirm-any-tab dialog. Bulk callers (close-all, empty-group) opt out.
+      const userInitiated = opts?.userInitiated ?? true
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         useAppStore.getState(),
         worktreeId
@@ -143,33 +147,55 @@ export function useTabGroupTabCloseCommands({
         return
       }
       if (item.contentType === 'terminal') {
-        // Why: closeTerminalTab can defer behind a pin / running-process dialog, so the
-        // empty check has to run on the actual close — never on cancel.
-        closeTerminalTab(
-          item.entityId,
-          opts?.skipEmptyCheck ? undefined : { onClosed: leaveWorktreeIfEmpty }
-        )
+        // Why: closeTerminalTab owns the pinned/confirm-any/running-process guards and can
+        // defer behind a dialog, so the empty check runs on the actual close, never on cancel.
+        closeTerminalTab(item.entityId, {
+          userInitiated,
+          ...(opts?.skipEmptyCheck ? {} : { onClosed: leaveWorktreeIfEmpty })
+        })
         return
       }
-      if (item.contentType === 'browser') {
-        const plan = closeBrowserItem(item, runtimeEnvironmentId)
-        // Why: the empty check below answers "the user emptied this worktree". Unwinding a create
-        // that never finished is not that — it must leave the selection as the click found it.
-        if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
-          return
+      const performClose = (): void => {
+        if (item.contentType === 'browser') {
+          const plan = closeBrowserItem(item, runtimeEnvironmentId)
+          // Why: the empty check below answers "the user emptied this worktree". Unwinding a create
+          // that never finished is not that — it must leave the selection as the click found it.
+          if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
+            return
+          }
+        } else if (item.contentType === 'simulator') {
+          closeUnifiedTab(item.id)
+        } else {
+          const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
+          if (!canCloseTab) {
+            return
+          }
+          closeUnifiedTab(item.id)
         }
-      } else if (item.contentType === 'simulator') {
-        closeUnifiedTab(item.id)
-      } else {
-        const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
-        if (!canCloseTab) {
-          return
+        if (!opts?.skipEmptyCheck) {
+          leaveWorktreeIfEmpty()
         }
-        closeUnifiedTab(item.id)
       }
-      if (!opts?.skipEmptyCheck) {
-        leaveWorktreeIfEmpty()
+      // Why: dirty editors already prompt via the save/discard dialog, so don't double-prompt.
+      const isDirtyEditor =
+        item.contentType !== 'browser' &&
+        item.contentType !== 'simulator' &&
+        (useAppStore.getState().openFiles.find((file) => file.id === item.entityId)?.isDirty ??
+          false)
+      if (
+        userInitiated &&
+        !isDirtyEditor &&
+        (useAppStore.getState().settings?.confirmCloseAnyTab ?? false)
+      ) {
+        guardTabClose({
+          isPinned: false,
+          tabLabel: resolveTabLabel(useAppStore.getState(), worktreeId, item.id),
+          userInitiated: true,
+          onClose: performClose
+        })
+        return
       }
+      performClose()
     },
     [
       closeBrowserItem,

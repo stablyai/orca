@@ -10,6 +10,7 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
+import { guardTabClose, resolveTabLabel } from '../store/tab-close-guard'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { useAllWorktrees } from '../store/selectors'
@@ -677,7 +678,18 @@ function Terminal(): React.JSX.Element | null {
       }
       const file = state.openFiles.find((f) => f.id === fileId)
       if (file?.isDirty) {
+        // Why: the unsaved-changes save/discard dialog is already a confirmation, so don't double-prompt.
         queueEditorCloseRequests([fileId])
+        return
+      }
+      // Why: clean editor tabs prompt only when confirm-any-tab is opted in.
+      if ((state.settings?.confirmCloseAnyTab ?? false) && activeWorktreeId) {
+        guardTabClose({
+          isPinned: false,
+          tabLabel: resolveTabLabel(state, activeWorktreeId, fileId),
+          userInitiated: true,
+          onClose: () => closeFile(fileId)
+        })
         return
       }
       closeFile(fileId)
@@ -1787,7 +1799,7 @@ function Terminal(): React.JSX.Element | null {
   }, [activeWorktreeId, openNewMarkdownInActiveWorkspace])
 
   const handleCloseTab = useCallback((tabId: string) => {
-    closeTerminalTab(tabId)
+    closeTerminalTab(tabId, { userInitiated: true })
   }, [])
 
   const handleCloseBrowserTab = useCallback(
@@ -1803,58 +1815,75 @@ function Terminal(): React.JSX.Element | null {
       if (isPinnedVisibleTab(state, owningWorktreeId, tabId)) {
         return
       }
-      const plan = closeBrowserWorkspaceTabOnHosts({
-        state,
-        worktreeId: owningWorktreeId,
-        workspaceId: tabId,
-        visibleTabId: tabId,
-        focusedEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, owningWorktreeId)
-      })
-      if (!plan.closesLocally) {
-        if (plan.removesVisibleTab) {
-          const mirroredTab = (state.unifiedTabsByWorktree[owningWorktreeId] ?? []).find(
-            (candidate) => candidate.contentType === 'browser' && candidate.entityId === tabId
-          )
-          if (mirroredTab) {
-            state.closeUnifiedTab(mirroredTab.id)
-          }
-        }
-        return
-      }
-      const closeOptions = plan.localCloseReason ? { reason: plan.localCloseReason } : undefined
-      const currentTabs = state.browserTabsByWorktree[owningWorktreeId] ?? []
-      if (currentTabs.length <= 1) {
-        const hasUnifiedEntry = Object.values(state.unifiedTabsByWorktree).some((tabs) =>
-          tabs.some((tab) => tab.contentType === 'browser' && tab.entityId === tabId)
-        )
-        closeBrowserTab(tabId, closeOptions)
-        // closeBrowserTab announces the MRU target before guest teardown can trigger bridge fallback.
-        destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
-        // Why: the fallback below answers "the user emptied this worktree". Unwinding a create
-        // that never finished is not that, so it must leave the selection as the click found it.
-        if (plan.localCloseReason === 'cleanup') {
-          return
-        }
-        if (!hasUnifiedEntry && state.activeWorktreeId === owningWorktreeId) {
-          const worktreeFile = state.openFiles.find((file) => file.worktreeId === owningWorktreeId)
-          if (worktreeFile) {
-            setActiveFile(worktreeFile.id)
-            setActiveTabType('editor')
-          } else {
-            const terminalTab = (state.tabsByWorktree[owningWorktreeId] ?? [])[0]
-            if (terminalTab) {
-              setActiveTab(terminalTab.id)
-              setActiveTabType('terminal')
-            } else {
-              setActiveWorktree(null)
+      // Why: re-read fresh state on confirm so a slow dialog answer doesn't act on a stale tab list.
+      const performClose = (): void => {
+        const latest = useAppStore.getState()
+        const plan = closeBrowserWorkspaceTabOnHosts({
+          state: latest,
+          worktreeId: owningWorktreeId,
+          workspaceId: tabId,
+          visibleTabId: tabId,
+          focusedEnvironmentId: getRuntimeEnvironmentIdForWorktree(latest, owningWorktreeId)
+        })
+        if (!plan.closesLocally) {
+          if (plan.removesVisibleTab) {
+            const mirroredTab = (latest.unifiedTabsByWorktree[owningWorktreeId] ?? []).find(
+              (candidate) => candidate.contentType === 'browser' && candidate.entityId === tabId
+            )
+            if (mirroredTab) {
+              latest.closeUnifiedTab(mirroredTab.id)
             }
           }
+          return
         }
+        const closeOptions = plan.localCloseReason ? { reason: plan.localCloseReason } : undefined
+        const currentTabs = latest.browserTabsByWorktree[owningWorktreeId] ?? []
+        if (currentTabs.length <= 1) {
+          const hasUnifiedEntry = Object.values(latest.unifiedTabsByWorktree).some((tabs) =>
+            tabs.some((tab) => tab.contentType === 'browser' && tab.entityId === tabId)
+          )
+          closeBrowserTab(tabId, closeOptions)
+          // closeBrowserTab announces the MRU target before guest teardown can trigger bridge fallback.
+          destroyWorkspaceWebviews(latest.browserPagesByWorkspace, tabId)
+          // Why: the fallback below answers "the user emptied this worktree". Unwinding a create
+          // that never finished is not that, so it must leave the selection as the click found it.
+          if (plan.localCloseReason === 'cleanup') {
+            return
+          }
+          if (!hasUnifiedEntry && latest.activeWorktreeId === owningWorktreeId) {
+            const worktreeFile = latest.openFiles.find(
+              (file) => file.worktreeId === owningWorktreeId
+            )
+            if (worktreeFile) {
+              setActiveFile(worktreeFile.id)
+              setActiveTabType('editor')
+            } else {
+              const terminalTab = (latest.tabsByWorktree[owningWorktreeId] ?? [])[0]
+              if (terminalTab) {
+                setActiveTab(terminalTab.id)
+                setActiveTabType('terminal')
+              } else {
+                setActiveWorktree(null)
+              }
+            }
+          }
+          return
+        }
+        closeBrowserTab(tabId, closeOptions)
+        // closeBrowserTab announces the MRU target before guest teardown can trigger bridge fallback.
+        destroyWorkspaceWebviews(latest.browserPagesByWorkspace, tabId)
+      }
+      // Why: unpinned browser closes prompt only when confirm-any-tab is opted in; otherwise close immediately.
+      if (state.settings?.confirmCloseAnyTab ?? false) {
+        guardTabClose({
+          isPinned: false,
+          tabLabel: resolveTabLabel(state, owningWorktreeId, tabId),
+          userInitiated: true,
+          onClose: performClose
+        })
         return
       }
-      closeBrowserTab(tabId, closeOptions)
-      // closeBrowserTab announces the MRU target before guest teardown can trigger bridge fallback.
-      destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
+      performClose()
     },
     [closeBrowserTab, setActiveFile, setActiveTab, setActiveTabType, setActiveWorktree]
   )

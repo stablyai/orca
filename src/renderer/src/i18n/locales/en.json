@@ -3211,7 +3211,10 @@
             "0d1963f4a6": "This tab is pinned. Are you sure you want to close it?",
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
-            "c337c9d75c": "Close"
+            "c337c9d75c": "Close",
+            "close_any_title": "Close tab?",
+            "close_any_description": "Are you sure you want to close this tab?",
+            "dont_ask_again_any": "Don't ask again when closing tabs"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
@@ -7009,7 +7012,10 @@
           "5cb5475664": "Confirm before closing pinned tabs",
           "36b2a5dc6d": "Show a confirmation dialog before a pinned tab is closed.",
           "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it.",
+          "confirm_close_any_title": "Confirm before closing any tab",
+          "confirm_close_any_description": "Show a confirmation dialog before any tab is closed.",
+          "confirm_close_any_kw": "any"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -9446,7 +9452,10 @@
             "editorFontFamily": "Editor Font Family",
             "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
             "externalWorktrees": "External worktrees",
-            "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default."
+            "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default.",
+            "confirm_close_any_title": "Confirm before closing any tab",
+            "confirm_close_any_description": "Show a confirmation dialog before any tab is closed.",
+            "confirm_close_any_kw": "any"
           }
         },
         "git": {

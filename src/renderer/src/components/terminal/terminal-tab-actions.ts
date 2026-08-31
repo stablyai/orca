@@ -9,13 +9,8 @@ import {
   resolveHostSessionTabIdForWebSessionTab
 } from '@/runtime/web-session-tabs-sync'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { guardTabClose, isUnifiedTabPinned, resolveTabLabel } from '@/store/tab-close-guard'
 import { translate } from '@/i18n/i18n'
-import {
-  guardPinnedTabClose,
-  isUnifiedTabPinned,
-  resolvePinnedTabLabel,
-  shouldConfirmPinnedTabClose
-} from '@/store/pinned-tab-close-guard'
 import {
   closeStructuredTerminalSessionWithRetry,
   disposeStructuredTerminalSession,
@@ -46,6 +41,11 @@ export function closeTerminalTab(
   options?: {
     force?: boolean
     rejectPinned?: boolean
+    /** Set by genuine single-tab user close gestures (✕, context-menu Close,
+     *  Cmd/Ctrl+W). Only these open the opt-in confirm-any-tab dialog; bulk and
+     *  autonomous lifecycle closes must not, or switching away from a tab whose
+     *  PTY later exits would prompt for a tab the user isn't looking at. */
+    userInitiated?: boolean
     reason?: TerminalTabCloseReason
     /** Close reason sent to the host only. Unlike `reason`, it does not skip
      *  local guards (pinned confirmation keys off `reason === 'pty-exit'`),
@@ -97,26 +97,29 @@ export function closeTerminalTab(
     return
   }
 
-  // Why: a pinned tab routes through the confirmation guard instead of closing
-  // outright. `force` is the post-confirmation re-entry, which skips the guard.
-  if (
-    options?.reason !== 'pty-exit' &&
-    !options?.force &&
-    isUnifiedTabPinned(state, owningWorktreeId, terminalTabId)
-  ) {
-    // Why: background lifecycle callers cannot safely wait on a modal whose
-    // owner may be unattended; reject pinned tabs without bypassing the guard.
-    if (options?.rejectPinned) {
+  // Why: a pinned tab (always, unless disabled) or any tab (only for genuine
+  // user close gestures, when opted in) routes through the confirmation guard
+  // instead of closing outright. `force` is the post-confirmation re-entry, which
+  // skips the guard. `pty-exit` never prompts. Pinned confirmation supersedes the
+  // running-process prompt, so its `force` re-entry deliberately bypasses it too.
+  if (options?.reason !== 'pty-exit' && !options?.force) {
+    const pinned = isUnifiedTabPinned(state, owningWorktreeId, terminalTabId)
+    // Why: rejectPinned must refuse a pinned tab even when pin confirmation is
+    // off, so a background CLI/lifecycle close never silently removes a pinned tab.
+    if (pinned && options?.rejectPinned) {
       options.onCancel?.()
       return
     }
-    // Why: the pin prompt supersedes the running-process one only when it actually
-    // appears. With `confirmClosePinnedTab` off it says nothing, so fall through and let
-    // a busy pinned tab still get asked — Cmd+W did exactly that before #10142.
-    if (shouldConfirmPinnedTabClose(state)) {
-      guardPinnedTabClose({
-        isPinned: true,
-        tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+    const confirmPinned = pinned && (state.settings?.confirmClosePinnedTab ?? true)
+    const confirmAny =
+      options?.userInitiated === true && (state.settings?.confirmCloseAnyTab ?? false)
+    // Why: a non-pinned rejectPinned caller closes immediately rather than opening
+    // a dialog it cannot answer; only genuine gestures route through the guard.
+    if ((confirmPinned || confirmAny) && !options?.rejectPinned) {
+      guardTabClose({
+        isPinned: pinned,
+        tabLabel: resolveTabLabel(state, owningWorktreeId, terminalTabId),
+        userInitiated: options?.userInitiated === true,
         onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
         ...(options?.onCancel ? { onCancel: options.onCancel } : {})
       })
@@ -126,11 +129,13 @@ export function closeTerminalTab(
 
   // Why: the X button, middle-click and the tab menu used to skip the running-process
   // prompt that Cmd+W enforced (#10142). Guarding here — above the web-runtime branch so
-  // host-backed tabs are covered too — gives every close path one shared policy.
+  // host-backed tabs are covered too — gives every close path one shared policy. A tab
+  // that already passed the pinned/any dialog re-enters with `force`, which
+  // `shouldConfirmRunningTerminalClose` treats as a skip, so it is never double-prompted.
   if (shouldConfirmRunningTerminalClose(options)) {
     guardRunningTerminalClose({
       terminalTabId,
-      tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+      tabLabel: resolveTabLabel(state, owningWorktreeId, terminalTabId),
       // Why: re-enter instead of continuing inline so pinned/route/precomputed state is
       // re-validated against fresh state after an arbitrarily long dialog.
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),

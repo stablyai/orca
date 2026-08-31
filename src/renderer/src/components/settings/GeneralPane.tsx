@@ -77,6 +77,37 @@ export function getTabOrderControlSearchKeywords(
 
 const EMPTY_WSL_DISTROS: string[] = []
 
+function TabCloseConfirmToggle({
+  titleKey,
+  titleFallback,
+  descriptionKey,
+  descriptionFallback,
+  keywords,
+  checked,
+  onToggle
+}: {
+  titleKey: string
+  titleFallback: string
+  descriptionKey: string
+  descriptionFallback: string
+  keywords: string[]
+  checked: boolean
+  onToggle: () => void
+}): React.JSX.Element {
+  const title = translate(titleKey, titleFallback)
+  const description = translate(descriptionKey, descriptionFallback)
+  return (
+    <SearchableSetting title={title} description={description} keywords={keywords}>
+      <SettingsSwitchRow
+        label={title}
+        description={description}
+        checked={checked}
+        onChange={onToggle}
+      />
+    </SearchableSetting>
+  )
+}
+
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -132,32 +163,28 @@ export function GeneralPane({
           keywords={tabOrderKeywords}
           updateSettings={updateSettings}
         />
-        <SearchableSetting
-          title={translate(
-            'auto.components.settings.GeneralPane.5cb5475664',
-            'Confirm before closing pinned tabs'
-          )}
-          description={translate(
-            'auto.components.settings.GeneralPane.36b2a5dc6d',
-            'Show a confirmation dialog before a pinned tab is closed.'
-          )}
+        <TabCloseConfirmToggle
+          titleKey="auto.components.settings.GeneralPane.5cb5475664"
+          titleFallback="Confirm before closing pinned tabs"
+          descriptionKey="auto.components.settings.GeneralPane.36b2a5dc6d"
+          descriptionFallback="Show a confirmation dialog before a pinned tab is closed."
           keywords={['pinned', 'tab', 'confirm', 'close']}
-        >
-          <SettingsSwitchRow
-            label={translate(
-              'auto.components.settings.GeneralPane.5cb5475664',
-              'Confirm before closing pinned tabs'
-            )}
-            description={translate(
-              'auto.components.settings.GeneralPane.36b2a5dc6d',
-              'Show a confirmation dialog before a pinned tab is closed.'
-            )}
-            checked={settings.confirmClosePinnedTab ?? true}
-            onChange={() =>
-              updateSettings({ confirmClosePinnedTab: !(settings.confirmClosePinnedTab ?? true) })
-            }
-          />
-        </SearchableSetting>
+          checked={settings.confirmClosePinnedTab ?? true}
+          onToggle={() =>
+            updateSettings({ confirmClosePinnedTab: !(settings.confirmClosePinnedTab ?? true) })
+          }
+        />
+        <TabCloseConfirmToggle
+          titleKey="auto.components.settings.GeneralPane.confirm_close_any_title"
+          titleFallback="Confirm before closing any tab"
+          descriptionKey="auto.components.settings.GeneralPane.confirm_close_any_description"
+          descriptionFallback="Show a confirmation dialog before any tab is closed."
+          keywords={['tab', 'confirm', 'close', 'any', 'all']}
+          checked={settings.confirmCloseAnyTab ?? false}
+          onToggle={() =>
+            updateSettings({ confirmCloseAnyTab: !(settings.confirmCloseAnyTab ?? false) })
+          }
+        />
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (

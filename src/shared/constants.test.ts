@@ -77,6 +77,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })
 
+  it('does not confirm before closing any tab by default', () => {
+    expect(getDefaultSettings('/tmp').confirmCloseAnyTab).toBe(false)
+  })
+
   it('keeps file-editor word wrapping enabled by default', () => {
     expect(getDefaultSettings('/tmp').editorWordWrap).toBe(true)
   })
