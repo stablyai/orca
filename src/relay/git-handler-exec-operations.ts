@@ -29,8 +29,12 @@ export class GitHandlerExecOperations extends GitHandlerOperationContext {
     if (args[0] !== 'clone') {
       throw new Error('git.clone only supports clone commands.')
     }
+    // Why: string-guard forwarded proxy values; buildConfiguredProxyEnv turns a malformed value into no proxy env rather than an arbitrary git env string.
+    const proxyUrl = typeof params.proxyUrl === 'string' ? params.proxyUrl : undefined
+    const proxyBypassRules =
+      typeof params.proxyBypassRules === 'string' ? params.proxyBypassRules : undefined
     return await this.runWithGitReadCacheClear(() =>
-      this.spawnClone(args, cwd, progressId, context)
+      this.spawnClone(args, cwd, progressId, { proxyUrl, proxyBypassRules }, context)
     )
   }
 

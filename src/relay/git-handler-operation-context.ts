@@ -34,6 +34,7 @@ export type GitHandlerOperationHost = {
     args: string[],
     cwd: string,
     progressId: string,
+    proxy: { proxyUrl?: string; proxyBypassRules?: string },
     context?: RequestContext
   ): Promise<GitHandlerCommandResult>
   clearGitMutationReadCaches(): void
@@ -80,9 +81,10 @@ export abstract class GitHandlerOperationContext {
     args: string[],
     cwd: string,
     progressId: string,
+    proxy: { proxyUrl?: string; proxyBypassRules?: string },
     context?: RequestContext
   ): Promise<GitHandlerCommandResult> {
-    return this.host.spawnClone(args, cwd, progressId, context)
+    return this.host.spawnClone(args, cwd, progressId, proxy, context)
   }
 
   protected clearGitMutationReadCaches(): void {

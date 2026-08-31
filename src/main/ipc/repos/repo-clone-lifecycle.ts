@@ -9,6 +9,7 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { getGitCloneFailureMessage } from '../../../shared/git-clone-failure-message'
 import { gitSpawnAfterWindowsEnvironmentReady, nonInteractiveGitEnv } from '../../git/runner'
+import { gitCloneEnvWithProxy } from '../../git/git-clone-proxy-env'
 import { getRepoName } from '../../git/repo'
 import type { ClaimedCloneTarget } from '../../git/repo-clone-path'
 import {
@@ -147,7 +148,8 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               cwd: args.destination,
               admissionTier: 'interactive',
               // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
-              env: nonInteractiveGitEnv(),
+              // Why: honor the app's configured proxy so clones route through it like other Orca network children.
+              env: gitCloneEnvWithProxy(nonInteractiveGitEnv(), store.getSettings()),
               signal: pendingController.signal,
               stdio: ['ignore', 'ignore', 'pipe']
             }

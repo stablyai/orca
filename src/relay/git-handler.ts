@@ -16,6 +16,7 @@ import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-ca
 import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
+import { buildConfiguredProxyEnv } from '../shared/network-proxy'
 import type {
   GitHandlerCommandOptions,
   GitHandlerCommandResult,
@@ -89,8 +90,8 @@ export class GitHandler {
       git: (args, cwd, opts) =>
         opts === undefined ? this.git(args, cwd) : this.git(args, cwd, opts),
       gitBuffer: (args, cwd) => this.gitBuffer(args, cwd),
-      spawnClone: (args, cwd, progressId, context) =>
-        this.spawnClone(args, cwd, progressId, context),
+      spawnClone: (args, cwd, progressId, proxy, context) =>
+        this.spawnClone(args, cwd, progressId, proxy, context),
       clearGitMutationReadCaches: () => this.clearGitMutationReadCaches(),
       runWithGitReadCacheClear: (run) => this.runWithGitReadCacheClear(run),
       maybeStreamResponse: (result, params, context) =>
@@ -207,12 +208,17 @@ export class GitHandler {
     args: string[],
     cwd: string,
     progressId: string,
+    proxy: { proxyUrl?: string; proxyBypassRules?: string },
     context?: RequestContext
   ): Promise<{ stdout: string; stderr: string }> {
+    const proxyEnv = buildConfiguredProxyEnv({
+      httpProxyUrl: proxy.proxyUrl,
+      httpProxyBypassRules: proxy.proxyBypassRules
+    })
     return await new Promise((resolve, reject) => {
       const child = spawn('git', args, {
         cwd: expandTilde(cwd),
-        env: buildRelayUnattendedGitEnv(),
+        env: { ...buildRelayUnattendedGitEnv(), ...proxyEnv },
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let stdout = ''

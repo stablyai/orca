@@ -215,7 +215,9 @@ export function AdvancedNetworkSettingsSection({
         'no_proxy',
         'network',
         'bypass',
-        'localhost'
+        'localhost',
+        'git',
+        'clone'
       ]}
       className="space-y-3"
     >

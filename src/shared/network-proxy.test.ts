@@ -63,6 +63,19 @@ describe('network proxy settings', () => {
     expect(buildConfiguredProxyEnv({ httpProxyUrl: '' })).toEqual({})
   })
 
+  it('builds socks5 proxy env so libcurl-backed git clone can route through it', () => {
+    expect(buildConfiguredProxyEnv({ httpProxyUrl: 'socks5://127.0.0.1:1080' })).toEqual({
+      HTTP_PROXY: 'socks5://127.0.0.1:1080',
+      HTTPS_PROXY: 'socks5://127.0.0.1:1080',
+      ALL_PROXY: 'socks5://127.0.0.1:1080',
+      http_proxy: 'socks5://127.0.0.1:1080',
+      https_proxy: 'socks5://127.0.0.1:1080',
+      all_proxy: 'socks5://127.0.0.1:1080',
+      NO_PROXY: '',
+      no_proxy: ''
+    })
+  })
+
   it('redacts credentials for diagnostics', () => {
     expect(redactProxyUrl('http://user:pass@proxy.example:8080')).toBe(
       'http://***:***@proxy.example:8080'

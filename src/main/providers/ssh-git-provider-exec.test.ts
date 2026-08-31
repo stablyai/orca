@@ -69,6 +69,36 @@ describe('SshGitProvider', () => {
     )
   })
 
+  it('forwards a configured proxy to the git.clone request', async () => {
+    mux.onNotificationByMethod.mockReturnValue(vi.fn())
+    mux.request.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await provider.clone(['clone', '--progress', '--', 'url', 'repo'], '/home/user', {
+      proxyUrl: 'socks5://127.0.0.1:1080',
+      proxyBypassRules: 'localhost;*.internal'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.clone',
+      expect.objectContaining({
+        proxyUrl: 'socks5://127.0.0.1:1080',
+        proxyBypassRules: 'localhost;*.internal'
+      }),
+      expect.anything()
+    )
+  })
+
+  it('omits proxy fields from git.clone when none is configured', async () => {
+    mux.onNotificationByMethod.mockReturnValue(vi.fn())
+    mux.request.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await provider.clone(['clone', '--progress', '--', 'url', 'repo'], '/home/user')
+
+    const params = mux.request.mock.calls[0][1]
+    expect(params).not.toHaveProperty('proxyUrl')
+    expect(params).not.toHaveProperty('proxyBypassRules')
+  })
+
   it('execNonInteractive delegates fixed binary commands to the relay', async () => {
     const execResult = {
       stdout: '10.0.0\n',

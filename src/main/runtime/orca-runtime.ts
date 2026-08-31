@@ -167,6 +167,7 @@ import {
   gitSpawnAfterWindowsEnvironmentReady,
   nonInteractiveGitEnv
 } from '../git/runner'
+import { gitCloneEnvWithProxy } from '../git/git-clone-proxy-env'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
@@ -1517,6 +1518,9 @@ type RuntimeStore = {
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
+    // Why: git clone honors the app's configured proxy (see gitCloneEnvWithProxy).
+    httpProxyUrl?: GlobalSettings['httpProxyUrl']
+    httpProxyBypassRules?: GlobalSettings['httpProxyBypassRules']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value
@@ -24006,7 +24010,8 @@ export class OrcaRuntimeService {
           // window on Windows; in a network-restricted env the browser/device
           // flow can never complete and git's credential retry re-pops it
           // (issue #7652). Fail fast with a clear error instead.
-          env: nonInteractiveGitEnv(),
+          // Why: honor the app's configured proxy so clones route through it like other Orca network children.
+          env: gitCloneEnvWithProxy(nonInteractiveGitEnv(), this.store?.getSettings()),
           stdio: ['ignore', 'ignore', 'pipe']
         }
       )

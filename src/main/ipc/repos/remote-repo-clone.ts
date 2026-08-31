@@ -84,12 +84,18 @@ export async function cloneRemoteRepo(
     // Why: match local clone by creating the parent first, or a fresh remote parent surfaces as spawn ENOENT.
     await fsProvider.createDir(trimmedDestination)
     // Why: the SSH relay runs git argv, not a shell; use the repo folder name so git creates it under the chosen parent.
+    const settings = store.getSettings()
     await gitProvider.clone(
       ['clone', '--progress', '--', args.url.trim(), repoName],
       trimmedDestination,
       {
         signal: controller.signal,
         timeoutMs: 10 * 60_000,
+        // Why: forward the configured proxy so the remote clone routes through it (the relay can't see the desktop's proxy env).
+        ...(settings.httpProxyUrl?.trim() ? { proxyUrl: settings.httpProxyUrl.trim() } : {}),
+        ...(settings.httpProxyBypassRules?.trim()
+          ? { proxyBypassRules: settings.httpProxyBypassRules.trim() }
+          : {}),
         onProgress: (progress) => {
           if (!mainWindow.isDestroyed()) {
             mainWindow.webContents.send('repos:clone-progress', progress)
