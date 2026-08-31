@@ -20,6 +20,7 @@ export function buildRelayHookEnvelope(
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
     tabId: event.tabId,
     worktreeId: event.worktreeId,
+    hookCwd: event.hookCwd,
     connectionId: null,
     hasExplicitPrompt: event.hasExplicitPrompt,
     promptInteractionKey: event.promptInteractionKey,

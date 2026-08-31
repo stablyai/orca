@@ -18,6 +18,7 @@ export type Body = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
+  hookCwd?: string
   env?: string
   version?: string
   payload: Record<string, unknown>

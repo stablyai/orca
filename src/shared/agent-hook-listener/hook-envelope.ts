@@ -39,6 +39,7 @@ type HookMetadata = {
   tabId?: string
   launchToken?: string
   worktreeId?: string
+  hookCwd?: string
   env?: string
   version?: string
 }
@@ -56,12 +57,13 @@ function readPackedHookMetadata(
     return null
   }
   // POSIX command substitution strips NUL bytes, so use the shell-safe unit separator.
+  // Why: older wrappers pack 6 fields without hookCwd; both lengths decode.
   const fields = decoded.split('\x1f')
-  if (fields.length !== 6 || !fields[0]) {
+  if ((fields.length !== 6 && fields.length !== 7) || !fields[0]) {
     return null
   }
-  const [paneKey, tabId, launchToken, worktreeId, env, version] = fields
-  return { paneKey, tabId, launchToken, worktreeId, env, version }
+  const [paneKey, tabId, launchToken, worktreeId, env, version, hookCwd] = fields
+  return { paneKey, tabId, launchToken, worktreeId, hookCwd, env, version }
 }
 
 /** Rebuilds the canonical envelope for POSIX hooks that carry raw JSON bodies. */
@@ -95,12 +97,22 @@ function readEnvelopeString(record: Record<string, unknown>, key: string): strin
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+// Why: a path is significant as sent (trailing whitespace can be part of a real directory name), so reject blanks but never trim.
+function readEnvelopePath(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key]
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return undefined
+  }
+  return value
+}
+
 export type ParsedHookEnvelope = {
   record: Record<string, unknown>
   paneKey: string
   hookPayloadRecord: Record<string, unknown>
   tabId?: string
   worktreeId?: string
+  hookCwd?: string
   launchToken?: string
 }
 
@@ -157,6 +169,7 @@ export function parseHookEnvelope(
     hookPayloadRecord: hookPayload as Record<string, unknown>,
     tabId,
     worktreeId: readEnvelopeString(record, 'worktreeId'),
+    hookCwd: readEnvelopePath(record, 'hookCwd'),
     launchToken: readEnvelopeString(record, 'launchToken')
   }
 }

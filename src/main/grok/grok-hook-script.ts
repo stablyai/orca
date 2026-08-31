@@ -56,6 +56,7 @@ export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): strin
     '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
     '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
+    '  --data-urlencode "hookCwd=${PWD}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "grokHome=${grok_home}" \\',

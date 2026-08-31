@@ -33,6 +33,11 @@ import {
 import { buildPosixAgentHookPostCommand } from './hook-post-command'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
+import {
+  installRemoteManagedAgentHooks,
+  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+} from './remote-managed-hook-installers'
+import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 
 let tmpDir: string
 let configPath: string
@@ -869,6 +874,8 @@ describe('buildWindowsAgentHookPostCommand', () => {
     expect(command).toContain('-H "Content-Type: application/x-www-form-urlencoded"')
     expect(command).toContain('-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"')
     expect(command).toContain('--data-urlencode "paneKey=%ORCA_PANE_KEY%"')
+    expect(command).toContain('--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"')
+    expect(command).toContain('--data-urlencode "hookCwd=%CD%"')
     expect(command).toContain('--data-urlencode "payload@-"')
     expect(command).toContain('/hook/codex')
     expect(command).not.toContain('powershell')
@@ -894,9 +901,12 @@ describe('buildPosixAgentHookPostCommand', () => {
     expect(command).toContain('Content-Type: application/json')
     expect(command).toContain('X-Orca-Agent-Hook-Meta-Encoding: base64')
     expect(command).toContain('X-Orca-Agent-Hook-Meta: ${orca_hook_metadata}')
-    expect(command).toContain("printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s'")
+    expect(command).toContain("printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s\\037%s'")
     expect(command).toContain('$ORCA_PANE_KEY')
     expect(command).toContain('$ORCA_WORKTREE_ID')
+    // Why: the live cwd rides the packed metadata as the trailing field, so
+    // raw-JSON posters attribute rows the same way form posters do (#10572).
+    expect(command).toContain('"$ORCA_AGENT_HOOK_VERSION" "$PWD"')
     expect(command).toContain('--data-binary @-')
     expect(command).toContain('Content-Type: application/x-www-form-urlencoded')
     expect(command).toContain('--data-urlencode "payload@-"')
@@ -916,6 +926,7 @@ describe('buildWindowsAgentHookCurlPostCommand', () => {
     expect(command).toContain('-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"')
     expect(command).toContain('--data-urlencode "paneKey=%ORCA_PANE_KEY%"')
     expect(command).toContain('--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"')
+    expect(command).toContain('--data-urlencode "hookCwd=%CD%"')
     // Why: `payload@-` makes curl read raw bytes from stdin and urlencode them,
     // so UTF-8 prompts survive without a code-page conversion.
     expect(command).toContain('--data-urlencode "payload@-"')
@@ -926,5 +937,29 @@ describe('buildWindowsAgentHookCurlPostCommand', () => {
 
   it('targets the requested hook source endpoint', () => {
     expect(buildWindowsAgentHookCurlPostCommand('grok')).toContain('/hook/grok')
+  })
+})
+
+describe('managed hook wrapper hookCwd reporting (#10572)', () => {
+  it('every installed wrapper that posts worktreeId also posts the live cwd as hookCwd', async () => {
+    const results = await installRemoteManagedAgentHooks(
+      createManagedHookLocalFilesystem(),
+      tmpDir,
+      {
+        grokHomeDir: join(tmpDir, '.grok'),
+        agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+      }
+    )
+    expect(results.filter((result) => result.state === 'error')).toEqual([])
+
+    const scriptDir = join(tmpDir, '.orca', 'agent-hooks')
+    const posters = readdirSync(scriptDir).filter((name) =>
+      /worktreeId\s*=/.test(readFileSync(join(scriptDir, name), 'utf-8'))
+    )
+    expect(posters.length).toBeGreaterThan(0)
+    for (const name of posters) {
+      const content = readFileSync(join(scriptDir, name), 'utf-8')
+      expect(content, name).toMatch(/hookCwd\s*=/)
+    }
   })
 })

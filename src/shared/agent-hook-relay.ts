@@ -75,6 +75,8 @@ export type AgentHookRelayEnvelope = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
+  /** The agent's live session cwd at hook time, forwarded from the CLI POST body. */
+  hookCwd?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */
   connectionId: null
   /** Preserved from the relay-side normalized hook event so Orca can

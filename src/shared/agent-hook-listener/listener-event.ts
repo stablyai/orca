@@ -10,6 +10,8 @@ export type AgentHookEventPayload = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
+  /** The agent's live session cwd at hook time ($PWD of the managed wrapper), when the wrapper reported it. */
+  hookCwd?: string
   /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
    *  in-flight events from a superseded connection after an SSH reconnect. */
   connectionId: string | null

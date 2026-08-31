@@ -39355,6 +39355,185 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  describe('agent cwd attribution (#10572)', () => {
+    const SIBLING_WORKTREE_PATH = '/tmp/worktree-b'
+    const SIBLING_WORKTREE_ID = `${TEST_REPO_ID}::${SIBLING_WORKTREE_PATH}`
+    const AGENT_LEAF_ID = '77777777-7777-4777-8777-777777777777'
+    const AGENT_PANE_KEY = `tab-1:${AGENT_LEAF_ID}`
+
+    function makeTwoWorktreeStore() {
+      vi.mocked(listWorktrees).mockResolvedValue([
+        ...MOCK_GIT_WORKTREES,
+        {
+          path: SIBLING_WORKTREE_PATH,
+          head: 'def',
+          branch: 'feature/bar',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'tab-1',
+              ptyId: null,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Kimi',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        }
+      })
+      return runtimeStore
+    }
+
+    it('attributes a row to the worktree its hookCwd points into', async () => {
+      const runtimeStore = makeTwoWorktreeStore()
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: AGENT_PANE_KEY,
+            worktreeId: TEST_WORKTREE_ID,
+            hookCwd: `${SIBLING_WORKTREE_PATH}/nested/dir`,
+            tabId: 'tab-1',
+            state: 'working',
+            prompt: 'port the patch',
+            agentType: 'kimi',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      })
+
+      const { worktrees } = await runtime.getWorktreePs()
+
+      expect(
+        worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents
+      ).toEqual([])
+      expect(
+        worktrees.find((worktree) => worktree.worktreeId === SIBLING_WORKTREE_ID)?.agents
+      ).toEqual([expect.objectContaining({ paneKey: AGENT_PANE_KEY, prompt: 'port the patch' })])
+    })
+
+    it('falls back to the pane OSC7-tracked cwd when the row carries no hookCwd', async () => {
+      const runtimeStore = makeTwoWorktreeStore()
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: AGENT_PANE_KEY,
+            worktreeId: TEST_WORKTREE_ID,
+            tabId: 'tab-1',
+            state: 'working',
+            prompt: 'port the patch',
+            agentType: 'kimi',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Kimi',
+            activeLeafId: AGENT_LEAF_ID,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: AGENT_LEAF_ID,
+            paneRuntimeId: 1,
+            ptyId: 'pty-1'
+          }
+        ]
+      })
+      runtime.registerPty('pty-1', TEST_WORKTREE_ID)
+      runtime.onPtyData('pty-1', `\x1b]7;file://localhost${SIBLING_WORKTREE_PATH}\x07`, 1)
+
+      const { worktrees } = await runtime.getWorktreePs()
+
+      expect(
+        worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents
+      ).toEqual([])
+      expect(
+        worktrees.find((worktree) => worktree.worktreeId === SIBLING_WORKTREE_ID)?.agents
+      ).toEqual([expect.objectContaining({ paneKey: AGENT_PANE_KEY, prompt: 'port the patch' })])
+    })
+
+    it('keeps tab attribution when neither hookCwd nor a tracked cwd exists', async () => {
+      const runtimeStore = makeTwoWorktreeStore()
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: AGENT_PANE_KEY,
+            worktreeId: TEST_WORKTREE_ID,
+            tabId: 'tab-1',
+            state: 'working',
+            prompt: 'port the patch',
+            agentType: 'kimi',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      })
+
+      const { worktrees } = await runtime.getWorktreePs()
+
+      expect(
+        worktrees.find((worktree) => worktree.worktreeId === SIBLING_WORKTREE_ID)?.agents
+      ).toEqual([])
+      expect(
+        worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents
+      ).toEqual([expect.objectContaining({ paneKey: AGENT_PANE_KEY, prompt: 'port the patch' })])
+    })
+
+    it('keeps tab attribution when hookCwd matches no visible worktree', async () => {
+      const runtimeStore = makeTwoWorktreeStore()
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: AGENT_PANE_KEY,
+            worktreeId: TEST_WORKTREE_ID,
+            hookCwd: '/tmp/unrelated-scratch',
+            tabId: 'tab-1',
+            state: 'working',
+            prompt: 'port the patch',
+            agentType: 'kimi',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      })
+
+      const { worktrees } = await runtime.getWorktreePs()
+
+      expect(
+        worktrees.find((worktree) => worktree.worktreeId === SIBLING_WORKTREE_ID)?.agents
+      ).toEqual([])
+      expect(
+        worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.agents
+      ).toEqual([expect.objectContaining({ paneKey: AGENT_PANE_KEY, prompt: 'port the patch' })])
+    })
+  })
+
   it('keeps a fresh OSC row when the cached hook row for the same pane is older', async () => {
     const now = Date.now()
     const leafId = '44444444-4444-4444-8444-444444444444'

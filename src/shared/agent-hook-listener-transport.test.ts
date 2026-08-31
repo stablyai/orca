@@ -116,6 +116,30 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('decodes a trailing packed hookCwd field without trimming path text', () => {
+    const merged = mergeAgentHookRequestHeaders(
+      { hook_event_name: 'UserPromptSubmit', prompt: 'hello' },
+      {
+        'x-orca-agent-hook-meta-encoding': 'base64',
+        'x-orca-agent-hook-meta': packedMetadata(
+          paneKey,
+          'tab-1',
+          '',
+          'repo::/tmp/work',
+          'production',
+          '1',
+          '/tmp/work'
+        )
+      }
+    )
+
+    expect(merged).toMatchObject({
+      paneKey,
+      worktreeId: 'repo::/tmp/work',
+      hookCwd: '/tmp/work'
+    })
+  })
+
   it('keeps raw envelope-like fields inside the agent payload', () => {
     const rawBody = {
       paneKey: 'payload-owned-pane',

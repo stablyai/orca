@@ -28,7 +28,7 @@ export function normalizeHookPayload(
   if (!envelope) {
     return null
   }
-  const { record, paneKey, hookPayloadRecord, tabId, worktreeId, launchToken } = envelope
+  const { record, paneKey, hookPayloadRecord, tabId, worktreeId, hookCwd, launchToken } = envelope
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   }
@@ -133,6 +133,7 @@ export function normalizeHookPayload(
     launchToken,
     tabId,
     worktreeId,
+    hookCwd,
     // Normalization is transport-agnostic; only ingestRemote knows the mux identity to stamp.
     connectionId: null,
     ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),

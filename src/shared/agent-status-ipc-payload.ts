@@ -29,6 +29,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   terminalHandle?: string
   tabId?: string
   worktreeId?: string
+  /** The agent's live session cwd reported by the managed hook wrapper; worktree attribution prefers it over launch-time identity. */
+  hookCwd?: string
   /** Identifies the SSH connection the event arrived on, or null for local.
    *  Only the remote-ingest path (`ingestRemote`) can stamp it from mux identity; the HTTP path has no mux and always sets null. */
   connectionId: string | null

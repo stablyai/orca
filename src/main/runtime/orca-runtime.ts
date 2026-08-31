@@ -1953,6 +1953,7 @@ type RuntimeWorktreeAgentSource = {
   ptyId?: string
   tabId?: string
   worktreeId?: string
+  hookCwd: string | null
   connectionId: string | null
   payload: ParsedAgentStatusPayload
   state: ParsedAgentStatusPayload['state']
@@ -22998,6 +22999,49 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why: attribution must never throw — a malformed cwd or graph gap degrades to
+  // the caller's fallback, not a dropped agent row.
+  private worktreeIdForAgentCwd(
+    cwd: string,
+    summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
+    fallback: string
+  ): string {
+    try {
+      const trimmed = cwd.trim()
+      if (trimmed.length === 0) {
+        return fallback
+      }
+      // Longest worktree path containing the cwd wins, so nested worktrees attribute correctly.
+      let best: RuntimeWorktreePsSummary | null = null
+      for (const summary of summaries.values()) {
+        if (isPathInsideOrEqual(summary.path, trimmed)) {
+          if (!best || summary.path.length > best.path.length) {
+            best = summary
+          }
+        }
+      }
+      return best?.worktreeId ?? fallback
+    } catch {
+      return fallback
+    }
+  }
+
+  // Why: hook rows carry no ptyId, so resolve the pane's leaf to its live PTY
+  // before consulting the OSC7 cwd map; any gap degrades to null (base attribution).
+  private trackedTerminalCwdForAgentRow(paneKey: string, ptyId: string | undefined): string | null {
+    try {
+      const parsed = parsePaneKey(paneKey)
+      const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : null
+      const resolvedPtyId = leaf?.ptyId ?? ptyId
+      if (!resolvedPtyId) {
+        return null
+      }
+      return this.terminalCwdByPtyId.get(resolvedPtyId) ?? null
+    } catch {
+      return null
+    }
+  }
+
   // Why: maps the retained per-pane agent snapshots into each worktree's inline
   // agent list, mirroring the desktop sidebar. Lineage parent is resolved from
   // the orchestration db (paneKey-keyed), not the OSC payload, since spawn
@@ -23029,6 +23073,8 @@ export class OrcaRuntimeService {
         ptyId: snapshot.ptyId,
         tabId: snapshot.tabId,
         worktreeId: snapshot.worktreeId,
+        // Why: OSC rows never carry a hook cwd; their attribution fallback is the OSC7-tracked cwd below.
+        hookCwd: null,
         connectionId: snapshot.connectionId,
         payload,
         state: payload.state,
@@ -23074,6 +23120,7 @@ export class OrcaRuntimeService {
         ptyId: existing?.ptyId,
         tabId: entry.tabId,
         worktreeId: entry.worktreeId,
+        hookCwd: existing?.hookCwd ?? entry.hookCwd ?? null,
         connectionId: entry.connectionId,
         payload: hookPayload,
         state: entry.state,
@@ -23120,10 +23167,17 @@ export class OrcaRuntimeService {
         // serve has no renderer graph, and session.tabs.list serves them.
         continue
       }
-      const worktreeId = mirroredWorktreeId ?? src.worktreeId
-      if (!worktreeId) {
+      const baseWorktreeId = mirroredWorktreeId ?? src.worktreeId
+      if (!baseWorktreeId) {
         continue
       }
+      // Why (#10572): agents cd into sibling worktrees mid-session, so launch-time
+      // attribution goes stale. Prefer the hook-reported live cwd, then the pane's
+      // OSC7-tracked cwd; either no-ops to the base id when absent or unmatched.
+      const agentCwd = src.hookCwd ?? this.trackedTerminalCwdForAgentRow(src.paneKey, src.ptyId)
+      const worktreeId = agentCwd
+        ? this.worktreeIdForAgentCwd(agentCwd, summaries, baseWorktreeId)
+        : baseWorktreeId
       const summary = this.getSummaryForRuntimeWorktreeId(
         summaries,
         runtimeWorktreeSummaryPathIndex,
