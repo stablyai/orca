@@ -25,6 +25,19 @@ describe('serve-mode-argv', () => {
     expect(findServeSubcommandIndex(['app', '--user-data-dir', '/tmp/x', 'serve'])).toBe(3)
   })
 
+  it('skips a space-separated Chromium switch value while locating serve', () => {
+    const argv = ['/AppRun', '--disable-features', 'Vulkan', 'serve', '--port', '6768']
+    expect(findServeSubcommandIndex(argv)).toBe(3)
+    expect(normalizeServeModeArgv(argv)).toEqual([
+      '/AppRun',
+      '--disable-features',
+      'Vulkan',
+      '--serve',
+      '--serve-port',
+      '6768'
+    ])
+  })
+
   it('refuses a help launch instead of binding a server', () => {
     // Why: `--help` is not a serve flag, so it used to be swallowed and the launch bound a
     // network-exposed runtime server with pairing on. The AppImage redirect routes help to the CLI.

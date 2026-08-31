@@ -55,6 +55,48 @@ describe('CLI launch redirect: entry-path form', () => {
     ).toEqual(['status'])
   })
 
+  it('strips injected Chromium switches before node-mode CLI arguments', () => {
+    expect(
+      getCliLaunchArgs(
+        [
+          linux.execPath,
+          linux.cliEntryPath,
+          '--no-sandbox',
+          '--disable-gpu',
+          '--disable-features=Vulkan',
+          'status',
+          '--json'
+        ],
+        linux.cliEntryPath,
+        linuxOptions
+      )
+    ).toEqual(['status', '--json'])
+    expect(
+      getCliLaunchArgs(
+        [linux.execPath, linux.cliEntryPath, '--disable-features', 'Vulkan', 'skills', 'get'],
+        linux.cliEntryPath,
+        linuxOptions
+      )
+    ).toEqual(['skills', 'get'])
+  })
+
+  it('keeps user flags after the command and malformed boolean assignments', () => {
+    expect(
+      getCliLaunchArgs(
+        [linux.execPath, linux.cliEntryPath, 'status', '--disable-features=Vulkan'],
+        linux.cliEntryPath,
+        linuxOptions
+      )
+    ).toEqual(['status', '--disable-features=Vulkan'])
+    expect(
+      getCliLaunchArgs(
+        [linux.execPath, linux.cliEntryPath, '--no-sandbox=true', 'status'],
+        linux.cliEntryPath,
+        linuxOptions
+      )
+    ).toEqual(['--no-sandbox=true', 'status'])
+  })
+
   it('does not treat a later positional entrypoint path as the launcher', () => {
     expect(
       getCliLaunchArgs(
@@ -108,6 +150,13 @@ describe('CLI launch redirect: command form', () => {
     expect(
       getCliLaunchArgs(
         [linux.execPath, '--no-sandbox', 'serve', '--help'],
+        linux.cliEntryPath,
+        linuxOptions
+      )
+    ).toEqual(['serve', '--help'])
+    expect(
+      getCliLaunchArgs(
+        [linux.execPath, '--disable-features', 'Vulkan', 'serve', '--help'],
         linux.cliEntryPath,
         linuxOptions
       )

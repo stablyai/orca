@@ -21,6 +21,7 @@ export type CliLaunchRedirectOptions = {
 
 const CLI_EARLY_EXIT_FLAGS = new Set(['--help', '-h', 'help', '--version', '-v'])
 const DESKTOP_FLAGS = new Set(['--no-sandbox', '--disable-gpu'])
+const DESKTOP_VALUE_FLAGS = new Set(['--disable-features'])
 const CLI_LAUNCH_VALUE_FLAG_NAMES = [...VALUE_TAKING_FLAGS].map((flag) => flag.slice(2))
 
 // Fence recursion if a wrapper drops ELECTRON_RUN_AS_NODE again.
@@ -85,23 +86,22 @@ export function getCliLaunchArgs(
   if (!options.isPackaged) {
     return null
   }
-  return (
-    getEntryPathLaunchArgs(argv, cliEntryPath, options.platform) ??
-    getCommandLaunchArgs(argv, options)
-  )
+  return getEntryPathLaunchArgs(argv, cliEntryPath, options) ?? getCommandLaunchArgs(argv, options)
 }
 
 function getEntryPathLaunchArgs(
   argv: string[],
   cliEntryPath: string,
-  platform: NodeJS.Platform
+  options: { platform: NodeJS.Platform; commandNames: readonly string[] }
 ): string[] | null {
-  const expectedCliPath = normalizePathForPlatform(cliEntryPath, platform)
+  const expectedCliPath = normalizePathForPlatform(cliEntryPath, options.platform)
   // The packaged launcher always passes the entrypoint as Electron's first argument.
   // Matching later positional arguments can mistake a normal desktop launch for the CLI.
-  return argv[1] && normalizePathForPlatform(argv[1], platform) === expectedCliPath
-    ? argv.slice(2)
-    : null
+  if (!argv[1] || normalizePathForPlatform(argv[1], options.platform) !== expectedCliPath) {
+    return null
+  }
+  const args = argv.slice(2)
+  return stripDesktopFlags(args, findCommandIndex(args, options.commandNames))
 }
 
 function getCommandLaunchArgs(
@@ -115,17 +115,58 @@ function getCommandLaunchArgs(
   if (args.length === 0) {
     return null
   }
-  const commandPaths = options.commandNames.map((name) => [name])
-  const commandIndex = findCliCommandIndex(args, commandPaths, CLI_LAUNCH_VALUE_FLAG_NAMES)
-  const cliArgs = args.filter(
-    (arg, index) => (commandIndex !== -1 && index > commandIndex) || !DESKTOP_FLAGS.has(arg)
-  )
+  const commandIndex = findCommandIndex(args, options.commandNames)
+  const cliArgs = stripDesktopFlags(args, commandIndex)
   const command = commandIndex === -1 ? null : args[commandIndex]
   // Keep direct serve in-process so signals reach its full child tree.
   if (command && command !== 'serve') {
     return cliArgs
   }
   return hasCliEarlyExitArg(args, commandIndex) ? cliArgs : null
+}
+
+function findCommandIndex(args: readonly string[], commandNames: readonly string[]): number {
+  return findCliCommandIndex(
+    args,
+    commandNames.map((name) => [name]),
+    CLI_LAUNCH_VALUE_FLAG_NAMES
+  )
+}
+
+function stripDesktopFlags(args: readonly string[], commandIndex: number): string[] {
+  const boundary = commandIndex === -1 ? findLeadingFlagBoundary(args) : commandIndex
+  const cliArgs: string[] = []
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!
+    if (index < boundary) {
+      if (DESKTOP_FLAGS.has(arg)) {
+        continue
+      }
+      if (DESKTOP_VALUE_FLAGS.has(flagName(arg))) {
+        if (!arg.includes('=') && args[index + 1] && !args[index + 1]!.startsWith('-')) {
+          index += 1
+        }
+        continue
+      }
+    }
+    cliArgs.push(arg)
+  }
+  return cliArgs
+}
+
+function findLeadingFlagBoundary(args: readonly string[]): number {
+  let index = 0
+  while (index < args.length) {
+    const token = args[index]!
+    if (token === '--' || !token.startsWith('-')) {
+      return index
+    }
+    index += 1
+    if (takesLaunchValue(token, args[index])) {
+      index += 1
+    }
+  }
+  return index
 }
 
 function hasCliEarlyExitArg(args: readonly string[], commandIndex: number): boolean {
@@ -167,8 +208,13 @@ function takesLaunchValue(token: string, next: string | undefined): boolean {
   ) {
     return false
   }
-  const flagName = token.startsWith('--') ? token.slice(2) : token.replace(/^-+/, '')
-  return !CLI_BOOLEAN_FLAGS.has(flagName)
+  const name = flagName(token)
+  return DESKTOP_VALUE_FLAGS.has(name) || !CLI_BOOLEAN_FLAGS.has(name.replace(/^-+/, ''))
+}
+
+function flagName(arg: string): string {
+  const equalsIndex = arg.indexOf('=')
+  return equalsIndex === -1 ? arg : arg.slice(0, equalsIndex)
 }
 
 function buildPackagedCliEntryPath(platform: NodeJS.Platform, resourcesPath: string): string {
