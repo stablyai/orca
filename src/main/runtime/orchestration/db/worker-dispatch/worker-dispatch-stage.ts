@@ -1,6 +1,7 @@
 import type { WorkerDispatchRow, WorkerDispatchState } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { WorkerAuthorityIsolationAttestation } from '../../../../../shared/worker-authority-policy'
 
 export function recordWorkerStage(
   this: OrchestrationDb,
@@ -79,14 +80,59 @@ export function updateWorkerSetupEvidence(
   }
 }
 
+export function recordWorkerAuthorityAttestation(
+  this: OrchestrationDb,
+  dispatchId: string,
+  attestation: WorkerAuthorityIsolationAttestation
+): WorkerDispatchRow {
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    const current = this.getWorkerDispatch(dispatchId)
+    if (!current || current.state !== 'starting') {
+      throw new OrchestrationError(
+        'worker_authority_attestation_missing',
+        `Dispatch ${dispatchId} cannot accept an authority attestation.`
+      )
+    }
+    const startOptions = JSON.parse(current.start_options) as Record<string, unknown>
+    if (startOptions.authorityIsolation !== undefined) {
+      throw new OrchestrationError(
+        'worker_authority_replay_conflict',
+        `Dispatch ${dispatchId} already has an authority attestation.`
+      )
+    }
+    startOptions.authorityIsolation = attestation
+    const updated = this.db
+      .prepare(
+        `UPDATE worker_dispatches
+         SET start_options = ?, updated_at = datetime('now')
+         WHERE dispatch_id = ? AND state = 'starting' AND start_options = ?`
+      )
+      .run(JSON.stringify(startOptions), dispatchId, current.start_options)
+    if (updated.changes !== 1) {
+      throw new OrchestrationError(
+        'worker_authority_replay_conflict',
+        `Dispatch ${dispatchId} changed while recording its authority attestation.`
+      )
+    }
+    this.db.exec('COMMIT')
+    return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 export type WorkerDispatchStageMethods = {
   recordWorkerStage: typeof recordWorkerStage
   updateWorkerSetupEvidence: typeof updateWorkerSetupEvidence
+  recordWorkerAuthorityAttestation: typeof recordWorkerAuthorityAttestation
 }
 
 export function attachWorkerDispatchStage(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     recordWorkerStage,
-    updateWorkerSetupEvidence
+    updateWorkerSetupEvidence,
+    recordWorkerAuthorityAttestation
   })
 }

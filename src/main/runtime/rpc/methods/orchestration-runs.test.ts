@@ -46,6 +46,7 @@ describe('orchestration RPC methods', () => {
     expect(registry.has('orchestration.dispatch')).toBe(true)
     expect(registry.has('orchestration.dispatchShow')).toBe(true)
     expect(registry.has('orchestration.workerStart')).toBe(true)
+    expect(registry.has('orchestration.workerPolicyCheck')).toBe(true)
     expect(registry.has('orchestration.workerShow')).toBe(true)
     expect(registry.has('orchestration.workerRead')).toBe(true)
     expect(registry.has('orchestration.workerStop')).toBe(true)

@@ -13,6 +13,9 @@ import {
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { WorkerAuthorityIsolationLaunchRequest } from '../../shared/worker-authority-policy'
+import { prepareWorkerAuthorityIsolation } from '../providers/worker-authority-isolation'
+import type { WorkerAuthorityDaemonOwner } from '../providers/worker-authority-container-contract'
 
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 
@@ -26,6 +29,8 @@ export type PtySubprocessOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
+  authorityIsolation?: WorkerAuthorityIsolationLaunchRequest
+  authorityOwner?: WorkerAuthorityDaemonOwner
   /** Explicit shell executable path/basename requested by the renderer. */
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
@@ -67,48 +72,82 @@ export async function checkPtySpawnHealth(): Promise<void> {
  */
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
-  const env = createDaemonPtyEnvironment(opts)
+  let env = createDaemonPtyEnvironment(opts)
   const launch = createPtyShellLaunchPlan(opts, env)
-
-  await preflightPtySpawn({
-    validationCwd: launch.validationCwd,
-    cwdWasExplicit: opts.cwd !== undefined,
-    sessionId: opts.sessionId,
-    ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
-  })
-  if (opts.isCanceled?.()) {
-    throw new TerminalAttachCanceledError(opts.sessionId)
+  if (opts.authorityIsolation && !opts.authorityOwner) {
+    throw new Error('worker_authority_isolation_failed')
   }
+  const isolation = opts.authorityIsolation
+    ? prepareWorkerAuthorityIsolation({
+        request: opts.authorityIsolation,
+        owner: opts.authorityOwner as WorkerAuthorityDaemonOwner,
+        agent: opts.launchAgent,
+        env,
+        workspacePath: launch.spawnCwd,
+        command: opts.command
+      })
+    : undefined
+  if (isolation) {
+    env = isolation.hostEnv
+  }
+  let isolatedProcessSpawned = false
 
-  let spawned: SpawnedDaemonPty
   try {
-    spawned = spawnNativeDaemonPty({
-      shellPath: launch.shellPath,
-      shellArgs: launch.shellArgs,
-      spawnCwd: launch.spawnCwd,
+    await preflightPtySpawn({
+      validationCwd: launch.validationCwd,
+      cwdWasExplicit: opts.cwd !== undefined,
+      sessionId: opts.sessionId,
+      ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
+    })
+    if (opts.isCanceled?.()) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
+
+    let spawned: SpawnedDaemonPty
+    try {
+      spawned = spawnNativeDaemonPty({
+        shellPath: launch.shellPath,
+        shellArgs: launch.shellArgs,
+        spawnCwd: launch.spawnCwd,
+        env,
+        cols: size.cols,
+        rows: size.rows,
+        windowsFallbackAttempts: launch.windowsFallbackAttempts,
+        onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy,
+        isolatedLaunch: isolation
+          ? {
+              executable: isolation.executable,
+              arguments: isolation.arguments,
+              containerShellPath: '/bin/bash'
+            }
+          : undefined
+      })
+      isolatedProcessSpawned = isolation !== undefined
+    } catch (error) {
+      if (process.platform === 'win32') {
+        throw formatPtySpawnError(error, launch.shellPath, launch.spawnCwd)
+      }
+      throw error
+    }
+
+    return createDaemonPtySubprocessHandle({
+      process: spawned.process,
+      shellPath: spawned.shellPath,
+      spawnCwd: spawned.spawnCwd,
       env,
-      cols: size.cols,
-      rows: size.rows,
-      windowsFallbackAttempts: launch.windowsFallbackAttempts,
-      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
+      startupCommandDeliveredInShellArgs:
+        isolation !== undefined ||
+        (spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs),
+      reportsChildExitStatus: spawned.reportsChildExitStatus,
+      requestedCwd: opts.cwd,
+      sessionId: opts.sessionId,
+      startupAgentRecognition: launch.startupAgentRecognition,
+      onCleanup: isolation
+        ? (forceContainerRemoval) => isolation.cleanup(forceContainerRemoval)
+        : undefined
     })
   } catch (error) {
-    if (process.platform === 'win32') {
-      throw formatPtySpawnError(error, launch.shellPath, launch.spawnCwd)
-    }
+    await isolation?.cleanup(isolatedProcessSpawned)
     throw error
   }
-
-  return createDaemonPtySubprocessHandle({
-    process: spawned.process,
-    shellPath: spawned.shellPath,
-    spawnCwd: spawned.spawnCwd,
-    env,
-    startupCommandDeliveredInShellArgs:
-      spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
-    reportsChildExitStatus: spawned.reportsChildExitStatus,
-    requestedCwd: opts.cwd,
-    sessionId: opts.sessionId,
-    startupAgentRecognition: launch.startupAgentRecognition
-  })
 }

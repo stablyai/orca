@@ -1,6 +1,6 @@
 // Spawn setup: node-pty launch options, Unix shell resolution and daemon cwd repair.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
@@ -80,6 +80,14 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 import {
+  NO_GITHUB_AUTHORITY_POLICY,
+  NO_GITHUB_AUTHORITY_POLICY_DIGEST
+} from '../../shared/worker-authority-policy'
+import {
+  WORKER_AUTHORITY_DOCKER_PATH,
+  WORKER_AUTHORITY_IMAGE
+} from '../providers/worker-authority-isolation'
+import {
   mockPtyProcess,
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   stubMissingDaemonCwd,
@@ -132,6 +140,88 @@ describe('createPtySubprocess', () => {
     )
     expect(onMacosTccSpawnStrategy).toHaveBeenCalledWith('direct')
   })
+
+  itOnMacHost(
+    'runs an admitted worker in the pinned container and removes copied auth on exit',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-authority-spawn-'))
+      const workspace = join(root, 'repo')
+      const codexHome = join(root, 'codex-home')
+      const lifecycleDirectory = join(root, 'lifecycle')
+      mkdirSync(join(workspace, '.git'), { recursive: true })
+      mkdirSync(codexHome, { recursive: true })
+      mkdirSync(lifecycleDirectory, { recursive: true })
+      writeFileSync(
+        join(workspace, '.git', 'config'),
+        '[remote "origin"]\n  url = https://github.com/example/repo.git\n'
+      )
+      writeFileSync(join(codexHome, 'auth.json'), '{"OPENAI_API_KEY":"synthetic-worker"}\n', {
+        mode: 0o600
+      })
+      const previousWorkerCodexHome = process.env.ORCA_WORKER_CODEX_HOME
+      process.env.ORCA_WORKER_CODEX_HOME = codexHome
+      const proc = mockPtyProcess()
+      spawnMock.mockReturnValue(proc)
+      try {
+        await createPtySubprocess({
+          sessionId: 'isolated-worker',
+          cols: 80,
+          rows: 24,
+          cwd: workspace,
+          env: {
+            SHELL: '/bin/zsh',
+            ORCA_WORKER_CODEX_HOME: codexHome,
+            GH_TOKEN: 'synthetic-secret'
+          },
+          command: 'codex --no-alt-screen',
+          launchAgent: 'codex',
+          authorityOwner: {
+            schemaVersion: 'worker_authority_daemon_owner/1',
+            pid: process.pid,
+            startedAtMs: Date.now() - process.uptime() * 1000,
+            launchNonce: 'synthetic-daemon',
+            socketPath: join(root, 'daemon.sock'),
+            tokenPath: join(root, 'daemon.token')
+          },
+          authorityIsolation: {
+            schemaVersion: 'worker_authority_launch/1',
+            policy: NO_GITHUB_AUTHORITY_POLICY,
+            policyDigest: NO_GITHUB_AUTHORITY_POLICY_DIGEST,
+            capabilityRef: `sha256:${'1'.repeat(64)}`,
+            dispatchId: 'dispatch_abc123',
+            worktreeId: 'worktree_abc123',
+            setupPolicy: 'skip',
+            imageDigest: WORKER_AUTHORITY_IMAGE,
+            lifecycleDirectory,
+            lifecycleBinding: `sha256:${'2'.repeat(64)}`
+          }
+        })
+        const [executable, argv, options] = spawnMock.mock.calls.at(-1)!
+        expect(executable).toBe(WORKER_AUTHORITY_DOCKER_PATH)
+        expect(argv).toEqual(expect.arrayContaining(['run', '--read-only', WORKER_AUTHORITY_IMAGE]))
+        expect(options.env).not.toHaveProperty('GH_TOKEN')
+        const homeMount = argv.find((arg: string) => arg.includes('dst=/home/orca-worker'))
+        const isolatedHome = /src=([^,]+),dst=/.exec(homeMount)?.[1]
+        expect(isolatedHome).toMatch(/orca-worker-authority-/)
+        if (!isolatedHome) {
+          throw new Error('missing isolated home mount')
+        }
+        expect(existsSync(isolatedHome)).toBe(true)
+        expect(argv.join('\n')).not.toContain('synthetic-secret')
+        expect(argv.join('\n')).not.toContain('docker.sock')
+
+        proc._simulateExit(0)
+        expect(existsSync(isolatedHome)).toBe(false)
+      } finally {
+        if (previousWorkerCodexHome === undefined) {
+          delete process.env.ORCA_WORKER_CODEX_HOME
+        } else {
+          process.env.ORCA_WORKER_CODEX_HOME = previousWorkerCodexHome
+        }
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('does not spawn after cancellation wins during async cwd validation', async () => {
     let releaseValidation: () => void = () => {}

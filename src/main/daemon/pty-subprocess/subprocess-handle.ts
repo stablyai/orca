@@ -22,6 +22,7 @@ export function createDaemonPtySubprocessHandle(args: {
   requestedCwd?: string
   sessionId: string
   startupAgentRecognition: RecognizedAgentProcess | null
+  onCleanup?: (forceContainerRemoval: boolean) => void | Promise<void>
 }): SubprocessHandle {
   const proc = args.process
   // node-pty exposes destroy at runtime but omits it from IPty.
@@ -30,6 +31,19 @@ export function createDaemonPtySubprocessHandle(args: {
   let dead = false
   let disposed = false
   let nodePtyKillIssued = false
+  let cleanupComplete = false
+  const cleanup = (forceContainerRemoval: boolean): void => {
+    if (cleanupComplete) {
+      return
+    }
+    cleanupComplete = true
+    void Promise.resolve(args.onCleanup?.(forceContainerRemoval)).catch((error) => {
+      console.warn(
+        `[daemon] failed to clean isolated worker ${args.sessionId}`,
+        error instanceof Error ? error.message : error
+      )
+    })
+  }
   const foreground = createPtyForegroundProcessTracker({
     process: proc,
     shellPath: args.shellPath,
@@ -50,9 +64,10 @@ export function createDaemonPtySubprocessHandle(args: {
       hostReportsChildExitStatus: args.reportsChildExitStatus
     })
   })
-  proc.onExit(() => {
+  proc.onExit(({ exitCode, signal }) => {
     dead = true
     foreground.markDead()
+    cleanup(exitCode !== 0 || Boolean(signal))
     // Why: neutralize kill synchronously so a later async socket-close SIGHUP cannot hit a recycled pid.
     if (process.platform !== 'win32') {
       nativeProc.kill = () => {}
@@ -187,6 +202,7 @@ export function createDaemonPtySubprocessHandle(args: {
       disposed = true
       dead = true
       events.clear()
+      cleanup(true)
       // POSIX destroy() can asynchronously signal a recycled pid; Windows needs kill() to close ConPTY.
       if (process.platform !== 'win32') {
         nativeProc.kill = () => {}

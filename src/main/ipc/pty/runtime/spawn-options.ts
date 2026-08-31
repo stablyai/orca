@@ -101,6 +101,15 @@ export async function buildRuntimePtySpawnOptions(
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
   }
+  if (args.authorityIsolation) {
+    if (
+      !isTuiAgent(args.launchAgent) ||
+      ctx.provider.supportsWorkerAuthorityIsolation?.(args.launchAgent) !== true
+    ) {
+      throw new Error('worker_authority_policy_unsupported')
+    }
+    ctx.spawnOptions.authorityIsolation = args.authorityIsolation
+  }
   if (args.worktreeId !== undefined) {
     ctx.spawnOptions.worktreeId = args.worktreeId
   }

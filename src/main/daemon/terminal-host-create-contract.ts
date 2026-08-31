@@ -9,6 +9,7 @@ import type {
 } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { WorkerAuthorityIsolationLaunchRequest } from '../../shared/worker-authority-policy'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -20,6 +21,7 @@ export type CreateOrAttachOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
+  authorityIsolation?: WorkerAuthorityIsolationLaunchRequest
   /** Missing ownership is not permission to create during stable-pane adoption. */
   attachOnly?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */

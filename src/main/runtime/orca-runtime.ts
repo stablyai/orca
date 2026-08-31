@@ -187,6 +187,7 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
+import { restoreWorkerContainerLifecycleMonitors } from './orchestration/worker-container-lifecycle'
 import {
   classifyWorkerTerminalProcessIncarnation,
   parseWorkerTerminalHostScope,
@@ -406,6 +407,7 @@ import type {
 } from '../../shared/terminal-tab-types'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { WorkerAuthorityIsolationLaunchRequest } from '../../shared/worker-authority-policy'
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../shared/workspace-source'
@@ -1702,6 +1704,7 @@ type TerminalCreateOptions = {
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  authorityIsolation?: WorkerAuthorityIsolationLaunchRequest
   // Why: agent ids are not shell commands (`cursor` is the Cursor desktop app; its
   // CLI is `cursor-agent`). Callers that know the agent name it here instead of
   // guessing a command, and the runtime builds the configured launch.
@@ -2030,6 +2033,7 @@ type HeadlessSeedMetadata = {
 }
 
 type RuntimePtyController = {
+  supportsWorkerAuthorityIsolation?(agent: TuiAgent): boolean
   claimStablePaneCreate?(args: {
     worktreeId: string
     connectionId: string | null
@@ -2062,6 +2066,7 @@ type RuntimePtyController = {
     cwd?: string
     command?: string
     launchAgent?: TuiAgent
+    authorityIsolation?: WorkerAuthorityIsolationLaunchRequest
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
@@ -4705,6 +4710,7 @@ export class OrcaRuntimeService {
       this._orchestrationDb = new OrchestrationDb(dbPath)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
+      this.restoreWorkerContainerLifecycleMonitors()
     }
     return this._orchestrationDb
   }
@@ -4715,6 +4721,17 @@ export class OrcaRuntimeService {
     this._orchestrationDb = db
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
+    this.restoreWorkerContainerLifecycleMonitors()
+  }
+
+  private restoreWorkerContainerLifecycleMonitors(): void {
+    if (!this._orchestrationDb) {
+      return
+    }
+    restoreWorkerContainerLifecycleMonitors({
+      db: this._orchestrationDb,
+      notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType)
+    })
   }
 
   private getLegacyWorkerTerminalRecoveryPlan(): LegacyWorkerTerminalRecoveryPlan {
@@ -6657,6 +6674,10 @@ export class OrcaRuntimeService {
     // instead of tunneling back through renderer IPC, or live handles could
     // drift from the process they are supposed to control during reloads.
     this.ptyController = controller
+  }
+
+  supportsWorkerAuthorityIsolation(agent: TuiAgent): boolean {
+    return this.ptyController?.supportsWorkerAuthorityIsolation?.(agent) === true
   }
 
   setNotifier(notifier: RuntimeNotifier | null): void {
@@ -30021,7 +30042,11 @@ export class OrcaRuntimeService {
       return opts
     }
 
-    await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
+    // The isolated worker owns a fresh per-Dispatch Codex home. Trust only the mounted
+    // workspace there; mutating the process owner's Codex config would cross the boundary.
+    if (!opts.authorityIsolation) {
+      await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
+    }
 
     return {
       ...opts,
@@ -30597,6 +30622,7 @@ export class OrcaRuntimeService {
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
+            authorityIsolation: launchOpts.authorityIsolation,
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,

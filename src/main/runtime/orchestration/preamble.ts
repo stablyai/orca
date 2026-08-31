@@ -33,6 +33,7 @@ export type PreambleParams = {
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
   // Why gated: advertising a verb the depth cap will reject just burns a turn.
   canDispatchSubWorkers?: boolean
+  lifecycleAdapter?: 'container-file'
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -58,6 +59,10 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
+
+  if (params.lifecycleAdapter === 'container-file') {
+    return buildContainerWorkerPreamble(params)
+  }
 
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
@@ -143,6 +148,35 @@ ${postDoneInstructions}`
   const subDispatch = params.canDispatchSubWorkers ? buildSubDispatchSection(cli) : ''
 
   return `${header}${drift}${subDispatch}
+
+=== TASK ===
+${params.taskSpec}`
+}
+
+function buildContainerWorkerPreamble(params: PreambleParams): string {
+  return `You are working inside Orca as a dispatched worker in an isolated container.
+Your task ID is: ${params.taskId}
+Your Dispatch ID is: ${params.dispatchId}
+
+The container intentionally has no Orca runtime socket, founder credentials, or GitHub mutation
+authority. Do not try to use the Orca CLI, GitHub CLI authentication, SSH authentication, plugins,
+connectors, or browser sessions. Work only in the mounted repository.
+
+Report exactly one terminal lifecycle result through the mounted adapter:
+
+  # Success or failure after the requested work is complete:
+  orca-worker-report --type worker_done --outcome succeeded \
+    --subject "<short status>" \
+    --body "<3-sentence summary: what you did, what you found, what's left>"
+
+  # A blocker that requires coordinator action before the task can complete:
+  orca-worker-report --type escalation \
+    --subject "Blocked: <reason>" --body "<details>"
+
+Use --outcome failed instead of succeeded when the work is not complete. The adapter binds the
+receipt to this exact Dispatch; never write lifecycle JSON directly. After reporting, stop and take
+no further action. There is no interactive coordinator question channel in this Alpha boundary, so
+report an escalation and stop if a decision is required.
 
 === TASK ===
 ${params.taskSpec}`

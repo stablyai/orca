@@ -2,6 +2,7 @@ import type { AgentLaunchPreferences } from '../../../../shared/agent-session-ho
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
+import type { WorkerAuthorityIsolationLaunchRequest } from '../../../../shared/worker-authority-policy'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -60,12 +61,14 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   launchPreferences?: AgentLaunchPreferences
   taskId: string
   effects: WorkerEffect[]
+  authorityIsolation?: WorkerAuthorityIsolationLaunchRequest
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
     // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
     // desktop app while its CLI is `cursor-agent`. Let the runtime build the
     // configured launcher instead of executing the raw id.
     startupAgent: args.agent,
+    ...(args.authorityIsolation ? { authorityIsolation: args.authorityIsolation } : {}),
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar

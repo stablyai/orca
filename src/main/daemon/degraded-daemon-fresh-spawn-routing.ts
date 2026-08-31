@@ -1,4 +1,5 @@
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 export const DEGRADED_DAEMON_RECOVERY_RETRY_MS = 30_000
 
@@ -23,6 +24,10 @@ export class DegradedDaemonFreshSpawnRouter {
   supportsGitGuardHost(sessionId?: string): boolean {
     const provider = (sessionId ? this.sessionProviders.get(sessionId) : undefined) ?? this.target
     return provider.supportsGitCredentialGuardHost?.(sessionId) === true
+  }
+
+  supportsWorkerAuthorityIsolation(agent: TuiAgent): boolean {
+    return this.target.supportsWorkerAuthorityIsolation?.(agent) === true
   }
 
   canProvideSnapshot(sessionId: string): boolean {

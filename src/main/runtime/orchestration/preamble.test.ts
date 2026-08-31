@@ -168,6 +168,27 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('refactor the auth module')
   })
 
+  it('uses only the bound file adapter for an isolated container worker', () => {
+    const result = buildDispatchPreamble(
+      baseParams({
+        lifecycleAdapter: 'container-file',
+        dispatchCapability: 'dcap_must_not_cross_boundary',
+        canDispatchSubWorkers: true
+      })
+    )
+
+    expect(result).toContain('orca-worker-report --type worker_done --outcome succeeded')
+    expect(result).toContain('orca-worker-report --type escalation')
+    expect(result).toContain('Your Dispatch ID is: ctx_def456')
+    expect(result).toContain('Implement the login form')
+    expect(result).toContain('There is no interactive coordinator question channel')
+    expect(result).not.toContain('orca orchestration')
+    expect(result).not.toContain('dispatch-capability')
+    expect(result).not.toContain('dcap_must_not_cross_boundary')
+    expect(result).not.toContain('heartbeat')
+    expect(result).not.toContain('SUB-DISPATCH')
+  })
+
   it('uses orca CLI by default when devMode is not set', () => {
     const result = buildDispatchPreamble(baseParams())
     expect(result).toContain('orca orchestration send')

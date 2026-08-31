@@ -11,6 +11,7 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
@@ -79,6 +80,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   supportsGitCredentialGuardHost = (id?: string): boolean =>
     this.freshSpawns.supportsGitGuardHost(id)
+
+  supportsWorkerAuthorityIsolation = (agent: TuiAgent): boolean =>
+    this.freshSpawns.supportsWorkerAuthorityIsolation(agent)
 
   canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
     this.freshSpawns.canProvideSnapshot(id)

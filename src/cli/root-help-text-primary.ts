@@ -105,6 +105,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  orchestration task-create Create an orchestration task',
   '  orchestration task-list   List orchestration tasks',
   '  orchestration task-update Update a task status',
+  '  orchestration worker-policy-check Check an enforced worker authority policy',
   '  orchestration dispatch    Dispatch a task to a terminal',
   '  orchestration dispatch-show Show dispatch context for a task',
   '  orchestration worker-start Start a supervised worker locally or on a connected Orca server',

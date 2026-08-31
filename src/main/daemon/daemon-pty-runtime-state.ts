@@ -6,7 +6,11 @@ import type {
   DaemonAuditTrigger
 } from './daemon-audit-classifier'
 import { CheckpointSessionQueue } from './daemon-checkpoint-session-queue'
-import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
+  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
+  WORKER_AUTHORITY_ISOLATION_DAEMON_PROTOCOL_VERSION
+} from './daemon-protocol-version'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
@@ -15,7 +19,6 @@ import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
-  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress,
@@ -31,6 +34,7 @@ import { HistoryReader } from './history-reader'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 export type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
@@ -209,6 +213,14 @@ export abstract class DaemonPtyRuntimeState {
 
   supportsGitCredentialGuardHost(): boolean {
     return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
+  }
+
+  supportsWorkerAuthorityIsolation(agent: TuiAgent): boolean {
+    return (
+      agent === 'codex' &&
+      process.platform === 'darwin' &&
+      this.protocolVersion >= WORKER_AUTHORITY_ISOLATION_DAEMON_PROTOCOL_VERSION
+    )
   }
 
   canProvideAuthoritativeBufferSnapshot(_id: string): boolean {

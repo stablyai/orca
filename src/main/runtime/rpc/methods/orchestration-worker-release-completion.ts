@@ -228,6 +228,16 @@ async function completeWorkerTerminalReleaseOnce(
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
+    if (reason === 'tab_not_found' && observation.status === 'exited') {
+      const released = db.settleWorkerTerminalRelease(resource.id)
+      runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
+      return {
+        dispatchId,
+        state: 'released',
+        processAction: 'closed_exited_terminal',
+        archive: archiveSummary(released)
+      }
+    }
     if (/disposed|not connected|unavailable/i.test(reason)) {
       // Durable intent exists; the owning endpoint is temporarily unreachable. Recovery retries.
       return {

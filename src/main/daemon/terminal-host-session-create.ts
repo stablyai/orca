@@ -45,6 +45,9 @@ export async function createOrAttachTerminalSession(
   // exit, kill during the await) that produced repeated regressions. Checkpoint
   // readers that need a settled owner use getSettledSnapshot.
   if (existing && existing.isAlive && !existing.isTerminating) {
+    if (opts.authorityIsolation) {
+      throw new Error('worker_authority_replay_conflict')
+    }
     const snapshot = existing.getSnapshot()
     existing.detachAllClients()
     const token = existing.attachClient(opts.streamClient)
@@ -98,6 +101,7 @@ async function spawnAndPublishSession(
     command: opts.command,
     startupCommandDelivery: opts.startupCommandDelivery,
     ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+    ...(opts.authorityIsolation ? { authorityIsolation: opts.authorityIsolation } : {}),
     shellOverride: opts.shellOverride,
     terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
     terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,

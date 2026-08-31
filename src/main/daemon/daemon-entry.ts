@@ -25,6 +25,8 @@ import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
 import { publishDaemonPidFile } from './daemon-spawner'
+import { recoverOrphanedWorkerAuthorityContainers } from '../providers/worker-authority-orphan-recovery'
+import { createWorkerAuthorityDaemonOwner } from '../providers/worker-authority-daemon-owner'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -122,6 +124,13 @@ async function main(): Promise<void> {
   } = parseArgs(process.argv.slice(2))
   const startedAtMs = Date.now() - process.uptime() * 1000
   const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
+  const workerAuthorityOwner = createWorkerAuthorityDaemonOwner({
+    pid: process.pid,
+    readyIdentity,
+    launchNonce,
+    socketPath,
+    tokenPath
+  })
   // Fail-open: a broken log path must never block daemon startup.
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
@@ -295,6 +304,7 @@ async function main(): Promise<void> {
     spawnSubprocess: (opts) =>
       createPtySubprocess({
         ...opts,
+        ...(workerAuthorityOwner ? { authorityOwner: workerAuthorityOwner } : {}),
         ...(process.platform === 'darwin'
           ? {
               onMacosTccSpawnStrategy: (strategy) =>
@@ -316,6 +326,14 @@ async function main(): Promise<void> {
       process.exit(0)
     }
   })
+  const workerRecovery = await recoverOrphanedWorkerAuthorityContainers()
+  if (
+    workerRecovery.removedContainers ||
+    workerRecovery.removedRoots ||
+    workerRecovery.rejectedRoots
+  ) {
+    daemonLog.log('worker-authority-orphan-recovery', workerRecovery)
+  }
   deathWatch?.start()
 
   // Signal readiness to parent via IPC (if available)

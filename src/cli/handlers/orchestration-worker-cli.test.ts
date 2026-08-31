@@ -8,7 +8,10 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  WORKER_AUTHORITY_POLICY_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 
 describe('orchestration worker-start CLI contract', () => {
   beforeEach(() => {
@@ -28,6 +31,90 @@ describe('orchestration worker-start CLI contract', () => {
       cwd: '/tmp/repo',
       json: true
     } as never)
+
+  it('requests a worker authority capability before task creation', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        policy: 'no-github-authority/v1',
+        agentId: 'codex',
+        enforcement: 'available'
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-policy-check']({
+      flags: new Map<string, string | boolean>([
+        ['policy', 'no-github-authority/v1'],
+        ['agent', 'codex'],
+        ['worktree', 'id:worktree_1'],
+        ['setup', 'skip']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.workerPolicyCheck', {
+      policy: 'no-github-authority/v1',
+      agent: 'codex',
+      worktree: 'id:worktree_1',
+      setup: 'skip',
+      on: undefined
+    })
+  })
+
+  it('rejects an authority policy when the runtime would strip it', async () => {
+    callMock.mockResolvedValueOnce({ result: { capabilities: [] } })
+
+    await expect(
+      invokeWorkerStart(
+        new Map<string, string | boolean>([
+          ['task', 'task_1'],
+          ['agent', 'codex'],
+          ['policy', 'no-github-authority/v1'],
+          ['capability-ref', `sha256:${'a'.repeat(64)}`],
+          ['from', 'term_coord']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('forwards a complete authority policy pair to a capable runtime', async () => {
+    callMock
+      .mockResolvedValueOnce({
+        result: { capabilities: [WORKER_AUTHORITY_POLICY_RUNTIME_CAPABILITY] }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          runId: 'run_1',
+          taskId: 'task_1',
+          dispatchId: 'ctx_1',
+          state: 'ready',
+          effects: [],
+          residualResources: []
+        }
+      })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['policy', 'no-github-authority/v1'],
+        ['capability-ref', `sha256:${'b'.repeat(64)}`],
+        ['from', 'term_coord']
+      ])
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'orchestration.workerStart',
+      expect.objectContaining({
+        policy: 'no-github-authority/v1',
+        capabilityRef: `sha256:${'b'.repeat(64)}`
+      })
+    )
+  })
 
   it('passes the complete supported creation contract and retry receipt', async () => {
     callMock.mockResolvedValue({

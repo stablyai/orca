@@ -4,6 +4,16 @@ import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  NO_GITHUB_AUTHORITY_POLICY,
+  issueWorkerAuthorityPolicyCapability
+} from '../../../../shared/worker-authority-policy'
+import type * as WorkerAuthorityIsolationModule from '../../../providers/worker-authority-isolation'
+
+vi.mock('../../../providers/worker-authority-isolation', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorkerAuthorityIsolationModule>()
+  return { ...actual, verifyWorkerAuthorityContainerRuntime: async () => true }
+})
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -65,6 +75,137 @@ describe('orchestration RPC methods', () => {
         bytesWritten: 1
       })
     }
+
+    it('rejects an incomplete authority policy request before creating a Dispatch', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'reject incomplete authority policy' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          agent: 'codex',
+          policy: NO_GITHUB_AUTHORITY_POLICY
+        })
+      ).rejects.toMatchObject({ code: 'worker_authority_capability_stale' })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    })
+
+    it('rejects a target-mismatched authority capability before creating a Dispatch', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'reject target mismatch' })
+      const capability = issueWorkerAuthorityPolicyCapability({
+        runtimeId: runtime.getRuntimeId(),
+        agentId: 'claude',
+        worktreeId: 'repo::worktree',
+        setupPolicy: 'skip'
+      })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          agent: 'codex',
+          worktree: 'id:repo::worktree',
+          setup: 'skip',
+          policy: NO_GITHUB_AUTHORITY_POLICY,
+          capabilityRef: capability.capabilityRef
+        })
+      ).rejects.toMatchObject({ code: 'worker_authority_capability_stale' })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    })
+
+    it('fails closed before effects when process-owner isolation is unavailable', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'require process-owner isolation' })
+      const capability = issueWorkerAuthorityPolicyCapability({
+        runtimeId: runtime.getRuntimeId(),
+        agentId: 'codex',
+        worktreeId: 'repo::worktree',
+        setupPolicy: 'skip'
+      })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          agent: 'codex',
+          worktree: 'id:repo::worktree',
+          setup: 'skip',
+          policy: NO_GITHUB_AUTHORITY_POLICY,
+          capabilityRef: capability.capabilityRef
+        })
+      ).rejects.toMatchObject({ code: 'worker_authority_policy_unsupported' })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    })
+
+    it('binds a successful preflight capability into the exact worker terminal launch', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'supportsWorkerAuthorityIsolation').mockReturnValue(true)
+      const task = db.createTask({ spec: 'launch isolated worker' })
+      const capability = (await call('orchestration.workerPolicyCheck', {
+        policy: NO_GITHUB_AUTHORITY_POLICY,
+        agent: 'codex',
+        worktree: 'id:repo::worktree',
+        setup: 'skip'
+      })) as { capabilityRef: string }
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex',
+        worktree: 'id:repo::worktree',
+        setup: 'skip',
+        policy: NO_GITHUB_AUTHORITY_POLICY,
+        capabilityRef: capability.capabilityRef
+      })) as { state: string; dispatchId: string; authorityIsolation: { proofRef: string } }
+
+      expect(result).toMatchObject({ state: 'ready' })
+      expect(result.authorityIsolation.proofRef).toMatch(/^sha256:[0-9a-f]{64}$/)
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({
+          startupAgent: 'codex',
+          authorityIsolation: expect.objectContaining({
+            policy: NO_GITHUB_AUTHORITY_POLICY,
+            capabilityRef: capability.capabilityRef
+          })
+        })
+      )
+      const shown = (await call('orchestration.workerShow', {
+        dispatch: result.dispatchId
+      })) as { worker: { authorityIsolation: { capabilityRef: string; proofRef: string } } }
+      expect(shown.worker.authorityIsolation).toMatchObject({
+        capabilityRef: capability.capabilityRef,
+        proofRef: result.authorityIsolation.proofRef
+      })
+    })
+
+    it('rejects folder workspaces during authority policy preflight', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'supportsWorkerAuthorityIsolation').mockReturnValue(true)
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'folder:workspace-1',
+        repoId: 'folder-workspace:group-1'
+      } as never)
+
+      await expect(
+        call('orchestration.workerPolicyCheck', {
+          policy: NO_GITHUB_AUTHORITY_POLICY,
+          agent: 'codex',
+          worktree: 'id:folder:workspace-1',
+          setup: 'skip'
+        })
+      ).rejects.toMatchObject({ code: 'worker_authority_policy_unsupported' })
+    })
 
     it('rejects a declared caller that disagrees with complete attested evidence', async () => {
       setup()

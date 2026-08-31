@@ -14608,6 +14608,37 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('does not mutate host Codex trust for an authority-isolated launch', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-isolated' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const authorityIsolation = {
+      schemaVersion: 'worker_authority_launch/1',
+      policy: 'no-github-authority/v1',
+      policyDigest: `sha256:${'1'.repeat(64)}`,
+      capabilityRef: `sha256:${'2'.repeat(64)}`,
+      dispatchId: 'ctx_isolated',
+      worktreeId: TEST_WORKTREE_ID,
+      setupPolicy: 'skip',
+      imageDigest: `orca-worker-authority@sha256:${'3'.repeat(64)}`,
+      lifecycleDirectory: '/private/tmp/orca-isolated-lifecycle',
+      lifecycleBinding: `sha256:${'4'.repeat(64)}`
+    } as const
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      startupAgent: 'codex',
+      authorityIsolation
+    })
+
+    expect(markCodexProjectTrustedMock).not.toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ authorityIsolation }))
+  })
+
   // Why: `cursor` on PATH is the Cursor desktop launcher; only `cursor-agent` is
   // the CLI Orca can host (issue #11926).
   it('launches the configured agent CLI for a startupAgent id, not the raw id', async () => {

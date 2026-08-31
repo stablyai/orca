@@ -526,7 +526,7 @@ describe('orchestration worker release', () => {
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('unknown')
   })
 
-  it('records an explicitly empty archive for an already-exited worker process', async () => {
+  it('settles an already-exited worker when its reaped tab cannot be closed', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
     vi.mocked(runtime.showTerminal).mockImplementation(
@@ -539,6 +539,7 @@ describe('orchestration worker release', () => {
       truncated: false,
       nextCursor: null
     })
+    vi.mocked(runtime.closeTerminal).mockRejectedValue(new Error('tab_not_found'))
     const receipt = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
       processAction: string

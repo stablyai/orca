@@ -22,6 +22,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
+import type { WorkerAuthorityIsolationLaunchRequest } from '../../shared/worker-authority-policy'
 export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
@@ -32,7 +33,6 @@ export {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
-  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
@@ -71,6 +71,7 @@ export type CreateOrAttachRequest = {
     command?: string
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
+    authorityIsolation?: WorkerAuthorityIsolationLaunchRequest
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
     attachOnly?: boolean
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').

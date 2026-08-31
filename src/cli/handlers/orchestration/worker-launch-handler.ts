@@ -3,16 +3,54 @@ import { printResult } from '../../format'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  WORKER_AUTHORITY_POLICY_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
+  'orchestration worker-policy-check': async ({ flags, client, json }) => {
+    const result = await client.call('orchestration.workerPolicyCheck', {
+      policy: getRequiredStringFlag(flags, 'policy'),
+      agent: getRequiredStringFlag(flags, 'agent'),
+      worktree: getRequiredStringFlag(flags, 'worktree'),
+      setup: getRequiredStringFlag(flags, 'setup'),
+      on: getOptionalStringFlag(flags, 'on')
+    })
+    printResult(result, json, (value) => {
+      const capability = value as {
+        policy: string
+        agentId: string
+        enforcement: string
+        expiresAt: string
+      }
+      return `${capability.policy} agent=${capability.agentId} [${capability.enforcement}] expires=${capability.expiresAt}`
+    })
+  },
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
+    const policy = getOptionalStringFlag(flags, 'policy')
+    const capabilityRef = getOptionalStringFlag(flags, 'capability-ref')
+    if (Boolean(policy) !== Boolean(capabilityRef)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--policy and --capability-ref must be provided together.'
+      )
+    }
+    if (policy) {
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (!status.result.capabilities?.includes(WORKER_AUTHORITY_POLICY_RUNTIME_CAPABILITY)) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime cannot enforce worker authority isolation. Update Orca and try again.'
+        )
+      }
+    }
     if (model || effort) {
       const status = await client.call<RuntimeStatus>('status.get')
       if (
@@ -49,6 +87,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       agent: getOptionalStringFlag(flags, 'agent'),
       model,
       effort,
+      policy,
+      capabilityRef,
       terminal: getOptionalStringFlag(flags, 'terminal'),
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),

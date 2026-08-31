@@ -28,7 +28,14 @@ export function validateFederatedWorkerStartPlacement(
       '--terminal cannot combine with remote new-worktree creation.'
     )
   }
-  if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
+  const admittedExistingIsolationSetup = Boolean(params.policy && params.setup === 'skip')
+  if (
+    !createsWorktree &&
+    (params.name ||
+      params.repo ||
+      params.baseBranch ||
+      (params.setup && !admittedExistingIsolationSetup))
+  ) {
     throw new OrchestrationError(
       'invalid_argument',
       'Creation and setup options apply only to remote new-top-level worktrees.'
@@ -70,7 +77,14 @@ export function prepareLocalWorkerStart(args: {
   if (createsWorktree && !params.name) {
     throw new OrchestrationError('invalid_argument', 'New worktrees require --name.')
   }
-  if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
+  const admittedExistingIsolationSetup = Boolean(params.policy && params.setup === 'skip')
+  if (
+    !createsWorktree &&
+    (params.name ||
+      params.repo ||
+      params.baseBranch ||
+      (params.setup && !admittedExistingIsolationSetup))
+  ) {
     throw new OrchestrationError(
       'invalid_argument',
       'Creation and setup options apply only to new-child or new-top-level worktrees.'

@@ -104,6 +104,9 @@ export class DaemonTerminalAdmission {
         startupCommandDelivery: payload.startupCommandDelivery,
         ...(attachOnly ? { attachOnly: true } : {}),
         ...(isTuiAgent(payload.launchAgent) ? { launchAgent: payload.launchAgent } : {}),
+        ...(payload.authorityIsolation
+          ? { authorityIsolation: payload.authorityIsolation }
+          : {}),
         shellOverride: payload.shellOverride,
         terminalWindowsWslDistro: payload.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: payload.terminalWindowsPowerShellImplementation,

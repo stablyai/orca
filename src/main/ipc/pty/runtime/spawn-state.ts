@@ -15,6 +15,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../../../shared/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
+import type { WorkerAuthorityIsolationLaunchRequest } from '../../../../shared/worker-authority-policy'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -86,6 +87,7 @@ export type RuntimePtySpawnArgs = {
   cwd?: string
   command?: string
   launchAgent?: TuiAgent
+  authorityIsolation?: WorkerAuthorityIsolationLaunchRequest
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: {

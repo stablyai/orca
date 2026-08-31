@@ -12,6 +12,7 @@ import type {
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { WorkerAuthorityIsolationLaunchRequest } from '../../shared/worker-authority-policy'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -57,6 +58,8 @@ export type PtySpawnOptions = {
   startupCommandDelivery?: StartupCommandDelivery
   /** Minimal allowlisted launch ownership preserved by daemon reattach. */
   launchAgent?: TuiAgent
+  /** Process-owner enforced launch boundary for supervised ordinary workers. */
+  authorityIsolation?: WorkerAuthorityIsolationLaunchRequest
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
@@ -129,6 +132,8 @@ export type IPtyProvider = {
   deleteWorktreeHistory?: (worktreeId: string) => Promise<void>
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
+  /** Exact fresh-spawn owner support; false keeps policy preflight fail-closed. */
+  supportsWorkerAuthorityIsolation?: (agent: TuiAgent) => boolean
   /** Explicit false selects pre-claim legacy spawn for a preserved old daemon. */
   supportsAgentSessionClaims?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   /** Whether missing claim metadata in this PTY's process listing proves absence. */

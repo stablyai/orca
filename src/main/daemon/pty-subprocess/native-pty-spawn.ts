@@ -25,7 +25,29 @@ export function spawnNativeDaemonPty(args: {
   rows: number
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
+  isolatedLaunch?: {
+    executable: string
+    arguments: string[]
+    containerShellPath: string
+  }
 }): SpawnedDaemonPty {
+  if (args.isolatedLaunch) {
+    const process = pty.spawn(args.isolatedLaunch.executable, args.isolatedLaunch.arguments, {
+      name: args.env.TERM ?? 'xterm-256color',
+      cols: args.cols,
+      rows: args.rows,
+      cwd: args.spawnCwd,
+      env: args.env
+    })
+    args.onMacosTccSpawnStrategy?.('direct')
+    return {
+      process,
+      shellPath: args.isolatedLaunch.containerShellPath,
+      spawnCwd: args.spawnCwd,
+      startupCommandDeliveredInShellArgs: true,
+      reportsChildExitStatus: true
+    }
+  }
   let reportsChildExitStatus = true
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)

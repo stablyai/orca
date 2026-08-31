@@ -56,6 +56,10 @@ export class LocalPtyProvider implements IPtyProvider {
     this.opts = opts
   }
 
+  supportsWorkerAuthorityIsolation(_agent: NonNullable<PtySpawnOptions['launchAgent']>): boolean {
+    return false
+  }
+
   /**
    * Spawns or reattaches a local PTY session for the renderer process.
    *

@@ -101,11 +101,15 @@ export async function showContextOnlyWorker(
 }
 
 export function exposeWorker(worker: WorkerDispatchRow) {
+  const startOptions = JSON.parse(worker.start_options) as Record<string, unknown>
   return {
     ...worker,
     effects: JSON.parse(worker.effects) as unknown[],
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
-    startOptions: JSON.parse(worker.start_options) as unknown
+    startOptions,
+    ...(startOptions.authorityIsolation
+      ? { authorityIsolation: startOptions.authorityIsolation }
+      : {})
   }
 }
 

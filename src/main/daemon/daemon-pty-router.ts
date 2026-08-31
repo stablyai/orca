@@ -11,6 +11,7 @@ import type {
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 
 export class DaemonPtyRouter implements IPtyProvider {
@@ -54,6 +55,10 @@ export class DaemonPtyRouter implements IPtyProvider {
   supportsGitCredentialGuardHost(sessionId?: string): boolean {
     const adapter = sessionId ? this.adapterFor(sessionId) : this.current
     return adapter.supportsGitCredentialGuardHost()
+  }
+
+  supportsWorkerAuthorityIsolation(agent: TuiAgent): boolean {
+    return this.current.supportsWorkerAuthorityIsolation(agent)
   }
 
   supportsAgentSessionClaims(): boolean {
