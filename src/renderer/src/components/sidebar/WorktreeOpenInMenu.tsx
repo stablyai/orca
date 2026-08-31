@@ -156,7 +156,7 @@ function showOpenFailureToast(
       {
         description: translate(
           'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorUnsupportedDetail',
-          'Choose VS Code or use the app locally.'
+          'Choose VS Code or Cursor, or use the app locally.'
         )
       }
     )

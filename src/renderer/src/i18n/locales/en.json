@@ -5604,7 +5604,7 @@
           "sshAliasRequired": "VS Code needs an SSH config alias for this host.",
           "sshAliasRequiredDetail": "Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.",
           "remoteEditorUnsupported": "This app cannot open SSH workspaces.",
-          "remoteEditorUnsupportedDetail": "Choose VS Code or use the app locally.",
+          "remoteEditorUnsupportedDetail": "Choose VS Code or Cursor, or use the app locally.",
           "remotePathInvalid": "Path is not valid for the SSH host.",
           "remotePathInvalidDetail": "Refresh the workspace before trying again.",
           "remoteLaunchFailed": "Could not open the path in VS Code.",

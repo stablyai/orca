@@ -285,7 +285,7 @@ describe('WorktreeOpenInMenu', () => {
 
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
     expect(toastErrorMock).toHaveBeenCalledWith('This app cannot open SSH workspaces.', {
-      description: 'Choose VS Code or use the app locally.'
+      description: 'Choose VS Code or Cursor, or use the app locally.'
     })
   })
 
