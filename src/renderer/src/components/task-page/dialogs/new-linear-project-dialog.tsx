@@ -102,11 +102,14 @@ export function NewLinearProjectDialog({
                     <ChevronDown className="size-3 flex-none text-muted-foreground" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-72 p-1">
+                <PopoverContent
+                  align="start"
+                  className="w-72 p-1 popover-scroll-content scrollbar-sleek"
+                >
                   <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {translate('auto.components.TaskPage.a98cbe7664', 'Team')}
                   </div>
-                  <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                  <div>
                     {availableTeams.map((team) => (
                       <button
                         key={team.id}

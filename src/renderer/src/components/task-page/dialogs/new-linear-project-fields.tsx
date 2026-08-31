@@ -58,7 +58,7 @@ export function NewLinearProjectFields({
             <ChevronDown className="size-3 text-muted-foreground/70" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-48 p-1">
+        <PopoverContent align="start" className="w-48 p-1 popover-scroll-content scrollbar-sleek">
           <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
           </div>
@@ -101,7 +101,7 @@ export function NewLinearProjectFields({
             <ChevronDown className="size-3 text-muted-foreground/70" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-64 p-1">
+        <PopoverContent align="start" className="w-64 p-1 popover-scroll-content scrollbar-sleek">
           <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {translate('auto.components.TaskPage.34da8ac06c', 'Lead')}
           </div>
@@ -110,7 +110,7 @@ export function NewLinearProjectFields({
               <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+            <div>
               <button
                 type="button"
                 onClick={() => setNewLinearProjectLeadId(null)}
@@ -180,7 +180,7 @@ export function NewLinearProjectFields({
             <ChevronDown className="size-3 text-muted-foreground/70" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-64 p-1">
+        <PopoverContent align="start" className="w-64 p-1 popover-scroll-content scrollbar-sleek">
           <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {translate('auto.components.TaskPage.d6cda23ef1', 'Members')}
           </div>
@@ -189,7 +189,7 @@ export function NewLinearProjectFields({
               <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+            <div>
               {newLinearProjectMembers.data.map((member) => {
                 const selected = newLinearProjectMemberIds.includes(member.id)
                 return (
@@ -248,7 +248,7 @@ export function NewLinearProjectFields({
             <ChevronDown className="size-3 text-muted-foreground/70" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-64 p-1">
+        <PopoverContent align="start" className="w-64 p-1 popover-scroll-content scrollbar-sleek">
           <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
           </div>
@@ -257,7 +257,7 @@ export function NewLinearProjectFields({
               <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+            <div>
               {newLinearProjectLabels.data.length === 0 ? (
                 <div className="px-2 py-2 text-xs text-muted-foreground">
                   {translate('auto.components.TaskPage.af9e877f30', 'No labels')}
