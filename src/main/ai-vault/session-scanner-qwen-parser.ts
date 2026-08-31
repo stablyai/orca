@@ -1,4 +1,5 @@
-import { createReadStream } from 'node:fs'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import {
@@ -32,13 +33,18 @@ export async function parseQwenSessionFile(
   const state = createQwenSessionResumeState(file)
   try {
     const lines = createInterface({
-      input: createReadStream(file.path, { encoding: 'utf-8' }),
+      input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
       crlfDelay: Infinity
     })
     for await (const line of lines) {
       state.consumeLine(line)
     }
-  } catch {
+  } catch (error) {
+    // Gate refusal means the bytes exist but are unreachable — a partial
+    // session must not be cached (STA-4049).
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     // Unreadable/empty transcript — still list a metadata-only session.
   }
   return state.finalize(platform)
