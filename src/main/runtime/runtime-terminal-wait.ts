@@ -2,10 +2,7 @@ import type {
   RuntimeTerminalWait as RuntimeTerminalWaitResult,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult,
@@ -31,6 +28,16 @@ type RuntimeTerminalWaitDependencies = {
   quiescenceMs: number
   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
+  canResolveTuiIdleEvidence(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
+  canResolveTuiIdlePromptPreview(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
   startVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void
 }
 
@@ -44,25 +51,31 @@ export class RuntimeTerminalWait {
   /** Why one helper per record kind: every satisfaction site must rank the same way,
    *  or the immediate check and the poll disagree about the same pane. */
   private ptySatisfied(pty: RuntimePtyWorktreeRecord, waitText: string): boolean {
-    return isTuiIdleSatisfied({
-      record: pty,
-      readPositiveBodyEvidence: () =>
-        this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' || isKnownReadyPromptPreview(waitText),
-      agent: this.deps.getPaneAgent(pty.ptyId),
-      firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
-      quiescenceMs: this.deps.quiescenceMs
-    })
+    return (
+      isTuiIdleSatisfied({
+        record: pty,
+        readPositiveBodyEvidence: () =>
+          this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
+          this.deps.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt),
+        agent: this.deps.getPaneAgent(pty.ptyId),
+        firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
+        quiescenceMs: this.deps.quiescenceMs
+      }) && this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
+    )
   }
 
   private leafSatisfied(leaf: RuntimeLeafRecord, waitText: string): boolean {
-    return isTuiIdleSatisfied({
-      record: leaf,
-      rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-      readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
-      agent: this.deps.getPaneAgent(leaf.ptyId),
-      firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
-      quiescenceMs: this.deps.quiescenceMs
-    })
+    return (
+      isTuiIdleSatisfied({
+        record: leaf,
+        rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
+        readPositiveBodyEvidence: () =>
+          this.deps.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt),
+        agent: this.deps.getPaneAgent(leaf.ptyId),
+        firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
+        quiescenceMs: this.deps.quiescenceMs
+      }) && this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
+    )
   }
 
   async wait(

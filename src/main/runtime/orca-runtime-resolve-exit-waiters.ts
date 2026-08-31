@@ -4,10 +4,7 @@ import { OrcaRuntimeWithBindPtyIncarnationHandle } from './orca-runtime-bind-pty
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { buildPtyTerminalWaitResult, buildTerminalWaitResult } from './terminal-wait-results'
 import type { AgentStatus } from '../../shared/agent-detection'
-import {
-  detectExplicitIdleStatusFromTitle,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { isTuiIdleSatisfied } from './tui-idle-evidence'
 import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
@@ -56,7 +53,11 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
       return
     }
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+      if (
+        waiter.condition === 'tui-idle' &&
+        this.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
+      ) {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
       }
     }
@@ -95,7 +96,11 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
       return
     }
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+      if (
+        waiter.condition === 'tui-idle' &&
+        this.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
+      ) {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
       }
     }
@@ -103,32 +108,34 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
 
   // Why: the primary OSC-title signal can't fire for daemon-hosted terminals (no PTY data through the runtime), so this fallback polls the renderer-synced tab title + foreground-process quiescence; self-cancels when the OSC path fires.
   protected isTuiIdleSatisfiedForLeaf(leaf: RuntimeLeafRecord): boolean {
-    return isTuiIdleSatisfied({
-      record: leaf,
-      rendererTitle: leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title ?? null,
-      readPositiveBodyEvidence: () =>
-        isKnownReadyPromptPreview(
-          buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-        ),
-      agent: this.getPaneAgentForTuiIdle(leaf.ptyId),
-      firstPartyStatus:
-        (leaf.ptyId ? this.ptysById.get(leaf.ptyId)?.lastExplicitAgentStatus : null) ?? null,
-      quiescenceMs: TUI_IDLE_QUIESCENCE_MS
-    })
+    const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    return (
+      isTuiIdleSatisfied({
+        record: leaf,
+        rendererTitle: leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title ?? null,
+        readPositiveBodyEvidence: () =>
+          this.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt),
+        agent: this.getPaneAgentForTuiIdle(leaf.ptyId),
+        firstPartyStatus:
+          (leaf.ptyId ? this.ptysById.get(leaf.ptyId)?.lastExplicitAgentStatus : null) ?? null,
+        quiescenceMs: TUI_IDLE_QUIESCENCE_MS
+      }) && this.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
+    )
   }
 
   protected isTuiIdleSatisfiedForPty(pty: RuntimePtyWorktreeRecord): boolean {
-    return isTuiIdleSatisfied({
-      record: pty,
-      readPositiveBodyEvidence: () =>
-        this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
-        isKnownReadyPromptPreview(
-          buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-        ),
-      agent: this.getPaneAgentForTuiIdle(pty.ptyId),
-      firstPartyStatus: pty.lastExplicitAgentStatus ?? null,
-      quiescenceMs: TUI_IDLE_QUIESCENCE_MS
-    })
+    const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    return (
+      isTuiIdleSatisfied({
+        record: pty,
+        readPositiveBodyEvidence: () =>
+          this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
+          this.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt),
+        agent: this.getPaneAgentForTuiIdle(pty.ptyId),
+        firstPartyStatus: pty.lastExplicitAgentStatus ?? null,
+        quiescenceMs: TUI_IDLE_QUIESCENCE_MS
+      }) && this.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
+    )
   }
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {

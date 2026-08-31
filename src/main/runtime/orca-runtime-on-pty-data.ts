@@ -35,6 +35,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
     const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
+    this.recordAgentPromptTerminalEvidence(ptyId, normalizeTerminalChunk(data, '').text)
     this.recordRecentPtyOutputForPathProvenance(ptyId, data)
     // Why: watch terminal output for advertised dev-server URLs (e.g. Vite's
     // `Network: https://local.example.com:3001/`) so the workspace ports

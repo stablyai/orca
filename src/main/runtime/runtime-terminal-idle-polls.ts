@@ -1,9 +1,6 @@
 import { isShellProcess, type AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult,
@@ -30,6 +27,16 @@ type RuntimeTerminalIdlePollDependencies = {
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
   /** Re-read the record the waiter registered against; see `liveLeaf` below. */
   getLiveLeaf(leaf: RuntimeLeafRecord): RuntimeLeafRecord
+  canResolveTuiIdleEvidence(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
+  canResolveTuiIdlePromptPreview(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
 }
 
@@ -114,11 +121,12 @@ export class RuntimeTerminalIdlePolls {
         isTuiIdleSatisfied({
           record: leaf,
           rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-          readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
+          readPositiveBodyEvidence: () =>
+            this.deps.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt),
           agent,
           firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
           quiescenceMs: this.deps.quiescenceMs
-        })
+        }) && this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
@@ -181,11 +189,11 @@ export class RuntimeTerminalIdlePolls {
           record: pty,
           readPositiveBodyEvidence: () =>
             this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
-            isKnownReadyPromptPreview(waitText),
+            this.deps.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt),
           agent,
           firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
           quiescenceMs: this.deps.quiescenceMs
-        })
+        }) && this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
