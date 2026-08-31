@@ -16365,11 +16365,20 @@
           "result": "passed",
           "durationSeconds": 48,
           "summary": "The extracted candidate AppRun passed process-group SIGINT and systemd-mixed main-PID SIGTERM under Ubuntu 26.04 amd64 emulation with status zero, no fatal evidence, full listener/Xvfb/tree cleanup, and an unchanged canary identity."
+        },
+        {
+          "date": "2026-08-31",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64",
+          "result": "passed",
+          "durationSeconds": 1336,
+          "summary": "Native-amd64 PR package job https://github.com/stablyai/orca/actions/runs/33360129768/job/99389831915 built AppImage SHA-256 999d43bfe123e87a77fe917a5f46be1efd5c45a5205f99f02998a75136d8a793 and ran the restricted original-AppImage startup oracle before each of the three signal matrices. Each startup reached the exact updater-setup-done marker with stable launcher/Xvfb PID-start-tick identities and bounded TERM/KILL cleanup; SIGINT and SIGTERM then returned wait status 0 with no fatal evidence, listener, descendant, Xvfb, or canary residue. This is CI evidence only; no fresh local Docker oracle is claimed."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 240,
-        "scope": "two fresh Ubuntu 26.04 containers, one per foreground signal"
+        "p95Seconds": 1800,
+        "scope": "three AppImage startup/extraction matrices, each with fresh Ubuntu 26.04 INT and TERM containers"
       },
       "flakeHistory": {
         "status": "not-started",
