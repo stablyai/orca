@@ -80,7 +80,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const requestedWorktree = params.worktree ?? 'current'
       const createsWorktree =
         requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-      const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+      let { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
       const coordinatorTerminal = await runtime.showTerminal(params.from)
       const creationWorktree = createsWorktree
@@ -98,16 +98,16 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         : requestedWorktree === 'current'
           ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
           : await runtime.showManagedTerminalWorkspace(requestedWorktree)
-      let explicitTerminal
       if (params.terminal) {
-        explicitTerminal = await runtime.showTerminal(params.terminal)
+        const explicitTerminal = await runtime.showTerminal(params.terminal)
         if (explicitTerminal.worktreeId !== resolvedWorktree?.id) {
           throw new OrchestrationError(
             'terminal_worktree_mismatch',
             `Terminal ${params.terminal} does not belong to worktree ${resolvedWorktree?.id}.`
           )
         }
-        if (!(await runtime.isTerminalRunningAgent(params.terminal))) {
+        agent = (await runtime.getTerminalRunningTuiAgent(params.terminal)) ?? undefined
+        if (!agent) {
           throw new OrchestrationError(
             'agent_unconfigured',
             `Terminal ${params.terminal} is not running a recognized agent.`

@@ -188,10 +188,12 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
         ? lifecycle.status
         : (explicit?.status ?? ptyStatus ?? null)
     return {
+      agent: this.getPtyAgent(ptyId),
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
       workingSequence: lifecycle?.workingSequence ?? 0,
       explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
+      terminalWorkingSequence: this.agentPromptTerminalWorkingSequenceByPtyId.get(ptyId) ?? 0,
       outputSequence,
       status
     }

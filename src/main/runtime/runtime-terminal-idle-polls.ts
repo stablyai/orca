@@ -2,8 +2,7 @@ import { isShellProcess, type AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
 import {
   detectExplicitIdleStatusFromTitle,
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
+  detectTerminalWaitBlockedReason
 } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
@@ -21,6 +20,16 @@ type RuntimeTerminalIdlePollDependencies = {
   getTabTitle(tabId: string): string | null
   getForegroundProcess(ptyId: string): Promise<string | null> | null
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
+  canResolveTuiIdleEvidence(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
+  canResolveTuiIdlePromptPreview(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
 }
 
@@ -35,18 +44,25 @@ export class RuntimeTerminalIdlePolls {
       }
       let startedForegroundPoll = false
       try {
-        if (leaf.lastAgentStatus === 'idle') {
+        const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+        if (
+          leaf.lastAgentStatus === 'idle' &&
+          this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
+        ) {
           this.stop(waiter)
           this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
           return
         }
         const title = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
-        if (title && detectExplicitIdleStatusFromTitle(title) === 'idle') {
+        if (
+          title &&
+          detectExplicitIdleStatusFromTitle(title) === 'idle' &&
+          this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
+        ) {
           this.stop(waiter)
           this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
           return
         }
-        const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
         const blockedReason = detectTerminalWaitBlockedReason(waitText)
         if (blockedReason) {
           this.stop(waiter)
@@ -56,12 +72,20 @@ export class RuntimeTerminalIdlePolls {
           )
           return
         }
-        if (isKnownReadyPromptPreview(waitText)) {
+        if (
+          this.deps.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt) &&
+          this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
+        ) {
           this.stop(waiter)
           this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
           return
         }
-        if (leaf.lastAgentStatus === null && leaf.ptyId && !foregroundPollInFlight) {
+        if (
+          leaf.lastAgentStatus === null &&
+          leaf.ptyId &&
+          this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt) &&
+          !foregroundPollInFlight
+        ) {
           const foregroundRead = this.deps.getForegroundProcess(leaf.ptyId)
           if (!foregroundRead) {
             return
@@ -96,12 +120,15 @@ export class RuntimeTerminalIdlePolls {
       }
       let startedForegroundPoll = false
       try {
-        if (pty.lastAgentStatus === 'idle') {
+        const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+        if (
+          pty.lastAgentStatus === 'idle' &&
+          this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
+        ) {
           this.stop(waiter)
           this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
         const blockedReason = detectTerminalWaitBlockedReason(waitText)
         if (blockedReason) {
           this.stop(waiter)
@@ -112,14 +139,19 @@ export class RuntimeTerminalIdlePolls {
           return
         }
         if (
-          this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
-          isKnownReadyPromptPreview(waitText)
+          (this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
+            this.deps.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt)) &&
+          this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
         ) {
           this.stop(waiter)
           this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        if (pty.lastAgentStatus === null && !foregroundPollInFlight) {
+        if (
+          pty.lastAgentStatus === null &&
+          this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt) &&
+          !foregroundPollInFlight
+        ) {
           const foregroundRead = this.deps.getForegroundProcess(pty.ptyId)
           if (!foregroundRead) {
             return

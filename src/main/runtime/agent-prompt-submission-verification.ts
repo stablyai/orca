@@ -11,12 +11,14 @@ const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
 export const AGENT_PROMPT_STALLED_ERROR = 'agent_prompt_stalled'
 
 export type AgentPromptActivity = Readonly<{
+  agent?: TuiAgent | null
   generation: number
   permissionSequence: number
   workingSequence: number
   /** When the hook's current `working` turn began; reaches the runtime with no window and no
    *  title coverage. Pinned across same-state pings, so a refresh alone cannot move it. */
   explicitWorkingStartedAt: number | null
+  terminalWorkingSequence: number
   /** PTY bytes seen on this pane; delivery evidence when a turn-start edge cannot be observed. */
   outputSequence: number
   status: 'working' | 'permission' | 'idle' | null
@@ -96,6 +98,9 @@ function agentPromptEffectObserved(
   baseline: AgentPromptActivity,
   current: AgentPromptActivity
 ): boolean {
+  if (baseline.agent === 'codex' || current.agent === 'codex') {
+    return current.terminalWorkingSequence > baseline.terminalWorkingSequence
+  }
   return (
     current.workingSequence > baseline.workingSequence ||
     observedHookWorkingAfterBaseline(baseline, current) ||

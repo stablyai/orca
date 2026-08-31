@@ -103,7 +103,7 @@ function findCursorReadyPromptIndex(normalized: string): number | null {
   return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
 }
 
-function findCodexReadyPromptIndex(normalized: string): number | null {
+export function findCodexReadyPromptIndex(normalized: string): number | null {
   const headerIndex = normalized.lastIndexOf('openai codex')
   if (headerIndex === -1) {
     return null

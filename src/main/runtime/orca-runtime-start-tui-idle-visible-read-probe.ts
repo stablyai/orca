@@ -68,8 +68,17 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         }
         const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        if (!blockedReason && !isKnownReadyPromptPreview(snapshotText)) {
-          return
+        if (!blockedReason) {
+          const livePty = this.getLivePtyForHandle(waiter.handle)
+          const liveLeaf = livePty ? null : this.getLiveLeafForHandle(waiter.handle).leaf
+          const ptyId = livePty?.pty.ptyId ?? liveLeaf?.ptyId ?? null
+          const lastOutputAt = livePty?.pty.lastOutputAt ?? liveLeaf?.lastOutputAt ?? null
+          if (
+            !isKnownReadyPromptPreview(snapshotText) ||
+            !this.canResolveTuiIdleEvidence(ptyId, snapshotText, lastOutputAt)
+          ) {
+            return
+          }
         }
         const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
         if (waiter.pollInterval) {

@@ -4,8 +4,7 @@ import type {
 } from '../../shared/runtime-types'
 import {
   detectExplicitIdleStatusFromTitle,
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
+  detectTerminalWaitBlockedReason
 } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
@@ -27,6 +26,16 @@ type RuntimeTerminalWaitDependencies = {
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
   getTabTitle(tabId: string): string | null
+  canResolveTuiIdleEvidence(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
+  canResolveTuiIdlePromptPreview(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
   startVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void
 }
 
@@ -60,13 +69,22 @@ export class RuntimeTerminalWait {
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
-      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
+      if (
+        condition === 'tui-idle' &&
+        pty.pty.lastAgentStatus === 'idle' &&
+        this.deps.canResolveTuiIdleEvidence(pty.pty.ptyId, ptyWaitText, pty.pty.lastOutputAt)
+      ) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       if (
         condition === 'tui-idle' &&
         (this.deps.getAdoptedPtyIdleStatus(pty.pty) === 'idle' ||
-          isKnownReadyPromptPreview(ptyWaitText))
+          this.deps.canResolveTuiIdlePromptPreview(
+            pty.pty.ptyId,
+            ptyWaitText,
+            pty.pty.lastOutputAt
+          )) &&
+        this.deps.canResolveTuiIdleEvidence(pty.pty.ptyId, ptyWaitText, pty.pty.lastOutputAt)
       ) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
@@ -115,11 +133,27 @@ export class RuntimeTerminalWait {
               waiter,
               buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
             )
-          } else if (live.pty.lastAgentStatus === 'idle') {
+          } else if (
+            live.pty.lastAgentStatus === 'idle' &&
+            this.deps.canResolveTuiIdleEvidence(
+              live.pty.ptyId,
+              livePtyWaitText,
+              live.pty.lastOutputAt
+            )
+          ) {
             this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else if (
-            this.deps.getAdoptedPtyIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
+            (this.deps.getAdoptedPtyIdleStatus(live.pty) === 'idle' ||
+              this.deps.canResolveTuiIdlePromptPreview(
+                live.pty.ptyId,
+                livePtyWaitText,
+                live.pty.lastOutputAt
+              )) &&
+            this.deps.canResolveTuiIdleEvidence(
+              live.pty.ptyId,
+              livePtyWaitText,
+              live.pty.lastOutputAt
+            )
           ) {
             this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
@@ -147,14 +181,19 @@ export class RuntimeTerminalWait {
     // detection that powers the renderer's "Task complete" notifications.
     // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
     // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
+    if (
+      condition === 'tui-idle' &&
+      leaf.lastAgentStatus === 'idle' &&
+      this.deps.canResolveTuiIdleEvidence(leaf.ptyId, leafWaitText, leaf.lastOutputAt)
+    ) {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
     if (condition === 'tui-idle') {
       const fastPathTitle = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
       if (
-        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-        isKnownReadyPromptPreview(leafWaitText)
+        ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+          this.deps.canResolveTuiIdlePromptPreview(leaf.ptyId, leafWaitText, leaf.lastOutputAt)) &&
+        this.deps.canResolveTuiIdleEvidence(leaf.ptyId, leafWaitText, leaf.lastOutputAt)
       ) {
         return buildTerminalWaitResult(handle, condition, leaf)
       }
@@ -214,7 +253,14 @@ export class RuntimeTerminalWait {
               waiter,
               buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
             )
-          } else if (live.leaf.lastAgentStatus === 'idle') {
+          } else if (
+            live.leaf.lastAgentStatus === 'idle' &&
+            this.deps.canResolveTuiIdleEvidence(
+              live.leaf.ptyId,
+              liveLeafWaitText,
+              live.leaf.lastOutputAt
+            )
+          ) {
             // Why: don't clear lastAgentStatus here. It's a factual record of the
             // last detected OSC state, not a one-shot signal. Clearing it causes
             // subsequent tui-idle waiters to hang even though the agent is idle —
@@ -226,8 +272,17 @@ export class RuntimeTerminalWait {
             // preview/title until the waiter resolves or hits its timeout.
             const fastPathTitle = live.leaf.paneTitle ?? this.deps.getTabTitle(live.leaf.tabId)
             if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
+              ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+                this.deps.canResolveTuiIdlePromptPreview(
+                  live.leaf.ptyId,
+                  liveLeafWaitText,
+                  live.leaf.lastOutputAt
+                )) &&
+              this.deps.canResolveTuiIdleEvidence(
+                live.leaf.ptyId,
+                liveLeafWaitText,
+                live.leaf.lastOutputAt
+              )
             ) {
               this.waiters.resolve(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
             } else {

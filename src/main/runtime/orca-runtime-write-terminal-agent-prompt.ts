@@ -95,6 +95,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       timeoutMs: resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId)),
       signal: options.signal
     })
+    this.agentPromptAcceptedGenerationByPtyId.set(ptyId, generation)
     return 1
   }
 }

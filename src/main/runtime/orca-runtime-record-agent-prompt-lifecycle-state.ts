@@ -7,6 +7,9 @@ import { detectAgentStatusFromTitle } from '../../shared/agent-detection'
 import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
 import type { RemoteTerminalSourceRangeConsumerHooks } from './remote-terminal-source-range-consumer'
 
+const AGENT_PROMPT_TERMINAL_EVIDENCE_CARRY_CHARS = 256
+const CODEX_TERMINAL_WORKING_INDICATOR = /\bWorking\s*\([^)]{0,160}\besc to interrupt\b/i
+
 export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   protected recordAgentPromptLifecycleState(ptyId: string, status: AgentStatus | null): void {
     if (status === 'permission') {
@@ -34,6 +37,23 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     this.agentPromptPermissionSequenceByPtyId.set(
       ptyId,
       (this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0) + 1
+    )
+  }
+
+  protected recordAgentPromptTerminalEvidence(ptyId: string, text: string): void {
+    const carry = this.agentPromptTerminalEvidenceCarryByPtyId.get(ptyId) ?? ''
+    const combined = `${carry}${text}`
+    const marker = CODEX_TERMINAL_WORKING_INDICATOR.exec(combined)
+    CODEX_TERMINAL_WORKING_INDICATOR.lastIndex = 0
+    if (marker && marker.index + marker[0].length > carry.length) {
+      this.agentPromptTerminalWorkingSequenceByPtyId.set(
+        ptyId,
+        (this.agentPromptTerminalWorkingSequenceByPtyId.get(ptyId) ?? 0) + 1
+      )
+    }
+    this.agentPromptTerminalEvidenceCarryByPtyId.set(
+      ptyId,
+      combined.slice(-AGENT_PROMPT_TERMINAL_EVIDENCE_CARRY_CHARS)
     )
   }
 
@@ -87,6 +107,9 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     this.stopRequestedPtyIds.delete(ptyId)
     this.agentPromptLifecycleByPtyId.delete(ptyId)
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
+    this.agentPromptTerminalWorkingSequenceByPtyId.delete(ptyId)
+    this.agentPromptTerminalEvidenceCarryByPtyId.delete(ptyId)
+    this.agentPromptAcceptedGenerationByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
     this.legacyWorkerRecovery.deleteRecoveredPty(ptyId)
     // Why: a respawn under the same session id needs its own subscriber-driven attach.

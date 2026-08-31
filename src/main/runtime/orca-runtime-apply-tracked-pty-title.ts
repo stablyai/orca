@@ -139,6 +139,9 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.agentPromptLifecycleByPtyId.delete(ptyId)
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
+    this.agentPromptTerminalWorkingSequenceByPtyId.delete(ptyId)
+    this.agentPromptTerminalEvidenceCarryByPtyId.delete(ptyId)
+    this.agentPromptAcceptedGenerationByPtyId.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
     const pty = this.ptysById.get(ptyId)
     if (pty) {
