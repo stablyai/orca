@@ -136,6 +136,16 @@ export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-resume.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
+// Why: older hosts answer git.lineBlame and git.fileBlame with method_not_found,
+// so clients must hide authorship for remote runtimes unless advertised.
+//
+// Why one capability for both methods: they are registered together and
+// unconditionally, so no host can ever answer one and not the other — two names
+// could never disagree, and gating them separately made a client probe twice.
+// That is not free: a negative capability answer clears its own cache entry to
+// force a re-probe, so against an older host each resting cursor line would burn
+// two `status.get` round trips instead of one, indefinitely.
+export const GIT_BLAME_RUNTIME_CAPABILITY = 'git.blame.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
 export const GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY = 'github.markPRReadyForReview' as const
@@ -245,7 +255,8 @@ export const RUNTIME_CAPABILITIES = [
   SKILL_DELETE_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  GIT_BLAME_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

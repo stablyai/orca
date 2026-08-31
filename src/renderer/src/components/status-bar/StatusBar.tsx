@@ -124,6 +124,11 @@ const ResourceUsageStatusSegment = lazyWithRetry(() =>
 const PortsStatusSegment = lazyWithRetry(() =>
   import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
 )
+const LineBlameStatusSegment = lazyWithRetry(() =>
+  import('./LineBlameStatusSegment').then((module) => ({
+    default: module.LineBlameStatusSegment
+  }))
+)
 const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
@@ -2160,6 +2165,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
+  const showLineBlame = statusBarItems.includes('line-blame')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   // Why: meter-only children (excludes resource-usage) so the % display callout anchors to a real meter cluster.
@@ -2400,6 +2406,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
           ) : null}
           {showPorts ? <PortsStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
+          {showLineBlame ? <LineBlameStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
           {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
         </React.Suspense>
         {showFloatingTerminalToggle && (
