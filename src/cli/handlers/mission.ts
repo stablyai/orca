@@ -4,6 +4,10 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserWorktreeSelector } from '../selectors'
 import {
+  formatMissionAttention,
+  type MissionAttention
+} from './mission/mission-attention-reporting'
+import {
   executeMissionRun,
   type MissionPlanRpcResult,
   type MissionTask
@@ -47,7 +51,8 @@ export const MISSION_HANDLERS: Record<string, CommandHandler> = {
       agent: planned.result.agent,
       agentCandidates: planned.result.agentCandidates,
       tasks,
-      maxConcurrency
+      maxConcurrency,
+      onAttention: (attention) => reportMissionAttention(from, attention)
     })
 
     if (summary.state === 'failed') {
@@ -60,4 +65,8 @@ export const MISSION_HANDLERS: Record<string, CommandHandler> = {
         `Mission run ${value.runId} ${value.state}: ${value.completedTasks} completed, ${value.failedTasks} failed.`
     )
   }
+}
+
+function reportMissionAttention(from: string, attention: MissionAttention): void {
+  console.error(formatMissionAttention(attention, from))
 }
