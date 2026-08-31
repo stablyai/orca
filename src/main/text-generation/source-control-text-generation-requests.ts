@@ -17,12 +17,15 @@ import {
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import {
   planCommitMessageGeneration,
-  type CommitMessagePlan
+  type CommitMessagePlan,
+  type CommitMessagePlanResult
 } from '../../shared/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
+import { planOmpMissionGeneration } from './omp-mission-generation-plan'
+import { withOmpMissionProcessFiles } from './omp-mission-process-files'
 import { runLocalPlanForAgent } from './source-control-local-generation'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
 import type {
@@ -74,22 +77,61 @@ async function executeGenerationPlan(input: {
       })
 }
 
-export async function generateText(input: {
+type GenerateTextInput = {
   prompt: string
   params: GenerateParams
   target: CommitMessageGenerationTarget
   operation: TextGenerationOperation
   useAgentDefaultModel?: boolean
   spawnAgent: SpawnSourceControlAgent
-}): Promise<GenerateTextResult> {
-  const planned = planCommitMessageGeneration(
-    {
-      ...input.params,
-      backslash: commandBackslashMode(input.target),
-      useAgentDefaultModel: input.useAgentDefaultModel
-    },
-    input.prompt
+}
+
+export async function generateText(input: GenerateTextInput): Promise<GenerateTextResult> {
+  const backslash = commandBackslashMode(input.target)
+  // OMP planning must not change the Source Control AI capability registry.
+  if (
+    input.operation === 'mission-plan' &&
+    input.params.agentId === 'omp' &&
+    input.useAgentDefaultModel
+  ) {
+    if (input.target.kind !== 'local' || input.target.wslDistro) {
+      return {
+        success: false,
+        error: 'OMP Mission planning requires the local controller host for its isolated process.'
+      }
+    }
+    try {
+      return await withOmpMissionProcessFiles((files) =>
+        generatePlannedText(
+          input,
+          planOmpMissionGeneration(
+            input.prompt,
+            input.params.agentCommandOverride,
+            backslash,
+            files
+          )
+        )
+      )
+    } catch {
+      return {
+        success: false,
+        error: 'OMP Mission planner could not prepare its isolated process.'
+      }
+    }
+  }
+  return generatePlannedText(
+    input,
+    planCommitMessageGeneration(
+      { ...input.params, backslash, useAgentDefaultModel: input.useAgentDefaultModel },
+      input.prompt
+    )
   )
+}
+
+async function generatePlannedText(
+  input: GenerateTextInput,
+  planned: CommitMessagePlanResult
+): Promise<GenerateTextResult> {
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }

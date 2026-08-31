@@ -78,13 +78,13 @@ async function planMissionWithAgent(
   settings: ReturnType<OrcaRuntimeService['getClientSettings']>
 ) {
   const plannerSpec = getCommitMessageAgentSpec(agent)
-  if (!plannerSpec) {
+  if (!plannerSpec && agent !== 'omp') {
     return { mission, agent, plan: { mode: 'single-agent' as const } }
   }
 
   const generationParams = {
     agentId: agent,
-    model: plannerSpec.defaultModelId,
+    model: plannerSpec?.defaultModelId ?? '',
     agentCommandOverride: settings.agentCmdOverrides?.[agent]
   }
   const generationTarget = { kind: 'local' as const, cwd: homedir() }

@@ -126,4 +126,16 @@ describe('Mission planning contract', () => {
     expect(prompt).toContain('must use collaboration topics')
     expect(prompt).toContain('Return JSON only')
   })
+
+  it('distinguishes broad independent investigation from an atomic check without forcing a count', () => {
+    const prompt = buildMissionPlanningPrompt('分析电脑性能缺陷')
+    expect(prompt).toContain('independent evidence-gathering or analysis tracks')
+    expect(prompt).toContain('not merely whether one agent could do all the work')
+    expect(prompt).toContain('whole-computer performance diagnosis')
+    expect(prompt).toContain('checking free disk space')
+    expect(prompt).toContain('explicit request to use only one agent')
+    expect(prompt).toContain('takes precedence over all orchestration guidance below')
+    expect(prompt).toContain('Do not invent extra tasks merely to increase agent count')
+    expect(prompt).toContain('does not authorize repairs')
+  })
 })
