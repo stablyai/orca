@@ -13,6 +13,7 @@ import {
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
+import { shouldRequestCombinedDiffSectionLoad } from '../../editor/combined-diff/load-sections/combined-diff-section-load-state'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
@@ -242,6 +243,18 @@ export function PRFilesCombinedDiffViewer({
     pendingRestoreScrollTopRef
   })
 
+  const ensureCombinedDiffSectionLoaded = useCallback(
+    (index: number): void => {
+      const section = sectionsRef.current[index]
+      if (!shouldRequestCombinedDiffSectionLoad(section, loadingIndicesRef.current.has(index))) {
+        return
+      }
+      loadedIndicesRef.current.delete(index)
+      window.requestAnimationFrame(() => loadSection(index))
+    },
+    [loadSection]
+  )
+
   const handleTreeNavigate = useCallback(
     (entry: CombinedDiffFileTreeEntry) => {
       const navigatedIndex = handleCombinedDiffFileTreeNavigation({
@@ -250,13 +263,14 @@ export function PRFilesCombinedDiffViewer({
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
+        loadSection: ensureCombinedDiffSectionLoaded,
         scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
       })
       if (navigatedIndex !== null) {
         setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
       }
     },
-    [sectionIndexByKey, setActiveTreeSectionKey, toggleSection, virtualizer]
+    [ensureCombinedDiffSectionLoaded, sectionIndexByKey, setActiveTreeSectionKey, toggleSection, virtualizer]
   )
 
   const openFilesOnGitHub = useCallback(() => {
