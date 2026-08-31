@@ -140,13 +140,24 @@ function skipWhitespace(source: string, start: number): number {
 function valueEnd(source: string, start: number): number {
   const string = parseTomlStringValue(source, start)
   if (string) {
-    return string.end
+    let end = string.end
+    const quote = source[start]
+    if (source.startsWith('"""', start) || source.startsWith("'''", start)) {
+      // TOML permits one or two quote characters immediately before the closing delimiter.
+      while (end < string.end + 2 && source[end] === quote) {
+        end += 1
+      }
+    }
+    return end
   }
   const closing = source[start] === '{' ? '}' : source[start] === '[' ? ']' : null
   let index = start + (closing ? 1 : 0)
   if (closing) {
     while (index < source.length && source[index] !== closing) {
-      if (
+      if (source[index] === '#') {
+        const newline = source.indexOf('\n', index)
+        index = newline === -1 ? source.length : newline + 1
+      } else if (
         source[index] === '"' ||
         source[index] === "'" ||
         source[index] === '{' ||
