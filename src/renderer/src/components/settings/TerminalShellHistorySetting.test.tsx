@@ -69,4 +69,25 @@ describe('TerminalShellHistorySetting', () => {
     expect(updateSettings).toHaveBeenCalledOnce()
     expect(updateSettings).toHaveBeenCalledWith({ terminalScopeHistoryByWorktree: false })
   })
+
+  it('blocks repeated toggles while persistence is pending', async () => {
+    let resolveWrite: (() => void) | undefined
+    const write = new Promise<void>((resolve) => {
+      resolveWrite = resolve
+    })
+    const updateSettings = vi.fn(() => write)
+    const toggle = renderSetting(true, updateSettings)
+
+    act(() => {
+      toggle.click()
+      toggle.click()
+    })
+
+    expect(toggle.disabled).toBe(true)
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(updateSettings).toHaveBeenCalledOnce()
+    expect(updateSettings).toHaveBeenCalledWith({ terminalScopeHistoryByWorktree: false })
+
+    await act(async () => resolveWrite?.())
+  })
 })
