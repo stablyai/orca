@@ -17098,6 +17098,125 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  // Why (#9905): Grok Build keeps an idle OSC title + ready composer while
+  // background tasks still run. tui-idle must not treat that as task-complete.
+  it('does not resolve tui-idle while Grok background tasks are still active', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData(
+        'pty-bg',
+        [
+          '\x1b]0;grok\x07',
+          'Tasks 1\n',
+          'Task Background sleep 60 for Orca repro  33s\n',
+          'watching · 1 command\n',
+          '> '
+        ].join(''),
+        Date.now()
+      )
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 5_000
+      })
+      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+      await vi.advanceTimersByTimeAsync(5_000)
+      await timeoutAssertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves tui-idle for Grok once background tasks clear', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    // Why: seed active background work, then clear — proves Tasks 1 → Tasks 0 releases waiters.
+    runtime.onPtyData('pty-bg', 'Tasks 1\nwatching · 1 command\n> ', Date.now())
+    const waitPromise = runtime.waitForTerminal(handle, {
+      condition: 'tui-idle',
+      timeoutMs: 1_000
+    })
+    runtime.onPtyData(
+      'pty-bg',
+      ['\x1b]0;grok\x07', 'Tasks 0\n', 'No background tasks\n', '> '].join(''),
+      Date.now()
+    )
+
+    await expect(waitPromise).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      status: 'running'
+    })
+  })
+
+  // Why (#9905): live OSC idle transition is the primary waiter path and must
+  // not bypass the background-work veto (immediate/poll paths alone are not enough).
+  it('does not resolve tui-idle on idle OSC title while Grok background tasks remain', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      runtime.onPtyData(
+        'pty-bg',
+        [
+          '\x1b]0;\u280b Grok\x07',
+          'Tasks 1\n',
+          'Task Background sleep 60 for Orca repro  33s\n',
+          'watching · 1 command\n',
+          '> '
+        ].join(''),
+        Date.now()
+      )
+
+      const waitPromise = runtime.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 5_000
+      })
+      let settled: 'resolved' | 'rejected' | null = null
+      void waitPromise.then(
+        () => {
+          settled = 'resolved'
+        },
+        () => {
+          settled = 'rejected'
+        }
+      )
+
+      // Non-idle → idle title transition while HUD still shows Tasks 1
+      runtime.onPtyData('pty-bg', '\x1b]0;Grok\x07', Date.now())
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(settled).toBeNull()
+
+      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+      await vi.advanceTimersByTimeAsync(5_000)
+      await timeoutAssertion
+      expect(settled).toBe('rejected')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves tui-idle from an Antigravity ready prompt preview', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

@@ -21890,11 +21890,16 @@ export class OrcaRuntimeService {
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
-      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
+      if (
+        condition === 'tui-idle' &&
+        !hasActiveAgentBackgroundWork(ptyWaitText) &&
+        pty.pty.lastAgentStatus === 'idle'
+      ) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       if (
         condition === 'tui-idle' &&
+        !hasActiveAgentBackgroundWork(ptyWaitText) &&
         (this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
           isKnownReadyPromptPreview(ptyWaitText))
       ) {
@@ -21950,11 +21955,15 @@ export class OrcaRuntimeService {
               waiter,
               buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
             )
-          } else if (live.pty.lastAgentStatus === 'idle') {
+          } else if (
+            !hasActiveAgentBackgroundWork(livePtyWaitText) &&
+            live.pty.lastAgentStatus === 'idle'
+          ) {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else if (
-            this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
+            !hasActiveAgentBackgroundWork(livePtyWaitText) &&
+            (this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
+              isKnownReadyPromptPreview(livePtyWaitText))
           ) {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
@@ -21980,10 +21989,15 @@ export class OrcaRuntimeService {
     // detection that powers the renderer's "Task complete" notifications.
     // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
     // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
+    // Why: also refuse idle while Grok-style background tasks are still active (#9905).
+    if (
+      condition === 'tui-idle' &&
+      !hasActiveAgentBackgroundWork(leafWaitText) &&
+      leaf.lastAgentStatus === 'idle'
+    ) {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
-    if (condition === 'tui-idle') {
+    if (condition === 'tui-idle' && !hasActiveAgentBackgroundWork(leafWaitText)) {
       const fastPathTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
       if (
         (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
@@ -22052,7 +22066,10 @@ export class OrcaRuntimeService {
               waiter,
               buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
             )
-          } else if (live.leaf.lastAgentStatus === 'idle') {
+          } else if (
+            !hasActiveAgentBackgroundWork(liveLeafWaitText) &&
+            live.leaf.lastAgentStatus === 'idle'
+          ) {
             // Why: don't clear lastAgentStatus here. It's a factual record of the
             // last detected OSC state, not a one-shot signal. Clearing it causes
             // subsequent tui-idle waiters to hang even though the agent is idle —
@@ -22062,10 +22079,12 @@ export class OrcaRuntimeService {
             // Why: renderer-synced previews can show a known ready prompt even
             // while the last OSC title is still "working"; keep polling the
             // preview/title until the waiter resolves or hits its timeout.
+            // Why: suppress while Grok-style background tasks are still active (#9905).
             const fastPathTitle = live.leaf.paneTitle ?? this.tabs.get(live.leaf.tabId)?.title
             if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
+              !hasActiveAgentBackgroundWork(liveLeafWaitText) &&
+              ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+                isKnownReadyPromptPreview(liveLeafWaitText))
             ) {
               this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
             } else {
@@ -38047,8 +38066,13 @@ export class OrcaRuntimeService {
     if (!waiters || waiters.size === 0) {
       return
     }
+    // Why: OSC idle can fire while Grok background tasks still run (#9905).
+    // Skip here; the fallback poll re-checks and resolves once work clears.
+    const backgroundWorkActive = hasActiveAgentBackgroundWork(
+      buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    )
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      if (waiter.condition === 'tui-idle' && !backgroundWorkActive) {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
       }
     }
@@ -38102,8 +38126,13 @@ export class OrcaRuntimeService {
     if (!waiters || waiters.size === 0) {
       return
     }
+    // Why: title-transition path is the primary live trigger; gate it the same
+    // as immediate/poll checks so Grok background HUD still blocks tui-idle.
+    const backgroundWorkActive = hasActiveAgentBackgroundWork(
+      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    )
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      if (waiter.condition === 'tui-idle' && !backgroundWorkActive) {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
       }
     }
@@ -38122,7 +38151,14 @@ export class OrcaRuntimeService {
       }
       let startedForegroundPoll = false
       try {
-        if (leaf.lastAgentStatus === 'idle') {
+        const leafWaitText = buildTerminalWaitText(
+          leaf.tailBuffer,
+          leaf.tailPartialLine,
+          leaf.preview
+        )
+        // Why: Grok can stay OSC-idle while background tasks still run (#9905).
+        const backgroundWorkActive = hasActiveAgentBackgroundWork(leafWaitText)
+        if (leaf.lastAgentStatus === 'idle' && !backgroundWorkActive) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -38132,7 +38168,7 @@ export class OrcaRuntimeService {
         }
         // Why: the renderer-synced title is the only path where OSC titles are visible for daemon-hosted terminals.
         const pollTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
-        if (pollTitle) {
+        if (pollTitle && !backgroundWorkActive) {
           const titleStatus = detectExplicitIdleStatusFromTitle(pollTitle)
           if (titleStatus === 'idle') {
             if (waiter.pollInterval) {
@@ -38143,11 +38179,6 @@ export class OrcaRuntimeService {
             return
           }
         }
-        const leafWaitText = buildTerminalWaitText(
-          leaf.tailBuffer,
-          leaf.tailPartialLine,
-          leaf.preview
-        )
         const blockedReason = detectTerminalWaitBlockedReason(leafWaitText)
         if (blockedReason) {
           if (waiter.pollInterval) {
@@ -38219,7 +38250,10 @@ export class OrcaRuntimeService {
       }
       let startedForegroundPoll = false
       try {
-        if (pty.lastAgentStatus === 'idle') {
+        const ptyWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+        // Why: Grok can stay OSC-idle while background tasks still run (#9905).
+        const backgroundWorkActive = hasActiveAgentBackgroundWork(ptyWaitText)
+        if (pty.lastAgentStatus === 'idle' && !backgroundWorkActive) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -38227,7 +38261,6 @@ export class OrcaRuntimeService {
           this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        const ptyWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
         const blockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
         if (blockedReason) {
           if (waiter.pollInterval) {
@@ -38242,8 +38275,9 @@ export class OrcaRuntimeService {
         }
         // Why: adopted background PTY handles use their live xterm title as the same readiness signal as leaf handles.
         if (
-          this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
-          isKnownReadyPromptPreview(ptyWaitText)
+          !backgroundWorkActive &&
+          (this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
+            isKnownReadyPromptPreview(ptyWaitText))
         ) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
@@ -42775,6 +42809,11 @@ function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
 
 function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
+  // Why: Grok (and similar) can expose a ready composer while background tasks
+  // still run — that is input-ready, not task-complete (#9905).
+  if (hasActiveAgentBackgroundWork(normalized)) {
+    return false
+  }
   const readyIndex = findKnownReadyPromptIndex(normalized)
   if (readyIndex === null) {
     return false
@@ -42784,6 +42823,22 @@ function isKnownReadyPromptPreview(preview: string): boolean {
     return false
   }
   return true
+}
+
+// Why: tui-idle is used as task-complete evidence by coordinators. Grok Build
+// keeps the input prompt (and often an idle OSC title) while background tasks
+// are still live ("Tasks 1", "watching · 1 command"); treat that as not idle.
+function hasActiveAgentBackgroundWork(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  // "watching · 1 command" / "watching • 2 commands" — Grok task HUD chrome
+  if (/\bwatching\s*[·.•]\s*[1-9]\d*\s+commands?\b/.test(normalized)) {
+    return true
+  }
+  // "Tasks 1" with at least one task row still listed
+  if (/\btasks\s+[1-9]\d*\b/.test(normalized) && /\btask\b/.test(normalized)) {
+    return true
+  }
+  return false
 }
 
 function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
