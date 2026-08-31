@@ -17,7 +17,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
-import { getUsagePace } from '../../../../shared/usage-pace'
+import { getUsagePace, getUsagePaceNextChangeAt } from '../../../../shared/usage-pace'
 import { formatUsagePaceLine } from './usage-pace-copy'
 import { UsagePaceMarker } from './UsagePaceMarker'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
@@ -280,7 +280,15 @@ export function ProviderPanel({
   usagePercentageDisplay?: UsagePercentageDisplay
 }): React.JSX.Element {
   const windowSections = p ? getWindowSections(p) : []
-  const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
+  // Why: pace turns over on its own schedule, which is finer than the hourly
+  // countdown boundary once a reset is more than a day out.
+  const now = useResetCountdownClock(
+    windowSections.map((section) => section.window?.resetsAt),
+    (at) =>
+      windowSections.map((section) =>
+        section.window ? getUsagePaceNextChangeAt(section.window, at) : null
+      )
+  )
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'

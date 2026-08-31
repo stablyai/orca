@@ -20,12 +20,25 @@ function parseResetTimesKey(key: string): number[] {
  * Returns a `now` timestamp that advances whenever the soonest reset countdown
  * label is due to change. Pass the window `resetsAt` values; feed the returned
  * `now` into the label formatter so it stays live.
+ *
+ * `planExtraWakes` lets a caller whose own readings move faster than the
+ * countdown name additional wake-up times. It is re-run against the fresh clock
+ * on every tick, so it stays a plain function of `now` rather than something the
+ * caller has to keep in state.
  */
-export function useResetCountdownClock(resetTimes: readonly (number | null | undefined)[]): number {
+export function useResetCountdownClock(
+  resetTimes: readonly (number | null | undefined)[],
+  planExtraWakes?: (now: number) => readonly (number | null | undefined)[]
+): number {
   const [scheduledNow, setScheduledNow] = useState(() => Date.now())
   const key = useMemo(() => resetTimesKey(resetTimes), [resetTimes])
   const times = useMemo(() => parseResetTimesKey(key), [key])
   const previousKeyRef = useRef(key)
+  // Why: read the planner through a ref so a caller can pass an inline closure
+  // without its identity rescheduling the timeout on every render.
+  const planExtraWakesRef = useRef(planExtraWakes)
+  planExtraWakesRef.current = planExtraWakes
+
   // Why: when the set of reset times changes, refresh `now` before paint so the
   // label reflects the new window without a stale intermediate frame.
   useLayoutEffect(() => {
@@ -37,7 +50,14 @@ export function useResetCountdownClock(resetTimes: readonly (number | null | und
   }, [key])
 
   useEffect(() => {
-    const delayMs = getResetCountdownNextTickDelay(scheduledNow, times)
+    let delayMs = getResetCountdownNextTickDelay(scheduledNow, times)
+    for (const wakeAt of planExtraWakesRef.current?.(scheduledNow) ?? []) {
+      if (wakeAt == null || !Number.isFinite(wakeAt) || wakeAt <= scheduledNow) {
+        continue
+      }
+      const extraDelayMs = wakeAt - scheduledNow
+      delayMs = delayMs === null ? extraDelayMs : Math.min(delayMs, extraDelayMs)
+    }
     if (delayMs === null) {
       return
     }

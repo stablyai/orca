@@ -30,15 +30,24 @@ export const USAGE_PACE_ON_PACE_BAND_PERCENT = 2
 /** Below this much elapsed window, a burn rate extrapolated from it is fiction. */
 export const USAGE_PACE_MIN_ELAPSED_PERCENT = 3
 
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+const DAY_MS = 24 * HOUR_MS
+
+type WindowTiming = {
+  durationMs: number
+  remainingMs: number
+  elapsedMs: number
+  expectedUsedPercent: number
+}
+
 /**
- * Measures a window's spend against an even burn through it.
- *
- * Returns null wherever the reading would be invented rather than measured: no
- * reset timestamp, a reset already past, a reset further out than the window is
- * long (so `resetsAt` and `windowMinutes` disagree), or too little of the window
- * elapsed to extrapolate from.
+ * The window's own timeline, or null where it cannot be trusted: no reset
+ * timestamp, a reset already past, or a reset further out than the window is
+ * long (so `resetsAt` and `windowMinutes` disagree — a stale snapshot, or a
+ * window Orca mislabels — and any budget from that pair would be invented).
  */
-export function getUsagePace(window: RateLimitWindow, now: number): UsagePace | null {
+function resolveWindowTiming(window: RateLimitWindow, now: number): WindowTiming | null {
   const { resetsAt, windowMinutes } = window
   if (resetsAt == null || !Number.isFinite(resetsAt) || !Number.isFinite(now)) {
     return null
@@ -46,21 +55,31 @@ export function getUsagePace(window: RateLimitWindow, now: number): UsagePace | 
   if (!Number.isFinite(windowMinutes) || windowMinutes <= 0) {
     return null
   }
-
-  const durationMs = windowMinutes * 60_000
+  const durationMs = windowMinutes * MINUTE_MS
   const remainingMs = resetsAt - now
-  // Why: a reset further out than the window is long means resetsAt and
-  // windowMinutes disagree (stale snapshot, or a window Orca mislabels), and an
-  // even-burn budget derived from that pair would be invented, not measured.
   if (remainingMs <= 0 || remainingMs > durationMs) {
     return null
   }
-
   const elapsedMs = durationMs - remainingMs
-  const expectedUsedPercent = (elapsedMs / durationMs) * 100
-  if (expectedUsedPercent < USAGE_PACE_MIN_ELAPSED_PERCENT) {
+  return {
+    durationMs,
+    remainingMs,
+    elapsedMs,
+    expectedUsedPercent: (elapsedMs / durationMs) * 100
+  }
+}
+
+/**
+ * Measures a window's spend against an even burn through it. Returns null
+ * wherever the reading would be invented rather than measured — see
+ * `resolveWindowTiming`, plus too little of the window elapsed to extrapolate.
+ */
+export function getUsagePace(window: RateLimitWindow, now: number): UsagePace | null {
+  const timing = resolveWindowTiming(window, now)
+  if (!timing || timing.expectedUsedPercent < USAGE_PACE_MIN_ELAPSED_PERCENT) {
     return null
   }
+  const { expectedUsedPercent, elapsedMs, remainingMs } = timing
 
   const usedPercent = clampUsedPercent(window.usedPercent)
   const deltaPercent = usedPercent - expectedUsedPercent
@@ -103,4 +122,52 @@ function projectRunOut(
   return projectedMs >= remainingMs
     ? { willLastToReset: true, runsOutInMs: null }
     : { willLastToReset: false, runsOutInMs: projectedMs }
+}
+
+/**
+ * When the pace reading next turns over, as a timestamp.
+ *
+ * Why: the panel's clock wakes on the reset countdown's boundaries, which are
+ * hourly once a reset is more than a day out. Pace moves on its own schedule —
+ * finer than that near a threshold — so it has to name its own wake-up times or
+ * the popover keeps showing a superseded reading for up to an hour.
+ */
+export function getUsagePaceNextChangeAt(window: RateLimitWindow, now: number): number | null {
+  const timing = resolveWindowTiming(window, now)
+  if (!timing) {
+    return null
+  }
+  const { durationMs, remainingMs, elapsedMs, expectedUsedPercent } = timing
+  const msPerPercent = durationMs / 100
+
+  if (expectedUsedPercent < USAGE_PACE_MIN_ELAPSED_PERCENT) {
+    return now + (USAGE_PACE_MIN_ELAPSED_PERCENT - expectedUsedPercent) * msPerPercent
+  }
+
+  const usedPercent = clampUsedPercent(window.usedPercent)
+  const delays: number[] = []
+
+  // The printed delta is round(|used − expected|). Usage holds still between
+  // fetches while expected only grows, so the reading turns over each time that
+  // difference passes a half-percent.
+  const deltaPercent = usedPercent - expectedUsedPercent
+  delays.push((deltaPercent - (Math.ceil(deltaPercent - 0.5) - 0.5)) * msPerPercent)
+
+  // Spend projected forward grows at this rate per elapsed millisecond.
+  const burnRatio = usedPercent > 0 && usedPercent < 100 ? (100 - usedPercent) / usedPercent : 0
+  if (burnRatio > 0) {
+    const projectedMs = burnRatio * elapsedMs
+    // The projection climbs while the time left falls; the lasts/runs-out
+    // verdict flips where they meet.
+    delays.push((remainingMs - projectedMs) / (1 + burnRatio))
+    if (projectedMs < remainingMs) {
+      // "Runs out in 2d 2h" is floored, to the hour past a day and the minute below it.
+      const unitMs = projectedMs >= DAY_MS ? HOUR_MS : MINUTE_MS
+      const nextBoundaryMs = (Math.floor(projectedMs / unitMs) + 1) * unitMs
+      delays.push((nextBoundaryMs - projectedMs) / burnRatio)
+    }
+  }
+
+  const soonest = Math.min(...delays.filter((delay) => Number.isFinite(delay) && delay > 0))
+  return Number.isFinite(soonest) ? now + soonest : null
 }

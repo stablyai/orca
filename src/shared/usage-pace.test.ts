@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RateLimitWindow } from './rate-limit-types'
-import { getUsagePace } from './usage-pace'
+import { getResetCountdownNextTickDelay } from './rate-limit-reset-format'
+import { getUsagePace, getUsagePaceNextChangeAt } from './usage-pace'
 
 const NOW = 1_700_000_000_000
 const WEEK_MINUTES = 10_080
@@ -126,5 +127,76 @@ describe('getUsagePace', () => {
     )
     expect(pace?.stage).toBe('reserve')
     expect(pace?.displayDeltaPercent).toBe(9)
+  })
+})
+
+describe('getUsagePaceNextChangeAt', () => {
+  const WEEK_MS = WEEK_MINUTES * 60_000
+
+  // Re-reading the window at the returned instant must print something new.
+  function readingAt(window: RateLimitWindow, at: number): string {
+    const pace = getUsagePace(window, at)
+    return pace
+      ? `${pace.stage}|${pace.displayDeltaPercent}|${pace.willLastToReset}|${Math.floor((pace.runsOutInMs ?? -1) / 60_000)}`
+      : 'none'
+  }
+
+  it('lands on the instant the printed delta turns over', () => {
+    const window = weekly(10, 2 / 7)
+    const at = getUsagePaceNextChangeAt(window, NOW)
+    expect(at).not.toBeNull()
+    // Just before the boundary the reading still matches; at it, it has moved.
+    expect(readingAt(window, (at as number) - 1000)).toBe(readingAt(window, NOW))
+    expect(readingAt(window, at as number)).not.toBe(readingAt(window, NOW))
+  })
+
+  it('names an instant the countdown grid would have missed', () => {
+    // The countdown wakes hourly once a reset is over a day out. Its grid is set
+    // by the reset time, so it lands after the pace reading has already turned
+    // over — which is the staleness this exists to close.
+    const window = weekly(10, 2 / 7)
+    const changeAt = getUsagePaceNextChangeAt(window, NOW) as number
+    let countdownTick = NOW
+    while (countdownTick < changeAt) {
+      countdownTick += getResetCountdownNextTickDelay(countdownTick, [
+        window.resetsAt as number
+      ]) as number
+    }
+    expect(countdownTick).toBeGreaterThan(changeAt)
+  })
+
+  it('waits for the window to become old enough to read', () => {
+    const at = getUsagePaceNextChangeAt(weekly(0, 0.02), NOW)
+    // 2% elapsed against a 3% floor leaves 1% of the week to wait.
+    expect((at as number) - NOW).toBeCloseTo(WEEK_MS * 0.01, -3)
+    expect(getUsagePace(weekly(0, 0.02), at as number)).not.toBeNull()
+  })
+
+  it('is silent for windows that carry no readable timing', () => {
+    expect(
+      getUsagePaceNextChangeAt(
+        { usedPercent: 10, windowMinutes: WEEK_MINUTES, resetsAt: null, resetDescription: null },
+        NOW
+      )
+    ).toBeNull()
+    expect(getUsagePaceNextChangeAt({ ...weekly(10, 0.5), resetsAt: NOW - 1 }, NOW)).toBeNull()
+  })
+
+  it('always moves forward, so a clock driven by it cannot spin', () => {
+    for (const used of [1, 10, 29, 50, 75, 99]) {
+      for (const elapsed of [0.1, 0.3, 0.5, 0.9]) {
+        const at = getUsagePaceNextChangeAt(weekly(used, elapsed), NOW)
+        if (at !== null) {
+          expect(at).toBeGreaterThan(NOW)
+        }
+      }
+    }
+  })
+
+  it('catches the run-out projection turning over before the delta does', () => {
+    // Heavy spend: the projection moves fast, so it is the earlier boundary.
+    const window = weekly(75, 0.5)
+    const at = getUsagePaceNextChangeAt(window, NOW)
+    expect(readingAt(window, at as number)).not.toBe(readingAt(window, NOW))
   })
 })
