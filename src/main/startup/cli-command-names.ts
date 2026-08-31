@@ -44,6 +44,7 @@ export const CLI_COMMAND_NAMES = [
   'mouse',
   'network',
   'open',
+  'open-url',
   'orchestration',
   'pdf',
   'project',
