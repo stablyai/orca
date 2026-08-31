@@ -9,6 +9,13 @@ import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 export const WORKSPACE_FILE_PATH_MIME = 'text/x-orca-file-path'
 export const WORKSPACE_FILE_PATHS_MIME = 'text/x-orca-file-paths'
 
+export function hasWorkspaceFileDragTypes(dataTransfer: Pick<DataTransfer, 'types'>): boolean {
+  return (
+    dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
+    dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
+  )
+}
+
 export type WorkspaceFileDragRejectionReason = 'paths-too-large' | 'too-many-paths'
 
 export type WorkspaceFileDragPathsReadResult =

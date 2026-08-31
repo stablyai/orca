@@ -3266,6 +3266,10 @@
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
+          },
+          "WorkspaceFileSplitDropLayer": {
+            "ownerUnresolved": "Couldn't verify which host owns this workspace. Try again after it reconnects.",
+            "openFailed": "Could not open the dropped files in a new pane."
           }
         },
         "bar": {

@@ -3,6 +3,9 @@ import type { TabDropZone } from './tab-drag-data'
 /** Matches TabGroupPanel tab row height (`h-[32px]`). */
 export const TAB_GROUP_TAB_STRIP_HEIGHT_PX = 32
 
+/** Share of a pane taken by each split-opening edge band. */
+export const PANE_COLUMN_EDGE_RATIO = 0.2
+
 type PaneRect = { left: number; top: number; width: number; height: number }
 
 export function resolveDropZone(
@@ -46,7 +49,7 @@ export function resolvePaneColumnEdgeZone(
   }
 ): Exclude<TabDropZone, 'center'> | null {
   const localX = point.x - panelRect.left
-  const horizontalEdge = panelRect.width * 0.2
+  const horizontalEdge = panelRect.width * PANE_COLUMN_EDGE_RATIO
 
   if (localX < horizontalEdge) {
     return 'left'
@@ -77,7 +80,7 @@ export function resolvePaneColumnEdgeZone(
   }
 
   const bodyLocalY = point.y - bodyRect.top
-  const verticalEdge = bodyRect.height * 0.2
+  const verticalEdge = bodyRect.height * PANE_COLUMN_EDGE_RATIO
 
   if (bodyLocalY < verticalEdge) {
     return 'up'
