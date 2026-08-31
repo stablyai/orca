@@ -188,17 +188,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
     notes: [
-      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.',
-      'Each terminal reports its current surface: "visible" (adopted as a renderer tab) or "background".'
+      'Each terminal reports its current surface ("visible" or "background"); JSON omits visualLayouts unless --include-visual-layouts is passed.'
     ]
   },
   {
     path: ['terminal', 'show'],
-    summary: 'Show terminal metadata and preview',
+    summary: 'Show terminal metadata, current surface, and preview',
     usage: 'orca terminal show [--terminal <handle>] [--json]',
-    notes: [
-      'Reports the terminal\'s current surface ("visible" or "background"), so scripts can re-verify visibility after create.'
-    ],
     allowedFlags: [...GLOBAL_FLAGS, 'terminal']
   },
   {
