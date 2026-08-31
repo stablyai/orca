@@ -36,6 +36,17 @@ export async function findSkillFiles(
   maxDepth: number,
   signal?: AbortSignal
 ): Promise<string[]> {
+  return findRootFiles(rootPath, maxDepth, (name) => name === SKILL_FILE_NAME, signal)
+}
+
+/** The same bounded, symlink-guarded walk with a caller-chosen file predicate,
+ *  so slash-command roots do not need a second walker. */
+export async function findRootFiles(
+  rootPath: string,
+  maxDepth: number,
+  isMatch: (fileName: string) => boolean,
+  signal?: AbortSignal
+): Promise<string[]> {
   const out: string[] = []
   const visitedDirectoryPaths = new Set<string>()
   async function visit(dirPath: string): Promise<void> {
@@ -69,7 +80,7 @@ export async function findSkillFiles(
         continue
       }
       const entryPath = join(dirPath, entry.name)
-      if (entry.name === SKILL_FILE_NAME) {
+      if (isMatch(entry.name)) {
         if (entry.isFile()) {
           out.push(entryPath)
           continue

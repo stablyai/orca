@@ -1,7 +1,6 @@
-import { open, realpath, stat } from 'node:fs/promises'
+import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
-import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import type { Repo } from '../../shared/repo-types'
 import type {
   DiscoveredSkill,
@@ -26,10 +25,14 @@ import {
 } from './skill-scan-coalescer'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { skillDirectoryMaxDepth } from '../../shared/skill-discovery-depth'
+import { readMarkdownSummary } from './markdown-summary-read'
+import {
+  clearCustomSlashCommandScanCache,
+  discoverCustomSlashCommands
+} from './custom-slash-command-discovery'
 
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
-const MAX_MARKDOWN_BYTES = 256 * 1024
 // Why: the fixed home roots are identical for every target, so one worktree pane
 // per open workspace used to re-walk the same directories once per pane. Sharing
 // them for a few seconds is what bounds that fan-out.
@@ -65,6 +68,7 @@ const lastKnownRootScans = new Map<string, { skills: ScannedSkill[]; recordedAt:
 /** Drop every shared root scan, e.g. after a skill install/update mutates disk. */
 export function clearSkillRootScanCache(): void {
   rootScans.clear()
+  clearCustomSlashCommandScanCache()
   // A mutation invalidates the retained copy too — it is a pre-mutation answer.
   lastKnownRootScans.clear()
 }
@@ -109,31 +113,6 @@ async function pathExists(pathValue: string): Promise<boolean> {
   }
 }
 
-async function readSkillSummary(skillFilePath: string): Promise<{
-  name: string | null
-  description: string | null
-  updatedAt: number | null
-} | null> {
-  try {
-    const fileStat = await stat(skillFilePath)
-    const file = await open(skillFilePath, 'r')
-    let content = ''
-    try {
-      const buffer = Buffer.alloc(Math.min(fileStat.size, MAX_MARKDOWN_BYTES))
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-      content = buffer.toString('utf8', 0, bytesRead)
-    } finally {
-      await file.close()
-    }
-    return {
-      ...summarizeSkillMarkdown(content),
-      updatedAt: fileStat.mtimeMs
-    }
-  } catch {
-    return null
-  }
-}
-
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
 async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
@@ -151,7 +130,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
       // returning prevents symlinked roots from becoming duplicate picker rows.
       const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
       const directoryPath = dirname(skillFilePath)
-      const summary = await readSkillSummary(skillFilePath)
+      const summary = await readMarkdownSummary(skillFilePath)
       if (!summary) {
         return null
       }
@@ -275,7 +254,14 @@ export async function discoverSkills(args: {
       ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
       : [])
   ]
-  const scans = await Promise.all(roots.map((root) => scanRootShared(root, refresh)))
+  // Why here: `.claude/commands` is workspace-scoped picker data, exactly like
+  // plugin roots above, and the same one call feeds both halves of the picker.
+  const [scans, commands] = await Promise.all([
+    Promise.all(roots.map((root) => scanRootShared(root, refresh))),
+    args.cwd && args.includeCwd !== false
+      ? discoverCustomSlashCommands({ homeDir, cwd: args.cwd, refresh })
+      : Promise.resolve([])
+  ])
   const sources: SkillDiscoverySource[] = roots.map((root, index) => ({
     ...root,
     providers: [...root.providers],
@@ -312,6 +298,7 @@ export async function discoverSkills(args: {
     sources: sources.sort((a, b) =>
       a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
     ),
-    scannedAt: Date.now()
+    scannedAt: Date.now(),
+    commands
   }
 }
