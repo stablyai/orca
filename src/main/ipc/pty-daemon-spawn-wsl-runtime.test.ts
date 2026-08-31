@@ -8,6 +8,10 @@ import {
 import { delimiter, join } from 'node:path'
 import { _setWslCachesForTests } from '../wsl'
 import { registerPtyHandlers } from './pty'
+import {
+  _resetHydrateShellPathCache,
+  _setLaunchPathForTests
+} from '../startup/hydrate-shell-path'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -547,37 +551,44 @@ describe('registerPtyHandlers', () => {
           mockedApp.isPackaged = prev
         }
       })
-      it('preserves the inherited PATH when dev-mode daemon env omits PATH', async () => {
+      it('preserves the launcher PATH when dev-mode daemon env omits PATH', async () => {
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prev = mockedApp.isPackaged
         mockedApp.isPackaged = false
+        // Why (#17446): the sparse daemon env falls back to the PATH Orca was
+        // launched with, not the seeded process PATH the pane must never inherit.
+        _setLaunchPathForTests('/system/bin')
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
-            PATH: '/system/bin'
+            PATH: `/seeded/only${delimiter}/system/bin`
           })
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-          expect(env.PATH).toContain(
+          expect(env.PATH).toBe(
             `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
           )
         } finally {
+          _resetHydrateShellPathCache()
           mockedApp.isPackaged = prev
         }
       })
       it('drops a legacy shim PATH entry inherited from the host process on the daemon path', async () => {
-        // Why: the daemon path passes a sparse env, so the prepends re-read PATH from
-        // process.env — the scrub must outlive that fallback (pre-upgrade host or parent pane).
+        // Why: the daemon path passes a sparse env, so the prepends re-read the launch
+        // PATH — the scrub must outlive that fallback (pre-upgrade host or parent pane).
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prev = mockedApp.isPackaged
         mockedApp.isPackaged = false
+        const legacyShimPath = `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
+        _setLaunchPathForTests(legacyShimPath)
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
-            PATH: `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
+            PATH: legacyShimPath
           })
           expect(env.PATH).not.toContain('orca-terminal-attribution')
           expect(env.PATH).toContain('/system/bin')
         } finally {
+          _resetHydrateShellPathCache()
           mockedApp.isPackaged = prev
         }
       })

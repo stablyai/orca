@@ -9,6 +9,10 @@ import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-regi
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
+import {
+  _resetHydrateShellPathCache,
+  _setLaunchPathForTests
+} from '../startup/hydrate-shell-path'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -322,6 +326,27 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv()
       expect(env.FORCE_HYPERLINK).toBe('1')
     })
+    // Why (#17446): panes run a login shell, and rc files that prepend a directory
+    // only when it is absent find Orca's seeded copies already there and skip them —
+    // leaving the user's tool dirs behind /usr/bin once path_helper hoists /etc/paths.
+    it.skipIf(process.platform === 'win32')(
+      'starts a pane from the launcher PATH, not Orca\'s seeded one',
+      async () => {
+        const launchPath = ['/usr/bin', '/bin'].join(delimiter)
+        const seededOnlyDir = '/Users/me/.local/share/mise/shims'
+        _setLaunchPathForTests(launchPath)
+        try {
+          const env = await spawnAndGetEnv(undefined, {
+            PATH: `${launchPath}${delimiter}${seededOnlyDir}`
+          })
+
+          expect(env.PATH.split(delimiter)).not.toContain(seededOnlyDir)
+          expect(env.PATH.endsWith(launchPath)).toBe(true)
+        } finally {
+          _resetHydrateShellPathCache()
+        }
+      }
+    )
     it('surfaces ORCA_APP_VERSION as TERM_PROGRAM_VERSION for TUI feature gating', async () => {
       const env = await spawnAndGetEnv(undefined, { ORCA_APP_VERSION: '1.2.3-test' })
       expect(env.TERM_PROGRAM_VERSION).toBe('1.2.3-test')

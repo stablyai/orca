@@ -16,7 +16,7 @@ import { resolvePathEnvKey, mergePersistedWindowsPath } from '../../../pty/windo
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
 import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
 import type { BuildPtyHostEnvOptions } from './types'
-import { readInheritedPath } from './path'
+import { readInheritedPath, restoreLauncherInheritedPath } from './path'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
 import {
   clearPiAgentShadowEnv,
@@ -235,6 +235,10 @@ export function buildPtyHostEnv(
     }
     delete baseEnv.ORCA_CLI_COMMAND
   }
+  // Why: must precede every prepend below -- they read the inherited PATH, and
+  // the pane's login shell must rebuild from the launcher's PATH, not Orca's.
+  restoreLauncherInheritedPath(baseEnv)
+
   // Why: dev mode needs the launcher PATH override so `orca` resolves to the dev build instead of the production binary at /usr/local/bin/orca.
   if (!opts.isPackaged) {
     const devCliBin = join(opts.userDataPath, 'cli', 'bin')
