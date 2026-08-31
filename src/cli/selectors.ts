@@ -194,9 +194,12 @@ export async function getBrowserWorktreeSelector(
   // Default: auto-resolve from cwd
   try {
     return await resolveCurrentWorktreeSelector(cwd, client)
-  } catch {
-    // Not inside a managed worktree — no filter
-    return undefined
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'selector_not_found') {
+      // Not inside a managed worktree — no filter.
+      return undefined
+    }
+    throw error
   }
 }
 
