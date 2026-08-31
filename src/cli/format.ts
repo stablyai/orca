@@ -10,6 +10,7 @@ import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
 export {
+  formatBrowserPlacement,
   formatBrowserProfileList,
   formatScreenshot,
   formatSnapshot,

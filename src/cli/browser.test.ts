@@ -260,8 +260,8 @@ describe('orca cli browser page targeting', () => {
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('browser.tabList', { worktree: undefined })
     expect(logSpy).toHaveBeenCalledWith(
-      '* [0] page-1  Example — https://example.com  [Default]\n' +
-        '  [1] page-2  Mail — https://mail.example.com  [Work]'
+      '* [0] page-1  Example — https://example.com  [placement-unknown]  [Default]\n' +
+        '  [1] page-2  Mail — https://mail.example.com  [placement-unknown]  [Work]'
     )
   })
 

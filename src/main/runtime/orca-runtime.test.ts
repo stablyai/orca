@@ -52122,7 +52122,8 @@ describe('OrcaRuntimeService', () => {
 
       await expect(runtime.browserTabSwitch({ page: 'page-2' })).resolves.toEqual({
         switched: 2,
-        browserPageId: 'page-2'
+        browserPageId: 'page-2',
+        placement: { kind: 'server' }
       })
       await expect(runtime.browserCaptureStart({ page: 'page-2' })).resolves.toEqual({
         capturing: true
@@ -52149,7 +52150,8 @@ describe('OrcaRuntimeService', () => {
 
       await expect(runtime.browserTabSwitch({ page: 'page-1', focus: true })).resolves.toEqual({
         switched: 0,
-        browserPageId: 'page-1'
+        browserPageId: 'page-1',
+        placement: { kind: 'server' }
       })
       // Bridge is unchanged — focus is delivered to the renderer via IPC, not threaded through bridge state.
       expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')

@@ -6,6 +6,7 @@ import type {
   BrowserSessionProfileSource
 } from './browser-workspace-types'
 import type { BROWSER_UNAVAILABLE_ERROR_CODE } from './runtime-session-contracts'
+import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
@@ -60,10 +61,15 @@ export type BrowserTabInfo = {
   worktreeId?: string | null
   profileId?: string | null
   profileLabel?: string | null
+  placement?: RuntimeBrowserPlacement
 }
 
 export type BrowserTabListResult = { tabs: BrowserTabInfo[] }
-export type BrowserTabSwitchResult = { switched: number; browserPageId: string }
+export type BrowserTabSwitchResult = {
+  switched: number
+  browserPageId: string
+  placement?: RuntimeBrowserPlacement
+}
 
 export type BrowserTabSetProfileResult = {
   browserPageId: string

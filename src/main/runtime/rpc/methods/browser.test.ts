@@ -12,12 +12,52 @@ import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
 import { ClipboardWrite, Fill, KeyboardInsert, ProfileCreate, Type } from './browser-schemas'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('browser RPC methods', () => {
+  it.each([
+    ['capable', [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]],
+    ['incapable', []]
+  ] as const)('publishes client placement to a %s caller', async (_label, clientCapabilities) => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserTabList: vi.fn().mockResolvedValue({
+        tabs: [
+          {
+            browserPageId: 'page-client',
+            index: 0,
+            url: 'https://example.test',
+            title: 'Client page',
+            active: true,
+            placement: {
+              kind: 'client',
+              browserHostClientId: 'host-a',
+              browserHostGeneration: 3,
+              pageHostGeneration: 9
+            }
+          }
+        ]
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('browser.tabList', {}),
+      (reply) => replies.push(reply),
+      { clientKind: 'runtime', clientCapabilities }
+    )
+
+    expect(JSON.parse(replies[0]!)).toMatchObject({
+      ok: true,
+      result: { tabs: [{ placement: { kind: 'client' } }] }
+    })
+  })
+
   it('passes authenticated caller identity to client page creation outside the payload', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

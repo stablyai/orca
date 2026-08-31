@@ -740,7 +740,11 @@ describe('browser tab-switch placement census', () => {
 
       await expect(
         commands.browserTabSwitch({ worktree: 'id:wt-1', page: 'page-b', focus: true })
-      ).resolves.toEqual({ switched: 1, browserPageId: 'page-b' })
+      ).resolves.toMatchObject({
+        switched: 1,
+        browserPageId: 'page-b',
+        placement: { kind: 'client' }
+      })
       expect(registry.getPage('page-b')?.active).toBe(true)
       expect(markHeadlessBrowserSessionTabActive).toHaveBeenCalledWith('wt-1', 'page-b', {
         focusesHost: true

@@ -5,7 +5,13 @@ import type {
   BrowserTabSwitchResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { formatTabList, formatTabListWithProfiles, formatTabShow, printResult } from '../format'
+import {
+  formatBrowserPlacement,
+  formatTabList,
+  formatTabListWithProfiles,
+  formatTabShow,
+  printResult
+} from '../format'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
@@ -64,7 +70,12 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('focus') ? { focus: true } : {}),
       ...target
     })
-    printResult(result, json, (v) => `Switched to tab ${v.switched} (${v.browserPageId})`)
+    printResult(
+      result,
+      json,
+      (v) =>
+        `Switched to tab ${v.switched} (${v.browserPageId}) [${formatBrowserPlacement(v.placement)}]`
+    )
   },
   'tab create': async ({ flags, client, cwd, json }) => {
     const url = getOptionalStringFlag(flags, 'url')

@@ -472,16 +472,26 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
           url: 'https://client.test/',
           title: 'Client page',
           active: true,
-          worktreeId: 'folder:folder-1'
+          worktreeId: 'folder:folder-1',
+          placement: {
+            kind: 'client',
+            browserHostClientId: 'host-a',
+            browserHostGeneration: 3,
+            pageHostGeneration: 9
+          }
         }
       ]
     })
     await expect(
       commands.browserTabShow({ worktree: 'id:folder:folder-1', page: 'page-client' })
-    ).resolves.toMatchObject({ tab: { browserPageId: 'page-client' } })
+    ).resolves.toMatchObject({
+      tab: { browserPageId: 'page-client', placement: { kind: 'client' } }
+    })
     await expect(
       commands.browserTabCurrent({ worktree: 'id:folder:folder-1' })
-    ).resolves.toMatchObject({ tab: { browserPageId: 'page-client' } })
+    ).resolves.toMatchObject({
+      tab: { browserPageId: 'page-client', placement: { kind: 'client' } }
+    })
   })
 
   it('switches logical client pages without invoking the server bridge', async () => {
@@ -501,7 +511,11 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
 
     await expect(
       commands.browserTabSwitch({ worktree: 'id:wt-1', page: 'page-b' })
-    ).resolves.toEqual({ switched: 1, browserPageId: 'page-b' })
+    ).resolves.toMatchObject({
+      switched: 1,
+      browserPageId: 'page-b',
+      placement: { kind: 'client' }
+    })
     expect(registry.getPage('page-a')?.active).toBe(false)
     expect(registry.getPage('page-b')?.active).toBe(true)
     expect(notify).toHaveBeenCalledWith('wt-1')
@@ -562,13 +576,14 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
     )
 
     await expect(commands.browserTabSwitch({ page: 'page-server' })).resolves.toMatchObject({
-      browserPageId: 'page-server'
+      browserPageId: 'page-server',
+      placement: { kind: 'server' }
     })
     expect(registry.listPages().every((page) => !page.active)).toBe(true)
     expect(registry.listPages('wt-1')[0]?.active).toBe(true)
     expect(registry.listPages('wt-2')[0]?.active).toBe(true)
     await expect(commands.browserTabCurrent({})).resolves.toMatchObject({
-      tab: { browserPageId: 'page-server' }
+      tab: { browserPageId: 'page-server', placement: { kind: 'server' } }
     })
   })
 

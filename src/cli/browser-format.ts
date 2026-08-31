@@ -34,7 +34,8 @@ export function formatTabListWithProfiles(
     .map((t) => {
       const marker = t.active ? '* ' : '  '
       const profile = showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
-      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}`
+      const placement = `[${formatBrowserPlacement(t.placement)}]`
+      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}  ${placement}${profile}`
     })
     .join('\n')
 }
@@ -60,9 +61,22 @@ export function formatTabShow(result: BrowserTabShowResult | BrowserTabCurrentRe
     `title: ${tab.title}`,
     `url: ${tab.url}`,
     `active: ${tab.active}`,
+    `placement: ${tab.placement?.kind ?? 'unknown'}`,
     `worktree: ${tab.worktreeId ?? 'unknown'}`,
     `profile: ${tab.profileLabel ?? tab.profileId ?? 'unknown'}`
   ].join('\n')
+}
+
+export function formatBrowserPlacement(
+  placement: BrowserTabListResult['tabs'][number]['placement']
+): 'server-hosted' | 'client-hosted' | 'placement-unknown' {
+  if (placement?.kind === 'server') {
+    return 'server-hosted'
+  }
+  if (placement?.kind === 'client') {
+    return 'client-hosted'
+  }
+  return 'placement-unknown'
 }
 
 export function formatTabProfileShow(result: BrowserTabProfileShowResult): string {
