@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Check, ChevronDown, ExternalLink } from 'lucide-react'
+import { Check, ChevronDown, Copy, ExternalLink } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SettingsBadge, SettingsSegmentedControl } from './SettingsFormControls'
 import type { AgentSessionSourceHomeControl } from './codex-session-source-home-control'
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
@@ -73,6 +74,8 @@ export type AgentCatalogRowProps = {
   onSaveOverride: (value: string) => void
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
+  onDuplicateAsCustom: () => void
+  duplicateAsCustomDisabled?: boolean
   sessionSourceHome?: AgentSessionSourceHomeControl
 }
 
@@ -94,6 +97,8 @@ export function AgentCatalogRow({
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
+  onDuplicateAsCustom,
+  duplicateAsCustomDisabled = false,
   sessionSourceHome
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
@@ -131,7 +136,7 @@ export function AgentCatalogRow({
           </div>
         </div>
 
-        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">
+        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem_1.75rem] items-center gap-1.5">
           <AgentAvailabilityControl
             label={label}
             isEnabled={isEnabled}
@@ -171,6 +176,32 @@ export function AgentCatalogRow({
           >
             <ExternalLink className="size-3.5" />
           </a>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={duplicateAsCustomDisabled}
+                onClick={onDuplicateAsCustom}
+                aria-label={translate(
+                  'auto.components.settings.AgentCatalogRow.duplicateAsCustom',
+                  'Duplicate {{value0}} as custom agent',
+                  { value0: label }
+                )}
+                className="size-7 text-muted-foreground hover:text-foreground"
+              >
+                <Copy className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {translate(
+                'auto.components.settings.AgentCatalogRow.duplicateAsCustom',
+                'Duplicate {{value0}} as custom agent',
+                { value0: label }
+              )}
+            </TooltipContent>
+          </Tooltip>
           <div className="flex size-7 items-center justify-center">
             {isDetected && (
               <Button

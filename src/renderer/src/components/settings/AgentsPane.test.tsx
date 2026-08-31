@@ -94,7 +94,8 @@ function renderPane(
       React.createElement(AgentsPane, {
         settings,
         updateSettings: vi.fn(),
-        ...props
+        ...props,
+        updateSettingsOrThrow: props.updateSettingsOrThrow ?? vi.fn().mockResolvedValue(undefined)
       })
     )
   )
@@ -171,6 +172,12 @@ describe('AgentsPane', () => {
     expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'local' })
   })
 
+  it('offers duplicate-as-custom for built-in agents', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
+
+    expect(markup).toContain('Duplicate Claude as custom agent')
+  })
+
   it('scopes agent detection to the active remote server', () => {
     // Repro for the "Remote Server lists local agents" bug: with an Active
     // Server selected, the Installed list must probe that server's PATH.
@@ -191,6 +198,9 @@ describe('AgentsPane', () => {
 
       expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'runtime', environmentId: 'env-1' })
       expect(markup).toContain('on Coder')
+      expect(markup).toMatch(
+        /<button[^>]*disabled=""[^>]*aria-label="Duplicate Claude as custom agent"/
+      )
     } finally {
       initialState.runtimeEnvironments = priorRuntimeEnvironments
     }

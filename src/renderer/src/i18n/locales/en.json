@@ -977,6 +977,12 @@
         "preview": {
           "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet."
         }
+      },
+      "launchCustomAgentInNewTab": {
+        "profileRemoved": "This custom agent was removed. Choose another agent.",
+        "pairedRuntimeUnsupported": "Custom agents are not yet available on paired Orca hosts.",
+        "sshUnavailable": "Reconnect the SSH target before launching a custom agent.",
+        "windowsSshUnsupported": "Custom agents are not yet available over Windows SSH."
       }
     },
     "hooks": {
@@ -3378,7 +3384,8 @@
             "ec2adf093e": "Launch {{value0}} in a new terminal",
             "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
-            "8dea9b5cdf": "No enabled agents"
+            "8dea9b5cdf": "No enabled agents",
+            "customLaunchTitle": "Launch {{value0}} in a new terminal"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -6583,7 +6590,9 @@
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
-          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
+          "customAgentLimit": "Custom agents are limited to {{value0}} profiles.",
+          "duplicateCommandError": "This command override contains shell syntax. Create the custom agent manually."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -11841,6 +11850,38 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "AgentCatalogRow": {
+          "duplicateAsCustom": "Duplicate {{value0}} as custom agent"
+        },
+        "CustomAgentProfilesSection": {
+          "nameRequired": "Enter a name.",
+          "nameUnique": "Choose a name that is not already used by another agent.",
+          "executableRequired": "Enter an executable name or path.",
+          "invalidProfile": "The executable and arguments must be literal text without control characters.",
+          "limit": "Custom agents are limited to {{value0}} profiles.",
+          "title": "Custom agents",
+          "description": "Create independent launch profiles with a command and literal arguments.",
+          "create": "Create custom agent",
+          "empty": "No custom agents yet. Create one from scratch or duplicate a built-in agent below.",
+          "edit": "Edit {{value0}}",
+          "deleteNamed": "Delete {{value0}}",
+          "deleteTitle": "Delete {{value0}}?",
+          "deleteDescription": "Existing terminals keep their captured launch command. This removes the profile from future launches.",
+          "delete": "Delete",
+          "finishEditing": "Finish editing the current custom agent before opening another."
+        },
+        "CustomAgentProfileEditor": {
+          "name": "Name",
+          "executable": "Executable",
+          "arguments": "Arguments",
+          "addArgument": "Add argument",
+          "argumentNumber": "Argument {{value0}}",
+          "removeArgument": "Remove argument {{value0}}",
+          "cancel": "Cancel",
+          "saving": "Saving…",
+          "save": "Save",
+          "executablePlaceholder": "codex"
         }
       },
       "right": {
