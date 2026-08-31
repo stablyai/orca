@@ -58,7 +58,9 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     handle: string,
     paneKey: string | null,
     exitCode: number,
-    cause: TerminalExitCause
+    cause: TerminalExitCause,
+    processIncarnation: string | null,
+    processDeathCertified: boolean
   ): void {
     if (!this._orchestrationDb) {
       return
@@ -79,6 +81,21 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     // killed process would otherwise absorb a much later crash as a clean stop.
     const stopping = this._orchestrationDb.getWorkerDispatch?.(dispatch.id)
     if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
+      this._orchestrationDb.settleWorkerStop(dispatch.id)
+      return
+    }
+
+    // A proven exit for this stop intent wins over the close promise's later settlement.
+    if (
+      cause.kind === 'operator_close' &&
+      processDeathCertified &&
+      this._orchestrationDb.getWorkerDispatch(dispatch.id)?.state === 'stopping' &&
+      this._orchestrationDb.isDispatchProcessCurrent({
+        dispatchId: dispatch.id,
+        paneKey,
+        processIncarnation
+      })
+    ) {
       this._orchestrationDb.settleWorkerStop(dispatch.id)
       return
     }

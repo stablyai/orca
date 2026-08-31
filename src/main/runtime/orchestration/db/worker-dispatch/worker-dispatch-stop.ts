@@ -116,6 +116,10 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
+    if (worker?.state === 'stopped' && dispatch) {
+      this.db.exec('COMMIT')
+      return worker
+    }
     if (!worker || !dispatch || worker.state !== 'stopping') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
@@ -124,7 +128,7 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
       id: dispatchId,
       from: 'stopping',
       to: 'stopped',
-      projection: { stage: 'process_stopped', updated_at: new Date().toISOString() }
+      projection: { stage: 'process_stopped', last_error: null, updated_at: new Date().toISOString() }
     })
     if (['pending', 'dispatched'].includes(dispatch.status)) {
       transitionLifecycleWithDb(this.db, {
@@ -132,7 +136,11 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
         id: dispatchId,
         from: dispatch.status,
         to: 'failed',
-        projection: { completed_at: new Date().toISOString(), last_failure: 'stopped' }
+        projection: {
+          completed_at: new Date().toISOString(),
+          last_failure: 'stopped',
+          termination_reason: 'operator_close'
+        }
       })
     }
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
@@ -241,6 +249,10 @@ export function markWorkerStopUnknown(
   reason: string
 ): WorkerDispatchRow {
   const worker = this.getWorkerDispatch(dispatchId)
+  // The owning host's confirmed exit cannot be downgraded by a later close error.
+  if (worker?.state === 'stopped') {
+    return worker
+  }
   if (!worker || worker.state !== 'stopping') {
     throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
   }
