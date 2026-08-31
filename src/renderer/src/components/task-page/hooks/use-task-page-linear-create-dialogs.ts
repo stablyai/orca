@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type SetStateAction } from 'react'
 
 import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
 import { useTeamLabels, useTeamMembers, useTeamStates } from '@/hooks/useIssueMetadata'
-import { linearListProjects } from '@/runtime/runtime-linear-client'
+import { linearListProjects } from '@/runtime/runtime-linear-project-client'
 import {
   writeNewLinearIssueDraft,
   writeNewLinearProjectDraft

@@ -32,6 +32,7 @@ import {
 } from './automations-page-test-harness'
 import { makeAutomation, REPO_ID, WORKSPACE_ID } from './automations-page-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
 
 installAutomationsPageHarness()
 
@@ -71,6 +72,52 @@ function addSshProject(): void {
   } as Repo
   mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
   mocks.repoMap.set(SSH_REPO_ID, repo)
+  // Without a ready setup on that host the project has no run context, and a
+  // save against it is refused before any destination is stated.
+  mocks.state.projectHostSetups = [
+    ...(mocks.state.projectHostSetups as ProjectHostSetup[]),
+    {
+      id: 'setup-ssh',
+      projectId: 'project-ssh',
+      hostId: `ssh:${SSH_TARGET_ID}`,
+      repoId: SSH_REPO_ID,
+      path: '/repos/orca',
+      displayName: 'orca',
+      setupState: 'ready',
+      setupMethod: 'legacy-repo',
+      createdAt: 1,
+      updatedAt: 1
+    }
+  ]
+}
+
+/** A runtime project with the same host-local id as the desktop project. */
+function addCollidingRuntimeProject(): void {
+  const repo = {
+    id: REPO_ID,
+    displayName: 'orca on m4-air',
+    path: '/repos/orca',
+    badgeColor: '#111111',
+    addedAt: 1,
+    worktreeBaseRef: 'main',
+    executionHostId: `runtime:${RUNTIME_ID}`
+  } as Repo
+  mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
+  mocks.state.projectHostSetups = [
+    ...(mocks.state.projectHostSetups as ProjectHostSetup[]),
+    {
+      id: 'setup-runtime-collision',
+      projectId: 'project-runtime-collision',
+      hostId: `runtime:${RUNTIME_ID}`,
+      repoId: REPO_ID,
+      path: '/repos/orca',
+      displayName: 'orca on m4-air',
+      setupState: 'ready',
+      setupMethod: 'legacy-repo',
+      createdAt: 1,
+      updatedAt: 1
+    }
+  ]
 }
 
 /** The runtime answers a create; without this the RPC double returns an empty result. */
@@ -392,6 +439,227 @@ describe('AutomationsPage edit dialog projects', () => {
 
     expect(mocks.editorDialog?.isEditing).toBe(true)
     expect(mocks.editorDialog?.repos?.map((repo) => repo.id)).toEqual([RUNTIME_REPO_ID])
+  })
+})
+
+describe('AutomationsPage edit destination', () => {
+  it('names the edited row’s own host, and offers every host it could move to', async () => {
+    const automation = makeAutomation({ id: 'a-1' })
+    api.automations.list.mockResolvedValue([])
+    scopedList([automation])
+    addSshHost()
+    addSshProject()
+    runtimeHost([], [])
+
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+
+    const resolution = mocks.editorDialog?.editDestination?.resolution
+    expect(resolution?.status === 'ready' && resolution.entry.stableKey).toBe(DESKTOP_SELF_KEY)
+    // Another authority is a legal destination — reached by a create there and a
+    // delete here — so restricting the list to this one would hide a real move.
+    expect(mocks.editorDialog?.editDestination?.entries.map((entry) => entry.stableKey)).toContain(
+      RUNTIME_SELF_KEY
+    )
+    expect(mocks.editorDialog?.editDestination?.moveWarning).toBeFalsy()
+  })
+
+  it('moves the record across authorities by creating there and deleting here', async () => {
+    const automation = makeAutomation({ id: 'a-1' })
+    api.automations.list.mockResolvedValue([])
+    scopedList([automation])
+    runtimeHost([], [])
+    addRuntimeProject()
+    runtimeCreateReturns(makeAutomation({ id: 'a-moved', projectId: RUNTIME_REPO_ID }))
+
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+    await act(async () => {
+      mocks.editorDialog?.editDestination?.onSelect(RUNTIME_SELF_KEY)
+    })
+
+    expect(mocks.editorDialog?.editDestination?.moveWarning).toBeTruthy()
+
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...(current as Record<string, unknown>),
+        projectId: RUNTIME_REPO_ID,
+        workspaceMode: 'existing',
+        workspaceId: RUNTIME_WORKSPACE_ID
+      }))
+    })
+    await save()
+
+    expect(api.automations.update).not.toHaveBeenCalled()
+    expect(runtimeCreateCalls()).toHaveLength(1)
+    expect(runtimeCreateCalls()[0]?.[2]).toMatchObject({
+      repo: `id:${RUNTIME_REPO_ID}`,
+      dtstart: automation.dtstart
+    })
+    expect(api.automations.delete).toHaveBeenCalledWith(expect.objectContaining({ id: 'a-1' }))
+  })
+
+  it('moves when the destination project has the same host-local id', async () => {
+    const automation = makeAutomation({ id: 'a-1' })
+    api.automations.list.mockResolvedValue([])
+    scopedList([automation])
+    runtimeHost([], [])
+    addCollidingRuntimeProject()
+    runtimeCreateReturns(makeAutomation({ id: 'a-moved', projectId: REPO_ID }))
+
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+    await act(async () => {
+      mocks.editorDialog?.editDestination?.onSelect(RUNTIME_SELF_KEY)
+    })
+    await save()
+
+    expect(runtimeCreateCalls()).toHaveLength(1)
+    expect(runtimeCreateCalls()[0]?.[2]).toMatchObject({ repo: `id:${REPO_ID}` })
+    expect(api.automations.delete).toHaveBeenCalled()
+  })
+
+  it('reuses the move creation key on retry even when the schedule changed', async () => {
+    const automation = makeAutomation({ id: 'a-1' })
+    api.automations.list.mockResolvedValue([])
+    scopedList([automation])
+    runtimeHost([], [])
+    addRuntimeProject()
+    // The first create dies in transport after the server may have committed;
+    // only an identical creationKey on the retry keeps that copy singular.
+    let failCreate = true
+    const previous = mocks.callRuntimeRpc.getMockImplementation()
+    mocks.callRuntimeRpc.mockImplementation(
+      async (target: unknown, method: string, params: unknown, options: unknown) => {
+        if (method === 'automation.create') {
+          if (failCreate) {
+            failCreate = false
+            throw new Error('socket hang up')
+          }
+          return { automation: makeAutomation({ id: 'a-moved', projectId: RUNTIME_REPO_ID }) }
+        }
+        return await previous?.(target, method, params, options)
+      }
+    )
+
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+    await act(async () => {
+      mocks.editorDialog?.editDestination?.onSelect(RUNTIME_SELF_KEY)
+    })
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...(current as Record<string, unknown>),
+        projectId: RUNTIME_REPO_ID,
+        workspaceMode: 'existing',
+        workspaceId: RUNTIME_WORKSPACE_ID,
+        // A changed schedule mints dtstart per attempt — the volatile input that
+        // must not re-key the move.
+        preset: 'custom',
+        customSchedule: 'FREQ=DAILY;BYHOUR=10;BYMINUTE=0'
+      }))
+    })
+
+    const realNow = Date.now.bind(Date)
+    let clockSkew = 0
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + clockSkew)
+    try {
+      await save()
+      clockSkew = 5000
+      await save()
+    } finally {
+      nowSpy.mockRestore()
+    }
+
+    const creationKeys = runtimeCreateCalls().map(
+      (call) => (call[2] as { creationKey?: string }).creationKey
+    )
+    expect(creationKeys).toHaveLength(2)
+    expect(creationKeys[0]).toBeTruthy()
+    expect(creationKeys[1]).toBe(creationKeys[0])
+    expect(api.automations.delete).toHaveBeenCalledWith(expect.objectContaining({ id: 'a-1' }))
+  })
+
+  it('reports a kept original as two live copies, never as a completed move', async () => {
+    const automation = makeAutomation({ id: 'a-1' })
+    api.automations.list.mockResolvedValue([])
+    scopedList([automation])
+    runtimeHost([], [])
+    addRuntimeProject()
+    runtimeCreateReturns(makeAutomation({ id: 'a-moved', projectId: RUNTIME_REPO_ID }))
+    api.automations.delete.mockRejectedValue(new Error('gone away'))
+
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+    await act(async () => {
+      mocks.editorDialog?.editDestination?.onSelect(RUNTIME_SELF_KEY)
+    })
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...(current as Record<string, unknown>),
+        projectId: RUNTIME_REPO_ID,
+        workspaceMode: 'existing',
+        workspaceId: RUNTIME_WORKSPACE_ID
+      }))
+    })
+    await save()
+
+    expect(runtimeCreateCalls()).toHaveLength(1)
+    expect(api.automations.delete).toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('could not be deleted'))
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('moves the record to the host the user picks, clearing the stranded project', async () => {
+    const automation = makeAutomation({ id: 'a-1' })
+    api.automations.list.mockResolvedValue([])
+    scopedList([automation])
+    addSshHost()
+    addSshProject()
+
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+    await act(async () => {
+      mocks.editorDialog?.editDestination?.onSelect(SSH_HOST_KEY)
+    })
+
+    // Keeping the local project selected only defers the same refusal to submit.
+    expect(mocks.editorDialog?.repos?.map((repo) => repo.id)).toEqual([SSH_REPO_ID])
+    expect(mocks.editorDialog?.draft?.projectId).toBe('')
+
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...(current as Record<string, unknown>),
+        projectId: SSH_REPO_ID,
+        workspaceMode: 'new_per_run',
+        workspaceId: ''
+      }))
+    })
+    await save()
+
+    expect(api.automations.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        destination: { selector: { kind: 'ssh', targetId: SSH_TARGET_ID, targetGeneration: 1 } }
+      })
+    )
   })
 })
 

@@ -118,3 +118,11 @@ export function foldWslUncPathCaseInsensitiveParts(path: string): string | null 
     : parsed.linuxPath
   return `//wsl.localhost/${parsed.distro.toLowerCase()}${linuxPath === '/' ? '' : linuxPath}`
 }
+
+/**
+ * The spelling a WSL-hosted tool answers in for `path`. Git-in-the-distro resolves relative output
+ * against the Linux path, not the caller's UNC spelling, and realpath cannot bridge the two spaces.
+ */
+export function toWslExecutionSpace(path: string): string {
+  return parseWslUncPath(path)?.linuxPath ?? path
+}

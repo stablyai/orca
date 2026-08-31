@@ -54,6 +54,7 @@ import type {
   BrowserSessionUserAgentMode
 } from '../../shared/browser-workspace-types'
 import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
 import type { BrowserPageCreationPlacement } from '../../shared/browser-client-host-placement'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { browserNetworkExecutionHostKey } from '../browser/browser-network-execution-route'
@@ -96,6 +97,7 @@ import {
 } from './browser-tab-create-publication'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import { BROWSER_HOST_WEBVIEW_CAPABILITY } from './browser-host-capability-selection'
 import {
   closeRuntimeBrowserClientPage,
   createRuntimeBrowserClientPage,
@@ -1727,6 +1729,32 @@ export class RuntimeBrowserCommands {
     return { browserPageId }
   }
 
+  async browserOpenUrlOnClient(params: {
+    url: string
+    worktree: string
+  }): Promise<{ browserPageId: string }> {
+    const protocol = new URL(params.url).protocol
+    if (protocol !== 'http:' && protocol !== 'https:') {
+      throw new BrowserError('invalid_argument', 'Only http(s) URLs can be opened on the client.')
+    }
+    const lease = this.host
+      .getBrowserHostLeaseRegistry()
+      .select(undefined, [
+        BROWSER_HOST_WEBVIEW_CAPABILITY,
+        BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY
+      ])
+    return this.browserTabCreate(
+      {
+        url: params.url,
+        worktree: params.worktree,
+        activate: true,
+        navigation: 'caller',
+        placement: { kind: 'client', browserHostClientId: lease.browserHostClientId }
+      },
+      { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime' }
+    )
+  }
+
   async browserTabSetProfile(
     params: {
       profileId: string
@@ -1868,7 +1896,7 @@ export class RuntimeBrowserCommands {
     userAgentMode?: BrowserSessionUserAgentMode
   }): Promise<BrowserProfileCreateResult> {
     return {
-      profile: browserSessionRegistry.createProfile(params.scope, params.label, {
+      profile: await browserSessionRegistry.createProfile(params.scope, params.label, {
         userAgentMode: params.userAgentMode
       })
     }

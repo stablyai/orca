@@ -121,6 +121,7 @@ describe('startup ordering', () => {
     expect(desktopStartup).toContain(
       'openWindow: () => openMainWindow({ revealOnDidFinishLoad: true })'
     )
+    expect(desktopStartup).toContain('bindServices: bindTerminalRuntimeStartupServices')
     expect(desktopStartup).toContain('shellPathReady,')
     expect(desktopStartup).toContain('startServices: startTerminalRuntimeStartupServices')
     expect(barrier).toContain('managedWslCliStartupBarrierReady')
@@ -268,6 +269,20 @@ describe('startup ordering', () => {
     expect(beforeQuit).not.toContain('unsubscribeSystemResumeBroadcast')
     expect(commitIndex).toBeGreaterThanOrEqual(0)
     expect(disposeIndex).toBeGreaterThan(commitIndex)
+  })
+
+  it('joins structured agent sessions to the committed quit barrier', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const willQuitStart = source.indexOf("app.on('will-quit'")
+    const willQuitEnd = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const willQuit = source.slice(willQuitStart, willQuitEnd)
+
+    expect(willQuit).toContain(
+      'const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()'
+    )
+    expect(willQuit).toContain(
+      "{ name: 'structured-agent-session', promise: structuredAgentSessionShutdown }"
+    )
   })
 
   it('joins agent-browser cleanup before the committed quit exits', () => {

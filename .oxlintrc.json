@@ -40,6 +40,18 @@
     "react/no-string-refs": "error",
     "react/no-unescaped-entities": "error",
     "react/require-render-return": "error",
+    "react/error-boundaries": "error",
+    "react/globals": "error",
+    "react/immutability": "off",
+    "react/incompatible-library": "off",
+    "react/preserve-manual-memoization": "off",
+    "react/purity": "error",
+    "react/refs": "off",
+    "react/set-state-in-effect": "off",
+    "react/set-state-in-render": "error",
+    "react/static-components": "error",
+    "react/use-memo": "error",
+    "react/void-use-memo": "error",
     "react/jsx-curly-brace-presence": [
       "error",
       { "props": "never", "children": "never", "propElementValues": "always" }
@@ -62,6 +74,7 @@
     "typescript/consistent-type-definitions": ["error", "type"],
     "typescript/consistent-type-imports": "error",
     "typescript/no-explicit-any": ["error", { "ignoreRestArgs": true }],
+    "typescript/no-confusing-non-null-assertion": "error",
     "typescript/no-import-type-side-effects": "error",
     "typescript/no-unnecessary-boolean-literal-compare": "error",
     "typescript/no-unnecessary-template-expression": "error",
@@ -131,6 +144,7 @@
     {
       "files": ["**/*.test.*", "**/*.spec.*", "**/*-benchmark.*"],
       "rules": {
+        "react/globals": "off",
         "quadratic-buffer-concat/no-loop-carried-concat": "off",
         "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off"
       }

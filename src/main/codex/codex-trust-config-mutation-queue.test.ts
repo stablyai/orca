@@ -108,4 +108,36 @@ describe('runExclusivelyForCodexTrustConfig', () => {
     await queued
     expect(secondStarted).toBe(true)
   })
+
+  it('coalesces WSL UNC aliases without folding the case-sensitive Linux path', async () => {
+    const aliasGate = deferred()
+    let aliasStarted = false
+    const blockedAlias = runExclusivelyForCodexTrustConfig(
+      String.raw`\\wsl.localhost\Ubuntu\home\Alice\.codex\config.toml`,
+      () => aliasGate.promise
+    )
+    const queuedAlias = runExclusivelyForCodexTrustConfig(
+      String.raw`\\wsl$\ubuntu\home\Alice\.codex\config.toml`,
+      () => {
+        aliasStarted = true
+        return Promise.resolve()
+      }
+    )
+    await Promise.resolve()
+    expect(aliasStarted).toBe(false)
+
+    let distinctStarted = false
+    await runExclusivelyForCodexTrustConfig(
+      String.raw`\\wsl.localhost\Ubuntu\home\alice\.codex\config.toml`,
+      async () => {
+        distinctStarted = true
+      }
+    )
+    expect(distinctStarted).toBe(true)
+
+    aliasGate.resolve()
+    await blockedAlias
+    await queuedAlias
+    expect(aliasStarted).toBe(true)
+  })
 })

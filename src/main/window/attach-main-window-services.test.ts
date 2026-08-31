@@ -17,6 +17,8 @@ const {
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
   hydrateLocalPtyRegistryAtBootMock,
+  setWorktreeBaseDirectoryWatcherSyncContextMock,
+  scheduleWorktreeBaseDirectoryWatcherSyncMock,
   setupAutoUpdaterMock,
   browserManagerUnregisterAllMock,
   runWorktreeChangeInvalidatorsMock,
@@ -40,6 +42,8 @@ const {
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
+  setWorktreeBaseDirectoryWatcherSyncContextMock: vi.fn(),
+  scheduleWorktreeBaseDirectoryWatcherSyncMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
   browserManagerUnregisterAllMock: vi.fn(),
   runWorktreeChangeInvalidatorsMock: vi.fn(),
@@ -96,6 +100,11 @@ vi.mock('../ipc/pty', () => ({
 
 vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: hydrateLocalPtyRegistryAtBootMock
+}))
+
+vi.mock('../ipc/worktree-base-directory-watcher', () => ({
+  setWorktreeBaseDirectoryWatcherSyncContext: setWorktreeBaseDirectoryWatcherSyncContextMock,
+  scheduleWorktreeBaseDirectoryWatcherSync: scheduleWorktreeBaseDirectoryWatcherSyncMock
 }))
 
 vi.mock('../browser/browser-manager', () => ({
@@ -222,27 +231,7 @@ async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
 
 describe('attachMainWindowServices', () => {
   beforeEach(() => {
-    onMock.mockReset()
-    removeAllListenersMock.mockReset()
-    removeListenerMock.mockReset()
-    handleMock.mockReset()
-    removeHandlerMock.mockReset()
-    setPermissionRequestHandlerMock.mockReset()
-    setPermissionCheckHandlerMock.mockReset()
-    systemPreferencesAskForMediaAccessMock.mockReset()
-    systemPreferencesGetMediaAccessStatusMock.mockReset()
-    registerRepoHandlersMock.mockReset()
-    setRepoRemoteClientNotifierMock.mockReset()
-    setWorktreeCatalogRemoteClientNotifierMock.mockReset()
-    registerWorktreeHandlersMock.mockReset()
-    registerPtyHandlersMock.mockReset()
-    hydrateLocalPtyRegistryAtBootMock.mockReset()
-    setupAutoUpdaterMock.mockReset()
-    browserManagerUnregisterAllMock.mockReset()
-    acknowledgePendingTccPromptNoticeMock.mockReset()
-    consumePendingTccPromptNoticeMock.mockReset()
-    dismissTccPromptNoticeMock.mockReset()
-    releasePendingTccPromptNoticeMock.mockReset()
+    vi.resetAllMocks()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
   })
@@ -282,8 +271,8 @@ describe('attachMainWindowServices', () => {
     expect(mainWindow.webContents.reload).toHaveBeenCalledTimes(1)
   })
 
-  it('retries local PTY registry hydration after local startup services are ready', async () => {
-    const localStartup = deferred()
+  it('hydrates once after the local PTY provider barrier resolves', async () => {
+    const providerStartup = deferred()
     const store = createStore()
 
     attachMainWindowServices(
@@ -292,18 +281,17 @@ describe('attachMainWindowServices', () => {
       createRuntime() as never,
       undefined,
       undefined,
-      { awaitLocalPtyStartup: () => localStartup.promise }
+      { awaitLocalPtyProviderStartup: () => providerStartup.promise }
     )
 
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(1)
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledWith(store)
+    expect(hydrateLocalPtyRegistryAtBootMock).not.toHaveBeenCalled()
 
-    localStartup.resolve()
-    await localStartup.promise
+    providerStartup.resolve()
+    await providerStartup.promise
     await Promise.resolve()
 
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(2)
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenLastCalledWith(store)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledOnce()
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledWith(store)
   })
 
   it('passes injected update quit cleanup to the auto-updater', async () => {
@@ -944,5 +932,22 @@ describe('attachMainWindowServices', () => {
       title: undefined,
       identity
     })
+  })
+
+  it('keeps deferred worktree watcher setup inside the service boundary', async () => {
+    const mainWindow = createMainWindow()
+    const store = createStore()
+
+    vi.useFakeTimers()
+    try {
+      attachMainWindowServices(mainWindow as never, store, createRuntime() as never)
+
+      expect(setWorktreeBaseDirectoryWatcherSyncContextMock).toHaveBeenCalledWith(store, mainWindow)
+      expect(scheduleWorktreeBaseDirectoryWatcherSyncMock).toHaveBeenCalledWith(store, mainWindow)
+
+      await vi.advanceTimersByTimeAsync(100)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

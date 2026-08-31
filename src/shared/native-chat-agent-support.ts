@@ -1,13 +1,20 @@
+import type { TuiAgent } from './tui-agent'
+
 export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp'
 
-/** Agents whose transcripts the native chat view can parse and render. */
-export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
+/** Agents whose transcripts the native chat view can parse and render, in the
+ *  order the settings pane advertises them. */
+export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'claude',
   'openclaude',
   'codex',
   'grok',
   'omp'
-])
+]
+
+export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(
+  NATIVE_CHAT_SUPPORTED_AGENT_LIST
+)
 
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)

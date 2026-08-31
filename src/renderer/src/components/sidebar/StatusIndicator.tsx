@@ -1,8 +1,12 @@
 import React from 'react'
-import { Radio } from 'lucide-react'
+import { Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
+import {
+  StateIndicatorTooltip,
+  type StateIndicatorTooltipSide
+} from '@/components/StateIndicatorTooltip'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 
 // Why: re-export WorktreeStatus under the existing `Status` alias so the
@@ -11,90 +15,92 @@ import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-stat
 // (e.g., 'error') and the other didn't.
 export type Status = WorktreeStatus
 
-type StatusIndicatorProps = React.ComponentProps<'span'> & {
+type StatusIndicatorProps = Omit<React.ComponentProps<'span'>, 'title'> & {
   status: Status
+  showTooltip?: boolean
+  tooltipSide?: StateIndicatorTooltipSide
 }
+
+const AGENT_STATUS_TOOLTIP_STATUSES = new Set<Status>([
+  'working',
+  'monitoring',
+  'permission',
+  'interrupted',
+  'done'
+])
 
 const StatusIndicator = React.memo(function StatusIndicator({
   status,
   className,
-  title,
+  showTooltip = true,
+  tooltipSide,
   ...rest
 }: StatusIndicatorProps) {
-  // Why: surface the status label as a native tooltip so hovering the dot
-  // reveals the state — matters especially for 'active' vs 'done', which
-  // share the same emerald dot. Callers pass aria-hidden="true" alongside
-  // an sr-only label, so the `title` attribute is ignored by AT and only
-  // serves sighted users on hover. Callers can override by passing their
-  // own `title`.
-  const resolvedTitle = title ?? getWorktreeStatusLabel(status)
+  const tooltipLabel =
+    showTooltip && AGENT_STATUS_TOOLTIP_STATUSES.has(status) ? getWorktreeStatusLabel(status) : null
+  let indicator: React.JSX.Element
 
   if (status === 'working') {
-    return (
+    indicator = (
       <span
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-        title={resolvedTitle}
         {...rest}
       >
         <AgentWorkingSpinner className="size-2" />
       </span>
     )
-  }
-
-  if (status === 'monitoring') {
-    return (
+  } else if (status === 'monitoring') {
+    indicator = (
       <span
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-        title={resolvedTitle}
         {...rest}
       >
-        <Radio className="size-3 text-yellow-500" aria-hidden="true" />
+        <Activity className="size-3 text-yellow-500" aria-hidden="true" />
       </span>
     )
-  }
-
-  if (status === 'interrupted') {
-    return (
+  } else if (status === 'interrupted') {
+    indicator = (
       <span
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-        title={resolvedTitle}
         {...rest}
       >
         <span className="block size-1.5 rounded-full bg-red-500" />
       </span>
     )
-  }
-
-  if (status === 'permission') {
-    return (
+  } else if (status === 'permission') {
+    indicator = (
       <span
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-        title={resolvedTitle}
         {...rest}
       >
         <AgentQuestionIcon className="size-3" />
       </span>
     )
+  } else {
+    indicator = (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        {...rest}
+      >
+        <span
+          className={cn(
+            'block size-2 rounded-full',
+            status === 'done' || status === 'active'
+              ? // Green dot for both hook-reported 'done' and the heuristic
+                // 'active' (terminal open, quiet). Working uses a yellow
+                // ring above; 'inactive' stays grey.
+                'bg-emerald-500'
+              : 'bg-neutral-500/40'
+          )}
+        />
+      </span>
+    )
   }
 
   return (
-    <span
-      className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-      title={resolvedTitle}
-      {...rest}
-    >
-      <span
-        className={cn(
-          'block size-2 rounded-full',
-          status === 'done' || status === 'active'
-            ? // Green dot for both hook-reported 'done' and the heuristic
-              // 'active' (terminal open, quiet). Working uses a yellow
-              // ring above; 'inactive' stays grey.
-              'bg-emerald-500'
-            : 'bg-neutral-500/40'
-        )}
-      />
-    </span>
+    <StateIndicatorTooltip label={tooltipLabel} side={tooltipSide}>
+      {indicator}
+    </StateIndicatorTooltip>
   )
 })
 

@@ -117,6 +117,8 @@ export type PtyConnectionDeps = {
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
+  /** Settles the captured one-shot startup only after this pane owns a concrete PTY. */
+  onStartupBound?: () => void
   deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
   /** Records a DECSET 2031 subscription seen through main's '2031-subscribe'
    *  fact (paneMode2031 + the mode at subscribe time) so later theme flips push

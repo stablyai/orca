@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { createWorkspaceFromComposerSource } from './source-workspace-create'
 import type { MobileComposerCreateSelection } from './mobile-composer-source-types'
+import { WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS } from './worktree-create-idempotency-policy'
 
 type Call = { method: string; params: Record<string, unknown> }
 
@@ -24,6 +25,9 @@ function fakeClient(handle: (method: string, call: number) => unknown, calls: Ca
 }
 
 const agent = { choice: 'blank' as const }
+const IDEMPOTENT_CREATE_SUPPORT = {
+  dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS
+}
 
 const baseArgs = {
   targetRepoId: 'repo-1',
@@ -31,7 +35,7 @@ const baseArgs = {
   agent,
   workspaceName: undefined,
   note: undefined,
-  supportsIdempotentCutoverRetry: true
+  worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
 }
 
 describe('createWorkspaceFromComposerSource', () => {

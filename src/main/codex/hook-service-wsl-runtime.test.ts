@@ -16,6 +16,7 @@ import {
   type CodexTrustEntry
 } from './config-toml-trust'
 import {
+  CodexHookService,
   _internals,
   createCodexWslRuntimeHookInstallPlan,
   type CodexWslRuntimeHookInstallPlan
@@ -82,7 +83,67 @@ function expectedManagedCommand(scriptPath: string): string {
 }
 
 describe('Codex WSL runtime hook install', () => {
-  it('plans WSL hook files with Linux command and trust paths', async () => {
+  it('coalesces aliases of one runtime home without blocking independent homes', async () => {
+    const service = new CodexHookService()
+    const releases: (() => void)[] = []
+    const started: string[] = []
+    vi.spyOn(service, 'installForRuntimeHome').mockImplementation(async (runtimeHomePath) => {
+      started.push(runtimeHomePath!)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      return null
+    })
+    const firstHome = '\\\\wsl$\\Ubuntu\\home\\Alice\\.local\\share\\orca\\codex-runtime-home\\home'
+    const alias = firstHome.replace('\\\\wsl$', '\\\\wsl.localhost')
+    const independent = firstHome.replace('\\Alice\\', '\\Bob\\')
+
+    const first = service.installForRuntimeHomeSerialized(firstHome)
+    const second = service.installForRuntimeHomeSerialized(alias)
+    const third = service.installForRuntimeHomeSerialized(independent)
+    await vi.waitFor(() => expect(started).toEqual([firstHome, independent]))
+    expect(second).toBe(first)
+
+    releases.splice(0).forEach((release) => release())
+    await Promise.all([first, second, third])
+    expect(started).toEqual([firstHome, independent])
+  })
+
+  it('does not coalesce one drive-backed home across WSL distros', async () => {
+    const service = new CodexHookService()
+    const started: string[] = []
+    vi.spyOn(service, 'installForRuntimeHome').mockImplementation(async (_runtimeHome, target) => {
+      started.push(target?.wslDistro ?? '')
+      return null
+    })
+    const home = 'D:\\wsl-home\\.local\\share\\orca\\codex-runtime-home\\home'
+
+    await Promise.all([
+      service.installForRuntimeHomeSerialized(home, { runtime: 'wsl', wslDistro: 'Ubuntu' }),
+      service.installForRuntimeHomeSerialized(home, { runtime: 'wsl', wslDistro: 'Debian' })
+    ])
+
+    expect(started).toEqual(['Ubuntu', 'Debian'])
+  })
+
+  it('keeps case-distinct Linux runtime homes on separate queues', async () => {
+    const service = new CodexHookService()
+    const started: string[] = []
+    vi.spyOn(service, 'installForRuntimeHome').mockImplementation(async (runtimeHomePath) => {
+      started.push(runtimeHomePath!)
+      return null
+    })
+    const upper =
+      '\\\\wsl.localhost\\Ubuntu\\home\\Alice\\.local\\share\\orca\\codex-runtime-home\\home'
+    const lower = upper.replace('\\Alice\\', '\\alice\\')
+
+    await Promise.all([
+      service.installForRuntimeHomeSerialized(upper),
+      service.installForRuntimeHomeSerialized(lower)
+    ])
+
+    expect(started).toEqual([upper, lower])
+  })
+
+  it('plans WSL hook files with Linux command and trust paths', () => {
     const runtimeHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
 
@@ -275,11 +336,15 @@ describe('Codex WSL runtime hook install', () => {
   it('generates a POSIX hook that bridges WSL loopback failures through Windows curl', async () => {
     const script = _internals.getManagedScript('posix')
     expect(script).toContain('load_hook_endpoint()')
+    expect(script).toContain('unset ORCA_AGENT_HOOK_TRANSPORT')
     expect(script).toContain('"set ORCA_AGENT_HOOK_TOKEN="*)')
     expect(script).toContain('post_codex_hook()')
     expect(script).toContain('is_wsl_runtime()')
     expect(script).toContain('WSL_DISTRO_NAME')
     expect(script).toContain('windows_curl=$(command -v curl.exe 2>/dev/null || true)')
+    expect(script).toContain('-H "Content-Type: application/json"')
+    expect(script).toContain('-H "X-Orca-Agent-Hook-Meta-Encoding: base64"')
+    expect(script).toContain('--data-binary @-')
     expect(script).toContain('--data-urlencode "payload@-"')
     expect(script).toContain('if post_codex_hook curl >/dev/null 2>&1; then')
     expect(script).toContain('post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true')
@@ -302,6 +367,7 @@ describe('Codex WSL runtime hook install', () => {
           'set ORCA_AGENT_HOOK_TOKEN=fresh-token',
           'set ORCA_AGENT_HOOK_ENV=development',
           'set ORCA_AGENT_HOOK_VERSION=1',
+          'set ORCA_AGENT_HOOK_TRANSPORT=raw-json-v1',
           ''
         ].join('\r\n'),
         'utf-8'
@@ -333,6 +399,7 @@ describe('Codex WSL runtime hook install', () => {
       const posted = readFileSync(capturePath, 'utf-8')
       expect(posted).toContain('http://127.0.0.1:43210/hook/codex')
       expect(posted).toContain('X-Orca-Agent-Hook-Token: fresh-token')
+      expect(posted).toContain('Content-Type: application/json')
       expect(posted).not.toContain('stale-token')
     }
   )

@@ -64,8 +64,7 @@ describe('direct SSH hydration fanout', () => {
       api: {
         ui: {},
         ssh: {
-          listTargets: () =>
-            Promise.resolve(targets.map((id) => ({ id, label: id }))),
+          listTargets: () => Promise.resolve(targets.map((id) => ({ id, label: id }))),
           listRemovedTargetLabels: () => Promise.resolve({}),
           // A wedged relay answers nothing until the 30s RPC timeout fires.
           getState: ({ targetId }: { targetId: string }) => {

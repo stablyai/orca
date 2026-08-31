@@ -140,6 +140,11 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
+import {
+  capturePersistedUIWriteBaseline,
+  diffPersistedUIWriteFields,
+  type PersistedUIWriteBaseline
+} from './persisted-ui-write-baseline'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -370,6 +375,23 @@ function collectAcknowledgedAgentNotificationId({
   if (id) {
     ids.add(id)
   }
+}
+
+function usableTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+}
+
+/** Newest turn timestamp an unread check can compare against for one agent row. */
+function latestAgentTurnTimestamp(entry: {
+  stateStartedAt?: number
+  stateHistory?: { startedAt?: number }[]
+}): number {
+  let latest = usableTimestamp(entry.stateStartedAt)
+  // Why history too: Activity renders one event per stateHistory entry, each with its own unread check.
+  for (const history of entry.stateHistory ?? []) {
+    latest = Math.max(latest, usableTimestamp(history.startedAt))
+  }
+  return latest
 }
 
 function isPlainPersistedRecord(value: unknown): value is Record<string, unknown> {
@@ -1001,6 +1023,19 @@ export type UISlice = {
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
   persistedUIReady: boolean
+  /** Writer-owned fields as last hydrated from main or flushed by the writer; the debounced writer diffs against this so it only persists fields this client changed (STA-5781). */
+  persistedUIWriteBaseline: PersistedUIWriteBaseline | null
+  /** Fields with a ui.set round-trip in flight; hydration keeps the mirror's value for them so an echo of the in-flight write can't revert a newer flip-back. */
+  persistedUIWriteInFlightCounts: Partial<Record<keyof PersistedUIWriteBaseline, number>>
+  /** Bumped whenever hydration replaces the baseline; an ack whose write predates the bump must not fold, or it would erase a remote write that landed during the round trip. */
+  persistedUIWriteBaselineGeneration: number
+  notePersistedUIWriteStarted: (fields: readonly (keyof PersistedUIWriteBaseline)[]) => void
+  /** Settle an in-flight write: fold the acked patch into the baseline (null = rejected, leaving the fields dirty so the next change re-flushes them). */
+  notePersistedUIWriteSettled: (
+    fields: readonly (keyof PersistedUIWriteBaseline)[],
+    flushed: Partial<PersistedUIWriteBaseline> | null,
+    options?: { sentAtGeneration: number }
+  ) => void
   uiZoomLevel: number
   setUIZoomLevel: (level: number) => void
   editorFontZoomLevel: number
@@ -1215,10 +1250,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         return s
       }
       const now = Date.now()
-      // Why: only reallocate if an ack advances; compare prev<now not !== — Date.now() ticks every ms and !== would rewrite the map every call.
+      const migrationUnsupported = Object.values(s.migrationUnsupportedByPtyId ?? {})
+      // Why: only reallocate if an ack advances; compare prev<stamp not !== — the stamp ticks every ms and !== would rewrite the map every call.
       let next: Record<string, number> | null = null
       for (const key of paneKeys) {
         const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+        // Why not plain Date.now(): a remote/SSH execution host can stamp a turn ahead of this clock,
+        // and every unread rule is `ackAt < turnTimestamp`. A behind-the-turn ack can never clear the
+        // row, so its auto-ack effect re-fires on each new millisecond forever (React #185).
+        let stamp = now
         const liveEntry = s.agentStatusByPaneKey?.[key]
         if (liveEntry) {
           collectAcknowledgedAgentNotificationId({
@@ -1228,6 +1268,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             stateStartedAt: liveEntry.stateStartedAt,
             previousAckAt: prev
           })
+          stamp = Math.max(stamp, latestAgentTurnTimestamp(liveEntry))
         }
         const retained = s.retainedAgentsByPaneKey?.[key]
         if (retained) {
@@ -1238,12 +1279,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             stateStartedAt: retained.entry.stateStartedAt,
             previousAckAt: prev
           })
+          stamp = Math.max(stamp, latestAgentTurnTimestamp(retained.entry))
         }
-        if (prev < now) {
+        for (const unsupported of migrationUnsupported) {
+          // Why: Activity synthesizes a blocked row from this entry, stamped by the pane's host like any turn.
+          if (unsupported.paneKey === key) {
+            stamp = Math.max(stamp, usableTimestamp(unsupported.updatedAt))
+          }
+        }
+        if (prev < stamp) {
           if (next === null) {
             next = { ...s.acknowledgedAgentsByPaneKey }
           }
-          next[key] = now
+          next[key] = stamp
         }
       }
       return next ? { acknowledgedAgentsByPaneKey: next } : s
@@ -2445,6 +2493,47 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   scrollToDiffCommentId: null,
   setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,
+  persistedUIWriteBaseline: null,
+  persistedUIWriteInFlightCounts: {},
+  notePersistedUIWriteStarted: (fields) =>
+    set((s) => {
+      const counts = { ...s.persistedUIWriteInFlightCounts }
+      for (const field of fields) {
+        counts[field] = (counts[field] ?? 0) + 1
+      }
+      return { persistedUIWriteInFlightCounts: counts }
+    }),
+  persistedUIWriteBaselineGeneration: 0,
+  notePersistedUIWriteSettled: (fields, flushed, options) =>
+    set((s) => {
+      const counts = { ...s.persistedUIWriteInFlightCounts }
+      for (const field of fields) {
+        const next = (counts[field] ?? 0) - 1
+        if (next > 0) {
+          counts[field] = next
+        } else {
+          delete counts[field]
+        }
+      }
+      // Why the generation guard: a hydration during the round trip made the
+      // baseline authoritative for state NEWER than this write; folding the
+      // sent values over it would blank the mirror-vs-baseline diff and leave
+      // mirror and authority divergent with nothing left to reconcile them.
+      // Skipping the fold keeps the diff alive so the trailing flush re-sends.
+      // Why options is required for folding: an unguarded fold from a future
+      // caller could silently erase a remote write that landed mid-round-trip.
+      const foldable =
+        flushed &&
+        s.persistedUIWriteBaseline &&
+        options !== undefined &&
+        options.sentAtGeneration === s.persistedUIWriteBaselineGeneration
+      return {
+        persistedUIWriteInFlightCounts: counts,
+        ...(foldable
+          ? { persistedUIWriteBaseline: { ...s.persistedUIWriteBaseline!, ...flushed } }
+          : {})
+      }
+    }),
   uiZoomLevel: 0,
   setUIZoomLevel: (level) => set({ uiZoomLevel: level }),
   editorFontZoomLevel: 0,
@@ -2662,8 +2751,60 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             : s.activeView,
         persistedUIReady: true
       }
+      // The incoming payload is authoritative for the writer-owned fields, so it becomes the
+      // writer's new diff baseline — but fields with an unflushed local edit (mirror diverged
+      // from the previous baseline) keep the local value so a broadcast arriving inside the
+      // writer's debounce window can't silently revert what the user just toggled (STA-5781).
+      // Order matters: capture the baseline BEFORE overlaying pending edits, or the baseline
+      // would equal the pending value, the diff would go empty, and the toggle would be dropped.
+      // Note the width sanitizers above fall back to the CURRENT store value only for
+      // non-numeric input (numbers are clamped in place), so a captured width can differ
+      // from what main holds only for garbage payloads; at worst main keeps an
+      // out-of-range width until the next drag re-writes it.
+      const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
+      const previousBaseline = s.persistedUIWriteBaseline
+      if (previousBaseline) {
+        const pendingLocalEdits = diffPersistedUIWriteFields(
+          capturePersistedUIWriteBaseline(s),
+          previousBaseline
+        )
+        Object.assign(hydrated, pendingLocalEdits)
+        // In-flight fields too: a flip-back to the baseline value diffs empty,
+        // yet the in-flight write's echo must not revert it (PR#17057 review).
+        for (const field of Object.keys(
+          s.persistedUIWriteInFlightCounts
+        ) as (keyof PersistedUIWriteBaseline)[]) {
+          ;(hydrated as Record<string, unknown>)[field] = s[field]
+        }
+      }
       // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.
-      return hydratedUIPartialMatchesState(s, hydrated) ? s : hydrated
+      // The baseline must still advance when it moved (a remote same-field write during an in-flight
+      // ack pins the only visibly differing field, and our own echo precedes every ack) — but only
+      // the two baseline keys, or every ordinary write's echo would churn the store's collection
+      // identities and re-render identity-compared selectors once per write.
+      // Why the generation bumps only on baseline movement: an unrelated-field
+      // broadcast during an in-flight write would otherwise void that write's
+      // fold and cost a redundant trailing re-send of identical values.
+      const writeBaselineMoved =
+        !previousBaseline ||
+        Object.keys(diffPersistedUIWriteFields(nextWriteBaseline, previousBaseline)).length > 0
+      const nextWriteBaselineGeneration = writeBaselineMoved
+        ? s.persistedUIWriteBaselineGeneration + 1
+        : s.persistedUIWriteBaselineGeneration
+      if (hydratedUIPartialMatchesState(s, hydrated)) {
+        if (!writeBaselineMoved) {
+          return s
+        }
+        return {
+          persistedUIWriteBaseline: nextWriteBaseline,
+          persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
+        }
+      }
+      return {
+        ...hydrated,
+        persistedUIWriteBaseline: nextWriteBaseline,
+        persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
+      }
     }),
 
   updateStatus: { state: 'idle' },

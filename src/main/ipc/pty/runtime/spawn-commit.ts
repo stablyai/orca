@@ -33,10 +33,12 @@ import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
+import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import type { RuntimePtySpawnState } from './spawn-state'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
+  const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
   try {
     ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
       store: ctx.hostSessionBinding?.store,
@@ -69,7 +71,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       {
         tabId: owner.surface.tabId,
         leafId: owner.surface.leafId,
-        ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {})
+        ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+        ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
       }
     )
     if (!args.connectionId) {
@@ -204,7 +207,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ? {
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
-            ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {})
+            ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+            ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }
         : undefined,
       !args.connectionId

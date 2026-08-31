@@ -92,16 +92,14 @@ export const nativeSkillInstallFilesystem: SkillInstallFilesystem = {
   inspectPaths: async (paths) =>
     new Map(
       await runSkillCandidateTasks(
-        paths.map(
-          (path) => async (): Promise<[string, SkillPathInspection]> => [
-            path,
-            {
-              kind: statKind(await lstat(path).catch(() => null)),
-              realpath: await realpath(path).catch(() => null),
-              mtimeMs: (await stat(path).catch(() => null))?.mtimeMs ?? null
-            }
-          ]
-        )
+        paths.map((path) => async (): Promise<[string, SkillPathInspection]> => [
+          path,
+          {
+            kind: statKind(await lstat(path).catch(() => null)),
+            realpath: await realpath(path).catch(() => null),
+            mtimeMs: (await stat(path).catch(() => null))?.mtimeMs ?? null
+          }
+        ])
       )
     )
 }

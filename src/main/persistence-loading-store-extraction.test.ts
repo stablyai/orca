@@ -2,14 +2,22 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'v
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getDefaultWorkspaceSession } from '../shared/constants'
+import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../shared/constants'
 import type { PersistedState } from '../shared/persisted-state-types'
+import type * as StartupDiagnosticsModule from './startup/startup-diagnostics'
 import type { Store as PersistenceStore } from './persistence/loading-store/store'
-import { createStore, dataFile, makeRepo, testState } from './persistence-test-harness'
+import {
+  createStore,
+  dataFile,
+  makeRepo,
+  testState,
+  writeDataFile
+} from './persistence-test-harness'
 
-const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
+const { trackMock, getCohortAtEmitMock, logStartupDiagnosticMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
-  getCohortAtEmitMock: vi.fn(() => ({ nth_repo_added: 2 }))
+  getCohortAtEmitMock: vi.fn(() => ({ nth_repo_added: 2 })),
+  logStartupDiagnosticMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -33,6 +41,10 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(() => ({ hosts: [] })),
   sshConfigHostsToTargets: vi.fn(() => [])
 }))
+vi.mock('./startup/startup-diagnostics', async (importOriginal) => {
+  const actual = await importOriginal<typeof StartupDiagnosticsModule>()
+  return { ...actual, logStartupDiagnostic: logStartupDiagnosticMock }
+})
 
 describe('loading Store extraction seams', () => {
   beforeEach(() => {
@@ -40,7 +52,68 @@ describe('loading Store extraction seams', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
+    logStartupDiagnosticMock.mockReset()
     rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('does not serialize the workspace session when startup diagnostics are disabled', () => {
+    const sentinel = 'startup-diagnostics-workspace-session-sentinel-disabled'
+    vi.stubEnv('ORCA_STARTUP_DIAGNOSTICS', '')
+    const state = getDefaultPersistedState(testState.dir)
+    state.workspaceSession = { ...state.workspaceSession, activeTabId: sentinel }
+    writeDataFile(state)
+
+    const stringifySpy = vi.spyOn(JSON, 'stringify')
+    const store = createStore()
+    store.freezeWrites()
+
+    const workspaceSessionStringifyCalls = stringifySpy.mock.calls.filter(
+      ([value]) =>
+        value &&
+        typeof value === 'object' &&
+        (value as { activeTabId?: unknown }).activeTabId === sentinel
+    )
+    stringifySpy.mockRestore()
+
+    expect(store.getWorkspaceSession().activeTabId).toBe(sentinel)
+    expect(workspaceSessionStringifyCalls).toHaveLength(0)
+    expect(
+      logStartupDiagnosticMock.mock.calls.some(([event]) => event === 'persistence-load-done')
+    ).toBe(false)
+  })
+
+  it('reports the unchanged workspace-session byte count when startup diagnostics are enabled', () => {
+    const sentinel = 'startup-diagnostics-workspace-session-sentinel-enabled'
+    vi.stubEnv('ORCA_STARTUP_DIAGNOSTICS', '1')
+    const state = getDefaultPersistedState(testState.dir)
+    state.workspaceSession = { ...state.workspaceSession, activeTabId: sentinel }
+    writeDataFile(state)
+
+    const stringifySpy = vi.spyOn(JSON, 'stringify')
+    const store = createStore()
+    store.freezeWrites()
+
+    const workspaceSessionStringifyCalls = stringifySpy.mock.calls.filter(
+      ([value]) =>
+        value &&
+        typeof value === 'object' &&
+        (value as { activeTabId?: unknown }).activeTabId === sentinel
+    )
+    stringifySpy.mockRestore()
+
+    expect(store.getWorkspaceSession().activeTabId).toBe(sentinel)
+    expect(workspaceSessionStringifyCalls).toHaveLength(1)
+    const loadDoneCall = logStartupDiagnosticMock.mock.calls.find(
+      ([event]) => event === 'persistence-load-done'
+    )
+    expect(loadDoneCall).toBeDefined()
+    const details = loadDoneCall?.[1] as Record<string, unknown> | undefined
+    expect(details).toEqual({
+      t: expect.any(Number),
+      repos: state.repos.length,
+      workspaceSessionBytes: Buffer.byteLength(JSON.stringify(store.getWorkspaceSession()))
+    })
   })
 
   it('accepts the first JSON-parseable backup even when an older backup has richer state', async () => {

@@ -178,6 +178,11 @@ export function createWorkspaceTerminalHydrationActions(
           lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
           defaultTerminalTabsAppliedByWorktreeId:
             session.defaultTerminalTabsAppliedByWorktreeId ?? {},
+          // Why replace and not union: both callers hand over a map they derived from this store
+          // synchronously (the pull merge) or from disk before the store had one (startup), so there
+          // is no local tombstone to lose — and a union would resurrect the ones the merge just
+          // retired on the host's acknowledgement, which is the whole bound on this map.
+          closedTerminalTabTombstonesByTabId: session.closedTerminalTabTombstonesByTabId ?? {},
           automaticAgentResumeClaimsByTabId: {},
           sleepingAgentSessionsByPaneKey,
           pendingReconnectWorktreeIds,

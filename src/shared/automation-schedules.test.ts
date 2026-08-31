@@ -1,19 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
-  buildAutomationCronSchedule,
-  buildAutomationRrule,
   classifyAutomationCronSchedule,
   describeAutomationSchedule,
-  formatAutomationSchedule,
+  formatAutomationSchedule
+} from './automation-schedules'
+import {
+  buildAutomationCronSchedule,
+  buildAutomationRrule,
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from './automation-schedule-occurrences'
+import {
+  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
   getAutomationCronExpressionFields,
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
-  latestAutomationOccurrenceAtOrBefore,
-  nextAutomationOccurrenceAfter,
   parseAutomationRrule,
   tryParseAutomationRrule
-} from './automation-schedules'
+} from './automation-schedule-parsing'
 
 function formatTimeForTest(hour: number, minute: number): string {
   const date = new Date()

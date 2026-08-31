@@ -1,6 +1,6 @@
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
@@ -62,7 +62,7 @@ export type SimulatorPaletteSearchResult = {
   lastActiveAt?: number | null
 }
 
-type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type SimulatorPaletteActiveTabType = WorkspaceVisibleTabType
 
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 

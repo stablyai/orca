@@ -1,3 +1,4 @@
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
@@ -88,8 +89,11 @@ export type TerminalState = {
   tabBarOrderByWorktree: Record<string, string[]>
   /** False until global reconnect publishes every deferred wake hint. */
   workspaceSessionReady: boolean
+  /** True after main ownership restoration, renderer PTY adoption, and structured-tab projection settle. */
+  terminalStartupRestorationReady: boolean
   restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
+  closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId
   hydrationSucceeded: boolean
   pendingReconnectWorktreeIds: string[]
   pendingReconnectTabByWorktree: Record<string, string[]>

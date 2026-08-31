@@ -6,6 +6,10 @@ export type TerminalRecord = {
   title: string
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
+  /** From `terminal.list`; parked and proven-absent leaves report false. */
+  connected?: boolean
+  /** From `terminal.list`; a live PTY with no leaf, so it never appears as a tab. */
+  orphaned?: boolean
 }
 
 export type MobileTerminalSessionTab = {
@@ -157,6 +161,26 @@ export function mergeTerminalRecordsByCurrentOrder(
   ]
 }
 
+// Why: tab snapshots are partial and can transiently omit a live terminal, so absence
+// here is only a hint to schedule the `terminal.list` sweep -- never a reason to prune.
+// Restricted to connected, non-orphaned handles: parked leaves and orphaned PTYs are
+// legitimately absent from tabs forever and would pin the caller to the fast cadence.
+export function hasConnectedTerminalAbsentFromSessionTabs(
+  currentTerminals: readonly TerminalRecord[],
+  tabs: readonly MobileSessionTabLike[]
+): boolean {
+  const tabbable = currentTerminals.filter(
+    (terminal) => terminal.connected === true && terminal.orphaned !== true
+  )
+  if (tabbable.length === 0) {
+    return false
+  }
+  const tabHandles = new Set(
+    getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
+  )
+  return tabbable.some((terminal) => !tabHandles.has(terminal.handle))
+}
+
 export function getTerminalRecordsFromSessionTabs(
   tabs: readonly MobileSessionTabLike[]
 ): TerminalRecord[] {
@@ -169,7 +193,8 @@ export function getTerminalRecordsFromSessionTabs(
         handle: tab.terminal,
         title: tab.title || 'Terminal',
         terminalTheme: tab.terminalTheme,
-        isActive: tab.isActive === true
+        isActive: tab.isActive === true,
+        connected: true
       }
     ]
   })

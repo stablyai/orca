@@ -356,10 +356,12 @@ describe('connectPanePty', () => {
         await flushAsyncTicks(8)
 
         const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
-        expect(replies.some((reply) => reply.startsWith('\x1b]11;rgb:'))).toBe(true)
         // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
-        expect(replies.some((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toBe(true)
-        expect(replies).toContain(DEFAULT_DA1_RESPONSE)
+        const cprReply = replies.find((reply) => /^\u001b\[\d+;\d+R$/.test(reply))
+        const oscReply = replies.find((reply) => reply.startsWith('\x1b]11;rgb:'))
+        expect(oscReply).toBeDefined()
+        expect(cprReply).toBeDefined()
+        expect(replies).toEqual([oscReply, cprReply, DEFAULT_DA1_RESPONSE])
         const written = writtenFloodData(pane)
         expect(written).not.toContain('aaaa')
         expect(written).not.toContain('bbbb')

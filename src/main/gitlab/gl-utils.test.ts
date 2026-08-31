@@ -24,6 +24,7 @@ import {
   GITLAB_ADMISSION_TIMEOUT_MS,
   getIssueProjectRef,
   parseGlabJsonList,
+  parseGlabPaginationHeader,
   isMissingJobLogError,
   getGlabKnownHosts,
   getProjectRef,
@@ -662,6 +663,21 @@ describe('getGlabKnownHosts', () => {
     expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], { timeout: 10_000 })
   })
 
+  it('preserves WSL and background admission on the cold auth-status probe', async () => {
+    glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await getGlabKnownHosts(undefined, {
+      wslDistro: 'Ubuntu',
+      admissionTier: 'background'
+    })
+
+    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], {
+      timeout: 10_000,
+      wslDistro: 'Ubuntu',
+      admissionTier: 'background'
+    })
+  })
+
   it('falls back to default when glab auth status fails', async () => {
     glabExecFileAsyncMock.mockRejectedValueOnce(new Error('glab not authenticated'))
 
@@ -905,5 +921,26 @@ describe('getGlabKnownHosts', () => {
     ])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
     unregisterSshGitProvider(connectionId)
+  })
+})
+
+describe('parseGlabPaginationHeader', () => {
+  it('reads a usable header value', () => {
+    expect(parseGlabPaginationHeader('25', 1)).toBe(25)
+    expect(parseGlabPaginationHeader(' 9 ', 1)).toBe(9)
+  })
+
+  it('returns undefined for an absent or unparseable header', () => {
+    expect(parseGlabPaginationHeader(undefined, 0)).toBeUndefined()
+    expect(parseGlabPaginationHeader('', 0)).toBeUndefined()
+    expect(parseGlabPaginationHeader('abc', 0)).toBeUndefined()
+  })
+
+  // Why: the minimum is what lets issues.ts tell "x-total: 0" (derive one page) apart from an
+  // absent header (probe for a next page), and what makes x-total-pages: 0 fall through.
+  it('rejects values below the minimum', () => {
+    expect(parseGlabPaginationHeader('0', 1)).toBeUndefined()
+    expect(parseGlabPaginationHeader('0', 0)).toBe(0)
+    expect(parseGlabPaginationHeader('-3', 0)).toBeUndefined()
   })
 })

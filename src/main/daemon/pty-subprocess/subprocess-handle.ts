@@ -71,6 +71,7 @@ export function createDaemonPtySubprocessHandle(args: {
       : {}),
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
+    confirmShellForeground: foreground.confirmShellForeground,
     write: (data) => {
       if (dead) {
         return

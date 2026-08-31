@@ -827,11 +827,10 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     })
     await flushEffects()
 
-    // Why: the row stays where the frozen order put it, and its badge must keep resolving — row
-    // data covers every open tab, so inclusion dropping it can't blank the pip mid-open.
+    // Why: a frozen row must retain its live badge while staying in its original slot.
     expect(getTabRowIds()).toContain('tab-alpha')
     expect(testContainer.textContent).toContain('Alpha chat')
-    expect(testContainer.querySelector('[title="Working"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Working')
   })
 
   it('keeps a frozen current row listed when its agent finishes mid-open', async () => {
@@ -859,10 +858,9 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     })
     await flushEffects()
 
-    // Why: `done` gates entry, not rendering — a row already in the frozen order keeps its slot and
-    // flips to the completed check rather than blanking under the cursor.
+    // Why: completion changes the frozen row's badge without removing its reserved slot.
     expect(getTabRowIds()).toContain('tab-alpha')
-    expect(testContainer.querySelector('[title="Done"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Done')
   })
 
   it('activates the row a digit chord addresses while open', async () => {
@@ -920,8 +918,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       })
     )
 
-    // Why not optional-call: a skipped setter would leave the empty-query Recent section standing
-    // and the assertions below would pass without the query path ever running.
+    // Why: require the setter so this cannot silently exercise the empty-query section.
     const applyQuery = setCommandQuery
     if (!applyQuery) {
       throw new Error('CommandInput never installed a query setter')
@@ -937,7 +934,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     const alphaRow = testContainer.querySelector<HTMLElement>(
       '[data-command-item="workspace-tab:tab-alpha"]'
     )
-    expect(alphaRow?.querySelector('[title="Working"]')).not.toBeNull()
+    expect(alphaRow?.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Working')
   })
 
   it('keeps create-worktree below the matches it would otherwise outrank', async () => {

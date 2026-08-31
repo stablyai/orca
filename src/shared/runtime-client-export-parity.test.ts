@@ -158,6 +158,7 @@ type RuntimeTypeInventory = [
   Runtime.RuntimeTerminalSplit,
   Runtime.RuntimeTerminalState,
   Runtime.RuntimeTerminalSummary,
+  Runtime.RuntimeTerminalUnavailableReason,
   Runtime.RuntimeTerminalVisualGroupNode,
   Runtime.RuntimeTerminalVisualLayout,
   Runtime.RuntimeTerminalVisualLayoutNode,
@@ -225,8 +226,11 @@ describe('runtime client public export parity', () => {
       'BROWSER_UNAVAILABLE_ERROR_CODE',
       'COMPUTER_ERROR_CODES',
       'HEADLESS_RUNTIME_WINDOW_ID',
+      'TERMINAL_PTY_DEGRADATION_CAPABILITY',
+      'TERMINAL_UNAVAILABLE_ERROR_CODE',
       'UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH',
-      'browserUnavailableMessage'
+      'browserUnavailableMessage',
+      'terminalUnavailableMessage'
     ])
     expect(Object.keys(RemoteClient).sort()).toEqual([
       'RemoteRuntimeClientError',

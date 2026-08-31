@@ -125,4 +125,17 @@ describe('worktree RPC schemas', () => {
 
     expect(parsed.displayName).toBeUndefined()
   })
+
+  it('parses optional GitHub PR suppression writes and clears', () => {
+    expect(
+      WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: 42 }).suppressedGitHubPR
+    ).toBe(42)
+    expect(
+      WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: null })
+        .suppressedGitHubPR
+    ).toBeNull()
+    expect(
+      WorktreeSet.safeParse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: 0 }).success
+    ).toBe(false)
+  })
 })

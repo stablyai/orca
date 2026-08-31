@@ -147,7 +147,9 @@ describe('feature interaction writer boundaries', () => {
   })
 
   it('records GitLab provider-depth for detail opens, workspace use, and dialog mutations', () => {
-    const dialogSource = componentSource('GitLabItemDialog.tsx')
+    const detailsSource = componentSource('gitlab-item-dialog/use-gitlab-details-editing.ts')
+    const primarySource = componentSource('gitlab-item-dialog/use-gitlab-primary-actions.ts')
+    const reviewSource = componentSource('gitlab-item-dialog/use-gitlab-review-actions.ts')
     const gitlabWriter = "recordFeatureInteraction('gitlab-tasks')"
 
     expect(
@@ -166,14 +168,18 @@ describe('feature interaction writer boundaries', () => {
     ).toContain(gitlabWriter)
 
     const mutationSections = [
-      sourceBetween(dialogSource, 'const handleSaveDetails', 'const handleRetryJob'),
-      sourceBetween(dialogSource, 'const handleSetReviewers', 'const handleSubmitInlineComment'),
-      sourceBetween(dialogSource, 'const handleSubmitInlineComment', 'const handleClose'),
-      sourceBetween(dialogSource, 'const handleClose', 'const handleReopen'),
-      sourceBetween(dialogSource, 'const handleReopen', 'const handleMerge'),
-      sourceBetween(dialogSource, 'const handleMerge', 'const handleSubmitComment'),
-      sourceBetween(dialogSource, 'const handleSubmitComment', 'const handleResolveDiscussion'),
-      sourceBetween(dialogSource, 'const handleResolveDiscussion', 'const Icon =')
+      sourceBetween(detailsSource, 'const handleSaveDetails', 'return {'),
+      sourceBetween(reviewSource, 'const handleSetReviewers', 'const handleSubmitInlineComment'),
+      sourceBetween(
+        reviewSource,
+        'const handleSubmitInlineComment',
+        'const handleResolveDiscussion'
+      ),
+      sourceBetween(primarySource, 'const handleClose', 'const handleReopen'),
+      sourceBetween(primarySource, 'const handleReopen', 'const handleMerge'),
+      sourceBetween(primarySource, 'const handleMerge', 'const handleSubmitComment'),
+      sourceBetween(primarySource, 'const handleSubmitComment', 'return {'),
+      sourceBetween(reviewSource, 'const handleResolveDiscussion', 'return {')
     ]
     for (const section of mutationSections) {
       expect(section).toContain(gitlabWriter)
@@ -200,7 +206,10 @@ describe('feature interaction writer boundaries', () => {
   })
 
   it('records Linear provider-depth for inline edits, board drops, creation, and workspace use', () => {
-    const drawerSource = componentSource('LinearItemDrawer.tsx')
+    const drawerSource = [
+      componentSource('linear-item-drawer-edit-controller.tsx'),
+      componentSource('linear-item-drawer-comment-footer.tsx')
+    ].join('\n')
     const linearWriter = "recordFeatureInteraction('linear-tasks')"
 
     const taskPageSections = [
@@ -234,7 +243,7 @@ describe('feature interaction writer boundaries', () => {
       sourceBetween(drawerSource, 'const handlePriorityChange', 'const handleEstimateChange'),
       sourceBetween(drawerSource, 'const handleEstimateChange', 'const handleEstimateSubmit'),
       sourceBetween(drawerSource, 'const handleAssigneeChange', 'const handleLabelToggle'),
-      sourceBetween(drawerSource, 'const handleLabelToggle', 'return ('),
+      sourceBetween(drawerSource, 'const handleLabelToggle', 'return {'),
       sourceBetween(drawerSource, 'const handleSubmit = useCallback(async () => {', 'return (')
     ]
     for (const section of drawerMutationSections) {

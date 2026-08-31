@@ -83,7 +83,8 @@ export async function getStatusOp(
 }> {
   const worktreePath = params.worktreePath as string
   const lineStatsCacheKey = `relay\0${worktreePath}`
-  const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
+  const lineStatsWriteToken =
+    params.includeLineStats === false ? null : beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
   // Why: untrusted RPC input spliced into a git argv — only an OID shape may pass.
   const branchLineTotalMergeBase = readGitBranchLineTotalMergeBaseParam(
@@ -197,7 +198,7 @@ export async function getStatusOp(
   }
 
   // Why: skip numstat after the limit to avoid reintroducing its cost.
-  if (!didHitLimit) {
+  if (!didHitLimit && lineStatsWriteToken !== null) {
     const branchLineTotalInput = buildBranchLineTotalInput(
       git,
       worktreePath,
@@ -218,7 +219,7 @@ export async function getStatusOp(
       recompute: () => attachLineStats(git, worktreePath, entries, options.signal),
       ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     }))
-  } else {
+  } else if (lineStatsWriteToken !== null) {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
 

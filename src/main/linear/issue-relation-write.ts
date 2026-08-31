@@ -16,7 +16,7 @@ import {
   type RawRelationsResponse
 } from './issue-context-raw'
 import { createLinearIssueRelation, deleteLinearIssueRelation } from './issue-relation-mutation'
-import { LinearWriteFailure } from './issues'
+import { LinearWriteFailure } from './linear-issue-write-support'
 
 const RELATION_WRITE_READ_CAP = 250
 

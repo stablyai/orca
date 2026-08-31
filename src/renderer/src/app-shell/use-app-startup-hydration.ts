@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
+import { useStartupActions } from './use-app-startup-actions'
 import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
 import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/codex-stale-pane-sweep'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace-session-host-persistence'
@@ -33,6 +33,7 @@ import {
 } from '../../../shared/execution-host'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import { restoreLocalStructuredSessionTabsOnce } from '../runtime/local-structured-session-tabs-sync'
 
 async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
   try {
@@ -43,39 +44,6 @@ async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]>
     console.warn('Failed to list runtime session hosts for startup:', err)
     return []
   }
-}
-
-function useStartupActions() {
-  // Why: consolidate action refs into one useShallow subscription so React runs one equality check per store mutation instead of one per action.
-  return useAppStore(
-    useShallow((s) => ({
-      fetchReposForAllHosts: s.fetchReposForAllHosts,
-      awaitLocalRepoCatalogSettlement: s.awaitLocalRepoCatalogSettlement,
-      fetchProjectGroupsForAllHosts: s.fetchProjectGroupsForAllHosts,
-      fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
-      fetchAllWorktrees: s.fetchAllWorktrees,
-      fetchWorktrees: s.fetchWorktrees,
-      fetchWorktreeLineage: s.fetchWorktreeLineage,
-      fetchOrcaProfiles: s.fetchOrcaProfiles,
-      fetchSettings: s.fetchSettings,
-      awaitOwnerWorktreeVisibilityDefaultsHydration:
-        s.awaitOwnerWorktreeVisibilityDefaultsHydration,
-      fetchKeybindings: s.fetchKeybindings,
-      initGitHubCache: s.initGitHubCache,
-      hydrateWorkspaceSession: s.hydrateWorkspaceSession,
-      hydrateTabsSession: s.hydrateTabsSession,
-      hydrateEditorSession: s.hydrateEditorSession,
-      hydrateBrowserSession: s.hydrateBrowserSession,
-      fetchBrowserSessionProfiles: s.fetchBrowserSessionProfiles,
-      reconnectPersistedTerminals: s.reconnectPersistedTerminals,
-      setDeferredSshReconnectTargets: s.setDeferredSshReconnectTargets,
-      setSshConnectionState: s.setSshConnectionState,
-      hydratePersistedUI: s.hydratePersistedUI,
-      setHydrationSucceeded: s.setHydrationSucceeded,
-      pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
-      seedActiveWorktreeLastVisitedIfMissing: s.seedActiveWorktreeLastVisitedIfMissing
-    }))
-  )
 }
 
 /**
@@ -226,6 +194,12 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
           })
+          await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
+            window.api.app.prepareTerminalStartupRestoration()
+          )
+          if (cancelled) {
+            return
+          }
           // Why: prune visit timestamps AFTER hydration (earlier, worktreesByRepo may be empty and prune would drop entries for worktrees about to appear); seed the active worktree if missing.
           // See docs/cmd-j-empty-query-ordering.md.
           timeRendererStartupSyncStep('visit-timestamp-prune', () => {
@@ -275,12 +249,19 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          await timeRendererStartupStep('project-structured-session-tabs', () =>
+            restoreLocalStructuredSessionTabsOnce()
+          )
+          if (cancelled) {
+            return
+          }
           // Why here: reconnect just published restored PTY ids; sweeping them now
           // re-offers stale Codex panes whose tabs never mount this session.
           sweepRestoredCodexPanesForStaleAccounts(useAppStore.getState())
           syncZoomCSSVar()
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)
+          actions.setTerminalStartupRestorationReady(true)
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })

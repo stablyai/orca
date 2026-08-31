@@ -680,7 +680,7 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('plain links stay current while explicit new-tab gestures activate Orca tabs', async ({
+  test('every new-tab link gesture activates an Orca tab and never a native window', async ({
     electronApp,
     orcaPage
   }) => {
@@ -698,23 +698,20 @@ test.describe('Browser Tab', () => {
       const baseWindowCount = await electronApp.evaluate(
         ({ BaseWindow }) => BaseWindow.getAllWindows().length
       )
-      const baseTabCount = await orcaPage.locator('[data-tab-id]').count()
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link')
-
+      // A plain target=_blank click is a new-tab request, in the main frame and in an iframe;
+      // the source tab must stay put rather than navigate away under it.
       const sourceTabLocator = orcaPage.locator(`[data-tab-id="${sourceTab!.id}"]`)
-      await expect(sourceTabLocator).toContainText('Linked destination', { timeout: 10_000 })
-      await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(baseTabCount)
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link')
+      await expectBrowserTabActive(orcaPage, 'Linked destination')
+      await expect(sourceTabLocator).toContainText('Source page')
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#return-link')
-      await expect(sourceTabLocator).toContainText('Source page', { timeout: 10_000 })
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-link', {
         frameSelector: '#link-frame'
       })
-      await expect(sourceTabLocator).toContainText('Frame destination', { timeout: 10_000 })
-      await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(baseTabCount)
-
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#return-link')
-      await expect(sourceTabLocator).toContainText('Source page', { timeout: 10_000 })
+      await expectBrowserTabActive(orcaPage, 'Frame destination')
+      await expect(sourceTabLocator).toContainText('Source page')
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-modifier-link', {
         frameSelector: '#link-frame',

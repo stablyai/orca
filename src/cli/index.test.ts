@@ -41,6 +41,7 @@ vi.mock('child_process', async () => {
 })
 
 import { COMMAND_SPECS, main } from './index'
+import { formatFlagHelp } from './help'
 import { GLOBAL_FLAGS, specPaths } from './args'
 import { okFixture, queueFixtures } from './test-fixtures'
 
@@ -480,6 +481,7 @@ describe('orca root help', () => {
     const rootHelp = String(logSpy.mock.calls[0][0])
     expect(rootHelp).not.toContain('--parent-workspace')
     expect(rootHelp).toContain('[--parent-worktree <selector>] [--no-parent]')
+    expect(rootHelp).toContain('identity:<identity>')
 
     logSpy.mockClear()
     await main(['worktree', 'create', '--help'], '/tmp/repo')
@@ -504,6 +506,7 @@ describe('orca root help', () => {
     const setHelp = String(logSpy.mock.calls[0][0])
     expect(setHelp).not.toContain('--parent-workspace')
     expect(setHelp).not.toContain('folder:<id>')
+    expect(formatFlagHelp('parent-worktree')).toContain('identity:<identity>')
     expect(setHelp).not.toContain('worktree:<id>')
     expect(callMock).not.toHaveBeenCalled()
   })

@@ -53,6 +53,24 @@ function runtimeAutomationCalls(): string[] {
 }
 
 describe('AutomationsPage row actions under a colliding automation id', () => {
+  it('names the selected row’s own host, not the desktop that listed it', async () => {
+    await collidingHosts()
+    await renderPage()
+    await settleHostQueries()
+
+    const remote = mocks.listPanel?.filteredRows.find(
+      (candidate) => candidate.automation.name === 'Remote nightly'
+    )
+    await act(async () => {
+      mocks.listPanel?.selectAutomationRow(remote?.key ?? '')
+    })
+
+    // The runtime copy's own execution target reads `local` — local to that
+    // server — so only the row's catalog entry can name the host on the detail view.
+    expect(mocks.detailPane?.selected?.name).toBe('Remote nightly')
+    expect(mocks.detailPane?.selectedHostEntry?.authorityLabel).toBe('GPU box')
+  })
+
   it('runs the selected desktop row on the desktop, not on the runtime holding the same id', async () => {
     await collidingHosts()
     const { container } = await renderPage()

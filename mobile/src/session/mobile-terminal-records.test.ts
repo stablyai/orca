@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getTerminalRecordsFromSessionTabs,
+  hasConnectedTerminalAbsentFromSessionTabs,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
@@ -149,5 +150,71 @@ describe('mobile terminal records', () => {
         ]
       )
     ).toBe(false)
+  })
+
+  const record = (over: Partial<TerminalRecord> & { handle: string }): TerminalRecord => ({
+    title: 'Terminal',
+    terminalTheme: undefined,
+    isActive: false,
+    ...over
+  })
+  const terminalTab = (handle: string): MobileTerminalSessionTab => ({
+    id: `tab-${handle}`,
+    type: 'terminal',
+    terminal: handle,
+    title: 'Terminal',
+    isActive: false
+  })
+
+  it('reports a connected terminal the tab snapshot dropped', () => {
+    const held = [
+      record({ handle: 'pty-1', connected: true }),
+      record({ handle: 'pty-2', connected: true })
+    ]
+
+    expect(hasConnectedTerminalAbsentFromSessionTabs(held, [terminalTab('pty-1')])).toBe(true)
+  })
+
+  it('ignores parked handles that tabs never carry', () => {
+    const parked = [
+      record({ handle: 'pty-1', connected: false }),
+      record({ handle: 'pty-2', connected: false })
+    ]
+
+    // A worktree with no live PTY lists every parked leaf while tabs publish none;
+    // treating that as absence would pin the caller to the fast cadence forever.
+    expect(hasConnectedTerminalAbsentFromSessionTabs(parked, [])).toBe(false)
+  })
+
+  it('ignores orphaned PTYs, which have no leaf and so never appear as a tab', () => {
+    const orphan = [record({ handle: 'pty-1', connected: true, orphaned: true })]
+
+    expect(hasConnectedTerminalAbsentFromSessionTabs(orphan, [])).toBe(false)
+  })
+
+  it('ignores a host that omits connected rather than assuming liveness', () => {
+    expect(hasConnectedTerminalAbsentFromSessionTabs([record({ handle: 'pty-1' })], [])).toBe(false)
+  })
+
+  it('clears once the snapshot covers every connected terminal', () => {
+    const held = [record({ handle: 'pty-1', connected: true })]
+
+    expect(
+      hasConnectedTerminalAbsentFromSessionTabs(held, [terminalTab('pty-1'), terminalTab('pty-2')])
+    ).toBe(false)
+  })
+
+  it('keeps the merge additive so absence only schedules the sweep', () => {
+    const held = [
+      record({ handle: 'pty-1', connected: true }),
+      record({ handle: 'pty-2', connected: true })
+    ]
+    const tabs = [terminalTab('pty-1')]
+
+    expect(
+      mergeTerminalRecordsByCurrentOrder(getTerminalRecordsFromSessionTabs(tabs), held).map(
+        (terminal) => terminal.handle
+      )
+    ).toEqual(['pty-1', 'pty-2'])
   })
 })

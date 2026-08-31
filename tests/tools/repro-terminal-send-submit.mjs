@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const SCRIPT_PATH = import.meta.filename
 const BEGIN = '\x1b[200~'
@@ -118,6 +119,20 @@ async function closeTerminal(cli, handle, cwd) {
   }
 }
 
+async function waitForPermissionPrompt(cli, handle, cwd) {
+  const deadline = Date.now() + 10_000
+  let lastTerminal = null
+  while (Date.now() < deadline) {
+    const shown = await callOrca(cli, ['terminal', 'show', '--terminal', handle], cwd)
+    lastTerminal = shown.terminal ?? null
+    if (lastTerminal?.agentWait) {
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error(`terminal permission prompt was not observed: ${JSON.stringify(lastTerminal)}`)
+}
+
 async function waitForWorktreeSelector(cli, repoId, cwd) {
   const deadline = Date.now() + 10_000
   const expectedPath = path.resolve(cwd)
@@ -138,18 +153,25 @@ async function waitForWorktreeSelector(cli, repoId, cwd) {
 }
 
 async function createFakeCodexCommand(tempDir, args) {
+  const launcherPath = path.join(tempDir, 'codex')
+  const runnerPath = path.join(tempDir, 'fake-agent.mjs')
+  await writeFile(runnerPath, `import ${JSON.stringify(pathToFileURL(SCRIPT_PATH).href)}\n`, 'utf8')
   if (process.platform === 'win32') {
-    const launcherPath = path.join(tempDir, 'codex.cmd')
+    const commandPath = path.join(tempDir, 'codex.cmd')
     await writeFile(
-      launcherPath,
-      `@echo off\r\n"${process.execPath}" "${SCRIPT_PATH}" %*\r\n`,
+      commandPath,
+      `@echo off\r\n"${process.execPath}" "%~dp0fake-agent.mjs" %*\r\n`,
       'utf8'
     )
-    return [shellQuote(launcherPath), ...args].join(' ')
+    return [shellQuote(commandPath), ...args].join(' ')
   }
-  const launcherPath = path.join(tempDir, 'codex')
-  await symlink(process.execPath, launcherPath)
-  return [shellQuote(launcherPath), shellQuote(SCRIPT_PATH), ...args].join(' ')
+  await writeFile(
+    launcherPath,
+    `#!/usr/bin/env sh\n"${process.execPath}" "${runnerPath}" "$@"\n`,
+    'utf8'
+  )
+  await chmod(launcherPath, 0o755)
+  return [shellQuote(launcherPath), ...args].join(' ')
 }
 
 async function parentMain() {
@@ -162,43 +184,48 @@ async function parentMain() {
   const prompt = `${marker} ${'slow composer payload '.repeat(24)}`
   const expectStalled = hasFlag('expect-stalled')
   const expectBlocked = hasFlag('expect-blocked')
+  const providedHandle = argValue('terminal')
   await mkdir(tempDir, { recursive: true })
   await rm(reportPath, { force: true })
 
-  const command =
-    argValue('agent-command') ??
-    (await createFakeCodexCommand(tempDir, [
-      '--fake-agent',
-      '--report',
-      shellQuote(reportPath),
-      '--marker',
-      shellQuote(marker),
-      '--timeout-ms',
-      String(timeoutMs),
-      ...(expectBlocked ? ['--permission-before-send'] : []),
-      ...(process.platform === 'win32' ? ['--allow-unframed-paste'] : [])
-    ]))
-  const added = await callOrca(cli, ['repo', 'add', '--path', cwd], cwd)
-  const repoId = added.repo?.id
-  if (!repoId) {
-    throw new Error('repo add returned no id')
+  let handle = providedHandle
+  if (!handle) {
+    const command =
+      argValue('agent-command') ??
+      (await createFakeCodexCommand(tempDir, [
+        '--fake-agent',
+        '--report',
+        shellQuote(reportPath),
+        '--marker',
+        shellQuote(marker),
+        '--timeout-ms',
+        String(timeoutMs),
+        ...(expectStalled ? ['--swallow-first-enter'] : []),
+        ...(expectBlocked ? ['--permission-before-send'] : []),
+        ...(process.platform === 'win32' ? ['--allow-unframed-paste'] : [])
+      ]))
+    const added = await callOrca(cli, ['repo', 'add', '--path', cwd], cwd)
+    const repoId = added.repo?.id
+    if (!repoId) {
+      throw new Error('repo add returned no id')
+    }
+    const worktreeSelector = await waitForWorktreeSelector(cli, repoId, cwd)
+    const created = await callOrca(
+      cli,
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        worktreeSelector,
+        '--title',
+        'terminal send submit repro',
+        '--command',
+        command
+      ],
+      cwd
+    )
+    handle = created.terminal?.handle
   }
-  const worktreeSelector = await waitForWorktreeSelector(cli, repoId, cwd)
-  const created = await callOrca(
-    cli,
-    [
-      'terminal',
-      'create',
-      '--worktree',
-      worktreeSelector,
-      '--title',
-      'terminal send submit repro',
-      '--command',
-      command
-    ],
-    cwd
-  )
-  const handle = created.terminal?.handle
   if (!handle) {
     throw new Error('terminal create returned no handle')
   }
@@ -209,6 +236,7 @@ async function parentMain() {
       if (!setupReport) {
         throw new Error('terminal permission prompt did not materialize')
       }
+      await waitForPermissionPrompt(cli, handle, cwd)
     } else {
       await callOrca(
         cli,
@@ -278,6 +306,7 @@ async function parentMain() {
 }
 
 async function fakeAgentMain() {
+  process.title = 'codex'
   const reportPath = argValue('report')
   const marker = argValue('marker')
   const timeoutMs = parsePositiveInteger('timeout-ms', DEFAULT_TIMEOUT_MS)
@@ -291,10 +320,14 @@ async function fakeAgentMain() {
     process.stdin.setRawMode(true)
   }
   process.stdin.resume()
-  process.stdout.write('OpenAI Codex\nmodel: fake\ndirectory: fixture\n> ')
-  if (permissionBeforeSend) {
-    process.stdout.write('\nPermission required\nAllow once\nAllow always\nReject\n')
-  }
+  process.stdout.write('\x1b]0;Codex working\x07')
+  setTimeout(() => {
+    const title = permissionBeforeSend ? 'Codex permission' : 'Codex Ready'
+    process.stdout.write(`\x1b]0;${title}\x07OpenAI Codex\nmodel: fake\ndirectory: fixture\n> `)
+    if (permissionBeforeSend) {
+      process.stdout.write('\nPermission required\nAllow once\nAllow always\nReject\n')
+    }
+  }, 100)
 
   let input = ''
   let countedCarriages = 0
@@ -308,6 +341,7 @@ async function fakeAgentMain() {
   const writeReport = async (submitted) => {
     const hasBracketedPasteFrame = input.includes(BEGIN) && input.includes(END)
     const report = {
+      configuredTimeoutMs: timeoutMs,
       contractOk:
         prematureEnters === 0 &&
         (permissionBeforeSend || !pasteFramingRequired || hasBracketedPasteFrame),

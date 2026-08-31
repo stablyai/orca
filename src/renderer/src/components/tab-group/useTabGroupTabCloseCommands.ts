@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
@@ -7,6 +8,20 @@ import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { translate } from '@/i18n/i18n'
+
+function reportStructuredSessionCloseError(error: unknown): void {
+  toast.error(
+    translate(
+      'components.native-chat.structuredSessionCloseFailed',
+      'Could not close this Codex chat'
+    ),
+    { description: error instanceof Error ? error.message : String(error) }
+  )
+}
 
 export function useTabGroupTabCloseCommands({
   worktreeId,
@@ -16,7 +31,6 @@ export function useTabGroupTabCloseCommands({
   groupTabs: Tab[]
 }) {
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
-  const closeTab = useAppStore((state) => state.closeTab)
   const closeFile = useAppStore((state) => state.closeFile)
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
@@ -105,6 +119,29 @@ export function useTabGroupTabCloseCommands({
         useAppStore.getState(),
         worktreeId
       )
+      if (item.contentType === 'agent-session') {
+        // Why: the structured session lives on the host, so the local tab close must also
+        // retire the host's canonical row or it reappears on the next sync.
+        const target = getActiveRuntimeTarget({
+          activeRuntimeEnvironmentId: runtimeEnvironmentId
+        })
+        void closeStructuredAgentSession(target, item.entityId)
+          .then(() =>
+            callRuntimeRpc(target, 'session.tabs.close', {
+              worktree: toRuntimeWorktreeSelector(worktreeId),
+              tabId: `agent-session:${item.entityId}`,
+              reason: 'user'
+            })
+          )
+          .then(() => {
+            closeUnifiedTab(item.id)
+            if (!opts?.skipEmptyCheck) {
+              leaveWorktreeIfEmpty()
+            }
+          })
+          .catch(reportStructuredSessionCloseError)
+        return
+      }
       if (item.contentType === 'terminal') {
         // Why: closeTerminalTab can defer behind a pin / running-process dialog, so the
         // empty check has to run on the actual close — never on cancel.
@@ -155,6 +192,22 @@ export function useTabGroupTabCloseCommands({
           useAppStore.getState(),
           worktreeId
         )
+        if (item.contentType === 'agent-session') {
+          const target = getActiveRuntimeTarget({
+            activeRuntimeEnvironmentId: runtimeEnvironmentId
+          })
+          void closeStructuredAgentSession(target, item.entityId)
+            .then(() =>
+              callRuntimeRpc(target, 'session.tabs.close', {
+                worktree: toRuntimeWorktreeSelector(worktreeId),
+                tabId: `agent-session:${item.entityId}`,
+                reason: 'user'
+              })
+            )
+            .then(() => closeUnifiedTab(item.id))
+            .catch(reportStructuredSessionCloseError)
+          continue
+        }
         if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
           // Why: revoke local resume + hook authority before the host removes its canonical tab.
           // No running-process prompt: a bulk close of N busy tabs would be a modal storm.
@@ -164,7 +217,7 @@ export function useTabGroupTabCloseCommands({
         if (item.contentType === 'browser') {
           closeBrowserItem(item, runtimeEnvironmentId)
         } else if (item.contentType === 'terminal') {
-          closeTab(item.entityId)
+          closeTerminalTab(item.entityId, { skipRunningProcessConfirm: true })
         } else if (item.contentType === 'simulator') {
           closeUnifiedTab(item.id)
         } else {
@@ -175,7 +228,7 @@ export function useTabGroupTabCloseCommands({
         }
       }
     },
-    [closeBrowserItem, closeEditorIfUnreferenced, closeTab, closeUnifiedTab, groupTabs, worktreeId]
+    [closeBrowserItem, closeEditorIfUnreferenced, closeUnifiedTab, groupTabs, worktreeId]
   )
 
   return { closeItem, closeMany, leaveWorktreeIfEmpty }

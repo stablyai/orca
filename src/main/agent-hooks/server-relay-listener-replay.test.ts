@@ -63,6 +63,7 @@ describe('AgentHookServer listener replay', () => {
     send(restartedRelay, { hook_event_name: 'SubagentStop', agent_id: 'child-a' })
     expect(server.getStatusSnapshot()[0]).toMatchObject({
       state: 'working',
+      prompt: 'coordinate reviewers',
       model: 'gpt-5.4',
       providerSession: { key: 'session_id', id: 'root-session' },
       subagents: [expect.objectContaining({ id: 'child-b' })]

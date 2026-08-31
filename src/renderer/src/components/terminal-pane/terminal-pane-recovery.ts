@@ -210,6 +210,12 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   if (!isCurrentTerminalRecoveryRequest(request)) {
     return false
   }
+  // A terminal-backed tab is intentionally hidden while native chat owns the
+  // provider. Late xterm callbacks from that hidden surface must not remount
+  // the tab and race the handoff's owner transition.
+  if (useAppStore.getState().getTab?.(request.tabId)?.viewMode === 'chat') {
+    return false
+  }
   const budget = recoveryBudget(request.tabId, Date.now())
   if (!budget.allowed) {
     if (shouldScheduleRecoveryRetry(request, budget)) {

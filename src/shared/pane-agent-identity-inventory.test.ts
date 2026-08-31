@@ -55,6 +55,7 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/renderer/src/components/automations/automation-list-search-rows.ts', 2],
       ['src/renderer/src/components/dashboard-popout/AgentMapSnapshotWorkspaceMenu.tsx', 2],
       ['src/renderer/src/components/dashboard-popout/AgentMapWorktreeRingNode.tsx', 2],
+      ['src/renderer/src/components/settings/NativeChatSupportedAgents.tsx', 2],
       ['src/renderer/src/components/settings/QuickCommandsList.tsx', 2],
       ['src/renderer/src/components/tab-bar/TabBarQuickCommandItem.tsx', 2],
       ['src/renderer/src/components/tab-bar/TabBarQuickCommandsMenu.tsx', 2],
@@ -125,11 +126,6 @@ const INVENTORY: readonly InventoryGroup[] = [
   },
   {
     helper: 'buildAgentNameRe',
-    classification: 'action-consumer',
-    paths: [['src/main/runtime/orchestration/groups.ts', 2]]
-  },
-  {
-    helper: 'buildAgentNameRe',
     classification: 'parser-implementation',
     paths: [['src/shared/agent-name-token-match.ts', 2]]
   },
@@ -175,7 +171,6 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'resolveCommittedTitleAgentType',
     classification: 'identity-consumer',
     paths: [
-      ['src/renderer/src/components/tab-bar/tab-bar-item-surface.tsx', 3],
       ['src/renderer/src/components/terminal-pane/native-chat-leaf-title-agent.ts', 4],
       ['src/renderer/src/components/terminal-pane/pty-connection/pane-agent-identity.ts', 2]
     ]
@@ -277,7 +272,7 @@ const DIRECT_SINGLE_SOURCE_SURFACES: readonly {
     marker: 'isCursorAgentTitle'
   },
   {
-    path: 'src/main/providers/local-pty-provider.ts',
+    path: 'src/main/providers/local-pty-session-activation.ts',
     classification: 'action-consumer',
     marker: 'launchAgent'
   },

@@ -127,6 +127,13 @@ describe('registerWorktreeHandlers', () => {
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([
         {
+          path: '/remote/old-improve-dashboard',
+          head: 'old123',
+          branch: 'refs/heads/archive/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
           path: '/remote/repo-improve-dashboard',
           head: 'abc123',
           branch: 'refs/heads/improve-dashboard',
@@ -137,7 +144,7 @@ describe('registerWorktreeHandlers', () => {
     }
     const fsProvider = {
       readFile: vi.fn().mockResolvedValue({
-        content: 'scripts:\n  setup: pnpm install\n',
+        content: 'setupAgentStartupPolicy: wait-for-setup\nscripts:\n  setup: pnpm install\n',
         isBinary: false
       }),
       createDir: vi.fn().mockResolvedValue(undefined),
@@ -153,7 +160,10 @@ describe('registerWorktreeHandlers', () => {
     getSshFilesystemProviderMock.mockReturnValue(fsProvider)
     getActiveMultiplexerMock.mockReturnValue(mux)
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
-    parseOrcaYamlMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    parseOrcaYamlMock.mockReturnValue({
+      scripts: { setup: 'pnpm install' },
+      setupAgentStartupPolicy: 'wait-for-setup'
+    })
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     shouldRunSetupForCreateMock.mockReturnValue(true)
 
@@ -184,7 +194,8 @@ describe('registerWorktreeHandlers', () => {
           envVars: expect.objectContaining({
             ORCA_ROOT_PATH: '/remote/repo',
             ORCA_WORKTREE_PATH: '/remote/repo-improve-dashboard'
-          })
+          }),
+          waitForAgentStartup: true
         }
       })
     )

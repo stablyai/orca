@@ -57,7 +57,10 @@ import {
   type HttpLinkSourceOwner
 } from '@/lib/http-link-routing'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
-import { canOpenWorkspaceBrowserTabOnRuntime } from '@/lib/workspace-browser-tab-open'
+import {
+  canOpenWorkspaceBrowserTabOnRuntime,
+  canOpenWorkspaceBrowserTabOnSsh
+} from '@/lib/workspace-browser-tab-open'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -95,6 +98,8 @@ import {
   resolveNonLatinControlChordInput
 } from './terminal-non-latin-control-chord'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import { installTerminalImeComposerPlaceholderMask } from './terminal-ime-composer-placeholder-mask'
+import { isCurrentPlatformIosWeb } from '@/lib/ios-web-platform'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
   armTerminalImePendingCandidateKeyRelease,
@@ -103,6 +108,8 @@ import {
   shouldApplyTerminalImePendingCandidateKeyRelease
 } from './terminal-ime-candidate-key-release-guard'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
+import { installTerminalIosHangulPreedit } from './terminal-ios-hangul-preedit'
+import { createTerminalIosHangulPreeditRenderer } from './terminal-ios-hangul-preedit-overlay'
 import {
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
@@ -326,6 +333,8 @@ type UseTerminalPaneLifecycleDeps = {
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
+  /** Settles the captured one-shot startup only after a pane owns a concrete PTY. */
+  onStartupBound?: () => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void
@@ -451,13 +460,6 @@ export function resolvePaneLinkCwd(
 
 export function resolvePaneSeedCwd(splitPaneCwd: string | undefined, fallbackCwd: string): string {
   return splitPaneCwd ?? fallbackCwd
-}
-
-// Why > 1, matching isIOSWebView in mobile/src/terminal/terminal-webview-html.ts: a Mac with a
-// touch peripheral can report exactly 1, and it must keep the forwarder. Real iPads report 5.
-// Why UA rather than that helper's platform check: an iPhone reports platform "iPhone", not "MacIntel".
-export function isTouchIOSUserAgent(userAgent: string, maxTouchPoints: number): boolean {
-  return userAgent.includes('Mac') && maxTouchPoints > 1
 }
 
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
@@ -726,6 +728,7 @@ export function useTerminalPaneLifecycle({
   setCacheTimerStartedAt,
   syncPanePtyLayoutBinding,
   clearExitedPanePtyLayoutBinding,
+  onStartupBound,
   setTabPaneExpanded,
   setTabCanExpandPane,
   setExpandedPane,
@@ -829,14 +832,21 @@ export function useTerminalPaneLifecycle({
       resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     const getHttpLinkSourceOwnerForPane = (paneId: number) =>
       resolveTerminalHttpLinkSourceOwner(paneTransportsRef.current.get(paneId))
-    const canOpenRuntimeBrowserForPane = (paneId: number): boolean => {
+    const canOpenOwnedBrowserForPane = (paneId: number): boolean => {
       const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-      return (
-        sourceOwner.kind === 'runtime' &&
-        canOpenWorkspaceBrowserTabOnRuntime(
+      if (sourceOwner.kind === 'runtime') {
+        return canOpenWorkspaceBrowserTabOnRuntime(
           useAppStore.getState(),
           worktreeId,
           sourceOwner.runtimeEnvironmentId
+        )
+      }
+      return (
+        sourceOwner.kind === 'ssh' &&
+        canOpenWorkspaceBrowserTabOnSsh(
+          useAppStore.getState(),
+          worktreeId,
+          sourceOwner.connectionId
         )
       )
     }
@@ -845,7 +855,7 @@ export function useTerminalPaneLifecycle({
       return terminalHttpLinkActionDestinationsFor(
         settingsRef.current,
         sourceOwner,
-        canOpenRuntimeBrowserForPane(paneId)
+        canOpenOwnedBrowserForPane(paneId)
       )
     }
     const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
@@ -969,6 +979,7 @@ export function useTerminalPaneLifecycle({
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
       clearExitedPanePtyLayoutBinding,
+      onStartupBound,
       deferPtyInput: (paneId, data, forward) => {
         const suppression = httpLinkClickFallbackDisposables.get(paneId)?.ptyMouseSuppression
         if (!suppression) {
@@ -1001,7 +1012,7 @@ export function useTerminalPaneLifecycle({
         ...terminalUrlOpenHintOptionsFor(
           settingsRef.current,
           getHttpLinkSourceOwnerForPane(paneId),
-          canOpenRuntimeBrowserForPane(paneId)
+          canOpenOwnedBrowserForPane(paneId)
         ),
         showActions: settingsRef.current?.terminalLinkActionPopoverEnabled !== false
       })
@@ -1061,22 +1072,38 @@ export function useTerminalPaneLifecycle({
           !isMac &&
           navigator.userAgent.includes('Linux') &&
           !/Android|CrOS/.test(navigator.userAgent)
-        // Why: gates the forwarder only — isMac stays as-is for the Ctrl+C, clipboard, JIS-yen and 229 policies.
-        const isTouchIOS = isTouchIOSUserAgent(navigator.userAgent, navigator.maxTouchPoints)
+        // Why: gates the iOS text-edit paths only — isMac stays as-is for the Ctrl+C, clipboard, JIS-yen and 229 policies.
+        const isIosWeb = isCurrentPlatformIosWeb()
         const linuxImeCandidateState = isLinux
           ? installTerminalImeLinuxCandidateState(pane.terminal.element)
           : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
+        // Why after the tracker: the preedit stops propagation on `input` while
+        // a syllable is held, so anything on this element that needs those
+        // events has to be registered ahead of it. Nothing does today — the
+        // preedit reads composition ownership off the event itself.
+        const iosHangulPreedit = isIosWeb
+          ? installTerminalIosHangulPreedit({
+              terminalElement: pane.terminal.element,
+              isCompositionActive: () => imeCompositionTracker.isActive(),
+              isScreenReaderMode: () => pane.terminal.options.screenReaderMode === true,
+              sendInput: (data) => pane.terminal.input(data),
+              renderPreedit: createTerminalIosHangulPreeditRenderer(pane.terminal)
+            })
+          : null
         imeCompositionDisposablesRef.current.set(pane.id, {
           dispose: () => {
+            imeComposerPlaceholderMask.dispose()
             imeCompositionTracker.dispose()
             linuxImeCandidateState?.dispose()
+            iosHangulPreedit?.dispose()
           }
         })
         // Why: macOS commits an input source's substituted text through the input event alone, so printable keydowns must not reach xterm's encoder.
         // Not on touch iOS/iPadOS: the forwarder stands aside for IME input via composition events, which iPad Hangul appears not to fire (#13345).
         const imeNativeTextForwarder =
-          isMac && !isTouchIOS
+          isMac && !isIosWeb
             ? installTerminalImeNativeTextForwarder({
                 terminalElement: pane.terminal.element,
                 isComposing: () => imeCompositionTracker.isActive(),
@@ -1216,6 +1243,7 @@ export function useTerminalPaneLifecycle({
 
           const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
+            isIosWeb,
             hasSelection: pane.terminal.hasSelection(),
             kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
           })

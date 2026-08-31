@@ -29,6 +29,7 @@ const CLIENT_EXPORTS = [
   'mergePR',
   'setPRAutoMerge',
   'updatePRState',
+  'markPRReadyForReview',
   'rerunPRChecks',
   'requestPRReviewers',
   'removePRReviewers',

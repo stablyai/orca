@@ -1312,7 +1312,9 @@ export function buildMobileSessionTabSnapshots(
     const groupProjection = buildMobileSessionGroupProjection(inputs, {
       terminalIds: publishableTerminalIds,
       editorIds,
-      browserIds: [...browserWorkspaceByIdForWorktree.keys()]
+      browserIds: [...browserWorkspaceByIdForWorktree.values()]
+        .filter((workspace) => isMobilePublishableBrowserWorkspace(workspace))
+        .map((workspace) => workspace.id)
     })
     const tabs: RuntimeMobileSessionSnapshotTab[] = []
     const emittedEditorFileIds = new Set<string>()
@@ -1353,7 +1355,7 @@ export function buildMobileSessionTabSnapshots(
         emittedEditorTabIds.add(item.tabId ?? item.id)
       } else if (item.type === 'browser') {
         const workspace = browserWorkspaceByIdForWorktree.get(item.id)
-        if (!workspace) {
+        if (!workspace || !isMobilePublishableBrowserWorkspace(workspace)) {
           continue
         }
         tabs.push(
@@ -2114,6 +2116,18 @@ function isMobileUnsupportedCombinedDiffSource(
 function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
   // Why: combined diff tabs use display labels as paths and need the desktop renderer; mobile would mis-call files.read.
   return !isMobileUnsupportedCombinedDiffSource(file.diffSource)
+}
+
+/**
+ * Why a workspace document is held back: it is served to one desktop guest through a grant no
+ * mobile client holds, so there is nothing on the other side that could render it — and the wire
+ * has no tab kind for it, so an old client would take it for an ordinary browser tab and offer
+ * navigation for a page that has no URL. Host and phone parity ships behind capability negotiation.
+ */
+function isMobilePublishableBrowserWorkspace(
+  workspace: NonNullable<AppState['browserTabsByWorktree'][string]>[number]
+): boolean {
+  return !workspace.docLocation
 }
 
 // Why: the store buckets a workspace under its own worktreeId, so this worktree's scoped inputs are the workspace's own scope.

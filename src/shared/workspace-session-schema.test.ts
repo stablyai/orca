@@ -547,6 +547,45 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves a structured agent session tab and its active projection', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'session-1',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'session-1',
+            entityId: 'session-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex',
+            structuredSessionId: 'codex-session-1',
+            label: 'Codex Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      activeTabTypeByWorktree: { wt: 'agent-session' }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex',
+        structuredSessionId: 'codex-session-1'
+      })
+      expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
+    }
+  })
+
   it('degrades an unknown viewMode to the safe default instead of failing parse', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

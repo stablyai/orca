@@ -19,6 +19,20 @@ const SESSION_PERSISTENCE_PATH = 'src/renderer/src/app-shell/use-app-session-per
 const PERSISTED_UI_WRITER_PATH = 'src/renderer/src/app-shell/use-persisted-ui-writer.ts'
 
 describe('renderer startup runtime routing', () => {
+  it('routes packaged terminal restore through the daemon adoption gate', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
+      'utf8'
+    )
+    const gateStart = source.indexOf('const startupActivationGateWorktreeIdsRef')
+    const gateEnd = source.indexOf('const startupResumeWorktreeIdsRef', gateStart)
+    const gateEffect = source.slice(gateStart, gateEnd)
+
+    expect(gateStart).toBeGreaterThanOrEqual(0)
+    expect(gateEffect).toContain('void gateWorktreeAgentActivation(activeWorktreeId)')
+    expect(gateEffect).not.toContain('resumeSleepingAgentSessionsForWorktree')
+  })
+
   it('hydrates persisted UI before local catalog and worktree hydration', () => {
     const source = readSource(STARTUP_HYDRATION_PATH)
     const startupBlockStart = source.indexOf('void (async () => {')
@@ -323,6 +337,46 @@ describe('renderer startup runtime routing', () => {
 
     expect(capabilityIndex).toBeGreaterThanOrEqual(0)
     expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
+  })
+
+  it('orders packaged restoration before adoption, projection, and default creation', () => {
+    // Why this file: the startup sequence moved out of App.tsx into the hydration hook;
+    // the ordering it asserts is unchanged, only the module that now spells it out.
+    const appSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/app-shell/use-app-startup-hydration.ts'),
+      'utf8'
+    )
+    const terminalSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
+      'utf8'
+    )
+    const hydrateIndex = appSource.indexOf("timeRendererStartupSyncStep('hydrate-session-stores'")
+    const prepareIndex = appSource.indexOf(
+      "timeRendererStartupStep('prepare-terminal-startup-restoration'"
+    )
+    const reconnectIndex = appSource.indexOf("timeRendererStartupStep('reconnect-terminals'")
+    const projectIndex = appSource.indexOf(
+      "timeRendererStartupStep('project-structured-session-tabs'"
+    )
+    const readyIndex = appSource.indexOf('actions.setTerminalStartupRestorationReady(true)')
+    const gateStart = terminalSource.indexOf('const startupActivationGateWorktreeIdsRef')
+    const gateEnd = terminalSource.indexOf('const startupResumeWorktreeIdsRef', gateStart)
+    const gateBlock = terminalSource.slice(gateStart, gateEnd)
+    const gateIndex = gateBlock.indexOf('gateWorktreeAgentActivation(activeWorktreeId)')
+    const createIndex = gateBlock.indexOf(
+      'createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })'
+    )
+
+    expect(hydrateIndex).toBeGreaterThanOrEqual(0)
+    expect(hydrateIndex).toBeLessThan(prepareIndex)
+    expect(prepareIndex).toBeLessThan(reconnectIndex)
+    expect(reconnectIndex).toBeLessThan(projectIndex)
+    expect(projectIndex).toBeLessThan(readyIndex)
+    expect(gateBlock).toContain('terminalStartupRestorationReady')
+    expect(gateBlock).not.toContain('hydrationSucceeded')
+    expect(gateIndex).toBeGreaterThanOrEqual(0)
+    expect(gateIndex).toBeLessThan(createIndex)
+    expect(gateBlock.slice(gateIndex, createIndex)).toContain("outcome !== 'empty'")
   })
 
   it('does not load the terminal workbench on the no-workspace landing path', () => {

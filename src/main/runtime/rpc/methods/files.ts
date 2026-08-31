@@ -51,6 +51,12 @@ const FileOpenDiff = FileOpen.extend({
   staged: z.boolean().optional()
 })
 
+const DocPreviewFileRead = FileOpen.extend({
+  entryRelativePath: z.string().min(1),
+  implicitRootRelativePath: z.string().nullable(),
+  authorizedRootRelativePaths: z.array(z.string())
+})
+
 const FileTreePath = WorktreeSelector.extend({
   relativePath: z
     .unknown()
@@ -147,6 +153,19 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.readMobileFile(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.readDocPreview',
+    params: DocPreviewFileRead,
+    handler: async (params, { runtime, clientKind, requestId }) =>
+      runtime.readDocPreviewFile(
+        params.worktree,
+        params.relativePath,
+        params.entryRelativePath,
+        params.implicitRootRelativePath,
+        params.authorizedRootRelativePaths,
+        remoteFileContentBudget(clientKind, requestId)
+      )
   }),
   defineMethod({
     name: 'files.resolveTerminalPath',

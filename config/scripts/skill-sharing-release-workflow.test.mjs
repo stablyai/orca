@@ -44,6 +44,48 @@ describe('skill-sharing release workflow', () => {
     expect(command).toContain('src/shared/skill-bundle-install-contract.test.ts')
   })
 
+  it('installs the archive tool required by Electron on the Linux floor', () => {
+    const linux = workflow.jobs['skill-sharing-linux-floor-release-gate']
+    const prerequisites = stepNamed(linux, 'Install Ubuntu 20.04 prerequisites')
+
+    expect(prerequisites.run).toMatch(/apt-get install[^\n]*\bunzip\b/)
+  })
+
+  it('trusts only the checked-out workspace before container git operations', () => {
+    const linux = workflow.jobs['skill-sharing-linux-floor-release-gate']
+    const trustWorkspace = stepNamed(linux, 'Trust the checked-out workspace in the job container')
+    const restoreHarness = stepNamed(
+      linux,
+      'Restore skill-sharing test harness from the workflow ref'
+    )
+    const safeDirectoryCommands = linux.steps
+      .filter((step) => typeof step.run === 'string' && step.run.includes('safe.directory'))
+      .map((step) => step.run)
+
+    expect(trustWorkspace.run).toBe('git config --global --add safe.directory "$GITHUB_WORKSPACE"')
+    expect(linux.steps.indexOf(trustWorkspace)).toBeLessThan(linux.steps.indexOf(restoreHarness))
+    expect(safeDirectoryCommands).toEqual([
+      'git config --global --add safe.directory "$GITHUB_WORKSPACE"'
+    ])
+  })
+
+  it('validates immutable tags with the current skill-sharing test harness', () => {
+    for (const jobName of [
+      'skill-sharing-release-gate',
+      'skill-sharing-linux-floor-release-gate'
+    ]) {
+      const restore = stepNamed(
+        workflow.jobs[jobName],
+        'Restore skill-sharing test harness from the workflow ref'
+      )
+
+      expect(restore.env.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
+      expect(restore.run).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
+      expect(restore.run).toContain('skill-freshness-inventory.test.ts')
+      expect(restore.run).toContain('skill-provider-runtime-roots.test.ts')
+    }
+  })
+
   it('archives bounded machine-readable evidence from every platform', () => {
     for (const jobName of [
       'skill-sharing-release-gate',

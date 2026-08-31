@@ -22,6 +22,11 @@ import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason, HostProfile } from './types'
 import { MobileRelayBackgroundGrace } from './mobile-relay-background-grace'
+import {
+  logRelayConnected,
+  logRelayCredentialUnavailable,
+  logRelayDialFailure
+} from './mobile-relay-diagnostic-log'
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 
@@ -98,7 +103,7 @@ export class MobileEndpointSupervisor {
       recordMigration: () => {
         this.relayRotationPending = false
         this.hysteresis.recordMigration(dependencies.now())
-        this.logRelay('runtime channel migrated to relay')
+        logRelayConnected(this.logRelay)
       },
       scheduleLease: (expiry) =>
         this.leaseRotation.scheduleFromLease(
@@ -107,8 +112,7 @@ export class MobileEndpointSupervisor {
       scheduleDirectProbe: () => this.directProbe.schedule(),
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
-      onDialFailure: (error) =>
-        this.logRelay('relay dial failed', `${error.name}: ${String(error.message).slice(0, 80)}`)
+      onDialFailure: (error) => logRelayDialFailure(this.logRelay, error)
     })
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
@@ -166,7 +170,8 @@ export class MobileEndpointSupervisor {
         // Why: the direct client enters reconnecting after its first failed
         // dial and may never publish disconnected while its retry loop lives.
         recoveryPresentation.onActiveFailure(this.logical, this.relayReconnect, state, this.bundle)
-        this.relayReconnect.handleStateFailure(this.logical, state)
+        const relayFailure = this.relayReconnect.handleStateFailure(this.logical, state)
+        logRelayDialFailure(this.logRelay, relayFailure, 'active-session')
       }
     })
     if (this.relayReconnect.needsRecovery(this.logical.getState())) {
@@ -249,11 +254,7 @@ export class MobileEndpointSupervisor {
         this.logical.setRecoveryPath(null)
         // Why: "expired" vs "missing" separates a sleep-past-expiry phone
         // (needs re-pair or LAN) from a Keychain failure in field reports.
-        this.logRelay(
-          selection.bundle
-            ? 'relay credential expired or rejected; slow reprobe armed'
-            : 'no relay credential bundle; slow reprobe armed'
-        )
+        logRelayCredentialUnavailable(this.logRelay, selection.bundle !== null)
         this.relayReconnect.armCredentialReprobe()
         if (ownsRecovery) {
           // Why: no dial happened — keep the session and the intent; the reprobe

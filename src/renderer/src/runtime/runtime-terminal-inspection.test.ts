@@ -209,6 +209,53 @@ describe('runtime terminal owner routing', () => {
     })
   })
 
+  it('attributes a delayed runtime acknowledgement to the current layout owner', async () => {
+    const pendingSend = Promise.withResolvers<{
+      ok: true
+      result: { send: { handle: string; accepted: true; bytesWritten: number } }
+      _meta: { runtimeId: string }
+    }>()
+    runtimeCall.mockReturnValue(pendingSend.promise)
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-1' }
+        }
+      }
+    })
+    recordRuntimeTerminalInputForPtyId('remote:env-1@@terminal-1', 123)
+    useAppStore.setState({ lastTerminalInputAtByPaneKey: {} })
+
+    expect(
+      sendRuntimePtyInput({ activeRuntimeEnvironmentId: 'env-2' }, 'remote:env-1@@terminal-1', 'x')
+    ).toBe(true)
+    const nextLeafId = '22222222-2222-4222-8222-222222222222'
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-2': {
+          root: { type: 'leaf', leafId: nextLeafId },
+          activeLeafId: nextLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [nextLeafId]: 'remote:env-1@@terminal-1' }
+        }
+      }
+    })
+    pendingSend.resolve({
+      ok: true,
+      result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().lastTerminalInputAtByPaneKey).toEqual({
+        [`tab-2:${nextLeafId}`]: expect.any(Number)
+      })
+    })
+  })
+
   it('does not record declined fire-and-forget runtime input', async () => {
     runtimeCall.mockResolvedValue({
       ok: true,
@@ -477,6 +524,163 @@ describe('runtime terminal owner routing', () => {
     recordRuntimeTerminalInputForPtyId('local-pty', 123)
 
     expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBe(123)
+  })
+
+  it('indexes a stable layout identity once across repeated terminal input', () => {
+    const layoutCount = 500
+    let layoutEnumerations = 0
+    let leafEnumerations = 0
+    const layouts = Object.fromEntries(
+      Array.from({ length: layoutCount }, (_, index) => {
+        const leafId = `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`
+        const ptyIdsByLeafId = new Proxy(
+          { [leafId]: `pty-${index}` },
+          {
+            ownKeys: (target) => {
+              leafEnumerations += 1
+              return Reflect.ownKeys(target)
+            }
+          }
+        )
+        return [
+          `tab-${index}`,
+          {
+            root: { type: 'leaf' as const, leafId },
+            activeLeafId: leafId,
+            expandedLeafId: null,
+            ptyIdsByLeafId
+          }
+        ]
+      })
+    )
+    const observedLayouts = new Proxy(layouts, {
+      ownKeys: (target) => {
+        layoutEnumerations += 1
+        return Reflect.ownKeys(target)
+      }
+    })
+    useAppStore.setState({ terminalLayoutsByTabId: observedLayouts })
+
+    recordRuntimeTerminalInputForPtyId('pty-0', 10_000)
+    expect({ layoutEnumerations, leafEnumerations }).toEqual({
+      layoutEnumerations: 1,
+      leafEnumerations: 1
+    })
+    layoutEnumerations = 0
+    leafEnumerations = 0
+
+    for (let timestamp = 1; timestamp <= 100; timestamp += 1) {
+      recordRuntimeTerminalInputForPtyId(`pty-${layoutCount - 1}`, timestamp * 10_000)
+    }
+
+    expect({ layoutEnumerations, leafEnumerations }).toEqual({
+      layoutEnumerations: 1,
+      leafEnumerations: layoutCount
+    })
+    expect(
+      useAppStore.getState().lastTerminalInputAtByPaneKey[
+        `tab-${layoutCount - 1}:00000000-0000-4000-8000-${(layoutCount - 1)
+          .toString(16)
+          .padStart(12, '0')}`
+      ]
+    ).toBe(1_000_000)
+  })
+
+  it('reindexes a PTY when the immutable layout identity changes', () => {
+    const nextLeafId = '22222222-2222-4222-8222-222222222222'
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'rebound-pty' }
+        }
+      }
+    })
+    recordRuntimeTerminalInputForPtyId('rebound-pty', 123)
+
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-2': {
+          root: { type: 'leaf', leafId: nextLeafId },
+          activeLeafId: nextLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [nextLeafId]: 'rebound-pty' }
+        }
+      }
+    })
+    recordRuntimeTerminalInputForPtyId('rebound-pty', 1_000)
+
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey).toEqual({
+      [PANE_KEY]: 123,
+      [`tab-2:${nextLeafId}`]: 1_000
+    })
+  })
+
+  it('reindexes stale owners without caching misses within the same layout identity', () => {
+    const nextLeafId = '22222222-2222-4222-8222-222222222222'
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'rebound-pty' }
+        }
+      }
+    })
+    const layouts = useAppStore.getState().terminalLayoutsByTabId
+    recordRuntimeTerminalInputForPtyId('rebound-pty', 123)
+    recordRuntimeTerminalInputForPtyId('late-pty', 456)
+
+    const firstLayout = layouts['tab-1']
+    expect(firstLayout).toBeDefined()
+    if (!firstLayout) {
+      return
+    }
+    firstLayout.ptyIdsByLeafId = Object.create({ [LEAF_ID]: 'rebound-pty' })
+    Object.setPrototypeOf(layouts, { 'tab-1': firstLayout })
+    delete layouts['tab-1']
+    layouts['tab-2'] = {
+      root: { type: 'leaf', leafId: nextLeafId },
+      activeLeafId: nextLeafId,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [nextLeafId]: 'rebound-pty', [LEAF_ID]: 'late-pty' }
+    }
+    recordRuntimeTerminalInputForPtyId('rebound-pty', 1_000)
+    recordRuntimeTerminalInputForPtyId('late-pty', 2_000)
+
+    expect(useAppStore.getState().terminalLayoutsByTabId).toBe(layouts)
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey).toEqual({
+      [PANE_KEY]: 123,
+      [`tab-2:${nextLeafId}`]: 1_000,
+      [`tab-2:${LEAF_ID}`]: 2_000
+    })
+  })
+
+  it('preserves a malformed first match instead of routing a duplicate PTY', () => {
+    const nextLeafId = '22222222-2222-4222-8222-222222222222'
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'legacy:tab': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'duplicate-pty' }
+        },
+        'tab-2': {
+          root: { type: 'leaf', leafId: nextLeafId },
+          activeLeafId: nextLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [nextLeafId]: 'duplicate-pty' }
+        }
+      }
+    })
+
+    recordRuntimeTerminalInputForPtyId('duplicate-pty', 123)
+
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey).toEqual({})
   })
 
   it('reports success after fallback fire-and-forget writes when local acceptance cannot be verified', async () => {

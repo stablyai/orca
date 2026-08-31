@@ -205,6 +205,8 @@ export type GlobalSettings = {
   openAgentTabsInChatByDefault?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */
   experimentalNativeChat?: boolean
+  /** Opt-in updated structured runtime; off keeps the existing PTY-backed native chat path. */
+  experimentalStructuredNativeChat?: boolean
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */

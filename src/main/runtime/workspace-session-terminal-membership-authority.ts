@@ -160,6 +160,25 @@ export function advanceTerminalTopologyRevision(
   }
 }
 
+/**
+ * The tab whose live layout holds this leaf. Only the leaf half of a pane key is remint-stable —
+ * `detachTerminalPaneToTab` moves a live pane into a new tab, so a stored tabId names the tab the
+ * pane left. Callers fencing on location must resolve it here rather than trust a frozen tabId.
+ */
+export function findTerminalTabIdForLeaf(
+  session: WorkspaceSessionState | undefined,
+  leafId: string
+): string | undefined {
+  for (const [tabId, layout] of Object.entries(session?.terminalLayoutsByTabId ?? {})) {
+    const leafIds = new Set<string>()
+    collectLeafIds(layout.root, leafIds)
+    if (leafIds.has(leafId)) {
+      return tabId
+    }
+  }
+  return undefined
+}
+
 export function hasHostAuthoritativeTerminalMembership(
   session: WorkspaceSessionState | undefined,
   worktreeId: string
@@ -188,7 +207,9 @@ export function rebaseWorkspaceSessionTerminalMembership(
     )
   }
   const tabsByWorktree = { ...incoming.tabsByWorktree }
-  const terminalLayoutsByTabId = { ...incoming.terminalLayoutsByTabId }
+  const incomingTerminalLayoutsByTabId = incoming.terminalLayoutsByTabId ?? {}
+  const priorTerminalLayoutsByTabId = prior.terminalLayoutsByTabId ?? {}
+  const terminalLayoutsByTabId = { ...incomingTerminalLayoutsByTabId }
   const unifiedTabs = { ...incoming.unifiedTabs }
   const tabGroups = { ...incoming.tabGroups }
   const tabGroupLayouts = { ...incoming.tabGroupLayouts }
@@ -226,8 +247,8 @@ export function rebaseWorkspaceSessionTerminalMembership(
     }
     for (const tabId of terminalTabIds) {
       const layout = rebaseLayout(
-        incoming.terminalLayoutsByTabId[tabId],
-        prior.terminalLayoutsByTabId[tabId]
+        incomingTerminalLayoutsByTabId[tabId],
+        priorTerminalLayoutsByTabId[tabId]
       )
       if (layout) {
         terminalLayoutsByTabId[tabId] = layout

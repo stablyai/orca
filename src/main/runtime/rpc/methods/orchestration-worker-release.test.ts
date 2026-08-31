@@ -587,6 +587,7 @@ describe('orchestration worker release', () => {
       handle: 'term_worker',
       status: 'running',
       tail: ['first line', `capability dcap_${'a'.repeat(24)} leaked`, 'last line'],
+      draft: `send --dispatch-capability dcap_${'b'.repeat(24)}`,
       truncated: false,
       nextCursor: '3'
     })
@@ -596,19 +597,24 @@ describe('orchestration worker release', () => {
     const page1 = (await call('orchestration.workerRead', {
       dispatch: dispatchId,
       limit: 2
-    })) as { archived?: boolean; terminal: { tail: string[] }; cursor: string | null }
-    expect(page1.archived).toBe(true)
+    })) as {
+      archived?: boolean
+      terminal: { tail: string[]; draft?: string }
+      cursor: string | null
+    }
     expect(page1.terminal.tail).toEqual([
       'first line',
       'capability [dispatch capability redacted] leaked'
     ])
+    expect(page1.terminal.draft).toBe('send --dispatch-capability [dispatch capability redacted]')
     expect(page1.cursor).not.toBeNull()
 
     const page2 = (await call('orchestration.workerRead', {
       dispatch: dispatchId,
       cursor: page1.cursor as string
-    })) as { terminal: { tail: string[] }; cursor: string | null }
+    })) as { terminal: { tail: string[]; draft?: string }; cursor: string | null }
     expect(page2.terminal.tail).toEqual(['last line'])
+    expect(page2.terminal.draft).toBeUndefined()
     expect(page2.cursor).toBeNull()
     // The live terminal is never consulted after release.
     expect(runtime.readTerminal).not.toHaveBeenCalled()

@@ -234,8 +234,10 @@ describe('mobile endpoint supervisor', () => {
       .fn()
       .mockReturnValueOnce(new FakeRelaySession('connected', new RelayOuterError(4429)))
       .mockImplementation(() => new FakeRelaySession('connected'))
+    const onLog = vi.fn()
     const deps = dependencies({
       openRelay,
+      onLog,
       randomBytes: () => new Uint8Array([128, 0])
     })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
@@ -245,6 +247,13 @@ describe('mobile endpoint supervisor', () => {
 
     expect(openRelay).toHaveBeenCalledOnce()
     expect(logical.getPendingPath()).toBe('relay')
+    expect(onLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'relay-session-failed',
+        path: 'relay',
+        message: 'Relay: active relay session failed'
+      })
+    )
     await vi.advanceTimersByTimeAsync(249)
     expect(openRelay).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(1)

@@ -167,7 +167,7 @@ export function AutomationRunHistory({
               <p className="text-center text-sm text-foreground">
                 {translate(
                   'auto.components.automations.AutomationRunHistory.historyUnavailable',
-                  'Run history could not be loaded for this automation.'
+                  'Run history is unavailable from this host. This does not mean the automation failed or has no runs.'
                 )}
               </p>
               <AutomationOwnerConflictNotice notice={notice} onRecover={onRecoverHistory} />

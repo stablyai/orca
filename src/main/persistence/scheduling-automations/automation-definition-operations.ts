@@ -6,7 +6,7 @@ import type {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
-import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedules'
+import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
   deriveAutomationExecutionTargetForCreate,
@@ -50,6 +50,14 @@ export function createAutomation(
   input: AutomationCreateInput,
   options?: { destination?: AutomationDestination }
 ): Automation {
+  if (input.creationKey) {
+    const existing = (operations.state.automations ?? []).find(
+      (automation) => automation.creationKey === input.creationKey
+    )
+    if (existing) {
+      return existing
+    }
+  }
   const repo = operations.state.repos.find((entry) => entry.id === input.projectId)
   const now = Date.now()
   const workspaceId = input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null
@@ -72,6 +80,7 @@ export function createAutomation(
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
   const automation: Automation = {
     id: randomUUID(),
+    ...(input.creationKey ? { creationKey: input.creationKey } : {}),
     name: input.name.trim() || 'Untitled automation',
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),

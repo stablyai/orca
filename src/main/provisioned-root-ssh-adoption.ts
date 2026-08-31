@@ -15,7 +15,7 @@ import {
 } from '../shared/ephemeral-vm-recipes'
 import { listEphemeralVmRuntimes } from '../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
-import { getProjectHostSetupWorktreeMeta } from '../shared/project-host-setup-projection'
+import { getProjectHostSetupWorktreeMeta } from '../shared/project-host-setup-lookup'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import {

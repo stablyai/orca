@@ -53,7 +53,9 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
   return stableInFlightKey([
     worktreePath,
     options.wslDistro ?? '',
+    options.admissionTier ?? 'status',
     options.includeIgnored === true,
+    options.includeLineStats !== false,
     options.reuseLineStats === true,
     // Why: the result carries a total only for callers who asked, and only for
     // this fork point, so a shared lease must never serve one to the other.
@@ -102,7 +104,8 @@ async function runGetStatus(
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
   const lineStatsCacheKey = getStatusLineStatsCacheKey(worktreePath, options)
-  const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
+  const lineStatsWriteToken =
+    options.includeLineStats === false ? null : beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
   // Why: a bad limit (negative/fractional/NaN) breaks early-stop; require a valid non-negative int (0 disables the cap).
@@ -132,6 +135,7 @@ async function runGetStatus(
       const result = await gitStreamStdout(statusArgs, {
         cwd: worktreePath,
         wslDistro: options.wslDistro,
+        admissionTier: options.admissionTier,
         preferWslDirectGit: true,
         // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
         env: gitOptionalLocksDisabledEnv(),
@@ -209,7 +213,7 @@ async function runGetStatus(
 
   // Why: line counts run only for areas with entries (clean tree = 0 calls); skip past the limit to avoid numstat over a huge set.
   let branchLineTotal: GitBranchLineTotal | undefined
-  if (!didHitLimit) {
+  if (!didHitLimit && lineStatsWriteToken !== null) {
     const branchLineTotalInput = createBranchLineTotalInput(
       worktreePath,
       entries,
@@ -227,7 +231,7 @@ async function runGetStatus(
       ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     })
     branchLineTotal = lineStats.branchLineTotal
-  } else {
+  } else if (lineStatsWriteToken !== null) {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
 
