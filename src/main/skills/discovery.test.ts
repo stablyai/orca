@@ -631,4 +631,28 @@ describe('skill discovery', () => {
 
     expect(result.skills.map((skill) => skill.name)).not.toContain('Too Deep')
   })
+  it('returns Claude Code custom slash commands for a targeted workspace scan', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const cwd = join(root, 'repo')
+    const projectCommands = join(cwd, '.claude', 'commands', 'opsx')
+    await mkdir(projectCommands, { recursive: true })
+    await writeFile(
+      join(projectCommands, 'apply.md'),
+      '---\ndescription: Apply an OpenSpec change\n---\n'
+    )
+
+    const result = await discoverSkills({ homeDir: home, cwd })
+
+    expect(result.commands?.map((command) => command.name)).toEqual(['opsx:apply'])
+  })
+
+  it('leaves commands empty for an untargeted inventory scan', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+
+    const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
+
+    expect(result.commands).toEqual([])
+  })
 })

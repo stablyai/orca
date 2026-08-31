@@ -11,7 +11,11 @@ import {
 } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
-import type { SlashCommandSuggestion } from '../../../../shared/native-chat-slash-commands'
+import {
+  mergeDiscoveredSlashCommands,
+  type SlashCommandSuggestion
+} from '../../../../shared/native-chat-slash-commands'
+import type { DiscoveredSlashCommand } from '../../../../shared/custom-slash-commands'
 import {
   applyPickerSuggestion,
   classifyNativeChatSend,
@@ -72,6 +76,16 @@ export function useNativeChatPickerState(args: {
         ? beforeCaret.startsWith('/') && !/\s/.test(beforeCaret)
         : false
   const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
+  // The one place curated built-ins and discovered `.claude/commands` become a
+  // single catalog, so the picker, send classification, and dispatch agree.
+  const commands = useMemo(
+    () => mergeDiscoveredSlashCommands(agentCommands, discovery.commands),
+    [agentCommands, discovery.commands]
+  )
+  // Why retained: discovery only runs while a `/` token is being typed, so the
+  // live list is empty by the time a completed command with arguments is sent —
+  // without this the send would be classified as an unknown token.
+  const discoveredCommandsRef = useRef<readonly DiscoveredSlashCommand[]>([])
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
   const [dismissed, setDismissed] = useState<{ context: string; triggerKey: string } | null>(null)
@@ -82,13 +96,13 @@ export function useNativeChatPickerState(args: {
       deriveComposerAutocomplete(
         draft,
         caret,
-        agentCommands,
+        commands,
         discovery.skills,
         profile,
         discovery,
         dismissed?.context === dismissalContext ? dismissed.triggerKey : null
       ),
-    [agentCommands, caret, dismissalContext, dismissed, discovery, draft, profile]
+    [caret, commands, dismissalContext, dismissed, discovery, draft, profile]
   )
 
   useEffect(() => {
@@ -96,8 +110,15 @@ export function useNativeChatPickerState(args: {
     // is reused across pane/agent switches, so a stale dismissal must clear or
     // the picker stays closed for an in-progress token when that context returns.
     skillOriginRef.current = null
+    discoveredCommandsRef.current = []
     setDismissed(null)
   }, [dismissalContext])
+
+  useEffect(() => {
+    if (discovery.commands.length > 0) {
+      discoveredCommandsRef.current = discovery.commands
+    }
+  }, [discovery.commands])
 
   useEffect(() => {
     if (autocomplete.mode !== 'slash' && autocomplete.mode !== 'skill') {
@@ -149,7 +170,7 @@ export function useNativeChatPickerState(args: {
       const next = deriveComposerAutocomplete(
         value,
         nextCaret,
-        agentCommands,
+        commands,
         discovery.skills,
         profile,
         discovery
@@ -161,14 +182,14 @@ export function useNativeChatPickerState(args: {
         setDismissed(null)
       }
     },
-    [agentCommands, dismissalContext, dismissed, discovery, draft, profile]
+    [commands, dismissalContext, dismissed, discovery, draft, profile]
   )
 
   const classifySend = useCallback(
     (value: string) => {
       const outcome = classifyNativeChatSend(
         value,
-        agentCommands,
+        mergeDiscoveredSlashCommands(agentCommands, discoveredCommandsRef.current),
         skillOriginRef.current,
         profile?.skillPrefix ?? null
       )

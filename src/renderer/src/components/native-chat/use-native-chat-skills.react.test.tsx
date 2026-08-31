@@ -51,8 +51,14 @@ function stateForHost(hostId: string) {
   }
 }
 
-function Probe({ enabled }: { enabled: boolean }): null {
-  mocks.snapshots.push(useNativeChatSkills('codex', 'tab-1', enabled))
+function Probe({
+  enabled,
+  agent = 'codex'
+}: {
+  enabled: boolean
+  agent?: 'codex' | 'claude'
+}): null {
+  mocks.snapshots.push(useNativeChatSkills(agent, 'tab-1', enabled))
   return null
 }
 
@@ -130,6 +136,53 @@ describe('useNativeChatSkills', () => {
       { cwd: '/repo/worktree', worktreeId: 'worktree-1' },
       { timeoutMs: 10_000 }
     )
+  })
+
+  it('exposes discovered .claude/commands to Claude-owned panes', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({
+      skills: [],
+      sources: [],
+      scannedAt: 1,
+      commands: [
+        {
+          name: 'opsx:apply',
+          description: 'Apply an OpenSpec change',
+          scope: 'project',
+          commandFilePath: '/repo/.claude/commands/opsx/apply.md'
+        }
+      ]
+    })
+    render(<Probe enabled agent="claude" />)
+
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+    expect(mocks.snapshots.at(-1)?.commands.map((command) => command.name)).toEqual(['opsx:apply'])
+  })
+
+  it('withholds Claude command grammar from a Codex pane', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({
+      skills: [],
+      sources: [],
+      scannedAt: 1,
+      commands: [
+        {
+          name: 'opsx:apply',
+          description: null,
+          scope: 'project',
+          commandFilePath: '/repo/.claude/commands/opsx/apply.md'
+        }
+      ]
+    })
+    render(<Probe enabled />)
+
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+    expect(mocks.snapshots.at(-1)?.commands).toEqual([])
+  })
+
+  it('tolerates a host that never scanned commands', async () => {
+    render(<Probe enabled agent="claude" />)
+
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+    expect(mocks.snapshots.at(-1)?.commands).toEqual([])
   })
 
   it('surfaces discovery failure instead of remaining loading', async () => {
