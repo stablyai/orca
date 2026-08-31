@@ -148,6 +148,7 @@ import {
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import {
   recoverActiveTerminalAfterForeground,
+  shouldKickIosTouchesOnSessionMount,
   shouldRecoverTerminalOnAppStateChange
 } from '../../../../src/terminal/terminal-foreground-recovery'
 import { MobileBrowserPane } from '../../../../src/browser/MobileBrowserPane'
@@ -2090,6 +2091,10 @@ export default function SessionScreen() {
   }, [])
 
   const pendingForegroundRecoveryRef = useRef(false)
+  const [foregroundTouchEpoch, setForegroundTouchEpoch] = useState(0)
+  const kickIosForegroundTouches = useCallback(() => {
+    setForegroundTouchEpoch((epoch) => epoch + 1)
+  }, [])
   useEffect(() => {
     let previousAppState: AppStateStatus | null = AppState.currentState
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
@@ -2102,6 +2107,7 @@ export default function SessionScreen() {
       if (!shouldRecover) {
         return
       }
+      kickIosForegroundTouches()
       for (const terminalRef of terminalRefs.current.values()) {
         terminalRef.prepareForForegroundRecovery()
       }
@@ -2120,7 +2126,15 @@ export default function SessionScreen() {
     return () => {
       sub.remove()
     }
-  }, [scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+  }, [kickIosForegroundTouches, scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+
+  useEffect(() => {
+    if (!shouldKickIosTouchesOnSessionMount(Platform.OS, AppState.currentState)) {
+      return
+    }
+    kickIosForegroundTouches()
+    pendingForegroundRecoveryRef.current = true
+  }, [kickIosForegroundTouches])
 
   // Why: resume lands mid-reconnect (socket dies in bg); re-run recovery once connected or a blanked WKWebView stays stale.
   useEffect(() => {
@@ -4346,6 +4360,7 @@ export default function SessionScreen() {
                     key={terminal.handle}
                     handle={terminal.handle}
                     active={terminal.handle === activeHandle}
+                    touchEpoch={foregroundTouchEpoch}
                     keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
                     terminalTheme={terminal.terminalTheme}
                     textScale={terminalTextScale}
@@ -4384,6 +4399,7 @@ export default function SessionScreen() {
                   sendSurfaceId={nativeChatScopeKey ?? ''}
                   getSendCompletionGeneration={getSendCompletionGeneration}
                   keyboardInset={keyboardLift}
+                  touchEpoch={foregroundTouchEpoch}
                 />
                 {toastMessage && (
                   <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>

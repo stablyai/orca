@@ -7,10 +7,12 @@ import type {
   TerminalModes,
   TerminalWebViewHandle
 } from '../terminal/terminal-webview-contract'
+import { useIosForegroundTouchPulse } from './ios-foreground-touch-pulse'
 
 type TerminalPaneViewProps = {
   handle: string
   active: boolean
+  touchEpoch?: number
   keyboardLift: number
   terminalTheme?: MobileTerminalTheme
   textScale: number
@@ -33,6 +35,7 @@ type TerminalPaneViewProps = {
 export function TerminalPaneView({
   handle,
   active,
+  touchEpoch = 0,
   keyboardLift,
   terminalTheme,
   textScale,
@@ -57,16 +60,21 @@ export function TerminalPaneView({
     },
     [handle, onRef]
   )
+  const touchCommitted = useIosForegroundTouchPulse(touchEpoch, active)
 
   return (
     <View
       // Why: inactive terminal WebViews stay mounted to preserve xterm state,
       // while touch and visibility are disabled until the tab is active again.
-      pointerEvents={active ? 'auto' : 'none'}
+      // iOS notification resume can leave the last frame painted with a dead
+      // hit-test; one-frame pointerEvents none (same flip as a tab switch)
+      // recommits the native wrapper.
+      pointerEvents={active && touchCommitted ? 'auto' : 'none'}
       style={[
         styles.terminalPane,
         keyboardLift > 0 && { transform: [{ translateY: -keyboardLift }] },
-        !active && styles.terminalPaneHidden
+        !active && styles.terminalPaneHidden,
+        active && !touchCommitted && styles.terminalPaneKick
       ]}
     >
       <TerminalWebView
@@ -98,6 +106,9 @@ const styles = StyleSheet.create({
   },
   terminalPaneHidden: {
     opacity: 0
+  },
+  terminalPaneKick: {
+    opacity: 0.99
   },
   terminalWebView: {
     flex: 1

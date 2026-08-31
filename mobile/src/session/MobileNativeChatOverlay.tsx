@@ -5,6 +5,7 @@ import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
+import { useIosForegroundTouchPulse } from './ios-foreground-touch-pulse'
 
 type Props = {
   controller: MobileNativeChatController
@@ -29,6 +30,7 @@ type Props = {
   /** Reads the retained route's focus generation for accepted-send fencing. */
   getSendCompletionGeneration: () => number
   keyboardInset: number
+  touchEpoch?: number
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
@@ -49,7 +51,8 @@ export function MobileNativeChatOverlay({
   onClearSendError,
   sendSurfaceId,
   getSendCompletionGeneration,
-  keyboardInset
+  keyboardInset,
+  touchEpoch = 0
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
@@ -59,11 +62,12 @@ export function MobileNativeChatOverlay({
     controller.nativeChatStreamScopeKey,
     controller.nativeChatStreamLive
   )
+  const touchCommitted = useIosForegroundTouchPulse(touchEpoch, controller.showNativeChat)
   if (!controller.showNativeChat) {
     return null
   }
   return (
-    <View style={styles.overlay}>
+    <View style={styles.overlay} pointerEvents={touchCommitted ? 'auto' : 'none'}>
       <MobileNativeChatView
         messages={session.messages}
         folded={folded}
