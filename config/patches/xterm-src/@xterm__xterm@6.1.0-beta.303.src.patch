@@ -88,7 +88,7 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
  
  export interface IBrowser {
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e83509c3c8f94 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..b095525d202eadd38634f724f4db4f463171d1f7 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
 @@ -3,8 +3,13 @@
@@ -99,17 +99,29 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
 +import { IRenderService, IThemeService } from '../services/Services';
  import { IBufferService, ICoreService, IOptionsService } from '../../common/services/Services';
 +import { channels, color } from '../../common/Color';
-+import { Attributes, WHITESPACE_CELL_CHAR } from '../../common/buffer/Constants';
++import { Attributes, UnderlineStyle, WHITESPACE_CELL_CHAR } from '../../common/buffer/Constants';
 +import { CellData } from '../../common/buffer/CellData';
 +import { ICellData } from '../../common/buffer/Types';
 +import { IColor } from '../../common/Types';
  import { C0 } from '../../common/data/EscapeSequences';
  
  interface IPosition {
-@@ -12,6 +17,34 @@ interface IPosition {
+@@ -12,6 +17,46 @@ interface IPosition {
    end: number;
  }
  
++/** What the renderer's `xterm-underline-N` classes draw, as the CSS keyword for each. */
++const UNDERLINE_DECORATION_STYLES: { [key: number]: string } = {
++  [UnderlineStyle.SINGLE]: 'solid',
++  [UnderlineStyle.DOUBLE]: 'double',
++  [UnderlineStyle.CURLY]: 'wavy',
++  [UnderlineStyle.DOTTED]: 'dotted',
++  [UnderlineStyle.DASHED]: 'dashed'
++};
++
++/** Kept out of the source as an escape so a formatter cannot fold it back into a plain space. */
++const NON_BREAKING_SPACE = '\u00a0';
++
 +/** A stretch of tail cells that all render the same way. */
 +interface ITailRun {
 +  text: string;
@@ -141,7 +153,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
  /**
   * Encapsulates the logic for handling compositionstart, compositionupdate and compositionend
   * events, displaying the in-progress composition to the UI and forwarding the final composition
-@@ -24,6 +57,15 @@ export class CompositionHelper {
+@@ -24,6 +69,15 @@ export class CompositionHelper {
     */
    private _isComposing: boolean;
    public get isComposing(): boolean { return this._isComposing; }
@@ -157,7 +169,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
  
    /**
     * The position within the input textarea's value of the current composition.
-@@ -36,52 +78,150 @@ export class CompositionHelper {
+@@ -36,52 +90,150 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
  
@@ -318,7 +330,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
    }
  
    /**
-@@ -89,22 +229,93 @@ export class CompositionHelper {
+@@ -89,22 +241,93 @@ export class CompositionHelper {
     * @param ev The event.
     */
    public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
@@ -421,7 +433,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
    }
  
    /**
-@@ -113,7 +324,19 @@ export class CompositionHelper {
+@@ -113,7 +336,19 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -442,7 +454,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
        if (ev.keyCode === 20 || ev.keyCode === 229) {
          // 20 is CapsLock, 229 is Enter
          // Continue composing if the keyCode is the "composition character"
-@@ -128,6 +351,10 @@ export class CompositionHelper {
+@@ -128,6 +363,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
@@ -453,7 +465,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +365,74 @@ export class CompositionHelper {
+@@ -138,6 +377,74 @@ export class CompositionHelper {
      return true;
    }
  
@@ -528,7 +540,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
    /**
     * Finalizes the composition, resuming regular input actions. This is called when a composition
     * is ending.
-@@ -146,23 +441,52 @@ export class CompositionHelper {
+@@ -146,23 +453,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -592,7 +604,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,35 +496,313 @@ export class CompositionHelper {
+@@ -172,37 +508,315 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -632,9 +644,9 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
          }
 -      }, 0);
 +      });
-+    }
-+  }
-+
+     }
+   }
+ 
 +  private _sendPendingComposition(
 +    pending: IPendingComposition,
 +    includeFollowingInput: boolean = false
@@ -642,7 +654,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
 +    this._cancelPendingFinalizer(pending);
 +    if (this._pendingComposition === pending) {
 +      this._pendingComposition = undefined;
-     }
++    }
 +    const textareaInput = this._getPendingTextareaInput(pending, includeFollowingInput);
 +    const observedInput = this._removeAlreadySentData(
 +      pending.inputData || pending.keypressData,
@@ -930,10 +942,12 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
 +    }
 +    clearTimeout(timer);
 +    this._compositionTimers.delete(timer);
-   }
- 
++  }
++
    /**
-@@ -222,6 +824,9 @@ export class CompositionHelper {
+    * Apply any changes made to the textarea after the current event chain is allowed to complete.
+    * This should be called when not currently composing but a keydown event with the "composition
+@@ -222,6 +836,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -943,7 +957,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +841,230 @@ export class CompositionHelper {
+@@ -236,6 +853,260 @@ export class CompositionHelper {
      }, 0);
    }
  
@@ -994,7 +1008,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
 +        const styled = doc.createElement('span');
 +        styled.setAttribute('style', run.style);
 +        styled.textContent = run.text;
-+        remainder.appendChild(styled)
++        remainder.appendChild(styled);
 +      }
 +      children.push(remainder);
 +    }
@@ -1028,7 +1042,12 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
 +    const runs: ITailRun[] = [];
 +    for (let x = start; x < end; x += cell.getWidth() || 1) {
 +      line.loadCell(x, cell);
-+      const chars = cell.getChars() || WHITESPACE_CELL_CHAR;
++      let chars = cell.getChars() || WHITESPACE_CELL_CHAR;
++      // The renderer makes the same swap: a plain space collapses the line that should run
++      // under it, so an underlined or overlined blank draws nothing.
++      if (chars === ' ' && (cell.isUnderline() || cell.isOverline())) {
++        chars = NON_BREAKING_SPACE;
++      }
 +      const style = this._tailCellStyle(cell);
 +      const open = runs[runs.length - 1];
 +      if (open && open.style === style) {
@@ -1126,7 +1145,32 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
 +      decorations.push('overline');
 +    }
 +    if (decorations.length) {
-+      declarations.push(`text-decoration:${decorations.join(' ')}`);
++      declarations.push(`text-decoration-line:${decorations.join(' ')}`);
++    }
++    if (cell.isUnderline()) {
++      // SGR 4:2-5 pick a line the renderer draws through its own `xterm-underline-N` classes.
++      const underlineStyle = UNDERLINE_DECORATION_STYLES[cell.extended.underlineStyle];
++      if (underlineStyle) {
++        declarations.push(`text-decoration-style:${underlineStyle}`);
++      }
++      // SGR 58 colours the line independently of the text; default leaves it following the text.
++      if (!cell.isUnderlineColorDefault()) {
++        let underlineColor = cell.getUnderlineColor();
++        if (cell.isUnderlineColorRGB()) {
++          declarations.push(
++            `text-decoration-color:${channels.toColor(
++              (underlineColor >> 16) & 0xFF,
++              (underlineColor >> 8) & 0xFF,
++              underlineColor & 0xFF
++            ).css}`
++          );
++        } else {
++          if (this._optionsService.rawOptions.drawBoldTextInBrightColors && cell.isBold() && underlineColor < 8) {
++            underlineColor += 8;
++          }
++          declarations.push(`text-decoration-color:${colors.ansi[underlineColor].css}`);
++        }
++      }
 +    }
 +    return declarations.join(';');
 +  }
@@ -1174,7 +1218,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,10 +1072,20 @@ export class CompositionHelper {
+@@ -243,10 +1114,20 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
@@ -1196,7 +1240,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..879730e91a78bf819fcd0042341e8350
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
  
-@@ -265,20 +1104,38 @@ export class CompositionHelper {
+@@ -265,20 +1146,38 @@ export class CompositionHelper {
        const maxWidth = this._bufferService.cols * this._renderService.dimensions.css.cell.width - cursorLeft;
        this._compositionView.style.maxWidth = maxWidth + 'px';
        this._compositionView.style.overflow = 'hidden';

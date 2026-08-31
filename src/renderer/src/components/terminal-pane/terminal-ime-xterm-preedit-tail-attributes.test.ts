@@ -204,6 +204,32 @@ describe('a rendered composition tail keeps its cells’ styling', () => {
     expect(tail.children).toHaveLength(0)
   })
 
+  it('carries the underline style and its own colour, not just a plain underline', async () => {
+    const rig = openTerminal()
+    // SGR 4:3 is a curly underline and SGR 58;5;1 colours the line independently of the text.
+    await rig.write('\x1b[4:3m\x1b[58;5;1mwarn\x1b[0m\x1b[4D')
+
+    rig.compose('ㄱ')
+
+    const runs = Array.from(tailOf(rig.compositionView).children) as HTMLElement[]
+    expect(runs).toHaveLength(1)
+    expect(runs[0]!.style.textDecorationLine).toBe('underline')
+    // Collapsing every variant to a plain underline is what this guards against.
+    expect(runs[0]!.style.textDecorationStyle).toBe('wavy')
+    expect(runs[0]!.style.textDecorationColor).not.toBe('')
+  })
+
+  it('gives an underlined blank something to draw the line under', async () => {
+    const rig = openTerminal()
+    // A plain space collapses in the view, so the renderer swaps it for a non-breaking one.
+    await rig.write('\x1b[4ma b\x1b[0m\x1b[3D')
+
+    rig.compose('ㄱ')
+
+    const tail = tailOf(rig.compositionView)
+    expect(tail.textContent).toBe('a\u00a0b')
+  })
+
   it('keeps a run of spaces inside the tail without padding it out to the row width', async () => {
     const rig = openTerminal()
     // Two spaces inside the text and nothing written past it. The trimmed end column keeps the
