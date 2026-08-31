@@ -119,24 +119,26 @@ function adoptHostOwnedSurface(
  * Give every live workspace PTY the surface that already owns it, minting one
  * only for a PTY proven to have none.
  *
- * Returns whether any live PTY ends the sweep holding a surface. False means the
- * workspace has live agents but nothing the user can look at — the caller owes them
- * a seeded pane, because failing closed must not also fail silent.
+ * `surfaced` is whether any live PTY ends the sweep holding a surface. False means the
+ * workspace has live agents but nothing the user can look at — the caller owes them a
+ * seeded pane, because failing closed must not also fail silent. `declinedPtyIds` names
+ * the live PTYs the sweep left without one, so a decline is diagnosable and not mute.
  */
 export async function adoptLiveWorkspacePtySurfaces(
   getState: () => LiveSurfaceAdoptionStore,
   worktreeId: string,
   livePtyIds: readonly string[],
   listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
-): Promise<boolean> {
+): Promise<{ surfaced: boolean; declinedPtyIds: string[] }> {
   // Why: ptyIdsByTabId holds only panes this renderer mounted, so a tab bound
   // solely in tab.ptyId or the persisted layout used to read as unbound.
   const unbound = livePtyIds.filter(
     (ptyId) => resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind === 'none'
   )
   let surfaced = unbound.length < livePtyIds.length
+  const declinedPtyIds: string[] = []
   if (unbound.length === 0) {
-    return surfaced
+    return { surfaced, declinedPtyIds }
   }
   let surfaceOwners: LiveTerminalSurfaceOwnerIndex | null
   try {
@@ -154,12 +156,17 @@ export async function adoptLiveWorkspacePtySurfaces(
     }
     const owner = surfaceOwners?.get(ptyId)
     if (owner) {
-      surfaced = adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds) || surfaced
+      if (adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds)) {
+        surfaced = true
+      } else {
+        declinedPtyIds.push(ptyId)
+      }
       continue
     }
     // Why: only the execution host can prove a live PTY is unowned, and minting
     // on anything weaker forks a running agent onto a second empty surface.
     if (!surfaceOwners || surfaceOwners.has(ptyId)) {
+      declinedPtyIds.push(ptyId)
       continue
     }
     getState().createTab(worktreeId, undefined, undefined, {
@@ -169,5 +176,5 @@ export async function adoptLiveWorkspacePtySurfaces(
     })
     surfaced = true
   }
-  return surfaced
+  return { surfaced, declinedPtyIds }
 }

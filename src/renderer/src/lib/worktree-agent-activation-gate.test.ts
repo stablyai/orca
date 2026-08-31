@@ -618,6 +618,29 @@ describe('worktree agent activation gate', () => {
     expect(createTab).not.toHaveBeenCalled()
   })
 
+  it('reports a decline when the host names a leaf the persisted layout does not have', async () => {
+    const livePtyId = `${WORKTREE_ID}@@live-agent`
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { deps, createTab } = testDeps({
+      sessions: [listed(livePtyId)],
+      surfaceOwners: new Map([
+        [livePtyId, { paneKey: `tab-live:${SIBLING_LEAF_ID}`, ptyId: livePtyId, tabId: 'tab-live' }]
+      ]),
+      resumeCount: 0
+    })
+    seedExistingSurface(deps.getState(), { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
+
+    // The seam re-checks its own guard, so an existing tab is not re-seeded by 'empty'.
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
+
+    expect(createTab).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(
+      '[worktree-activation] live PTYs left without a surface',
+      expect.objectContaining({ worktreeId: WORKTREE_ID, declinedPtyIds: [livePtyId] })
+    )
+    warn.mockRestore()
+  })
+
   it('reports adopted only for the PTYs that actually landed on a surface', async () => {
     const adoptedPtyId = `${WORKTREE_ID}@@orphan-agent`
     const unverifiablePtyId = `${WORKTREE_ID}@@ambiguous-agent`

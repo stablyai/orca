@@ -214,12 +214,20 @@ export async function runWorktreeAgentActivationGate(
     // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted'
     // would suppress the caller's seed and leave the workspace with no surface at all —
     // fail-closed must still leave the user a usable pane (STA-5701).
-    liveSurfaceAdopted = await adoptLiveWorkspacePtySurfaces(
+    const adoption = await adoptLiveWorkspacePtySurfaces(
       deps.getState,
       worktreeId,
       [...liveWorkspacePtyIds],
       deps.listSurfaceOwners
     )
+    liveSurfaceAdopted = adoption.surfaced
+    // A live agent the user can no longer see has to be diagnosable from the console.
+    if (adoption.declinedPtyIds.length > 0) {
+      console.warn('[worktree-activation] live PTYs left without a surface', {
+        worktreeId,
+        declinedPtyIds: adoption.declinedPtyIds
+      })
+    }
     if (liveSurfaceAdopted && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
       return 'adopted'
     }
