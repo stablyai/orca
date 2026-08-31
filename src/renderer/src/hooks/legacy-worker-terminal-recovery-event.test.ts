@@ -38,6 +38,49 @@ describe('legacy worker terminal recovery events', () => {
     })
   })
 
+  it('fences and unfences only the named workspace recovery record', () => {
+    expect(
+      resolveLegacyWorkerTerminalRecoveryAction({
+        paneKey: `legacy-worker:${LEAF_ID}`,
+        resolution: 'fenced',
+        worktreeId: 'repo::/workspace'
+      })
+    ).toEqual({
+      kind: 'set-automatic-resume-block',
+      paneKey: `legacy-worker:${LEAF_ID}`,
+      worktreeId: 'repo::/workspace',
+      blocked: true
+    })
+    expect(
+      resolveLegacyWorkerTerminalRecoveryAction({
+        paneKey: `legacy-worker:${LEAF_ID}`,
+        resolution: 'unfenced',
+        worktreeId: 'repo::/workspace'
+      })
+    ).toEqual({
+      kind: 'set-automatic-resume-block',
+      paneKey: `legacy-worker:${LEAF_ID}`,
+      worktreeId: 'repo::/workspace',
+      blocked: false
+    })
+    expect(
+      resolveLegacyWorkerTerminalRecoveryAction({
+        paneKey: `legacy-worker:${LEAF_ID}`,
+        resolution: 'fenced'
+      })
+    ).toEqual({ kind: 'ignore' })
+  })
+
+  // Why: an unknown kind is forward-wire compat, not a rollback — it must not detach a surface.
+  it('ignores a resolution kind it does not understand', () => {
+    expect(
+      resolveLegacyWorkerTerminalRecoveryAction({
+        paneKey: `legacy-worker:${LEAF_ID}`,
+        resolution: 'teleported' as never
+      })
+    ).toEqual({ kind: 'ignore' })
+  })
+
   it('removes an unmounted split surface only when its PTY identity still matches', () => {
     const setTabLayout = vi.fn()
     const clearTabPtyId = vi.fn()

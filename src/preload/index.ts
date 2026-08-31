@@ -253,6 +253,7 @@ import {
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
+  LegacyWorkerTerminalRecoveryEvent,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
@@ -5186,19 +5187,11 @@ const api = {
       return () => ipcRenderer.removeListener('agentStatus:migrationUnsupportedClear', listener)
     },
     onLegacyWorkerTerminalRecovery: (
-      callback: (data: {
-        paneKey: string
-        resolution: 'adopted' | 'exited' | 'rolled_back'
-        ptyId?: string
-      }) => void
+      callback: (data: LegacyWorkerTerminalRecoveryEvent) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: {
-          paneKey: string
-          resolution: 'adopted' | 'exited' | 'rolled_back'
-          ptyId?: string
-        }
+        data: LegacyWorkerTerminalRecoveryEvent
       ) => callback(data)
       ipcRenderer.on('agentStatus:legacyWorkerTerminalRecovery', listener)
       return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalRecovery', listener)

@@ -15,7 +15,10 @@ import { MESSAGE_TYPES } from '../../orchestration/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
-import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import {
+  reconcileLifecycleMessage,
+  type LifecycleReconciliationResult
+} from '../../orchestration/lifecycle-reconciliation'
 import { waitForFederatedLifecycleSettlement } from '../../orchestration/federation-lifecycle-settlement'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import {
@@ -128,6 +131,15 @@ function parseMessageTaskId(payload: string | undefined): string | undefined {
 
 function isWorkerReportOutcome(value: unknown): value is 'succeeded' | 'failed' {
   return value === 'succeeded' || value === 'failed'
+}
+
+function fenceSettledWorkerPanes(
+  runtime: OrcaRuntimeService,
+  reconciled: readonly LifecycleReconciliationResult[]
+): void {
+  if (reconciled.some((result) => result.action === 'completed' || result.action === 'failed')) {
+    runtime.prepareLegacyWorkerTerminalRecovery()
+  }
 }
 
 const SendParams = z
@@ -798,6 +810,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
             return withSendWarnings({ message: rejection, lifecycle: reconciled })
           }
+          fenceSettledWorkerPanes(runtime, [reconciled])
           runtime.notifyMessageArrived(msg.to_handle, msg.type)
           return withSendWarnings(
             msg.type === 'worker_done' ? { message: msg, lifecycle: reconciled } : { message: msg }
@@ -1331,12 +1344,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         let visibleMessages = messages
         if (consumeUnread && messages.length > 0) {
           // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
+          const reconciledMessages: LifecycleReconciliationResult[] = []
           visibleMessages = messages.map((message) => {
             const reconciled = reconcileLifecycleMessage(db, message)
+            reconciledMessages.push(reconciled)
             return reconciled.action === 'rejected'
               ? (db.getMessageById(message.id) ?? message)
               : message
           })
+          fenceSettledWorkerPanes(runtime, reconciledMessages)
           db.markAsRead(messages.map((m) => m.id))
         }
 

@@ -35,6 +35,24 @@ test.afterAll(() => {
   cleanupCompletedWorkerFixture()
 })
 
+async function waitForTerminalStartupRestorationReady(
+  orcaPage: Parameters<typeof waitForSessionReady>[0]
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        orcaPage.evaluate(() => {
+          const state = window.__store?.getState()
+          return Boolean(state?.workspaceSessionReady && state.terminalStartupRestorationReady)
+        }),
+      {
+        timeout: 30_000,
+        message: 'terminal startup restoration did not become ready'
+      }
+    )
+    .toBe(true)
+}
+
 for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
   test(`completed background worker ${closeMode} retires resume authority before first activation`, async ({
     orcaPage,
@@ -267,9 +285,11 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       }
     )
 
+    // Why: the fixture drives the turn to `done`, and the checkpoint carries that real state —
+    // restating `working` is the ghost-resume lie #16308 removed.
     const expectedRecovery = {
       origin: 'live',
-      state: 'working',
+      state: 'done',
       providerSessionId: PROVIDER_SESSION_ID
     }
     await expect
@@ -468,6 +488,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
 
     await orcaPage.reload()
     await waitForSessionReady(orcaPage)
+    await waitForTerminalStartupRestorationReady(orcaPage)
 
     const beforeActivation = await orcaPage.evaluate((worktreeId) => {
       const state = window.__store?.getState()

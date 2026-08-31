@@ -108,6 +108,9 @@ export async function handleLegacyLifecycleSend(args: {
             }
           : { kind: 'message_only' }
   })
+  if (committed.settlement?.action === 'settled') {
+    runtime.prepareLegacyWorkerTerminalRecovery()
+  }
   if (!committed.duplicate) {
     runtime.notifyMessageArrived(committed.message.to_handle, committed.message.type)
   }

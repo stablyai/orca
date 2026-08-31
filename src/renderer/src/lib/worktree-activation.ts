@@ -258,7 +258,17 @@ export function activateAndRevealWorktree(
     void gateWorktreeAgentActivation(worktreeId).then((outcome) => {
       const currentState = useAppStore.getState()
       if (outcome === 'empty' && currentState.activeWorktreeId === worktreeId) {
-        ensureWorktreeHasInitialTerminal(currentState, worktreeId)
+        ensureWorktreeHasInitialTerminal(
+          currentState,
+          worktreeId,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          {
+            reseedEmptiedWorkspace: opts?.providesInitialSurface !== true
+          }
+        )
       }
     })
   }

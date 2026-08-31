@@ -31,8 +31,13 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     }
   }
   session.onAgentExited = (): void => {
-    // Why: eligibility can disappear transiently during reconnect, but a
-    // confirmed shell-title transition is authoritative for native-chat exit.
+    // Why: a confirmed shell transition means the agent ended before its terminal.
+    // Retire exact resume authority so a later workspace open cannot resurrect it.
+    const state = useAppStore.getState()
+    const sleepingRecordEntry = session.getSleepingRecordForPane(state)
+    if (sleepingRecordEntry) {
+      session.clearSleepingRecordProviderDuplicates(state, sleepingRecordEntry)
+    }
     session.deps.onAgentExitedRef.current(session.pane.leafId)
     session.clearSuppressedTitleSideEffects()
     session.clearCommandInferredPaneAgent()

@@ -5,6 +5,7 @@ import { flushAsyncTicks } from './pty-connection-test-async'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from './pty-connection-test-constants'
 import {
   LEAF_1,
+  LEAF_2,
   createMockTransport,
   createPane,
   createManager,
@@ -641,6 +642,67 @@ describe('connectPanePty', () => {
 
       expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
     })
+
+    it.each(['claude', 'codex'] as const)(
+      'retires only the confirmed %s agent exit recovery record before PTY teardown',
+      async (agent) => {
+        enableMainAuthority()
+        const { connectPanePty } = await import('./pty-connection')
+        const handler = await import('./terminal-side-effect-facts-handler')
+        const transport = createMockTransport('pty-agent-exit')
+        transportFactoryQueue.push(transport)
+        const paneKey = 'tab-1:1'
+        const duplicatePaneKey = 'tab-1:2'
+        const siblingPaneKey = makePaneKey('tab-1', LEAF_2)
+        const record = {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent,
+          providerSession: { key: 'session_id', id: 'session-1' },
+          state: 'working' as const,
+          capturedAt: 1,
+          updatedAt: 1
+        }
+        const duplicateRecord = {
+          ...record,
+          paneKey: duplicatePaneKey,
+          capturedAt: 2,
+          updatedAt: 2
+        }
+        const siblingRecord = {
+          ...record,
+          paneKey: siblingPaneKey,
+          providerSession: { key: 'session_id', id: 'session-2' }
+        }
+        mockStoreState.sleepingAgentSessionsByPaneKey = {
+          [paneKey]: record,
+          [duplicatePaneKey]: duplicateRecord,
+          [siblingPaneKey]: siblingRecord
+        }
+        const deps = createDeps()
+
+        connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+        const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+        onPtySpawn('pty-agent-exit')
+        handler._dispatchTerminalSideEffectBatchForTest({
+          ptyId: 'pty-agent-exit',
+          seq: 1,
+          facts: [{ kind: 'agent-exited' }]
+        })
+
+        expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+        expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(duplicatePaneKey)
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[duplicatePaneKey]).toBeUndefined()
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[siblingPaneKey]).toBe(siblingRecord)
+        expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
+        const clearCallOrders = mockStoreState.clearSleepingAgentSession.mock.invocationCallOrder
+        expect(clearCallOrders.at(-1)).toBeLessThan(
+          deps.onAgentExitedRef.current.mock.invocationCallOrder[0]
+        )
+      }
+    )
 
     it('honors the persisted kill switch for panes bound before settings hydrate', async () => {
       // Pre-hydration: settings not loaded but kill switch persisted off — pane registers byte parsers, not a fact consumer.

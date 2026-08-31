@@ -611,7 +611,7 @@ function sleepingRecordFromEntry(args: {
     return null
   }
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
-  return {
+  const record: SleepingAgentSessionRecord = {
     paneKey: args.entry.paneKey,
     ...(tab ? { tabId: tab.id } : {}),
     worktreeId: args.worktreeId,
@@ -632,6 +632,11 @@ function sleepingRecordFromEntry(args: {
     ...(args.entry.interrupted ? { interrupted: true } : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }
+  carryOverAutomaticResumeBlock(
+    record,
+    args.state.sleepingAgentSessionsByPaneKey[args.entry.paneKey]
+  )
+  return record
 }
 
 type CollectSleepingAgentSessionRecordsOptions = {
@@ -677,8 +682,7 @@ function manualSleepCaptureEntry(entry: AgentStatusEntry, capturedAt: number): A
   return { ...entry, updatedAt: capturedAt, interrupted: false }
 }
 
-// Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a deliberately
-// blocked worker must not become auto-resumable at wake.
+// Why: every re-derivation from a live entry must preserve a deliberate worker resume fence.
 function carryOverAutomaticResumeBlock(
   record: SleepingAgentSessionRecord,
   previous: SleepingAgentSessionRecord | undefined
@@ -794,10 +798,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-        carryOverAutomaticResumeBlock(
-          record,
-          state.sleepingAgentSessionsByPaneKey[retained.entry.paneKey]
-        )
       }
       records[record.paneKey] = record
     }
@@ -831,7 +831,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
-        carryOverAutomaticResumeBlock(record, state.sleepingAgentSessionsByPaneKey[paneKey])
       }
       records[record.paneKey] = record
     }

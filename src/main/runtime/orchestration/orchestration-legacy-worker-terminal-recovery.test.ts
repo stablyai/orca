@@ -30,7 +30,8 @@ describe('legacy worker terminal recovery planning', () => {
         {
           worktreeId: 'repo::/workspace',
           paneKey: `tab-worker:${LEAF_ID}`,
-          contractVersion: 0
+          contractVersion: 0,
+          settled: false
         }
       ],
       candidates: [
@@ -52,12 +53,41 @@ describe('legacy worker terminal recovery planning', () => {
         {
           worktreeId: 'repo::/workspace',
           paneKey: `tab-worker:${LEAF_ID}`,
-          contractVersion: 0
+          contractVersion: 0,
+          settled: false
         }
       ],
       candidates: [],
       ambiguousDispatchIds: []
     })
+  })
+
+  it('fences a settled worker pane without offering its terminal for adoption', () => {
+    const plan = planLegacyWorkerTerminalRecovery([
+      recoveryRow({ worker_state: 'succeeded', dispatch_status: 'completed' })
+    ])
+    expect(plan).toEqual({
+      blockedPanes: [
+        {
+          worktreeId: 'repo::/workspace',
+          paneKey: `tab-worker:${LEAF_ID}`,
+          contractVersion: 0,
+          settled: true
+        }
+      ],
+      candidates: [],
+      ambiguousDispatchIds: []
+    })
+  })
+
+  it('does not let a settled row make a live worker identity ambiguous', () => {
+    const plan = planLegacyWorkerTerminalRecovery([
+      recoveryRow({ dispatch_id: 'dispatch-settled', worker_state: 'succeeded' }),
+      recoveryRow({ dispatch_id: 'dispatch-live' })
+    ])
+    expect(plan.candidates).toEqual([expect.objectContaining({ dispatchId: 'dispatch-live' })])
+    expect(plan.ambiguousDispatchIds).toEqual([])
+    expect(plan.blockedPanes).toEqual([expect.objectContaining({ settled: false })])
   })
 
   it('fails closed when two Dispatches claim one terminal identity', () => {

@@ -2,23 +2,32 @@ import type { CloseTerminalPaneDetail } from '@/constants/terminal'
 import { detachTerminalLayoutLeaf } from '@/components/terminal-pane/terminal-layout-leaf-detach'
 import type { AppState } from '@/store'
 import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-
-type LegacyWorkerTerminalRecoveryEvent = {
-  paneKey: string
-  resolution: 'adopted' | 'exited' | 'rolled_back'
-  ptyId?: string
-}
+import type { LegacyWorkerTerminalRecoveryEvent } from '../../../shared/agent-status-types'
 
 export type LegacyWorkerTerminalRecoveryAction =
   | { kind: 'clear-sleeping'; paneKey: string }
   | { kind: 'rollback-surface'; detail: CloseTerminalPaneDetail }
+  | { kind: 'set-automatic-resume-block'; paneKey: string; worktreeId: string; blocked: boolean }
   | { kind: 'ignore' }
 
 export function resolveLegacyWorkerTerminalRecoveryAction(
   event: LegacyWorkerTerminalRecoveryEvent
 ): LegacyWorkerTerminalRecoveryAction {
-  if (event.resolution !== 'rolled_back') {
+  if (event.resolution === 'adopted' || event.resolution === 'exited') {
     return { kind: 'clear-sleeping', paneKey: event.paneKey }
+  }
+  if (event.resolution === 'fenced' || event.resolution === 'unfenced') {
+    return event.worktreeId
+      ? {
+          kind: 'set-automatic-resume-block',
+          paneKey: event.paneKey,
+          worktreeId: event.worktreeId,
+          blocked: event.resolution === 'fenced'
+        }
+      : { kind: 'ignore' }
+  }
+  if (event.resolution !== 'rolled_back') {
+    return { kind: 'ignore' }
   }
   const pane = parsePaneKey(event.paneKey)
   return pane && event.ptyId
