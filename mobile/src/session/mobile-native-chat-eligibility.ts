@@ -32,6 +32,16 @@ export type MobileNativeChatTab = {
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
+  /** Working directory the terminal was spawned in; scopes transcript recovery. */
+  startupCwd?: string
+}
+
+/** A transcript address recovered from the host's session index for a pane whose
+ *  agent never published one. See `mobile-native-chat-session-recovery.ts`. */
+export type MobileNativeChatRecoveredAddress = {
+  agent: string
+  sessionId: string
+  transcriptPath: string
 }
 
 /** Resolve a session tab to the transcript identity native chat needs, or
@@ -40,7 +50,10 @@ export type MobileNativeChatTab = {
  *  hint or the live status; session id from the captured provider session. */
 export function resolveMobileNativeChat(
   tab: MobileNativeChatTab | null,
-  nativeChatTranscriptIsLocalReadable = false
+  nativeChatTranscriptIsLocalReadable = false,
+  /** Host-index fallback used only when the live status carries no session id;
+   *  a published session always outranks it. */
+  recovered: MobileNativeChatRecoveredAddress | null = null
 ): MobileNativeChatResolution | null {
   if (!tab || tab.type !== 'terminal') {
     return null
@@ -57,10 +70,18 @@ export function resolveMobileNativeChat(
   if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
     return null
   }
+  const published = tab.agentStatus?.providerSession ?? null
+  if (!published && recovered && recovered.agent === agent) {
+    return {
+      agent,
+      sessionId: recovered.sessionId,
+      transcriptPath: recovered.transcriptPath
+    }
+  }
   return {
     agent,
-    sessionId: tab.agentStatus?.providerSession?.id ?? null,
-    transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null
+    sessionId: published?.id ?? null,
+    transcriptPath: published?.transcriptPath ?? null
   }
 }
 

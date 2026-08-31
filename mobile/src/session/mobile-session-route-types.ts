@@ -27,6 +27,8 @@ export type MobileSessionTab =
       /** Host-provided launch context still parked as an unsent TUI-input draft. */
       launchDraft?: string
       launchDraftCreatedAt?: number
+      /** Working directory the host spawned this terminal in. */
+      startupCwd?: string
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }

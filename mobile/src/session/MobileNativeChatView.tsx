@@ -266,7 +266,7 @@ export function MobileNativeChatView({
     [toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
   )
 
-  const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
+  const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error, agentWorking === true)
   const showLoading = status === 'loading' && messages.length === 0
 
   // A dead PTY emits subscribed→end; settle both edges so its false lease cannot flash the composer enabled.

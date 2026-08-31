@@ -108,7 +108,9 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   const onSendResolved = vi.fn()
   // Only the stale-input heal reaches the transport directly (the message send
   // itself is mocked above).
-  const clientStub = { sendRequest: vi.fn() }
+  // Default to a refused response, not `undefined`: the real client always
+  // resolves an RpcResponse, and a double that returns nothing hides crashes.
+  const clientStub = { sendRequest: vi.fn().mockResolvedValue({ ok: false }) }
 
   function Harness({ connState = 'connected' }: { connState?: ConnectionState }): null {
     controller = useMobileNativeChatController({

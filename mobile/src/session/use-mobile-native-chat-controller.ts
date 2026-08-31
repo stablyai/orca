@@ -4,6 +4,8 @@ import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { type MobileNativeChatTab, resolveMobileNativeChat } from './mobile-native-chat-eligibility'
+import type { MobileNativeChatRecoveryTab } from './mobile-native-chat-session-recovery'
+import { useMobileNativeChatSessionRecovery } from './use-mobile-native-chat-session-recovery'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
@@ -23,6 +25,8 @@ import type { MobileNativeChatController } from './mobile-native-chat-controller
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
 const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
+// Stable identity so the recovery effect's dependency list does not churn.
+const EMPTY_RECOVERY_TABS: readonly MobileNativeChatRecoveryTab[] = []
 
 /** Owns mobile native-chat state and teardown outside the already dense session
  *  route. The route remains responsible only for choosing and rendering the view. */
@@ -32,6 +36,9 @@ export function useMobileNativeChatController(args: {
   worktreeId: string
   activeSessionTab: MobileNativeChatTab | null
   activeSessionTabId: string | null
+  /** Every terminal tab in this worktree, for the transcript-recovery ambiguity
+   *  guard. Omitted by callers that never need recovery (tests). */
+  sessionTabs?: readonly MobileNativeChatRecoveryTab[]
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
@@ -49,6 +56,7 @@ export function useMobileNativeChatController(args: {
     worktreeId,
     activeSessionTab,
     activeSessionTabId,
+    sessionTabs,
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
@@ -59,9 +67,22 @@ export function useMobileNativeChatController(args: {
   } = args
   const { isTabChatView, toggleTabChatView } = useMobileSessionViewMode({ hostId, worktreeId })
 
-  const activeChatResolution =
+  // Only a pane the user is actually looking at, whose agent published nothing,
+  // is worth a host scan — an addressed pane needs no recovery at all.
+  const unaddressed =
     activeSessionTab && activeSessionTabId && isTabChatView(activeSessionTabId)
       ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
+      : null
+  const recovered = useMobileNativeChatSessionRecovery({
+    client,
+    tabId: unaddressed && unaddressed.sessionId === null ? activeSessionTabId : null,
+    agent: unaddressed?.sessionId === null ? unaddressed.agent : null,
+    cwd: activeSessionTab?.startupCwd ?? null,
+    tabs: sessionTabs ?? EMPTY_RECOVERY_TABS
+  })
+  const activeChatResolution =
+    activeSessionTab && activeSessionTabId && isTabChatView(activeSessionTabId)
+      ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable, recovered)
       : null
   const showNativeChat = activeChatResolution != null
   const showNativeChatRef = useRef(showNativeChat)

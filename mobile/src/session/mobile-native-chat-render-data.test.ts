@@ -21,27 +21,53 @@ function user(id: string, text: string): NativeChatMessage {
 }
 
 describe('mobileNativeChatEmptyState', () => {
-  it('invites a first message naming the agent, matching desktop copy', () => {
-    // waiting-session (live agent, no transcript) and ready (loaded, empty) both
-    // resolve to the shared "empty" copy with the agent label substituted.
-    const waiting = mobileNativeChatEmptyState('waiting-session', 'claude')
-    expect(waiting).toEqual({
-      title: 'Start a chat with Claude',
-      subtitle: 'Ask Claude to inspect code, explain output, or make a change.'
-    })
-    expect(mobileNativeChatEmptyState('ready', 'codex')?.title).toBe('Start a chat with Codex')
+  const STATUSES = ['waiting-session', 'awaiting-transcript', 'ready'] as const
+
+  // The reported bug: a pane whose agent never published a session id rendered
+  // the SAME copy as a genuinely empty chat, so "Start a chat with Claude" sat
+  // above a footer reading "Agent is working". The three states must be
+  // separable on screen, not just in the status enum.
+  it('renders a distinct title and subtitle for each pre-message state', () => {
+    const copies = STATUSES.map((status) => mobileNativeChatEmptyState(status, 'claude'))
+    expect(copies.map((copy) => copy?.title)).toEqual([
+      'No conversation linked yet',
+      'Transcript not written yet',
+      'Start a chat with Claude'
+    ])
+    expect(new Set(copies.map((copy) => JSON.stringify(copy))).size).toBe(STATUSES.length)
   })
 
-  it('invites a first message while the transcript file is still unwritten', () => {
-    // The spinner is already gone by then, so a bare list would read as broken.
-    expect(mobileNativeChatEmptyState('awaiting-transcript', 'claude')?.title).toBe(
+  it('names the agent and the recovery in the no-session copy', () => {
+    expect(mobileNativeChatEmptyState('waiting-session', 'claude')).toEqual({
+      title: 'No conversation linked yet',
+      subtitle:
+        'Orca has not received a session id for this Claude terminal. Switch to terminal view to keep working.'
+    })
+  })
+
+  it('does not invite a first message while the agent is mid-turn', () => {
+    // "Start a chat" under a live working indicator is the exact contradiction
+    // the user hit; an empty transcript with a working agent says so instead.
+    expect(mobileNativeChatEmptyState('ready', 'claude', undefined, true)).toEqual({
+      title: 'Claude is working',
+      subtitle: 'This conversation has no messages yet. Turns appear here as they are written.'
+    })
+    expect(mobileNativeChatEmptyState('ready', 'claude', undefined, false)?.title).toBe(
       'Start a chat with Claude'
     )
   })
 
+  it('invites a first message on a settled, genuinely empty transcript', () => {
+    expect(mobileNativeChatEmptyState('ready', 'codex')).toEqual({
+      title: 'Start a chat with Codex',
+      subtitle: 'Ask Codex to inspect code, explain output, or make a change.'
+    })
+  })
+
   it('falls back to "the agent" when the agent is unknown', () => {
-    expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe(
-      'Start a chat with the agent'
+    expect(mobileNativeChatEmptyState('ready', null)?.title).toBe('Start a chat with the agent')
+    expect(mobileNativeChatEmptyState('awaiting-transcript', null)?.subtitle).toBe(
+      'the agent has not saved this conversation to disk. It appears here as soon as it does.'
     )
   })
 

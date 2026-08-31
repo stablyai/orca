@@ -15,21 +15,31 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 /** The centered empty-state copy for a chat with no messages, mirroring the
  *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
  *  stay in lockstep. Returns null when the list should stay bare (idle, or the
- *  loading spinner owns the view). */
+ *  loading spinner owns the view).
+ *
+ *  Why three distinct copies: these statuses used to share the `empty` copy, so a
+ *  pane that could not address its transcript at all read exactly like a blank new
+ *  chat — "Start a chat with Claude" over a footer saying "Agent is working". Each
+ *  status now states which of the three it is, so a bug is separable from a blank
+ *  slate without reading logs. */
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
   agent: string | null,
-  error?: string
+  error?: string,
+  agentWorking = false
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
-    // A live agent with no transcript yet — an unwritten transcript file, or a
-    // loaded-but-empty one — is "start a chat"; invite the first message instead
-    // of implying the agent is still starting up.
+    // No session id: the transcript has no address, so nothing was ever read.
     case 'waiting-session':
+      return formatNativeChatEmptyStateCopy('waitingSession', agentLabel)
+    // Addressed, but the transcript file does not exist on the host yet.
     case 'awaiting-transcript':
+      return formatNativeChatEmptyStateCopy('awaitingTranscript', agentLabel)
+    // Read settled and really is empty. Only then is "start a chat" true — and
+    // only while the agent is not mid-turn.
     case 'ready':
-      return formatNativeChatEmptyStateCopy('empty', agentLabel)
+      return formatNativeChatEmptyStateCopy(agentWorking ? 'workingEmpty' : 'empty', agentLabel)
     case 'error': {
       const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
       return error ? { ...copy, subtitle: error } : copy

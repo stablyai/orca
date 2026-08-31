@@ -15,6 +15,26 @@ export const NATIVE_CHAT_EMPTY_STATE_COPY = {
     title: 'Start a chat with {{value0}}',
     subtitle: 'Ask {{value0}} to inspect code, explain output, or make a change.'
   },
+  // Distinct from `empty` on purpose: the pane has an agent but no conversation
+  // address, so "start a chat" would claim the transcript is empty when Orca
+  // simply cannot read it. Names the recovery the user actually has.
+  waitingSession: {
+    title: 'No conversation linked yet',
+    subtitle:
+      'Orca has not received a session id for this {{value0}} terminal. Switch to terminal view to keep working.'
+  },
+  // The session is addressable but its transcript file does not exist yet.
+  awaitingTranscript: {
+    title: 'Transcript not written yet',
+    subtitle:
+      '{{value0}} has not saved this conversation to disk. It appears here as soon as it does.'
+  },
+  // Loaded, genuinely empty, but the agent is mid-turn: inviting a first message
+  // would contradict the working indicator sitting right below it.
+  workingEmpty: {
+    title: '{{value0}} is working',
+    subtitle: 'This conversation has no messages yet. Turns appear here as they are written.'
+  },
   error: {
     title: 'Could not load conversation',
     subtitle: 'The transcript could not be read. Toggle back to the terminal to keep working.'

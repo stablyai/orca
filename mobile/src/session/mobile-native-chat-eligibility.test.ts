@@ -128,3 +128,61 @@ describe('resolveMobileNativeChat', () => {
     expect(canShowMobileNativeChat(null)).toBe(false)
   })
 })
+
+describe('resolveMobileNativeChat transcript recovery', () => {
+  const recovered = {
+    agent: 'claude',
+    sessionId: 'sess-recovered',
+    transcriptPath: '/tmp/recovered.jsonl'
+  }
+
+  // A hand-started agent never publishes a `providerSession`, so the pane had no
+  // transcript address at all and native chat could only ever render empty.
+  it('addresses the transcript when the live status published no provider session', () => {
+    expect(
+      resolveMobileNativeChat(
+        { type: 'terminal', agentStatus: status({ agentType: 'claude' }) },
+        false,
+        recovered
+      )
+    ).toEqual({
+      agent: 'claude',
+      sessionId: 'sess-recovered',
+      transcriptPath: '/tmp/recovered.jsonl'
+    })
+  })
+
+  it('keeps the published provider session ahead of a recovered one', () => {
+    expect(
+      resolveMobileNativeChat(
+        {
+          type: 'terminal',
+          agentStatus: status({
+            agentType: 'claude',
+            providerSession: {
+              key: 'session_id',
+              id: 'sess-live',
+              transcriptPath: '/tmp/live.jsonl'
+            }
+          })
+        },
+        false,
+        recovered
+      )
+    ).toEqual({
+      agent: 'claude',
+      sessionId: 'sess-live',
+      transcriptPath: '/tmp/live.jsonl'
+    })
+  })
+
+  it('ignores a recovery captured for a different agent', () => {
+    expect(
+      resolveMobileNativeChat(
+        { type: 'terminal', agentStatus: status({ agentType: 'codex' }) },
+        false,
+        recovered
+      )
+    ).toEqual({ agent: 'codex', sessionId: null, transcriptPath: null })
+  })
+})

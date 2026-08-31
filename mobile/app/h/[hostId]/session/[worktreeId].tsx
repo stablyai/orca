@@ -690,12 +690,30 @@ export default function SessionScreen() {
     activeHandle,
     connected: connState === 'connected'
   })
+  // Every terminal tab's published transcript address, so recovery can refuse to
+  // adopt a transcript when two same-agent panes are both unaddressed.
+  const nativeChatRecoveryTabs = useMemo(
+    () =>
+      sessionTabs.flatMap((tab) =>
+        tab.type === 'terminal'
+          ? [
+              {
+                id: tab.id,
+                agent: tab.agentStatus?.agentType ?? tab.launchAgent ?? null,
+                sessionId: tab.agentStatus?.providerSession?.id ?? null
+              }
+            ]
+          : []
+      ),
+    [sessionTabs]
+  )
   const nativeChatController = useMobileNativeChatController({
     client,
     hostId,
     worktreeId,
     activeSessionTab,
     activeSessionTabId,
+    sessionTabs: nativeChatRecoveryTabs,
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
