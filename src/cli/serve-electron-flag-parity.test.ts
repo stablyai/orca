@@ -53,17 +53,21 @@ describe('serve flag parity between the CLI spec and the Electron argv rewrite',
   })
 
   it('emits the same --serve-* names the CLI spawns with and the main process reads', () => {
-    // Why source text: serveOrcaApp spawns a real process and getServeOptions is not exported, so
-    // both ends of the contract are only readable statically. Without this leg the rewrite could
-    // emit a name nothing reads and every behavioural assertion above would still pass.
+    // Why source text: serveOrcaApp spawns a real process; getServeOptions lives in
+    // startup/serve-options.ts and is only readable statically for the flag names it
+    // accepts. Without this leg the rewrite could emit a name nothing reads and every
+    // behavioural assertion above would still pass.
     const launchSource = readFileSync(join(process.cwd(), 'src/cli/runtime/launch.ts'), 'utf8')
-    const mainSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const start = mainSource.indexOf('function getServeOptions(')
+    const serveOptionsSource = readFileSync(
+      join(process.cwd(), 'src/main/startup/serve-options.ts'),
+      'utf8'
+    )
+    const start = serveOptionsSource.indexOf('export function getServeOptions(')
     // Why bound the anchor: an unresolved indexOf slices to EOF and passes vacuously.
     expect(start).toBeGreaterThanOrEqual(0)
-    const end = mainSource.indexOf('\n}', start)
+    const end = serveOptionsSource.indexOf('\n}', start)
     expect(end).toBeGreaterThan(start)
-    const getServeOptionsBody = mainSource.slice(start, end)
+    const getServeOptionsBody = serveOptionsSource.slice(start, end)
 
     for (const flag of translatedFlags) {
       expect(launchSource).toContain(`'--serve-${flag}'`)
