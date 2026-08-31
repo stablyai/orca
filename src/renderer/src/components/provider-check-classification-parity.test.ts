@@ -238,11 +238,11 @@ describe('provider check classification parity', () => {
 
   it('preserves GitLab pipeline gating while presenting a terminal cancellation', () => {
     expect(derivePipelineStatuses('canceled')).toEqual({
-      status: 'neutral',
+      status: 'failure',
       presentationStatus: 'cancelled'
     })
     expect(derivePipelineStatuses({ status: 'canceled' })).toEqual({
-      status: 'neutral',
+      status: 'failure',
       presentationStatus: 'cancelled'
     })
     expect(derivePipelineStatuses([{ status: 'canceled' }])).toEqual({

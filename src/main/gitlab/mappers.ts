@@ -315,7 +315,13 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'success') {
     return 'success'
   }
-  if (s === 'failed' || s === 'action_required') {
+  if (
+    s === 'failed' ||
+    s === 'action_required' ||
+    s === 'canceled' ||
+    s === 'cancelled' ||
+    s === 'canceling'
+  ) {
     return 'failure'
   }
   // Why: GitLab only reports pipeline-level `manual` when the pipeline is *blocked* on a human
@@ -326,10 +332,7 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'manual') {
     return 'pending'
   }
-  // Why: `skipped` and `canceled` pipelines stay neutral (the fall-through below) even though the
-  // job rollup calls the same jobs passing/failing. GitLab's own MR widget paints both grey, and
-  // `allow_merge_on_skipped_pipeline` defaults to false, so a skipped pipeline still blocks merge —
-  // flipping either tone is a product decision that belongs in its own change, not this one.
+  // Why: `skipped` pipelines stay neutral even though job rollups call skipped jobs passing.
   if (
     s === 'created' ||
     s === 'pending' ||

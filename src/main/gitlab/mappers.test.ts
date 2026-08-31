@@ -272,26 +272,23 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus({ status: 'manual' })).toBe('pending')
   })
 
-  // Why: pins the two remaining string/array divergences. The job rollup calls skipped jobs
-  // passing and canceled jobs failing, but `head_pipeline.status` is the only production entry
-  // point and GitLab paints both pipeline states grey — flipping either card tone needs product
-  // sign-off, so these assertions exist so neither flip can land silently.
-  it('keeps skipped and canceled pipeline strings neutral (deferred tone changes)', () => {
+  it('keeps skipped neutral while cancelled pipelines remain non-passing', () => {
     expect(derivePipelineStatus('skipped')).toBe('neutral')
     expect(derivePipelineStatus({ status: 'skipped' })).toBe('neutral')
-    expect(derivePipelineStatus('canceled')).toBe('neutral')
-    expect(derivePipelineStatus('canceling')).toBe('neutral')
+    expect(derivePipelineStatus('canceled')).toBe('failure')
+    expect(derivePipelineStatus('cancelled')).toBe('failure')
+    expect(derivePipelineStatus('canceling')).toBe('failure')
     expect(derivePipelineStatus([{ status: 'canceled' }])).toBe('failure')
     expect(derivePipelineStatuses('canceled')).toEqual({
-      status: 'neutral',
+      status: 'failure',
       presentationStatus: 'cancelled'
     })
     expect(derivePipelineStatuses('canceling')).toEqual({
-      status: 'neutral',
+      status: 'failure',
       presentationStatus: 'cancelled'
     })
     expect(derivePipelineStatuses({ status: 'canceling' })).toEqual({
-      status: 'neutral',
+      status: 'failure',
       presentationStatus: 'cancelled'
     })
     expect(derivePipelineStatuses([{ status: 'canceled' }])).toEqual({
