@@ -63,12 +63,19 @@ function pumpInspectionQueue(): void {
 
   activeInspections += 1
   inspectionStarts.push(now)
-  void next.run().finally(() => {
-    activeInspections = Math.max(0, activeInspections - 1)
-    if (inspectionQueue.length > 0) {
-      scheduleInspectionPump()
-    }
-  })
+  void next
+    .run()
+    .catch(() => {
+      // Why: this queue is the fire-and-forget boundary. Individual coordinators
+      // own error/backoff policy, but an unexpected rejection must not become a
+      // renderer-wide unhandled rejection and feed crash diagnostics forever.
+    })
+    .finally(() => {
+      activeInspections = Math.max(0, activeInspections - 1)
+      if (inspectionQueue.length > 0) {
+        scheduleInspectionPump()
+      }
+    })
 
   if (inspectionQueue.length > 0) {
     scheduleInspectionPump()
