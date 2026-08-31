@@ -1362,6 +1362,11 @@ import {
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
+import {
+  PROVEN_ABSENT_LEAF_PTY_TTL_MS,
+  pruneProvenAbsentLeafPtyVerdicts,
+  recordProvenAbsentLeafPtyVerdict
+} from './proven-absent-leaf-pty-verdicts'
 
 function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
@@ -2320,7 +2325,7 @@ const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 // Why: long enough that a keystroke burst to a proven-dead leaf probes once,
 // short enough that a recreated session id regains writability quickly even if
 // its runtime record (which also invalidates the verdict) is late.
-const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
+// PROVEN_ABSENT_LEAF_PTY_TTL_MS imported from proven-absent-leaf-pty-verdicts.ts (#12660).
 
 function isClientDisconnectedError(error: unknown): boolean {
   return error instanceof Error && error.message === 'client_disconnected'
@@ -20665,6 +20670,8 @@ export class OrcaRuntimeService {
       this.provenAbsentLeafPtyVerdicts.delete(ptyId)
       return Promise.resolve(false)
     }
+    // Why: expired entries only dropped on re-probe leave process-lifetime growth (#12660).
+    pruneProvenAbsentLeafPtyVerdicts(this.provenAbsentLeafPtyVerdicts)
     const verdictAt = this.provenAbsentLeafPtyVerdicts.get(ptyId)
     if (verdictAt !== undefined) {
       if (Date.now() - verdictAt < PROVEN_ABSENT_LEAF_PTY_TTL_MS) {
@@ -20685,7 +20692,7 @@ export class OrcaRuntimeService {
         if ((await probeLiveness(ptyId)) !== false) {
           return false
         }
-        this.provenAbsentLeafPtyVerdicts.set(ptyId, Date.now())
+        recordProvenAbsentLeafPtyVerdict(this.provenAbsentLeafPtyVerdicts, ptyId)
         return true
       } catch {
         // Why: a failed probe is unknown, and unknown never rejects a write.
