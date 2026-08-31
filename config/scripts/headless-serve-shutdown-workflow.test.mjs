@@ -69,16 +69,17 @@ describe('headless serve shutdown PR gate', () => {
     expect(steps.indexOf(appImageShutdownStep)).toBeGreaterThan(steps.indexOf(launcherShutdownStep))
   })
 
-  it('keeps the readiness parser line-buffered', () => {
-    expect(signalCase).toContain("| sed -u -n 's/^[^{]*//p'")
+  it('keeps readiness polling finite and leak-free', () => {
+    expect(signalCase).toContain('read_ready_line()')
+    expect(signalCase).toContain("sed -u -n 's/^[^{]*//p'")
     expect(signalCase).toContain('startup_timeout_seconds=${ORCA_STARTUP_TIMEOUT_SECONDS:-180}')
+    expect(signalCase).toContain('startup_deadline=$((SECONDS + startup_timeout_seconds))')
+    expect(signalCase).toContain('while (( SECONDS < startup_deadline )); do')
+    expect(signalCase).toContain('kill -0 "$app_pid" 2>/dev/null || break')
     expect(signalCase).toContain(
-      'timeout --foreground --signal=TERM --kill-after=5s "$startup_timeout_seconds"'
+      "jq's `inputs` waits for EOF even when wrapped in `first`, so a tail -F"
     )
-    expect(signalCase).toContain(
-      'A readiness event can land as the timeout tears down the tail pipeline.'
-    )
-    expect(signalCase).toContain('ready_line=$(sed -u -n')
+    expect(signalCase).not.toContain('tail --pid=')
   })
 
   it('checks that a serving-electron signal target owns the ready socket', () => {

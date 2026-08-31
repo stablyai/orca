@@ -55,17 +55,25 @@ setsid env -u DISPLAY "${entrypoint[@]}" serve --port 0 --pairing-address 127.0.
 app_pid=$!
 app_start_ticks=$(awk '{print $22}' "/proc/$app_pid/stat")
 
-# The inner shell expands its positional parameters.
-# shellcheck disable=SC1083,SC2016
-ready_line=$(timeout --foreground --signal=TERM --kill-after=5s "$startup_timeout_seconds" bash -c '
-  tail --pid="$1" -n +1 -F "$2" 2>/dev/null \
-    | sed -u -n 's/^[^{]*//p' \
-    | jq --unbuffered -Rnc '\''first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))'\''
-' bash "$app_pid" "$stdout_log" || true)
-# A readiness event can land as the timeout tears down the tail pipeline.
+# jq's `inputs` waits for EOF even when wrapped in `first`, so a tail -F
+# observer can outlive the timeout and leak into the next signal case. Poll
+# finite snapshots instead; each parser invocation has a definite EOF.
+read_ready_line() {
+  sed -u -n 's/^[^{]*//p' "$stdout_log" \
+    | jq --unbuffered -Rnc 'first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))'
+}
+
+ready_line=''
+startup_deadline=$((SECONDS + startup_timeout_seconds))
+while (( SECONDS < startup_deadline )); do
+  ready_line=$(read_ready_line)
+  [[ -n "$ready_line" ]] && break
+  kill -0 "$app_pid" 2>/dev/null || break
+  sleep 1
+done
+# A readiness event can land as the final poll races the write.
 if [[ -z "$ready_line" ]]; then
-  ready_line=$(sed -u -n 's/^[^{]*//p' "$stdout_log" \
-    | jq --unbuffered -Rnc 'first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))')
+  ready_line=$(read_ready_line)
 fi
 if [[ -z "$ready_line" ]]; then
   cat "$stdout_log" "$stderr_log" >&2
