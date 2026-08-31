@@ -146,6 +146,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     // stale frame makes therefore still fails, exactly as the advance above intends.
     this.ptyLifecycleGenerationById.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    this.ompPromptReadinessByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
