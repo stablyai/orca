@@ -210,24 +210,31 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
-      // The host emits the opening snapshot (or the missed batch) synchronously
-      // inside open(), so nothing between here and there can interleave.
-      dispose = host.subscribe({
-        id: subscriptionId,
-        sessionId: params.sessionId,
-        emit,
-        ...(params.cursor ? { cursor: params.cursor } : {})
-      })
-      if (closed) {
-        dispose()
-      } else {
-        // Fire-and-forget, but never unhandled: a resume that refuses leaves the stream holding a
-        // readable session, which is exactly what the client sees anyway.
-        void host
-          .hold(params.sessionId, streamHolder, { resume: false })
-          .catch((error: unknown) =>
-            console.warn('[agent-session] stream hold failed', params.sessionId, error)
-          )
+      try {
+        await host.hold(params.sessionId, streamHolder, { resume: false })
+        if (closed) {
+          return
+        }
+        // The host emits the opening snapshot (or the missed batch) synchronously
+        // inside open(), so nothing between here and there can interleave.
+        dispose = await host.subscribeHeld(
+          {
+            id: subscriptionId,
+            sessionId: params.sessionId,
+            emit,
+            ...(params.cursor ? { cursor: params.cursor } : {})
+          },
+          streamHolder
+        )
+        if (closed) {
+          dispose()
+        }
+      } catch (error) {
+        const transportClosed = closed
+        releaseTransportSubscription()
+        if (!transportClosed) {
+          throw error
+        }
       }
     }
   }),

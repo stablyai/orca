@@ -91,6 +91,12 @@ export class AgentSessionSubscribers {
     }
   }
 
+  closeSession(sessionId: string): void {
+    for (const subscriber of this.subscribers(sessionId)) {
+      this.close(sessionId, subscriber.id)
+    }
+  }
+
   /** Fan out whatever each subscriber has not yet seen. */
   publish(sessionId: string, journal: AgentSessionJournal): void {
     for (const subscriber of this.subscribers(sessionId)) {

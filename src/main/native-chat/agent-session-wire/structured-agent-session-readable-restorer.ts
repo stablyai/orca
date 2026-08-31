@@ -29,7 +29,14 @@ export class StructuredAgentSessionReadableRestorer {
     return this.restorePromise
   }
 
-  private async restoreReadableSessions(sessionIds?: readonly string[]): Promise<void> {
+  restoreMissing(sessionIds: readonly string[], isCurrent?: (sessionId: string) => boolean) {
+    return this.restoreReadableSessions(sessionIds, isCurrent)
+  }
+
+  private async restoreReadableSessions(
+    sessionIds?: readonly string[],
+    isCurrent?: (sessionId: string) => boolean
+  ): Promise<void> {
     const targetOrder = sessionIds
       ? new Map(sessionIds.map((sessionId, index) => [sessionId, index]))
       : null
@@ -46,7 +53,8 @@ export class StructuredAgentSessionReadableRestorer {
     }
     await restoreStructuredAgentSessionsOnRestart({
       ...this.input,
-      records
+      records,
+      ...(isCurrent ? { isCurrent } : {})
     })
   }
 }

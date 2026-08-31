@@ -169,6 +169,32 @@ describe('a chat that closes', () => {
     expect(closeSession).not.toHaveBeenCalled()
     expect(host.hasSession(SESSION)).toBe(true)
   })
+
+  it('reopens a surface that arrives while the released child is stopping', async () => {
+    await attach()
+    await host.hold(SESSION, SURFACE)
+    acquire.mockClear()
+    const closeEntered = Promise.withResolvers<void>()
+    const closeGate = Promise.withResolvers<void>()
+    closeSession.mockImplementationOnce(async () => {
+      closeEntered.resolve()
+      await closeGate.promise
+      return true
+    })
+
+    host.release(SESSION, SURFACE)
+    await closeEntered.promise
+    const replacement = host.hold(SESSION, 'paired-phone:1')
+    await Promise.resolve()
+
+    expect(host.isHeld(SESSION)).toBe(false)
+    expect(acquire).not.toHaveBeenCalled()
+    closeGate.resolve()
+    await expect(replacement).resolves.toBeUndefined()
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(host.isHeld(SESSION)).toBe(true)
+    expect(host.hasSession(SESSION)).toBe(true)
+  })
 })
 
 describe('a session with a turn in flight', () => {
@@ -220,6 +246,31 @@ describe('startup', () => {
       runtimeKind: 'native',
       ownerProcess: { pid: 4242 }
     })
+  })
+
+  it('gives concurrent surfaces one shared provider resume', async () => {
+    await attach()
+    await reboot()
+    await host.restoreReadableSessions()
+    const entered = Promise.withResolvers<void>()
+    const acquireGate = Promise.withResolvers<void>()
+    const runAcquire = acquire.getMockImplementation()!
+    acquire.mockImplementation(async (input) => {
+      entered.resolve()
+      await acquireGate.promise
+      return runAcquire(input)
+    })
+
+    const desktop = host.hold(SESSION, SURFACE)
+    await entered.promise
+    const paired = host.hold(SESSION, 'paired-phone:1')
+    await Promise.resolve()
+
+    expect(acquire).toHaveBeenCalledOnce()
+    acquireGate.resolve()
+    await expect(Promise.all([desktop, paired])).resolves.toEqual([undefined, undefined])
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
   })
 })
 

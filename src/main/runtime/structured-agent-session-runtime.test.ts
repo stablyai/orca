@@ -2,6 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  HOST_TEST_NOW,
+  HOST_TEST_SESSION,
+  HOST_TEST_THREAD,
+  hostTestAttachParams
+} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type {
   AgentSessionClaimStatus,
   AgentSessionProcessIdentity,
@@ -261,5 +267,76 @@ describe('structured agent-session runtime install', () => {
         failure
       )
     )
+  })
+
+  it('closes a child whose resume attach was already admitted when shutdown began', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW)
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
+    const secondOpenEntered = Promise.withResolvers<void>()
+    const secondOpenGate = Promise.withResolvers<void>()
+    const connections: { closed: boolean }[] = []
+    let openCount = 0
+    const host = await ensureStructuredAgentSessionHost({
+      stateDirectory,
+      hostId: HOST_ID,
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => stateDirectory!,
+      resolveEnvironment: async () => ({}),
+      resolveCodexCommand: () => '/usr/local/bin/codex',
+      readProcessStartTime: async () => 1_700_000_000_000,
+      openCodexConnection: async (_launch, handlers = {}) => {
+        openCount += 1
+        if (openCount === 2) {
+          secondOpenEntered.resolve()
+          await secondOpenGate.promise
+        }
+        const connection = {
+          pid: 4242,
+          closed: false,
+          request: async (method: string) =>
+            method === 'thread/start' || method === 'thread/resume'
+              ? { thread: { id: HOST_TEST_THREAD } }
+              : method === 'model/list'
+                ? {
+                    data: [
+                      {
+                        model: 'gpt-test',
+                        displayName: 'GPT Test',
+                        hidden: false,
+                        supportedReasoningEfforts: [],
+                        isDefault: true
+                      }
+                    ],
+                    nextCursor: null
+                  }
+                : {},
+          notify: () => {},
+          respond: () => {},
+          respondWithError: () => {},
+          close: async () => {
+            connection.closed = true
+            return true
+          },
+          ...handlers
+        }
+        connections.push(connection)
+        return connection as never
+      }
+    })
+    await expect(
+      host.attach({ callerKey: 'runtime-shutdown-test' }, hostTestAttachParams(null))
+    ).resolves.toMatchObject({ ok: true })
+    await host.close(HOST_TEST_SESSION)
+
+    const holding = host.hold(HOST_TEST_SESSION, 'desktop-chat:shutdown-race')
+    await secondOpenEntered.promise
+    const stopping = stopStructuredAgentSessionRuntime()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    secondOpenGate.resolve()
+
+    await expect(holding).rejects.toThrow()
+    await stopping
+    expect(connections).toHaveLength(2)
+    expect(connections[1]?.closed).toBe(true)
   })
 })

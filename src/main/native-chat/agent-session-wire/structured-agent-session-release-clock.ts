@@ -25,12 +25,16 @@ export type StructuredAgentSessionReleaseClockDeps = {
 export class StructuredAgentSessionReleaseClock {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly graceMs: number
+  private disposed = false
 
   constructor(private readonly deps: StructuredAgentSessionReleaseClockDeps) {
     this.graceMs = deps.graceMs ?? STRUCTURED_AGENT_SESSION_RELEASE_GRACE_MS
   }
 
   arm(sessionId: string): void {
+    if (this.disposed) {
+      return
+    }
     this.cancel(sessionId)
     const timer = setTimeout(() => {
       this.timers.delete(sessionId)
@@ -54,6 +58,7 @@ export class StructuredAgentSessionReleaseClock {
   }
 
   dispose(): void {
+    this.disposed = true
     for (const timer of this.timers.values()) {
       clearTimeout(timer)
     }

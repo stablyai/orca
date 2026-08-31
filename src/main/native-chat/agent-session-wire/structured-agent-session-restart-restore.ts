@@ -32,6 +32,7 @@ export async function restoreStructuredAgentSessionsOnRestart(input: {
   hasSession: (sessionId: string) => boolean
   onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
   restoreHandoff: (sessionId: string) => Promise<void>
+  isCurrent?: (sessionId: string) => boolean
 }): Promise<void> {
   await mapWithConcurrency(input.records, JOURNAL_RESTORE_CONCURRENCY, async ({ sessionId }) => {
     const unreconciled = await input.reconcile(sessionId)
@@ -40,6 +41,9 @@ export async function restoreStructuredAgentSessionsOnRestart(input: {
       await input.resolveRecovery(sessionId)
     }
     await input.serialize(sessionId, async () => {
+      if (input.isCurrent && !input.isCurrent(sessionId)) {
+        return
+      }
       if (input.hasSession(sessionId)) {
         // A surface that took a hold mid-restore already attached this one.
         await input.restoreHandoff(sessionId)
@@ -50,7 +54,7 @@ export async function restoreStructuredAgentSessionsOnRestart(input: {
         input.journalRoot,
         sessionId
       )
-      if (!restored) {
+      if (!restored || (input.isCurrent && !input.isCurrent(sessionId))) {
         return
       }
       input.onReadable(sessionId, restored)

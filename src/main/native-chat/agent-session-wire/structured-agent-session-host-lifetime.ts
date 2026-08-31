@@ -67,7 +67,7 @@ export async function evictHeldStructuredAgentSession(
 export function createStructuredAgentSessionHolds(
   context: StructuredAgentSessionLifetimeContext,
   input: {
-    resume: (sessionId: string) => Promise<void>
+    resume: (sessionId: string, isCurrent: () => boolean) => Promise<void>
     evict: (sessionId: string) => Promise<void>
   }
 ): StructuredAgentSessionHolds {

@@ -56,4 +56,35 @@ describe('restart journal restoration', () => {
     expect(restoreRead).toHaveBeenCalledTimes(records.length)
     expect(peak).toBe(4)
   })
+
+  it('does not publish a readable session cancelled while its journal opens', async () => {
+    const restoreEntered = Promise.withResolvers<void>()
+    const restoreGate = Promise.withResolvers<void>()
+    let current = true
+    const onReadable = vi.fn()
+    restoreRead.mockImplementationOnce(async () => {
+      restoreEntered.resolve()
+      await restoreGate.promise
+      return { journal: {}, params: {}, fence: 1, hasProviderChild: false }
+    })
+
+    const restoration = restoreStructuredAgentSessionsOnRestart({
+      store: {} as never,
+      journalRoot: '/tmp/journals',
+      records: [{ sessionId: 'session-1' } as AgentSessionRecord],
+      reconcile: async () => null,
+      resolveRecovery: async () => undefined,
+      serialize: async (_sessionId, task) => task(),
+      hasSession: () => false,
+      onReadable,
+      restoreHandoff: async () => undefined,
+      isCurrent: () => current
+    })
+    await restoreEntered.promise
+    current = false
+    restoreGate.resolve()
+
+    await restoration
+    expect(onReadable).not.toHaveBeenCalled()
+  })
 })

@@ -8,6 +8,7 @@ import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch
 } from './codex-structured-session-adapter'
+import { closeCodexPublishedSession } from './codex-structured-session-close'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-1'
@@ -30,6 +31,30 @@ function identity(): AgentSessionJournalIdentity {
 }
 
 describe('CodexStructuredSessionAdapter shutdown', () => {
+  it('does not let a stale close delete a replacement session', async () => {
+    const closeGate = Promise.withResolvers<boolean>()
+    const oldSession = {
+      connection: { close: () => closeGate.promise },
+      prompts: { clear: () => {} },
+      ended: true,
+      translator: null
+    }
+    const replacement = {
+      connection: { close: async () => true },
+      prompts: { clear: () => {} },
+      ended: false,
+      translator: null
+    }
+    const sessions = new Map([['session-1', oldSession]])
+
+    const closing = closeCodexPublishedSession(sessions as never, 'session-1')
+    sessions.set('session-1', replacement)
+    closeGate.resolve(true)
+
+    await expect(closing).resolves.toBe(true)
+    expect(sessions.get('session-1')).toBe(replacement)
+  })
+
   it('refuses acquisitions that enter after closeAll starts', async () => {
     const connections: CodexAppServerConnection[] = []
     const openConnection = (async () => {

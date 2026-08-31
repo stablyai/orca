@@ -213,6 +213,124 @@ describe('a client that disappears without cleanup', () => {
     expect(closeSession).toHaveBeenCalledWith(SESSION)
   })
 
+  it('does not open a subscription aborted while session eviction is running', async () => {
+    const closeEntered = Promise.withResolvers<void>()
+    const closeGate = Promise.withResolvers<void>()
+    closeSession.mockImplementationOnce(async () => {
+      closeEntered.resolve()
+      await closeGate.promise
+      return true
+    })
+    const closing = host.close(SESSION)
+    await closeEntered.promise
+    const subscribe = vi.spyOn(host, 'subscribe')
+    const transport = new AbortController()
+    const dispatching = dispatcher.dispatchStreaming(
+      {
+        id: 'aborted-during-eviction',
+        authToken: 'token',
+        method: 'agentSession.subscribe',
+        params: { sessionId: SESSION }
+      },
+      () => {},
+      {
+        signal: transport.signal,
+        clientId: 'paired-client',
+        clientKind: 'runtime',
+        clientCapabilities: CLIENT.clientCapabilities,
+        connectionId: CONNECTION
+      }
+    )
+    await Promise.resolve()
+    transport.abort()
+    closeGate.resolve()
+
+    await closing
+    await dispatching
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(host.isHeld(SESSION)).toBe(false)
+  })
+
+  it('does not open a subscription when close starts after its retain settles', async () => {
+    const closeEntered = Promise.withResolvers<void>()
+    const closeGate = Promise.withResolvers<void>()
+    closeSession.mockImplementationOnce(async () => {
+      closeEntered.resolve()
+      await closeGate.promise
+      return true
+    })
+    const readableEntered = Promise.withResolvers<void>()
+    const readableGate = Promise.withResolvers<void>()
+    const ensureReadable = host.ensureReadableSession
+    vi.spyOn(host, 'ensureReadableSession').mockImplementationOnce(async (sessionId, isCurrent) => {
+      readableEntered.resolve()
+      await readableGate.promise
+      await ensureReadable(sessionId, isCurrent)
+    })
+    const subscribe = vi.spyOn(host, 'subscribe')
+    const replies: RpcResponse[] = []
+    const dispatching = dispatcher.dispatchStreaming(
+      {
+        id: 'close-after-retain',
+        authToken: 'token',
+        method: 'agentSession.subscribe',
+        params: { sessionId: SESSION }
+      },
+      (raw) => replies.push(JSON.parse(raw) as RpcResponse),
+      CLIENT
+    )
+    await readableEntered.promise
+
+    const closing = host.close(SESSION)
+    await closeEntered.promise
+    readableGate.resolve()
+    closeGate.resolve()
+
+    await closing
+    await dispatching
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(host.isHeld(SESSION)).toBe(false)
+    expect(host.hasSession(SESSION)).toBe(false)
+    expect(replies).toHaveLength(1)
+    expect(replies[0]).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('agent_session_ownership_unknown') }
+    })
+  })
+
+  it('opens a readable subscription only after overlapping eviction settles', async () => {
+    const closeEntered = Promise.withResolvers<void>()
+    const closeGate = Promise.withResolvers<void>()
+    closeSession.mockImplementationOnce(async () => {
+      closeEntered.resolve()
+      await closeGate.promise
+      return true
+    })
+    const closing = host.close(SESSION)
+    await closeEntered.promise
+    const subscribe = vi.spyOn(host, 'subscribe')
+    const dispatching = dispatcher.dispatchStreaming(
+      {
+        id: 'retained-after-eviction',
+        authToken: 'token',
+        method: 'agentSession.subscribe',
+        params: { sessionId: SESSION }
+      },
+      () => {},
+      CLIENT
+    )
+    await Promise.resolve()
+    expect(subscribe).not.toHaveBeenCalled()
+    closeGate.resolve()
+
+    await closing
+    await dispatching
+    expect(subscribe).toHaveBeenCalledOnce()
+    expect(host.isHeld(SESSION)).toBe(true)
+    expect(host.hasSession(SESSION)).toBe(true)
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+  })
+
   it('does not let a stream alone resume a released session', async () => {
     await host.close(SESSION)
     expect(host.hasSession(SESSION)).toBe(false)

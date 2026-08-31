@@ -94,8 +94,8 @@ export class StructuredAgentSessionHost {
       now: this.now
     })
     this.holds = createStructuredAgentSessionHolds(this.lifetimeContext(), {
-      resume: (sessionId) => this.resumeForHold(sessionId),
-      evict: (sessionId) => this.close(sessionId)
+      resume: (sessionId, isCurrent) => this.resumeForHold(sessionId, isCurrent),
+      evict: (sessionId) => this.closeSession(sessionId)
     })
     this.readableRestorer = new StructuredAgentSessionReadableRestorer({
       store: deps.store,
@@ -128,12 +128,18 @@ export class StructuredAgentSessionHost {
 
   isHeld = (sessionId: string): boolean => this.holds.isHeld(sessionId)
 
-  private async resumeForHold(sessionId: string): Promise<void> {
+  private async resumeForHold(sessionId: string, isCurrent: () => boolean): Promise<void> {
     const unreconciled = await this.reconcileLeases(sessionId)
     if (unreconciled) {
       throw new Error(unreconciled.code)
     }
+    if (!isCurrent()) {
+      throw new Error('agent_session_ownership_unknown')
+    }
     await this.runtimeState.resolveRecovery(sessionId)
+    if (!isCurrent()) {
+      throw new Error('agent_session_ownership_unknown')
+    }
     await resumeHeldStructuredAgentSession({
       sessionId,
       deps: this.deps,
@@ -168,9 +174,14 @@ export class StructuredAgentSessionHost {
   /** Releases a session's resources without ending the conversation: the record and journal stay
    *  on disk, so the same session can be attached again. */
   close(sessionId: string): Promise<void> {
+    return this.holds.evict(sessionId)
+  }
+
+  private closeSession(sessionId: string): Promise<void> {
     return this.serialize(sessionId, async () => {
       await this.handoffs.closeRetainedTuiOwner(sessionId)
       await evictHeldStructuredAgentSession(this.lifetimeContext(), sessionId)
+      this.subscribers.closeSession(sessionId)
       // Whoever asked for the close, the surfaces that were holding this session are looking at a
       // session that no longer exists. A failed eviction throws above and keeps them.
       this.holds.forget(sessionId)
@@ -201,6 +212,15 @@ export class StructuredAgentSessionHost {
 
   restoreReadableSessions = (sessionIds?: readonly string[]): Promise<void> =>
     this.restartRestore.run(() => this.readableRestorer.restore(sessionIds))
+
+  ensureReadableSession = async (
+    sessionId: string,
+    isCurrent?: (sessionId: string) => boolean
+  ): Promise<void> => {
+    if (!this.sessions.has(sessionId)) {
+      await this.readableRestorer.restoreMissing([sessionId], isCurrent)
+    }
+  }
 
   private serialize = <T>(sessionId: string, task: () => Promise<T>): Promise<T> =>
     this.tasks.serialize(sessionId, task)
@@ -292,6 +312,20 @@ export class StructuredAgentSessionHost {
       journal: session.journal,
       fence,
       handoff: this.handoffs.status(input.sessionId)
+    })
+  }
+
+  async subscribeHeld(input: AgentSessionSubscribeInput, holderId: string): Promise<() => void> {
+    const holderLease = this.holds.holderLease(input.sessionId, holderId)
+    if (!holderLease) {
+      throw new Error('agent_session_ownership_unknown')
+    }
+    await this.ensureReadableSession(input.sessionId, () => holderLease.isCurrent())
+    return this.serialize(input.sessionId, async () => {
+      if (!holderLease.isCurrent()) {
+        throw new Error('agent_session_ownership_unknown')
+      }
+      return this.subscribe(input)
     })
   }
 

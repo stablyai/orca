@@ -95,7 +95,7 @@ const STRUCTURED_CALLS: {
   },
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.
-  { method: 'agentSession.subscribe', hostMethod: 'subscribe' },
+  { method: 'agentSession.subscribe', hostMethod: 'subscribeHeld' },
   // Teardown runs through the runtime's subscription registry rather than the
   // host, so its reply is the only signal that the gate opened.
   { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } }
@@ -297,6 +297,7 @@ function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     subscribe: vi.fn(() => () => undefined),
+    subscribeHeld: vi.fn(async () => () => undefined),
     unsubscribe: vi.fn()
   }
 }

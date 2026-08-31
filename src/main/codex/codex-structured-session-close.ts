@@ -41,7 +41,10 @@ export async function closeCodexPublishedSession(
   if (exited !== true) {
     return false
   }
-  sessions.delete(sessionId)
+  // A timed-out/stale close may finish after a replacement was published; never delete it.
+  if (sessions.get(sessionId) === session) {
+    sessions.delete(sessionId)
+  }
   if (!session.ended) {
     session.ended = true
     const event: CodexStructuredSessionEvent = {

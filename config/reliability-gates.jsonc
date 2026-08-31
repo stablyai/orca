@@ -6875,6 +6875,7 @@
         "workspace activation",
         "sleep and hibernate restore",
         "provider session dedupe",
+        "structured session surface holds",
         "sidebar and mobile identity",
         "runtime-owned background PTY mount and remount"
       ],
@@ -6882,7 +6883,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "remote-runtime"],
-      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun.",
+      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. Structured host contracts race desktop and paired surface holds through one deferred provider acquisition, shared failure, retry, release, disposal, subscription abort, and a stop-versus-reopen overlap. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6800",
         "https://github.com/stablyai/orca/pull/5240",
@@ -6891,16 +6892,22 @@
         "https://github.com/stablyai/orca/pull/11789",
         "https://github.com/stablyai/orca/pull/11819"
       ],
-      "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, mount, remount, and reconnect code must not replay or resume a provider session id already owned, queued, pending, live, or durably bound to a host PTY in that workspace. A renderer with missing projection state must adopt the exact runtime-owned PTY for the original tab and leaf rather than create a replacement.",
-      "oracle": "Renderer-state tests assert provider-session ownership across preserved and queued panes. Main/provider contracts assert atomic attach-only adoption, stable host/worktree/tab/leaf identity, no fresh spawn on adoption, and safe paired-runtime cancellation. The Electron oracle creates inactive runtime-owned Codex and Setup PTYs plus an unrelated canary, seeds an exact resumable provider session, removes only the target renderer projections, and activates the workspace. It requires byte-stable handle, PTY, incarnation, tab, leaf, process PID, renderer graph, persisted binding, runtime id, graph epoch, and daemon PID across first mount and reload; PID-specific DOM keyboard I/O must remain live with one launch, zero resume argv, zero signals, zero interruption text, and no canary mutation.",
+      "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, mount, remount, and reconnect code must not replay or resume a provider session id already owned, queued, pending, live, or durably bound to a host PTY in that workspace. Concurrent structured surface holds for one session share one in-flight resume; every caller observes the same failure, a later retry remains possible, release or disposal during acquisition cannot publish a stale child, and a hold arriving during eviction remains cancellable before it reacquires after teardown. Failed eviction is retried once before later demand reacquires. A subscription opens only while its retain hold is still current after any overlapping close, and cancelled restoration cannot reinsert a closed session. A renderer with missing projection state must adopt the exact runtime-owned PTY for the original tab and leaf rather than create a replacement.",
+      "oracle": "Renderer-state tests assert provider-session ownership across preserved and queued panes. Main/provider contracts assert atomic attach-only adoption, stable host/worktree/tab/leaf identity, no fresh spawn on adoption, and safe paired-runtime cancellation. Deferred structured-host tests race desktop and paired holders, require one resume and one provider acquisition, replay the same error to both callers, retry after settlement, release a child published by a failed resume after every holder leaves, invalidate pending work on disposal, reject disposal during eviction wait, preserve eviction failure until explicit retry, release only after the last holder leaves, and reopen a surface only after overlapping teardown settles. RPC tests abort a subscription while eviction is deferred, race close after retain settlement, and require zero stale subscriber opens; a surviving stream restores only readable state after teardown. Runtime integration defers an admitted provider connection across shutdown and requires the adapter to supersede and close it before teardown completes. The Electron oracle creates inactive runtime-owned Codex and Setup PTYs plus an unrelated canary, seeds an exact resumable provider session, removes only the target renderer projections, and activates the workspace. It requires byte-stable handle, PTY, incarnation, tab, leaf, process PID, renderer graph, persisted binding, runtime id, graph epoch, and daemon PID across first mount and reload; PID-specific DOM keyboard I/O must remain live with one launch, zero resume argv, zero signals, zero interruption text, and no canary mutation.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/native-chat/agent-session-wire/structured-agent-session-holds.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-restart-restore.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-surface-lifetime.test.ts src/main/runtime/rpc/methods/structured-agent-session-hold.test.ts src/main/runtime/structured-agent-session-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty-provider-spawn-session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/ipc/pty-pane-materialization-race.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts src/main/ipc/pty-pane-reservation-settlement.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
         "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-holds.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-restart-restore.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-surface-lifetime.test.ts",
+        "src/main/runtime/rpc/methods/structured-agent-session-hold.test.ts",
+        "src/main/runtime/structured-agent-session-runtime.test.ts",
         "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
         "src/main/providers/local-pty-provider-spawn-session.test.ts",
         "src/main/daemon/terminal-host.test.ts",
@@ -6915,6 +6922,43 @@
         "tests/e2e/live-background-terminal-mount-authority.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-holds.test.ts",
+          "assertions": [
+            "concurrent same-session holds share one deferred resume and its exact failure before a fresh retry",
+            "forget invalidates the pending generation without letting its failure remove a replacement holder",
+            "release during resume preserves remaining holders, evicts a child published before failed settlement after every holder leaves, and disposal invalidates a pre-attach resume",
+            "a replacement hold waits for an in-flight eviction, remains cancellable while pending, and resumes only after teardown",
+            "disposal rejects an eviction-waiting hold, and later demand retries even a valueless eviction rejection before reacquiring"
+          ]
+        },
+        {
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-restart-restore.test.ts",
+          "assertions": [
+            "holder cancellation while the journal opens cannot publish a stale readable session"
+          ]
+        },
+        {
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-surface-lifetime.test.ts",
+          "assertions": [
+            "desktop and paired surfaces converge through one provider acquisition and one live lease",
+            "a paired surface arriving while release eviction stops the child reopens only after teardown"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/structured-agent-session-hold.test.ts",
+          "assertions": [
+            "a transport aborted during deferred eviction opens no subscriber and retains no holder",
+            "close beginning after retain settlement invalidates the holder before a subscriber can open or readable restoration can reinsert it",
+            "a surviving subscription waits for eviction and restores only readable state before opening"
+          ]
+        },
+        {
+          "file": "src/main/runtime/structured-agent-session-runtime.test.ts",
+          "assertions": [
+            "shutdown supersedes and closes a provider connection whose resume attach was already admitted"
+          ]
+        },
         {
           "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
           "assertions": [
@@ -8194,9 +8238,7 @@
       "assertionRefs": [
         {
           "file": "tests/e2e/persisted-session-production-upgrade.spec.ts",
-          "assertions": [
-            "upgrades a legacy daemon session and keeps it stable after relaunch"
-          ]
+          "assertions": ["upgrades a legacy daemon session and keeps it stable after relaunch"]
         }
       ],
       "evidenceRuns": [
