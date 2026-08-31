@@ -99,38 +99,105 @@ describe('mission.plan', () => {
     )
   })
 
-  it('uses the configured default agent when --agent is omitted', async () => {
+  it.each(['pi', 'omp'] as const)(
+    'uses configured default %s planner for a single-agent plan when --agent is omitted',
+    async (agent) => {
+      setup()
+      vi.mocked(runtime.getClientSettings).mockReturnValue({
+        ...runtime.getClientSettings(),
+        defaultTuiAgent: agent
+      })
+      vi.mocked(generateTextFromPrompt).mockResolvedValue({
+        success: true,
+        text: '{"mode":"single-agent"}',
+        agentLabel: agent === 'omp' ? 'OMP' : 'Pi'
+      })
+
+      await expect(
+        call({ text: 'Inspect this task.', worktree: 'id:repo::worktree' })
+      ).resolves.toMatchObject({ agent, plan: { mode: 'single-agent' } })
+
+      expect(vi.mocked(generateTextFromPrompt).mock.calls[0]?.[1].agentId).toBe(agent)
+    }
+  )
+
+  it('plans separable work with the default OMP instead of silently choosing one worker', async () => {
     setup()
+    vi.mocked(runtime.getClientSettings).mockReturnValue({
+      ...runtime.getClientSettings(),
+      defaultTuiAgent: 'omp'
+    })
     vi.mocked(generateTextFromPrompt).mockResolvedValue({
       success: true,
-      text: '{"mode":"single-agent"}',
-      agentLabel: 'Pi'
+      text: JSON.stringify({
+        mode: 'orchestration',
+        objective: 'Analyze independent performance bottlenecks',
+        maxConcurrency: 2,
+        tasks: [
+          { key: 'compute', spec: 'Analyze CPU and memory observations.', deps: [] },
+          { key: 'storage', spec: 'Analyze storage observations.', deps: [] }
+        ]
+      }),
+      agentLabel: 'OMP'
     })
 
     await expect(
-      call({ text: 'Inspect this task.', worktree: 'id:repo::worktree' })
-    ).resolves.toMatchObject({ agent: 'pi', plan: { mode: 'single-agent' } })
+      call({ text: '分析当前电脑的性能缺口', worktree: 'id:repo::worktree' })
+    ).resolves.toMatchObject({
+      agent: 'omp',
+      plan: {
+        mode: 'orchestration',
+        maxConcurrency: 2,
+        tasks: [{ key: 'compute' }, { key: 'storage' }]
+      }
+    })
+    expect(generateTextFromPrompt).toHaveBeenCalledWith(
+      expect.stringContaining('分析当前电脑的性能缺口'),
+      expect.objectContaining({ agentId: 'omp' }),
+      { kind: 'local', cwd: homedir() },
+      'mission-plan',
+      { useAgentDefaultModel: true }
+    )
   })
 
-  it('falls back to the next detected agent when the preferred planner is unavailable', async () => {
+  it('surfaces an explicitly selected OMP planner failure instead of running the task unplanned', async () => {
     setup()
-    vi.mocked(generateTextFromPrompt)
-      .mockResolvedValueOnce({ success: false, error: 'Pi is not authenticated.' })
-      .mockResolvedValueOnce({
-        success: true,
-        text: '{"mode":"single-agent"}',
-        agentLabel: 'Codex'
-      })
+    vi.mocked(generateTextFromPrompt).mockResolvedValue({
+      success: false,
+      error: 'OMP planner unavailable.'
+    })
 
     await expect(
-      call({ text: 'Inspect this task.', worktree: 'id:repo::worktree' })
-    ).resolves.toMatchObject({ agent: 'codex', plan: { mode: 'single-agent' } })
-
-    expect(vi.mocked(generateTextFromPrompt).mock.calls.map(([, params]) => params.agentId)).toEqual([
-      'pi',
-      'codex'
-    ])
+      call({ text: 'Analyze performance.', worktree: 'id:repo::worktree', agent: 'omp' })
+    ).rejects.toMatchObject({ code: 'mission_planner_failed' })
   })
+
+  it.each(['pi', 'omp'] as const)(
+    'falls back from unavailable default %s planner to the next detected agent',
+    async (defaultAgent) => {
+      setup()
+      vi.mocked(runtime.getClientSettings).mockReturnValue({
+        ...runtime.getClientSettings(),
+        defaultTuiAgent: defaultAgent
+      })
+      vi.mocked(detectInstalledAgentsWithShellPathHydration).mockResolvedValue(['codex'])
+      vi.mocked(generateTextFromPrompt)
+        .mockResolvedValueOnce({ success: false, error: `${defaultAgent} planner unavailable.` })
+        .mockResolvedValueOnce({
+          success: true,
+          text: '{"mode":"single-agent"}',
+          agentLabel: 'Codex'
+        })
+
+      await expect(
+        call({ text: 'Inspect this task.', worktree: 'id:repo::worktree' })
+      ).resolves.toMatchObject({ agent: 'codex', plan: { mode: 'single-agent' } })
+
+      expect(
+        vi.mocked(generateTextFromPrompt).mock.calls.map(([, params]) => params.agentId)
+      ).toEqual([defaultAgent, 'codex'])
+    }
+  )
 
   it('does not fall back when --agent explicitly selects an unavailable planner', async () => {
     setup()
@@ -175,7 +242,9 @@ describe('mission.plan', () => {
 
   it('maps a missing managed workspace to a helpful mission error', async () => {
     setup()
-    vi.mocked(runtime.showManagedTerminalWorkspace).mockRejectedValue(new Error('selector_not_found'))
+    vi.mocked(runtime.showManagedTerminalWorkspace).mockRejectedValue(
+      new Error('selector_not_found')
+    )
 
     await expect(
       call({ text: 'Inspect this task.', worktree: 'id:repo::missing', agent: 'pi' })
@@ -187,40 +256,52 @@ describe('mission.plan', () => {
     expect(generateTextFromPrompt).not.toHaveBeenCalled()
   })
 
-  it('repairs one invalid planner response before failing the mission', async () => {
-    setup()
-    vi.mocked(generateTextFromPrompt)
-      .mockResolvedValueOnce({
+  it.each(['pi', 'omp'] as const)(
+    'repairs one malformed %s planner response before returning the parsed plan',
+    async (agent) => {
+      setup()
+      vi.mocked(generateTextFromPrompt)
+        .mockResolvedValueOnce({
+          success: true,
+          text: '{"mode":"single"}',
+          agentLabel: agent === 'omp' ? 'OMP' : 'Pi'
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          text: '{"mode":"single-agent"}',
+          agentLabel: agent === 'omp' ? 'OMP' : 'Pi'
+        })
+
+      await expect(
+        call({ text: 'Inspect this task.', worktree: 'id:repo::worktree', agent })
+      ).resolves.toMatchObject({ agent, plan: { mode: 'single-agent' } })
+
+      expect(
+        vi.mocked(generateTextFromPrompt).mock.calls.map(([, params]) => params.agentId)
+      ).toEqual([agent, agent])
+      expect(vi.mocked(generateTextFromPrompt).mock.calls[1]?.[0]).toContain(
+        'Repair the previous Mission Planner output'
+      )
+    }
+  )
+
+  it.each(['pi', 'omp'] as const)(
+    'rejects persistently malformed %s planner output after one repair attempt',
+    async (agent) => {
+      setup()
+      vi.mocked(generateTextFromPrompt).mockResolvedValue({
         success: true,
-        text: '{"mode":"single"}',
-        agentLabel: 'Pi'
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        text: '{"mode":"single-agent"}',
-        agentLabel: 'Pi'
+        text: 'not json',
+        agentLabel: agent === 'omp' ? 'OMP' : 'Pi'
       })
 
-    await expect(
-      call({ text: 'Inspect this task.', worktree: 'id:repo::worktree', agent: 'pi' })
-    ).resolves.toMatchObject({ agent: 'pi', plan: { mode: 'single-agent' } })
+      await expect(
+        call({ text: 'Inspect this task.', worktree: 'id:repo::worktree', agent })
+      ).rejects.toMatchObject({ code: 'mission_planner_failed' })
 
-    expect(generateTextFromPrompt).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(generateTextFromPrompt).mock.calls[1]?.[0]).toContain(
-      'Repair the previous Mission Planner output'
-    )
-  })
-
-  it('surfaces invalid planner output as mission_planner_failed after one repair attempt', async () => {
-    setup()
-    vi.mocked(generateTextFromPrompt).mockResolvedValue({
-      success: true,
-      text: 'not json',
-      agentLabel: 'Pi'
-    })
-
-    await expect(
-      call({ text: 'Inspect this task.', worktree: 'id:repo::worktree', agent: 'pi' })
-    ).rejects.toMatchObject({ code: 'mission_planner_failed' })
-  })
+      expect(
+        vi.mocked(generateTextFromPrompt).mock.calls.map(([, params]) => params.agentId)
+      ).toEqual([agent, agent])
+    }
+  )
 })
