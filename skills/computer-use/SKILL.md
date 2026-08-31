@@ -5,10 +5,11 @@ description: >-
   through accessibility trees, screenshots, and safe UI actions. Use for
   desktop app interaction: list apps/windows, get app state, read visible UI,
   click controls, type, press keys, scroll, drag, set values, or perform
-  accessibility actions. Also use for browser windows, webviews, Orca app UI,
-  or other desktop UI. Triggers include "computer use", "orca computer", "read
-  Spotify", "read Slack", "control/click/read in a desktop app", and "get app
-  state".
+  accessibility actions. Also use for external browser windows, webviews, Orca
+  app UI, or other desktop UI. For Orca's embedded browser tabs, use the
+  `orca-cli` skill instead. Triggers include "computer use", "orca computer",
+  "read Spotify", "read Slack", "control/click/read in a desktop app", and
+  "get app state".
 ---
 
 # Computer Use
@@ -19,9 +20,10 @@ never drift from the binary that will actually run your commands.
 
 Engage Orca's computer-use surface whenever you must inspect or operate a local desktop app
 window — reading its accessibility tree, taking screenshots, or performing safe UI actions
-(click controls, type, press keys, scroll, drag, set values). It also covers browser
-windows, webviews, and Orca's own UI. Triggers include "computer use", "orca computer",
-"read Spotify", "read Slack", "control/click/read in a desktop app", and "get app state".
+(click controls, type, press keys, scroll, drag, set values). It also covers external browser
+windows, webviews, and Orca's own UI. Orca's embedded browser tabs belong to the `orca-cli`
+skill instead. Triggers include "computer use", "orca computer", "read Spotify", "read Slack",
+"control/click/read in a desktop app", and "get app state".
 
 ## Resolve the CLI for this session
 

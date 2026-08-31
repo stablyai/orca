@@ -24,6 +24,16 @@ describe('computer-use skill guidance', () => {
     expect(skill).not.toContain('Routing:')
   })
 
+  it('routes Orca embedded browser tabs to the orca-cli surface', () => {
+    const skill = readFileSync(guidePath, 'utf8').replace(/\s+/gu, ' ')
+
+    expect(skill).toContain('external browser windows')
+    expect(skill).toContain("For Orca's embedded browser tabs, use the `orca-cli` skill instead")
+    expect(skill).toContain(
+      'For the browser embedded in Orca, use the `orca-cli` skill and its typed browser commands'
+    )
+  })
+
   it('warns agents to verify browser-hosted form focus before drafting text', () => {
     const skill = readFileSync(guidePath, 'utf8')
 
@@ -99,6 +109,13 @@ describe('computer-use install stub', () => {
     expect(stub).not.toContain('result.snapshot.treeText')
     expect(stub).not.toContain('--restore-window')
     expect(stub.length).toBeLessThan(guide.length)
+  })
+
+  it('keeps the embedded-browser routing hint in the discovery stub', () => {
+    const stub = readFileSync(stubPath, 'utf8').replace(/\s+/gu, ' ')
+
+    expect(stub).toContain("Orca's embedded browser tabs belong to the `orca-cli` skill instead")
+    expect(stub).toContain("external browser windows, webviews, and Orca's own UI")
   })
 
   it('keeps the routing frontmatter identical to the guide', () => {

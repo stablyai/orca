@@ -6,9 +6,10 @@ never drift from the binary that will actually run your commands.
 
 Engage Orca's computer-use surface whenever you must inspect or operate a local desktop app
 window — reading its accessibility tree, taking screenshots, or performing safe UI actions
-(click controls, type, press keys, scroll, drag, set values). It also covers browser
-windows, webviews, and Orca's own UI. Triggers include "computer use", "orca computer",
-"read Spotify", "read Slack", "control/click/read in a desktop app", and "get app state".
+(click controls, type, press keys, scroll, drag, set values). It also covers external browser
+windows, webviews, and Orca's own UI. Orca's embedded browser tabs belong to the `orca-cli`
+skill instead. Triggers include "computer use", "orca computer", "read Spotify", "read Slack",
+"control/click/read in a desktop app", and "get app state".
 
 ## Resolve the CLI for this session
 

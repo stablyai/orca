@@ -3,7 +3,9 @@ name: orca-cli
 description: >-
   Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
   terminals, repos, automations, artifacts, skill sharing, worktree comments, and the browser
-  embedded inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
+  embedded inside the Orca app. In an Orca-managed session, use this skill for generic browser
+  requests such as "browser use", "open a website", "navigate", "click", "snapshot", or
+  "screenshot" when the user does not name an external browser. Use when the user says "$orca-cli", "use orca cli",
   "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
   "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
   "give this to another agent", "another worktree", "Orca browser", "orca artifacts",
@@ -54,6 +56,23 @@ ORCA status --json
 ```
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
+
+## Browser routing for Codex sessions
+
+When the agent is running inside Orca and the user says "use the browser" (or asks to open a
+site, navigate, inspect, click, snapshot, or screenshot without naming an external browser),
+route the request to the built-in browser commands in this guide. Codex CLI and the Codex IDE
+extension do not expose ChatGPT's built-in Browser/IAB surface. Do not call Codex
+`browsers.list`, `browsers.getDefault()`, an `agent.browsers` adapter, or an IAB socket;
+those are not Orca integration points.
+
+Use the Orca CLI as the only control plane: resolve `ORCA` once, then use `ORCA tab ...`,
+`ORCA goto`, `ORCA snapshot`, `ORCA click`, and `ORCA screenshot`. Keep the
+`browserPageId` from `tab list` when a later command needs explicit `--page` targeting.
+
+If the user names Chrome, Safari, Firefox, an external browser window, a webview, or Orca's
+app chrome/settings, use the `computer-use` skill instead. This section covers only Orca's
+embedded browser.
 
 ## Full Handoffs
 

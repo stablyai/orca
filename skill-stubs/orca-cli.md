@@ -6,10 +6,17 @@ can never drift from the binary that will actually run your commands.
 
 Engage Orca whenever its running editor/runtime is the source of truth: Orca-managed
 worktrees, folder contexts, terminals, repos, automations, worktree comments, and the
-browser embedded inside the Orca app. Triggers include "$orca-cli", "Orca worktree",
+browser embedded inside the Orca app. In an Orca-managed session, generic "browser use",
+"open a website", "navigate", "click", "snapshot", and "screenshot" requests without an
+external browser name use this skill. Triggers include "$orca-cli", "Orca worktree",
 "child worktree", "spawn codex/claude in a worktree", "read/wait/send Orca terminal",
 "full handoff" / "handover" / "give this to another agent", and "control the browser
 inside Orca". Use plain shell tools when Orca state does not matter.
+
+For Orca's embedded browser, use the Orca CLI rather than ChatGPT's Browser/IAB surface or
+Codex `browsers.list`/`browsers.getDefault()`; those are not Orca integration points. Use
+the `computer-use` skill only for an external desktop browser, webview, or Orca app
+chrome/settings.
 
 ## Resolve the CLI for this session
 
