@@ -20,6 +20,7 @@ import {
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
 import { formatArtifactListPage, formatArtifactShared } from '../artifact-format'
+import { readStdinTextWithinLimit } from '../bounded-stdin-text'
 import { printResult } from '../format'
 
 function stringFlag(ctx: HandlerContext, name: string): string | undefined {
@@ -62,23 +63,6 @@ function artifactContentType(path: string): ArtifactWriteRequest['contentType'] 
     : ['.md', '.markdown'].includes(extension)
       ? 'text/markdown'
       : null
-}
-
-async function readStdinWithinLimit(maxBytes: number): Promise<string> {
-  const chunks: Buffer[] = []
-  let bytes = 0
-  for await (const chunk of process.stdin) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
-    bytes += buffer.length
-    if (bytes > maxBytes) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Artifact is too large for the Orca CLI transport. Use the browser upload page instead.'
-      )
-    }
-    chunks.push(buffer)
-  }
-  return Buffer.concat(chunks).toString('utf8')
 }
 
 /**
@@ -130,7 +114,14 @@ async function readArtifactRequest(ctx: HandlerContext): Promise<ArtifactWriteRe
     )
   }
   const content = remoteInput
-    ? await readStdinWithinLimit(ARTIFACT_CLI_MAX_RPC_BYTES)
+    ? await readStdinTextWithinLimit(
+        ARTIFACT_CLI_MAX_RPC_BYTES,
+        () =>
+          new RuntimeClientError(
+            'invalid_argument',
+            'Artifact is too large for the Orca CLI transport. Use the browser upload page instead.'
+          )
+      )
     : localRead?.status === 'ok'
       ? localRead.content
       : ''

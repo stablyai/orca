@@ -1,3 +1,6 @@
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
@@ -10,6 +13,12 @@ import type {
   RuntimeTerminalSplit,
   RuntimeTerminalWait
 } from '../../shared/runtime-types'
+import {
+  assertTerminalInputWithinLimit,
+  TERMINAL_INPUT_MAX_BYTES,
+  TERMINAL_INPUT_TOO_LARGE_ERROR
+} from '../../shared/terminal-input'
+import { readStdinTextWithinLimit, readTextStreamWithinLimit } from '../bounded-stdin-text'
 import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
@@ -42,6 +51,53 @@ import {
 // timeout. Even without an explicit server timeout, the client must allow
 // long waits instead of failing at the generic 15s transport cap.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+async function readTerminalSendTextFile(path: string, cwd: string): Promise<string> {
+  const createTooLargeError = (): RuntimeClientError =>
+    new RuntimeClientError('invalid_argument', TERMINAL_INPUT_TOO_LARGE_ERROR)
+  if (path === '-') {
+    return readStdinTextWithinLimit(TERMINAL_INPUT_MAX_BYTES, createTooLargeError)
+  }
+  const resolvedPath = resolve(cwd, path)
+  try {
+    if ((await stat(resolvedPath)).size > TERMINAL_INPUT_MAX_BYTES) {
+      throw createTooLargeError()
+    }
+    return await readTextStreamWithinLimit(
+      createReadStream(resolvedPath),
+      TERMINAL_INPUT_MAX_BYTES,
+      createTooLargeError
+    )
+  } catch (error) {
+    if (error instanceof RuntimeClientError) {
+      throw error
+    }
+    const detail = error instanceof Error ? `: ${error.message}` : ''
+    throw new RuntimeClientError('invalid_argument', `Unable to read text file "${path}"${detail}`)
+  }
+}
+
+async function getTerminalSendText(
+  flags: Map<string, string | boolean>,
+  cwd: string
+): Promise<string | undefined> {
+  if (flags.has('text') && flags.has('text-file')) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--text and --text-file cannot be used together'
+    )
+  }
+  if (!flags.has('text-file')) {
+    return getOptionalStringFlag(flags, 'text')
+  }
+  const path = getRequiredStringFlag(flags, 'text-file')
+  const text = await readTerminalSendTextFile(path, cwd)
+  if (text.length === 0) {
+    throw new RuntimeClientError('invalid_argument', `Text file "${path}" is empty.`)
+  }
+  assertTerminalInputWithinLimit(text)
+  return text
+}
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
@@ -103,7 +159,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalRead)
   },
   'terminal send': async ({ flags, client, cwd, json }) => {
-    const text = getOptionalStringFlag(flags, 'text')
+    const text = await getTerminalSendText(flags, cwd)
     const enter = flags.get('enter') === true
     const interrupt = flags.get('interrupt') === true
     const result = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {
