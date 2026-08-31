@@ -193,6 +193,23 @@ describe('getUsagePaceNextChangeAt', () => {
     }
   })
 
+  it('clears the boundary on the deficit side, where rounding takes .5 upward', () => {
+    // Sweep spend above the even burn so the shrinking positive delta lands on a
+    // half-percent: waking exactly there would still read the pre-change value.
+    // Heavy spend is where that crossing, rather than the run-out label, is the
+    // soonest boundary — so the sweep has to reach the high end to bite.
+    for (const elapsed of [0.1, 2 / 7, 0.5, 0.8]) {
+      for (let used = 5; used <= 99; used += 1) {
+        const window = weekly(used, elapsed)
+        const at = getUsagePaceNextChangeAt(window, NOW)
+        if (at === null || getUsagePace(window, NOW) === null) {
+          continue
+        }
+        expect(readingAt(window, at)).not.toBe(readingAt(window, NOW))
+      }
+    }
+  })
+
   it('catches the run-out projection turning over before the delta does', () => {
     // Heavy spend: the projection moves fast, so it is the earlier boundary.
     const window = weekly(75, 0.5)

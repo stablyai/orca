@@ -34,10 +34,15 @@ export function useResetCountdownClock(
   const key = useMemo(() => resetTimesKey(resetTimes), [resetTimes])
   const times = useMemo(() => parseResetTimesKey(key), [key])
   const previousKeyRef = useRef(key)
-  // Why: read the planner through a ref so a caller can pass an inline closure
-  // without its identity rescheduling the timeout on every render.
-  const planExtraWakesRef = useRef(planExtraWakes)
-  planExtraWakesRef.current = planExtraWakes
+  // Why: key the timeout on the planned instants rather than the planner's
+  // identity. An inline closure would reschedule every render; the planner's
+  // own inputs (a window's usedPercent, say) can change on a refresh that
+  // leaves resetsAt alone, and that has to reschedule.
+  const extraKey = useMemo(
+    () => resetTimesKey(planExtraWakes?.(scheduledNow) ?? []),
+    [planExtraWakes, scheduledNow]
+  )
+  const extraTimes = useMemo(() => parseResetTimesKey(extraKey), [extraKey])
 
   // Why: when the set of reset times changes, refresh `now` before paint so the
   // label reflects the new window without a stale intermediate frame.
@@ -51,8 +56,8 @@ export function useResetCountdownClock(
 
   useEffect(() => {
     let delayMs = getResetCountdownNextTickDelay(scheduledNow, times)
-    for (const wakeAt of planExtraWakesRef.current?.(scheduledNow) ?? []) {
-      if (wakeAt == null || !Number.isFinite(wakeAt) || wakeAt <= scheduledNow) {
+    for (const wakeAt of extraTimes) {
+      if (wakeAt <= scheduledNow) {
         continue
       }
       const extraDelayMs = wakeAt - scheduledNow
@@ -63,7 +68,7 @@ export function useResetCountdownClock(
     }
     const timeout = window.setTimeout(() => setScheduledNow(Date.now()), delayMs)
     return () => window.clearTimeout(timeout)
-  }, [scheduledNow, times])
+  }, [scheduledNow, times, extraTimes])
 
   return scheduledNow
 }

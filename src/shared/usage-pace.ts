@@ -30,6 +30,16 @@ export const USAGE_PACE_ON_PACE_BAND_PERCENT = 2
 /** Below this much elapsed window, a burn rate extrapolated from it is fiction. */
 export const USAGE_PACE_MIN_ELAPSED_PERCENT = 3
 
+// Why: land just past a boundary rather than on it. Math.round takes .5 upward,
+// so at the exact instant a shrinking positive delta reaches n.5 it still prints
+// n + 1 — waking there would read the old value and defer the real change a
+// whole percent. The same holds where the run-out projection meets the time left.
+const PAST_BOUNDARY_MS = 1
+
+// Why: absorb double-rounding dust so a projection sitting exactly on a unit is
+// not read as a hair below it, which would name the boundary already passed.
+const UNIT_FLOAT_SLOP = 1e-6
+
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
@@ -118,10 +128,15 @@ function projectRunOut(
   if (usedPercent <= 0) {
     return { willLastToReset: true, runsOutInMs: null }
   }
-  const projectedMs = ((100 - usedPercent) * elapsedMs) / usedPercent
+  const projectedMs = projectSpendToEmpty(usedPercent, elapsedMs)
   return projectedMs >= remainingMs
     ? { willLastToReset: true, runsOutInMs: null }
     : { willLastToReset: false, runsOutInMs: projectedMs }
+}
+
+/** Time to spend the rest of the window at the rate observed so far. */
+function projectSpendToEmpty(usedPercent: number, elapsedMs: number): number {
+  return ((100 - usedPercent) * elapsedMs) / usedPercent
 }
 
 /**
@@ -141,7 +156,9 @@ export function getUsagePaceNextChangeAt(window: RateLimitWindow, now: number): 
   const msPerPercent = durationMs / 100
 
   if (expectedUsedPercent < USAGE_PACE_MIN_ELAPSED_PERCENT) {
-    return now + (USAGE_PACE_MIN_ELAPSED_PERCENT - expectedUsedPercent) * msPerPercent
+    return (
+      now + (USAGE_PACE_MIN_ELAPSED_PERCENT - expectedUsedPercent) * msPerPercent + PAST_BOUNDARY_MS
+    )
   }
 
   const usedPercent = clampUsedPercent(window.usedPercent)
@@ -156,18 +173,22 @@ export function getUsagePaceNextChangeAt(window: RateLimitWindow, now: number): 
   // Spend projected forward grows at this rate per elapsed millisecond.
   const burnRatio = usedPercent > 0 && usedPercent < 100 ? (100 - usedPercent) / usedPercent : 0
   if (burnRatio > 0) {
-    const projectedMs = burnRatio * elapsedMs
+    // Why: the same expression projectRunOut uses, so the boundary this lands on
+    // is the one the reading is actually computed from — the two disagreed in the
+    // last float bit, and a floor either side of it returned a wake worth nothing.
+    const projectedMs = projectSpendToEmpty(usedPercent, elapsedMs)
     // The projection climbs while the time left falls; the lasts/runs-out
     // verdict flips where they meet.
     delays.push((remainingMs - projectedMs) / (1 + burnRatio))
     if (projectedMs < remainingMs) {
       // "Runs out in 2d 2h" is floored, to the hour past a day and the minute below it.
       const unitMs = projectedMs >= DAY_MS ? HOUR_MS : MINUTE_MS
-      const nextBoundaryMs = (Math.floor(projectedMs / unitMs) + 1) * unitMs
+      const unitsShown = Math.floor(projectedMs / unitMs + UNIT_FLOAT_SLOP)
+      const nextBoundaryMs = (unitsShown + 1) * unitMs
       delays.push((nextBoundaryMs - projectedMs) / burnRatio)
     }
   }
 
   const soonest = Math.min(...delays.filter((delay) => Number.isFinite(delay) && delay > 0))
-  return Number.isFinite(soonest) ? now + soonest : null
+  return Number.isFinite(soonest) ? now + soonest + PAST_BOUNDARY_MS : null
 }
