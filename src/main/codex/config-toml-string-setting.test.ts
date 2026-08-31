@@ -80,3 +80,34 @@ describe('array comments inside inline environment policy', () => {
     }
   )
 })
+
+describe.each(['"', "'"])('table after an array containing multiline %s', (quote) => {
+  it.each([3, 4, 5])(
+    'inserts the profile after %i closing quotes without redefining the table',
+    (closingQuotes) => {
+      const original = `sandbox_workspace_write.writable_roots = [${quote.repeat(3)}foo${quote.repeat(closingQuotes)}]\n[shell_environment_policy]\ninherit = "core"\n[shell_environment_policy.set]\nKEEP = "yes"\n`
+      parse(original)
+      const edited = editTomlStringSetting(original, path, profile)
+      expect(parse(edited)).toEqual({
+        sandbox_workspace_write: { writable_roots: [`foo${quote.repeat(closingQuotes - 3)}`] },
+        shell_environment_policy: {
+          inherit: 'core',
+          set: { KEEP: 'yes', ORCA_USER_DATA_PATH: profile }
+        }
+      })
+      expect(editTomlStringSetting(edited, path, profile)).toBe(edited)
+    }
+  )
+
+  it.each([3, 4, 5])(
+    'strips runtime identity after %i closing quotes during extraction',
+    (closingQuotes) => {
+      const original = `sandbox_workspace_write.writable_roots = [${quote.repeat(3)}foo${quote.repeat(closingQuotes)}]\n[shell_environment_policy]\ninherit = "core"\n[shell_environment_policy.set]\nKEEP = "yes"\nORCA_USER_DATA_PATH = "runtime-owned"\n`
+      parse(original)
+      expect(parse(extractOrdinaryCodexSettings(original))).toEqual({
+        sandbox_workspace_write: { writable_roots: [`foo${quote.repeat(closingQuotes - 3)}`] },
+        shell_environment_policy: { inherit: 'core', set: { KEEP: 'yes' } }
+      })
+    }
+  )
+})
