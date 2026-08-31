@@ -182,8 +182,10 @@ const SHARED_PACKAGE_PREFIXES = [
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
   'config/docker/cli-launch-contract/',
+  'config/docker/headless-pairing/',
   'config/docker/headless-serve-shutdown/',
   'config/scripts/run-linux-cli-launch-contract',
+  'config/scripts/run-headless-linux-pairing-docker',
   'config/scripts/static-appimage-package-contract',
   'native/computer-use-linux/',
   'resources/linux/',

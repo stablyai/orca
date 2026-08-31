@@ -185,8 +185,11 @@ describe('per-job path classification', () => {
     for (const file of [
       'config/docker/cli-launch-contract/Dockerfile',
       'config/docker/cli-launch-contract/run-cli-case.sh',
+      'config/docker/headless-pairing/Dockerfile',
+      'config/docker/headless-pairing/run-appimage-case.sh',
       'config/docker/headless-serve-shutdown/Dockerfile',
       'config/scripts/run-linux-cli-launch-contract-docker.mjs',
+      'config/scripts/run-headless-linux-pairing-docker.mjs',
       'config/scripts/static-appimage-package-contract.cjs'
     ]) {
       expectClassification([file], { package: true })
