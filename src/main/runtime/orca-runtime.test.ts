@@ -33585,6 +33585,88 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
   })
 
+  it('closes headless terminal parents whose persisted record is missing instead of resurrecting them', async () => {
+    const layout = makeHeadlessTerminalLayout({
+      [HEADLESS_LEAF_ID]: 'pty-a',
+      [HEADLESS_SECOND_LEAF_ID]: 'pty-b'
+    })
+    const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: 'pty-a',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Persisted Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: { 'host-tab': layout }
+      })
+    )
+    const kill = vi.fn(() => true)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Persisted Terminal',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'pty-a',
+          paneTitle: 'A'
+        },
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_SECOND_LEAF_ID,
+          paneRuntimeId: 2,
+          ptyId: 'pty-b',
+          paneTitle: 'B'
+        }
+      ]
+    })
+
+    // Why: warm the live snapshot, then drop the persisted row out-of-band to
+    // reproduce the persisted/live-state drift (#10747, #12920) — a
+    // never-persisted background tab or a close that de-persisted then failed.
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    setSession({
+      ...getSession(),
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      terminalLayoutsByTabId: {}
+    })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+
+    expect(kill).toHaveBeenCalledWith('pty-a')
+    expect(kill).toHaveBeenCalledWith('pty-b')
+    const relisted = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(
+      relisted.tabs.filter((tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab')
+    ).toEqual([])
+  })
+
   it('closes persisted headless terminal parents before any prior list call', async () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()

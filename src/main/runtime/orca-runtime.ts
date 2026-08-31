@@ -9395,11 +9395,7 @@ export class OrcaRuntimeService {
     }
   }
 
-  private removePersistedHeadlessTerminalTab(
-    worktreeId: string,
-    parentTabId: string,
-    options: { allowMissing?: boolean } = {}
-  ): string[] {
+  private removePersistedHeadlessTerminalTab(worktreeId: string, parentTabId: string): string[] {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
       throw new Error('workspace_session_unavailable')
@@ -9409,10 +9405,12 @@ export class OrcaRuntimeService {
       throw new Error('terminal_tab_pinned')
     }
     if (!result.closed) {
-      if (options.allowMissing) {
-        return []
-      }
-      throw new Error('tab_not_found')
+      // Why: the caller resolved the tab from the live snapshot, so a missing
+      // persisted row is always drift (never-persisted background tab, or an
+      // earlier close that de-persisted then failed). Aborting here would skip
+      // the PTY kill and snapshot prune below and the republished snapshot
+      // would resurrect the tab on every client forever (#10747, #12920).
+      return []
     }
     this.setWorkspaceSessionForWorktree(
       worktreeId,
@@ -10077,10 +10075,7 @@ export class OrcaRuntimeService {
           this.isRuntimeOwnedHeadlessMobileTab(worktreeId, remainingTab)
         ) {
           // Why: after relay recovery the renderer can acknowledge a tab it no longer mirrors; the HUB must still retire its SSH-owned surface.
-          this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
-            // Why: the renderer may already have durably removed the tab before acknowledging.
-            allowMissingPersistedTab: true
-          })
+          this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab)
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           this.store?.flushOrThrow?.()
         }
@@ -10345,13 +10340,11 @@ export class OrcaRuntimeService {
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
     tab: RuntimeMobileSessionTerminalTab,
-    options: { allowMissingPersistedTab?: boolean; killPtys?: boolean } = {}
+    options: { killPtys?: boolean } = {}
   ): void {
     const closedParentTabId = tab.parentTabId
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
-    const projectedPtyIds = this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId, {
-      allowMissing: options.allowMissingPersistedTab
-    })
+    const projectedPtyIds = this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId)
     // Why: local provider ids can be reused after restart, so a dormant
     // persisted id is not kill authority. SSH relay ids remain durable exact
     // identities even before pane metadata reconnects.
