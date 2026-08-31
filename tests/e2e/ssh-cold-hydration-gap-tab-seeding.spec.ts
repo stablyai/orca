@@ -13,6 +13,12 @@ import {
 } from './helpers/docker-ssh-relay-target'
 import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
 import { createRestartSession } from './helpers/orca-restart'
+import {
+  createWorktreeTabSettleTracker,
+  describeWorktreeTabObservation,
+  toWorktreeTabObservation,
+  type WorktreeTabObservation
+} from './helpers/worktree-tab-settlement'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const BASELINE_TAB_COUNT = 3
@@ -21,10 +27,22 @@ const REMOTE_SNAPSHOT_DIR = '/root/.orca/sessions'
 
 test.use({ seedTestRepo: false })
 
-async function readWorktreeTabIds(page: Page, worktreeId: string): Promise<string[]> {
-  return page.evaluate(
-    (id) => (window.__store?.getState().tabsByWorktree[id] ?? []).map((tab) => tab.id),
-    worktreeId
+/**
+ * Reads the worktree's tab row, or reports that there is no row.
+ *
+ * `null` and `[]` are different answers here: the client has not placed this workspace yet versus
+ * it has and the workspace holds nothing. Collapsing them is what let the settle loop below call
+ * a cold launch "zero tabs".
+ */
+async function readWorktreeTabs(page: Page, worktreeId: string): Promise<WorktreeTabObservation> {
+  return toWorktreeTabObservation(
+    await page.evaluate((id) => {
+      const tabsByWorktree = window.__store?.getState().tabsByWorktree
+      if (!tabsByWorktree || !Object.hasOwn(tabsByWorktree, id)) {
+        return null
+      }
+      return tabsByWorktree[id].map((tab) => tab.id)
+    }, worktreeId)
   )
 }
 
@@ -42,24 +60,37 @@ async function readTargetSyncPhase(page: Page, targetId: string): Promise<string
   )
 }
 
-/** Poll until the worktree's tabs stop changing, so a late seed cannot slip past the sample. */
-async function waitForSettledTabIds(page: Page, worktreeId: string): Promise<string[]> {
-  let latest: string[] = []
-  let previousKey = ''
-  let agreements = 0
+/**
+ * Poll until the worktree's tabs stop changing, so a late seed cannot slip past the sample.
+ *
+ * `requirePresentRow` says whether a missing row may end the wait. Where the client is expected to
+ * hold this workspace, it may not: the absence is the thing still loading.
+ */
+async function waitForSettledTabs(
+  page: Page,
+  worktreeId: string,
+  options: { requirePresentRow: boolean }
+): Promise<WorktreeTabObservation> {
+  const tracker = createWorktreeTabSettleTracker(options)
   await expect
-    .poll(
-      async () => {
-        latest = await readWorktreeTabIds(page, worktreeId)
-        const key = latest.join()
-        agreements = key === previousKey ? agreements + 1 : 0
-        previousKey = key
-        return agreements
-      },
-      { timeout: 60_000, intervals: [1_000], message: 'the tab set never stopped changing' }
-    )
+    .poll(async () => tracker.observe(await readWorktreeTabs(page, worktreeId)), {
+      timeout: 60_000,
+      intervals: [1_000],
+      message: options.requirePresentRow
+        ? 'the worktree never held a settled tab row'
+        : 'the tab set never stopped changing'
+    })
     .toBeGreaterThanOrEqual(3)
-  return latest
+  return tracker.latest()
+}
+
+/** The settled tab ids, for a call site that has already established the row must be there. */
+async function waitForSettledTabIds(page: Page, worktreeId: string): Promise<string[]> {
+  const settled = await waitForSettledTabs(page, worktreeId, { requirePresentRow: true })
+  if (!settled.present) {
+    throw new Error(`the worktree row for ${worktreeId} never arrived`)
+  }
+  return settled.tabIds
 }
 
 function findRemoteSnapshotPath(target: DockerSshRelayTarget): string | null {
@@ -149,8 +180,10 @@ async function connectAndSeedTabs(
   await expect.poll(() => waitForActiveWorktree(page), { timeout: 30_000 }).toBe(remote.worktreeId)
   await waitForActiveTerminalManager(page, 60_000)
   await waitForActivePanePtyId(page, 60_000)
-  while ((await readWorktreeTabIds(page, remote.worktreeId)).length < BASELINE_TAB_COUNT) {
+  let seeded = await readWorktreeTabs(page, remote.worktreeId)
+  while (!seeded.present || seeded.tabIds.length < BASELINE_TAB_COUNT) {
     await createRemoteTerminalTab(page, remote.worktreeId)
+    seeded = await readWorktreeTabs(page, remote.worktreeId)
   }
   return { ...remote, tabIds: await waitForSettledTabIds(page, remote.worktreeId) }
 }
@@ -296,13 +329,18 @@ test.describe('SSH cold hydration gap tab seeding', () => {
           message: 'the fresh client never reported the unplaced snapshot as a conflict'
         })
         .toBe('conflict')
-      const rejoinedTabIds = await waitForSettledTabIds(freshLaunch.page, rejoined.worktreeId)
+      // Why not requirePresentRow: a client that never held this workspace legitimately has no row
+      // at all, and the fix under test is that it must not conjure one.
+      const rejoinedTabs = await waitForSettledTabs(freshLaunch.page, rejoined.worktreeId, {
+        requirePresentRow: false
+      })
+      const rejoinedTabIds = rejoinedTabs.present ? rejoinedTabs.tabIds : []
       const hydrated = await isTargetHydrated(freshLaunch.page, rejoined.targetId)
       // Re-read after settling: a conflict verdict that a later apply flips back would re-authorise
       // seeding, so the phase has to still hold once the tab set has stopped moving.
       const settledPhase = await readTargetSyncPhase(freshLaunch.page, rejoined.targetId)
       console.log(
-        `[unplaced-host-tabs] hydrated=${hydrated} phase=${settledPhase} tabs=${rejoinedTabIds.length}`
+        `[unplaced-host-tabs] hydrated=${hydrated} phase=${settledPhase} ${describeWorktreeTabObservation(rejoinedTabs)}`
       )
 
       // STA-3593. The host listed three tabs on paths this client cannot place. Adoption still
@@ -322,9 +360,9 @@ test.describe('SSH cold hydration gap tab seeding', () => {
         'the unplaced verdict has to survive settling, or authority is re-authorised to seed'
       ).toBe('conflict')
       expect(
-        rejoinedTabIds.length,
-        `authority stays unverifiable, so no tab may be seeded: got ${rejoinedTabIds.length}`
-      ).toBe(0)
+        rejoinedTabIds,
+        `authority stays unverifiable, so no tab may be seeded: ${describeWorktreeTabObservation(rejoinedTabs)}`
+      ).toEqual([])
     } finally {
       if (freshApp) {
         await fresh.close(freshApp)
