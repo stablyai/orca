@@ -39,6 +39,39 @@ const signedOutCodex: ProviderRateLimits = {
   error: 'ChatGPT authentication required to read rate limits',
   status: 'error'
 }
+/** Cursor ProviderRateLimits fixture with both plan buckets. */
+function cursorBucketLimits(): ProviderRateLimits {
+  return {
+    provider: 'cursor',
+    session: null,
+    weekly: null,
+    monthly: {
+      usedPercent: 15,
+      windowMinutes: 43_200,
+      resetsAt: null,
+      resetDescription: null
+    },
+    buckets: [
+      {
+        name: 'Cursor Models',
+        usedPercent: 6,
+        windowMinutes: 43_200,
+        resetsAt: null,
+        resetDescription: null
+      },
+      {
+        name: 'Other models',
+        usedPercent: 80,
+        windowMinutes: 43_200,
+        resetsAt: null,
+        resetDescription: null
+      }
+    ],
+    updatedAt: 0,
+    status: 'ok',
+    error: null
+  }
+}
 
 describe('UsageRow', () => {
   beforeEach(() => {
@@ -246,6 +279,47 @@ describe('UsageRow', () => {
     expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
     expect(markup).toContain('25%')
     expect(markup).toContain('60%')
+  })
+
+  it('aligns unlabeled Cursor bars with the name in compact popover mode', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={cursorBucketLimits()}
+        display="used"
+        mode="compact"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain('data-usage-mode="compact"')
+    expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
+    expect(markup).toContain('6%')
+    expect(markup).toContain('80%')
+    expect(markup).not.toMatch(/>Cursor Models</)
+    expect(markup).not.toMatch(/>Other models</)
+    expect(markup).not.toContain('pl-[30px]')
+  })
+
+  it('labels Cursor bars beneath the name in verbose popover mode', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={cursorBucketLimits()}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain('data-usage-mode="verbose"')
+    expect(markup).toContain('pl-[30px]')
+    expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
+    expect(markup).toContain('6%')
+    expect(markup).toContain('80%')
+    expect(markup).toMatch(/>Cursor Models</)
+    expect(markup).toMatch(/>Other models</)
   })
 })
 

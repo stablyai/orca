@@ -22,6 +22,7 @@ export function createResetCreditLimits(updatedAt = 30): ProviderRateLimits {
   }
 }
 
+/** Builds a RateLimitState fixture with the given Codex snapshot. */
 export function createResetRateLimitState(
   codex: ProviderRateLimits,
   target: RateLimitState['codexTarget'] = { runtime: 'host', wslDistro: null }
@@ -35,8 +36,10 @@ export function createResetRateLimitState(
     antigravity: null,
     minimax: null,
     grok: null,
+    cursor: null,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    cursorAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: target,
     inactiveClaudeAccounts: [],

@@ -1,6 +1,6 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
-
+/** Human-readable display name for a rate-limit provider id. */
 export function getProviderDisplayName(provider: ProviderRateLimits['provider']): string {
   if (provider === 'claude') {
     return 'Claude'
@@ -25,6 +25,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   }
   if (provider === 'grok') {
     return 'Grok'
+  }
+  if (provider === 'cursor') {
+    return 'Cursor'
   }
   return provider
 }
@@ -75,6 +78,7 @@ function getDelegatedCliRefreshProvider(
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
+/** Short status label for a provider usage snapshot. */
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
   if (delegatedCliProvider === 'grok') {
@@ -82,6 +86,15 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   }
   if (delegatedCliProvider === 'kimi') {
     return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
+  }
+  if (p.provider === 'cursor') {
+    const failureKind = p.usageMetadata?.failureKind
+    if (failureKind === 'missing-credentials' || failureKind === 'stale-token') {
+      return translate(
+        'auto.components.status.bar.tooltip.cursorSignInRequired',
+        'Sign in required'
+      )
+    }
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
@@ -117,6 +130,7 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   return translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
 }
 
+/** User-facing error copy for a provider usage failure. */
 export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
   const fallback = translate(
     'auto.components.status.bar.tooltip.2c35eca8d4',
@@ -137,6 +151,21 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
+  }
+  if (p.provider === 'cursor') {
+    const failureKind = p.usageMetadata?.failureKind
+    if (failureKind === 'missing-credentials') {
+      return translate(
+        'auto.components.status.bar.tooltip.cursorMissingCredentials',
+        'Sign in to Cursor from cursor-agent or the Cursor IDE, then retry usage.'
+      )
+    }
+    if (failureKind === 'stale-token') {
+      return translate(
+        'auto.components.status.bar.tooltip.cursorStaleToken',
+        'Cursor sign-in expired. Sign in again from cursor-agent or the Cursor IDE, then retry usage.'
+      )
+    }
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {

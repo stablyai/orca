@@ -1,7 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { RateLimitState } from '../../../../shared/rate-limit-types'
 import { noopUnsubscribe } from './web-storage'
-
+/** Web preload API for rate-limit state and refresh actions. */
 export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
   const empty: RateLimitState = {
     claude: null,
@@ -12,8 +12,10 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
     antigravity: null,
     minimax: null,
     grok: null,
+    cursor: null,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    cursorAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],

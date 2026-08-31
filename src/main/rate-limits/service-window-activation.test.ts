@@ -7,6 +7,7 @@ import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
+import { fetchCursorRateLimits } from './cursor-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   asRateLimitWindow,
@@ -51,6 +52,14 @@ vi.mock('./grok-fetcher', () => ({
 
 vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn(async () => ({ status: 'missing' }))
 }))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
@@ -192,6 +201,7 @@ describe('RateLimitService', () => {
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchMiniMaxRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchCursorRateLimits).toHaveBeenCalledTimes(1)
       expect(service.getState().claude?.status).toBe('ok')
 
       service.stop()

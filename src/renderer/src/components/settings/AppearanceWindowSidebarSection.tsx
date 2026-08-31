@@ -34,7 +34,7 @@ type AppearanceWindowSidebarSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisiblePrimary?: boolean
 }
-
+/** Records a status-bar toggle interaction for feature telemetry. */
 function recordStatusBarToggleInteraction(
   id: StatusBarItem,
   recordFeatureInteraction: (feature: FeatureInteractionId) => void
@@ -53,7 +53,8 @@ function recordStatusBarToggleInteraction(
     id === 'kimi' ||
     id === 'antigravity' ||
     id === 'minimax' ||
-    id === 'grok'
+    id === 'grok' ||
+    id === 'cursor'
   ) {
     recordFeatureInteraction('usage-tracking')
   }
