@@ -183,6 +183,7 @@ import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-p
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
+import { moveActiveTabToNextPaneColumn } from './tab-bar/tab-move-to-pane-column'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -2325,6 +2326,19 @@ function Terminal(): React.JSX.Element | null {
         e.stopImmediatePropagation()
         handleSwitchRecentTab()
         return
+      }
+
+      // Ships unbound — VS Code "move editor to next group" semantics: join the existing
+      // next group, else split into a new column. Why: only consume the chord when a move
+      // actually happens, so a lone tab in a lone group lets the chord fall through untouched.
+      if (!e.repeat && matchShortcut('tab.moveToNewPaneColumn')) {
+        if (moveActiveTabToNextPaneColumn('right')) {
+          e.preventDefault()
+          e.stopPropagation()
+          e.stopImmediatePropagation()
+          notifyTerminalCapture('tab.moveToNewPaneColumn')
+          return
+        }
       }
 
       // Why: match on e.code, not e.key — macOS Shift+[ reports '{' and Option+[ composes dead-keys, so e.key misses the chord on many layouts.
