@@ -1,4 +1,15 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
+import { orchestrationFlagHelp } from './orchestration-flag-help'
+
+const WORKER_FLAG_HELP = {
+  dispatch: '<dispatch_id> Target the supervised worker Dispatch by id',
+  'retry-request': '<id> Retry the exact mutation after an unknown result',
+  run: '<run_id> Filter workers by orchestration Run id'
+} satisfies Record<string, string>
+
+function workerFlagHelp(overrides: Record<string, string> = {}): Record<string, string> {
+  return orchestrationFlagHelp({ ...WORKER_FLAG_HELP, ...overrides })
+}
 
 export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -27,6 +38,26 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'from',
       'retry-request'
     ],
+    flagHelp: workerFlagHelp({
+      task: '<task_id> Task to assign to the worker',
+      on: '<environment> Saved environment where the worker should run',
+      worktree:
+        '<placement> Worker placement; required with --terminal, where current means the coordinator worktree',
+      name: '<name> Name for a newly created worktree',
+      repo: '<selector> Repository for a new top-level worktree',
+      'base-branch': '<ref> Base ref for a newly created worktree',
+      'display-name': '<text> Display name for a newly created worktree',
+      comment: '<text> Comment for a newly created worktree',
+      setup: '<policy> Setup policy for a newly created worktree',
+      agent: '<agent> TUI agent to launch in a fresh terminal',
+      model: '<id> Provider model id for a fresh agent launch',
+      effort: '<level> Reasoning effort for the selected model',
+      terminal: '<handle> Existing agent terminal to reuse with its --worktree placement',
+      'retry-of': '<dispatch_id> Prior Dispatch that this attempt replaces',
+      'timeout-ms': '<n> Maximum time to wait for worker readiness',
+      run: '<run_id> Run containing the task',
+      from: '<handle> Coordinator terminal used as caller identity'
+    }),
     notes: [
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
       'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
@@ -44,6 +75,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Inspect one supervised worker Dispatch',
     usage: 'orca orchestration worker-show --dispatch <dispatch_id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch'],
+    flagHelp: workerFlagHelp(),
     notes: [
       'A Dispatch created by orchestration dispatch is shown as unsupervised and reports the exact adopted terminal when its identity is still provable.',
       'observation.agentWait names a worker parked on a prompt only a human can answer, with the evidence that proved it (hook, prompt-text, or title). Null means Orca looked and found no wait. An absent field means it never looked — an older host, an unverifiable worker identity, an unreadable pane, or an agent probe that did not answer in time — and never means the worker is not waiting. A waiting worker is healthy, not failed.'
@@ -55,6 +87,11 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration worker-read --dispatch <dispatch_id> [--source <auto|transcript|terminal>] [--cursor <cursor>] [--limit <n>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'source', 'cursor', 'limit'],
+    flagHelp: workerFlagHelp({
+      source: '<source> Output source: auto, transcript, or terminal',
+      cursor: '<cursor> Opaque cursor returned by a previous worker-read page',
+      limit: '<n> Maximum number of output rows to return'
+    }),
     notes: [
       'The default auto source uses an exact hook-reported transcript when available and otherwise returns labeled terminal output.',
       'A Dispatch created by orchestration dispatch reads from its adopted terminal with worker status unsupervised.',
@@ -67,6 +104,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration worker-stop --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    flagHelp: workerFlagHelp(),
     notes: [
       'A Dispatch created by orchestration dispatch is fenced without closing its unsupervised terminal process.',
       'Never deletes the worktree, setup terminal, configured tabs, or unrelated processes.'
@@ -78,6 +116,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration worker-abandon --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    flagHelp: workerFlagHelp(),
     notes: ['Retains all possibly-live resources and performs no process or filesystem action.']
   },
   {
@@ -86,6 +125,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration worker-release --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    flagHelp: workerFlagHelp(),
     notes: [
       'Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.',
       'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
@@ -100,6 +140,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration worker-retain --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    flagHelp: workerFlagHelp(),
     notes: [
       'Records a durable user-requested exception; a later explicit worker-release clears it and releases the terminal.',
       'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
@@ -112,6 +153,10 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration worker-list [--run <run_id>] [--terminal-state <active|reclaimable|retained|release_pending|release_unknown|released>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'run', 'terminal-state'],
+    flagHelp: workerFlagHelp({
+      'terminal-state':
+        '<state> Filter by state: active, reclaimable, retained, release_pending, release_unknown, or released'
+    }),
     notes: [
       'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.',
       'Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.'

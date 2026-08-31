@@ -1,5 +1,6 @@
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
+import { resolveFlagHelp } from './command-flag-help-layout'
 import { unknownCommandData } from './command-suggestion'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
@@ -38,8 +39,13 @@ export function formatCommandHelp(spec: CommandSpec): string {
 
   if (displayedFlags.length > 0) {
     lines.push('', 'Options:')
-    for (const flag of displayedFlags) {
-      lines.push(`  ${formatCommandFlagHelp(flag, spec.path)}`)
+    const command = spec.path.join(' ')
+    const flagHelp = displayedFlags.map((flag) =>
+      resolveFlagHelp(flag, spec.flagHelp?.[flag], formatLegacyCommandFlagHelp(flag, command))
+    )
+    const descriptionColumn = Math.max(...flagHelp.map(({ label }) => label.length)) + 2
+    for (const { label, description } of flagHelp) {
+      lines.push(`  ${description ? label.padEnd(descriptionColumn) + description : label}`)
     }
   }
 
@@ -70,8 +76,7 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
   return lines.join('\n')
 }
 
-function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
-  const command = commandPath.join(' ')
+function formatLegacyCommandFlagHelp(flag: string, command: string): string {
   if (command === 'skills install' && flag === 'agent') {
     return '--agent <names>        Comma-separated install targets; default is detected agents'
   }

@@ -1,5 +1,7 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { orchestrationFlagHelp } from './orchestration-flag-help'
+import { ORCHESTRATION_MESSAGE_COMMAND_SPECS } from './orchestration-message-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
@@ -9,6 +11,10 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration run-create --objective <text> [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'retry-request'],
+    flagHelp: orchestrationFlagHelp({
+      objective: '<text> Objective for the new Run',
+      from: '<handle> Coordinator terminal to bind to the new Run'
+    }),
     notes: [
       'A Run is a namespace and home inbox. It never schedules or places workers.',
       '--retry-request is only for exact recovery after an unknown mutation result.'
@@ -20,6 +26,11 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration run-use --id <run_id> [--from <handle>] [--takeover-legacy] [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'takeover-legacy', 'retry-request'],
+    flagHelp: orchestrationFlagHelp({
+      id: '<run_id> Run to bind',
+      from: '<handle> Coordinator terminal to bind',
+      'takeover-legacy': 'Fence the prior coordinator and adopt its live Run'
+    }),
     notes: [
       '--takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.'
     ]
@@ -28,102 +39,29 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'run-current'],
     summary: 'Show the Run bound to this coordinator terminal',
     usage: 'orca orchestration run-current [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'from']
+    allowedFlags: [...GLOBAL_FLAGS, 'from'],
+    flagHelp: orchestrationFlagHelp({
+      from: '<handle> Coordinator terminal whose Run binding to inspect'
+    })
   },
   {
     path: ['orchestration', 'run-list'],
     summary: 'List lightweight orchestration Runs',
     usage: 'orca orchestration run-list [--limit <n>] [--cursor <cursor>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'cursor']
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'cursor'],
+    flagHelp: orchestrationFlagHelp({
+      limit: '<n> Maximum number of Runs to return',
+      cursor: '<cursor> Opaque cursor returned by a previous run-list page'
+    })
   },
   {
     path: ['orchestration', 'run-show'],
     summary: 'Show one lightweight orchestration Run',
     usage: 'orca orchestration run-show --id <run_id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id']
+    allowedFlags: [...GLOBAL_FLAGS, 'id'],
+    flagHelp: orchestrationFlagHelp({ id: '<run_id> Run to inspect' })
   },
-  {
-    path: ['orchestration', 'send'],
-    summary: 'Send an inter-agent message',
-    usage:
-      'orca orchestration send --subject <text> [--to <run:id|dispatch:id|legacy_handle>] [--run <run_id>] [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--outcome <succeeded|failed>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--retry-request <id>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'to',
-      'run',
-      'from',
-      'subject',
-      'body',
-      'type',
-      'priority',
-      'thread-id',
-      'payload',
-      'task-id',
-      'dispatch-id',
-      'dispatch-capability',
-      'retry-request',
-      'outcome',
-      'files-modified',
-      'report-path',
-      'phase'
-    ],
-    notes: [
-      'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
-      "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox.",
-      'worker_done requires --outcome succeeded or --outcome failed.',
-      'From an active Dispatch, an omitted recipient defaults to its owning Run mailbox.',
-      'Use --to dispatch:<id> for attempt-specific coordinator guidance; Orca durably relays it to a connected worker server.',
-      'A worker_done with the active task/dispatch IDs completes that task only from the dispatched pane. When stable pane identity is unavailable, the sender handle must exactly match the dispatch assignee; injected preambles include the correct --from value.',
-      'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.'
-    ]
-  },
-  {
-    path: ['orchestration', 'check'],
-    summary: 'Check messages for a terminal',
-    usage:
-      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
-      "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
-      '  --ack: acknowledge the prior whole batch before checking/waiting.\n' +
-      '  --peek: return only unread messages without marking them read.\n' +
-      '  --all: return every message for the handle; does not mark read.\n' +
-      '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
-      '          Emits JSON keepalive lines to stderr every 15s so the caller can\n' +
-      '          tell the process is alive. `_keepalive` is unrelated to heartbeat\n' +
-      '          messages; `_heartbeat` remains as a deprecated compatibility alias.\n' +
-      '          Filter with `jq "select(._keepalive|not)"` when merging streams.',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'terminal',
-      'run',
-      'ack',
-      'unread',
-      'peek',
-      'all',
-      'types',
-      'format',
-      'wait',
-      'timeout-ms',
-      'retry-request'
-    ],
-    notes: [
-      'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
-      '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.'
-    ]
-  },
-  {
-    path: ['orchestration', 'reply'],
-    summary: 'Reply to a message',
-    usage:
-      'orca orchestration reply --id <msg_id> --body <text> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'body', 'run', 'from', 'retry-request']
-  },
-  {
-    path: ['orchestration', 'inbox'],
-    summary: 'Show messages across (or for) recipients',
-    usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full']
-  },
+  ...ORCHESTRATION_MESSAGE_COMMAND_SPECS,
   {
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
@@ -139,7 +77,15 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'run',
       'from',
       'retry-request'
-    ]
+    ],
+    flagHelp: orchestrationFlagHelp({
+      spec: '<text> Full instructions for the task',
+      'task-title': '<text> Concise title for the orchestration task',
+      'display-name': '<text> UI label shown for dispatched worker rows',
+      deps: '<json_array> Prerequisite task ids',
+      parent: '<task_id> Parent task',
+      from: '<handle> Coordinator terminal creating the task'
+    })
   },
   {
     path: ['orchestration', 'task-list'],
@@ -147,6 +93,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'run', 'from'],
+    flagHelp: orchestrationFlagHelp({
+      status: '<status> Filter by task status',
+      ready: 'Return only tasks ready to dispatch',
+      brief: 'Collapse and truncate task specifications',
+      from: '<handle> Coordinator terminal whose Run to inspect'
+    }),
     notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
   },
   {
@@ -155,6 +107,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result', 'run', 'from', 'retry-request'],
+    flagHelp: orchestrationFlagHelp({
+      id: '<task_id> Task to update',
+      status: '<status> New task status',
+      result: '<json> Structured task result',
+      from: '<handle> Coordinator terminal authorizing the update'
+    }),
     notes: ['Valid --status values: pending, ready, dispatched, completed, failed, blocked.']
   },
   ...ORCHESTRATION_WORKER_COMMAND_SPECS,
@@ -173,13 +131,24 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'dry-run',
       'return-preamble',
       'retry-request'
-    ]
+    ],
+    flagHelp: orchestrationFlagHelp({
+      task: '<task_id> Task to dispatch',
+      to: '<handle> Agent terminal that will receive the task',
+      from: '<handle> Coordinator terminal dispatching the task',
+      inject: 'Inject the tracked task into a recognized agent CLI',
+      'dry-run': 'Build the dispatch preamble without applying effects',
+      'return-preamble': 'Include the generated worker preamble in the result'
+    })
   },
   {
     path: ['orchestration', 'request-show'],
     summary: 'Ask whether one orchestration mutation request already took effect',
     usage: 'orca orchestration request-show --request <request_id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'request'],
+    flagHelp: orchestrationFlagHelp({
+      request: '<request_id> Mutation request receipt to inspect'
+    }),
     notes: [
       'Read-only: it never starts, retries, or settles anything, so it is safe to run after any lost response.',
       'completed means the mutation landed and --retry-request replays the recorded outcome instead of starting a second one. pending means the original mutation is still running or Orca restarted before recording its outcome; wait for a live original command, otherwise replay with --retry-request.',
@@ -191,7 +160,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show dispatch context for a task',
     usage:
       'orca orchestration dispatch-show --task <task_id> [--preamble] [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'preamble', 'from']
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'preamble', 'from'],
+    flagHelp: orchestrationFlagHelp({
+      task: '<task_id> Task whose Dispatch to inspect',
+      preamble: 'Render the worker preamble for the Dispatch',
+      from: '<handle> Coordinator terminal embedded in the preamble'
+    })
   },
   {
     path: ['orchestration', 'ask'],
@@ -210,6 +184,14 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'from',
       'retry-request'
     ],
+    flagHelp: orchestrationFlagHelp({
+      to: '<run:id> Run recipient for a new question',
+      question: '<text> Question to send to the coordinator',
+      resume: '<message_id> Pending question to resume',
+      options: '<csv> Answer options for a new question',
+      'timeout-ms': '<n> Maximum time to wait for an answer',
+      from: '<handle> Worker terminal asking the question'
+    }),
     notes: [
       'From an active Dispatch, a new question defaults to its owning Run mailbox.',
       'Timeout leaves the question pending; resume with the original message ID.'
@@ -229,6 +211,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'max-concurrent',
       'worktree'
     ],
+    flagHelp: orchestrationFlagHelp({
+      spec: '<text> Retired coordinator objective text',
+      'poll-interval-ms': '<n> Retired coordinator polling interval',
+      'max-concurrent': '<n> Retired coordinator concurrency limit',
+      worktree: '<selector> Retired coordinator worktree selector'
+    }),
     notes: [
       'This command performs no effects and returns the exact `skills get orchestration --full` recovery action.',
       'Use the lightweight Run, Task, and worker-start primitives described by the current skill.'
@@ -240,6 +228,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Retired: load the current orchestration skill',
     usage: 'orca orchestration coordinator-stop [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
+    flagHelp: orchestrationFlagHelp(),
     notes: [
       'This command performs no effects and returns the exact `skills get orchestration --full` recovery action.'
     ]
@@ -249,14 +238,25 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Create a decision gate blocking a task',
     usage:
       'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'from', 'retry-request']
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'from', 'retry-request'],
+    flagHelp: orchestrationFlagHelp({
+      task: '<task_id> Task blocked by the decision gate',
+      question: '<text> Decision question for the gate',
+      options: '<json_array> Allowed resolutions',
+      from: '<handle> Coordinator terminal creating the gate'
+    })
   },
   {
     path: ['orchestration', 'gate-resolve'],
     summary: 'Resolve a pending decision gate',
     usage:
       'orca orchestration gate-resolve --id <gate_id> --resolution <text> [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'resolution', 'from', 'retry-request']
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'resolution', 'from', 'retry-request'],
+    flagHelp: orchestrationFlagHelp({
+      id: '<gate_id> Decision gate to resolve',
+      resolution: '<text> Resolution selected for the gate',
+      from: '<handle> Coordinator terminal resolving the gate'
+    })
   },
   {
     path: ['orchestration', 'gate-list'],
@@ -264,6 +264,11 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration gate-list [--task <task_id>] [--status <status>] [--run <run_id>] [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'task', 'status', 'run', 'from'],
+    flagHelp: orchestrationFlagHelp({
+      task: '<task_id> Filter gates by task',
+      status: '<status> Filter gates by status',
+      from: '<handle> Coordinator terminal whose Run to inspect'
+    }),
     notes: ['--run inspects a named Run without binding; otherwise gates are scoped to the caller.']
   },
   {
@@ -271,6 +276,11 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Reset one explicit orchestration state scope',
     usage:
       'orca orchestration reset (--all | --tasks | --messages) [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'all', 'tasks', 'messages', 'retry-request']
+    allowedFlags: [...GLOBAL_FLAGS, 'all', 'tasks', 'messages', 'retry-request'],
+    flagHelp: orchestrationFlagHelp({
+      all: 'Reset tasks and messages',
+      tasks: 'Reset task and Dispatch state',
+      messages: 'Reset orchestration message state'
+    })
   }
 ]

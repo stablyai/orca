@@ -8,6 +8,7 @@ export type CommandSpec = {
   summary: string
   usage: string
   allowedFlags: string[]
+  flagHelp?: Record<string, string>
   positionalArgs?: string[]
   examples?: string[]
   notes?: string[]
