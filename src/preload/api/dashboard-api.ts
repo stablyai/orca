@@ -1,4 +1,5 @@
 import type {
+  DashboardRemoveWorkspaceArgs,
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
@@ -19,6 +20,7 @@ export type DashboardApi = {
   onAckAgent: (callback: (paneKey: string) => void) => () => void
   onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
   onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
+  onRemoveWorkspace: (callback: (args: DashboardRemoveWorkspaceArgs) => void) => () => void
   requestSnapshot: () => Promise<void>
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
   onViewRequested: (callback: (view: 'board' | 'map') => void) => () => void
@@ -26,6 +28,7 @@ export type DashboardApi = {
   ackAgent: (paneKey: string) => Promise<void>
   spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
+  removeWorkspace: (args: DashboardRemoveWorkspaceArgs) => Promise<void>
 }
 
 export type TerminalPreviewApi = {

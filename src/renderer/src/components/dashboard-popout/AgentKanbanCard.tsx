@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronRight,
+  Trash2,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
@@ -100,6 +101,7 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.hostKind === b.hostKind &&
     a.executionHostId === b.executionHostId &&
     a.hostLabel === b.hostLabel &&
+    a.workspaceKind === b.workspaceKind &&
     a.hasReview === b.hasReview &&
     a.review?.number === b.review?.number &&
     a.review?.state === b.review?.state &&
@@ -192,6 +194,9 @@ type AgentKanbanCardProps = {
    *  card: bucket moves remount the card, and an embedded dialog would close
    *  the chat mid-conversation. */
   onOpenTerminal: (card: DashboardCard) => void
+  /** Removes the card's worktree. Only offered on idle cards, and only when the
+   *  host supplies it — the confirm and the deletion itself live there. */
+  onRemoveWorkspace?: (card: DashboardCard) => void
 }
 
 /** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
@@ -200,7 +205,8 @@ export const AgentKanbanCard = memo(
     card,
     repoIcon = null,
     now,
-    onOpenTerminal
+    onOpenTerminal,
+    onRemoveWorkspace
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
@@ -214,6 +220,7 @@ export const AgentKanbanCard = memo(
     // the best heading left — and then the footer drops it rather than say it
     // twice.
     const heading = card.conversationName ?? card.worktreeName
+    const removeLabel = translate('dashboardPopout.card.removeWorktree', 'Remove worktree')
     const worktreeInFooter = card.conversationName !== undefined
 
     return (
@@ -223,7 +230,7 @@ export const AgentKanbanCard = memo(
         // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
-          'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
+          'group relative flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
           needsYou
             ? 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
             : isDone
@@ -346,11 +353,37 @@ export const AgentKanbanCard = memo(
             </span>
           ) : null}
         </button>
+
+        {/* Why: only idle cards offer removal — a working or waiting agent's
+            worktree is still in use. It sits outside the open-terminal button
+            (a button cannot nest in a button) and stays hidden until the card
+            is hovered or the control itself is focused, so the board does not
+            read as a row of delete buttons. Folder workspaces are excluded:
+            they aren't resolvable by the git-worktree deletion path, so the
+            control would be a no-op. */}
+        {card.bucket === 'idle' && card.workspaceKind !== 'folder' && onRemoveWorkspace ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={removeLabel}
+                onClick={() => onRemoveWorkspace(card)}
+                className="absolute top-2 right-2 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                <Trash2 className="size-3.5" aria-hidden />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {removeLabel}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
     )
   },
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
+    previous.onRemoveWorkspace === next.onRemoveWorkspace &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||

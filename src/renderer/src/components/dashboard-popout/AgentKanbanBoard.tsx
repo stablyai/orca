@@ -35,6 +35,21 @@ function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
 }
 
+/** Remove a workspace from the pop-out: the main renderer runs the ordinary
+ *  delete funnel, confirm included. Same `?.` HMR-skew guard as the relays above.
+ *  Folder workspaces aren't resolvable by the git-worktree deletion path, and a
+ *  card without a resolved host can't be removed unambiguously — both are
+ *  no-ops here (the card also hides its control in these cases). */
+function removeWorkspaceViaPopoutRelay(card: DashboardCard): void {
+  if (card.workspaceKind === 'folder' || !card.executionHostId) {
+    return
+  }
+  void window.api.dashboard.removeWorkspace?.({
+    worktreeId: card.worktreeId,
+    executionHostId: card.executionHostId
+  })
+}
+
 function bucketLabel(bucket: DashboardBucket): string {
   switch (bucket) {
     case 'attention':
@@ -71,13 +86,15 @@ function KanbanColumn({
   cards,
   repoIconsByRepoId,
   now,
-  onOpenTerminal
+  onOpenTerminal,
+  onRemoveWorkspace
 }: {
   bucket: DashboardBucket
   cards: DashboardCard[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
   onOpenTerminal: (card: DashboardCard) => void
+  onRemoveWorkspace: (card: DashboardCard) => void
 }): React.JSX.Element {
   return (
     // Why: attention no longer tints the whole column — the cards inside carry
@@ -104,6 +121,7 @@ function KanbanColumn({
               repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
               now={now}
               onOpenTerminal={onOpenTerminal}
+              onRemoveWorkspace={onRemoveWorkspace}
             />
           ))
         )}
@@ -123,6 +141,9 @@ type AgentKanbanBoardProps = {
   /** Focuses the agent's pane. Defaults to the pop-out IPC relay; the in-window
    *  host activates the worktree/pane locally and closes the overlay. */
   onRevealAgent?: (args: AgentRevealArgs) => void
+  /** Removes an idle card's worktree. Defaults to the pop-out IPC relay; the
+   *  in-window host runs the delete funnel directly. */
+  onRemoveWorkspace?: (card: DashboardCard) => void
   /** When provided, renders a close control in the header (in-window mode). The
    *  pop-out relies on its native window controls, so it omits this. */
   onClose?: () => void
@@ -139,6 +160,7 @@ export function AgentKanbanBoard({
   containerClassName = 'h-screen w-screen',
   onAckAgent = ackAgentViaPopoutRelay,
   onRevealAgent = revealAgentViaPopoutRelay,
+  onRemoveWorkspace = removeWorkspaceViaPopoutRelay,
   onClose,
   headerActions
 }: AgentKanbanBoardProps): React.JSX.Element {
@@ -291,6 +313,7 @@ export function AgentKanbanBoard({
                 repoIconsByRepoId={snapshot.repoIconsByRepoId}
                 now={now}
                 onOpenTerminal={handleOpenTerminal}
+                onRemoveWorkspace={onRemoveWorkspace}
               />
             ))}
           </div>

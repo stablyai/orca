@@ -53,6 +53,7 @@ function renderCard(props: {
   now: number
   repoIcon?: RepoIcon | null
   onOpenTerminal?: () => void
+  onRemoveWorkspace?: (card: DashboardCard) => void
 }): ReturnType<typeof render> {
   return render(
     <TooltipProvider>
@@ -61,6 +62,7 @@ function renderCard(props: {
         repoIcon={props.repoIcon}
         now={props.now}
         onOpenTerminal={props.onOpenTerminal ?? vi.fn()}
+        onRemoveWorkspace={props.onRemoveWorkspace}
       />
     </TooltipProvider>
   )
@@ -163,6 +165,42 @@ describe('AgentKanbanCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '1 subagent' }))
     expect(onOpenTerminal).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers removal only on an idle card, and names the worktree it would delete', () => {
+    const onRemoveWorkspace = vi.fn()
+    const { rerender } = renderCard({
+      card: card({ bucket: 'working', dotState: 'working' }),
+      now: 2_000,
+      onRemoveWorkspace
+    })
+    expect(screen.queryByRole('button', { name: 'Remove worktree' })).not.toBeInTheDocument()
+
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={card({ bucket: 'idle', dotState: 'idle' })}
+          now={2_000}
+          onOpenTerminal={() => {}}
+          onRemoveWorkspace={onRemoveWorkspace}
+        />
+      </TooltipProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Remove worktree' }))
+
+    expect(onRemoveWorkspace).toHaveBeenCalledTimes(1)
+    expect(onRemoveWorkspace.mock.calls[0][0]).toMatchObject({ worktreeId: 'worktree-1' })
+  })
+
+  it('hides removal for an idle folder workspace, which the git-worktree delete path cannot resolve', () => {
+    const onRemoveWorkspace = vi.fn()
+    renderCard({
+      card: card({ bucket: 'idle', dotState: 'idle', workspaceKind: 'folder' }),
+      now: 2_000,
+      onRemoveWorkspace
+    })
+
+    expect(screen.queryByRole('button', { name: 'Remove worktree' })).not.toBeInTheDocument()
   })
 
   it('labels one subagent accessibly and never renders a workspace-status dot', () => {

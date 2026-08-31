@@ -234,3 +234,11 @@ export type DashboardSpawnAgentArgs = {
 export type DashboardSleepWorkspaceArgs = {
   worktreeId: string
 }
+
+export type DashboardRemoveWorkspaceArgs = {
+  worktreeId: string
+  /** Names the row's host. The worktree map keys one row per repo+path, so an
+   *  SSH card and a local card can share an id — a delete that names no host
+   *  can land on the wrong checkout. */
+  executionHostId?: ExecutionHostId
+}

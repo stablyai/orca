@@ -24,6 +24,7 @@ import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
   DashboardRevealAgentArgs,
+  DashboardRemoveWorkspaceArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
   DashboardSpawnAgentArgs
@@ -2502,6 +2503,14 @@ const api = {
       ipcRenderer.on('ui:sleepDashboardWorkspace', listener)
       return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
     },
+    onRemoveWorkspace: (callback: (args: DashboardRemoveWorkspaceArgs) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        args: DashboardRemoveWorkspaceArgs
+      ): void => callback(args)
+      ipcRenderer.on('ui:removeDashboardWorkspace', listener)
+      return () => ipcRenderer.removeListener('ui:removeDashboardWorkspace', listener)
+    },
 
     // ── Consumer side (pop-out window) ───────────────────────────────────
     requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
@@ -2524,7 +2533,9 @@ const api = {
     spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
     sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args)
+      ipcRenderer.invoke('dashboardPopout:sleepWorkspace', args),
+    removeWorkspace: (args: DashboardRemoveWorkspaceArgs): Promise<void> =>
+      ipcRenderer.invoke('dashboardPopout:removeWorkspace', args)
   },
 
   terminalPreview: {
