@@ -9,12 +9,14 @@ export function createActivityThreadActions({
   allThreads,
   acknowledgeAgents,
   unacknowledgeAgents,
-  setSelectedPaneKey
+  setSelectedPaneKey,
+  clearWorktreeUnreadIfNoOtherAttention
 }: {
   allThreads: AgentPaneThread[]
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   setSelectedPaneKey: (paneKey: string | null) => void
+  clearWorktreeUnreadIfNoOtherAttention: (worktreeId: string) => void
 }): {
   hasUnreadThreads: boolean
   markThreadUnread: (thread: AgentPaneThread) => void
@@ -24,6 +26,7 @@ export function createActivityThreadActions({
 } {
   const markThreadRead = (thread: AgentPaneThread): void => {
     acknowledgeAgents([thread.paneKey])
+    clearWorktreeUnreadIfNoOtherAttention(thread.worktree.id)
   }
 
   const markThreadUnread = (thread: AgentPaneThread): void => {
@@ -74,11 +77,15 @@ export function createActivityThreadActions({
   const hasUnreadThreads = allThreads.some((thread) => thread.unread)
 
   const markAllThreadsRead = (): void => {
-    const unreadKeys = allThreads.filter((t) => t.unread).map((t) => t.paneKey)
+    const unreadThreads = allThreads.filter((t) => t.unread)
+    const unreadKeys = unreadThreads.map((t) => t.paneKey)
     if (unreadKeys.length === 0) {
       return
     }
     acknowledgeAgents(unreadKeys)
+    for (const worktreeId of new Set(unreadThreads.map((t) => t.worktree.id))) {
+      clearWorktreeUnreadIfNoOtherAttention(worktreeId)
+    }
   }
 
   return {

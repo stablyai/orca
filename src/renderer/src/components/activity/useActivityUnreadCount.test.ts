@@ -22,8 +22,7 @@ function makeSource(entry: AgentStatusEntry, ackAt = 0) {
     acknowledgedAgentsByPaneKey: { [PANE]: ackAt },
     agentStatusByPaneKey: { [PANE]: entry },
     migrationUnsupportedByPtyId: {},
-    retainedAgentsByPaneKey: {},
-    worktreesByRepo: {}
+    retainedAgentsByPaneKey: {}
   }
 }
 

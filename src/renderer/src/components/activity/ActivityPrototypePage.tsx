@@ -32,6 +32,7 @@ import type {
   ActivityTerminalPortalSlotId,
   ThreadReadFilter
 } from './activity-thread-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 export * from './activity-prototype-page-exports'
 
@@ -75,6 +76,9 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
       unacknowledgeAgents: s.unacknowledgeAgents,
+      clearWorktreeUnread: s.clearWorktreeUnread,
+      unreadAgentCompletionPanes: s.unreadAgentCompletionPanes,
+      unreadTerminalTabs: s.unreadTerminalTabs,
       generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
     }))
   )
@@ -298,12 +302,36 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
   }, [activePortalTargetEl, inactivePortalTargetEl])
 
+  const clearWorktreeUnreadIfNoOtherAttention = useCallback(
+    (worktreeId: string): void => {
+      const tabIds = new Set((storeData.tabsByWorktree[worktreeId] ?? []).map((t) => t.id))
+      if (tabIds.size === 0) {
+        storeData.clearWorktreeUnread(worktreeId)
+        return
+      }
+      const hasOtherUnreadAgentCompletion = Object.keys(storeData.unreadAgentCompletionPanes).some(
+        (paneKey) => {
+          const parsed = parsePaneKey(paneKey)
+          return parsed && tabIds.has(parsed.tabId)
+        }
+      )
+      const hasUnreadTerminalTabs = Object.keys(storeData.unreadTerminalTabs).some((tabId) =>
+        tabIds.has(tabId)
+      )
+      if (!hasOtherUnreadAgentCompletion && !hasUnreadTerminalTabs) {
+        storeData.clearWorktreeUnread(worktreeId)
+      }
+    },
+    [storeData]
+  )
+
   const { hasUnreadThreads, markThreadUnread, selectThread, jumpToWorkspace, markAllThreadsRead } =
     createActivityThreadActions({
       allThreads,
       acknowledgeAgents: storeData.acknowledgeAgents,
       unacknowledgeAgents: storeData.unacknowledgeAgents,
-      setSelectedPaneKey
+      setSelectedPaneKey,
+      clearWorktreeUnreadIfNoOtherAttention
     })
 
   useEffect(() => {
@@ -330,6 +358,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     if (selectedThreadHasDetailOnlyView || selectedThreadIsVisibleTerminal) {
       autoAcknowledgedTurnRef.current = autoAcknowledgeKey
       storeData.acknowledgeAgents([selectedThread.paneKey])
+      clearWorktreeUnreadIfNoOtherAttention(selectedThread.worktree.id)
     }
   }, [
     selectedHasLiveTab,
@@ -338,7 +367,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     stagedThread,
     storeData,
     visiblePortalReady,
-    visibleThread
+    visibleThread,
+    clearWorktreeUnreadIfNoOtherAttention
   ])
 
   // Why (page padding): no top/horizontal padding so the page reaches the window edges; the titlebar and the right pane's title row (pt-2) supply the top spacing.

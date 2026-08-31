@@ -14,6 +14,8 @@ export function createUIStore(): StoreApi<AppState> {
   return createStore<any>()((...args: any[]) => ({
     repos: [],
     worktreesByRepo: {},
+    // Why: acknowledgeAgents clears pane-level completion markers; production always initializes this (terminals slice).
+    unreadAgentCompletionPanes: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
     markdownTocPanelWidth: 240,

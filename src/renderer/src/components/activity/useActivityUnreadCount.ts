@@ -12,19 +12,16 @@ type ActivityUnreadCountSource = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
-  | 'worktreesByRepo'
 >
 
 type ActivityUnreadCountMode = 'agent-events' | 'sidebar-badge'
 
-const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
 const EMPTY_MIGRATION_UNSUPPORTED: AppState['migrationUnsupportedByPtyId'] = {}
 const EMPTY_RETAINED_AGENTS: AppState['retainedAgentsByPaneKey'] = {}
 const EMPTY_ACKNOWLEDGED_AGENTS: AppState['acknowledgedAgentsByPaneKey'] = {}
 
 const DISABLED_ACTIVITY_UNREAD_INPUTS = {
   sortEpoch: 0,
-  worktreesByRepo: EMPTY_WORKTREES_BY_REPO,
   migrationUnsupportedByPtyId: EMPTY_MIGRATION_UNSUPPORTED,
   retainedAgentsByPaneKey: EMPTY_RETAINED_AGENTS,
   acknowledgedAgentsByPaneKey: EMPTY_ACKNOWLEDGED_AGENTS
@@ -39,16 +36,6 @@ export function countActivityUnread(
   mode: ActivityUnreadCountMode
 ): number {
   let count = 0
-
-  if (mode === 'sidebar-badge') {
-    for (const worktrees of Object.values(source.worktreesByRepo)) {
-      for (const worktree of worktrees) {
-        if (worktree.createdAt && worktree.isUnread) {
-          count += 1
-        }
-      }
-    }
-  }
 
   const countEntry = (entry: AgentStatusEntry, ackAt: number): void => {
     if (mode === 'agent-events') {
@@ -101,7 +88,6 @@ export function countActivityUnread(
 export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCountMode): number {
   const {
     sortEpoch,
-    worktreesByRepo,
     migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey,
     acknowledgedAgentsByPaneKey
@@ -115,7 +101,6 @@ export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCou
         // cannot change unread count unless a sort-relevant state transition
         // or removal occurred. sortEpoch is the cheap invalidation signal.
         sortEpoch: state.sortEpoch,
-        worktreesByRepo: state.worktreesByRepo,
         migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
         retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
         acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey
@@ -133,7 +118,6 @@ export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCou
         agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
         migrationUnsupportedByPtyId,
         retainedAgentsByPaneKey,
-        worktreesByRepo,
         acknowledgedAgentsByPaneKey
       },
       mode
@@ -144,7 +128,6 @@ export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCou
     migrationUnsupportedByPtyId,
     mode,
     retainedAgentsByPaneKey,
-    sortEpoch,
-    worktreesByRepo
+    sortEpoch
   ])
 }
