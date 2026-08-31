@@ -10,9 +10,12 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, value: string) => valu
 
 import {
   buildDirectWorkItemAgentStartupPlan,
-  buildDirectWorkItemStartupOpts
+  buildDirectWorkItemStartupOpts,
+  pasteDirectWorkItemDraftWhenAgentReady
 } from './launch-work-item-direct-agent'
 import type { AgentStartupPlan } from './tui-agent-startup'
+import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { toast } from 'sonner'
 
 describe('buildDirectWorkItemStartupOpts', () => {
   it('preserves Codex startup command delivery for linked work-item launches', () => {
@@ -63,6 +66,36 @@ describe('buildDirectWorkItemStartupOpts', () => {
   })
 })
 
+describe('pasteDirectWorkItemDraftWhenAgentReady', () => {
+  it('fails closed with actionable trust/sign-in/update guidance', async () => {
+    vi.mocked(pasteDraftWhenAgentReady).mockImplementationOnce(async (args) => {
+      args.onTimeout?.()
+      return false
+    })
+    const startupPlan: AgentStartupPlan = {
+      agent: 'codex',
+      launchCommand: 'codex',
+      expectedProcess: 'codex',
+      followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} }
+    }
+
+    await expect(
+      pasteDirectWorkItemDraftWhenAgentReady({
+        primaryTabId: 'tab-1',
+        startupPlan,
+        content: 'https://github.com/acme/repo/issues/36',
+        submit: true,
+        forcePaste: true
+      })
+    ).resolves.toBe(false)
+
+    expect(toast.message).toHaveBeenCalledWith(
+      'Agent input did not become ready. Dismiss any trust, sign-in, or update prompt, then send the work item prompt from the terminal.'
+    )
+  })
+})
+
 const settings = {
   agentCmdOverrides: {},
   agentDefaultArgs: {},
@@ -77,6 +110,31 @@ const settings = {
 }
 
 describe('buildDirectWorkItemAgentStartupPlan', () => {
+  it('keeps the real Codex command and launch identity for submit-after-ready', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: 'Review issue 42',
+      promptDelivery: 'submit-after-ready',
+      settings: { agentCmdOverrides: {}, agentDefaultArgs: {}, agentDefaultEnv: {} },
+      launchPlatform: 'darwin'
+    })
+
+    expect(result.draftLaunchedNatively).toBe(false)
+    expect(result.startupPlan).toEqual(
+      expect.objectContaining({
+        agent: 'codex',
+        launchCommand: expect.stringMatching(/^codex(?:\s|$)/),
+        expectedProcess: 'codex'
+      })
+    )
+    expect(buildDirectWorkItemStartupOpts('codex', result.startupPlan, 'task_page')).toEqual({
+      startup: expect.objectContaining({
+        command: result.startupPlan?.launchCommand,
+        launchAgent: 'codex'
+      })
+    })
+  })
+
   it('omits native-chat preferences when the new workspace opens in terminal mode', () => {
     const result = buildDirectWorkItemAgentStartupPlan({
       agent: 'codex',

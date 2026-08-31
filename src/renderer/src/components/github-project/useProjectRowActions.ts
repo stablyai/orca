@@ -16,6 +16,7 @@ import {
 import { resolveSelectedProjectRowRepo } from './project-row-filtering'
 import { buildProjectWorkItem } from './project-work-item'
 import { useProjectRowMutations } from './useProjectRowMutations'
+import { resolveWorkItemStartPromptDelivery } from '../../../../shared/work-item-start-prompt-delivery'
 
 type DialogRepoItem = {
   workItem: GitHubWorkItem
@@ -216,6 +217,9 @@ export function useProjectRowActions({
         repoId: resolution.repo.id,
         launchSource: 'task_page',
         telemetrySource: 'sidebar',
+        promptDelivery: resolveWorkItemStartPromptDelivery(
+          useAppStore.getState().settings?.workItemStartPromptDelivery
+        ),
         openModalFallback: () => {
           if (row.content.url) {
             void window.api.shell.openUrl(row.content.url)

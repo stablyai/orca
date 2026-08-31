@@ -65,6 +65,7 @@ export const SettingsUpdate = z
     defaultTaskViewPreset: z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
+    workItemStartPromptDelivery: z.enum(['draft', 'submit-after-ready']).optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),

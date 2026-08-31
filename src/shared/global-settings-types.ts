@@ -25,6 +25,7 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
+import type { WorkItemStartPromptDelivery } from './work-item-start-prompt-delivery'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -339,6 +340,8 @@ export type GlobalSettings = {
   skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
+  /** Whether direct Start/Use actions leave work item context editable or submit it after TUI readiness. */
+  workItemStartPromptDelivery?: WorkItemStartPromptDelivery
   /** Persisted last-used task source so Tasks reopens to the same provider instead of defaulting to GitHub. */
   defaultTaskSource: TaskProvider
   /** Persisted visible task providers; hides unused providers from Tasks chrome and sidebar shortcuts. */

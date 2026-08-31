@@ -112,6 +112,13 @@ export async function pasteDraftWhenAgentReady(args: {
 
   const { ptyId } = readiness
   if (!readiness.ready) {
+    // Why: a live agent process can still be blocked on a trust/update modal. Drafts retain the
+    // best-effort fallback below, but auto-submit must not paste+Enter until the real composer
+    // signal proves the input path is ready.
+    if (submit === true) {
+      onTimeout?.()
+      return false
+    }
     // Why: fast-starting TUIs can emit the paste-ready escape sequence before
     // this sidecar subscription attaches. If process/title inspection says the
     // launched agent owns the PTY, fall back to a best-effort paste instead of
@@ -156,6 +163,12 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   const budget = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
   if (!ready) {
+    // Why: remote process ownership is not composer readiness. A trust/update modal can own the
+    // same PTY while the expected agent binary is alive, so submitted prompts fail closed.
+    if (submit === true) {
+      onTimeout?.()
+      return false
+    }
     const fallbackReady = agentConfig
       ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
       : false

@@ -12,6 +12,7 @@ import { readLegacySidekickFlag } from '../applying-settings/onboarding-normaliz
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
+import { resolveWorkItemStartPromptDelivery } from '../../../shared/work-item-start-prompt-delivery'
 
 export function normalizeLoadedGlobalSettings(
   parsed: PersistedState,
@@ -110,6 +111,9 @@ export function normalizeLoadedGlobalSettings(
     // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
     uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
+    workItemStartPromptDelivery: resolveWorkItemStartPromptDelivery(
+      parsed.settings?.workItemStartPromptDelivery
+    ),
     defaultTaskSource: taskProviderSettings.defaultTaskSource,
     visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
     visibleTaskProvidersDefaultedForJira: true,

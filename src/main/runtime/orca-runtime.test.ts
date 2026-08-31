@@ -1848,6 +1848,7 @@ describe('OrcaRuntimeService', () => {
         ...store.getSettings(),
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        workItemStartPromptDelivery: 'submit-after-ready',
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
         terminalQuickCommands
@@ -1858,6 +1859,7 @@ describe('OrcaRuntimeService', () => {
       worktreeVisibilityDefaults: { external: 'hide' },
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      workItemStartPromptDelivery: 'submit-after-ready',
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
     })
@@ -1938,6 +1940,7 @@ describe('OrcaRuntimeService', () => {
       ...store.getSettings(),
       experimentalNewWorktreeCardStyle: false,
       compactWorktreeCards: false,
+      workItemStartPromptDelivery: 'draft' as const,
       minimaxGroupId: '',
       minimaxUsageModels: 'general'
     }
@@ -1955,12 +1958,14 @@ describe('OrcaRuntimeService', () => {
       await runtime.updateClientSettings({
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        workItemStartPromptDelivery: 'submit-after-ready',
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5'
       })
     ).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      workItemStartPromptDelivery: 'submit-after-ready',
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
     })
@@ -1968,6 +1973,7 @@ describe('OrcaRuntimeService', () => {
       {
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        workItemStartPromptDelivery: 'submit-after-ready',
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5'
       },
@@ -1976,6 +1982,7 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getClientSettings()).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      workItemStartPromptDelivery: 'submit-after-ready',
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
     })

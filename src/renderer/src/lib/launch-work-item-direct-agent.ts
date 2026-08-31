@@ -167,23 +167,31 @@ export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
   content: string
   submit?: boolean
   forcePaste?: boolean
-}): Promise<void> {
+}): Promise<boolean> {
   const { primaryTabId, startupPlan, content, submit = false, forcePaste = false } = args
-  await deliverLaunchPromptToAgentTab({
+  return await deliverLaunchPromptToAgentTab({
     tabId: primaryTabId,
     content,
     agent: startupPlan.agent,
     submit,
     forcePaste,
     onTimeout: () => {
-      const label = submit ? 'prompt' : 'work item context'
-      toast.message(
-        translate(
-          'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
-          'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
-          { value0: label }
+      if (submit) {
+        toast.message(
+          translate(
+            'auto.lib.launch.work.item.direct.agent.submitTimeout',
+            'Agent input did not become ready. Dismiss any trust, sign-in, or update prompt, then send the work item prompt from the terminal.'
+          )
         )
-      )
+      } else {
+        toast.message(
+          translate(
+            'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
+            'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
+            { value0: 'work item context' }
+          )
+        )
+      }
       // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
       // on the dashboard is the trigger to add one.
       track('agent_error', {

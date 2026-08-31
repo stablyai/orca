@@ -48,8 +48,9 @@ import {
  *   - the repo can't be resolved from `repoId`
  *   - no compatible agent is detected on PATH
  *
- * Best-effort: after workspace activation, paste failures only toast a notice — the user still
- * has a usable workspace and can paste the work item context themselves.
+ * Draft delivery remains best-effort after activation. Submit-after-ready resolves only after
+ * the prompt reaches the agent input; a readiness timeout returns false while leaving the usable
+ * workspace active.
  */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
   const {
@@ -344,12 +345,16 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return true
   }
 
-  void pasteDirectWorkItemDraftWhenAgentReady({
+  const promptDeliveryResult = pasteDirectWorkItemDraftWhenAgentReady({
     primaryTabId,
     startupPlan,
     content: draftContent,
     submit: promptDelivery === 'submit-after-ready',
     forcePaste: promptDelivery === 'submit-after-ready'
   })
+  if (promptDelivery === 'submit-after-ready') {
+    return await promptDeliveryResult
+  }
+  void promptDeliveryResult
   return true
 }
