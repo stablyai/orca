@@ -1,5 +1,5 @@
-import { EyeOff, RotateCcw } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { EyeOff, RefreshCw, RotateCcw } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getFeatureWallSetupSteps,
   getFirstIncompleteFeatureWallSetupStepId
@@ -17,7 +17,10 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
   const [checklistDismissed, setChecklistDismissed] = useState(false)
   const [checklistVisibilityLoaded, setChecklistVisibilityLoaded] = useState(false)
+  const [checklistVisibilityLoadFailed, setChecklistVisibilityLoadFailed] = useState(false)
+  const [checklistVisibilityLoadAttempt, setChecklistVisibilityLoadAttempt] = useState(0)
   const [dismissalUpdating, setDismissalUpdating] = useState(false)
+  const dismissalIntentRef = useRef<boolean | null>(null)
   const progress = useSettingsSetupGuideFullProgress(
     true,
     orchestrationSkillInstalled,
@@ -33,21 +36,23 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
     void window.api.onboarding
       .get()
       .then((onboarding) => {
-        if (mounted) {
+        if (mounted && dismissalIntentRef.current === null) {
           setChecklistDismissed(onboarding.checklist.dismissed)
+          setChecklistVisibilityLoadFailed(false)
           setChecklistVisibilityLoaded(true)
         }
       })
       .catch((error) => {
         console.error('Failed to load onboarding checklist visibility:', error)
         if (mounted) {
+          setChecklistVisibilityLoadFailed(true)
           setChecklistVisibilityLoaded(true)
         }
       })
     return () => {
       mounted = false
     }
-  }, [])
+  }, [checklistVisibilityLoadAttempt])
 
   useEffect(() => {
     if (userSelectedStep) {
@@ -72,6 +77,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   }
 
   const handleChecklistDismissal = async (dismissed: boolean): Promise<void> => {
+    dismissalIntentRef.current = dismissed
     setDismissalUpdating(true)
     try {
       const onboarding = await window.api.onboarding.update({ checklist: { dismissed } })
@@ -123,6 +129,34 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
           'Loading onboarding checklist'
         )}
       />
+    )
+  }
+
+  if (checklistVisibilityLoadFailed) {
+    return (
+      <div className="flex h-[min(740px,calc(100vh-14rem))] min-h-[540px] items-center justify-center px-7 py-6">
+        <div className="flex max-w-md flex-col items-center gap-3 text-center">
+          <p className="text-sm text-muted-foreground">
+            {translate(
+              'auto.components.settings.SettingsSetupGuidePane.loadFailedDescription',
+              'The onboarding checklist visibility could not be loaded.'
+            )}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setChecklistVisibilityLoaded(false)
+              setChecklistVisibilityLoadFailed(false)
+              setChecklistVisibilityLoadAttempt((attempt) => attempt + 1)
+            }}
+          >
+            <RefreshCw />
+            {translate('auto.components.settings.SettingsSetupGuidePane.retry', 'Retry')}
+          </Button>
+        </div>
+      </div>
     )
   }
 

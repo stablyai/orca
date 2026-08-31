@@ -8128,7 +8128,9 @@
           "checklistHiddenDescription": "The onboarding checklist is hidden. You can show it again whenever you need it.",
           "showChecklist": "Show checklist",
           "hideChecklist": "Hide checklist",
-          "loadingChecklist": "Loading onboarding checklist"
+          "loadingChecklist": "Loading onboarding checklist",
+          "loadFailedDescription": "The onboarding checklist visibility could not be loaded.",
+          "retry": "Retry"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Status",
