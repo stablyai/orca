@@ -19,6 +19,9 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   'command-code': '--yolo',
   continue: '--allow "*"',
   cursor: '--yolo',
+  // Why: interactive `droid` exposes autonomy as `--auto <low|medium|high>`; `--skip-permissions-unsafe`
+  // is a `droid exec`-only flag that Factory scopes to isolated sandboxes, so High autonomy is the yolo analogue.
+  droid: '--auto high',
   kimi: '--yolo',
   'mistral-vibe': '--agent auto-approve',
   'qwen-code': '--approval-mode yolo',

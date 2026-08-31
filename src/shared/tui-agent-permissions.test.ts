@@ -76,6 +76,48 @@ describe('tui agent permissions', () => {
     ).toBe('mixed')
   })
 
+  it('resolves one Droid yolo launch as yolo', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'droid',
+        agentArgs: YOLO_TUI_AGENT_ARGS.droid,
+        agentEnv: {}
+      })
+    ).toBe('yolo')
+  })
+
+  it('resolves one empty Droid launch as manual', () => {
+    expect(resolveTuiAgentPermissionMode({ agent: 'droid', agentArgs: '', agentEnv: {} })).toBe(
+      'manual'
+    )
+  })
+
+  it('resolves a lower Droid autonomy level as mixed', () => {
+    expect(
+      resolveTuiAgentPermissionMode({ agent: 'droid', agentArgs: '--auto medium', agentEnv: {} })
+    ).toBe('mixed')
+  })
+
+  it('clears the Droid autonomy flag when applying manual mode', () => {
+    const result = applyAgentPermissionMode({
+      mode: 'manual',
+      agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
+      agentDefaultEnv: YOLO_TUI_AGENT_ENV
+    })
+
+    expect(result.agentDefaultArgs.droid).toBe('')
+  })
+
+  it('restores the Droid autonomy flag when applying yolo mode to an untouched profile', () => {
+    const result = applyAgentPermissionMode({
+      mode: 'yolo',
+      agentDefaultArgs: { droid: '' },
+      agentDefaultEnv: {}
+    })
+
+    expect(result.agentDefaultArgs.droid).toBe('--auto high')
+  })
+
   it('resolves env-driven yolo launches', () => {
     expect(
       resolveTuiAgentPermissionMode({
