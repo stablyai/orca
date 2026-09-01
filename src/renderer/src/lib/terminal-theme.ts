@@ -175,5 +175,6 @@ export function resolvePaneStyleOptions(
 
 export {
   isTerminalBackgroundLight,
+  resolveReadableTerminalForeground,
   resolveOpaqueTerminalBackground
 } from './terminal-title-contrast'

@@ -5,7 +5,11 @@ import {
   normalizeLeftSidebarTintOpacity
 } from '../../../shared/left-sidebar-appearance'
 import { normalizeTerminalHexColor } from '../../../shared/terminal-custom-themes'
-import { isTerminalBackgroundLight, resolveEffectiveTerminalAppearance } from './terminal-theme'
+import {
+  isTerminalBackgroundLight,
+  resolveEffectiveTerminalAppearance,
+  resolveReadableTerminalForeground
+} from './terminal-theme'
 
 export type AppAppearanceSettings = Pick<
   GlobalSettings,
@@ -127,12 +131,19 @@ function resolveTerminalSurface(
     normalizeTerminalHexColor(settings.terminalColorOverrides?.background) ??
     appearance.theme?.background ??
     '#000000'
+  const rawForeground =
+    normalizeTerminalHexColor(settings.terminalColorOverrides?.foreground) ??
+    appearance.theme?.foreground ??
+    '#fafafa'
+  const contrastOptions = {
+    backgroundOpacity: settings.terminalBackgroundOpacity,
+    appSurface: resolveBaseDarkMode(settings, systemPrefersDark)
+      ? ('dark' as const)
+      : ('light' as const)
+  }
   return {
     background: compositeWithBaseSurface(rawBackground, settings.terminalBackgroundOpacity),
-    foreground:
-      normalizeTerminalHexColor(settings.terminalColorOverrides?.foreground) ??
-      appearance.theme?.foreground ??
-      '#fafafa',
+    foreground: resolveReadableTerminalForeground(rawForeground, rawBackground, contrastOptions),
     rawBackground
   }
 }
