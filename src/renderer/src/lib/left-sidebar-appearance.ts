@@ -114,7 +114,7 @@ function buildSurfaceVariables(background: string, foreground: string): LeftSide
     '--sidebar-accent-foreground': foreground,
     '--sidebar-border': border,
     '--sidebar-ring': ring,
-    '--bg-titlebar': card
+    '--bg-titlebar': background
   }
 }
 
