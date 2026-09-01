@@ -49,7 +49,6 @@ import {
 import {
   createViewportGuestFactory,
   flushViewportOps,
-  GUEST_CLEAN_UA,
   GUEST_ELECTRON_UA
 } from './browser-manager-viewport-test-fixtures'
 
@@ -207,7 +206,7 @@ describe('browserManager', () => {
         mobile: false
       })
       expect(debuggerSendCommand).toHaveBeenLastCalledWith('Emulation.setUserAgentOverride', {
-        userAgent: GUEST_CLEAN_UA
+        userAgent: GUEST_ELECTRON_UA
       })
 
       // Navigating to the auth host must move the standing override to the Firefox identity.
@@ -222,7 +221,7 @@ describe('browserManager', () => {
       debuggerSendCommand.mockClear()
       willRedirect({ preventDefault: vi.fn() }, 'https://example.com/', false, true)
       await flushViewportOps()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_ELECTRON_UA })
     })
 
     // Why: not an ordering race — debugger.sendCommand dispatches in call order over one channel, so
@@ -241,8 +240,8 @@ describe('browserManager', () => {
     }
 
     // Why mobile: on the desktop branch the break is masked by coincidence — applyGoogleAuthUserAgent
-    // has already switched the WebContents UA to Firefox, and cleanElectronUserAgent passes a Firefox
-    // UA through untouched, so the stale-URL desktop path happens to emit Firefox anyway. The mobile
+    // has already switched the WebContents UA to Firefox and the desktop branch republishes its base
+    // UA untouched, so the stale-URL desktop path happens to emit Firefox anyway. The mobile
     // branch derives a Chrome-shaped iPhone UA from that same base and exposes the real defect.
     it('does not leave the Chrome preset UA standing when a mobile preset lands mid-navigation onto an auth host', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4251, 'https://example.com/')
@@ -332,7 +331,7 @@ describe('browserManager', () => {
 
       // Without the fix the resuming preset re-reads getURL() as the auth host and clobbers the
       // navigation's correct write, stranding the Firefox UA on a non-auth page.
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_ELECTRON_UA })
     })
 
     it('falls back to the committed URL once a navigation commits or fails', async () => {
@@ -378,7 +377,7 @@ describe('browserManager', () => {
       await flushViewportOps()
 
       expect(guest.setUserAgent).toHaveBeenLastCalledWith(GUEST_ELECTRON_UA)
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_ELECTRON_UA })
 
       // A later preset must also resolve the committed, non-auth URL.
       debuggerSendCommand.mockClear()
@@ -457,7 +456,7 @@ describe('browserManager', () => {
       expect(guest.setUserAgent).not.toHaveBeenCalled()
       expect(debuggerSendCommand).not.toHaveBeenCalledWith(
         'Emulation.setUserAgentOverride',
-        expect.objectContaining({ userAgent: GUEST_CLEAN_UA })
+        expect.objectContaining({ userAgent: GUEST_ELECTRON_UA })
       )
     })
 
@@ -517,7 +516,7 @@ describe('browserManager', () => {
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/redirected', true)
       await flushViewportOps()
       expect(guest.setUserAgent).not.toHaveBeenCalled()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_ELECTRON_UA })
     })
 
     it('preserves the auth identity when a viewport preset is cleared after a redirect', async () => {
@@ -592,7 +591,7 @@ describe('browserManager', () => {
       didStartNavigation(null, 'https://example.com/', false, true)
       await flushViewportOps()
 
-      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_ELECTRON_UA })
     })
 
     it('reapplies a preset when navigation starts during its final UA write', async () => {

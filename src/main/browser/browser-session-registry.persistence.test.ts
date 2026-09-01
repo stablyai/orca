@@ -119,7 +119,6 @@ function installModuleMocks(
     requestSystemMediaAccess: requestSystemMediaAccessMock
   }))
   vi.doMock('./browser-session-ua', () => ({
-    cleanElectronUserAgent: vi.fn((ua: string) => ua.replace(/\s*Electron\/\S+/, '')),
     setupClientHintsOverride: setupClientHintsOverrideMock
   }))
   // This suite models replay with an in-memory filesystem. The real file-backed SQLite merge has
@@ -234,7 +233,7 @@ describe('BrowserSessionRegistry persistence', () => {
     })
   })
 
-  it('keeps UA cleaning as the fallback for profiles without an override', async () => {
+  it('leaves the engine UA in place for profiles without an override', async () => {
     const fsState = createFsState()
     const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
     const { browserSessionRegistry } = await import('./browser-session-registry')
@@ -242,8 +241,14 @@ describe('BrowserSessionRegistry persistence', () => {
     await browserSessionRegistry.createProfile('isolated', 'Default identity')
 
     const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
-    expect(profileSession.setUserAgent).toHaveBeenCalledWith('Mozilla/5.0 Orca')
-    expect(setupClientHintsOverrideMock).toHaveBeenCalledWith(profileSession, 'Mozilla/5.0 Orca')
+    // Why: a rewritten UA is what Cloudflare's managed challenge rejects (STA-3905); the engine's
+    // own identity stands, and only the auth-host header switch installs.
+    expect(profileSession.setUserAgent).not.toHaveBeenCalled()
+    // The Electron token now survives to the auth-host switch instead of being laundered out.
+    expect(setupClientHintsOverrideMock).toHaveBeenCalledWith(
+      profileSession,
+      'Mozilla/5.0 Electron/31 Orca'
+    )
   })
 
   it('leaves UA and client hints untouched for native-mode profiles', async () => {
@@ -379,7 +384,7 @@ describe('BrowserSessionRegistry persistence', () => {
   // Why: imports before Aug 2026 persisted a synthesized source-browser UA
   // (fork imports as a broken Chrome/1.x, Chrome imports as a valid version).
   // Neither may ever be applied again — the engine-derived UA is the only one.
-  it('ignores legacy persisted UAs, valid or broken, and applies the engine UA', async () => {
+  it('ignores legacy persisted UAs, valid or broken, and writes no UA at all', async () => {
     const importedPartition = 'persist:orca-browser-session-11111111-1111-4111-8111-111111111111'
     const brokenUa =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/1.158.1 Safari/537.36'
@@ -415,9 +420,8 @@ describe('BrowserSessionRegistry persistence', () => {
     )
     expect(appliedUas).not.toContain(brokenUa)
     expect(appliedUas).not.toContain(validUa)
-    // Why: every non-native profile falls to Orca's own cleaned engine UA.
-    expect(appliedUas.length).toBeGreaterThan(0)
-    expect(appliedUas.every((ua) => ua === 'Mozilla/5.0 Orca')).toBe(true)
+    // Why: no profile writes a UA at all now, which subsumes "never replays a persisted one".
+    expect(appliedUas).toEqual([])
     expect(
       setupClientHintsOverrideMock.mock.calls.every(
         (c: unknown[]) => c[1] !== brokenUa && c[1] !== validUa

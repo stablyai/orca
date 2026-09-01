@@ -48,7 +48,6 @@ import {
   type PageInitiatedTabBudget
 } from './browser-page-initiated-tab-budget'
 import { isNewBrowserTabPopupIntent } from './browser-popup-new-tab-intent'
-import { cleanElectronUserAgent } from './browser-session-ua'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
@@ -1311,7 +1310,7 @@ export class BrowserManager {
         // Why: the session UA is the profile's stable base identity. guest.getUserAgent() is not:
         // applyGoogleAuthUserAgent leaves it pinned to the Firefox auth UA once a guest switches to
         // the CDP override, so reading it back here would republish that identity on ordinary hosts.
-        baseUserAgent: cleanElectronUserAgent(baseUserAgent ?? guest.session.getUserAgent())
+        baseUserAgent: baseUserAgent ?? guest.session.getUserAgent()
       })
     )
   }

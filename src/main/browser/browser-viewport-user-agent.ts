@@ -44,7 +44,8 @@ export function buildViewportUserAgentOverride(args: {
     return { userAgent: googleAuthUserAgent() }
   }
   if (!args.mobile) {
-    // Why: desktop presets still need the clean (non-Electron) UA so Cloudflare/Turnstile don't flag the session.
+    // Why: republish the session's own identity unchanged — a preset must not become a second place
+    // that reshapes the UA (STA-3905).
     return { userAgent: args.baseUserAgent }
   }
   const chromeMajor = extractChromeMajor(args.baseUserAgent)

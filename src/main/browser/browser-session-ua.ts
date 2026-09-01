@@ -8,25 +8,14 @@ import {
   stripClientHints
 } from './browser-google-auth-ua'
 
-// Why: Electron's default UA includes "Electron/X.X.X" and the app name
-// (e.g. "orca/1.2.3"), which Cloudflare Turnstile and other bot detectors
-// flag as non-human traffic. Strip those tokens so the webview's UA and
-// sec-ch-ua Client Hints look like standard Chrome.
-export function cleanElectronUserAgent(ua: string): string {
-  return (
-    ua
-      .replace(/\s+Electron\/\S+/, '')
-      // Why: \S+ matches any non-whitespace token (e.g. "orca/1.3.8-rc.0")
-      // including pre-release semver strings that [\d.]+ would miss.
-      .replace(/(\)\s+)\S+\s+(Chrome\/)/, '$1$2')
-  )
-}
-
-// Why: Electron emits sec-ch-ua brands like "Not A(Brand" without a
-// "Google Chrome" entry, which disagrees with the Chrome-shaped UA the session
-// presents. Rewrite the hint headers to the brand set Chrome ships for the same
-// engine version so the two surfaces tell one story. Also owns the Google
-// auth-host Firefox switch, which must install even for a non-Chrome-shaped UA.
+// Why the session UA is left alone (STA-3905): stripping "Electron/X" and the app name leaves a UA
+// claiming Google Chrome, and Chromium under Electron sends no sec-ch-ua* client hints at all — a
+// combination no real Chrome produces. Cloudflare's managed challenge rejects it ("There was a
+// problem with verification"), while the untouched engine UA passes. Measured on
+// dash.cloudflare.com/login: untouched 5/5 pass, every rewritten variant 12/12 fail.
+//
+// The brand rewrite below is kept for hosts that do send the hints, but its real job now is the
+// Google auth-host Firefox switch, which must install regardless of the UA shape.
 export function setupClientHintsOverride(
   sess: Session,
   ua: string,

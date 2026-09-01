@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   handleGuestWillDownload: vi.fn(),
   noticeDocPreviewDownloadBlocked: vi.fn(),
   clearBrowserWebAuthnAccessHandlers: vi.fn(),
-  installBrowserWebAuthnAccessHandlers: vi.fn()
+  installBrowserWebAuthnAccessHandlers: vi.fn(),
+  setupClientHintsOverride: vi.fn()
 }))
 
 type WillDownloadListener = (
@@ -82,8 +83,7 @@ vi.mock('./browser-media-access', () => ({
   requestSystemMediaAccess: async () => false
 }))
 vi.mock('./browser-session-ua', () => ({
-  cleanElectronUserAgent: (userAgent: string) => userAgent,
-  setupClientHintsOverride: vi.fn()
+  setupClientHintsOverride: mocks.setupClientHintsOverride
 }))
 vi.mock('./browser-session-user-agent-mode', () => ({
   setBrowserSessionUserAgentMode: vi.fn()
@@ -231,5 +231,34 @@ describe('partition permission policy', () => {
       displayMediaDecision = decision
     })
     expect(displayMediaDecision).toEqual({ video: undefined, audio: undefined })
+  })
+  // Why: stripping the engine tokens leaves a UA claiming Google Chrome that the engine cannot
+  // back — Electron emits no sec-ch-ua* client hints — and Cloudflare's managed challenge rejects
+  // exactly that combination. The untouched engine UA passes it (STA-3905).
+  it('leaves the engine user agent untouched on a clean-mode profile', async () => {
+    const install = await loadInstaller()
+    install(profileFor('orca-ua-clean'))
+    const sess = sessionsByPartition.get('orca-ua-clean')
+    if (!sess) {
+      throw new Error('Expected the clean-mode session')
+    }
+    expect(sess.setUserAgent).not.toHaveBeenCalled()
+  })
+
+  // Why: the auth-host Firefox switch lives inside the same installer, so dropping the UA rewrite
+  // must not take it down with it.
+  it('still installs the auth-host header switch for a clean-mode profile', async () => {
+    const install = await loadInstaller()
+    install(profileFor('orca-ua-hints'))
+    const sess = sessionsByPartition.get('orca-ua-hints')
+    expect(mocks.setupClientHintsOverride).toHaveBeenCalledWith(sess, 'Mozilla/5.0 Orca')
+  })
+
+  it('installs no header switch for a native-mode profile', async () => {
+    const install = await loadInstaller()
+    install({ ...profileFor('orca-ua-native'), userAgentMode: 'native' })
+    const sess = sessionsByPartition.get('orca-ua-native')
+    expect(sess?.setUserAgent).not.toHaveBeenCalled()
+    expect(mocks.setupClientHintsOverride).not.toHaveBeenCalledWith(sess, expect.anything())
   })
 })

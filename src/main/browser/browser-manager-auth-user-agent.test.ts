@@ -51,7 +51,7 @@ import {
 import {
   createViewportGuestFactory,
   flushViewportOps,
-  GUEST_CLEAN_UA
+  GUEST_ELECTRON_UA
 } from './browser-manager-viewport-test-fixtures'
 
 const {
@@ -543,7 +543,7 @@ describe('browserManager', () => {
     )
     expect(uaWrites.length).toBeGreaterThan(0)
     for (const [, params] of uaWrites) {
-      expect((params as { userAgent: string }).userAgent).toBe(GUEST_CLEAN_UA)
+      expect((params as { userAgent: string }).userAgent).toBe(GUEST_ELECTRON_UA)
     }
   })
 })
