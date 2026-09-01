@@ -107,8 +107,16 @@ describe('applyAppAppearanceToDocument', () => {
     root.style.setProperty('--foreground', '#fafafa')
     root.style.setProperty('--primary', '#fafafa')
     root.style.setProperty('--primary-foreground', '#0a0a0a')
+    root.style.setProperty('--secondary', '#262626')
+    root.style.setProperty('--secondary-foreground', '#fafafa')
+    root.style.setProperty('--destructive', '#ff6568')
+    root.style.setProperty('--destructive-foreground', '#df2225')
     root.style.setProperty('--popover', '#202020')
     root.style.setProperty('--popover-foreground', '#fafafa')
+    root.style.setProperty('--status-success', '#86efac')
+    root.style.setProperty('--annotation-highlight', '#fbbf24')
+    root.style.setProperty('--markdown-search-match', '#facc15')
+    root.style.setProperty('--markdown-search-match-active', '#fb923c')
     root.style.setProperty('--editor-surface', '#1e1e1e')
     const style = document.createElement('style')
     style.textContent = `
@@ -118,8 +126,16 @@ describe('applyAppAppearanceToDocument', () => {
         --foreground: var(--orca-editor-base-foreground);
         --primary: var(--orca-editor-base-primary);
         --primary-foreground: var(--orca-editor-base-primary-foreground);
+        --secondary: var(--orca-editor-base-secondary);
+        --secondary-foreground: var(--orca-editor-base-secondary-foreground);
+        --destructive: var(--orca-editor-base-destructive);
+        --destructive-foreground: var(--orca-editor-base-destructive-foreground);
         --popover: var(--orca-editor-base-popover);
         --popover-foreground: var(--orca-editor-base-popover-foreground);
+        --status-success: var(--orca-editor-base-status-success);
+        --annotation-highlight: var(--orca-editor-base-annotation-highlight);
+        --markdown-search-match: var(--orca-editor-base-markdown-search-match);
+        --markdown-search-match-active: var(--orca-editor-base-markdown-search-match-active);
         --editor-surface: var(--orca-editor-base-editor-surface);
         background: var(--editor-surface);
         color: var(--foreground);
@@ -153,6 +169,11 @@ describe('applyAppAppearanceToDocument', () => {
     expect(root.style.getPropertyValue('--orca-editor-base-foreground')).toBe('#fafafa')
     expect(root.style.getPropertyValue('--orca-editor-base-primary')).toBe('#fafafa')
     expect(root.style.getPropertyValue('--orca-editor-base-primary-foreground')).toBe('#0a0a0a')
+    expect(root.style.getPropertyValue('--orca-editor-base-secondary')).toBe('#262626')
+    expect(root.style.getPropertyValue('--orca-editor-base-destructive')).toBe('#ff6568')
+    expect(root.style.getPropertyValue('--orca-editor-base-status-success')).toBe('#86efac')
+    expect(root.style.getPropertyValue('--orca-editor-base-annotation-highlight')).toBe('#fbbf24')
+    expect(root.style.getPropertyValue('--orca-editor-base-markdown-search-match')).toBe('#facc15')
     expect(root.style.getPropertyValue('--orca-editor-base-popover')).toBe('#202020')
     expect(root.style.getPropertyValue('--orca-editor-base-popover-foreground')).toBe('#fafafa')
     expect(root.style.getPropertyValue('--orca-editor-base-editor-surface')).toBe('#1e1e1e')
@@ -162,8 +183,13 @@ describe('applyAppAppearanceToDocument', () => {
       expect(computed.color).toBe('#fafafa')
       expect(computed.getPropertyValue('--primary')).toBe('#fafafa')
       expect(computed.getPropertyValue('--primary-foreground')).toBe('#0a0a0a')
+      expect(computed.getPropertyValue('--secondary')).toBe('#262626')
+      expect(computed.getPropertyValue('--destructive')).toBe('#ff6568')
       expect(computed.getPropertyValue('--popover')).toBe('#202020')
       expect(computed.getPropertyValue('--popover-foreground')).toBe('#fafafa')
+      expect(computed.getPropertyValue('--status-success')).toBe('#86efac')
+      expect(computed.getPropertyValue('--annotation-highlight')).toBe('#fbbf24')
+      expect(computed.getPropertyValue('--markdown-search-match')).toBe('#facc15')
     }
   })
 

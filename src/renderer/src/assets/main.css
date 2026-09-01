@@ -383,11 +383,20 @@
   --accent-foreground: var(--orca-editor-base-accent-foreground);
   --primary: var(--orca-editor-base-primary);
   --primary-foreground: var(--orca-editor-base-primary-foreground);
+  --secondary: var(--orca-editor-base-secondary);
+  --secondary-foreground: var(--orca-editor-base-secondary-foreground);
+  --destructive: var(--orca-editor-base-destructive);
+  --destructive-foreground: var(--orca-editor-base-destructive-foreground);
   --popover: var(--orca-editor-base-popover);
   --popover-foreground: var(--orca-editor-base-popover-foreground);
   --border: var(--orca-editor-base-border);
   --input: var(--orca-editor-base-input);
   --ring: var(--orca-editor-base-ring);
+  --status-success: var(--orca-editor-base-status-success);
+  --annotation-highlight: var(--orca-editor-base-annotation-highlight);
+  --markdown-search-match: var(--orca-editor-base-markdown-search-match);
+  --markdown-search-match-active: var(--orca-editor-base-markdown-search-match-active);
+  --radius: var(--orca-editor-base-radius);
   --editor-surface: var(--orca-editor-base-editor-surface);
 }
 
