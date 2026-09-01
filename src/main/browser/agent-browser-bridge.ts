@@ -50,7 +50,9 @@ import type {
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
-import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
+import { insertTextThroughCdp, iterateBrowserTextInsertionChunks } from './browser-text-insertion'
+import { resolveKeyDefinition, type KeyDefinition } from './cdp-text-input-commands'
+import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { createAgentBrowserProcessEnvironment } from './agent-browser-process-environment'
 import {
   ORCA_TAB_SESSION_PREFIX,
@@ -1015,16 +1017,42 @@ export class AgentBrowserBridge {
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
-      async (sessionName) => {
-        for (const chunk of iterateBrowserTextInsertionChunks(
-          input,
-          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
-        )) {
-          await this.execAgentBrowser(sessionName, ['keyboard', 'type', chunk])
+      async (sessionName, target) => {
+        if (!browserPageId) {
+          for (const chunk of iterateBrowserTextInsertionChunks(
+            input,
+            AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+          )) {
+            await this.execAgentBrowser(sessionName, ['keyboard', 'type', chunk])
+          }
+          return { typed: true } as BrowserTypeResult
         }
-        return { typed: true } as BrowserTypeResult
+        const wc = this.requireTargetWebContents(target)
+        let releaseDebugger = (): void => {}
+        try {
+          releaseDebugger = acquireElectronDebugger(wc).release
+          wc.focus()
+          await insertTextThroughCdp(
+            (method, params) => sendDebuggerCommand(wc.debugger, method, params),
+            input,
+            { maxChunkBytes: AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES }
+          )
+          return { typed: true } as BrowserTypeResult
+        } catch (error) {
+          if (!this.getWebContents(target.webContentsId)) {
+            throw this.createPageUnavailableError(
+              `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
+            )
+          }
+          throw new BrowserError(
+            'browser_error',
+            `Failed to type into browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        } finally {
+          releaseDebugger()
+        }
       },
-      { requireScopedTarget: true }
+      { ensureSession: !browserPageId, requireScopedTarget: true }
     )
   }
 
@@ -1812,9 +1840,62 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserKeypressResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName, target) => {
+        if (!browserPageId) {
+          return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
+        }
+        const wc = this.requireTargetWebContents(target)
+        const keyDefinition = resolveKeyDefinition(key)
+        let releaseDebugger = (): void => {}
+        try {
+          releaseDebugger = acquireElectronDebugger(wc).release
+          wc.focus()
+          const modifierDefinitions = resolveModifierKeyDefinitions(keyDefinition.modifiers ?? 0)
+          let activeModifiers = 0
+          for (const modifier of modifierDefinitions) {
+            activeModifiers |= modifier.modifier
+            await sendDebuggerCommand(wc.debugger, 'Input.dispatchKeyEvent', {
+              type: 'keyDown',
+              ...modifier.definition,
+              modifiers: activeModifiers
+            })
+          }
+          await sendDebuggerCommand(wc.debugger, 'Input.dispatchKeyEvent', {
+            type: 'keyDown',
+            ...keyDefinition
+          })
+          await sendDebuggerCommand(wc.debugger, 'Input.dispatchKeyEvent', {
+            type: 'keyUp',
+            ...keyDefinition
+          })
+          for (const modifier of modifierDefinitions.toReversed()) {
+            activeModifiers &= ~modifier.modifier
+            await sendDebuggerCommand(wc.debugger, 'Input.dispatchKeyEvent', {
+              type: 'keyUp',
+              ...modifier.definition,
+              modifiers: activeModifiers
+            })
+          }
+          return { pressed: key }
+        } catch (error) {
+          if (!this.getWebContents(target.webContentsId)) {
+            throw this.createPageUnavailableError(
+              `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
+            )
+          }
+          throw new BrowserError(
+            'browser_error',
+            `Failed to press key in browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        } finally {
+          releaseDebugger()
+        }
+      },
+      { ensureSession: !browserPageId }
+    )
   }
 
   async pdf(worktreeId?: string, browserPageId?: string): Promise<BrowserPdfResult> {
@@ -2881,4 +2962,15 @@ export class AgentBrowserBridge {
       return null
     }
   }
+}
+
+const MODIFIER_KEY_DEFINITIONS: { modifier: number; definition: KeyDefinition }[] = [
+  { modifier: 1, definition: { key: 'Alt', code: 'AltLeft', windowsVirtualKeyCode: 18 } },
+  { modifier: 2, definition: { key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17 } },
+  { modifier: 4, definition: { key: 'Meta', code: 'MetaLeft', windowsVirtualKeyCode: 91 } },
+  { modifier: 8, definition: { key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16 } }
+]
+
+function resolveModifierKeyDefinitions(modifiers: number) {
+  return MODIFIER_KEY_DEFINITIONS.filter(({ modifier }) => (modifiers & modifier) !== 0)
 }

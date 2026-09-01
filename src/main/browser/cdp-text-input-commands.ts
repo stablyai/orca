@@ -156,14 +156,27 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
 }
 
 // Why: Input.dispatchKeyEvent needs `text` for keys with default actions (Enter/Tab), or Chrome skips the action.
-type KeyDefinition = {
+export type KeyDefinition = {
   key: string
   code: string
+  modifiers?: number
   windowsVirtualKeyCode?: number
   text?: string
+  unmodifiedText?: string
 }
 
 const KEY_DEFINITIONS: Record<string, KeyDefinition> = {
+  Backquote: { key: '`', code: 'Backquote', windowsVirtualKeyCode: 192, text: '`' },
+  Minus: { key: '-', code: 'Minus', windowsVirtualKeyCode: 189, text: '-' },
+  Equal: { key: '=', code: 'Equal', windowsVirtualKeyCode: 187, text: '=' },
+  Backslash: { key: '\\', code: 'Backslash', windowsVirtualKeyCode: 220, text: '\\' },
+  BracketLeft: { key: '[', code: 'BracketLeft', windowsVirtualKeyCode: 219, text: '[' },
+  BracketRight: { key: ']', code: 'BracketRight', windowsVirtualKeyCode: 221, text: ']' },
+  Semicolon: { key: ';', code: 'Semicolon', windowsVirtualKeyCode: 186, text: ';' },
+  Quote: { key: "'", code: 'Quote', windowsVirtualKeyCode: 222, text: "'" },
+  Comma: { key: ',', code: 'Comma', windowsVirtualKeyCode: 188, text: ',' },
+  Period: { key: '.', code: 'Period', windowsVirtualKeyCode: 190, text: '.' },
+  Slash: { key: '/', code: 'Slash', windowsVirtualKeyCode: 191, text: '/' },
   Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' },
   Tab: { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, text: '\t' },
   Escape: { key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 },
@@ -177,28 +190,142 @@ const KEY_DEFINITIONS: Record<string, KeyDefinition> = {
   End: { key: 'End', code: 'End', windowsVirtualKeyCode: 35 },
   PageUp: { key: 'PageUp', code: 'PageUp', windowsVirtualKeyCode: 33 },
   PageDown: { key: 'PageDown', code: 'PageDown', windowsVirtualKeyCode: 34 },
-  Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' }
+  Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' },
+  ...Object.fromEntries(
+    Array.from({ length: 12 }, (_, index) => {
+      const key = `F${index + 1}`
+      return [key, { key, code: key, windowsVirtualKeyCode: 112 + index }]
+    })
+  )
 }
 
-function resolveKeyDefinition(key: string): KeyDefinition {
+const SHIFTED_KEYS: Record<string, string> = {
+  Backquote: '~',
+  Minus: '_',
+  Equal: '+',
+  Backslash: '|',
+  BracketLeft: '{',
+  BracketRight: '}',
+  Semicolon: ':',
+  Quote: '"',
+  Comma: '<',
+  Period: '>',
+  Slash: '?'
+}
+
+const SHIFTED_DIGITS = ')!@#$%^&*('
+
+const PUNCTUATION_KEYS: Record<
+  string,
+  { code: string; windowsVirtualKeyCode: number; shifted: string }
+> = {
+  '`': { code: 'Backquote', windowsVirtualKeyCode: 192, shifted: '~' },
+  '-': { code: 'Minus', windowsVirtualKeyCode: 189, shifted: '_' },
+  '=': { code: 'Equal', windowsVirtualKeyCode: 187, shifted: '+' },
+  '\\': { code: 'Backslash', windowsVirtualKeyCode: 220, shifted: '|' },
+  '[': { code: 'BracketLeft', windowsVirtualKeyCode: 219, shifted: '{' },
+  ']': { code: 'BracketRight', windowsVirtualKeyCode: 221, shifted: '}' },
+  ';': { code: 'Semicolon', windowsVirtualKeyCode: 186, shifted: ':' },
+  "'": { code: 'Quote', windowsVirtualKeyCode: 222, shifted: '"' },
+  ',': { code: 'Comma', windowsVirtualKeyCode: 188, shifted: '<' },
+  '.': { code: 'Period', windowsVirtualKeyCode: 190, shifted: '>' },
+  '/': { code: 'Slash', windowsVirtualKeyCode: 191, shifted: '?' }
+}
+
+export function resolveKeyDefinition(input: string): KeyDefinition {
+  const parts = input.split('+')
+  let key = parts.pop() ?? input
+  if (key === '' && parts.at(-1) === '') {
+    parts.pop()
+    key = '+'
+  }
+  let modifiers = 0
+  for (const modifier of parts) {
+    if (modifier === 'Alt') {
+      modifiers |= 1
+    } else if (modifier === 'Control' || modifier === 'Ctrl') {
+      modifiers |= 2
+    } else if (
+      modifier === 'Meta' ||
+      modifier === 'Command' ||
+      modifier === 'Cmd' ||
+      (modifier === 'ControlOrMeta' && process.platform === 'darwin')
+    ) {
+      modifiers |= 4
+    } else if (modifier === 'ControlOrMeta') {
+      modifiers |= 2
+    } else if (modifier === 'Shift') {
+      modifiers |= 8
+    }
+  }
+
+  const hasNonShiftModifier = (modifiers & ~8) !== 0
+
   if (KEY_DEFINITIONS[key]) {
-    return KEY_DEFINITIONS[key]
+    if (modifiers === 0) {
+      return KEY_DEFINITIONS[key]
+    }
+    const baseDefinition = KEY_DEFINITIONS[key]
+    const shiftedKey = (modifiers & 8) !== 0 ? SHIFTED_KEYS[key] : undefined
+    return {
+      ...baseDefinition,
+      ...(shiftedKey
+        ? {
+            key: shiftedKey,
+            text: hasNonShiftModifier ? undefined : shiftedKey,
+            unmodifiedText: shiftedKey
+          }
+        : {}),
+      modifiers,
+      ...(hasNonShiftModifier ? { text: undefined } : {})
+    }
   }
   // Why: sites that check event.code drop events with invalid code values.
   if (key.length === 1) {
     const charCode = key.charCodeAt(0)
     if (charCode >= 48 && charCode <= 57) {
-      return { key, code: `Digit${key}`, windowsVirtualKeyCode: charCode, text: key }
-    }
-    if ((charCode >= 65 && charCode <= 90) || (charCode >= 97 && charCode <= 122)) {
+      const shiftedKey = (modifiers & 8) !== 0 ? SHIFTED_DIGITS[Number(key)] : key
       return {
-        key,
-        code: `Key${key.toUpperCase()}`,
-        windowsVirtualKeyCode: key.toUpperCase().charCodeAt(0),
-        text: key
+        key: shiftedKey,
+        code: `Digit${key}`,
+        windowsVirtualKeyCode: charCode,
+        ...(hasNonShiftModifier ? {} : { text: shiftedKey }),
+        modifiers,
+        ...(modifiers > 0 ? { unmodifiedText: (modifiers & 8) !== 0 ? shiftedKey : key } : {})
       }
     }
-    return { key, code: '', windowsVirtualKeyCode: charCode, text: key }
+    if ((charCode >= 65 && charCode <= 90) || (charCode >= 97 && charCode <= 122)) {
+      const text = hasNonShiftModifier ? undefined : key
+      const shiftedKey = (modifiers & 8) !== 0 ? key.toUpperCase() : key
+      return {
+        key: shiftedKey,
+        code: `Key${shiftedKey.toUpperCase()}`,
+        windowsVirtualKeyCode: shiftedKey.toUpperCase().charCodeAt(0),
+        ...(text !== undefined ? { text: (modifiers & 8) !== 0 ? shiftedKey : text } : {}),
+        ...(modifiers > 0 ? { unmodifiedText: (modifiers & 8) !== 0 ? shiftedKey : key } : {}),
+        modifiers
+      }
+    }
+    const punctuation = PUNCTUATION_KEYS[key]
+    if (punctuation) {
+      const shiftedKey = (modifiers & 8) !== 0 ? punctuation.shifted : key
+      return {
+        key: shiftedKey,
+        code: punctuation.code,
+        windowsVirtualKeyCode: punctuation.windowsVirtualKeyCode,
+        ...(hasNonShiftModifier ? {} : { text: shiftedKey }),
+        modifiers,
+        ...(modifiers > 0 ? { unmodifiedText: (modifiers & 8) !== 0 ? shiftedKey : key } : {})
+      }
+    }
+    return {
+      key,
+      code: '',
+      windowsVirtualKeyCode: charCode,
+      text: key,
+      modifiers,
+      ...(modifiers > 0 ? { unmodifiedText: key } : {})
+    }
   }
-  return { key, code: key }
+  return { key, code: key, modifiers }
 }

@@ -565,6 +565,178 @@ describe('AgentBrowserBridge', () => {
     expect(chunks).toEqual(['y'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'zz'])
   })
 
+  it('routes page-targeted type through the requested page debugger', async () => {
+    const wc = mockWebContents(100)
+    const activeWc = mockWebContents(101)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockImplementation((id: number) => (id === 100 ? wc : activeWc))
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(
+        new Map([
+          ['tab-target', 100],
+          ['tab-active', 101]
+        ])
+      )
+    )
+    bridge.setActiveTab(101)
+
+    await bridge.type('HELLO-SOLO', undefined, 'tab-target')
+
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(wc.focus).toHaveBeenCalledTimes(1)
+    expect(activeWc.focus).not.toHaveBeenCalled()
+    expect(activeWc.debugger.sendCommand).not.toHaveBeenCalled()
+    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Input.insertText', {
+      text: 'HELLO-SOLO'
+    })
+  })
+
+  it('routes page-targeted keypress through the requested page debugger', async () => {
+    const wc = mockWebContents(100)
+    const activeWc = mockWebContents(101)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockImplementation((id: number) => (id === 100 ? wc : activeWc))
+    bridge = new AgentBrowserBridge(
+      mockBrowserManager(
+        new Map([
+          ['tab-target', 100],
+          ['tab-active', 101]
+        ])
+      )
+    )
+    bridge.setActiveTab(101)
+
+    const result = await bridge.keypress('Escape', undefined, 'tab-target')
+
+    expect(result).toEqual({ pressed: 'Escape' })
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(wc.focus).toHaveBeenCalledTimes(1)
+    expect(activeWc.focus).not.toHaveBeenCalled()
+    expect(activeWc.debugger.sendCommand).not.toHaveBeenCalled()
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(1, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Escape',
+      code: 'Escape',
+      windowsVirtualKeyCode: 27
+    })
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: 'Escape',
+      code: 'Escape',
+      windowsVirtualKeyCode: 27
+    })
+  })
+
+  it('preserves modifiers for page-targeted keypresses', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.keypress('Control+a', undefined, 'tab-1')
+
+    expect(wc.focus).toHaveBeenCalledTimes(1)
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(1, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Control',
+      code: 'ControlLeft',
+      modifiers: 2,
+      windowsVirtualKeyCode: 17
+    })
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'a',
+      code: 'KeyA',
+      modifiers: 2,
+      windowsVirtualKeyCode: 65,
+      unmodifiedText: 'a'
+    })
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(3, 'Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: 'a',
+      code: 'KeyA',
+      modifiers: 2,
+      windowsVirtualKeyCode: 65,
+      unmodifiedText: 'a'
+    })
+  })
+
+  it('does not synthesize text for modified page-targeted shortcuts', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.keypress('Control+Enter', undefined, 'tab-1')
+
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(1, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Control',
+      code: 'ControlLeft',
+      modifiers: 2,
+      windowsVirtualKeyCode: 17
+    })
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Enter',
+      code: 'Enter',
+      modifiers: 2,
+      windowsVirtualKeyCode: 13,
+      text: undefined
+    })
+  })
+
+  it('initializes agent-browser for unscoped keypresses', async () => {
+    succeedWith({ pressed: 'Escape' })
+
+    await bridge.keypress('Escape')
+
+    expect(execFileMock).toHaveBeenCalled()
+    const commandArgs = execFileMock.mock.calls.map((call: unknown[]) => call[1] as string[])
+    expect(commandArgs.some((args) => args.includes('press') && args.includes('Escape'))).toBe(true)
+  })
+
+  it('uses the shifted symbol for page-targeted shifted digits', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.keypress('Shift+1', undefined, 'tab-1')
+
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(1, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Shift',
+      code: 'ShiftLeft',
+      modifiers: 8,
+      windowsVirtualKeyCode: 16
+    })
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: '!',
+      code: 'Digit1',
+      modifiers: 8,
+      windowsVirtualKeyCode: 49,
+      text: '!',
+      unmodifiedText: '!'
+    })
+  })
+
+  it('uses the shifted symbol for literal page-targeted punctuation', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.keypress('Shift+,', undefined, 'tab-1')
+
+    expect(wc.debugger.sendCommand).toHaveBeenNthCalledWith(2, 'Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: '<',
+      code: 'Comma',
+      modifiers: 8,
+      windowsVirtualKeyCode: 188,
+      text: '<',
+      unmodifiedText: '<'
+    })
+  })
+
   it('chunks large agent-browser keyboard insert text before transport', async () => {
     const text = ['z'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'qq'].join('')
     succeedWith({ inserted: true })
