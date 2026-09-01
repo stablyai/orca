@@ -27742,6 +27742,86 @@ describe('OrcaRuntimeService', () => {
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.terminalTitle).toBeUndefined()
   })
 
+  // Why (#9914): paired clients mirror this projection (not local hook IPC). Dropping
+  // lastAssistantMessage when demoting stale "working" left remote workspace cards
+  // without the completion subtitle that local cards still show from the hook row.
+  it('keeps lastAssistantMessage when demoting stale working status under a neutral title', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'claude working',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: 'bash'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: `tab-1::${leafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-1::${leafId}`,
+              parentTabId: 'tab-1',
+              leafId,
+              title: 'bash',
+              agentStatus: {
+                state: 'working',
+                prompt: 'stale task',
+                updatedAt: 1_700_000_000_000,
+                stateStartedAt: 1_699_999_999_000,
+                agentType: 'claude',
+                paneKey: `tab-1:${leafId}`,
+                terminalTitle: 'claude working',
+                lastAssistantMessage: '좌→우 가로 파이프라인으로 다시 그렸습니다',
+                interrupted: false,
+                stateHistory: []
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type).toBe('terminal')
+    if (tab?.type !== 'terminal') {
+      return
+    }
+    expect(tab.agentStatus).toEqual(
+      expect.objectContaining({
+        state: 'done',
+        agentType: 'claude',
+        lastAssistantMessage: '좌→우 가로 파이프라인으로 다시 그렸습니다',
+        interrupted: false
+      })
+    )
+    // Still demote the working spinner / stale prompt / title ownership fields.
+    expect(tab.agentStatus?.prompt).toBe('')
+    expect(tab.agentStatus?.terminalTitle).toBeUndefined()
+  })
+
   it('suppresses saved mobile agent status when the current terminal title is neutral', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '11111111-1111-4111-8111-111111111111'

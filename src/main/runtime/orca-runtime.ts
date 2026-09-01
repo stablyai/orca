@@ -36981,6 +36981,7 @@ export class OrcaRuntimeService {
       const agentStatus = keepFullAgentStatus
         ? { agentStatus: normalizedTabAgentStatus }
         : // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.
+          // Why: also keep lastAssistantMessage / interrupted so paired clients and mobile can still show the completion subtitle (#9914). Local desktop already has the full hook row in-process; remote mirrors only this projection.
           normalizedTabAgentStatus?.agentType != null
           ? {
               agentStatus: {
@@ -36993,6 +36994,12 @@ export class OrcaRuntimeService {
                 paneKey: normalizedTabAgentStatus.paneKey,
                 stateHistory: [],
                 agentType: normalizedTabAgentStatus.agentType,
+                ...(normalizedTabAgentStatus.lastAssistantMessage
+                  ? { lastAssistantMessage: normalizedTabAgentStatus.lastAssistantMessage }
+                  : {}),
+                ...(normalizedTabAgentStatus.interrupted != null
+                  ? { interrupted: normalizedTabAgentStatus.interrupted }
+                  : {}),
                 ...(normalizedTabAgentStatus.providerSession
                   ? { providerSession: normalizedTabAgentStatus.providerSession }
                   : {})
