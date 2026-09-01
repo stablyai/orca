@@ -1699,8 +1699,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           await runtime.sendTerminalAgentPrompt(to, preamble)
           injected = true
         } catch (err) {
-          db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
-          throw err
+          const settled = db.getDispatchContextById(ctx.id)
+          if (settled?.status === 'completed') {
+            injected = true
+          } else {
+            db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+            throw err
+          }
         }
       }
 
