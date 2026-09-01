@@ -5,6 +5,8 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
 import {
   isFreshNonDoneAgentStatus,
@@ -183,7 +185,17 @@ export function dispatchTerminalNotification(
   // construction; coupling the notification dispatcher to it would silently
   // drop the repo label if that format ever changes. The worktree object
   // itself is the source of truth for its owning repo.
-  const worktree = getWorktreeMapFromState(state).get(worktreeId)
+  // Folder workspaces are keyed `folder:<id>` and live outside the worktree
+  // map; without resolving them here the OS notification title falls back to
+  // the raw workspace key instead of the workspace name.
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  const folderWorkspace =
+    workspaceScope?.type === 'folder'
+      ? state.folderWorkspaces.find((item) => item.id === workspaceScope.folderWorkspaceId)
+      : undefined
+  const worktree =
+    getWorktreeMapFromState(state).get(worktreeId) ??
+    (folderWorkspace ? folderWorkspaceToWorktree(folderWorkspace) : undefined)
   const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
   const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
   const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
