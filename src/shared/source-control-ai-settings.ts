@@ -16,7 +16,7 @@ import type {
   SourceControlAiPrCreationDefaults,
   SourceControlAiSettings
 } from './source-control-ai-types'
-import { DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../main/text-generation/source-control-generation-limits'
+import { DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './constants'
 
 export const DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS: Required<SourceControlAiPrCreationDefaults> =
   {

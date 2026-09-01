@@ -243,7 +243,7 @@ export function CommitMessageAiPane({
       ),
       description: translate(
         'auto.components.settings.CommitMessageAiPane.b2e9d4f5a1',
-        'Maximum time allowed for AI commit message, branch name, and pull request generation.'
+        '最大等待时间，超出后 AI 生成 commit 消息、分支名或 PR 详情会中断并返回错误。'
       ),
       keywords: [
         translate('auto.components.settings.CommitMessageAiPane.c7d1e3f8b2', 'timeout'),
@@ -261,25 +261,40 @@ export function CommitMessageAiPane({
         )}
         description={translate(
           'auto.components.settings.CommitMessageAiPane.b2e9d4f5a1',
-          'Maximum time allowed for AI commit message, branch name, and pull request generation.'
+          '最大等待时间，超出后 AI 生成 commit 消息、分支名或 PR 详情会中断并返回错误。'
         )}
         keywords={['timeout', 'seconds', 'duration']}
         className="space-y-2 py-2"
+        forceVisible
       >
-        <div className="flex items-center gap-2">
-          <Input
-            id="source-control-ai-generation-timeout"
-            type="number"
-            min={10}
-            max={600}
-            step={5}
-            value={generationTimeoutSeconds}
-            onChange={(e) => onGenerationTimeoutChange(e.target.value)}
-            className="h-8 w-20 text-xs tabular-nums"
-          />
-          <span className="text-xs text-muted-foreground">
-            {translate('auto.components.settings.CommitMessageAiPane.f6c4d3e1b0', 'seconds')}
-          </span>
+        <div className="space-y-0.5">
+          <Label htmlFor="source-control-ai-generation-timeout">
+            {translate(
+              'auto.components.settings.CommitMessageAiPane.a8f3c1d2e7',
+              'Generation timeout'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.CommitMessageAiPane.b2e9d4f5a1',
+              '最大等待时间，超出后 AI 生成 commit 消息、分支名或 PR 详情会中断并返回错误。'
+            )}
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <Input
+              id="source-control-ai-generation-timeout"
+              type="number"
+              min={10}
+              max={600}
+              step={5}
+              value={generationTimeoutSeconds}
+              onChange={(e) => onGenerationTimeoutChange(e.target.value)}
+              className="h-8 w-20 text-xs tabular-nums"
+            />
+            <span className="text-xs text-muted-foreground">
+              {translate('auto.components.settings.CommitMessageAiPane.f6c4d3e1b0', 'seconds')}
+            </span>
+          </div>
         </div>
       </SearchableSetting>
     )

@@ -37,7 +37,7 @@ import {
   normalizeSourceControlAiSettings as normalizeSettings,
   sourceControlAiSettingsFromLegacy as settingsFromLegacy
 } from './source-control-ai-settings'
-import { DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../main/text-generation/source-control-generation-limits'
+import { DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './constants'
 import { hasActionAgentRecipe } from './source-control-ai-command-template'
 import type {
   SourceControlAiOperation,
