@@ -7,7 +7,7 @@ import {
 import { normalizeTerminalHexColor } from '../../../shared/terminal-custom-themes'
 import { isTerminalBackgroundLight, resolveEffectiveTerminalAppearance } from './terminal-theme'
 
-type LeftSidebarAppearanceSettings = Pick<
+export type AppAppearanceSettings = Pick<
   GlobalSettings,
   | 'leftSidebarAppearanceMode'
   | 'leftSidebarTintColor'
@@ -119,7 +119,7 @@ function buildSurfaceVariables(background: string, foreground: string): LeftSide
 }
 
 function resolveTerminalSurface(
-  settings: LeftSidebarAppearanceSettings,
+  settings: AppAppearanceSettings,
   systemPrefersDark: boolean
 ): { background: string; foreground: string; rawBackground: string } {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
@@ -138,16 +138,14 @@ function resolveTerminalSurface(
 }
 
 function resolveTerminalSurfaceVariables(
-  settings: LeftSidebarAppearanceSettings,
+  settings: AppAppearanceSettings,
   systemPrefersDark: boolean
 ): LeftSidebarStyleVariables {
   const { background, foreground } = resolveTerminalSurface(settings, systemPrefersDark)
   return buildSurfaceVariables(background, foreground)
 }
 
-function resolveTintedSurfaceVariables(
-  settings: LeftSidebarAppearanceSettings
-): LeftSidebarStyleVariables {
+function resolveTintedSurfaceVariables(settings: AppAppearanceSettings): LeftSidebarStyleVariables {
   const tintColor = normalizeLeftSidebarTintColor(settings.leftSidebarTintColor)
   const tintOpacity = normalizeLeftSidebarTintOpacity(settings.leftSidebarTintOpacity)
   const tintPercent = Number((tintOpacity * 100).toFixed(2))
@@ -155,15 +153,12 @@ function resolveTintedSurfaceVariables(
   return buildSurfaceVariables(background, 'var(--app-appearance-base-foreground)')
 }
 
-function resolveBaseDarkMode(
-  settings: LeftSidebarAppearanceSettings,
-  systemPrefersDark: boolean
-): boolean {
+function resolveBaseDarkMode(settings: AppAppearanceSettings, systemPrefersDark: boolean): boolean {
   return settings.theme === 'dark' || (settings.theme === 'system' && systemPrefersDark)
 }
 
 export function resolveAppAppearanceDarkMode(
-  settings: LeftSidebarAppearanceSettings | null | undefined,
+  settings: AppAppearanceSettings | null | undefined,
   systemPrefersDark: boolean
 ): boolean | undefined {
   if (
@@ -184,7 +179,7 @@ export function resolveAppAppearanceDarkMode(
 }
 
 export function resolveLeftSidebarStyleVariables(
-  settings: LeftSidebarAppearanceSettings | null | undefined,
+  settings: AppAppearanceSettings | null | undefined,
   systemPrefersDark: boolean
 ): LeftSidebarStyleVariables | undefined {
   if (!settings) {

@@ -84,7 +84,7 @@ export function AutomationSetupDecisionField({
                   'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
                   checked
                     ? 'border-emerald-500/60 bg-emerald-500 text-white'
-                    : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
+                    : 'border-foreground/20 bg-background dark:bg-muted/10'
                 )}
               >
                 <Check

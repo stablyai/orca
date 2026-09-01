@@ -82,7 +82,7 @@ describe('useDocumentAppearance', () => {
       })
     })
 
-    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('light')
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('light', expect.any(Object))
     expect(mocks.applyDocumentTheme).toHaveBeenCalledTimes(2)
     expect(mocks.buildAppFontFamily).toHaveBeenLastCalledWith('Monaco')
     expect(mocks.buildAppFontFamily).toHaveBeenCalledTimes(2)

@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../../../shared/plugins/plugin-panel-shell'
 import { applyDocumentTheme, type DocumentThemePreference } from './document-theme'
 import {
   APP_APPEARANCE_STYLE_PROPERTIES,
+  type AppAppearanceSettings,
   resolveAppAppearanceDarkMode,
   resolveLeftSidebarStyleVariables
 } from './left-sidebar-appearance'
@@ -63,7 +63,7 @@ export function clearAppAppearanceFromDocument(root: HTMLElement = document.docu
 }
 
 export function applyDocumentAppearance(
-  settings: GlobalSettings | null | undefined,
+  settings: AppAppearanceSettings | null | undefined,
   systemPrefersDark: boolean,
   options: {
     root?: HTMLElement
@@ -84,7 +84,7 @@ export function applyDocumentAppearance(
 }
 
 export function applyAppAppearanceToDocument(
-  settings: GlobalSettings | null | undefined,
+  settings: AppAppearanceSettings | null | undefined,
   systemPrefersDark: boolean,
   root: HTMLElement = document.documentElement
 ): void {

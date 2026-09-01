@@ -47,8 +47,7 @@ describe('buildPosixCommandPathLookupScript', () => {
           `${commandName}`
         ].join('\n')
 
-        const shellArgs = shell.name === 'zsh' ? ['-f', '-c', script] : ['-c', script]
-        const resolved = execFileSync(shell.path!, shellArgs, {
+        const resolved = execFileSync(shell.path!, ['-c', script], {
           encoding: 'utf8',
           env: {
             ...process.env,

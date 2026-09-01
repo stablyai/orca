@@ -143,7 +143,7 @@ export function FileExplorerRowContextMenu({
 
   return (
     <ContextMenuContent
-      className="w-64 bg-[rgba(255,255,255,0.82)] dark:bg-[rgba(0,0,0,0.72)]"
+      className="w-64"
       onPointerUpCapture={stopRightButtonMenuSelection}
       onCloseAutoFocus={(e) => e.preventDefault()}
     >

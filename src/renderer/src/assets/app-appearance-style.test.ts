@@ -5,7 +5,7 @@ const mainCss = readFileSync(new URL('./main.css', import.meta.url), 'utf8')
 const richMarkdownCss = readFileSync(new URL('./rich-markdown-editor.css', import.meta.url), 'utf8')
 const popoutSource = readFileSync(new URL('../popout.tsx', import.meta.url), 'utf8')
 const themePreviewSources = [
-  '../components/settings/Settings.tsx',
+  '../components/settings/use-settings-navigation-model.ts',
   '../components/onboarding/use-onboarding-flow.ts'
 ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
 const editorPortalSources = [
@@ -28,9 +28,20 @@ const portalPrimitiveSources = [
   '../components/ui/command.tsx'
 ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
 const selectedRowSources = [
-  '../components/activity/ActivityPrototypePage.tsx',
+  '../components/activity/activity-thread-row.tsx',
   '../components/sidebar/SidebarFilter.tsx',
   '../components/sidebar/SidebarProjectFilterPanel.tsx'
+].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
+const customMenuSources = [
+  '../components/SelectedTextCopyMenu.tsx',
+  '../components/browser-pane/assemble-chrome/browser-page-context-menu.tsx',
+  '../components/browser-pane/stream-remote/remote-browser-page-context-menu.tsx'
+].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
+const customChromeSources = [
+  '../components/tab-bar/TabBarCreateEntryRow.tsx',
+  '../components/floating-terminal/FloatingTerminalPanelSurface.tsx',
+  '../components/right-sidebar/file-explorer-row-context-menu.tsx',
+  '../components/browser-pane/annotate/browser-page-grab-toast.tsx'
 ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
 
 describe('custom app appearance styles', () => {
@@ -62,6 +73,19 @@ describe('custom app appearance styles', () => {
       expect(source).not.toMatch(/bg-\[rgba\((?:255|23|0),/)
       expect(source).not.toContain('border-black/14')
       expect(source).not.toContain('dark:border-white/14')
+    }
+  })
+
+  it('uses semantic surfaces for custom menus and floating chrome', () => {
+    for (const source of customMenuSources) {
+      expect(source).toContain('border-border')
+      expect(source).toContain('bg-popover')
+      expect(source).toContain('text-popover-foreground')
+    }
+    for (const source of [...customMenuSources, ...customChromeSources]) {
+      expect(source).not.toContain('border-black/14')
+      expect(source).not.toContain('dark:border-white/14')
+      expect(source).not.toMatch(/bg-\[rgba\((?:255|23|0),/)
     }
   })
 
