@@ -5,7 +5,6 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolveImagePaste } from './native-chat-image-paste'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-target'
 import {
-  nativeChatLocalAttachmentUnsupportedNotice,
   nativeChatWorktreeNotReadyNotice,
   type NativeChatAttachmentOwner
 } from './native-chat-attachment-upload'
@@ -74,15 +73,22 @@ export function useNativeChatComposerPaste({
     async (
       owner: NativeChatAttachmentOwner
     ): Promise<{ status: 'saved'; tempPath: string } | { status: 'empty' | 'failed' }> => {
-      if (owner.kind === 'runtime') {
-        setNotice(nativeChatLocalAttachmentUnsupportedNotice())
-        return { status: 'failed' }
-      }
       try {
-        // SSH panes save the image on the remote host (SFTP) so the attached
-        // path is readable by the remote agent, matching terminal image paste.
+        // SSH panes save the image on the remote host (SFTP) and runtime panes
+        // upload over the pairing channel — either way the attached path names
+        // a file the remote agent can read, matching terminal image paste. A
+        // runtime owner's connectionId is the SERVER-owned SSH connection for
+        // nested worktrees (#17679), forwarded by the runtime, never dialed
+        // from this client.
         const tempPath = await window.api.ui.saveClipboardImageAsTempFile(
-          owner.kind === 'ssh' ? { connectionId: owner.connectionId } : undefined
+          owner.kind === 'ssh'
+            ? { connectionId: owner.connectionId }
+            : owner.kind === 'runtime'
+              ? {
+                  connectionId: owner.connectionId,
+                  runtimeEnvironmentId: owner.runtimeEnvironmentId
+                }
+              : undefined
         )
         return tempPath ? { status: 'saved', tempPath } : { status: 'empty' }
       } catch (error) {

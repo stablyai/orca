@@ -4,9 +4,9 @@ import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
 import {
   formatNativeChatFileReference,
-  nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
+import type { NativeChatAttachedHost } from './native-chat-attachment-upload'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
@@ -36,7 +36,7 @@ export function useNativeChatComposerAttachments({
   setNotice
 }: UseNativeChatComposerAttachmentsArgs): {
   imageAttachments: NativeChatComposerImageAttachment[]
-  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
+  attachResolvedPaths: (paths: string[], host?: NativeChatAttachedHost) => void
   clearImageAttachments: () => void
   flushPendingAttachments: () => void
   removeImageAttachment: (id: string) => void
@@ -45,7 +45,7 @@ export function useNativeChatComposerAttachments({
     () => readNativeChatAttachmentCache(attachmentScopeKey)
   )
   const imageAttachmentCounter = useRef(0)
-  const pendingResolvedPathsRef = useRef<{ path: string; connectionId?: string | null }[]>([])
+  const pendingResolvedPathsRef = useRef<{ path: string; host?: NativeChatAttachedHost }[]>([])
   const pendingPathLimitRejectedRef = useRef(false)
   const disabledRef = useRef(disabled)
 
@@ -73,18 +73,19 @@ export function useNativeChatComposerAttachments({
   )
 
   const appendImageAttachments = useCallback(
-    (paths: { path: string; connectionId?: string | null }[]) => {
+    (paths: { path: string; host?: NativeChatAttachedHost }[]) => {
       if (paths.length === 0) {
         return
       }
       updateImageAttachments((prev) => [
         ...prev,
-        ...paths.map(({ path, connectionId }) => {
+        ...paths.map(({ path, host }) => {
           imageAttachmentCounter.current += 1
           return {
             id: `${Date.now()}-${imageAttachmentCounter.current}`,
             path,
-            connectionId: connectionId ?? undefined
+            connectionId: host?.connectionId ?? undefined,
+            runtime: host?.runtime
           }
         })
       ])
@@ -111,24 +112,22 @@ export function useNativeChatComposerAttachments({
     [caret, setCaret, setDraft, textareaRef]
   )
 
-  // Attach paths the TARGET AGENT can read: local paths for local worktrees,
-  // already-uploaded remote paths for SSH worktrees (the composer uploads
-  // before calling this — see native-chat-attachment-upload.ts).
+  // Attach paths the TARGET AGENT can read. Every entry point resolves the
+  // owning host and uploads FIRST (see native-chat-attachment-upload.ts), so
+  // this funnel only ever receives owner-resolved paths — local paths for
+  // local worktrees, uploaded remote paths for SSH and runtime worktrees.
   const applyResolvedPaths = useCallback(
     (
-      resolvedPaths: { path: string; connectionId?: string | null }[],
+      resolvedPaths: { path: string; host?: NativeChatAttachedHost }[],
       focus: boolean,
       preserveNotice = false
     ) => {
       const target = resolveTarget()
-      if (
-        (!target && !allowWithoutTarget) ||
-        (target && nativeChatComposerTargetIsRemote(target.ptyId))
-      ) {
+      if (!target && !allowWithoutTarget) {
         setNotice(
           translate(
-            'components.native-chat.composer.localAttachmentUnsupported',
-            'Local attachments are not available for remote sessions.'
+            'components.native-chat.composer.worktreeNotReady',
+            'Worktree not ready — try again in a moment.'
           )
         )
         return
@@ -140,7 +139,7 @@ export function useNativeChatComposerAttachments({
       // Images are NOT sent to the TUI here — they ride along on submit (see
       // NativeChatComposer.send) so the GUI chips and the TUI input never
       // diverge and removing a chip needs no TUI un-paste.
-      appendImageAttachments(imagePaths.map(({ path, connectionId }) => ({ path, connectionId })))
+      appendImageAttachments(imagePaths.map(({ path, host }) => ({ path, host })))
       insertFileReferences(filePaths)
       if (!preserveNotice) {
         setNotice(null)
@@ -160,7 +159,7 @@ export function useNativeChatComposerAttachments({
   )
 
   const attachResolvedPaths = useCallback(
-    (paths: string[], connectionId?: string | null) => {
+    (paths: string[], host?: NativeChatAttachedHost) => {
       if (paths.length === 0 || disabledRef.current) {
         return
       }
@@ -176,11 +175,11 @@ export function useNativeChatComposerAttachments({
           )
           return
         }
-        pendingResolvedPathsRef.current.push(...paths.map((path) => ({ path, connectionId })))
+        pendingResolvedPathsRef.current.push(...paths.map((path) => ({ path, host })))
         return
       }
       applyResolvedPaths(
-        paths.map((path) => ({ path, connectionId })),
+        paths.map((path) => ({ path, host })),
         true
       )
     },

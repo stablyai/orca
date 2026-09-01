@@ -1,11 +1,12 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import {
-  nativeChatLocalAttachmentUnsupportedNotice,
   nativeChatWorktreeNotReadyNotice,
   resolveNativeChatAttachmentOwner,
   resolveNativeChatAttachmentOwnerForWorktree,
   uploadNativeChatAttachmentPaths,
+  uploadNativeChatRuntimeAttachmentPaths,
+  type NativeChatAttachedHost,
   type NativeChatAttachmentOwner
 } from './native-chat-attachment-upload'
 
@@ -15,7 +16,7 @@ export type UseNativeChatExternalAttachmentsArgs = {
   /** Live composer-disabled state; read at await-resume via a ref so a flip
    *  mid-upload doesn't attach into a guarded composer. */
   disabled: boolean
-  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
+  attachResolvedPaths: (paths: string[], host?: NativeChatAttachedHost) => void
   setNotice: (notice: string | null) => void
 }
 
@@ -58,7 +59,19 @@ export function useNativeChatExternalAttachments({
         return
       }
       if (owner.kind === 'runtime') {
-        setNotice(nativeChatLocalAttachmentUnsupportedNotice())
+        void (async () => {
+          const remotePaths = await uploadNativeChatRuntimeAttachmentPaths(paths, owner)
+          if (!remotePaths || remotePaths.length === 0 || disabledRef.current) {
+            return
+          }
+          attachResolvedPaths(remotePaths, {
+            runtime: {
+              runtimeEnvironmentId: owner.runtimeEnvironmentId,
+              worktreeId: owner.worktreeId,
+              worktreePath: owner.worktreePath
+            }
+          })
+        })()
         return
       }
       if (owner.kind !== 'ssh') {
@@ -70,7 +83,7 @@ export function useNativeChatExternalAttachments({
         if (!remotePaths || remotePaths.length === 0 || disabledRef.current) {
           return
         }
-        attachResolvedPaths(remotePaths, owner.connectionId)
+        attachResolvedPaths(remotePaths, { connectionId: owner.connectionId })
       })()
     },
     [attachResolvedPaths, resolveAttachmentOwner, setNotice]

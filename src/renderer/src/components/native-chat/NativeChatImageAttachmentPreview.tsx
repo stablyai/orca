@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Image as ImageIcon, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-client-target'
+import { useAppStore } from '@/store'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 
@@ -41,10 +43,23 @@ export function NativeChatImageAttachmentPreview({
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
+  const settings = useAppStore((s) => s.settings)
+  const runtimeContext = useMemo(
+    () =>
+      attachment.runtime
+        ? {
+            settings: settingsForRuntimeOwner(settings, attachment.runtime.runtimeEnvironmentId),
+            worktreeId: attachment.runtime.worktreeId,
+            worktreePath: attachment.runtime.worktreePath
+          }
+        : undefined,
+    [attachment.runtime, settings]
+  )
   const previewSrc = useLocalImageSrc(
     isNearViewport || isOpen ? attachment.path : undefined,
     attachment.path,
-    attachment.connectionId
+    attachment.connectionId,
+    runtimeContext
   )
   const filename = isNativeChatPastedImagePath(attachment.path)
     ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')

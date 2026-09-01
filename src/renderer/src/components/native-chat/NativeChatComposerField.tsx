@@ -57,6 +57,9 @@ export type NativeChatComposerImageAttachment = {
   id: string
   path: string
   connectionId?: string
+  /** Set for runtime-owned attachments so the preview reads from the runtime,
+   *  not the client filesystem. */
+  runtime?: { runtimeEnvironmentId: string; worktreeId: string; worktreePath: string }
 }
 
 /**

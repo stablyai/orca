@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   toastDismiss: vi.fn(),
   toastError: vi.fn(),
   toastMessage: vi.fn(),
-  resolveDroppedPathsForAgent: vi.fn()
+  resolveDroppedPathsForAgent: vi.fn(),
+  importExternalPathsToRuntime: vi.fn(),
+  getState: vi.fn(() => ({}))
 }))
 
 vi.mock('sonner', () => ({
@@ -23,10 +25,20 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
+vi.mock('@/runtime/runtime-file-client', () => ({
+  importExternalPathsToRuntime: mocks.importExternalPathsToRuntime
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: { getState: mocks.getState }
+}))
+
 import {
   resolveNativeChatAttachmentOwner,
   resolveNativeChatAttachmentOwnerForWorktree,
-  uploadNativeChatAttachmentPaths
+  uploadNativeChatAttachmentPaths,
+  uploadNativeChatRuntimeAttachmentPaths,
+  type NativeChatRuntimeAttachmentOwner
 } from './native-chat-attachment-upload'
 
 function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -108,7 +120,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
     })
   })
 
-  it('resolves a runtime-owned repo to runtime', () => {
+  it('resolves a runtime-owned repo to a full runtime owner', () => {
     expect(
       resolveNativeChatAttachmentOwner(
         state({
@@ -116,7 +128,29 @@ describe('resolveNativeChatAttachmentOwner', () => {
         }),
         'tab-1'
       )
-    ).toEqual({ kind: 'runtime' })
+    ).toEqual({
+      kind: 'runtime',
+      runtimeEnvironmentId: 'env-1',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo/worktree',
+      connectionId: null,
+      expectedExecutionHostId: 'local'
+    })
+  })
+
+  it('carries the server-owned SSH connection on nested runtime worktrees', () => {
+    expect(
+      resolveNativeChatAttachmentOwner(
+        state({
+          repos: [{ id: 'repo', connectionId: 'conn-1', executionHostId: 'runtime:env-1' }] as never
+        }),
+        'tab-1'
+      )
+    ).toMatchObject({
+      kind: 'runtime',
+      runtimeEnvironmentId: 'env-1',
+      connectionId: 'conn-1'
+    })
   })
 
   it('routes unowned repos to the focused runtime host, matching terminal drops', () => {
@@ -125,7 +159,24 @@ describe('resolveNativeChatAttachmentOwner', () => {
         state({ settings: { activeRuntimeEnvironmentId: 'env-9' } as AppState['settings'] }),
         'tab-1'
       )
-    ).toEqual({ kind: 'runtime' })
+    ).toMatchObject({
+      kind: 'runtime',
+      runtimeEnvironmentId: 'env-9',
+      worktreePath: '/repo/worktree'
+    })
+  })
+
+  it('reports not-ready when a runtime worktree has no known path yet', () => {
+    expect(
+      resolveNativeChatAttachmentOwner(
+        state({
+          repos: [{ id: 'repo', connectionId: null, executionHostId: 'runtime:env-1' }] as never,
+          getKnownWorktreeById: () => undefined,
+          worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo' } as never] }
+        }),
+        'tab-1'
+      )
+    ).toEqual({ kind: 'not-ready' })
   })
 
   it('reports not-ready when the tab has no worktree owner', () => {
@@ -209,6 +260,84 @@ describe('uploadNativeChatAttachmentPaths', () => {
   it('returns null and reports when the upload IPC fails', async () => {
     mocks.resolveDroppedPathsForAgent.mockRejectedValue(new Error('sftp down'))
     await expect(uploadNativeChatAttachmentPaths(['/local/a.txt'], owner)).resolves.toBeNull()
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+    expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
+  })
+})
+
+describe('uploadNativeChatRuntimeAttachmentPaths', () => {
+  const owner: NativeChatRuntimeAttachmentOwner = {
+    kind: 'runtime',
+    runtimeEnvironmentId: 'env-1',
+    worktreeId: 'wt-1',
+    worktreePath: '/srv/wt',
+    connectionId: null,
+    expectedExecutionHostId: 'local'
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('imports into the worktree drops dir on the owning runtime and returns dest paths', async () => {
+    mocks.importExternalPathsToRuntime.mockResolvedValue({
+      results: [
+        { sourcePath: '/local/a.png', status: 'imported', destPath: '/srv/wt/.orca/drops/a.png' },
+        { sourcePath: '/local/link', status: 'skipped', reason: 'symlink' },
+        { sourcePath: '/local/b.txt', status: 'failed', reason: 'boom' }
+      ]
+    })
+    await expect(
+      uploadNativeChatRuntimeAttachmentPaths(['/local/a.png', '/local/link', '/local/b.txt'], owner)
+    ).resolves.toEqual(['/srv/wt/.orca/drops/a.png'])
+    expect(mocks.importExternalPathsToRuntime).toHaveBeenCalledWith(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/srv/wt',
+        expectedExecutionHostId: 'local',
+        expectedSshTargetId: undefined,
+        expectedSshConnectionGeneration: undefined
+      },
+      ['/local/a.png', '/local/link', '/local/b.txt'],
+      '/srv/wt/.orca/drops',
+      { assertCurrent: expect.any(Function) }
+    )
+    // Skips and failures surface through the shared drop toasts.
+    expect(mocks.toastMessage).toHaveBeenCalledTimes(1)
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+    expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
+  })
+
+  it('fails the in-flight upload when the owner changed underneath it', async () => {
+    // Live store now says wt-1 belongs to a different environment.
+    mocks.getState.mockReturnValue({
+      folderWorkspaces: [],
+      getKnownWorktreeById: () => ({ id: 'wt-1', path: '/srv/wt' }),
+      projectGroups: [],
+      repos: [{ id: 'repo', connectionId: null, executionHostId: 'runtime:env-2' }],
+      settings: { activeRuntimeEnvironmentId: null },
+      sshConnectionStates: new Map(),
+      tabsByWorktree: {},
+      worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo', path: '/srv/wt' }] }
+    })
+    mocks.importExternalPathsToRuntime.mockImplementation(
+      async (_context, _paths, _dest, options) => {
+        options?.assertCurrent?.()
+        return { results: [] }
+      }
+    )
+    await expect(
+      uploadNativeChatRuntimeAttachmentPaths(['/local/a.png'], owner)
+    ).resolves.toBeNull()
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns null and reports when the runtime import fails', async () => {
+    mocks.importExternalPathsToRuntime.mockRejectedValue(new Error('pairing dropped'))
+    await expect(
+      uploadNativeChatRuntimeAttachmentPaths(['/local/a.png'], owner)
+    ).resolves.toBeNull()
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
   })

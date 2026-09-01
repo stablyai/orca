@@ -8,14 +8,19 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { reportTerminalDropUploadSkipsAndFailures } from '../terminal-pane/terminal-drop-upload-report'
+import { isTerminalDropWindowsPathLike } from '../terminal-pane/terminal-drop-shell'
+import { joinRuntimeTerminalDropDir } from '../terminal-pane/terminal-drop-worktree-path'
 import {
   findTerminalTabWorktreeId,
   resolveNativeChatFileLinkContext
 } from './native-chat-file-link'
 import {
   captureDirectSshMutationExpectation,
+  captureWorktreeSshMutationExpectation,
   type DirectSshMutationExpectation
 } from '@/lib/ssh-mutation-expectation'
 
@@ -25,12 +30,22 @@ export type NativeChatSshAttachmentOwner = DirectSshMutationExpectation & {
   worktreePath: string
 }
 
+export type NativeChatRuntimeAttachmentOwner = ReturnType<
+  typeof captureWorktreeSshMutationExpectation
+> & {
+  kind: 'runtime'
+  runtimeEnvironmentId: string
+  worktreeId: string
+  worktreePath: string
+  /** Server-owned SSH connection when the worktree lives behind the
+   *  runtime's own SSH target (nested topology, #17679). */
+  connectionId: string | null
+}
+
 export type NativeChatAttachmentOwner =
   | { kind: 'local' }
   | NativeChatSshAttachmentOwner
-  /** Runtime-owned (`remote:`) panes keep the composer's existing
-   *  local-attachment block; runtime upload support is a separate seam. */
-  | { kind: 'runtime' }
+  | NativeChatRuntimeAttachmentOwner
   /** Store not hydrated / worktree unknown. Callers must not attach local
    *  paths in this window — the worktree may turn out to be remote, and the
    *  agent would silently receive paths it cannot read (see #6648). */
@@ -46,7 +61,8 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'sshConnectionStates'
   | 'tabsByWorktree'
   | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'sshStateByEnvironment'>>
 
 /** Resolve who owns the composer's backing worktree at attach time. Mirrors the
  *  terminal drop resolver's order: runtime owner first, then SSH vs local. */
@@ -66,8 +82,29 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   worktreeId: string,
   terminalTabId?: string
 ): NativeChatAttachmentOwner {
-  if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
-    return { kind: 'runtime' }
+  const resolveWorktreePath = (): string | undefined =>
+    terminalTabId
+      ? resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
+      : state.getKnownWorktreeById(worktreeId)?.path
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  if (runtimeEnvironmentId) {
+    const worktreePath = resolveWorktreePath()
+    if (!worktreePath) {
+      return { kind: 'not-ready' }
+    }
+    try {
+      return {
+        kind: 'runtime',
+        runtimeEnvironmentId,
+        worktreeId,
+        worktreePath,
+        connectionId: getConnectionIdFromState(state, worktreeId) ?? null,
+        ...captureWorktreeSshMutationExpectation(state, worktreeId)
+      }
+    } catch {
+      // Owner is mid-flip (SSH generation unknown) — fail closed like #6648.
+      return { kind: 'not-ready' }
+    }
   }
   const connectionId = getConnectionIdFromState(state, worktreeId)
   if (connectionId === undefined) {
@@ -76,9 +113,7 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   if (connectionId === null) {
     return { kind: 'local' }
   }
-  const worktreePath = terminalTabId
-    ? resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
-    : state.getKnownWorktreeById(worktreeId)?.path
+  const worktreePath = resolveWorktreePath()
   if (!worktreePath) {
     return { kind: 'not-ready' }
   }
@@ -90,17 +125,37 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   }
 }
 
+/** Where an attached path is readable — threaded onto attachment chips so
+ *  previews read from the owning host instead of the client filesystem. */
+export type NativeChatAttachedHost = {
+  connectionId?: string | null
+  runtime?: { runtimeEnvironmentId: string; worktreeId: string; worktreePath: string }
+}
+
+export function nativeChatAttachedHostForOwner(
+  owner: NativeChatAttachmentOwner
+): NativeChatAttachedHost | undefined {
+  if (owner.kind === 'ssh') {
+    return { connectionId: owner.connectionId }
+  }
+  if (owner.kind === 'runtime') {
+    // No connectionId: a runtime owner's connection is server-owned and must
+    // never be dialed from this client (#17679).
+    return {
+      runtime: {
+        runtimeEnvironmentId: owner.runtimeEnvironmentId,
+        worktreeId: owner.worktreeId,
+        worktreePath: owner.worktreePath
+      }
+    }
+  }
+  return undefined
+}
+
 export function nativeChatWorktreeNotReadyNotice(): string {
   return translate(
     'components.native-chat.composer.worktreeNotReady',
     'Worktree not ready — try again in a moment.'
-  )
-}
-
-export function nativeChatLocalAttachmentUnsupportedNotice(): string {
-  return translate(
-    'components.native-chat.composer.localAttachmentUnsupported',
-    'Local attachments are not available for remote sessions.'
   )
 }
 
@@ -110,17 +165,21 @@ export function nativeChatLocalAttachmentUnsupportedNotice(): string {
  * preserved). Returns null when the upload IPC itself failed; per-file
  * skips/failures surface through the shared drop toasts.
  */
+function uploadingAttachmentsToast(pathCount: number): string | number {
+  return toast.loading(
+    translate(
+      'components.native-chat.composer.uploadingAttachments',
+      'Uploading {{value0}} file(s) to remote…',
+      { value0: pathCount }
+    )
+  )
+}
+
 export async function uploadNativeChatAttachmentPaths(
   paths: string[],
   owner: NativeChatSshAttachmentOwner
 ): Promise<string[] | null> {
-  const pending = toast.loading(
-    translate(
-      'components.native-chat.composer.uploadingAttachments',
-      'Uploading {{value0}} file(s) to remote…',
-      { value0: paths.length }
-    )
-  )
+  const pending = uploadingAttachmentsToast(paths.length)
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
       paths,
@@ -132,6 +191,69 @@ export async function uploadNativeChatAttachmentPaths(
     })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
     return resolvedPaths
+  } catch (err) {
+    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
+    return null
+  } finally {
+    toast.dismiss(pending)
+  }
+}
+
+function assertNativeChatRuntimeOwnerCurrent(owner: NativeChatRuntimeAttachmentOwner): void {
+  const current = resolveNativeChatAttachmentOwnerForWorktree(
+    useAppStore.getState(),
+    owner.worktreeId
+  )
+  if (
+    current.kind !== 'runtime' ||
+    current.runtimeEnvironmentId !== owner.runtimeEnvironmentId ||
+    current.connectionId !== owner.connectionId ||
+    current.worktreePath !== owner.worktreePath ||
+    current.expectedExecutionHostId !== owner.expectedExecutionHostId ||
+    current.expectedSshTargetId !== owner.expectedSshTargetId ||
+    current.expectedSshConnectionGeneration !== owner.expectedSshConnectionGeneration
+  ) {
+    throw new Error('Attachment upload host changed; retry the attach.')
+  }
+}
+
+/**
+ * Upload client-local paths into `${worktreePath}/.orca/drops` on the runtime
+ * host (over the pairing channel — the runtime forwards to its own SSH target
+ * for nested worktrees) and return the destination-side paths. Mirrors the
+ * terminal drop flow; returns null when the upload itself failed.
+ */
+export async function uploadNativeChatRuntimeAttachmentPaths(
+  paths: string[],
+  owner: NativeChatRuntimeAttachmentOwner
+): Promise<string[] | null> {
+  const pending = uploadingAttachmentsToast(paths.length)
+  try {
+    const { results } = await importExternalPathsToRuntime(
+      {
+        settings: { activeRuntimeEnvironmentId: owner.runtimeEnvironmentId },
+        worktreeId: owner.worktreeId,
+        worktreePath: owner.worktreePath,
+        expectedExecutionHostId: owner.expectedExecutionHostId,
+        expectedSshTargetId: owner.expectedSshTargetId,
+        expectedSshConnectionGeneration: owner.expectedSshConnectionGeneration
+      },
+      paths,
+      joinRuntimeTerminalDropDir(owner.worktreePath),
+      { assertCurrent: () => assertNativeChatRuntimeOwnerCurrent(owner) }
+    )
+    const importedPaths = results
+      .filter((result) => result.status === 'imported')
+      .map((result) =>
+        isTerminalDropWindowsPathLike(owner.worktreePath)
+          ? result.destPath.replace(/\//g, '\\')
+          : result.destPath
+      )
+    reportTerminalDropUploadSkipsAndFailures(
+      results.filter((result) => result.status === 'skipped'),
+      results.filter((result) => result.status === 'failed')
+    )
+    return importedPaths
   } catch (err) {
     toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
     return null

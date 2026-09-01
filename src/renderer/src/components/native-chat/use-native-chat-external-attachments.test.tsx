@@ -5,7 +5,8 @@ import { createRoot, type Root } from 'react-dom/client'
 
 const mocks = vi.hoisted(() => ({
   resolveNativeChatAttachmentOwner: vi.fn(),
-  uploadNativeChatAttachmentPaths: vi.fn()
+  uploadNativeChatAttachmentPaths: vi.fn(),
+  uploadNativeChatRuntimeAttachmentPaths: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -13,10 +14,9 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('./native-chat-attachment-upload', () => ({
-  nativeChatLocalAttachmentUnsupportedNotice: () =>
-    'Local attachments are not available for remote sessions.',
   resolveNativeChatAttachmentOwner: mocks.resolveNativeChatAttachmentOwner,
   uploadNativeChatAttachmentPaths: mocks.uploadNativeChatAttachmentPaths,
+  uploadNativeChatRuntimeAttachmentPaths: mocks.uploadNativeChatRuntimeAttachmentPaths,
   nativeChatWorktreeNotReadyNotice: () => 'Worktree not ready — try again in a moment.'
 }))
 
@@ -132,7 +132,9 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1')
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], {
+      connectionId: 'conn-1'
+    })
   })
 
   it('delivers concurrent SSH resolutions in order without deduplicating paths', async () => {
@@ -164,8 +166,11 @@ describe('useNativeChatExternalAttachments', () => {
     })
 
     expect(attachResolvedPaths.mock.calls).toEqual([
-      [['/remote/wt/.orca/drops/b.txt', '/remote/wt/.orca/drops/b.txt'], 'conn-1'],
-      [['/remote/wt/.orca/drops/a.txt'], 'conn-1']
+      [
+        ['/remote/wt/.orca/drops/b.txt', '/remote/wt/.orca/drops/b.txt'],
+        { connectionId: 'conn-1' }
+      ],
+      [['/remote/wt/.orca/drops/a.txt'], { connectionId: 'conn-1' }]
     ])
   })
 
@@ -181,17 +186,46 @@ describe('useNativeChatExternalAttachments', () => {
     expect(attachResolvedPaths).not.toHaveBeenCalled()
   })
 
-  it('does not attach client-local paths to a remote runtime', async () => {
-    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'runtime' })
+  it('uploads runtime worktree paths and attaches the destination-side results', async () => {
+    const runtimeOwner = {
+      kind: 'runtime',
+      runtimeEnvironmentId: 'env-1',
+      worktreeId: 'wt-1',
+      worktreePath: '/srv/wt',
+      connectionId: null,
+      expectedExecutionHostId: 'local'
+    }
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue(runtimeOwner)
+    mocks.uploadNativeChatRuntimeAttachmentPaths.mockResolvedValue(['/srv/wt/.orca/drops/a.txt'])
     const attachResolvedPaths = vi.fn()
-    const setNotice = vi.fn()
-    const probe = await renderProbe({ attachResolvedPaths, setNotice })
+    const probe = await renderProbe({ attachResolvedPaths })
     await act(async () => {
       probe.latest().attachExternalPaths(['/local/a.txt'])
     })
-    expect(setNotice).toHaveBeenCalledWith(
-      'Local attachments are not available for remote sessions.'
+    expect(mocks.uploadNativeChatRuntimeAttachmentPaths).toHaveBeenCalledWith(
+      ['/local/a.txt'],
+      runtimeOwner
     )
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/srv/wt/.orca/drops/a.txt'], {
+      runtime: { runtimeEnvironmentId: 'env-1', worktreeId: 'wt-1', worktreePath: '/srv/wt' }
+    })
+  })
+
+  it('attaches nothing when the runtime upload fails', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({
+      kind: 'runtime',
+      runtimeEnvironmentId: 'env-1',
+      worktreeId: 'wt-1',
+      worktreePath: '/srv/wt',
+      connectionId: null,
+      expectedExecutionHostId: 'local'
+    })
+    mocks.uploadNativeChatRuntimeAttachmentPaths.mockResolvedValue(null)
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths })
+    await act(async () => {
+      probe.latest().attachExternalPaths(['/local/a.txt'])
+    })
     expect(attachResolvedPaths).not.toHaveBeenCalled()
   })
 
