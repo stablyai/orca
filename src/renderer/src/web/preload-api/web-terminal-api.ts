@@ -18,6 +18,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
     clearBuffer: () => {},
     kill: () => Promise.resolve(),
+    killSessions: () => Promise.resolve([]),
     ackColdRestore: () => {},
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,

@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process'
 import type { JobTerminationOutcome } from './windows/windows-pty-job'
+import type { DescendantSweepOutcome } from '../shared/pty-kill-sessions'
+export type { DescendantSweepOutcome } from '../shared/pty-kill-sessions'
 import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
   verifyWindowsTreeKillTarget,
@@ -35,6 +37,9 @@ export type ProcessTableCapture = {
   capturedAtMs: number
 }
 
+/** Observable result of the descendant sweep.  A root close can still
+ * succeed when the tree door is unavailable/refused; callers must surface
+ * that distinction instead of treating it as proof descendants exited. */
 export type ProcessTableReader = (timeoutMs?: number) => Promise<ProcessTableCapture>
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
 
@@ -256,7 +261,7 @@ export async function killWithDescendantSweep(
   rootPid: number,
   killRoot: () => void,
   deps: KillSweepDeps = {}
-): Promise<void> {
+): Promise<DescendantSweepOutcome> {
   const platform = deps.platform ?? process.platform
   if (platform === 'win32') {
     try {
@@ -265,7 +270,7 @@ export async function killWithDescendantSweep(
         // pid recycling the probe below exists to guard against, and it reaches
         // descendants that reparented away from the shell.
         if (deps.terminateOwnedTree?.() === 'terminated') {
-          return
+          return 'tree_terminated'
         }
         // Why: ownsRoot() is JS state only, and node-pty's ConPTY exit watcher closes
         // the last shell handle before it queues the JS exit callback — Windows may
@@ -277,25 +282,41 @@ export async function killWithDescendantSweep(
         if (target === 'own' && (deps.ownsRoot?.() ?? true)) {
           const killTree = deps.killWindowsTree ?? terminateWindowsProcessTree
           // Why: taskkill may race an already-exited tree; never block killRoot on that.
-          await killTree(rootPid).catch(() => {})
+          try {
+            await killTree(rootPid)
+            return 'tree_terminated'
+          } catch {
+            return 'tree_unavailable'
+          }
         }
+        if (target === 'foreign' || target === 'absent') {
+          return `tree_refused:${target}`
+        }
+        return 'tree_unavailable'
       }
     } finally {
       killRoot()
     }
-    return
+    return 'tree_unavailable'
   }
 
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
+  const ownsRoot = deps.ownsRoot?.() ?? true
   try {
     // Signal the captured descendants while their parent links still exist;
     // killing the root first creates a reparent/PID-reuse window.
-    if (snapshot && (deps.ownsRoot?.() ?? true)) {
+    if (snapshot && ownsRoot) {
       terminateDescendantSnapshot(snapshot, deps)
     }
   } finally {
     killRoot()
   }
+  // POSIX escalation is deliberately asynchronous so teardown does not block on the
+  // grace window. A captured descendant therefore remains unverified until that sweep
+  // completes; report unavailable so callers retain the conservative verdict.
+  return snapshot && ownsRoot && snapshot.descendants.length === 0
+    ? 'tree_terminated'
+    : 'tree_unavailable'
 }
 
 export function sendDescendantSignal(pid: number, signal: NodeJS.Signals): void {

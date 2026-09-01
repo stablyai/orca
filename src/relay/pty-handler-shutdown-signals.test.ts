@@ -119,6 +119,27 @@ describe('PtyHandler', () => {
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
   })
 
+  it('returns a fence refusal without touching a replacement PTY', async () => {
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+
+    const spawn = await spawnPty({})
+    await expect(
+      dispatcher.callRequest('pty.shutdown', {
+        id: PTY_1,
+        immediate: true,
+        incarnationId: `${spawn.incarnationId}-stale`
+      })
+    ).resolves.toEqual({ fenceUnavailable: true })
+    expect(mockKill).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(1)
+  })
+
   // Why: node-pty's Windows agent throws "Signals not supported on windows."
   // for any signal argument. killPtyProcess drops the signal on win32 — cover
   // every call site so a future regression cannot reintroduce signal args.

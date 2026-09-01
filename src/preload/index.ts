@@ -1181,6 +1181,8 @@ const api = {
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+    killSessions: (sessions, intent = 'orphan-cleanup') =>
+      ipcRenderer.invoke('pty:killSessions', { sessions, intent }),
 
     listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
     getAuthoritativeBufferSnapshotCapabilities: (

@@ -1,21 +1,13 @@
-import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
-import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
-import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
-import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
-import type { ColdRestoreInfo } from './history-reader'
-import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
-import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { DaemonPtySessionShutdown } from './daemon-pty-session-shutdown'
 import type { PtySpawnResult } from '../providers/types'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
-const MAX_TOMBSTONES = 1000
-
-export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
+export abstract class DaemonPtySessionControl extends DaemonPtySessionShutdown {
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
@@ -168,151 +160,6 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
       this.backgroundedSessionIds.delete(id)
     }
     this.client.notify('setSessionBackground', { sessionId: id, background: safeBackground })
-  }
-
-  async shutdown(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
-    if (opts.keepHistory && this.disconnectOnlyPromise) {
-      throw new Error('Cannot keep history after daemon disconnect has started')
-    }
-    const shutdown = this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
-    if (!opts.keepHistory) {
-      await shutdown
-      return
-    }
-    this.keepHistoryShutdowns.add(shutdown)
-    try {
-      await shutdown
-    } finally {
-      this.keepHistoryShutdowns.delete(shutdown)
-    }
-  }
-
-  protected async shutdownWithHistoryLock(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
-    // Why: shutdown can be the first lazy-client operation after restart; connect
-    // before killing so a healthy daemon session is not orphaned (#7742). Connect,
-    // the final-checkpoint wait, and kill all share the caller's one absolute
-    // deadline, so neither a wedged handshake nor a stalled history write can burn
-    // the whole teardown budget before the kill even starts. Only the waits are
-    // bounded — the checkpoint itself stays deadline-free and lossless (STA-4228).
-    await this.ensureConnected(opts.deadlineMs)
-    // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
-    // Force a final snapshot so wake can restore the pane users left.
-    if (opts.keepHistory) {
-      const committed = await this.runExclusiveCheckpoint(
-        async () => {
-          await this.checkpointSessions([id], { final: true, teardown: true })
-        },
-        { callerDeadlineMs: opts.deadlineMs }
-      )
-      // Why throw instead of killing anyway: the snapshot the caller asked us to prove is still
-      // being written. Killing here would race the wake-time restore source to disk, so report the
-      // pty unverified and leave it alive — worktree sleep declines to commit it and retries.
-      if (!committed) {
-        throw new FinalCheckpointWaitExpiredError(id)
-      }
-      const wslDistro = this.wslDistrosBySessionId.get(id)
-      const detection = await this.historyReader?.detectColdRestoreState(id, { wslDistro })
-      const detected = detection?.status === 'restored' ? detection.restoreInfo : null
-      const restoreInfo = detected
-        ? {
-            ...detected,
-            cwd:
-              normalizeWslColdRestoreCwd({
-                recoveredCwd: detected.cwd,
-                requestedCwd: this.initialCwds.get(id) ?? resolveSafePtyDefaultCwd(),
-                wslDistro
-              }) ?? ''
-          }
-        : null
-      const coldRestore = restoreInfo ? this.buildColdRestorePayload(restoreInfo) : null
-      if (coldRestore) {
-        this.coldRestoreCache.set(id, coldRestore)
-        if (this.coldRestoreCache.has(id)) {
-          this.sleepRestoreSessionIds.add(id)
-        }
-        // Why: physical exit must not mark intentional sleep as a clean end; the final checkpoint stays the wake-time recovery authority.
-        this.historyManager?.suspendSession(id)
-      } else if (
-        detection?.status === 'unreadable' ||
-        (detection?.status === 'restored' && detection.hasUnreadableRecovery)
-      ) {
-        this.historyManager?.suspendSession(id)
-      }
-    }
-    await this.client.request(
-      'kill',
-      { sessionId: id, immediate: opts.immediate ?? false },
-      remainingDaemonRequestTimeoutMs(opts.deadlineMs)
-    )
-    this.activeSessionIds.delete(id)
-    this.clearSessionAwaitingDaemonRecovery(id)
-    this.dirtySessionVersions.delete(id)
-    if (!opts.keepHistory) {
-      this.coldRestoreCache.delete(id)
-      this.sleepRestoreSessionIds.delete(id)
-    }
-    // Why: the !keepHistory path takes no final checkpoint, so clear sessionsNeedingFullCheckpoint here or it stays stranded (no-op under keepHistory).
-    this.sessionsNeedingFullCheckpoint.delete(id)
-    this.sessionsNeedingLiveCheckpoint.delete(id)
-    this.sessionsNeedingContinuityCheckpoint.delete(id)
-    this.overlayDeadlineWarnedSessionIds.delete(id)
-    this.periodicDeadlineWarnedSessionIds.delete(id)
-    this.nonFinalAdmissionDeniedSessionIds.delete(id)
-    this.lastFullCheckpointAt.delete(id)
-    this.stopCheckpointTimerIfIdle()
-    this.initialCwds.delete(id)
-    this.wslDistrosBySessionId.delete(id)
-    // Why: only remove history on explicit close; sleep also calls shutdown but wake needs the dir intact for cold restore (opts.keepHistory).
-    if (this.historyManager && !opts.keepHistory) {
-      await this.historyManager
-        .removeSession(id)
-        .catch((err) => console.warn('[history] removeSession failed:', id, err))
-    }
-
-    // Why: the tombstone rejects reattach to a user-killed session; sleep legitimately reattaches on wake, so skip it under keepHistory.
-    if (!opts.keepHistory) {
-      this.killedSessionTombstones.delete(id)
-      this.killedSessionTombstones.set(id, Date.now())
-      if (this.killedSessionTombstones.size > MAX_TOMBSTONES) {
-        const oldest = this.killedSessionTombstones.keys().next().value
-        if (oldest) {
-          this.killedSessionTombstones.delete(oldest)
-        }
-      }
-    }
-  }
-
-  ackColdRestore(sessionId: string): void {
-    this.coldRestoreCache.delete(sessionId)
-    this.sleepRestoreSessionIds.delete(sessionId)
-  }
-
-  clearTombstone(sessionId: string): void {
-    this.killedSessionTombstones.delete(sessionId)
-  }
-
-  protected buildColdRestorePayload(restoreInfo: ColdRestoreInfo): ColdRestorePayload | null {
-    // Why: alt-screen prefers normal scrollback, else snapshotAnsi alone — not rehydrate, which starts with \x1b[?1049h that POST_REPLAY_MODE_RESET won't undo — so a hibernated TUI's last frame isn't blank on wake.
-    const scrollback = restoreInfo.modes.alternateScreen
-      ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
-      : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
-    if (!scrollback) {
-      return null
-    }
-    return {
-      scrollback,
-      cwd: restoreInfo.cwd,
-      cols: restoreInfo.cols,
-      rows: restoreInfo.rows,
-      oscLinks: restoreInfo.oscLinks,
-      ...(restoreInfo.lastTitle ? { lastTitle: restoreInfo.lastTitle } : {})
-    }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {

@@ -20,6 +20,7 @@ import {
 } from '../pty-hidden-delivery-gate'
 import type { CodexHomePtySpawnedLifecycleArgs, PrepareCodexSessionResume } from './host-env/types'
 import { tryGetProviderForPty } from './provider/registry'
+import type { PtyKillIntent } from '../../../shared/pty-kill-sessions'
 
 export type PtyDataPayload = {
   id: string
@@ -154,7 +155,13 @@ export type PtyIpcSession = {
   shutdownProviderAndDetectExit: (
     provider: IPtyProvider,
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      intent?: PtyKillIntent
+      incarnationId?: string
+    }
   ) => Promise<boolean>
   rememberSyntheticKillExit: (id: string) => void
   rememberRetiredRejectedPty: (id: string) => void

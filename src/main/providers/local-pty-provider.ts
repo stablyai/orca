@@ -7,6 +7,8 @@ import {
   hasLocalPtyChildProcesses
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
+import type { PtyKillIntent } from '../../shared/pty-kill-sessions'
+import type { PtyShutdownResult } from './pty-provider-contract'
 import {
   advanceLoadGeneration,
   clearPtyState,
@@ -70,6 +72,10 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
+
+  supportsIncarnationFence(): boolean {
+    return true
+  }
   write(id: string, data: string): boolean {
     return writeLocalPty(id, data)
   }
@@ -89,7 +95,27 @@ export class LocalPtyProvider implements IPtyProvider {
     return getLocalPtyAppliedSize(id)
   }
 
-  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  shutdown(
+    id: string,
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      intent?: PtyKillIntent
+      incarnationId?: string
+    }
+  ): Promise<void> {
+    return shutdownLocalPty(id, opts).then(() => undefined)
+  }
+
+  shutdownWithOutcome(
+    id: string,
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      intent?: PtyKillIntent
+      incarnationId?: string
+    }
+  ): Promise<PtyShutdownResult | void> {
     return shutdownLocalPty(id, opts)
   }
 

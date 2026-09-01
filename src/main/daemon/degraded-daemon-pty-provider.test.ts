@@ -662,6 +662,27 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(provider.hasPty('legacy-session')).toBe(true)
   })
 
+  it('delivers synthetic exits to every listener when one unsubscribes', async () => {
+    const current = createDaemonAdapter('daemon', ['current-session'])
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [],
+      fallback: createProvider('fallback')
+    })
+    const events: string[] = []
+    let unsubscribe = () => {}
+    unsubscribe = provider.onExit(() => {
+      events.push('first')
+      unsubscribe()
+    })
+    provider.onExit(() => events.push('second'))
+
+    await provider.discoverDaemonSessions()
+    provider.fanoutCurrentDaemonSyntheticExits(-1)
+
+    expect(events).toEqual(['first', 'second'])
+  })
+
   it('keeps an exited legacy daemon poisoning listProcesses after construction', async () => {
     const current = createDaemonAdapter('daemon', ['current-session'])
     const legacy = createDaemonAdapter('legacy', ['legacy-session'])

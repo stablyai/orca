@@ -1,8 +1,13 @@
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
 import type { IPtyProvider } from '../providers/types'
+import { INCARNATION_FENCE_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  supportsIncarnationFence(): boolean {
+    return this.protocolVersion >= INCARNATION_FENCE_DAEMON_PROTOCOL_VERSION
+  }
+
   protected setupEventRouting(): void {
     if (this.removeEventListener) {
       return

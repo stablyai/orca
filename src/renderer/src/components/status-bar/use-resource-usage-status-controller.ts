@@ -50,7 +50,8 @@ export function useResourceUsageStatusController() {
     refreshSessions,
     clearSessionsError,
     removeSession,
-    removeSessions
+    removeSessions,
+    setSessionVerdict
   } = useResourceSessionInventory(workspaceSessionReady)
   const sessions = sessionInventory.sessions
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
@@ -205,6 +206,7 @@ export function useResourceUsageStatusController() {
     refreshSessions,
     removeSession,
     removeSessions,
+    setSessionVerdict,
     sessions,
     resourceSessionBindings,
     workspaceSessionReady,

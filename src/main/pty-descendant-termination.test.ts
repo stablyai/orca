@@ -416,7 +416,7 @@ describe('killWithDescendantSweep', () => {
     })
     expect(killRoot).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(0)
-    await pending
+    await expect(pending).resolves.toBe('tree_unavailable')
     expect(killRoot).toHaveBeenCalledOnce()
     expect(sendSignal.mock.calls).toEqual([[20, 'SIGTERM']])
     expect(events).toEqual(['descendant-term', 'root-kill'])
@@ -622,7 +622,7 @@ describe('killWithDescendantSweep', () => {
         killWindowsTree,
         verifyTreeKillTarget: async () => 'own'
       })
-    ).resolves.toBeUndefined()
+    ).resolves.toBe('tree_unavailable')
     expect(killRoot).toHaveBeenCalledOnce()
   })
 

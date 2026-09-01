@@ -146,6 +146,45 @@ describe('DaemonPtyAdapter history recovery', () => {
     expect(JSON.parse(readFileSync(metaPath, 'utf-8')).endedAt).toBeNull()
   })
 
+  it('reopens suspended history when a keep-history kill is fenced out', async () => {
+    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    const { id } = await historyAdapter.spawn({
+      cols: 80,
+      rows: 24,
+      sessionId: 'sleep-fenced-refusal'
+    })
+    const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
+    vi.spyOn(reader, 'detectColdRestoreState').mockResolvedValue({
+      status: 'unreadable',
+      sessionId: id
+    })
+    const client = (
+      historyAdapter as unknown as {
+        client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+      }
+    ).client
+    const originalRequest = client.request.bind(client)
+    vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+      if (type === 'kill') {
+        return { fenceUnavailable: true }
+      }
+      return await originalRequest(type, payload)
+    })
+
+    await expect(
+      historyAdapter.shutdownWithOutcome(id, {
+        immediate: true,
+        keepHistory: true,
+        incarnationId: 'stale-incarnation'
+      })
+    ).resolves.toEqual({ fenceUnavailable: true })
+
+    const manager = historyAdapter.getHistoryManager()!
+    expect(manager.hasWriter(id)).toBe(true)
+    const metaPath = join(historyDir, getHistorySessionDirName(id), 'meta.json')
+    expect(JSON.parse(readFileSync(metaPath, 'utf-8')).endedAt).toBeNull()
+  })
+
   it('suspends an empty final checkpoint with unreadable post-checkpoint recovery', async () => {
     historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
     const { id } = await historyAdapter.spawn({

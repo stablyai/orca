@@ -23,6 +23,7 @@ import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
+import type { PtyShutdownResult } from './pty-provider-contract'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -150,6 +151,10 @@ export class SshPtyProvider implements IPtyProvider {
     return await this.agentSessionCapabilities.supportsCreateOperations(options)
   }
 
+  async supportsIncarnationFence(options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    return await this.agentSessionCapabilities.supportsIncarnationFence(options)
+  }
+
   async attach(id: string): Promise<void> {
     const relayPtyId = this.toRelayPtyId(id)
     await requestSshPtyAttach({
@@ -206,19 +211,31 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
-    await this.mux.request(
+    await this.shutdownWithOutcome(id, opts)
+  }
+
+  async shutdownWithOutcome(
+    id: string,
+    opts: Parameters<IPtyProvider['shutdown']>[1]
+  ): Promise<PtyShutdownResult | void> {
+    const result = (await this.mux.request(
       'pty.shutdown',
       {
         id: this.toRelayPtyId(id),
         immediate: opts.immediate ?? false,
         keepHistory: opts.keepHistory ?? false,
+        ...(opts.intent === undefined ? {} : { intent: opts.intent }),
+        ...(opts.incarnationId === undefined ? {} : { incarnationId: opts.incarnationId }),
         ...(opts.expectedIncarnationId === undefined
           ? {}
           : { expectedIncarnationId: opts.expectedIncarnationId })
       },
       relayTimeoutOptions(opts.deadlineMs)
-    )
-    this.livePtyIds.delete(id)
+    )) as PtyShutdownResult | void
+    if (result?.fenceUnavailable !== true) {
+      this.livePtyIds.delete(id)
+    }
+    return result
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -291,42 +308,23 @@ export class SshPtyProvider implements IPtyProvider {
     }
     return processes
   }
-
   hasPty = (id: string): boolean => this.livePtyIds.has(id)
+  getDefaultShell = async (): Promise<string> =>
+    (await this.mux.request('pty.getDefaultShell')) as string
 
-  async getDefaultShell(): Promise<string> {
-    const result = await this.mux.request('pty.getDefaultShell')
-    return result as string
-  }
-
-  async getProfiles(): Promise<{ name: string; path: string }[]> {
-    const result = await this.mux.request('pty.getProfiles')
-    return result as { name: string; path: string }[]
-  }
-
+  getProfiles = async (): Promise<{ name: string; path: string }[]> =>
+    (await this.mux.request('pty.getProfiles')) as { name: string; path: string }[]
   onData = (callback: SshPtyDataCallback): (() => void) => this.outputState.onData(callback)
   onRejectedData = (callback: SshPtyDataCallback): (() => void) =>
     this.outputState.onRejectedData(callback)
   onReplay = (callback: SshPtyReplayCallback): (() => void) => this.outputState.onReplay(callback)
   onExit = (callback: SshPtyExitCallback): (() => void) => this.outputState.onExit(callback)
-
-  setPtyDeliveryPauseAdapter(adapter: SshPtyDeliveryPauseAdapter | null): void {
+  setPtyDeliveryPauseAdapter = (adapter: SshPtyDeliveryPauseAdapter | null): void =>
     this.outputState.setDeliveryPauseAdapter(adapter)
-  }
-
-  hasPtyDeliveryPauseAdapter(): boolean {
-    return this.outputState.hasDeliveryPauseAdapter()
-  }
-
-  pauseProducer(id: string): void {
-    this.outputState.pause(this.toRelayPtyId(id))
-  }
-
-  resumeProducer(id: string): void {
-    this.outputState.resume(this.toRelayPtyId(id))
-  }
-
-  closeOutputIntake(reason: string): void {
+  hasPtyDeliveryPauseAdapter = (): boolean => this.outputState.hasDeliveryPauseAdapter()
+  pauseProducer = (id: string): void => this.outputState.pause(this.toRelayPtyId(id))
+  resumeProducer = (id: string): void => this.outputState.resume(this.toRelayPtyId(id))
+  closeOutputIntake = (reason: string): void => {
     this.mux.dispose('connection_lost')
     console.error('[ssh-pty-provider] closed after bounded output intake failure', { reason })
   }

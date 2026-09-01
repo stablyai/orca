@@ -16,6 +16,8 @@ export const WORKTREE_TEARDOWN_VERIFY_GRACE_MS = 2_000
 
 export type UnstoppedPtyVerdict = PtyLivenessVerdict
 
+export type FailedPtyRef = string | { id: string; incarnationId?: string }
+
 /**
  * Re-lists the provider's processes to decide what a failed stop RPC actually
  * meant. The three verdicts stay distinct on purpose: "we could not ask" is not
@@ -28,7 +30,7 @@ export type UnstoppedPtyVerdict = PtyLivenessVerdict
  * gets a budget of its own, sized like the sweep's rather than its leftovers.
  */
 export async function verifyUnstoppedPtys(
-  failedPtyIds: readonly string[],
+  failedPtyIds: readonly FailedPtyRef[],
   provider: IPtyProvider,
   sweepBudgetMs: number
 ): Promise<UnstoppedPtyVerdict> {
@@ -54,8 +56,28 @@ export async function verifyUnstoppedPtys(
     }
   }
   const livePtyIds = new Set(sessions.map((session) => session.id))
-  const stillLive = failedPtyIds.filter((ptyId) => livePtyIds.has(ptyId))
-  return stillLive.length > 0 ? { status: 'live', ptyIds: stillLive } : { status: 'exited' }
+  const stillLive: string[] = []
+  let fenceUnavailable = false
+  for (const failed of failedPtyIds) {
+    const id = typeof failed === 'string' ? failed : failed.id
+    const listed = sessions.find((session) => session.id === id)
+    if (!listed) {
+      continue
+    }
+    if (typeof failed === 'object' && failed.incarnationId && listed.incarnationId) {
+      if (failed.incarnationId === listed.incarnationId) {
+        stillLive.push(id)
+      }
+      continue
+    }
+    if (livePtyIds.has(id)) {
+      stillLive.push(id)
+      fenceUnavailable = true
+    }
+  }
+  return stillLive.length > 0
+    ? { status: 'live', ptyIds: stillLive, ...(fenceUnavailable ? { fenceUnavailable: true } : {}) }
+    : { status: 'exited', ...(fenceUnavailable ? { fenceUnavailable: true } : {}) }
 }
 
 /**
@@ -77,7 +99,7 @@ export function unverifiableStopVerdict(
 }
 
 export async function resolveUnstoppedPtyVerdict(
-  failedPtyIds: readonly string[],
+  failedPtyIds: readonly FailedPtyRef[],
   provider: IPtyProvider,
   sweepBudgetMs: number,
   providerObservesOwningHost: boolean,
@@ -87,8 +109,9 @@ export async function resolveUnstoppedPtyVerdict(
     return { status: 'exited' }
   }
   if (!providerObservesOwningHost) {
+    const ids = failedPtyIds.map((failed) => (typeof failed === 'string' ? failed : failed.id))
     return (
-      unverifiableStopVerdict(failedPtyIds, runtime) ?? {
+      unverifiableStopVerdict(ids, runtime) ?? {
         status: 'unverifiable',
         reason: NO_OBSERVING_PROVIDER_REASON
       }
@@ -100,13 +123,14 @@ export async function resolveUnstoppedPtyVerdict(
 /** Names the blocking PTYs so a wedged removal is diagnosable, not just refused. */
 export function describeUnstoppedPtys(
   worktreeId: string,
-  failedPtyIds: readonly string[],
+  failedPtyIds: readonly FailedPtyRef[],
   verdict: Exclude<UnstoppedPtyVerdict, { status: 'exited' }>
 ): string {
+  const ids = failedPtyIds.map((failed) => (typeof failed === 'string' ? failed : failed.id))
   const detail =
     verdict.status === 'live'
       ? `${UNSTOPPED_PTY_LIVE_DETAIL_PREFIX} ${verdict.ptyIds.join(', ')}`
-      : `could not verify these exited: ${failedPtyIds.join(', ')} (${verdict.reason})`
+      : `could not verify these exited: ${ids.join(', ')} (${verdict.reason})`
   return `${UNSTOPPED_PTY_REMOVAL_PREFIX} ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${detail}`
 }
 

@@ -11,6 +11,7 @@ import {
   ptyAgentSessionIds,
   ptyForceKillTimers,
   ptyPhysicalExits,
+  ptyIncarnations,
   ptyProcesses,
   ptyShutdownOperations,
   ptyTerminationMode,
@@ -18,6 +19,8 @@ import {
   runPtyCleanup,
   type PtyShutdownOperation
 } from './local-pty-provider-state'
+import type { PtyShutdownResult } from './pty-provider-contract'
+import type { PtyKillIntent } from '../../shared/pty-kill-sessions'
 import {
   cancelAllPendingLocalPtySpawns,
   cancelPendingLocalPtySpawns
@@ -163,7 +166,7 @@ async function shutdownTrackedPty(
   id: string,
   proc: pty.IPty,
   operation: PtyShutdownOperation
-): Promise<void> {
+): Promise<PtyShutdownResult | void> {
   const physicalExit = ptyPhysicalExits.get(id)
   const signalRoot = (): void => {
     // Why: natural exit can race the sweep — never signal after this PTY loses ownership.
@@ -179,20 +182,25 @@ async function shutdownTrackedPty(
     // Why: POSIX needs a pre-kill descendant snapshot; Windows tree-kills only when the
     // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
     // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
-    await killWithDescendantSweep(proc.pid, signalRoot, {
+    const outcome = await killWithDescendantSweep(proc.pid, signalRoot, {
       ownsRoot: () => ptyProcesses.get(id) === proc,
       terminateOwnedTree: () => terminatePtyJob(proc)
     })
+    await waitForPtyPhysicalExit(id, physicalExit)
+    return outcome === 'tree_terminated' ? { outcome } : { outcome, treeUnverified: true }
   } else if (process.platform === 'win32' && operation.immediate) {
     // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
     // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
     // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
     // otherwise root close alone, and detached children may block physical stop (#10004).
-    await killWithDescendantSweep(proc.pid, signalRoot, {
+    const outcome = await killWithDescendantSweep(proc.pid, signalRoot, {
       ownsRoot: () => ptyProcesses.get(id) === proc,
       terminateOwnedTree: () => terminatePtyJob(proc)
     })
-  } else {
+    await waitForPtyPhysicalExit(id, physicalExit)
+    return outcome === 'tree_terminated' ? { outcome } : { outcome, treeUnverified: true }
+  }
+  if (!(process.platform === 'win32' && operation.immediate)) {
     signalRoot()
   }
   await waitForPtyPhysicalExit(id, physicalExit)
@@ -200,8 +208,17 @@ async function shutdownTrackedPty(
 
 export async function shutdownLocalPty(
   id: string,
-  opts: { immediate?: boolean; keepHistory?: boolean }
-): Promise<void> {
+  opts: {
+    immediate?: boolean
+    keepHistory?: boolean
+    intent?: PtyKillIntent
+    incarnationId?: string
+  }
+): Promise<PtyShutdownResult | void> {
+  const expectedIncarnationId = ptyIncarnations.get(id)
+  if (opts.incarnationId !== undefined && opts.incarnationId !== expectedIncarnationId) {
+    return { fenceUnavailable: true }
+  }
   cancelPendingLocalPtySpawns(id)
   const pending = ptyShutdownOperations.get(id)
   if (pending) {
@@ -211,8 +228,7 @@ export async function shutdownLocalPty(
         requestTrackedPtyShutdown(id, pending.proc, true)
       }
     }
-    await pending.promise
-    return
+    return await pending.promise
   }
   const proc = ptyProcesses.get(id)
   if (!proc) {
@@ -224,10 +240,10 @@ export async function shutdownLocalPty(
     rootSignalled: false,
     proc
   }
-  entry.promise = shutdownTrackedPty(id, proc, entry)
+  entry.promise = shutdownTrackedPty(id, proc, entry) as Promise<void>
   ptyShutdownOperations.set(id, entry)
   try {
-    await entry.promise
+    return await entry.promise
   } finally {
     if (ptyShutdownOperations.get(id) === entry) {
       ptyShutdownOperations.delete(id)

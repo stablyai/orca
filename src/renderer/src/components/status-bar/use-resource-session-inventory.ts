@@ -16,6 +16,12 @@ type ResourceSessionInventory = {
   clearSessionsError: () => void
   removeSession: (sessionId: string) => void
   removeSessions: (sessionIds: ReadonlySet<string>) => void
+  setSessionVerdict: (
+    id: string,
+    verdict: 'live' | 'unverifiable' | 'refused',
+    reason?: string,
+    incarnationId?: string
+  ) => void
 }
 
 type ResourceSessionInventoryState = {
@@ -30,6 +36,10 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
   const lifecycleRevisionRef = useRef(0)
   const removedAtRevisionRef = useRef(new Map<string, number>())
   const knownSessionIdsRef = useRef(new Set<string>())
+  const verdictsRef = useRef(
+    new Map<string, { verdict: 'live' | 'unverifiable' | 'refused'; reason?: string }>()
+  )
+  const verdictKey = (id: string, incarnationId?: string): string => `${id}\0${incarnationId ?? ''}`
   const [storedState, setStoredState] = useState<ResourceSessionInventoryState>(() => ({
     ready,
     sessionInventory: EMPTY_DAEMON_SESSION_INVENTORY,
@@ -63,9 +73,14 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
         return
       }
       const currentRemovedAtRevision = removedAtRevisionRef.current
-      const liveSessions = sessions.filter(
-        ({ id }) => (currentRemovedAtRevision.get(id) ?? 0) <= lifecycleRevision
-      )
+      const liveSessions = sessions
+        .filter(({ id }) => (currentRemovedAtRevision.get(id) ?? 0) <= lifecycleRevision)
+        .map((session) => {
+          const verdict = verdictsRef.current.get(verdictKey(session.id, session.incarnationId))
+          return verdict
+            ? { ...session, killVerdict: verdict.verdict, killReason: verdict.reason }
+            : session
+        })
       // Tombstones at or before this request cannot suppress later ID reuse;
       // only exits that raced this request must survive to the next refresh.
       for (const [id, removedAtRevision] of currentRemovedAtRevision) {
@@ -74,6 +89,18 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
         }
       }
       knownSessionIdsRef.current = new Set(liveSessions.map(({ id }) => id))
+      // Keep at most one verdict generation per listed PTY. Session ids can be
+      // recycled with a new incarnation while the inventory stays present; retaining
+      // every historical key would grow this map for the lifetime of the workspace.
+      const currentVerdictKeys = new Set(
+        liveSessions.map((session) => verdictKey(session.id, session.incarnationId))
+      )
+      for (const key of verdictsRef.current.keys()) {
+        const id = key.split('\0', 1)[0]
+        if (!knownSessionIdsRef.current.has(id) || !currentVerdictKeys.has(key)) {
+          verdictsRef.current.delete(key)
+        }
+      }
       setStoredState({
         ready: true,
         sessionInventory: inventoryFromSessions(liveSessions),
@@ -96,6 +123,11 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     const lifecycleRevision = ++lifecycleRevisionRef.current
     removedAtRevisionRef.current.set(sessionId, lifecycleRevision)
     knownSessionIdsRef.current.delete(sessionId)
+    for (const key of verdictsRef.current.keys()) {
+      if (key.startsWith(`${sessionId}\0`)) {
+        verdictsRef.current.delete(key)
+      }
+    }
     setStoredState((current) => ({
       ...current,
       sessionInventory: removeSessionFromInventory(current.sessionInventory, sessionId)
@@ -107,6 +139,11 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     for (const sessionId of sessionIds) {
       removedAtRevisionRef.current.set(sessionId, lifecycleRevision)
       knownSessionIdsRef.current.delete(sessionId)
+      for (const key of verdictsRef.current.keys()) {
+        if (key.startsWith(`${sessionId}\0`)) {
+          verdictsRef.current.delete(key)
+        }
+      }
     }
     setStoredState((current) => ({
       ...current,
@@ -114,11 +151,38 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     }))
   }, [])
 
+  const setSessionVerdict = useCallback(
+    (
+      id: string,
+      verdict: 'live' | 'unverifiable' | 'refused',
+      reason?: string,
+      incarnationId?: string
+    ): void => {
+      verdictsRef.current.set(verdictKey(id, incarnationId), {
+        verdict,
+        ...(reason ? { reason } : {})
+      })
+      setStoredState((current) => ({
+        ...current,
+        sessionInventory: {
+          ...current.sessionInventory,
+          sessions: current.sessionInventory.sessions.map((session) =>
+            session.id === id && (!incarnationId || session.incarnationId === incarnationId)
+              ? { ...session, killVerdict: verdict, killReason: reason }
+              : session
+          )
+        }
+      }))
+    },
+    []
+  )
+
   useEffect(() => {
     refreshGenerationRef.current += 1
     if (!ready) {
       removedAtRevisionRef.current.clear()
       knownSessionIdsRef.current.clear()
+      verdictsRef.current.clear()
       return
     }
     void refreshSessions()
@@ -203,6 +267,7 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     refreshSessions,
     clearSessionsError,
     removeSession,
-    removeSessions
+    removeSessions,
+    setSessionVerdict
   }
 }

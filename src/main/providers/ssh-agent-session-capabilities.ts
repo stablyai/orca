@@ -7,6 +7,7 @@ export class SshAgentSessionCapabilities {
   private claimProbe: Promise<void> | null = null
   private claimSupported = false
   private createOperationProbe: Promise<boolean> | null = null
+  private incarnationFenceProbe: Promise<boolean> | null = null
 
   constructor(private readonly mux: SshChannelMultiplexer) {}
 
@@ -25,6 +26,26 @@ export class SshAgentSessionCapabilities {
       }
       return false
     }
+  }
+
+  async supportsIncarnationFence(options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    const probe =
+      this.incarnationFenceProbe ??
+      this.mux
+        .request('pty.getCapabilities', undefined, { signal: options.signal, timeoutMs: 5_000 })
+        .then((value) => {
+          const version = (value as { incarnationFenceVersion?: unknown })?.incarnationFenceVersion
+          return typeof version === 'number' && version >= 1
+        })
+        .catch(() => false)
+    this.incarnationFenceProbe = probe
+    const supported = await probe
+    // Capability probes can fail transiently while an SSH relay is reconnecting;
+    // never let one negative result disable incarnation fencing for this provider's lifetime.
+    if (!supported && this.incarnationFenceProbe === probe) {
+      this.incarnationFenceProbe = null
+    }
+    return supported
   }
 
   providesOwnerListings(): boolean {

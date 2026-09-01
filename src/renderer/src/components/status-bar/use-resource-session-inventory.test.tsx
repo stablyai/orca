@@ -5,8 +5,14 @@ import type { DaemonSession } from './resource-usage-merge-types'
 import { notifyDaemonSessionInventoryInvalidated } from './daemon-session-inventory-invalidation'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
 
-function session(id: string): DaemonSession {
-  return { id, cwd: '/workspace', title: id, agentOwnership: 'absent' as const }
+function session(id: string, incarnationId?: string): DaemonSession {
+  return {
+    id,
+    cwd: '/workspace',
+    title: id,
+    agentOwnership: 'absent' as const,
+    ...(incarnationId ? { incarnationId } : {})
+  }
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -270,6 +276,34 @@ describe('useResourceSessionInventory', () => {
 
     await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
     expect(listSessions).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops verdicts from retired incarnations while retaining the live id', async () => {
+    listSessions
+      .mockResolvedValueOnce([session('reused', 'incarnation-old')])
+      .mockResolvedValueOnce([session('reused', 'incarnation-new')])
+    const { result } = renderHook(() => useResourceSessionInventory(true))
+    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
+
+    act(() => {
+      result.current.setSessionVerdict(
+        'reused',
+        'unverifiable',
+        'inventory unavailable',
+        'incarnation-old'
+      )
+    })
+    expect(result.current.sessionInventory.sessions[0]).toMatchObject({
+      incarnationId: 'incarnation-old',
+      killVerdict: 'unverifiable'
+    })
+
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.sessionInventory.sessions[0]).toEqual(
+      session('reused', 'incarnation-new')
+    )
   })
 
   it('ignores inventory invalidation before session restore is ready and after unmount', async () => {

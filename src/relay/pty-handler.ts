@@ -979,7 +979,8 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
-      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
+      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      incarnationFenceVersion: 1
     }))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
@@ -2073,7 +2074,9 @@ export class PtyHandler {
     return { cols: managed.pty.cols, rows: managed.pty.rows }
   }
 
-  private async shutdown(params: Record<string, unknown>): Promise<void> {
+  private async shutdown(
+    params: Record<string, unknown>
+  ): Promise<{ fenceUnavailable: true } | void> {
     const id = params.id as string
     const immediate = params.immediate as boolean
     const expectedIncarnationId = params.expectedIncarnationId
@@ -2083,12 +2086,24 @@ export class PtyHandler {
     ) {
       throw new Error('Invalid expectedIncarnationId')
     }
+    const incarnationId =
+      typeof params.incarnationId === 'string' ? params.incarnationId : undefined
+    if (
+      params.incarnationId !== undefined &&
+      (typeof params.incarnationId !== 'string' || params.incarnationId.length === 0)
+    ) {
+      throw new Error('Invalid incarnationId')
+    }
     const managed = this.ptys.get(id)
     if (!managed) {
       return
     }
-    if (expectedIncarnationId !== undefined && expectedIncarnationId !== managed.incarnationId) {
-      throw new Error(`PTY incarnation mismatch for ${id}`)
+    if (
+      (expectedIncarnationId !== undefined && expectedIncarnationId !== managed.incarnationId) ||
+      (incarnationId !== undefined && incarnationId !== managed.incarnationId)
+    ) {
+      // Preserve the live replacement; callers must classify this as a fence refusal.
+      return { fenceUnavailable: true }
     }
     // Why: `pty.shutdown` is the only authoritative statement this host ever gets that a tab is
     // gone. Record it before the kill request, because the kill is the part that can fail: an agent

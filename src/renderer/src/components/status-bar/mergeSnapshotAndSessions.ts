@@ -36,6 +36,7 @@ import type {
   UnifiedWorktreeRow
 } from './resource-usage-merge-types'
 import { buildResourceSessionBindingIndex } from './resource-session-bindings'
+import { killVerdictFields } from './resource-session-kill-verdict-fields'
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -134,6 +135,11 @@ function resolveDaemonSessionLabel(
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
 export const UNATTRIBUTED_REPO_NAME = 'Unattributed'
 
+type SessionWithKillVerdict = DaemonSession & {
+  killVerdict?: UnifiedSessionRow['killVerdict']
+  killReason?: string
+}
+
 export function mergeSnapshotAndSessions(
   snapshot: MemorySnapshot | null,
   daemonSessions: readonly DaemonSession[],
@@ -151,6 +157,9 @@ export function mergeSnapshotAndSessions(
   // session the daemon never listed is 'unknown', not 'absent'.
   const ownershipBySessionId = new Map(
     daemonSessions.map((session) => [session.id, session.agentOwnership])
+  )
+  const verdictBySessionId = new Map(
+    daemonSessions.map((session) => [session.id, session as SessionWithKillVerdict])
   )
 
   function isRepoRemote(repoId: string): boolean {
@@ -206,8 +215,11 @@ export function mergeSnapshotAndSessions(
       const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
         seenSessionIds.add(s.sessionId)
         const tabId = index.ptyIdToTabId.get(s.sessionId) ?? null
+        const verdict = verdictBySessionId.get(s.sessionId)
         return {
           sessionId: s.sessionId,
+          ...(verdict?.incarnationId ? { incarnationId: verdict.incarnationId } : {}),
+          ...(verdict ? killVerdictFields(verdict) : {}),
           paneKey: s.paneKey,
           pid: s.pid,
           label: resolveSnapshotSessionLabel(s, wt.worktreeId, ctx),
@@ -296,6 +308,8 @@ export function mergeSnapshotAndSessions(
 
     row.sessions.push({
       sessionId: session.id,
+      ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+      ...killVerdictFields(session as SessionWithKillVerdict),
       paneKey: null,
       pid: 0,
       label: resolveDaemonSessionLabel(session, worktreeId, tabId, ctx),

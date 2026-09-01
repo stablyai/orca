@@ -99,8 +99,10 @@ function selectReplayTargets(
  *
  *  Re-checks the fence here rather than trusting the selection pass, so the identity proof and the
  *  irreversible call sit next to each other and cannot drift apart if this loop is ever reshaped.
- *  Current relays enforce that fence atomically at shutdown; older relays ignore the additive field
- *  and retain this inventory check as their mixed-version fallback. */
+ *  The recorded incarnation is forwarded to the relay so its host-side fence can refuse a stale
+ *  replay instead of killing a replacement that recycled the relay id. Current relays enforce that
+ *  fence atomically at shutdown; older relays ignore the additive field and retain this inventory
+ *  check as their mixed-version fallback. */
 async function deliverReplay(
   args: SshPendingPtyKillReplayArgs,
   entry: SshPendingPtyKillEntry,

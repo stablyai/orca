@@ -1,8 +1,10 @@
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { Session } from './session'
+import type { PtyKillIntent } from '../../shared/pty-kill-sessions'
+import type { PtyShutdownResult } from '../providers/pty-provider-contract'
 
 type AgentTeardownOperation = {
-  promise: Promise<void>
+  promise: Promise<PtyShutdownResult | void>
   immediate: boolean
   rootSignalled: boolean
   rootCompletion: Promise<void>
@@ -16,11 +18,11 @@ export class TerminalSessionTeardown {
 
   constructor(private sessions: ReadonlyMap<string, Session>) {}
 
-  get(sessionId: string): Promise<void> | undefined {
+  get(sessionId: string): Promise<PtyShutdownResult | void> | undefined {
     return this.operations.get(sessionId)?.promise
   }
 
-  requestImmediate(sessionId: string): Promise<void> | undefined {
+  requestImmediate(sessionId: string): Promise<PtyShutdownResult | void> | undefined {
     const pending = this.operations.get(sessionId)
     if (pending) {
       pending.immediate = true
@@ -33,7 +35,15 @@ export class TerminalSessionTeardown {
     return pending?.promise
   }
 
-  killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {
+  killSession(
+    sessionId: string,
+    session: Session,
+    immediate: boolean,
+    opts?: { intent?: PtyKillIntent; incarnationId?: string }
+  ): void | Promise<PtyShutdownResult | void> {
+    if (opts?.incarnationId && opts.incarnationId !== session.incarnationId) {
+      return Promise.resolve({ fenceUnavailable: true })
+    }
     if (session.launchAgent) {
       return this.killAgentSession(sessionId, session, immediate)
     }
@@ -53,16 +63,21 @@ export class TerminalSessionTeardown {
    * (#10004/#10100). POSIX shells already reach their child pgroup on forceKill, so they
    * stay on the plain force-kill path.
    */
-  private async forceKillPlainShellSession(sessionId: string, session: Session): Promise<void> {
+  private async forceKillPlainShellSession(
+    sessionId: string,
+    session: Session
+  ): Promise<PtyShutdownResult | void> {
     if (process.platform === 'win32') {
       // Why: forceKillAndWaitForExit claims termination synchronously; awaiting the sweep
       // ahead of it would leave attach open on a doomed session for the taskkill's duration.
       session.beginTermination()
-      await killWithDescendantSweep(session.pid, () => {}, {
+      const outcome = await killWithDescendantSweep(session.pid, () => {}, {
         // Why: the descendant tree is only ours while this Session still owns the live root PID.
         ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
         terminateOwnedTree: () => session.terminateOwnedTree()
       })
+      await session.forceKillAndWaitForExit()
+      return outcome === 'tree_terminated' ? { outcome } : { outcome, treeUnverified: true }
     }
     await session.forceKillAndWaitForExit()
   }
@@ -71,7 +86,7 @@ export class TerminalSessionTeardown {
     sessionId: string,
     session: Session,
     immediate: boolean
-  ): void | Promise<void> {
+  ): void | Promise<PtyShutdownResult | void> {
     const pending = this.operations.get(sessionId)
     if (pending) {
       // Why: an immediate caller is a stronger teardown request and must not
@@ -125,7 +140,11 @@ export class TerminalSessionTeardown {
     )
     // Why: descendant capture completion only proves signals were requested;
     // destructive callers must retain the native owner until OS-confirmed exit.
-    const operation = sweep.then(() => entry.rootCompletion)
+    const operation = sweep.then((outcome) =>
+      entry.rootCompletion.then(() =>
+        outcome === 'tree_terminated' ? { outcome } : { outcome, treeUnverified: true as const }
+      )
+    )
     entry.promise = operation
     this.operations.set(sessionId, entry)
     const clearOperation = (): void => {

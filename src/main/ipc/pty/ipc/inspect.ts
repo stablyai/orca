@@ -53,6 +53,7 @@ export function installPtyInspectIpcHandlers(deps: {
           ptyOwnership.set(session.id, connectionId)
           deduped.set(session.id, {
             id: session.id,
+            ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
             cwd: session.cwd,
             title: session.title,
             // Why: the renderer's binding map is empty during restore, so ownership is the only

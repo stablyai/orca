@@ -12,6 +12,8 @@ import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import type { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 import type { TerminalHost } from './terminal-host'
 import { SessionNotFoundError, type DaemonRequest } from './types'
+import type { PtyKillIntent } from '../../shared/pty-kill-sessions'
+import { isPtyShutdownFenceUnavailable } from '../providers/pty-provider-contract'
 
 type DaemonRequestRouterOptions = {
   host: TerminalHost
@@ -90,8 +92,19 @@ export class DaemonRequestRouter {
           request.payload.sessionId,
           request.payload.background === true
         )
-      case 'kill':
-        return this.kill(clientId, request.payload.sessionId, request.payload.immediate)
+      case 'kill': {
+        const payload = request.payload as typeof request.payload & {
+          intent?: PtyKillIntent
+          incarnationId?: string
+        }
+        return this.kill(
+          clientId,
+          payload.sessionId,
+          payload.immediate,
+          payload.intent,
+          payload.incarnationId
+        )
+      }
       case 'signal':
         this.options.host.signal(request.payload.sessionId, request.payload.signal)
         return {}
@@ -185,21 +198,30 @@ export class DaemonRequestRouter {
   private async kill(
     clientId: string,
     sessionId: string,
-    immediate: boolean | undefined
-  ): Promise<Record<string, never>> {
-    const canceledPendingSpawn = this.options.preparations.cancel(sessionId)
-    this.options.attachments.clearInput(sessionId)
+    immediate: boolean | undefined,
+    intent?: PtyKillIntent,
+    incarnationId?: string
+  ): Promise<Record<string, unknown>> {
     const attribution = { sessionId, immediate: immediate === true, clientId }
+    let result: Record<string, unknown> | void = undefined
     try {
-      await this.options.host.kill(sessionId, { immediate })
+      result = await this.options.host.kill(sessionId, { immediate, intent, incarnationId })
+      // A stale-incarnation refusal must leave a same-ID replacement untouched. Other outcomes
+      // retain the existing cleanup semantics, but only after the host has accepted this lease.
+      if (!isPtyShutdownFenceUnavailable(result)) {
+        this.options.preparations.cancel(sessionId)
+        this.options.attachments.clearInput(sessionId)
+      }
     } catch (error) {
+      const canceledPendingSpawn = this.options.preparations.cancel(sessionId)
+      this.options.attachments.clearInput(sessionId)
       if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
         this.options.log.log('session-kill-failed', attribution)
         throw error
       }
     }
     this.options.log.log('session-killed', attribution)
-    return {}
+    return result ?? {}
   }
 
   private shutdownIfIdle(clientId: string, requestId: string): { retiring: boolean } {

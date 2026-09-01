@@ -8,11 +8,12 @@ import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
 } from '../pty-hidden-delivery-gate'
-import { localProvider } from './provider/registry'
+import { localProvider, registeredPtyProviders } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
 import { installPtyKillIpcHandler } from './ipc/renderer-kill'
+import { installPtyKillSessionsHandler } from './ipc/register-kill-sessions'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
 import { installPtyRuntimeController } from './runtime/controller'
@@ -101,6 +102,7 @@ export function registerPtyHandlers(
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
+  ipcMain.removeHandler('pty:killSessions')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
@@ -261,6 +263,15 @@ export function registerPtyHandlers(
   installPtyKillIpcHandler({
     store,
     runtime,
+    getLocalPtyProviderStartupPromise,
+    rememberSyntheticKillExit: session.rememberSyntheticKillExit,
+    sendPtyExitToRenderer: session.sendPtyExitToRenderer
+  })
+
+  installPtyKillSessionsHandler({
+    store,
+    runtime,
+    registeredPtyProviders,
     getLocalPtyProviderStartupPromise,
     shutdownProviderAndDetectExit: session.shutdownProviderAndDetectExit,
     rememberSyntheticKillExit: session.rememberSyntheticKillExit,

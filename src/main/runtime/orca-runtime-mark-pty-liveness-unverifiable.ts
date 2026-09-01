@@ -9,6 +9,32 @@ import { getPtyTerminalState, getTerminalState } from './terminal-wait-results'
 const MAX_TRACKED_PTY_LIVENESS_VERDICTS = 256
 
 export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithOnPtyExit {
+  /** Read-only ownership projection used by main-side PTY cleanup authorization. */
+  getPtySurfaceOwnershipEvidence(
+    ptyId: string,
+    incarnationId?: string
+  ): 'present' | 'absent' | 'unknown' {
+    const record = this.ptysById.get(ptyId)
+    if (!record) {
+      return 'unknown'
+    }
+    if (incarnationId && record.incarnationId && incarnationId !== record.incarnationId) {
+      return 'absent'
+    }
+    if (
+      record.tabId ||
+      record.paneKey ||
+      record.runtimeSessionOwned ||
+      record.agentSessionOwners.length > 0
+    ) {
+      return 'present'
+    }
+    if (this.mobileSubscribers.has(ptyId) || this.headlessTerminals.has(ptyId)) {
+      return 'present'
+    }
+    return 'absent'
+  }
+
   /**
    * Records that we lost contact with a PTY's owning host. Callers must never
    * read this as an exit: a detached relay PTY is designed to outlive the
@@ -33,6 +59,10 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
    */
   markPtyStopRequested(ptyId: string): void {
     this.stopRequestedPtyIds.add(ptyId)
+  }
+
+  clearPtyStopRequested(ptyId: string): void {
+    this.stopRequestedPtyIds.delete(ptyId)
   }
 
   isPtyStopRequested(ptyId: string): boolean {

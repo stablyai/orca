@@ -14,6 +14,8 @@ export type AgentOwnershipEvidence = 'present' | 'absent' | 'unknown'
  */
 export type PtyListedSession = {
   id: string
+  /** Which lifetime of this PTY row the provider observed, when supported. */
+  incarnationId?: string
   cwd: string
   title: string
   /**

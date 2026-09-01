@@ -14,6 +14,7 @@ export type DaemonSession = PtyListedSession
 
 export type UnifiedSessionRow = {
   sessionId: string
+  incarnationId?: string
   paneKey: string | null
   pid: number
   label: string
@@ -24,6 +25,8 @@ export type UnifiedSessionRow = {
   cpu: Metric
   memory: Metric
   hasLocalSamples: boolean
+  killVerdict?: 'live' | 'unverifiable' | 'refused'
+  killReason?: string
 }
 
 export type UnifiedWorktreeRow = {

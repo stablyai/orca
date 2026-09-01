@@ -16,6 +16,11 @@ import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
+import type {
+  PtyKillIntent,
+  PtyKillSessionRef,
+  PtyKillSessionResult
+} from '../../shared/pty-kill-sessions'
 
 export type PtyApi = {
   spawn: (opts: {
@@ -78,6 +83,10 @@ export type PtyApi = {
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
+  killSessions: (
+    sessions: PtyKillSessionRef[],
+    intent?: PtyKillIntent
+  ) => Promise<PtyKillSessionResult[]>
   ackColdRestore: (id: string) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
   onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void) => () => void

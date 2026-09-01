@@ -8,11 +8,11 @@ import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type { DaemonSession, UnifiedSessionRow } from './resource-usage-merge-types'
-import type { ResourceSessionBindingInputs } from './resource-session-bindings'
-import { selectUnboundDaemonSessions } from './resource-session-bindings'
 import { navigateResourceSessionToTab } from './resource-session-navigation'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
+import type { ResourceSessionBindingInputs } from './resource-session-bindings'
+import { selectUnboundDaemonSessions } from './resource-session-bindings'
 
 export function useResourceUsageActions({
   setCollapsedRepos,
@@ -25,6 +25,7 @@ export function useResourceUsageActions({
   refreshSessions,
   removeSession,
   removeSessions,
+  setSessionVerdict,
   sessions,
   resourceSessionBindings,
   workspaceSessionReady,
@@ -46,6 +47,12 @@ export function useResourceUsageActions({
   refreshSessions: () => Promise<void>
   removeSession: (sessionId: string) => void
   removeSessions: (sessionIds: ReadonlySet<string>) => void
+  setSessionVerdict: (
+    id: string,
+    verdict: 'live' | 'unverifiable' | 'refused',
+    reason?: string,
+    incarnationId?: string
+  ) => void
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
   workspaceSessionReady: boolean
@@ -138,11 +145,27 @@ export function useResourceUsageActions({
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
       if (!requiresKillConfirmation(session)) {
-        removeSession(session.sessionId)
-        // Why: await the kill before refreshing, else the refresh re-reads the daemon list before the kill lands and re-adds the row.
         void (async () => {
           try {
-            await window.api.pty.kill(session.sessionId)
+            const [result] = await window.api.pty.killSessions(
+              [
+                {
+                  id: session.sessionId,
+                  ...(session.incarnationId ? { incarnationId: session.incarnationId } : {})
+                }
+              ],
+              'orphan-cleanup'
+            )
+            if (result?.verdict === 'exited') {
+              removeSession(session.sessionId)
+            } else if (result) {
+              setSessionVerdict(
+                session.sessionId,
+                result.verdict,
+                result.reason,
+                result.incarnationId
+              )
+            }
           } catch {
             /* already dead */
           }
@@ -152,25 +175,45 @@ export function useResourceUsageActions({
       }
       setKillConfirm(session)
     },
-    [refreshSessions, removeSession, setKillConfirm]
+    [refreshSessions, removeSession, setKillConfirm, setSessionVerdict]
   )
 
   const handleKillOrphans = useCallback(async () => {
     if (!workspaceSessionReady) {
       return
     }
-    // Why the shared selector: the button's count comes from the same function, so the set killed
-    // is exactly the set advertised. Filtering separately here is how live sessions got killed.
-    const orphans = selectUnboundDaemonSessions(sessions, resourceSessionBindings)
-    if (orphans.length === 0) {
+    if (sessions.length === 0) {
       return
     }
-    // Why: optimistic removal so rows disappear immediately instead of waiting for the next daemon-side list refresh.
-    const orphanIds = new Set(orphans.map((s) => s.id))
-    removeSessions(orphanIds)
-    await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
-    void refreshSessions()
-  }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions, removeSessions])
+    const refs = selectUnboundDaemonSessions(sessions, resourceSessionBindings).map((s) => ({
+      id: s.id,
+      ...(s.incarnationId ? { incarnationId: s.incarnationId } : {})
+    }))
+    let results
+    try {
+      results = await window.api.pty.killSessions(refs, 'orphan-cleanup')
+    } catch {
+      await refreshSessions()
+      return
+    }
+    const exited = new Set<string>(results.filter((r) => r.verdict === 'exited').map((r) => r.id))
+    if (exited.size) {
+      removeSessions(exited)
+    }
+    for (const result of results) {
+      if (result.verdict !== 'exited') {
+        setSessionVerdict(result.id, result.verdict, result.reason, result.incarnationId)
+      }
+    }
+    await refreshSessions()
+  }, [
+    sessions,
+    workspaceSessionReady,
+    refreshSessions,
+    removeSessions,
+    setSessionVerdict,
+    resourceSessionBindings
+  ])
 
   const runKillConfirmed = useCallback(async () => {
     if (!killConfirm) {
@@ -178,10 +221,21 @@ export function useResourceUsageActions({
     }
     const target = killConfirm
     setKilling(true)
-    // Why: optimistic removal avoids a flash where the dialog closes but the killed row lingers until the next list refresh.
-    removeSession(target.sessionId)
     try {
-      await window.api.pty.kill(target.sessionId)
+      const [result] = await window.api.pty.killSessions(
+        [
+          {
+            id: target.sessionId,
+            ...(target.incarnationId ? { incarnationId: target.incarnationId } : {})
+          }
+        ],
+        'owner-close'
+      )
+      if (result?.verdict === 'exited') {
+        removeSession(target.sessionId)
+      } else if (result) {
+        setSessionVerdict(target.sessionId, result.verdict, result.reason, result.incarnationId)
+      }
     } catch {
       /* already dead — fall through */
     } finally {
@@ -207,6 +261,7 @@ export function useResourceUsageActions({
     popoverBodyRef,
     refreshSessions,
     removeSession,
+    setSessionVerdict,
     setKillConfirm,
     setKilling
   ])

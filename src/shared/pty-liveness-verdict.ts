@@ -7,8 +7,8 @@
  * a death certificate and never a successful stop.
  */
 export type PtyLivenessVerdict =
-  | { status: 'exited' }
-  | { status: 'live'; ptyIds: string[] }
+  | { status: 'exited'; fenceUnavailable?: true }
+  | { status: 'live'; ptyIds: string[]; fenceUnavailable?: true }
   | { status: 'unverifiable'; reason: string }
 
 export const SSH_PROVIDER_UNREGISTERED_REASON = 'its SSH provider is no longer registered'

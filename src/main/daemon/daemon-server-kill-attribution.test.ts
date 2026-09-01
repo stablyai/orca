@@ -6,9 +6,18 @@ import { DaemonServer } from './daemon-server'
 import { SessionNotFoundError, type DaemonRequest } from './types'
 
 type DaemonServerPrivate = {
-  host: { kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void> }
+  host: {
+    kill: (
+      sessionId: string,
+      opts?: { immediate?: boolean; incarnationId?: string }
+    ) => void | Promise<void | { fenceUnavailable: true }>
+  }
   preparations: {
     pending: Map<string, Set<{ canceled: boolean; clientId: string }>>
+    cancel: (sessionId: string) => boolean
+  }
+  attachments: {
+    clearInput: (sessionId: string) => void
   }
   requestRouter: {
     route(clientId: string, request: DaemonRequest): Promise<unknown>
@@ -123,5 +132,45 @@ describe('daemon kill attribution', () => {
       clientId: 'control-42'
     })
     expect(killLog.log).not.toHaveBeenCalledWith('session-kill-failed', expect.anything())
+  })
+
+  it('leaves replacement preparation and attachment input intact on stale fence refusal', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'daemon-kill-attribution-'))
+    const killLog = { log: vi.fn(), close: vi.fn() }
+    server = new DaemonServer({
+      socketPath: join(dir, 'daemon.sock'),
+      tokenPath: join(dir, 'daemon.token'),
+      log: killLog,
+      spawnSubprocess: () => {
+        throw new Error('not used')
+      }
+    })
+    const daemon = server as unknown as DaemonServerPrivate
+    const pendingPreparation = {
+      canceled: false,
+      controller: new AbortController(),
+      clientId: 'replacement-owner'
+    }
+    daemon.preparations.pending.set('reused-session', new Set([pendingPreparation]))
+    const cancel = vi.spyOn(daemon.preparations, 'cancel')
+    const clearInput = vi.spyOn(daemon.attachments, 'clearInput')
+    vi.spyOn(daemon.host, 'kill').mockResolvedValue({ fenceUnavailable: true })
+
+    await expect(
+      daemon.requestRouter.route('control-42', {
+        id: 'kill-stale',
+        type: 'kill',
+        payload: {
+          sessionId: 'reused-session',
+          immediate: true,
+          incarnationId: 'old-incarnation'
+        }
+      })
+    ).resolves.toEqual({ fenceUnavailable: true })
+
+    expect(cancel).not.toHaveBeenCalled()
+    expect(clearInput).not.toHaveBeenCalled()
+    expect(pendingPreparation.canceled).toBe(false)
+    expect(daemon.preparations.pending.has('reused-session')).toBe(true)
   })
 })

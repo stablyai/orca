@@ -12,6 +12,11 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import type { PtyKillIntent } from '../../shared/pty-kill-sessions'
+import {
+  isPtyShutdownFenceUnavailable,
+  type PtyShutdownResult
+} from '../providers/pty-provider-contract'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -73,6 +78,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.supportsAgentSessionCreateOperations()
   }
 
+  supportsIncarnationFence(options: { sessionId?: string } = {}): boolean {
+    return this.adapterFor(options.sessionId ?? '').supportsIncarnationFence()
+  }
+
   async attach(id: string): ReturnType<IPtyProvider['attach']> {
     return await this.adapterFor(id).attach(id)
   }
@@ -115,12 +124,36 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      intent?: PtyKillIntent
+      incarnationId?: string
+    }
   ): Promise<void> {
+    await this.shutdownWithOutcome(id, opts)
+  }
+
+  async shutdownWithOutcome(
+    id: string,
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      intent?: PtyKillIntent
+      incarnationId?: string
+    }
+  ): Promise<PtyShutdownResult | void> {
     const adapter = this.adapterFor(id)
     const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)
-    await adapter.shutdown(id, opts)
+    const result = adapter.shutdownWithOutcome
+      ? await adapter.shutdownWithOutcome(id, opts)
+      : await adapter.shutdown(id, opts)
     if (!opts.keepHistory || migrateHistory) {
+      if (isPtyShutdownFenceUnavailable(result)) {
+        return result
+      }
       if (migrateHistory) {
         adapter.ackColdRestore(id)
       }
@@ -128,6 +161,7 @@ export class DaemonPtyRouter implements IPtyProvider {
         this.ownerResolver.forgetRoute(id, adapter)
       }
     }
+    return result
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
