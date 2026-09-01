@@ -2189,124 +2189,130 @@ export async function createLocalWorktree(
   let lastExistingReviewNumber: number | null = null
   const shouldRetireGeneratedName =
     args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
-  const retiredNameRegistry = shouldRetireGeneratedName
-    ? await getRetiredNameRegistryForRepo(store, repo, store.getRepos(), settings)
-    : null
-  const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
-  // Why: a create-from-review branch override may already exist locally; suffix both branch and path instead of blocking the user.
-  for (let suffix = 1, attempts = 0; attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
-    effectiveSanitizedName = shouldRetireGeneratedName
-      ? getGeneratedWorktreeCreateCandidate(
-          sanitizedName,
-          suffix,
-          retiredNameRegistry?.exhaustedTiers
-        )
-      : getWorktreeCreateCandidate(sanitizedName, suffix)
-    effectiveRequestedName = shouldRetireGeneratedName
-      ? effectiveSanitizedName
-      : requestedName.trim()
-        ? getWorktreeCreateCandidate(requestedName, suffix)
-        : effectiveSanitizedName
-    if (isRetiredName?.(effectiveSanitizedName)) {
-      continue
-    }
-    attempts += 1
-    lastExistingReviewNumber = null
+  await timing.time('resolve_name', async () => {
+    const retiredNameRegistry = shouldRetireGeneratedName
+      ? await getRetiredNameRegistryForRepo(store, repo, store.getRepos(), settings)
+      : null
+    const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
+    // Why: a create-from-review branch override may already exist locally; suffix both branch and path instead of blocking the user.
+    for (
+      let suffix = 1, attempts = 0;
+      attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS;
+      suffix += 1
+    ) {
+      effectiveSanitizedName = shouldRetireGeneratedName
+        ? getGeneratedWorktreeCreateCandidate(
+            sanitizedName,
+            suffix,
+            retiredNameRegistry?.exhaustedTiers
+          )
+        : getWorktreeCreateCandidate(sanitizedName, suffix)
+      effectiveRequestedName = shouldRetireGeneratedName
+        ? effectiveSanitizedName
+        : requestedName.trim()
+          ? getWorktreeCreateCandidate(requestedName, suffix)
+          : effectiveSanitizedName
+      if (isRetiredName?.(effectiveSanitizedName)) {
+        continue
+      }
+      attempts += 1
+      lastExistingReviewNumber = null
 
-    branchName = await resolveCreateBranchName(
-      repo.path,
-      selectedExistingLocalBranchName
-        ? selectedExistingLocalBranchName
-        : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-      effectiveSanitizedName,
-      settings,
-      username,
-      localWorktreeGitOptions
-    )
-    checkoutExistingBranch = await canCheckoutExistingLocalBranch(
-      repo.path,
-      branchName,
-      baseBranch,
-      localWorktreeGitOptions
-    )
-    if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
-      // Why: suffix retries may need a new path, but an existing-branch checkout must keep the user-selected branch, not a sibling.
-      selectedExistingLocalBranchName = branchName
-    }
-    lastBranchConflictKind = checkoutExistingBranch
-      ? null
-      : await getBranchConflictKind(repo.path, branchName, baseBranch, localWorktreeGitOptions)
-    const allowedPushTargetRemoteConflict =
-      lastBranchConflictKind &&
-      isAllowedPushTargetRemoteConflict(lastBranchConflictKind, branchName, args)
-    if (lastBranchConflictKind) {
-      if (allowedPushTargetRemoteConflict) {
-        lastExistingPR = null
-        let lookupFailed = false
-        const selectedReview = getSelectedReviewBranch(args)
-        if (selectedReview?.provider === 'github') {
-          try {
-            lastExistingPR = await getLocalGitHubPrForBranch(
-              repo.path,
-              branchName,
-              localWorktreeGitOptions
-            )
-          } catch {
-            lookupFailed = true
-          }
-          if (!lookupFailed && isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
-            lastBranchConflictKind = null
-          } else if (lastExistingPR) {
-            lastExistingReviewNumber = lastExistingPR.number
-          }
-        } else if (selectedReview) {
-          let hostedReview: Awaited<ReturnType<typeof getSelectedHostedReviewForBranch>> = null
-          try {
-            hostedReview = await getSelectedHostedReviewForBranch(repo, branchName, args)
-          } catch {
-            lookupFailed = true
-          }
-          if (!lookupFailed && hostedReview?.matchesSelected) {
-            lastBranchConflictKind = null
-          } else if (hostedReview) {
-            lastExistingReviewNumber = hostedReview.number
+      branchName = await resolveCreateBranchName(
+        repo.path,
+        selectedExistingLocalBranchName
+          ? selectedExistingLocalBranchName
+          : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
+        effectiveSanitizedName,
+        settings,
+        username,
+        localWorktreeGitOptions
+      )
+      checkoutExistingBranch = await canCheckoutExistingLocalBranch(
+        repo.path,
+        branchName,
+        baseBranch,
+        localWorktreeGitOptions
+      )
+      if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
+        // Why: suffix retries may need a new path, but an existing-branch checkout must keep the user-selected branch, not a sibling.
+        selectedExistingLocalBranchName = branchName
+      }
+      lastBranchConflictKind = checkoutExistingBranch
+        ? null
+        : await getBranchConflictKind(repo.path, branchName, baseBranch, localWorktreeGitOptions)
+      const allowedPushTargetRemoteConflict =
+        lastBranchConflictKind &&
+        isAllowedPushTargetRemoteConflict(lastBranchConflictKind, branchName, args)
+      if (lastBranchConflictKind) {
+        if (allowedPushTargetRemoteConflict) {
+          lastExistingPR = null
+          let lookupFailed = false
+          const selectedReview = getSelectedReviewBranch(args)
+          if (selectedReview?.provider === 'github') {
+            try {
+              lastExistingPR = await getLocalGitHubPrForBranch(
+                repo.path,
+                branchName,
+                localWorktreeGitOptions
+              )
+            } catch {
+              lookupFailed = true
+            }
+            if (!lookupFailed && isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
+              lastBranchConflictKind = null
+            } else if (lastExistingPR) {
+              lastExistingReviewNumber = lastExistingPR.number
+            }
+          } else if (selectedReview) {
+            let hostedReview: Awaited<ReturnType<typeof getSelectedHostedReviewForBranch>> = null
+            try {
+              hostedReview = await getSelectedHostedReviewForBranch(repo, branchName, args)
+            } catch {
+              lookupFailed = true
+            }
+            if (!lookupFailed && hostedReview?.matchesSelected) {
+              lastBranchConflictKind = null
+            } else if (hostedReview) {
+              lastExistingReviewNumber = hostedReview.number
+            }
           }
         }
       }
-    }
-    if (lastBranchConflictKind) {
-      continue
-    }
-
-    // Why: gh pr list is a ~1–3s network call; only probe PR conflicts after a branch collision (suffix > 1) so the common no-collision path skips it.
-    if (suffix > 1 && !checkoutExistingBranch) {
-      lastExistingPR = null
-      try {
-        lastExistingPR = await getLocalGitHubPrForBranch(
-          repo.path,
-          branchName,
-          localWorktreeGitOptions
-        )
-      } catch {
-        // GitHub API may be unreachable, rate-limited, or token missing
-      }
-      if (lastExistingPR && !isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
-        lastExistingReviewNumber = lastExistingPR.number
+      if (lastBranchConflictKind) {
         continue
       }
-    }
 
-    worktreePath = ensurePathWithinWorkspace(
-      computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
-      workspaceRoot
-    )
-    if (existsSync(worktreePath)) {
-      continue
-    }
+      // Why: gh pr list is a ~1–3s network call; only probe PR conflicts after a branch collision (suffix > 1) so the common no-collision path skips it.
+      if (suffix > 1 && !checkoutExistingBranch) {
+        lastExistingPR = null
+        try {
+          lastExistingPR = await getLocalGitHubPrForBranch(
+            repo.path,
+            branchName,
+            localWorktreeGitOptions
+          )
+        } catch {
+          // GitHub API may be unreachable, rate-limited, or token missing
+        }
+        if (lastExistingPR && !isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
+          lastExistingReviewNumber = lastExistingPR.number
+          continue
+        }
+      }
 
-    resolved = true
-    break
-  }
+      worktreePath = ensurePathWithinWorkspace(
+        computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
+        workspaceRoot
+      )
+      if (existsSync(worktreePath)) {
+        continue
+      }
+
+      resolved = true
+      break
+    }
+  })
 
   if (!resolved) {
     // Why: every suffix collided; reject with a specific reason so the user sees why create failed instead of a generic error or hung spinner.
@@ -2361,14 +2367,17 @@ export async function createLocalWorktree(
   emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
 
   let preparedPushTarget: GitPushTarget | undefined
-  if (args.pushTarget) {
+  const requestedPushTarget = args.pushTarget
+  if (requestedPushTarget) {
     // Why: validate/fetch the contributor remote before create so a failure doesn't leave a half-created worktree with conflicts on retry.
-    preparedPushTarget = await prepareWorktreePushTarget(
-      repo.path,
-      args.pushTarget,
-      store,
-      repo.id,
-      localWorktreeGitOptions
+    preparedPushTarget = await timing.time('prepare_push_target', () =>
+      prepareWorktreePushTarget(
+        repo.path,
+        requestedPushTarget,
+        store,
+        repo.id,
+        localWorktreeGitOptions
+      )
     )
   }
 

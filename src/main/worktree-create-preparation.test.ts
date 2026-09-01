@@ -466,4 +466,46 @@ describe('worktree create preparation registry', () => {
     expect(mocks.mkdir).toHaveBeenCalledWith('/workspace', { recursive: true })
     expect(mocks.discard).toHaveBeenCalledTimes(1)
   })
+
+  it('re-arms a preparation after one is consumed so the next create stays warm', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
+
+    await consumePreparedWorktreeCreate({
+      repoPath: repo.path,
+      workspaceRoot: '/workspace',
+      worktreePath: '/workspace/first',
+      branch: 'feature/first',
+      baseBranch: 'origin/main'
+    })
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+
+    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(2)
+    // The replacement is claimable, so a second create still skips the cold add.
+    await expect(
+      consumePreparedWorktreeCreate({
+        repoPath: repo.path,
+        workspaceRoot: '/workspace',
+        worktreePath: '/workspace/second',
+        branch: 'feature/second',
+        baseBranch: 'origin/main'
+      })
+    ).resolves.toEqual({})
+    expect(mocks.finalize).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not re-arm when finalization failed', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    mocks.finalize.mockRejectedValueOnce(new Error('submodules prevent worktree move'))
+
+    await consumePreparedWorktreeCreate({
+      repoPath: repo.path,
+      workspaceRoot: '/workspace',
+      worktreePath: '/workspace/final',
+      branch: 'feature/test',
+      baseBranch: 'origin/main'
+    })
+
+    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
+  })
 })
