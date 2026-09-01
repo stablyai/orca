@@ -15996,7 +15996,7 @@ export class OrcaRuntimeService {
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
-      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
+      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, retireOnTimeout: true }
     )
     if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)

@@ -19497,6 +19497,42 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('retires a timed-out visible provider snapshot instead of rejoining it', async () => {
+    vi.useFakeTimers()
+    try {
+      const serializeProviderBuffer = vi.fn(() => new Promise<never>(() => undefined))
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      syncSinglePty(runtime)
+      runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-1',
+        { value: 900, generation: 'continued' },
+        0
+      )
+      const [terminal] = (await runtime.listTerminals()).terminals
+
+      const firstRead = runtime.readTerminal(terminal.handle)
+      await vi.advanceTimersByTimeAsync(750)
+      await expect(firstRead).resolves.toMatchObject({ tail: ['shell history'] })
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
+        tail: ['shell history']
+      })
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('discards a provider frame when the PTY generation resets during capture', async () => {
     type Snapshot = {
       data: string
