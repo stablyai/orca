@@ -79,7 +79,11 @@ export async function startGitCommonNarrowWatch(
             pollIntervalMs,
             visibility,
             onFullScan,
-            false
+            false,
+            () => [],
+            // Crash fuse tripped: this poller is now the sole change signal until a
+            // future existence-poll upgrade, so its cadence must scale with entry count.
+            { adaptiveCadence: true }
           )
         )
         .then(async (fallback) => {

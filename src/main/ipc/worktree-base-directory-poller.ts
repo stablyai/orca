@@ -1,6 +1,8 @@
 import { readdir, stat } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { forEachWithConcurrency } from '../../shared/map-with-concurrency'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -92,6 +94,11 @@ export const WORKTREE_BASE_BACKSTOP_TICKS = 15
 // backstop scan cover the pathological case.
 const PENDING_MARKER_MAX_TICKS = 300
 
+// Why: matches the git-common poller's fan-out bound (#17828) — bounded
+// concurrency turns hundreds of serial round trips into a handful of batches
+// without dumping every candidate onto libuv's 4-thread pool at once.
+const MARKER_PROBE_CONCURRENCY = 8
+
 function statSignature(s: { mtimeMs: number; ctimeMs: number; ino: number }): string {
   return `${s.mtimeMs}:${s.ctimeMs}:${s.ino}`
 }
@@ -123,6 +130,14 @@ type BaseSnapshot = {
   gateSignatures: string[]
 }
 
+async function readdirSafe(path: string): Promise<Dirent[]> {
+  try {
+    return await readdir(path, { withFileTypes: true })
+  } catch {
+    return []
+  }
+}
+
 // Depth-1 worktree dirs (flat layout), plus depth-2 dirs under each nested
 // repo's container, mirroring what worktree-base-directory-event-filter
 // matches: `<wt>/.git` completion markers and `<wt>` deletions.
@@ -144,14 +159,9 @@ async function snapshotBase(
       .map((config) => normalizeRuntimePathForComparison(config.repoName))
   )
 
-  let rootEntries
-  try {
-    rootEntries = await readdir(rootPath, { withFileTypes: true })
-  } catch {
-    // Root vanished: an empty snapshot diffs into delete events for every
-    // previously-known worktree dir, matching the old watcher's error path.
-    return { markers, gateDirs, gateSignatures }
-  }
+  // Root vanished or unreadable: readdirSafe yields [], producing the same
+  // empty markers/candidates result as the old watcher's error path.
+  const rootEntries = await readdirSafe(rootPath)
 
   const candidates: string[] = []
   for (const entry of rootEntries) {
@@ -165,12 +175,7 @@ async function snapshotBase(
     if (nestedRepoNames.has(normalizeRuntimePathForComparison(entry.name))) {
       gateDirs.push(entryPath)
       gateSignatures.push(await dirSignature(entryPath))
-      let subEntries
-      try {
-        subEntries = await readdir(entryPath, { withFileTypes: true })
-      } catch {
-        subEntries = []
-      }
+      const subEntries = await readdirSafe(entryPath)
       for (const sub of subEntries) {
         if (sub.isDirectory() || sub.isSymbolicLink()) {
           candidates.push(join(entryPath, sub.name))
@@ -179,9 +184,9 @@ async function snapshotBase(
     }
   }
 
-  for (const dir of candidates) {
+  await forEachWithConcurrency(candidates, MARKER_PROBE_CONCURRENCY, async (dir) => {
     markers.set(dir, await hasGitMarker(dir))
-  }
+  })
   return { markers, gateDirs, gateSignatures }
 }
 

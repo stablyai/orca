@@ -67,6 +67,9 @@ export async function startGitCommonWatch(
     visibility,
     onFullScan,
     true,
-    getStatusRefPaths
+    getStatusRefPaths,
+    // No native stream at all on this platform: this is the sole change signal, so
+    // it must not fall into a near-permanent scan loop at a large worktree count.
+    { adaptiveCadence: true }
   )
 }

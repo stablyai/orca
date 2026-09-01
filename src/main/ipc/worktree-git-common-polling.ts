@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { forEachWithConcurrency } from '../../shared/map-with-concurrency'
 import { PRIMARY_CHECKOUT_METADATA_FILES } from './worktree-git-common-metadata-files'
 import {
   diffGitCommon,
@@ -23,18 +24,38 @@ import {
 // same way the base poller's backstop rescan does.
 const INDEX_BACKSTOP_TICKS = 15
 
+// Why: an unbounded fan-out across every worktree admin entry (~7 stats each)
+// queues thousands of ops on libuv's 4-thread default pool, starving every
+// other main-process fs call for the scan's duration (#17828). 8 mirrors the
+// existing head-identity/exact-ref-probe pools — enough to saturate typical
+// local disks without monopolizing the pool.
+const GIT_COMMON_SNAPSHOT_CONCURRENCY = 8
+
+// Why: on hosts without native narrow-watch support (or once its crash fuse
+// trips), this poller's own per-tick structural fan-out is the only signal —
+// a fixed 2s cadence at hundreds of worktrees turns it into a near-permanent
+// scan loop. Stretch the interval so a scan stays a minority of its own duty
+// cycle, capped so external changes still surface in a bounded time.
+const ADAPTIVE_CADENCE_TARGET_DUTY_CYCLE = 0.1
+const ADAPTIVE_CADENCE_MAX_INTERVAL_MS = 30_000
+
+function computeAdaptiveIntervalMs(baseIntervalMs: number, lastScanDurationMs: number): number {
+  return Math.min(
+    ADAPTIVE_CADENCE_MAX_INTERVAL_MS,
+    Math.max(baseIntervalMs, lastScanDurationMs / ADAPTIVE_CADENCE_TARGET_DUTY_CYCLE)
+  )
+}
+
 async function snapshotStatusRefSignatures(
   paths: ReadonlySet<string>
 ): Promise<Map<string, string>> {
   const signatures = new Map<string, string>()
-  await Promise.all(
-    [...paths].map(async (path) => {
-      const signature = await gitCommonFileSignature(path)
-      if (signature !== null) {
-        signatures.set(path, signature)
-      }
-    })
-  )
+  await forEachWithConcurrency([...paths], GIT_COMMON_SNAPSHOT_CONCURRENCY, async (path) => {
+    const signature = await gitCommonFileSignature(path)
+    if (signature !== null) {
+      signatures.set(path, signature)
+    }
+  })
   return signatures
 }
 
@@ -91,12 +112,10 @@ async function snapshotGitCommon(
   }
 
   const entries = new Map<string, GitCommonEntrySnapshot>()
-  await Promise.all(
-    entryPaths.map(async (entryPath) => {
-      const previousEntry = previous?.entries.get(entryPath)
-      entries.set(entryPath, await snapshotGitCommonEntry(entryPath, previousEntry, forceFullScan))
-    })
-  )
+  await forEachWithConcurrency(entryPaths, GIT_COMMON_SNAPSHOT_CONCURRENCY, async (entryPath) => {
+    const previousEntry = previous?.entries.get(entryPath)
+    entries.set(entryPath, await snapshotGitCommonEntry(entryPath, previousEntry, forceFullScan))
+  })
   // Why: the expensive per-entry `index` read stays gated on each entry's own dir signature; onFullScan
   // now reflects an ungated index-metadata backstop fan-out (forceFullScan) — the real periodic cost —
   // rather than the always-run worktrees-dir readdir.
@@ -114,6 +133,9 @@ async function snapshotGitCommon(
 export type GitCommonPollingOptions = {
   /** Reconciliation backstop: never trust the per-entry gate, re-stat every tick. */
   forceFullScanEveryTick?: boolean
+  /** This is the ONLY signal (no native watch, or its crash fuse tripped): stretch
+   *  cadence when the entry count makes a scan take a large fraction of the interval. */
+  adaptiveCadence?: boolean
 }
 
 export async function startGitCommonPolling(
@@ -129,6 +151,7 @@ export async function startGitCommonPolling(
   let disposed = false
   let ticking = false
   let tickCount = 0
+  const initialSnapshotStartedAt = Date.now()
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -136,6 +159,11 @@ export async function startGitCommonPolling(
     false,
     new Set(getStatusRefPaths())
   )
+  // Seed from the baseline snapshot so a large worktree count never opens with
+  // a burst of 2s-cadence scans before the first tick has a duration to learn from.
+  let currentIntervalMs = options.adaptiveCadence
+    ? computeAdaptiveIntervalMs(pollIntervalMs, Date.now() - initialSnapshotStartedAt)
+    : pollIntervalMs
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
@@ -185,13 +213,14 @@ export async function startGitCommonPolling(
       ticking = false
     }
     if (!disposed) {
-      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
+      const elapsed = Date.now() - startedAt
+      if (options.adaptiveCadence) {
+        currentIntervalMs = computeAdaptiveIntervalMs(pollIntervalMs, elapsed)
+      }
+      // Why: clamp to [0, currentIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
       // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
       // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
-      const nextDelay = Math.max(
-        0,
-        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
-      )
+      const nextDelay = Math.max(0, Math.min(currentIntervalMs, currentIntervalMs - elapsed))
       timer = setTimeout(() => void tick(), nextDelay)
       timer.unref?.()
     }
@@ -207,7 +236,7 @@ export async function startGitCommonPolling(
     void tick(true)
   })
 
-  timer = setTimeout(() => void tick(), pollIntervalMs)
+  timer = setTimeout(() => void tick(), currentIntervalMs)
   timer.unref?.()
 
   return {
