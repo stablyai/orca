@@ -1,4 +1,5 @@
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { replayPayloadEndsWithCursorHidden } from '../../../../../shared/terminal-mode-reset-profiles'
 import { resolvePositiveTerminalDimensions } from '../terminal-snapshot-replay-paint'
 import { getEagerPtyBufferHandle } from '../pty-dispatcher'
@@ -72,7 +73,13 @@ export function attachDetachedOrEagerPty(
       }
     }
     if (isEagerAdopt) {
-      void session.replayWriteQueue.catch(() => undefined).then(finishEagerAdopt)
+      // Why: live TUI bytes deferred across replay are re-enqueued on the
+      // async output path; wait for them to parse at capture dims before
+      // fit/SIGWINCH can change the grid under that frame.
+      void session.replayWriteQueue
+        .catch(() => undefined)
+        .then(() => waitForTerminalOutputParsed(session.pane.terminal))
+        .then(finishEagerAdopt)
     }
     const attachedPtyId = session.transport.getPtyId() ?? attachPtyId
     session.bindActivePanePty(attachedPtyId, {

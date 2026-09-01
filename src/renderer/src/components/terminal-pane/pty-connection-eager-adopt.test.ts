@@ -364,6 +364,79 @@ describe('connectPanePty eager adopt', () => {
     expect(transport.resize).toHaveBeenCalled()
   })
 
+  it('parses live TUI bytes from during eager replay before fitting and resizing', async () => {
+    // Why: live output during replay is deferred then re-enqueued on the async
+    // write path. Fit/SIGWINCH must wait until that frame parses at capture dims.
+    const eagerPtyId = 'auto-eager-pty'
+    const eagerFrame = 'Cursor Agent\r\n→ prompt text'
+    const liveFrame = 'live TUI row during adopt'
+    const flush = vi.fn(() => eagerFrame)
+    vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+      ptyId === eagerPtyId
+        ? {
+            peek: () => eagerFrame,
+            flush,
+            dispose: () => {},
+            captureDims: { cols: 120, rows: 40 }
+          }
+        : undefined
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        const buffered = getEagerPtyBufferHandle(existingPtyId)?.flush() ?? ''
+        if (buffered) {
+          callbacks?.onReplayData?.(buffered, { clearBeforeReplay: true })
+        }
+        callbacks?.onData?.(liveFrame)
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
+      ptyIdsByTabId: { 'tab-1': [eagerPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: eagerPtyId }
+        }
+      }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+    pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })) as never
+    pane.fitAddon.fit = vi.fn(() => {
+      pane.terminal.cols = 80
+      pane.terminal.rows = 24
+    })
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+    const resizedAfterLiveWrite: boolean[] = []
+    transport.resize.mockImplementation(() => {
+      resizedAfterLiveWrite.push(writes.includes(liveFrame))
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    for (let step = 0; step < 40; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
+
+    expect(writes).toContain(liveFrame)
+    expect(resizedAfterLiveWrite.length).toBeGreaterThan(0)
+    expect(resizedAfterLiveWrite[0]).toBe(true)
+  })
+
   it('does not pre-resize when adopting an eager buffer without capture dims', async () => {
     const eagerPtyId = 'auto-eager-pty'
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
