@@ -22,6 +22,9 @@ export function decodeClaudeTranscriptLine(
   if (!record) {
     return null
   }
+  if (record.type === 'attachment') {
+    return decodeQueuedCommandAttachment(record, fallbackId)
+  }
   const role = record.type
   if (role !== 'user' && role !== 'assistant') {
     return null
@@ -62,6 +65,35 @@ export function decodeClaudeTranscriptLine(
     blocks,
     timestamp,
     source: 'transcript'
+  }
+}
+
+// Why: a prompt sent mid-turn is queued, and the queue entry is almost always
+// the only record it gets — undecoded, it is missing from chat entirely.
+function decodeQueuedCommandAttachment(
+  record: Record<string, unknown>,
+  fallbackId: string
+): NativeChatMessage | null {
+  const attachment = asRecord(record.attachment)
+  if (extractString(attachment?.type) !== 'queued_command') {
+    return null
+  }
+  // Why: ~46% of these are harness task-notification blobs the agent queues for
+  // itself, not typed input; only `prompt` mode is a user turn.
+  if (extractString(attachment?.commandMode) !== 'prompt') {
+    return null
+  }
+  const blocks = claudeContentBlocks(attachment?.prompt)
+  if (blocks.length === 0) {
+    return null
+  }
+  return {
+    id: extractString(record.uuid) ?? fallbackId,
+    role: 'user',
+    blocks,
+    timestamp: parseTimestamp(record.timestamp),
+    source: 'transcript',
+    queued: true
   }
 }
 

@@ -15,6 +15,7 @@ import {
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
+import { anchorQueuedPromptsToFileOrder } from './queued-prompt-file-order'
 
 export type ReadTranscriptResult =
   | {
@@ -56,7 +57,8 @@ export async function readNativeChatTranscript(
   try {
     const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
     if (transcriptAgent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
+      const messages = await readTranscript(filePath, decodeClaudeTranscriptLine)
+      return { messages: anchorQueuedPromptsToFileOrder(messages) }
     }
     if (transcriptAgent === 'codex') {
       return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
