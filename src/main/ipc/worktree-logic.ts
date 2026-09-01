@@ -61,22 +61,13 @@ function containsEmoji(input: string): boolean {
   )
 }
 
-export function sanitizeWorktreeDisplayName(input: string): string | undefined {
-  const withoutControls = Array.from(input, (char) => {
-    const code = char.charCodeAt(0)
-    return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? ' ' : char
-  }).join('')
-  const sanitized = withoutControls
-    // Why: titles come from external systems. Strip bidi override controls so a
-    // malicious title cannot visually reorder adjacent sidebar text.
-    .replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120)
-    .trim()
-
-  return sanitized || undefined
-}
+export {
+  resolveWorktreeCreateDisplayName,
+  resolveWorktreeCreateDisplayNameRequest,
+  resolveWorktreeCreateDisplayNameMeta,
+  sanitizeWorktreeDisplayName,
+  shouldSetDisplayName
+} from './worktree-display-name'
 
 /**
  * Ensure a target path is within the workspace directory (prevent path traversal).
@@ -283,14 +274,6 @@ function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: strin
  * A display name is set only when the user's requested name differs from
  * both the branch name and the sanitized name (i.e. it was modified).
  */
-export function shouldSetDisplayName(
-  requestedName: string,
-  branchName: string,
-  sanitizedName: string
-): boolean {
-  return !(branchName === requestedName && sanitizedName === requestedName)
-}
-
 /**
  * Parse a composite worktreeId ("repoId::worktreePath") into its parts.
  */

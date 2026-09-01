@@ -12,6 +12,10 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import {
+  runtimeHostConnectionState,
+  type RuntimeHostConnectionState
+} from '../../../../shared/runtime-host-connection-state'
 
 export type RuntimeHostDetails = {
   status: 'loading' | 'ready' | 'error'
@@ -147,7 +151,7 @@ export function isRuntimeEnvironmentRemovalBlocked(
   return activeRuntimeEnvironmentId === environmentId
 }
 
-export type RuntimeServerConnectionState = 'connected' | 'checking' | 'disconnected'
+export type RuntimeServerConnectionState = RuntimeHostConnectionState
 
 export function getRuntimeServerConnectionState(
   details: RuntimeHostDetails | undefined
@@ -158,11 +162,11 @@ export function getRuntimeServerConnectionState(
   if (details.status !== 'ready' || details.compatibility?.kind === 'blocked') {
     return 'disconnected'
   }
-  // Why: an attached, reachable, compatible host is "Connected" (and exposes
-  // Disconnect). Whether it is the default *active* server is a separate concept,
-  // surfaced by the Advanced > Active Server selector and the row's help text —
-  // it must not change this connection label, or the dot/label/button disagree.
-  return 'connected'
+  // Older clients can report a ready details phase without embedding RuntimeStatus.
+  if (details.runtimeStatus === null) {
+    return 'connected'
+  }
+  return runtimeHostConnectionState({ hasStatusEntry: true, status: details.runtimeStatus })
 }
 
 export function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionState): string {
@@ -172,10 +176,20 @@ export function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionSt
         'auto.components.settings.RuntimeEnvironmentsPane.serverConnected',
         'Connected'
       )
+    case 'workspace-window-closed':
+      return translate(
+        'auto.components.settings.RuntimeEnvironmentsPane.serverWorkspaceWindowClosed',
+        'Workspace window closed'
+      )
     case 'checking':
       return translate(
         'auto.components.settings.RuntimeEnvironmentsPane.serverChecking',
         'Checking…'
+      )
+    case 'reconnecting':
+      return translate(
+        'auto.components.settings.RuntimeEnvironmentsPane.serverReconnecting',
+        'Reconnecting'
       )
     case 'disconnected':
       return translate(
@@ -190,6 +204,8 @@ export function getRuntimeServerDotClass(state: RuntimeServerConnectionState): s
     case 'connected':
       return 'bg-emerald-500'
     case 'checking':
+    case 'workspace-window-closed':
+    case 'reconnecting':
       return 'bg-yellow-500'
     case 'disconnected':
       return 'bg-muted-foreground/40'

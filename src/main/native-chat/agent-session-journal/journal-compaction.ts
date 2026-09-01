@@ -8,12 +8,7 @@
 // The retained tail must cover the longest reconnect window Orca supports, or a
 // client that was merely asleep gets a full snapshot reload instead of a resume.
 
-import {
-  blobDigestsInBody,
-  referencedBlobDigests,
-  renderJournalState,
-  type JournalReducerState
-} from './journal-reducer'
+import { blobDigestsInBody, renderJournalState, type JournalReducerState } from './journal-reducer'
 import { pruneJournalBlobs } from './journal-blob-store'
 import {
   rewriteJournalLog,
@@ -23,6 +18,7 @@ import {
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type { JournalRow } from './journal-row-schema'
 import { AgentSessionJournalError } from './journal-write-guards'
+import { assertJournalPhysicalCapacity, journalDirectoryBytes } from './journal-physical-quota'
 
 export type JournalCompactionPolicy = {
   /** Always keep at least this many rows, however old they are. */
@@ -55,11 +51,14 @@ export type JournalCompactionResult = {
 
 export async function compactJournal(input: {
   journalDir: string
+  /** Parent quota root when compacting an in-directory staging journal. */
+  physicalQuotaRoot?: string
   state: JournalReducerState
   tailRows: readonly JournalRow[]
   policy?: JournalCompactionPolicy
   now: number
   maxSessionBytes: number
+  sessionId?: string
 }): Promise<JournalCompactionResult> {
   const policy = input.policy ?? DEFAULT_JOURNAL_COMPACTION_POLICY
   const retained = retainTail(input.tailRows, policy, input.now)
@@ -88,6 +87,7 @@ export async function compactJournal(input: {
       itemId,
       revision
     })),
+    appliedSettlementIds: [...input.state.appliedSettlementIds],
     tail: retained
   }
 
@@ -99,17 +99,51 @@ export async function compactJournal(input: {
     )
   }
 
+  const sessionId = input.sessionId ?? input.state.sessionId
+  const quotaRoot = input.physicalQuotaRoot ?? input.journalDir
+  const retainedLogBytes = retained.reduce(
+    (total, row) => total + Buffer.byteLength(JSON.stringify(row), 'utf8') + 1,
+    0
+  )
+  // Durable writes keep the old final alongside the new temp until rename.
+  // Reserve the complete compaction peak up front so a later copy cannot leave
+  // a half-published snapshot/log pair when the quota is tight.
+  await assertJournalPhysicalCapacity({
+    journalDir: quotaRoot,
+    sessionId,
+    maxBytes: input.maxSessionBytes,
+    peakAdditionalBytes: snapshotBytes + retainedLogBytes
+  })
   await writeJournalSnapshotFile(input.journalDir, snapshot)
   await rewriteJournalLog(input.journalDir, retained)
   // Blobs are pruned last: a crash before this leaks bytes, whereas pruning
   // first would strand a snapshot pointing at a payload that no longer exists.
-  const retainedDigests = referencedBlobDigests(input.state)
+  // Recompute from exactly what the durable snapshot and retained log carry;
+  // this preserves reused/pre-existing blobs while allowing stale payloads to
+  // be pruned safely after both files are published.
+  const retainedDigests = new Set<string>()
+  for (const item of snapshot.items) {
+    blobDigestsInBody(item.body, retainedDigests)
+  }
   for (const row of retained) {
     if (row.kind === 'item') {
       blobDigestsInBody(row.body, retainedDigests)
+    } else if (row.kind === 'lifecycle-batch') {
+      for (const mutation of row.mutations) {
+        if (mutation.kind === 'item') {
+          blobDigestsInBody(mutation.body, retainedDigests)
+        }
+      }
     }
   }
   await pruneJournalBlobs(input.journalDir, retainedDigests)
+
+  if ((await journalDirectoryBytes(quotaRoot)) > input.maxSessionBytes) {
+    throw new AgentSessionJournalError(
+      'journal_bound_exceeded',
+      `agent-session journal for ${sessionId} exceeds its physical bound after compaction`
+    )
+  }
 
   return {
     tailRows: retained,

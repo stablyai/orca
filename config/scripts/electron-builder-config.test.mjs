@@ -17,7 +17,7 @@ const {
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedSherpaOnnx,
-  prunePackagedRuntimeTypeDeclarations,
+  prunePackagedRuntimeTypeAndSourceMapArtifacts,
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 } = require('../packaged-runtime-node-modules.cjs')
@@ -154,6 +154,16 @@ describe('electron-builder config', () => {
         })
       ])
     )
+  })
+
+  it('ships one macOS serve-sim package through the runtime closure', () => {
+    const serveSimResources = electronBuilderConfig.mac.extraResources.filter((resource) =>
+      [join('node_modules', 'serve-sim'), 'serve-sim'].includes(resource.to)
+    )
+
+    expect(serveSimResources).toEqual([
+      expect.objectContaining({ to: join('node_modules', 'serve-sim') })
+    ])
   })
 
   // Why: the Windows CLI shim is delivered only via extraResources to
@@ -524,9 +534,11 @@ describe('electron-builder config', () => {
       await writeFile(join(packageDir, 'dist', 'index.cjs'), 'module.exports = {}', 'utf8')
       await writeFile(join(packageDir, 'dist', 'index.d.ts'), 'export type Value = string', 'utf8')
       await writeFile(join(packageDir, 'dist', 'index.d.cts'), 'export type Value = string', 'utf8')
+      await writeFile(join(packageDir, 'dist', 'index.d.mts'), 'export type Value = string', 'utf8')
+      await writeFile(join(packageDir, 'dist', 'index.d.cts.map'), '{}', 'utf8')
       await writeFile(join(packageDir, 'dist', 'index.d.mts.map'), '{}', 'utf8')
 
-      prunePackagedRuntimeTypeDeclarations(resourcesDir)
+      prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
 
       await expect(readdir(join(packageDir, 'dist'))).resolves.toEqual(['index.cjs'])
     } finally {

@@ -1511,16 +1511,11 @@ export class RuntimeFileCommands {
 
     const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = await Promise.all(
-      entries.map(async (entry) => {
-        const entryPath = join(dirPath, entry.name)
-        return {
-          name: entry.name,
-          isDirectory: await isRuntimeDirectoryEntry(entry, entryPath),
-          isSymlink: entry.isSymbolicLink()
-        }
-      })
-    )
+    const mapped = entries.map((entry) => ({
+      name: entry.name,
+      isDirectory: isRuntimeDirectoryEntry(entry),
+      isSymlink: entry.isSymbolicLink()
+    }))
     return sortDirEntries(mapped)
   }
 
@@ -2573,13 +2568,12 @@ function basenameFromRelativePath(relativePath: string): string {
   return normalized.slice(normalized.lastIndexOf('/') + 1)
 }
 
-async function isRuntimeDirectoryEntry(
-  entry: { isDirectory(): boolean; isSymbolicLink(): boolean },
-  _entryPath: string
-): Promise<boolean> {
+function isRuntimeDirectoryEntry(entry: {
+  isDirectory(): boolean
+  isSymbolicLink(): boolean
+}): boolean {
   // Why: listings are passive UI reads; don't stat symlink targets here (explicit open/expand resolves them).
   if (entry.isSymbolicLink()) {
-    void _entryPath
     return false
   }
   if (entry.isDirectory()) {

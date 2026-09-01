@@ -1,199 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
-  RemoteWorkspacePatchResult,
+  RemoteWorkspaceObservedPatchResult,
+  RemoteWorkspaceObservedSnapshot,
   RemoteWorkspaceSnapshot
 } from '../../../shared/remote-workspace-types'
-import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
+import type { SshProviderEpoch } from '../../../shared/ssh-types'
 import { i18n } from '@/i18n/i18n'
 import { PSEUDO_LOCALIZATION_LOCALE } from '@/i18n/pseudo-localization'
-import type { AppState } from '../store/types'
-import type {
-  DirectSshPreparationInput,
-  DirectSshPreparationToken
-} from './direct-ssh-reconnect-coordinator'
-import { createRemoteWorkspaceTargetSync } from './remote-workspace-target-sync'
-
-type Deferred<T> = {
-  promise: Promise<T>
-  resolve: (value: T) => void
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((settle) => {
-    resolve = settle
-  })
-  return { promise, resolve }
-}
-
-const owner: DirectSshAuthority = {
-  targetId: 'target-a',
-  providerEpoch: 'epoch-a' as SshProviderEpoch,
-  connectionGeneration: 1
-}
-
-function token(snapshotRevision: number | null = null): DirectSshPreparationToken {
-  return {
-    authority: owner,
-    catalogRevision: 1,
-    repoFingerprint: JSON.stringify([['ssh:target-a', 'repo-a']]),
-    authorityRequirement: 'required',
-    snapshotRevision,
-    outcome: 'complete'
-  }
-}
-
-function snapshot(
-  revision: number,
-  tabsByWorktreePath: RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'] = {}
-): RemoteWorkspaceSnapshot {
-  return {
-    namespace: 'workspace',
-    revision,
-    updatedAt: revision,
-    schemaVersion: 1,
-    session: {
-      activeWorktreePath: null,
-      activeTabId: null,
-      tabsByWorktreePath,
-      terminalLayoutsByTabId: {}
-    }
-  }
-}
-
-function repo(id = 'repo-a') {
-  return {
-    id,
-    path: `/remote/${id}`,
-    projectGroupId: null,
-    connectionId: 'target-a',
-    executionHostId: 'ssh:target-a'
-  }
-}
-
-function worktree(id = 'repo-a::/remote/work') {
-  return {
-    id,
-    repoId: id.slice(0, id.indexOf('::')),
-    hostId: 'ssh:target-a'
-  }
-}
-
-function appState(overrides: Record<string, unknown> = {}): AppState {
-  return {
-    workspaceSessionReady: true,
-    repos: [repo()],
-    worktreesByRepo: { 'repo-a': [worktree()] },
-    detectedWorktreesByRepo: {},
-    folderWorkspaces: [],
-    projectGroups: [],
-    restoredRuntimeHostIdByWorkspaceSessionKey: {},
-    activeRepoId: null,
-    activeWorkspaceKey: null,
-    activeWorktreeId: null,
-    activeTabId: null,
-    tabsByWorktree: {},
-    ptyIdsByTabId: {},
-    lastKnownRelayPtyIdByTabId: {},
-    directSshPaneRetryByTabId: {},
-    directSshLivePtyBindingByTabId: {},
-    terminalLayoutsByTabId: {},
-    activeTabIdByWorktree: {},
-    openFiles: [],
-    editorDrafts: {},
-    markdownFrontmatterVisible: {},
-    activeFileIdByWorktree: {},
-    activeTabTypeByWorktree: {},
-    browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    activeBrowserTabIdByWorktree: {},
-    browserUrlHistory: [],
-    unifiedTabsByWorktree: {},
-    groupsByWorktree: {},
-    layoutByWorktree: {},
-    activeGroupIdByWorktree: {},
-    sshConnectionStates: new Map(),
-    lastVisitedAtByWorktreeId: {},
-    defaultTerminalTabsAppliedByWorktreeId: {},
-    hydrateWorkspaceSession: vi.fn(),
-    hydrateTabsSession: vi.fn(),
-    hydrateEditorSession: vi.fn(),
-    hydrateBrowserSession: vi.fn(),
-    markRemoteWorkspaceHydrated: vi.fn(),
-    clearRemoteWorkspaceHydrated: vi.fn(),
-    setRemoteWorkspaceSyncStatus: vi.fn(),
-    reconnectPersistedTerminals: vi.fn(async () => {}),
-    ...overrides
-  } as unknown as AppState
-}
-
-function createHarness(
-  state: AppState,
-  get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>,
-  patchResult: RemoteWorkspacePatchResult = { ok: true, snapshot: snapshot(1) }
-) {
-  const setForConnectedTargets = vi.fn(async () => [
-    {
-      targetId: owner.targetId,
-      result: patchResult
-    }
-  ])
-  let current = true
-  const capturePreparationInput = vi.fn(
-    async (
-      authority: DirectSshAuthority,
-      reason: 'workspace-snapshot',
-      snapshotRevision: number
-    ): Promise<DirectSshPreparationInput> => ({
-      ...authority,
-      catalogRevision: 1,
-      repoRefs: [{ repoId: 'repo-a', executionHostId: 'ssh:target-a' }],
-      authorityRequirement: 'required',
-      reason,
-      snapshotRevision
-    })
-  )
-  const prepareOnly = vi.fn(async (input: DirectSshPreparationInput) => ({
-    status: 'complete' as const,
-    token: token(input.snapshotRevision ?? null),
-    repoOutcomes: {
-      complete: 1,
-      'non-authoritative': 0,
-      'timed-out': 0,
-      'cancel-budget-exhausted': 0,
-      canceled: 0,
-      stale: 0,
-      rejected: 0
-    },
-    lineageOutcome: 'complete' as const
-  }))
-  const finalizeHydratedTerminals = vi.fn(() => 1)
-  const sync = createRemoteWorkspaceTargetSync({
-    store: { getState: () => state },
-    remoteWorkspace: { get, setForConnectedTargets },
-    getCurrentAuthority: () => (current ? owner : null),
-    isPreparationTokenCurrent: () => current,
-    capturePreparationInput,
-    prepareOnly,
-    finalizeHydratedTerminals
-  })
-  return {
-    sync,
-    setForConnectedTargets,
-    capturePreparationInput,
-    prepareOnly,
-    finalizeHydratedTerminals,
-    makeStale: () => {
-      current = false
-    }
-  }
-}
-
-async function flush(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
-}
+import type { DirectSshPreparationInput } from './direct-ssh-reconnect-coordinator'
+import {
+  appState,
+  createHarness,
+  deferred,
+  flush,
+  owner,
+  repo,
+  snapshot,
+  token,
+  worktree
+} from './remote-workspace-target-sync-test-harness'
 
 describe('createRemoteWorkspaceTargetSync', () => {
   it('captures local tabs before get when deciding a revision-zero upload', async () => {
@@ -202,7 +27,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         'repo-a::/remote/work': [{ id: 'tab-a', worktreeId: 'repo-a::/remote/work', ptyId: null }]
       }
     })
-    const pendingGet = deferred<RemoteWorkspaceSnapshot | null>()
+    const pendingGet = deferred<RemoteWorkspaceObservedSnapshot | null>()
     const harness = createHarness(state, () => pendingGet.promise)
 
     const pending = harness.sync.syncAfterConnect(token())
@@ -213,7 +38,10 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
     expect(harness.setForConnectedTargets).toHaveBeenCalledOnce()
     expect(harness.setForConnectedTargets).toHaveBeenCalledWith(
-      expect.objectContaining({ hydratedTargetIds: ['target-a'] })
+      expect.objectContaining({
+        hydratedTargetIds: ['target-a'],
+        expectedRevisionsByTargetId: { 'target-a': 0 }
+      })
     )
   })
 
@@ -247,7 +75,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
   it('publishes nothing from a snapshot response after its authority turns stale', async () => {
     const state = appState()
-    const pendingGet = deferred<RemoteWorkspaceSnapshot | null>()
+    const pendingGet = deferred<RemoteWorkspaceObservedSnapshot | null>()
     const harness = createHarness(state, () => pendingGet.promise)
 
     const pending = harness.sync.syncAfterConnect(token())
@@ -500,6 +328,59 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(harness.finalizeHydratedTerminals).toHaveBeenCalledOnce()
   })
 
+  it('fails closed instead of remaining pulling after preparation keeps changing', async () => {
+    const state = appState()
+    const harness = createHarness(state, async () => null)
+    harness.prepareOnly.mockImplementation(async (input) => {
+      const preparedToken = token(input.snapshotRevision ?? null, input.catalogRevision)
+      harness.advanceCatalog()
+      return {
+        status: 'complete' as const,
+        token: preparedToken,
+        repoOutcomes: {
+          complete: 1,
+          'non-authoritative': 0,
+          'timed-out': 0,
+          'cancel-budget-exhausted': 0,
+          canceled: 0,
+          stale: 0,
+          rejected: 0
+        },
+        lineageOutcome: 'complete' as const
+      }
+    })
+
+    await harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(12))
+
+    expect(state.clearRemoteWorkspaceHydrated).toHaveBeenCalledWith('target-a')
+    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenLastCalledWith('target-a', {
+      phase: 'conflict',
+      direction: 'pull',
+      revision: 12,
+      updatedAt: 12,
+      hostObservationToken: 'observation-12'
+    })
+    expect(state.hydrateTabsSession).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when current snapshot preparation cannot start', async () => {
+    const state = appState()
+    const harness = createHarness(state, async () => null)
+    harness.capturePreparationInput.mockResolvedValueOnce(null)
+
+    await harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(13))
+
+    expect(state.clearRemoteWorkspaceHydrated).toHaveBeenCalledWith('target-a')
+    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenLastCalledWith('target-a', {
+      phase: 'conflict',
+      direction: 'pull',
+      revision: 13,
+      updatedAt: 13,
+      hostObservationToken: 'observation-13'
+    })
+    expect(state.hydrateTabsSession).not.toHaveBeenCalled()
+  })
+
   it('times out snapshot terminal reconnect and fences its late result', async () => {
     vi.useFakeTimers()
     const pendingReattach = deferred<void>()
@@ -522,6 +403,200 @@ describe('createRemoteWorkspaceTargetSync', () => {
     await flush()
     expect(harness.finalizeHydratedTerminals).toHaveBeenCalledOnce()
     vi.useRealTimers()
+  })
+
+  it('adopts host tabs when their worktree catalog row lands after the snapshot', async () => {
+    const hydrateTabsSession = vi.fn()
+    const markRemoteWorkspaceHydrated = vi.fn()
+    const clearRemoteWorkspaceHydrated = vi.fn()
+    let catalogProjectionReads = 0
+    const emptyWorktreesByRepo = {}
+    Object.defineProperty(emptyWorktreesByRepo, 'repo-a', {
+      enumerable: true,
+      get: () => {
+        catalogProjectionReads += 1
+        return []
+      }
+    })
+    const state = appState({
+      worktreesByRepo: emptyWorktreesByRepo,
+      hydrateTabsSession,
+      markRemoteWorkspaceHydrated,
+      clearRemoteWorkspaceHydrated
+    })
+    const harness = createHarness(state, async () => null)
+    const incoming = snapshot(12, {
+      '/remote/work': [
+        {
+          id: 'host-tab',
+          worktreePath: '/remote/work',
+          ptyId: 'ssh:target-a@@pty-1'
+        } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+      ]
+    })
+
+    const pending = harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+    await flush()
+    const readsBeforeUnrelatedWrites = catalogProjectionReads
+    for (let write = 0; write < 100; write += 1) {
+      harness.publishState()
+    }
+    expect(catalogProjectionReads).toBe(readsBeforeUnrelatedWrites)
+    state.worktreesByRepo = appState().worktreesByRepo
+    harness.advanceCatalog()
+    harness.publishState()
+    await pending
+
+    expect(
+      hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'].map(
+        (tab: { id: string }) => tab.id
+      )
+    ).toEqual(['host-tab'])
+    expect(markRemoteWorkspaceHydrated).toHaveBeenCalledWith('target-a')
+    expect(clearRemoteWorkspaceHydrated).toHaveBeenCalledOnce()
+    expect(clearRemoteWorkspaceHydrated).toHaveBeenCalledWith('target-a')
+  })
+
+  it('keeps only the latest placement waiter and fences a burst to the newest snapshot', async () => {
+    vi.useFakeTimers()
+    const hydrateTabsSession = vi.fn()
+    const state = appState({ worktreesByRepo: {}, hydrateTabsSession })
+    const harness = createHarness(state, async () => null)
+    const pending: Promise<void>[] = []
+    try {
+      for (let revision = 20; revision < 52; revision += 1) {
+        pending.push(
+          harness.sync.applyUnsolicitedSnapshot(
+            'target-a',
+            snapshot(revision, {
+              '/remote/work': [
+                {
+                  id: `host-tab-${revision}`,
+                  worktreePath: '/remote/work',
+                  ptyId: `ssh:target-a@@pty-${revision}`
+                } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+              ]
+            })
+          )
+        )
+        await flush()
+        expect(harness.activeStateListenerCount()).toBe(1)
+        expect(vi.getTimerCount()).toBe(1)
+      }
+
+      expect(harness.peakStateListenerCount()).toBe(1)
+      state.worktreesByRepo = appState().worktreesByRepo
+      harness.publishState()
+      await Promise.all(pending)
+
+      expect(harness.activeStateListenerCount()).toBe(0)
+      expect(hydrateTabsSession).toHaveBeenCalledOnce()
+      expect(
+        hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'].map(
+          (tab: { id: string }) => tab.id
+        )
+      ).toEqual(['host-tab-51'])
+      await vi.runAllTimersAsync()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      harness.sync.stop()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps only the latest readiness poll timer during a snapshot burst', async () => {
+    vi.useFakeTimers()
+    const state = appState({ workspaceSessionReady: false })
+    const harness = createHarness(state, async () => null)
+    const pending: Promise<void>[] = []
+    try {
+      for (let revision = 53; revision < 85; revision += 1) {
+        pending.push(harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(revision)))
+        await flush()
+        expect(vi.getTimerCount()).toBe(1)
+      }
+
+      harness.sync.stop()
+      await Promise.all(pending)
+
+      expect(vi.getTimerCount()).toBe(0)
+      expect(state.hydrateTabsSession).not.toHaveBeenCalled()
+    } finally {
+      harness.sync.stop()
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not publish a revision-zero push after a newer snapshot arrives', async () => {
+    const state = appState({
+      tabsByWorktree: {
+        'repo-a::/remote/work': [{ id: 'tab-a', worktreeId: 'repo-a::/remote/work', ptyId: null }]
+      }
+    })
+    const pendingPush =
+      deferred<{ targetId: string; result: RemoteWorkspaceObservedPatchResult }[]>()
+    const pendingCapture = deferred<DirectSshPreparationInput>()
+    const harness = createHarness(state, async () => snapshot(0))
+    harness.setForConnectedTargets.mockImplementationOnce(() => pendingPush.promise)
+
+    const first = harness.sync.syncAfterConnect(token())
+    await flush()
+    expect(harness.setForConnectedTargets).toHaveBeenCalledOnce()
+
+    harness.capturePreparationInput.mockImplementationOnce(() => pendingCapture.promise)
+    const second = harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(85))
+    await flush()
+    pendingPush.resolve([{ targetId: 'target-a', result: { ok: true, snapshot: snapshot(1) } }])
+    await first
+
+    expect(state.setRemoteWorkspaceSyncStatus).not.toHaveBeenCalledWith(
+      'target-a',
+      expect.objectContaining({ direction: 'push' })
+    )
+
+    harness.sync.stop()
+    pendingCapture.resolve({
+      ...owner,
+      catalogRevision: 1,
+      repoRefs: [{ repoId: 'repo-a', executionHostId: 'ssh:target-a' }],
+      authorityRequirement: 'required',
+      reason: 'workspace-snapshot',
+      snapshotRevision: 85
+    })
+    await second
+  })
+
+  it('stopping snapshot sync cancels the active placement waiter immediately', async () => {
+    vi.useFakeTimers()
+    const state = appState({ worktreesByRepo: {} })
+    const harness = createHarness(state, async () => null)
+    const pending = harness.sync.applyUnsolicitedSnapshot(
+      'target-a',
+      snapshot(52, {
+        '/remote/work': [
+          {
+            id: 'host-tab',
+            worktreePath: '/remote/work',
+            ptyId: 'ssh:target-a@@pty-52'
+          } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+        ]
+      })
+    )
+    try {
+      await flush()
+      expect(harness.activeStateListenerCount()).toBe(1)
+      expect(vi.getTimerCount()).toBe(1)
+
+      harness.sync.stop()
+      await pending
+
+      expect(harness.activeStateListenerCount()).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(state.hydrateTabsSession).not.toHaveBeenCalled()
+    } finally {
+      harness.sync.stop()
+      vi.useRealTimers()
+    }
   })
 
   it('fails closed on duplicate target paths and keeps folder workspaces out of projection', async () => {

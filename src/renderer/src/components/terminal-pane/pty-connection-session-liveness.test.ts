@@ -339,7 +339,7 @@ describe('connectPanePty', () => {
       // The last pane reattaches to the tab's persisted ptyId ('tab-pty').
       binding.reconcileIfSessionDead(new Set(['some-other-live']))
 
-      expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty')
+      expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty', 0)
       expect(manager.closePane).not.toHaveBeenCalled()
     })
 

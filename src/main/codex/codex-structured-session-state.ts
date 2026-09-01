@@ -1,4 +1,5 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import { randomUUID } from 'node:crypto'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import type {
   CodexAppServerConnection,
@@ -7,6 +8,7 @@ import type {
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
+import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 export type CodexStructuredLaunch = {
   command: string
@@ -31,6 +33,8 @@ export type CodexStructuredSessionEvent =
       codexItemId: string
       promptKey: string
     }
+  | StructuredAgentSessionLifecycleEvent
+  /** Translator-only compatibility for callers that do not participate in host recovery. */
   | { type: 'ended'; sessionId: string; reason: string }
 
 export type CodexStructuredSessionAdapterDeps = {
@@ -41,6 +45,7 @@ export type CodexStructuredSessionAdapterDeps = {
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
+  mintAcquisitionGeneration?: () => string
   now?: () => number
   requestTimeoutMs?: number
   captureTurnProcesses?: (rootPid: number) => Promise<CodexTurnProcessSnapshot | null>
@@ -53,6 +58,9 @@ export type CodexStructuredSessionAdapterDeps = {
 export type CodexSession = {
   connection: CodexAppServerConnection
   ended: boolean
+  requestedClose: boolean
+  fence: number
+  acquisitionGeneration: string
   threadId: string
   historyPath: string | null
   prompts: CodexAcquisitionWindow['prompts']
@@ -60,6 +68,31 @@ export type CodexSession = {
   reportedOptions: { model?: string; effort?: string }
   turnIdWaiters: ((turnId: string) => void)[]
   translator: CodexJournalTranslator | null
+  unbindReadingControl?: () => void
+  /** Terminates this exact child as an unexpected death and enters host recovery. */
+  forceCloseUnexpected?: (reason: Error) => Promise<boolean>
+}
+
+export function mintCodexAcquisitionGeneration(deps: CodexStructuredSessionAdapterDeps): string {
+  return deps.mintAcquisitionGeneration?.() ?? randomUUID()
+}
+
+export function codexSessionLifecycle(
+  fence: number,
+  acquisitionGeneration: string
+): Pick<CodexSession, 'ended' | 'requestedClose' | 'fence' | 'acquisitionGeneration'> {
+  return { ended: false, requestedClose: false, fence, acquisitionGeneration }
+}
+
+export function requireLiveCodexSession(
+  sessions: Map<string, CodexSession>,
+  sessionId: string
+): CodexSession {
+  const session = sessions.get(sessionId)
+  if (!session || session.ended) {
+    throw new Error(`no live codex app-server for session ${sessionId}`)
+  }
+  return session
 }
 
 export type CodexAcquisitionAttempt = {

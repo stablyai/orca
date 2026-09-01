@@ -6,6 +6,8 @@ import type { DiffSection } from '../../diff-section-types'
 import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'
 import { combinedDiffSectionsMatchEntryMetadata } from '../resolve-changes/combined-diff-section-cache-match'
 import { getCombinedDiffFileTreeSectionKey } from '../resolve-changes/combined-diff-section-identity'
+import { isCombinedDiffSectionViewed } from '../browse-files/combined-diff-file-tree-filter'
+import { shouldLoadCombinedDiffOnDemand } from '../../combined-diff-on-demand-load'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import type { CombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'
 import { clearPendingSectionReloadTimers } from '../load-sections/combined-diff-section-load-registry'
@@ -51,6 +53,7 @@ export function useCombinedDiffViewRestore({
   } = entrySet
   const {
     generationRef,
+    deferredLoadRequestsRef,
     loadSchedulerRef,
     loadedIndicesRef,
     loadingIndicesRef,
@@ -67,7 +70,26 @@ export function useCombinedDiffViewRestore({
   )
 
   // Why: tab/worktree switches unmount this viewer; cache by pane key so remount restores sections+scroll before repaint.
+  const initializedEntryStateRef = useRef<{
+    viewStateKey: string
+    entrySignature: string
+    hasUncommittedEntriesSnapshot: boolean
+  } | null>(null)
   useLayoutEffect(() => {
+    const initializedEntryState = initializedEntryStateRef.current
+    if (
+      initializedEntryState?.viewStateKey === viewStateKey &&
+      initializedEntryState.entrySignature === entrySignature &&
+      initializedEntryState.hasUncommittedEntriesSnapshot === hasUncommittedEntriesSnapshot
+    ) {
+      return
+    }
+    initializedEntryStateRef.current = {
+      viewStateKey,
+      entrySignature,
+      hasUncommittedEntriesSnapshot
+    }
+    deferredLoadRequestsRef.current.clear()
     const cached = combinedDiffViewStateCache.get(viewStateKey)
     const canRestoreSnapshotSectionsByKey =
       hasUncommittedEntriesSnapshot &&
@@ -97,7 +119,10 @@ export function useCombinedDiffViewRestore({
       setSectionHeights(cached.sectionHeights)
       setSideBySide(combinedDiffViewPreferences.sideBySide ?? cached.sideBySide)
       loadedIndicesRef.current = new Set(
-        cached.loadedIndices.filter((index) => !restoredSections[index]?.loading)
+        cached.loadedIndices.filter((index) => {
+          const section = restoredSections[index]
+          return section !== undefined && isCombinedDiffSectionViewed(section)
+        })
       )
       loadingIndicesRef.current.clear()
       scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
@@ -110,23 +135,32 @@ export function useCombinedDiffViewRestore({
     scrollAnchorRef.current = combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
     latestDomScrollAnchorRef.current = scrollAnchorRef.current
     setSections(
-      entries.map((entry) => ({
-        key: getCombinedDiffFileTreeSectionKey(treeMode, entry),
-        path: entry.path,
-        status: entry.status,
-        area: 'area' in entry ? entry.area : undefined,
-        oldPath: entry.oldPath,
-        added: 'added' in entry ? entry.added : undefined,
-        removed: 'removed' in entry ? entry.removed : undefined,
-        originalContent: '',
-        modifiedContent: '',
-        collapsed: combinedDiffViewPreferences.collapsed ?? false,
-        loading: true,
-        error: undefined,
-        dirty: false,
-        diffResult: null,
-        largeDiffRenderLimit: null
-      }))
+      entries.map((entry) => {
+        const loadOnDemand = shouldLoadCombinedDiffOnDemand({
+          added: 'added' in entry ? entry.added : undefined,
+          removed: 'removed' in entry ? entry.removed : undefined,
+          area: 'area' in entry ? entry.area : undefined,
+          path: entry.path
+        })
+        return {
+          key: getCombinedDiffFileTreeSectionKey(treeMode, entry),
+          path: entry.path,
+          status: entry.status,
+          area: 'area' in entry ? entry.area : undefined,
+          oldPath: entry.oldPath,
+          added: 'added' in entry ? entry.added : undefined,
+          removed: 'removed' in entry ? entry.removed : undefined,
+          originalContent: '',
+          modifiedContent: '',
+          collapsed: combinedDiffViewPreferences.collapsed ?? false,
+          loading: !loadOnDemand,
+          loadOnDemand,
+          error: undefined,
+          dirty: false,
+          diffResult: null,
+          largeDiffRenderLimit: null
+        }
+      })
     )
     setSectionHeights({})
     loadedIndicesRef.current.clear()
@@ -140,6 +174,7 @@ export function useCombinedDiffViewRestore({
     entries,
     entrySignature,
     generationRef,
+    deferredLoadRequestsRef,
     gitStatusEntries,
     hasUncommittedEntriesSnapshot,
     loadSchedulerRef,

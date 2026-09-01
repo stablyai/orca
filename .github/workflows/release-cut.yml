@@ -1316,6 +1316,38 @@ jobs:
           # Kill only its child and require both PTY and watch recovery before packaging.
           node config/scripts/relay-watcher-fault-harness.mjs
 
+      # Why: main ships minified with sourcemap:'hidden' and packaging drops
+      # out/**/*.map from app.asar, so a crash trace from a released build is
+      # otherwise undecodable. The main bundle is platform-independent, so one
+      # leg publishes the maps for the whole release.
+      - name: Bundle main-process source maps
+        if: matrix.platform == 'linux-x64'
+        shell: bash
+        env:
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(find out/main -name '*.js.map' -print -quit)" ]; then
+            echo "::error::No main-process source maps in out/main. Did build.sourcemap regress in electron.vite.config.ts?"
+            exit 1
+          fi
+          # Why: every entry in electron-builder's `files` is a negation, so
+          # app-builder prepends `**/*` and packs anything left in the workspace
+          # root into app.asar. Stage the bundle outside the checkout instead.
+          find out/main -name '*.js.map' -print | sort | zip -q -X "$RUNNER_TEMP/orca-sourcemaps-$TAG.zip" -@
+          ls -l "$RUNNER_TEMP/orca-sourcemaps-$TAG.zip"
+
+      - name: Publish main-process source maps
+        if: matrix.platform == 'linux-x64'
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: gh release upload "${{ needs.cut.outputs.tag }}" "${{ runner.temp }}/orca-sourcemaps-${{ needs.cut.outputs.tag }}.zip" --clobber --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
         uses: nick-fields/retry@v4
@@ -2117,6 +2149,42 @@ jobs:
             [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
           done
           echo "::warning::Failed to dispatch post-release E2E for $TAG after 3 attempts."
+
+  docs-production-dispatch:
+    needs:
+      - cut
+      - publish-release
+    # A release created with GITHUB_TOKEN does not reliably emit a release
+    # event to other workflows. Dispatch the trusted default-branch workflow;
+    # it validates and checks out the released tag before deploying.
+    if: ${{ needs.cut.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch docs deployment for stable desktop tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Skipping docs deployment for non-stable tag $TAG."
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            if gh workflow run docs.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$DEFAULT_BRANCH" \
+              --field "tag=$TAG"; then
+              echo "Dispatched docs deployment for $TAG."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::error::Failed to dispatch docs deployment for $TAG after 3 attempts."
+          exit 1
 
   homebrew-bump-published-rc-draft:
     needs:

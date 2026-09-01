@@ -5,6 +5,9 @@ import { parse } from 'yaml'
 
 const RELEASE_WORKFLOW = '.github/workflows/release-cut.yml'
 const EXPECTED_MATRIX = {
+  '.github/workflows/docs.yml#check': { contents: 'read' },
+  '.github/workflows/docs.yml#production': { contents: 'read' },
+  '.github/workflows/docs.yml#release_gate': { contents: 'read' },
   '.github/workflows/e2e.yml#build': { contents: 'read' },
   '.github/workflows/e2e.yml#changed-e2e': { contents: 'read' },
   '.github/workflows/e2e.yml#e2e': { contents: 'read' },
@@ -16,6 +19,7 @@ const EXPECTED_MATRIX = {
   [`${RELEASE_WORKFLOW}#build-mac`]: { actions: 'write', contents: 'read' },
   [`${RELEASE_WORKFLOW}#create-release`]: { contents: 'write' },
   [`${RELEASE_WORKFLOW}#cut`]: { contents: 'write' },
+  [`${RELEASE_WORKFLOW}#docs-production-dispatch`]: { actions: 'write' },
   [`${RELEASE_WORKFLOW}#homebrew-bump`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#homebrew-bump -> .github/workflows/homebrew-bump.yml#bump-cask`]: {
     contents: 'read'

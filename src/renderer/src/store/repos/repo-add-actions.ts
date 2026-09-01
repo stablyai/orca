@@ -24,6 +24,7 @@ import {
 } from './owner-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
+import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -128,6 +129,8 @@ export function createRepoAddActions(
           )
           // Why: the cross-profile advisory applies to SSH-added projects too; the presence lookup already keys on connection/host.
           await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
+          // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
+          warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
         }
         return repo
       } catch (err) {

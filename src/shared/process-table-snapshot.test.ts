@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { createProcessTableSnapshotReader, parseProcessTableRows } from './process-table-snapshot'
+import {
+  createProcessTableSnapshotReader,
+  parseProcessTableRows,
+  parseStrictProcessTableRows,
+  ProcessTableCaptureError
+} from './process-table-snapshot'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -213,5 +220,50 @@ describe('parseProcessTableRows', () => {
   it('tolerates CRLF and skips header/blank/non-matching lines', () => {
     const rows = parseProcessTableRows('  PID PPID STAT COMMAND\r\n42 1 Ss /sbin/launchd\r\n\r\n')
     expect(rows).toEqual([{ pid: 42, ppid: 1, stat: 'Ss', command: '/sbin/launchd' }])
+  })
+})
+
+describe('parseStrictProcessTableRows', () => {
+  it('accepts Linux kernel roots and bracketed comm values', () => {
+    const capture = readFileSync(
+      join(__dirname, '__fixtures__', 'linux-process-table-kernel-rows.txt'),
+      'utf8'
+    )
+    expect(parseStrictProcessTableRows(capture)).toEqual([
+      { pid: 1, ppid: 0, pgid: 1, tpgid: 0, stat: 'Ss', command: '/sbin/init' },
+      { pid: 2, ppid: 0, pgid: 0, tpgid: -1, stat: 'S', command: '[kthreadd]' },
+      {
+        pid: 3,
+        ppid: 2,
+        pgid: 0,
+        tpgid: -1,
+        stat: 'I',
+        command: '[pool_workqueue_release]'
+      },
+      { pid: 4, ppid: 2, pgid: 0, tpgid: -1, stat: 'I', command: '[kworker/R-rcu_g]' },
+      { pid: 5, ppid: 2, pgid: 0, tpgid: -1, stat: 'I', command: '[kworker/R-sync_wq]' },
+      { pid: 6, ppid: 2, pgid: 0, tpgid: -1, stat: 'I', command: '[kworker/R-slub_]' },
+      { pid: 100, ppid: 1, pgid: 100, tpgid: 100, stat: 'Ss+', command: '/bin/bash -l' },
+      { pid: 101, ppid: 100, pgid: 101, tpgid: 101, stat: 'S+', command: 'node /opt/codex' }
+    ])
+  })
+
+  it('still rejects truncated captures as unreadable', () => {
+    expect(() => parseStrictProcessTableRows('100 1 100 100 Ss+')).toThrow(ProcessTableCaptureError)
+  })
+
+  it.each([
+    '0 0 0 0 S [invalid-pid]',
+    '100 1 -1 100 S [invalid-pgid]',
+    '100 1 100 -2 S [invalid-tpgid]'
+  ])('rejects domain-invalid numeric values (%s)', (capture) => {
+    expect(() => parseStrictProcessTableRows(capture)).toThrow(ProcessTableCaptureError)
+  })
+
+  it('rejects an empty or header-only capture as unreadable', () => {
+    expect(() => parseStrictProcessTableRows('')).toThrow(ProcessTableCaptureError)
+    expect(() => parseStrictProcessTableRows('PID PPID PGID TPGID STAT COMMAND')).toThrow(
+      ProcessTableCaptureError
+    )
   })
 })

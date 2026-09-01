@@ -92,6 +92,52 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(30)
   })
 
+  it('costs zero idle inspections when the host publishes foreground evidence', async () => {
+    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const { coordinator } = createCoordinator(inspectProcess, {
+      shouldPollNoEvidenceProcessCadence: () => false
+    })
+
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(inspectProcess).not.toHaveBeenCalled()
+  })
+
+  it('starts a bounded hot cadence after output on an evidence-publishing host', async () => {
+    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const { coordinator } = createCoordinator(inspectProcess, {
+      shouldPollNoEvidenceProcessCadence: () => false
+    })
+
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(inspectProcess).not.toHaveBeenCalled()
+
+    coordinator.observeOutputActivity()
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    // Output arms 2s polls only for the 10s activity window; silence then
+    // disarms the host reads again instead of falling back to a slow timer.
+    expect(inspectProcess).toHaveBeenCalledTimes(4)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(inspectProcess).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not re-arm no-evidence scans for output from hidden panes', async () => {
+    const inspectProcess = vi.fn(async () => processResult(null, false))
+    const { coordinator } = createCoordinator(inspectProcess, {
+      shouldPollProcessCadence: () => false,
+      shouldPollNoEvidenceProcessCadence: () => false
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeOutputActivity()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(inspectProcess).not.toHaveBeenCalled()
+  })
+
   it('escalates to the hot cadence when PTY output appears mid-interval', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
     const { coordinator } = createCoordinator(inspectProcess)

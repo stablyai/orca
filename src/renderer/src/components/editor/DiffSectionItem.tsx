@@ -34,6 +34,7 @@ export function DiffSectionItem({
   sectionHeight,
   worktreeId,
   loadSection,
+  loadDeferredSection,
   retrySection,
   toggleSection,
   openSection,
@@ -376,6 +377,7 @@ export function DiffSectionItem({
           onCancelComment={() => setPopover(null)}
           onSubmitComment={handleSubmitComment}
           onRetrySection={retrySection}
+          onLoadDeferredSection={loadDeferredSection ?? loadSection}
           onSaveLimitedDiff={() => void handleSectionSaveRef.current(index)}
           onMount={handleMount}
         />

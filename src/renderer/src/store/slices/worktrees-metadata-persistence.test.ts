@@ -204,6 +204,7 @@ describe('worktree remote runtime mutations', () => {
       executionHostId: 'local',
       updates: {
         displayName: 'Fix auth',
+        displayNameIsPinned: true,
         pendingFirstAgentMessageRename: false,
         firstAgentMessageRenameError: null
       }

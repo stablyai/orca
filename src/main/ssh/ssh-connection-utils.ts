@@ -13,14 +13,15 @@ import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
 export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
-export type SshCredentialKind = 'passphrase' | 'password'
+export type SshCredentialKind = 'passphrase' | 'password' | 'keyboard-interactive'
 
 export type SshConnectionCallbacks = {
   onStateChange: (targetId: string, state: SshConnectionState) => void
   onCredentialRequest?: (
     targetId: string,
     kind: SshCredentialKind,
-    detail: string
+    detail: string,
+    signal?: AbortSignal
   ) => Promise<string | null>
 }
 
@@ -33,6 +34,7 @@ export const INITIAL_RETRY_ATTEMPTS = 5
 export const INITIAL_RETRY_DELAY_MS = 2000
 export const RECONNECT_BACKOFF_MS = [1000, 2000, 5000, 5000, 10000, 10000, 10000, 30000, 30000]
 export const CONNECT_TIMEOUT_MS = 30_000
+export const SSH_CREDENTIAL_TIMEOUT_MS = 120_000
 
 const TRANSIENT_ERROR_CODES = new Set([
   'ETIMEDOUT',
@@ -43,6 +45,10 @@ const TRANSIENT_ERROR_CODES = new Set([
   'EAI_AGAIN'
 ])
 
+function sshErrorLevel(err: Error): unknown {
+  return 'level' in err ? err.level : undefined
+}
+
 export function isAuthError(err: Error): boolean {
   const msg = err.message.toLowerCase()
   return (
@@ -52,16 +58,22 @@ export function isAuthError(err: Error): boolean {
     /permission denied(?:, please try again\.?| \([^)]*(?:publickey|password|keyboard-interactive|gssapi|hostbased)[^)]*\))/.test(
       msg
     ) ||
-    (err as { level?: string }).level === 'client-authentication'
+    sshErrorLevel(err) === 'client-authentication'
   )
 }
 
 export function isAgentFallbackError(err: Error): boolean {
-  return isAuthError(err) || (err as { level?: string }).level === 'agent'
+  return isAuthError(err) || sshErrorLevel(err) === 'agent'
 }
 
 export function isTransientError(err: Error): boolean {
-  const code = (err as NodeJS.ErrnoException).code
+  if (
+    sshErrorLevel(err) === 'client-timeout' ||
+    err.message === 'Timed out while waiting for SSH authentication'
+  ) {
+    return true
+  }
+  const code = 'code' in err && typeof err.code === 'string' ? err.code : undefined
   if (code && TRANSIENT_ERROR_CODES.has(code)) {
     return true
   }
@@ -189,7 +201,8 @@ export function buildConnectConfig(
     port: effectivePort,
     username: effectiveUser,
     readyTimeout: CONNECT_TIMEOUT_MS,
-    keepaliveInterval: 15_000
+    keepaliveInterval: 15_000,
+    tryKeyboard: true
   }
 
   const shouldIncludeAgent = options.includeAgent ?? true

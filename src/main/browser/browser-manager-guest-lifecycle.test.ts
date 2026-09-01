@@ -541,6 +541,11 @@ describe('browserManager', () => {
     })
     expect(oldGuestOffMock).toHaveBeenCalled()
     expect(browserManager.getGuestWebContentsId('browser-1')).toBe(newGuest.id)
+    expect(browserManager.getTabIdForWebContentsId(oldGuest.id)).toBeNull()
+    expect(browserManager.getTabIdForWebContentsId(newGuest.id)).toBe('browser-1')
+
+    browserManager.unregisterGuest('browser-1')
+    expect(browserManager.getTabIdForWebContentsId(newGuest.id)).toBeNull()
   })
 
   it('cleans up prior guest listeners before re-registering the same tab', () => {

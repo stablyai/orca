@@ -3,6 +3,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-e
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import {
   getHostDetailsDescription,
@@ -51,9 +52,27 @@ export function RuntimeServerRow({
   onRemove
 }: RuntimeServerRowProps): React.JSX.Element {
   const detailsDescription = getHostDetailsDescription(details)
-  const connectionState = getRuntimeServerConnectionState(details)
+  const runtimeStatusEntry = useAppStore((state) =>
+    state.runtimeStatusByEnvironmentId.get(environment.id)
+  )
+  const connectionState =
+    details?.status === 'loading' && !runtimeStatusEntry?.status
+      ? 'checking'
+      : runtimeStatusEntry
+        ? getRuntimeServerConnectionState({
+            ...(details ?? {
+              status: runtimeStatusEntry.status ? 'ready' : 'error',
+              runtimeStatus: null,
+              compatibility: null,
+              error: null
+            }),
+            status: runtimeStatusEntry.status ? 'ready' : 'error',
+            runtimeStatus: runtimeStatusEntry.status
+          })
+        : getRuntimeServerConnectionState(details)
   // A connected host exposes Disconnect; otherwise Connect.
-  const isReachable = connectionState === 'connected'
+  const isReachable =
+    connectionState === 'connected' || connectionState === 'workspace-window-closed'
   const actionBusy = connecting || switching || disconnecting || removing
 
   return (

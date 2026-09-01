@@ -60,6 +60,14 @@ export function installAppLifetimeIpcEvents(
   )
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
+  const onSharedControlDiagnostics = window.api.runtimeEnvironments?.onSharedControlDiagnostics
+  if (onSharedControlDiagnostics) {
+    unsubs.push(
+      onSharedControlDiagnostics((event) => {
+        useAppStore.getState().publishRuntimeEnvironmentDiagnostics(event)
+      })
+    )
+  }
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerProjectCatalogIpcBridge(
     unsubs,

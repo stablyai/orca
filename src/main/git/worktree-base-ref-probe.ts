@@ -1,4 +1,6 @@
 import { gitExecFileAsync } from './runner'
+import { isShowRefNoMatchError } from './exact-ref-probe'
+import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 
 type GitExecOptions = {
   wslDistro?: string
@@ -43,10 +45,9 @@ export type WorktreeBaseRefPresence = 'present' | 'absent' | 'unknown'
 /**
  * Distinguish "the ref does not exist" from "the probe itself failed".
  *
- * Why for-each-ref: it exits 0 whether or not the pattern matches, so an empty result
- * proves absence while a rejection still means the probe never ran (broken repo, dead
- * SSH transport). `rev-parse --verify --quiet` exits 1 for both, and reading that as
- * "absent" would silently drop warnings the caller must still surface.
+ * `show-ref --verify` is an exact lookup: exit 1 means a valid ref is absent,
+ * while other failures (for example a broken repo or dead SSH transport) stay
+ * inconclusive so callers can preserve their warning/error behavior.
  *
  * Executor-injected so the SSH path can route the same argv through the relay.
  */
@@ -54,15 +55,14 @@ export async function probeWorktreeBaseRefPresence(
   runGit: (args: string[]) => Promise<{ stdout: string }>,
   qualifiedRef: string
 ): Promise<WorktreeBaseRefPresence> {
-  try {
-    const { stdout } = await runGit([
-      'for-each-ref',
-      '--count=1',
-      '--format=%(refname)',
-      qualifiedRef
-    ])
-    return stdout.trim() === qualifiedRef ? 'present' : 'absent'
-  } catch {
+  // Reject malformed persisted metadata before passing it to Git.
+  if (!isSafeGitRefName(qualifiedRef)) {
     return 'unknown'
+  }
+  try {
+    await runGit(['show-ref', '--verify', '--quiet', '--', qualifiedRef])
+    return 'present'
+  } catch (error) {
+    return isShowRefNoMatchError(error) ? 'absent' : 'unknown'
   }
 }

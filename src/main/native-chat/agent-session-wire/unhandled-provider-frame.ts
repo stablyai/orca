@@ -10,7 +10,7 @@ import { classifyProviderFrame } from './provider-frame-disposition'
 export type UnhandledProviderFrameJournalItem = {
   body: AgentJournalStatusItem
   blobs: { digest: string; payload: string }[]
-  /** Why the frame surfaced. Error frames are exempt from generic-row caps. */
+  /** Why the frame surfaced; all classes are subject to the translator's row cap. */
   classification: 'timeline-substantive' | 'error-surface'
 }
 

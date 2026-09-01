@@ -23,7 +23,7 @@ type PowerSaveBlocker = {
 }
 
 type PlatformAwakeAssertion = {
-  start: (reason: string) => void
+  start: (reason: string) => boolean | void
   stop: (reason: string) => void
   dispose: () => void
 }
@@ -41,6 +41,7 @@ type AgentAwakeServiceOptions = {
   logger?: Logger
   macosAssertion?: PlatformAwakeAssertion
   now?: () => number
+  platform?: NodeJS.Platform
   powerMonitor?: PowerMonitorEventSource | null
 }
 
@@ -55,6 +56,7 @@ export class AgentAwakeService {
   private readonly linuxAssertion: PlatformAwakeAssertion
   private readonly logger: Logger
   private readonly macosAssertion: PlatformAwakeAssertion
+  private readonly platform: NodeJS.Platform
   private readonly now: () => number
   private readonly unsubscribeResume: (() => void) | null
 
@@ -78,6 +80,7 @@ export class AgentAwakeService {
         now: this.now,
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
+    this.platform = options.platform ?? process.platform
     const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
     if (resumeSource) {
       const onResume = () => this.refresh('power-resume')
@@ -132,8 +135,12 @@ export class AgentAwakeService {
     const runningStatusCount = this.getEligibleRunningStatusCount()
     const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
     if (shouldBlock) {
-      this.startBlocker(reason, runningStatusCount)
-      this.startMacosAssertion(reason)
+      const macosAssertionActive = this.startMacosAssertion(reason)
+      if (this.platform !== 'darwin' || !macosAssertionActive) {
+        this.startBlocker(reason, runningStatusCount)
+      } else {
+        this.stopBlocker('macos-assertion-active', runningStatusCount)
+      }
       this.startLinuxAssertion(reason)
     } else {
       this.stopBlocker(reason, runningStatusCount)
@@ -229,15 +236,16 @@ export class AgentAwakeService {
     }
   }
 
-  private startMacosAssertion(reason: string): void {
+  private startMacosAssertion(reason: string): boolean {
     try {
-      this.macosAssertion.start(reason)
+      return this.macosAssertion.start(reason) !== false
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start macOS system sleep assertion', {
         reason,
         mode: this.mode,
         error: err
       })
+      return false
     }
   }
 

@@ -36,7 +36,7 @@ export function useNativeChatComposerAttachments({
   setNotice
 }: UseNativeChatComposerAttachmentsArgs): {
   imageAttachments: NativeChatComposerImageAttachment[]
-  attachResolvedPaths: (paths: string[]) => void
+  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
   clearImageAttachments: () => void
   flushPendingAttachments: () => void
   removeImageAttachment: (id: string) => void
@@ -45,7 +45,7 @@ export function useNativeChatComposerAttachments({
     () => readNativeChatAttachmentCache(attachmentScopeKey)
   )
   const imageAttachmentCounter = useRef(0)
-  const pendingResolvedPathsRef = useRef<string[]>([])
+  const pendingResolvedPathsRef = useRef<{ path: string; connectionId?: string | null }[]>([])
   const pendingPathLimitRejectedRef = useRef(false)
   const disabledRef = useRef(disabled)
 
@@ -73,15 +73,19 @@ export function useNativeChatComposerAttachments({
   )
 
   const appendImageAttachments = useCallback(
-    (paths: string[]) => {
+    (paths: { path: string; connectionId?: string | null }[]) => {
       if (paths.length === 0) {
         return
       }
       updateImageAttachments((prev) => [
         ...prev,
-        ...paths.map((path) => {
+        ...paths.map(({ path, connectionId }) => {
           imageAttachmentCounter.current += 1
-          return { id: `${Date.now()}-${imageAttachmentCounter.current}`, path }
+          return {
+            id: `${Date.now()}-${imageAttachmentCounter.current}`,
+            path,
+            connectionId: connectionId ?? undefined
+          }
         })
       ])
     },
@@ -111,7 +115,11 @@ export function useNativeChatComposerAttachments({
   // already-uploaded remote paths for SSH worktrees (the composer uploads
   // before calling this — see native-chat-attachment-upload.ts).
   const applyResolvedPaths = useCallback(
-    (paths: string[], focus: boolean, preserveNotice = false) => {
+    (
+      resolvedPaths: { path: string; connectionId?: string | null }[],
+      focus: boolean,
+      preserveNotice = false
+    ) => {
       const target = resolveTarget()
       if (
         (!target && !allowWithoutTarget) ||
@@ -125,17 +133,19 @@ export function useNativeChatComposerAttachments({
         )
         return
       }
-      const imagePaths = paths.filter(isNativeChatImageAttachmentPath)
-      const filePaths = paths.filter((path) => !isNativeChatImageAttachmentPath(path))
+      const imagePaths = resolvedPaths.filter(({ path }) => isNativeChatImageAttachmentPath(path))
+      const filePaths = resolvedPaths
+        .filter(({ path }) => !isNativeChatImageAttachmentPath(path))
+        .map(({ path }) => path)
       // Images are NOT sent to the TUI here — they ride along on submit (see
       // NativeChatComposer.send) so the GUI chips and the TUI input never
       // diverge and removing a chip needs no TUI un-paste.
-      appendImageAttachments(imagePaths)
+      appendImageAttachments(imagePaths.map(({ path, connectionId }) => ({ path, connectionId })))
       insertFileReferences(filePaths)
       if (!preserveNotice) {
         setNotice(null)
       }
-      if (focus && paths.length > 0) {
+      if (focus && resolvedPaths.length > 0) {
         requestAnimationFrame(() => textareaRef.current?.focus())
       }
     },
@@ -150,7 +160,7 @@ export function useNativeChatComposerAttachments({
   )
 
   const attachResolvedPaths = useCallback(
-    (paths: string[]) => {
+    (paths: string[], connectionId?: string | null) => {
       if (paths.length === 0 || disabledRef.current) {
         return
       }
@@ -166,10 +176,13 @@ export function useNativeChatComposerAttachments({
           )
           return
         }
-        pendingResolvedPathsRef.current.push(...paths)
+        pendingResolvedPathsRef.current.push(...paths.map((path) => ({ path, connectionId })))
         return
       }
-      applyResolvedPaths(paths, true)
+      applyResolvedPaths(
+        paths.map((path) => ({ path, connectionId })),
+        true
+      )
     },
     [applyResolvedPaths, isComposing, setNotice]
   )

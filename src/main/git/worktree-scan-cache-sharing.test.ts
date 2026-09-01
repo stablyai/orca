@@ -1,4 +1,4 @@
-// listWorktrees scan sharing: in-flight coalescing and mutation-generation retirement.
+// Worktree scan sharing: in-flight coalescing and mutation-generation retirement.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -29,11 +29,13 @@ vi.mock('../worktree-trash', () => ({
 import {
   _getWorktreeScanCacheSizesForTests,
   _resetWorktreeScanCacheForTests,
+  listWorktreeGraph,
   listWorktrees,
   listWorktreesSharedStrict,
   listWorktreesStrict,
   moveWorktree,
   removeWorktree,
+  notifyPreparedWorktreeMutation,
   WORKTREE_LIST_TIMEOUT_MS
 } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
@@ -74,6 +76,104 @@ describe('listWorktrees in-flight sharing', () => {
     expect(a).toEqual(b)
     expect(a[0]?.path).toBe('/repo')
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares one graph scan across concurrent callers without sparse probes', async () => {
+    let resolveScan!: () => void
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = () => resolve({ stdout: scanOutput })
+        })
+    )
+
+    const first = listWorktreeGraph('/repo')
+    const second = listWorktreeGraph('/repo')
+    resolveScan()
+    const [a, b] = await Promise.all([first, second])
+
+    expect(a).toEqual(b)
+    expect(a[0]?.path).toBe('/repo')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps graph and annotated scans separate despite sharing the same Git listing', async () => {
+    const resolvers: ((value: { stdout: string }) => void)[] = []
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve)
+        })
+    )
+
+    const graphScan = listWorktreeGraph('/repo')
+    const annotatedScan = listWorktrees('/repo')
+    expect(resolvers).toHaveLength(2)
+
+    for (const resolve of resolvers) {
+      resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
+    }
+    await Promise.all([graphScan, annotatedScan])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps graph scans with an AbortSignal isolated from shared callers', async () => {
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: scanOutput })
+    const controller = new AbortController()
+
+    await Promise.all([
+      listWorktreeGraph('/repo'),
+      listWorktreeGraph('/repo', { signal: controller.signal })
+    ])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps graph scans with different visibility or timeout contracts separate', async () => {
+    const resolvers: ((value: { stdout: string }) => void)[] = []
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve)
+        })
+    )
+
+    const defaultScan = listWorktreeGraph('/repo')
+    const preparationScan = listWorktreeGraph('/repo', { includeCreatePreparations: true })
+    const shorterScan = listWorktreeGraph('/repo', { timeout: 5_000 })
+    expect(resolvers).toHaveLength(3)
+
+    for (const resolve of resolvers) {
+      resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
+    }
+    await Promise.all([defaultScan, preparationScan, shorterScan])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('retires a graph scan that overlaps a worktree mutation', async () => {
+    const resolvers: ((value: { stdout: string }) => void)[] = []
+    gitExecFileAsyncMock.mockImplementation((args: string[]) =>
+      args[0] === 'worktree' && args[1] === 'list'
+        ? new Promise((resolve) => {
+            resolvers.push(resolve)
+          })
+        : Promise.resolve({ stdout: '' })
+    )
+
+    const staleScan = listWorktreeGraph('/repo')
+    expect(resolvers).toHaveLength(1)
+    notifyPreparedWorktreeMutation('/repo')
+    const freshScan = listWorktreeGraph('/repo')
+    expect(resolvers).toHaveLength(2)
+
+    resolvers[1]?.({ stdout: 'worktree /repo\nHEAD fresh\nbranch refs/heads/main\n' })
+    resolvers[0]?.({ stdout: 'worktree /repo\nHEAD stale\nbranch refs/heads/main\n' })
+    expect((await freshScan)[0]?.head).toBe('fresh')
+    expect((await staleScan)[0]?.head).toBe('stale')
+    expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 0, generations: 0 })
   })
 
   // Why (#16520): create verification moved off the fail-soft listing so a Git failure stops being
@@ -127,6 +227,29 @@ describe('listWorktrees in-flight sharing', () => {
 
     await expect(lenient).resolves.toEqual([])
     await expect(strict).rejects.toThrow('git timed out.')
+  })
+
+  it('keeps listWorktreesStrict unshared for post-mutation verification', async () => {
+    // Why: a raw `git worktree prune` never bumps the scan generation, so a
+    // coalesced strict read could return the pre-prune row and report a
+    // successful removal as a stale registration.
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    const resolvers: (() => void)[] = []
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(() => resolve({ stdout: scanOutput }))
+        })
+    )
+
+    const first = listWorktreesStrict('/repo')
+    const second = listWorktreesStrict('/repo')
+    for (const resolve of resolvers) {
+      resolve()
+    }
+    await Promise.all([first, second])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('does not share scans across different timeout contracts', async () => {

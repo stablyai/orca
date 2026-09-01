@@ -127,6 +127,7 @@ import {
   launchTokenHash,
   type SpoolRecord
 } from '../../shared/agent-hook-spool'
+import { CodexSubagentPollScheduler } from '../../shared/codex-subagent-poll-scheduler'
 
 export type { AgentHookSource }
 
@@ -201,6 +202,7 @@ export type AgentHookAuthorityAttestation = Readonly<{
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 type ProviderSessionChangeListener = (providerSessions: AgentHookProviderSessionIdentity[]) => void
 type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
+type StatusDropListener = (paneKey: string) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
   stablePaneKey: string
@@ -221,6 +223,12 @@ const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
 const CODEX_SUBAGENT_POLL_MS = 1_000
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
+
+type CodexSubagentPoll = {
+  source: AgentHookSource
+  body: unknown
+  original: EnrichedAgentHookEventPayload
+}
 
 // Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
 const LAST_STATUS_FILE_VERSION = 2
@@ -705,6 +713,7 @@ export class AgentHookServer {
   private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
   private paneStatusClearListeners = new Set<PaneStatusClearListener>()
+  private statusDropListeners = new Set<StatusDropListener>()
   private statusChangeListeners = new Set<StatusChangeListener>()
   private providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
   // Why: setListener is a single slot owned by the main-window fanout; the
@@ -740,7 +749,10 @@ export class AgentHookServer {
   // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
   private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private codexSubagentPollScheduler = new CodexSubagentPollScheduler<CodexSubagentPoll>(
+    CODEX_SUBAGENT_POLL_MS,
+    (paneKey, poll) => this.runCodexSubagentPoll(paneKey, poll)
+  )
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   private activeHookTurnCompletedAtByPaneKey = new Map<string, number>()
   private promptSentHashSalt = randomBytes(16).toString('hex')
@@ -861,6 +873,27 @@ export class AgentHookServer {
     this.paneStatusClearListeners.add(listener)
     return () => {
       this.paneStatusClearListeners.delete(listener)
+    }
+  }
+
+  /** Multi-subscriber tap on definitive live-row deletions. `dropStatusEntry` is a user
+   *  dismissal, so it never routes through the pane-status-clear fan-out — pane-owned
+   *  cleanup (synthetic spinners) still has to retire with the row it was driving. */
+  subscribeStatusDrop(listener: StatusDropListener): () => void {
+    this.statusDropListeners.add(listener)
+    return () => {
+      this.statusDropListeners.delete(listener)
+    }
+  }
+
+  private emitStatusDropped(paneKey: string): void {
+    for (const listener of this.statusDropListeners) {
+      // Why: matches every other fan-out here — one throwing subscriber must not strand the rest.
+      try {
+        listener(paneKey)
+      } catch (err) {
+        console.error('[agent-hooks] status-drop listener threw', err)
+      }
     }
   }
 
@@ -1634,12 +1667,7 @@ export class AgentHookServer {
   }
 
   private clearCodexSubagentPoll(paneKey: string): void {
-    const timer = this.codexSubagentPollTimers.get(paneKey)
-    if (!timer) {
-      return
-    }
-    clearTimeout(timer)
-    this.codexSubagentPollTimers.delete(paneKey)
+    this.codexSubagentPollScheduler.clear(paneKey)
   }
 
   private scheduleCodexSubagentPoll(
@@ -1651,29 +1679,32 @@ export class AgentHookServer {
     if (source !== 'codex') {
       return
     }
-    this.clearCodexSubagentPoll(original.paneKey)
+    this.codexSubagentPollScheduler.clear(original.paneKey)
     if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
       return
     }
-    const timer = setTimeout(() => {
-      this.codexSubagentPollTimers.delete(original.paneKey)
-      const current = this.state.lastStatusByPaneKey.get(original.paneKey)
-      if (!this.server || current !== original) {
-        return
-      }
-      const normalized = normalizeHookPayload(this.state, source, body, this.env)
-      if (!normalized) {
-        return
-      }
-      const subagentsChanged =
-        JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
-      this.scheduleCodexSubagentPoll(source, body, next)
-    }, CODEX_SUBAGENT_POLL_MS)
-    this.codexSubagentPollTimers.set(original.paneKey, timer)
-    if (typeof timer.unref === 'function') {
-      timer.unref()
+    this.codexSubagentPollScheduler.schedule(original.paneKey, { source, body, original })
+  }
+
+  private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
+    const { source, body, original } = poll
+    // Keep the identity check at callback time: a newer event supersedes this
+    // payload even when its pane still has transcript children.
+    if (
+      paneKey !== original.paneKey ||
+      !this.server ||
+      this.state.lastStatusByPaneKey.get(original.paneKey) !== original
+    ) {
+      return
     }
+    const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    if (!normalized) {
+      return
+    }
+    const subagentsChanged =
+      JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
+    const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
+    this.scheduleCodexSubagentPoll(source, body, next)
   }
 
   private scheduleAssistantMessageRetry(
@@ -2711,10 +2742,7 @@ export class AgentHookServer {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
-    for (const timer of this.codexSubagentPollTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.codexSubagentPollTimers.clear()
+    this.codexSubagentPollScheduler.clearAll()
     // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     this.endpointDir = null
     this.endpointFilePathCache = null
@@ -2767,6 +2795,7 @@ export class AgentHookServer {
     }
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
+    this.emitStatusDropped(deleted.paneKey)
   }
 
   /** Retire panes whose owning process is certifiably dead.

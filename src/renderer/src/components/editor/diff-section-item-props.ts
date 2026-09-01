@@ -17,6 +17,7 @@ export type DiffSectionItemProps = {
   sectionHeight: number | undefined
   worktreeId?: string
   loadSection: (index: number) => void
+  loadDeferredSection?: (index: number) => void
   retrySection: (index: number) => void
   toggleSection: (index: number) => void
   openSection: (index: number) => void

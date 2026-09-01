@@ -15,7 +15,7 @@ export type UseNativeChatExternalAttachmentsArgs = {
   /** Live composer-disabled state; read at await-resume via a ref so a flip
    *  mid-upload doesn't attach into a guarded composer. */
   disabled: boolean
-  attachResolvedPaths: (paths: string[]) => void
+  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
   setNotice: (notice: string | null) => void
 }
 
@@ -70,7 +70,7 @@ export function useNativeChatExternalAttachments({
         if (!remotePaths || remotePaths.length === 0 || disabledRef.current) {
           return
         }
-        attachResolvedPaths(remotePaths)
+        attachResolvedPaths(remotePaths, owner.connectionId)
       })()
     },
     [attachResolvedPaths, resolveAttachmentOwner, setNotice]

@@ -13,7 +13,7 @@ import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 export { type AgentType }
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
-export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 1
+export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 2
 
 /** Epoch-qualified position in one journal. `sequence` 0 means "before the first row". */
 export type AgentJournalCursor = {

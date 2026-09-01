@@ -160,9 +160,57 @@ type MobileSessionWorktreeInputs = {
   mountedSurfaceCaptureByTabId: ReadonlyMap<string, MountedTerminalSurfaceCapture>
 }
 
-const registeredTabs = new Map<string, RegisteredTerminalTab>()
+type RegisteredTerminalTabKey = string
+
+const registeredTabs = new Map<RegisteredTerminalTabKey, RegisteredTerminalTab>()
 // Why: registration time suppresses the "no live transport" warning during the async PTY-connect window; after the grace period it's a real stuck state.
-const tabRegisteredAt = new Map<string, number>()
+const tabRegisteredAt = new Map<RegisteredTerminalTabKey, number>()
+
+function registeredTerminalTabKey(worktreeId: string, tabId: string): RegisteredTerminalTabKey {
+  return `${worktreeId}\0${tabId}`
+}
+
+function findRegisteredTerminalTab(
+  tabId: string,
+  worktreeId?: string
+): { key: RegisteredTerminalTabKey; tab: RegisteredTerminalTab } | null {
+  if (worktreeId !== undefined) {
+    const key = registeredTerminalTabKey(worktreeId, tabId)
+    const tab = registeredTabs.get(key)
+    return tab ? { key, tab } : null
+  }
+
+  let match: { key: RegisteredTerminalTabKey; tab: RegisteredTerminalTab } | null = null
+  for (const [key, tab] of registeredTabs) {
+    if (tab.tabId !== tabId) {
+      continue
+    }
+    // A tab id without its worktree is ambiguous; callers must fail closed.
+    if (match) {
+      return null
+    }
+    match = { key, tab }
+  }
+  return match
+}
+
+/** IDs occurring more than once cannot address the legacy tab-keyed runtime maps safely. */
+function collectAmbiguousTerminalTabIds(
+  tabsByWorktree: AppState['tabsByWorktree']
+): ReadonlySet<string> {
+  const seen = new Set<string>()
+  const ambiguous = new Set<string>()
+  for (const tabs of Object.values(tabsByWorktree)) {
+    for (const tab of tabs) {
+      if (seen.has(tab.id)) {
+        ambiguous.add(tab.id)
+      } else {
+        seen.add(tab.id)
+      }
+    }
+  }
+  return ambiguous
+}
 const NO_TRANSPORT_GRACE_MS = 10_000
 const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWorktree'] = {}
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
@@ -250,28 +298,33 @@ export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null)
   getStoreState = getter
 }
 
-/** True while a TerminalPane for this tab is mounted (lifecycle effect ran). */
-export function hasRegisteredRuntimeTerminalTab(tabId: string): boolean {
-  return registeredTabs.has(tabId)
+/** True while the target TerminalPane is mounted (lifecycle effect ran). */
+export function hasRegisteredRuntimeTerminalTab(tabId: string, worktreeId?: string): boolean {
+  return findRegisteredTerminalTab(tabId, worktreeId) !== null
 }
 
 export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => void {
-  registeredTabs.set(tab.tabId, tab)
-  tabRegisteredAt.set(tab.tabId, Date.now())
+  const key = registeredTerminalTabKey(tab.worktreeId, tab.tabId)
+  registeredTabs.set(key, tab)
+  tabRegisteredAt.set(key, Date.now())
   scheduleRuntimeGraphSync()
   return () => {
     // Why: React can mount a replacement surface before the prior effect cleans up; stale cleanup must not erase the successor's registry.
-    if (registeredTabs.get(tab.tabId) !== tab) {
+    if (registeredTabs.get(key) !== tab) {
       return
     }
-    registeredTabs.delete(tab.tabId)
-    tabRegisteredAt.delete(tab.tabId)
+    registeredTabs.delete(key)
+    tabRegisteredAt.delete(key)
     scheduleRuntimeGraphSync()
   }
 }
 
-export function focusRuntimeTerminalSurface(tabId: string, leafId?: string | null): boolean {
-  const registered = registeredTabs.get(tabId)
+export function focusRuntimeTerminalSurface(
+  tabId: string,
+  leafId?: string | null,
+  worktreeId?: string
+): boolean {
+  const registered = findRegisteredTerminalTab(tabId, worktreeId)?.tab
   const manager = registered?.getManager()
   if (!manager) {
     return false
@@ -724,14 +777,28 @@ async function syncRuntimeGraph(): Promise<void> {
   // Why: can't import the store directly (terminal slice imports this module); inject the getter to break the construction cycle.
   const state = getStoreState()
   const systemPrefersDark = getSystemPrefersDark()
+  const ambiguousTerminalTabIds = collectAmbiguousTerminalTabIds(state.tabsByWorktree)
   // Why: build lookup maps once per sync instead of re-flattening every worktree's tabs for each registered terminal.
-  const terminalTabById = new Map(
-    Object.values(state.tabsByWorktree)
-      .flat()
-      .map((tab) => [tab.id, tab])
-  )
+  const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    const tabsById = new Map<string, TerminalTab>()
+    for (const tab of tabs) {
+      // Duplicate ids in one worktree are malformed persisted state; don't
+      // guess which PTY a mounted surface owns.
+      if (tabsById.has(tab.id)) {
+        tabsById.delete(tab.id)
+        continue
+      }
+      tabsById.set(tab.id, tab)
+    }
+    terminalTabsByWorktree.set(worktreeId, tabsById)
+  }
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
-  const mobileSessionTabs = buildMobileSessionTabSnapshots(state, systemPrefersDark)
+  const mobileSessionTabs = buildMobileSessionTabSnapshots(
+    state,
+    systemPrefersDark,
+    ambiguousTerminalTabIds
+  )
   const publication = partitionMobileSessionPublication(mobileSessionTabs)
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
@@ -741,12 +808,15 @@ async function syncRuntimeGraph(): Promise<void> {
     unchangedMobileSessionWorktrees: publication.unchangedWorktrees
   }
 
-  for (const [tabId, registeredTab] of registeredTabs) {
-    const tab = terminalTabById.get(tabId)
+  for (const [registrationKey, registeredTab] of registeredTabs) {
+    if (ambiguousTerminalTabIds.has(registeredTab.tabId)) {
+      continue
+    }
+    const tab = terminalTabsByWorktree.get(registeredTab.worktreeId)?.get(registeredTab.tabId)
     if (!tab) {
       continue
     }
-    if (isWebOnlyMirroredTerminalTab(tab, state.terminalLayoutsByTabId[tabId])) {
+    if (isWebOnlyMirroredTerminalTab(tab, state.terminalLayoutsByTabId[registeredTab.tabId])) {
       continue
     }
 
@@ -757,31 +827,32 @@ async function syncRuntimeGraph(): Promise<void> {
       container?.firstElementChild instanceof HTMLElement ? container.firstElementChild : null
 
     graph.tabs.push({
-      tabId,
+      tabId: registeredTab.tabId,
       worktreeId: registeredTab.worktreeId,
       title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
 
-    const savedPtyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+    const savedPtyIdsByLeafId =
+      state.terminalLayoutsByTabId[registeredTab.tabId]?.ptyIdsByLeafId ?? {}
     for (const pane of manager?.getPanes() ?? []) {
       const leafId = pane.leafId
       const ptyId = registeredTab.getPtyIdForPane(pane.id)
       const savedPtyId = savedPtyIdsByLeafId[leafId] ?? null
-      const registeredTime = tabRegisteredAt.get(tabId) ?? 0
+      const registeredTime = tabRegisteredAt.get(registrationKey) ?? 0
       if (!ptyId && savedPtyId && Date.now() - registeredTime > NO_TRANSPORT_GRACE_MS) {
         warnTerminalLifecycleAnomaly('mounted terminal leaf has saved PTY but no live transport', {
-          tabId,
+          tabId: registeredTab.tabId,
           worktreeId: registeredTab.worktreeId,
           leafId,
           paneId: pane.id,
           ptyId: savedPtyId
         })
       }
-      const paneTitles = state.runtimePaneTitlesByTabId[tabId] ?? {}
+      const paneTitles = state.runtimePaneTitlesByTabId[registeredTab.tabId] ?? {}
       graph.leaves.push({
-        tabId,
+        tabId: registeredTab.tabId,
         worktreeId: registeredTab.worktreeId,
         leafId,
         paneRuntimeId: pane.id,
@@ -790,7 +861,7 @@ async function syncRuntimeGraph(): Promise<void> {
         title: resolveRuntimeTerminalTitle(
           tab,
           generatedTitlesEnabled,
-          state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? tab.title
+          state.runtimePaneTitlesByTabId[registeredTab.tabId]?.[pane.id] ?? tab.title
         )
       })
     }
@@ -806,8 +877,14 @@ async function syncRuntimeGraph(): Promise<void> {
   const parkedWatcherPtyIds = collectParkedTerminalWatcherPtyIds()
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
+      if (ambiguousTerminalTabIds.has(tab.id)) {
+        continue
+      }
       const layout = state.terminalLayoutsByTabId[tab.id]
-      if (registeredTabs.has(tab.id) || isWebOnlyMirroredTerminalTab(tab, layout)) {
+      if (
+        hasRegisteredRuntimeTerminalTab(tab.id, worktreeId) ||
+        isWebOnlyMirroredTerminalTab(tab, layout)
+      ) {
         continue
       }
       const savedPtyIdsByLeafId = layout?.ptyIdsByLeafId
@@ -1025,14 +1102,23 @@ function buildMobileSessionAgentStatusByWorktree(
 function buildMobileSessionWorktreeInputs(
   state: AppState,
   worktreeId: string,
-  publication: MobileSessionPublicationInputs
+  publication: MobileSessionPublicationInputs,
+  ambiguousTerminalTabIds: ReadonlySet<string>
 ): MobileSessionWorktreeInputs {
-  const terminalTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TERMINAL_TABS
+  // Legacy layout/title maps are keyed only by tab id. Omit ambiguous ids until
+  // hydration repairs ownership instead of publishing one worktree's metadata for another.
+  const sourceTerminalTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TERMINAL_TABS
+  // Preserve the source reference when there is nothing to filter; the mobile
+  // snapshot cache uses this identity to avoid rebuilding on title ticks.
+  const terminalTabs = sourceTerminalTabs.some((tab) => ambiguousTerminalTabIds.has(tab.id))
+    ? sourceTerminalTabs.filter((tab) => !ambiguousTerminalTabIds.has(tab.id))
+    : sourceTerminalTabs
   const terminalTabIds = terminalTabs.map((tab) => tab.id)
   const terminalLayoutByTabId = narrowRecordByKeys(state.terminalLayoutsByTabId, terminalTabIds)
   const mountedSurfaceCaptureByTabId = captureMountedTerminalSurfaces(
     terminalTabs,
-    state.terminalLayoutsByTabId
+    state.terminalLayoutsByTabId,
+    worktreeId
   )
   const browserWorkspaces =
     publication.browserTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_BROWSER_WORKSPACES
@@ -1099,11 +1185,12 @@ function buildMobileSessionWorktreeInputs(
 
 function captureMountedTerminalSurfaces(
   terminalTabs: AppState['tabsByWorktree'][string],
-  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
+  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'],
+  worktreeId: string
 ): ReadonlyMap<string, MountedTerminalSurfaceCapture> {
   let captures: Map<string, MountedTerminalSurfaceCapture> | null = null
   for (const tab of terminalTabs) {
-    const registered = registeredTabs.get(tab.id)
+    const registered = findRegisteredTerminalTab(tab.id, worktreeId)?.tab
     if (!registered) {
       continue
     }
@@ -1247,7 +1334,10 @@ function canReuseMobileSessionSnapshot(
 
 export function buildMobileSessionTabSnapshots(
   state: AppState,
-  systemPrefersDark = getSystemPrefersDark()
+  systemPrefersDark = getSystemPrefersDark(),
+  ambiguousTerminalTabIds: ReadonlySet<string> = collectAmbiguousTerminalTabIds(
+    state.tabsByWorktree
+  )
 ): RuntimeMobileSessionTabsSnapshot[] {
   // Why: high-frequency title ticks fire mobile sync; cache indexes/hashes by store-slice ref to skip rescanning editor state.
   const openFileIndexes = getOpenFileIndexes(state.openFiles)
@@ -1284,7 +1374,12 @@ export function buildMobileSessionTabSnapshots(
       mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
       continue
     }
-    const inputs = buildMobileSessionWorktreeInputs(state, worktreeId, publicationInputs)
+    const inputs = buildMobileSessionWorktreeInputs(
+      state,
+      worktreeId,
+      publicationInputs,
+      ambiguousTerminalTabIds
+    )
     const cached = mobileSessionSnapshotCacheByWorktree.get(worktreeId)
     // Why: invalidate before computing — building the maps, projection, and tab
     // array first made the cache save the fanout but none of the per-worktree work.

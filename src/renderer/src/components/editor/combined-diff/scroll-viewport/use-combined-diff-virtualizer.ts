@@ -5,7 +5,8 @@ import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import type { DiffSection } from '../../diff-section-types'
 import {
   getDiffSectionEstimatedHeight,
-  isIntrinsicHeightImageDiff
+  isIntrinsicHeightImageDiff,
+  usesLargeDiffFallbackHeight
 } from '../../diff-section-layout'
 
 const COMBINED_DIFF_OVERSCAN = 5
@@ -48,7 +49,7 @@ export function useCombinedDiffVirtualizer({
             ? undefined
             : (section.added ?? 0) + (section.removed ?? 0),
         useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
-        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        isLargeDiffLimited: usesLargeDiffFallbackHeight(section),
         lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
       })
     },

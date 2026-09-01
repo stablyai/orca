@@ -2,6 +2,7 @@ import os from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TracerModule from './observability/tracer'
 import type * as UpdaterModule from './updater'
+import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
   appMock,
@@ -145,7 +146,7 @@ async function reachDownloaded(): Promise<typeof UpdaterModule> {
   // same tracer instance updater.ts will import.
   tracer = await import('./observability/tracer')
   tracer.setActiveSink(capturingSink())
-  const updater = await import('./updater')
+  const updater = await loadUpdaterModule()
 
   updater.setupAutoUpdater(mainWindow as never)
   await vi.waitFor(() => {
@@ -158,6 +159,8 @@ async function reachDownloaded(): Promise<typeof UpdaterModule> {
   expect(updater.getUpdateStatus().state).toBe('downloaded')
   return updater
 }
+
+warmUpdaterModule()
 
 /**
  * On a `.deb` Linux host electron-updater's `install()` catches the failed elevation and

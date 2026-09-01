@@ -10,6 +10,12 @@ export type FreshnessSchedulerDeps = {
 export type FreshnessScheduler = {
   schedule: () => void
   /**
+   * Defer a freshness scan until the microtask queue drains. Multiple pending
+   * requests still retain their queue slots for ordering, but only the newest
+   * request performs the scan.
+   */
+  scheduleDeferred: () => void
+  /**
    * Cancel any pending freshness timer. Intended for tests that create a
    * fresh store per case — production callers do not need this because the
    * zustand store is a module-level singleton that lives until process exit.
@@ -23,12 +29,23 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
   // into the test process.
   let timer: ReturnType<typeof setTimeout> | null = null
   let lastCheckedAt: number | null = null
+  let deferredScheduleGeneration = 0
 
   const clear = (): void => {
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
     }
+  }
+
+  const scheduleDeferred = (): void => {
+    const generation = ++deferredScheduleGeneration
+    queueMicrotask(() => {
+      if (generation !== deferredScheduleGeneration) {
+        return
+      }
+      schedule()
+    })
   }
 
   const schedule = (): void => {
@@ -91,5 +108,11 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     }, delayMs)
   }
 
-  return { schedule, dispose: clear }
+  const dispose = (): void => {
+    clear()
+    // Invalidate callbacks already queued by scheduleDeferred.
+    deferredScheduleGeneration += 1
+  }
+
+  return { schedule, scheduleDeferred, dispose }
 }

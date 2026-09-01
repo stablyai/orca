@@ -1,12 +1,18 @@
 import { readdir, readFile } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 // Why: the whole point of this reader is replacing `git worktree list` fanout
 // with bounded metadata-file reads, so head freshness never re-creates the
 // spawn pressure that stalled terminal input. Keep it spawn-free.
 
 const MAX_SYMREF_DEPTH = 5
+// Head identity refreshes run on every git-common poll. Keep metadata reads
+// bounded while avoiding a serial round trip per linked worktree (especially
+// noticeable on WSL/UNC and network-backed worktrees).
+const HEAD_IDENTITY_READ_CONCURRENCY = 8
 
 async function readTrimmedFile(path: string): Promise<string | null> {
   try {
@@ -127,32 +133,39 @@ export async function readGitCommonHeadIdentities(
     }
   }
 
-  let entries
+  let entries: Dirent[]
   try {
     entries = await readdir(join(commonDirPath, 'worktrees'), { withFileTypes: true })
   } catch {
     return identities
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue
+
+  const linkedEntries = entries.filter((entry) => entry.isDirectory())
+  // mapWithConcurrency retains input order, so publishing identities stays
+  // deterministic while independent worktree metadata reads overlap.
+  const linkedIdentities = await mapWithConcurrency(
+    linkedEntries,
+    HEAD_IDENTITY_READ_CONCURRENCY,
+    async (entry) => {
+      const entryPath = join(commonDirPath, 'worktrees', entry.name)
+      const gitdirContent = await readTrimmedFile(join(entryPath, 'gitdir'))
+      if (!gitdirContent) {
+        return null
+      }
+      // `gitdir` holds `<worktree>/.git`, absolute or (with relative-path
+      // worktrees) relative to the entry dir.
+      const gitdirAbsolute = isAbsolute(gitdirContent)
+        ? gitdirContent
+        : join(entryPath, gitdirContent)
+      return readHeadIdentity(
+        commonDirPath,
+        join(entryPath, 'HEAD'),
+        dirname(gitdirAbsolute),
+        packedRefs
+      )
     }
-    const entryPath = join(commonDirPath, 'worktrees', entry.name)
-    const gitdirContent = await readTrimmedFile(join(entryPath, 'gitdir'))
-    if (!gitdirContent) {
-      continue
-    }
-    // `gitdir` holds `<worktree>/.git`, absolute or (with relative-path
-    // worktrees) relative to the entry dir.
-    const gitdirAbsolute = isAbsolute(gitdirContent)
-      ? gitdirContent
-      : join(entryPath, gitdirContent)
-    const identity = await readHeadIdentity(
-      commonDirPath,
-      join(entryPath, 'HEAD'),
-      dirname(gitdirAbsolute),
-      packedRefs
-    )
+  )
+  for (const identity of linkedIdentities) {
     if (identity) {
       identities.push(identity)
     }
