@@ -25,6 +25,10 @@ import {
   getWorktreeMirrorDistro
 } from './project-runtime-git-options'
 import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
+import {
+  recordPreparationConsume,
+  resetPreparationConsumeHistoryForTests
+} from './worktree-create-preparation-burst'
 import { toHostFilesystemPath } from './host-tree-removal'
 import {
   discardPreparationWithRetry,
@@ -276,10 +280,15 @@ async function claimPreparedWorktree(
   }
 }
 
-/** Replaces a just-consumed preparation. Never awaited: create has already returned by the time
- *  the replacement checkout finishes. */
+/** Replaces a just-consumed preparation, but only once the user has shown they are creating in a
+ *  burst. A replacement costs a full checkout and ~5 minutes of disk until its TTL, so arming one
+ *  after an isolated create spends that on nobody. Never awaited: create has already returned by
+ *  the time the replacement checkout finishes. */
 function rearmPreparation(entry: PreparationEntry, baseBranch: string): void {
   if (preparations.has(entry.key)) {
+    return
+  }
+  if (!recordPreparationConsume(entry.key)) {
     return
   }
   void startPreparation(
@@ -319,9 +328,8 @@ export async function consumePreparedWorktreeCreate(
       args.refreshLocalBaseRef,
       options
     )
-    // Consuming the only prepared checkout leaves the next create cold, and back-to-back creates
-    // from the same composer are the common case. Re-arm in the background; the TTL and the
-    // preparation limit still bound how long an unused one survives.
+    // Consuming the only prepared checkout leaves the next create cold. Re-arm for a user who is
+    // creating in a burst; the TTL and the preparation limit still bound an unused replacement.
     rearmPreparation(entry, args.baseBranch)
     return result
   } catch (error) {
@@ -337,6 +345,7 @@ export async function consumePreparedWorktreeCreate(
 export async function _resetWorktreeCreatePreparationsForTests(): Promise<void> {
   const entries = [...preparations.values()]
   preparations.clear()
+  resetPreparationConsumeHistoryForTests()
   staleCleanupInFlight.clear()
   await Promise.all(
     entries.map(async (entry) => {
