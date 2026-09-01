@@ -217,9 +217,11 @@ Create the Run and every independent Task first, then start all independent work
 orca orchestration run-create --objective "<objective>" --json
 orca orchestration task-create --spec "<worker A task>" --json
 orca orchestration task-create --spec "<worker B task>" --json
-orca orchestration worker-start --task <task_a> --worktree current --agent codex --json
-orca orchestration worker-start --task <task_b> --worktree current --agent claude --json
+orca orchestration worker-start --task <task_a> --worktree current --json
+orca orchestration worker-start --task <task_b> --worktree current --agent codex --json
 ```
+
+Omit `--agent` to launch the user's default agent from Settings; that is the normal choice. Pass `--agent <id>` only when the task or the user calls for a specific agent (any installed and enabled Orca agent id, for example `claude`, `codex`, `gemini`, `cursor`). Workers never inherit the coordinator's own agent. If Settings has no enabled default, or the named agent is disabled, `worker-start` fails with `agent_unconfigured`; an older Orca host may also require an explicit `--agent`.
 
 `current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
 
@@ -296,7 +298,7 @@ Recovery is conditional, never a fixed destructive sequence:
 
 - The response was lost and named no Dispatch: run `orca orchestration request-show --request <request_id> --json` first. It is read-only. `completed` means the mutation already took effect. `pending` means the original mutation is still running or Orca restarted before recording its outcome. For either state, replaying the original command with `--retry-request <request_id>` reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. `absent` means this runtime holds no receipt under your caller identity and is not proof that nothing happened; inspect the affected state before deciding whether to retry.
 - `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
-- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
+- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` choice and `--terminal`, or `--agent` when the Settings default is not wanted. Retry does not silently inherit placement.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 
