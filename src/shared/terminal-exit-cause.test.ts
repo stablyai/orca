@@ -119,6 +119,9 @@ describe('isProvenProcessExit', () => {
       isProvenProcessExit(0, { hostReportsChildExitStatus: false })
     ).toBe(false)
     expect(isProvenProcessExit(0, { signal: 0 })).toBe(true)
+    // A positive signal is proof the process ended, even from a negative
+    // synthetic code — the signal must actually reach resolveProcessExitCause.
+    expect(isProvenProcessExit(-1, { signal: 9 })).toBe(true)
   })
 
   it('keeps historical behaviour when no evidence is supplied', () => {
