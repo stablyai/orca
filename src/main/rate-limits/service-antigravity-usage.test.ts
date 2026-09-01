@@ -54,7 +54,7 @@ describe('RateLimitService Antigravity usage', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
   })
 
-  it('does not republish a Gemini failure as an Antigravity refresh failure', async () => {
+  it('does not republish the Gemini failure text under the Antigravity provider', async () => {
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
       errorProvider('gemini', 'Gemini project ID not found')
     )
@@ -63,7 +63,8 @@ describe('RateLimitService Antigravity usage', () => {
     await service.refresh()
 
     const state = service.getState()
-    expect(state.antigravity?.status).toBe('unavailable')
+    // Why: a failed shared-quota read is a failed Antigravity read; only the wording is Antigravity's.
+    expect(state.antigravity?.status).toBe('error')
     expect(state.antigravity?.error).not.toContain('Gemini project ID not found')
     expect(state.antigravity?.session).toBeNull()
     // Why: the real Gemini failure must still surface under its own provider.
@@ -83,7 +84,7 @@ describe('RateLimitService Antigravity usage', () => {
     expect(state.antigravity?.session?.usedPercent).toBe(42)
   })
 
-  it('never leaves a cached Antigravity snapshot in the error retry lane', async () => {
+  it('keeps the last shared-quota reading when the quota read fails, exactly as Gemini does', async () => {
     vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 42, Date.now()))
     const service = new RateLimitService()
     await service.refresh()
@@ -93,8 +94,32 @@ describe('RateLimitService Antigravity usage', () => {
     )
     await service.refresh()
 
-    // Why: stale-retention would otherwise show Gemini numbers as "Refresh failed" Antigravity usage.
-    expect(service.getState().antigravity?.status).toBe('unavailable')
-    expect(service.getState().antigravity?.session).toBeNull()
+    // Why: one read backs both rows, so one failure must not wipe one row and spare the other.
+    const state = service.getState()
+    expect(state.antigravity?.status).toBe('error')
+    expect(state.antigravity?.session?.usedPercent).toBe(42)
+    expect(state.gemini?.status).toBe('error')
+    expect(state.gemini?.session?.usedPercent).toBe(42)
+  })
+
+  it('does not quote the Gemini failure while showing a retained Antigravity reading', async () => {
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 42, Date.now()))
+    const service = new RateLimitService()
+    await service.refresh()
+
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
+      errorProvider('gemini', 'Token refresh failed')
+    )
+    await service.refresh()
+
+    // Why: #15876's real protection — the Antigravity row owns its wording even in the failure lane.
+    const antigravity = service.getState().antigravity
+    expect(antigravity?.error).not.toContain('Token refresh failed')
+    expect(antigravity?.error).toContain('shared Google Code Assist quota')
+    // Why: retention is what makes this lane new — the tooltip prints this reason under
+    // "Refresh failed — showing cached data" and directly above the retained meter, so a reason
+    // that calls the usage unavailable contradicts the numbers rendered next to it.
+    expect(antigravity?.session?.usedPercent).toBe(42)
+    expect(antigravity?.error).not.toContain('not available')
   })
 })

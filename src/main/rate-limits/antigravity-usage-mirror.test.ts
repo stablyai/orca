@@ -30,15 +30,21 @@ describe('deriveAntigravityRateLimits', () => {
     expect(antigravity.error).toBeNull()
   })
 
-  it('reports unavailable without quoting the Gemini failure', () => {
+  it('settles a failed quota read as an error without quoting the Gemini failure', () => {
     const antigravity = deriveAntigravityRateLimits(
       geminiSnapshot('error', 'Gemini project ID not found')
     )
 
     expect(antigravity.provider).toBe('antigravity')
-    expect(antigravity.status).toBe('unavailable')
+    // Why: the Gemini read is Antigravity's read of the shared quota, so its failure is a failed
+    // read, not an absent one — `unavailable` would discard the last good snapshot downstream.
+    expect(antigravity.status).toBe('error')
     expect(antigravity.error).not.toContain('Gemini project ID not found')
-    expect(antigravity.error).toContain('Antigravity usage is not available')
+    // Why: still Orca's own Antigravity wording — but this lane retains a reading, so it may not
+    // say the usage is unavailable. The no-sign-in lane below keeps that phrasing.
+    expect(antigravity.error).toContain('Antigravity usage')
+    expect(antigravity.error).toContain('shared Google Code Assist quota')
+    expect(antigravity.error).not.toContain('not available')
     expect(antigravity.session).toBeNull()
     expect(antigravity.weekly).toBeNull()
   })

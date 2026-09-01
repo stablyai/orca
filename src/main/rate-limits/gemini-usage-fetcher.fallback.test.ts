@@ -153,6 +153,36 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     expect(result.weekly).toBeNull()
   })
 
+  it('reports a present but malformed oauth_creds.json as a failed read', async () => {
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('auth.json')) {
+        return JSON.stringify({})
+      }
+      if (filePath.includes('oauth_creds.json')) {
+        return JSON.stringify({
+          access_token: 42,
+          refresh_token: 'refresh',
+          expiry_date: Date.now()
+        })
+      }
+      throw { code: 'ENOENT' }
+    })
+
+    const result = await fetchGeminiRateLimits(true)
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('credentials file is invalid')
+  })
+
+  it('keeps an actually missing oauth_creds.json as absent', async () => {
+    readFileMock.mockRejectedValue({ code: 'ENOENT' })
+
+    const result = await fetchGeminiRateLimits(true)
+
+    expect(result.status).toBe('unavailable')
+    expect(result.error).toContain('credentials not found')
+  })
+
   it('returns error when loadCodeAssist cannot resolve a project for oauth_creds path', async () => {
     // Why: when the fallback (oauth_creds.json) path has no project embedded
     // and loadCodeAssist fails, we surface a clear "project ID not found"

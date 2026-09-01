@@ -68,7 +68,9 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
     ) {
       return parsed as GeminiCredentials
     }
-    return null
+    // A file that exists but does not match the credential contract is a failed
+    // read. Preserve that distinction so callers do not report it as signed out.
+    throw new Error('Gemini CLI credentials file is invalid')
   } catch (err) {
     if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
       return null

@@ -1767,7 +1767,8 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
+    // Why: the Gemini read of shared Code Assist quota IS Antigravity's read, so its failure is
+    // Antigravity's failed read too — see antigravity-usage-mirror.ts for why that settles `error`.
     const antigravity = deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
