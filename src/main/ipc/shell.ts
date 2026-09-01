@@ -8,6 +8,10 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
+import {
+  APP_BACKGROUND_IMAGE_MIME_TYPES,
+  MAX_APP_BACKGROUND_IMAGE_UPLOAD_BYTES
+} from '../../shared/app-background-image'
 import type { Store } from '../persistence'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
@@ -272,6 +276,36 @@ export function registerShellHandlers(store: Store): void {
       const stats = await stat(filePath)
       if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
         throw new Error('Repo icon image must be 256KB or smaller.')
+      }
+
+      const buffer = await readFile(filePath)
+      return {
+        dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
+        fileName: basename(filePath)
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'shell:pickAppBackgroundImage',
+    async (): Promise<{ dataUrl: string; fileName: string } | null> => {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'Background images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return null
+      }
+
+      const filePath = result.filePaths[0]
+      const mimeType = APP_BACKGROUND_IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+      if (!mimeType) {
+        throw new Error('Background images must be PNG, JPEG, WebP, or GIF files.')
+      }
+
+      const stats = await stat(filePath)
+      if (stats.size > MAX_APP_BACKGROUND_IMAGE_UPLOAD_BYTES) {
+        throw new Error('Background image must be 4MB or smaller.')
       }
 
       const buffer = await readFile(filePath)

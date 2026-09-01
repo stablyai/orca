@@ -5,6 +5,7 @@ import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { AppIconId } from './app-icon'
+import type { AppBackgroundImageFit } from './app-background-image'
 import type { SourceControlAiSettings } from './source-control-ai-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
@@ -78,6 +79,10 @@ export type GlobalSettings = {
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
+  /** Inline image data URL drawn as a fixed low-opacity texture layer over the whole window. */
+  appBackgroundImage?: string
+  appBackgroundImageOpacity?: number
+  appBackgroundImageFit?: AppBackgroundImageFit
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string

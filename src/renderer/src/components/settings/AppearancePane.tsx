@@ -15,6 +15,7 @@ import {
   getAppIconEntries,
   getAppearancePaneSearchEntries,
   getLanguageEntries,
+  getAppBackgroundImageEntry,
   getLayoutEntries,
   getMenuBarIconEntries,
   getSidebarEntries,
@@ -157,6 +158,7 @@ export function AppearancePane({
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
     ...getLayoutEntries(),
+    getAppBackgroundImageEntry(),
     getLeftSidebarAppearanceEntry(),
     getWorkspaceCardLayoutEntry()
   ]
