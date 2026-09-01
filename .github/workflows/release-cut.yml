@@ -1122,10 +1122,33 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Why: artifact jobs submit Windows binaries to SignPath. Keep every
+  # quota-consuming build behind all blocking release gates so a late test
+  # failure cannot create signing requests that can never be published.
+  release-preflight:
+    needs:
+      - cut
+      - terminal-rendering-golden
+      - skill-sharing-release-gate
+      - skill-sharing-linux-floor-release-gate
+    if: >-
+      always() &&
+      needs.cut.outputs.should_release == 'true' &&
+      needs.terminal-rendering-golden.result == 'success' &&
+      needs.skill-sharing-release-gate.result == 'success' &&
+      needs.skill-sharing-linux-floor-release-gate.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Confirm blocking release gates passed
+        run: echo "All blocking release gates passed; artifact builds may start."
+
   build:
     needs:
       - cut
       - create-release
+      - release-preflight
     if: needs.cut.outputs.should_release == 'true'
     strategy:
       fail-fast: false
@@ -2026,6 +2049,7 @@ jobs:
     needs:
       - cut
       - create-release
+      - release-preflight
     if: needs.cut.outputs.should_release == 'true'
     # Why: SignPath requires every job in this signing workflow to be
     # GitHub-hosted. The actual mac build runs in release-mac-build.yml so
