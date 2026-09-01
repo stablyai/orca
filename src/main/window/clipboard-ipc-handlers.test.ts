@@ -729,47 +729,49 @@ describe('registerClipboardHandlers', () => {
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 
-  it('aborts remote runtime clipboard image uploads when a chunk fails', async () => {
-    const png = Buffer.alloc(512 * 1024)
+  it('routes runtime-owned pastes with a server-owned SSH connection through the runtime', async () => {
+    const png = Buffer.from([0, 1, 2, 3])
+    const contentBase64 = png.toString('base64')
     clipboardReadImageMock.mockReturnValue({
       getSize: () => ({ height: 1, width: 1 }),
       isEmpty: () => false,
       toPNG: () => png
     })
-    callRuntimeEnvironmentMock.mockImplementation(async (_userDataPath, _runtimeId, method) => {
-      if (method === 'clipboard.startImageUpload') {
-        return { ok: true, result: { uploadId: 'upload-1' }, _meta: { runtimeId: 'runtime-1' } }
-      }
-      if (method === 'clipboard.appendImageUploadChunk') {
-        return {
-          ok: false,
-          error: { code: 'runtime_error', message: 'append failed' },
-          _meta: { runtimeId: 'runtime-1' }
-        }
-      }
-      if (method === 'clipboard.abortImageUpload') {
-        return { ok: true, result: { aborted: true }, _meta: { runtimeId: 'runtime-1' } }
-      }
-      throw new Error(`unexpected method: ${method}`)
-    })
+    callRuntimeEnvironmentMock.mockImplementation(async (_userDataPath, _runtimeId, method) => ({
+      ok: true,
+      result:
+        method === 'clipboard.startImageUpload'
+          ? { uploadId: 'upload-1' }
+          : method === 'clipboard.commitImageUpload'
+            ? '/tmp/orca-paste-jetson.png'
+            : { receivedBase64Length: contentBase64.length },
+      _meta: { runtimeId: 'runtime-1' }
+    }))
 
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
     await expect(
       handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
-        runtimeEnvironmentId: 'remote-host-1'
+        runtimeEnvironmentId: 'remote-host-1',
+        connectionId: 'ssh-jetson'
       })
-    ).rejects.toThrow('append failed')
-    expect(callRuntimeEnvironmentMock).toHaveBeenLastCalledWith(
+    ).resolves.toBe('/tmp/orca-paste-jetson.png')
+    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
+      1,
       '/tmp',
       'remote-host-1',
-      'clipboard.abortImageUpload',
-      { uploadId: 'upload-1' },
+      'clipboard.startImageUpload',
+      { expectedBase64Length: contentBase64.length, connectionId: 'ssh-jetson' },
       30_000
     )
+    // The connection is server-owned: the client's SSH stack must never see it.
+    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
+
+  // Chunk/abort/fallback mechanics live in clipboard-runtime-image-upload.test.ts;
+  // this file owns the routing decision only.
 
   it('uploads clipboard images to the SSH host when a connection is provided', async () => {
     const png = Buffer.from([0, 1, 2, 3])

@@ -53,8 +53,16 @@ async function saveClipboardImageBufferForTarget(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
-  if (runtimeEnvironmentId && !args?.connectionId) {
-    return saveClipboardImageBufferInRuntime(app.getPath('userData'), runtimeEnvironmentId, buffer)
+  if (runtimeEnvironmentId) {
+    // A connectionId alongside a runtime owner names a SERVER-owned SSH
+    // connection (nested topology) — the runtime forwards over its own SFTP;
+    // the client's SSH stack has no such connection (#17679).
+    return saveClipboardImageBufferInRuntime(
+      app.getPath('userData'),
+      runtimeEnvironmentId,
+      buffer,
+      args?.connectionId ?? null
+    )
   }
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }
