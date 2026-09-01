@@ -44,4 +44,19 @@ describe('areWorkspaceLinkedItemsEqual', () => {
     )
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, repoId: 'repo-2' })).toBe(false)
   })
+
+  it('separates Odoo tickets that share a number across two instances', () => {
+    const ticket: WorkspaceLinkedItem = {
+      provider: 'odoo',
+      type: 'issue',
+      number: 80,
+      title: 'TASK-80 Guard empty password',
+      url: 'https://a.example.com/odoo/project/7/task/80',
+      odooInstanceId: 'instance-a'
+    }
+    expect(areWorkspaceLinkedItemsEqual(ticket, { ...ticket, odooInstanceId: 'instance-b' })).toBe(
+      false
+    )
+    expect(areWorkspaceLinkedItemsEqual(ticket, { ...ticket })).toBe(true)
+  })
 })

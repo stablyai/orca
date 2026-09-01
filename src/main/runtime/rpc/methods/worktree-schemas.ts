@@ -130,6 +130,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedGiteaPR: TriStateLinkedIssue,
   linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+  linkedOdooInstanceId: z.string().nullable().optional(),
+  linkedOdooTicket: z.number().int().positive().nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
   isPinned: OptionalBoolean,

@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TaskProvider } from '../../../../shared/task-providers'
+import { TASK_PROVIDERS, type TaskProvider } from '../../../../shared/task-providers'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 
@@ -45,7 +45,8 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkillNames: () => mocks.skill
 }))
 
-const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+// Derived so a newly shipped provider is exercised by the default probe.
+const ALL_PROVIDERS: readonly TaskProvider[] = TASK_PROVIDERS
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -83,6 +84,9 @@ beforeEach(() => {
     jiraStatus: { connected: true },
     jiraStatusChecked: true,
     jiraStatusContextKey: 'local',
+    odooStatus: { connected: true },
+    odooStatusChecked: true,
+    odooStatusContextKey: 'local',
     linearStatusChecked: true,
     linearStatusContextKey: 'local',
     linearConnected: true
@@ -116,6 +120,7 @@ describe('useTaskSourceProviderReadiness', () => {
     expect(latest?.github).toMatchObject({ connected: true, checking: false })
     expect(latest?.gitlab).toMatchObject({ connected: true, checking: false })
     expect(latest?.jira).toMatchObject({ connected: true, checking: false })
+    expect(latest?.odoo).toMatchObject({ connected: true, checking: false })
     expect(latest?.linear).toMatchObject({
       connected: true,
       checking: false,

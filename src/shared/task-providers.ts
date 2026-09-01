@@ -1,6 +1,12 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'odoo'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'odoo'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -100,9 +106,9 @@ function isTaskProviderAvailable(
   if (provider === 'gitlab') {
     return availability.gitlabInstalled
   }
-  // Why: Jira can be connected from the Tasks surface itself, so hiding it
-  // when disconnected would remove the entry point for first-time setup.
-  if (provider === 'jira') {
+  // Why: Jira and Odoo can be connected from the Tasks surface itself, so
+  // hiding them when disconnected would remove the entry point for setup.
+  if (provider === 'jira' || provider === 'odoo') {
     return true
   }
   return availability.linearConnected

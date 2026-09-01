@@ -10,6 +10,7 @@ const baseState: TaskPageListChromeVisibilityState = {
   hasGitHubDetail: false,
   hasGitLabDetail: false,
   hasJiraDetail: false,
+  hasOdooDetail: false,
   hasLinearIssueDetail: false,
   hasLinearProjectContext: false,
   hasLinearViewContext: false
@@ -41,6 +42,13 @@ describe('shouldHideTaskPageListChrome', () => {
     expect(
       shouldHideTaskPageListChrome({
         ...baseState,
+        taskSource: 'odoo',
+        hasOdooDetail: true
+      })
+    ).toBe(true)
+    expect(
+      shouldHideTaskPageListChrome({
+        ...baseState,
         taskSource: 'linear',
         hasLinearProjectContext: true
       })
@@ -53,6 +61,7 @@ describe('shouldHideTaskPageListChrome', () => {
         ...baseState,
         taskSource: 'github',
         hasJiraDetail: true,
+        hasOdooDetail: true,
         hasLinearProjectContext: true,
         hasLinearViewContext: true
       })
@@ -63,6 +72,15 @@ describe('shouldHideTaskPageListChrome', () => {
         taskSource: 'jira',
         hasGitHubDetail: true,
         hasGitLabDetail: true,
+        hasLinearIssueDetail: true
+      })
+    ).toBe(false)
+    expect(
+      shouldHideTaskPageListChrome({
+        ...baseState,
+        taskSource: 'odoo',
+        hasGitHubDetail: true,
+        hasJiraDetail: true,
         hasLinearIssueDetail: true
       })
     ).toBe(false)

@@ -32,6 +32,10 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   // obligation stays with the caller — unchanged from when those callers used
   // Electron's net directly.
   ['main/network/http-client.ts', 2],
+  // Same contract, for the opt-in Odoo live proofs: it installs a Node MainHttpClient
+  // and hands the Response straight back, so consume/cancel stays with the caller.
+  // Never installed outside a live run — the proofs call it inside describe.skipIf.
+  ['main/odoo/live-proof-host-ports.ts', 1],
   // fetch appears only inside injected browser script source strings, not as a
   // call this process makes
   ['main/amp/agent-status-plugin-source.ts', 1],

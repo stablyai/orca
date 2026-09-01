@@ -139,6 +139,47 @@ describe('automation RPC methods', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
   })
 
+  it('accepts an Odoo task source, which the renderer already renders', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn().mockResolvedValue({ id: 'auto-3' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    const sourceContext = {
+      kind: 'task-source',
+      provider: 'odoo',
+      projectId: 'account-backed-task-source',
+      hostId: 'local',
+      providerIdentity: {
+        provider: 'odoo',
+        instanceId: 'instance-a',
+        serverUrl: 'https://odoo.example.com',
+        database: 'demo',
+        projectId: 7
+      },
+      accountLabel: 'Demo'
+    }
+    await expect(
+      dispatcher.dispatch(
+        makeRequest('automation.create', {
+          name: 'Odoo triage',
+          prompt: 'Run',
+          agentId: 'codex',
+          repo: 'repo-1',
+          sourceContext,
+          rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+          dtstart: 1
+        })
+      )
+    ).resolves.toMatchObject({ ok: true })
+    expect(runtime.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceContext: expect.objectContaining({ provider: 'odoo' })
+      })
+    )
+  })
+
   it('preserves null baseBranch update values through the RPC boundary', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

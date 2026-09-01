@@ -7,6 +7,7 @@ import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
+import type { WorktreeCardOdooTicketDisplay } from './worktree-card-meta-types'
 import type { WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-details'
@@ -24,6 +25,7 @@ export function useWorktreeCardSecondaryDetails({
   showIssue,
   showLinearIssue,
   showJiraIssue,
+  showOdooTicket,
   showPR,
   showAutomation,
   showCli,
@@ -33,6 +35,7 @@ export function useWorktreeCardSecondaryDetails({
   linearIssue,
   linearIssueDisplay,
   jiraIssueDisplay,
+  odooTicketDisplay,
   prDisplay,
   linkedGitLabMR,
   linkedBitbucketPR,
@@ -63,10 +66,12 @@ export function useWorktreeCardSecondaryDetails({
     ReviewDetails,
     'prDisplay' | 'linkedGitLabMR' | 'linkedBitbucketPR' | 'linkedAzureDevOpsPR' | 'linkedGiteaPR'
   > & {
+    odooTicketDisplay: WorktreeCardOdooTicketDisplay | null
     showStatus: boolean
     showIssue: boolean
     showLinearIssue: boolean
     showJiraIssue: boolean
+    showOdooTicket: boolean
     showPR: boolean
     showAutomation: boolean
     showCli: boolean
@@ -78,12 +83,14 @@ export function useWorktreeCardSecondaryDetails({
   const hoverIssue = issueDisplay
   const hoverLinearIssue = linearIssueDisplay
   const hoverJiraIssue = jiraIssueDisplay
+  const hoverOdooTicket = odooTicketDisplay
   const hoverReview = prDisplay
   const statusLaneReview = statusPrDisplay ?? hoverReview
   const hoverComment = worktree.comment
   const metaIssue = showIssue ? hoverIssue : null
   const metaLinearIssue = showLinearIssue ? hoverLinearIssue : null
   const metaJiraIssue = showJiraIssue ? hoverJiraIssue : null
+  const metaOdooTicket = showOdooTicket ? hoverOdooTicket : null
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
@@ -247,12 +254,14 @@ export function useWorktreeCardSecondaryDetails({
     hoverIssue,
     hoverLinearIssue,
     hoverJiraIssue,
+    hoverOdooTicket,
     hoverReview,
     statusLaneReview,
     hoverComment,
     metaIssue,
     metaLinearIssue,
     metaJiraIssue,
+    metaOdooTicket,
     metaReview,
     metaAutomationProvenance,
     metaCliProvenance,

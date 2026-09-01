@@ -52,6 +52,18 @@ export type DashboardCardReview = {
   state: 'open' | 'closed' | 'merged' | 'draft'
 }
 
+/**
+ * The Odoo ticket a workspace is linked to. Only the cached link fields travel
+ * in the snapshot — it republishes several times a second, so the board must
+ * not depend on a live Odoo read to draw a card.
+ */
+export type DashboardCardOdooTicket = {
+  id: number
+  title?: string
+  url?: string
+  instanceId?: string
+}
+
 export type DashboardCardSubagent = {
   id: string
   name: string
@@ -77,6 +89,7 @@ export type DashboardWorkspace = {
   workspaceStatusColor?: string
   hasReview?: boolean
   review?: DashboardCardReview
+  odooTicket?: DashboardCardOdooTicket
 }
 
 export type DashboardCard = {
@@ -121,6 +134,8 @@ export type DashboardCard = {
   /** True when the workspace links a review whose live state is not cached yet. */
   hasReview?: boolean
   review?: DashboardCardReview
+  /** Odoo ticket the workspace is linked to, when one is set. */
+  odooTicket?: DashboardCardOdooTicket
   subagents?: DashboardCardSubagent[]
   /** "Started … ago" display. */
   startedAt: number

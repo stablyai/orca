@@ -152,7 +152,9 @@ export function useTaskPageSourceAvailability({
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    // Odoo is account-backed like Linear and Jira: its availability follows the
+    // connected instance, not the selected repos.
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'odoo') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)

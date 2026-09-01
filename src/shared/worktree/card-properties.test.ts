@@ -45,7 +45,12 @@ describe('worktree card properties', () => {
     expect(getWorktreeCardModeProperties('Default')).toEqual(
       expect.arrayContaining(TASK_WORKTREE_CARD_PROPERTIES)
     )
-    expect(TASK_WORKTREE_CARD_PROPERTIES).toEqual(['issue', 'linear-issue', 'jira-issue'])
+    expect(TASK_WORKTREE_CARD_PROPERTIES).toEqual([
+      'issue',
+      'linear-issue',
+      'jira-issue',
+      'odoo-ticket'
+    ])
   })
 
   it('normalizes fixed and legacy properties while preserving selected properties', () => {

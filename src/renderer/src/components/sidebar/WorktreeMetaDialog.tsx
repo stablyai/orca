@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { getDisplacedLinkLabels } from './worktree-issue-displacement'
 import {
+  buildOdooTicketMetaUpdateForStatus,
   buildWorktreeMetaUpdates,
   parseGitLabMergeRequestNumberForMetaField,
   parseGitHubWorkItemNumberForMetaField,
@@ -19,10 +20,11 @@ import {
   type WorktreeMetaSavedPayload,
   type WorktreeMetaSnapshot
 } from './worktree-meta-updates'
+import { WorktreeMetaOdooField } from './WorktreeMetaOdooField'
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { WorktreeMetaCommentField } from './WorktreeMetaCommentField'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
@@ -35,18 +37,14 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 import { WorktreeReviewLinkField } from './WorktreeReviewLinkField'
 
-function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
-  textarea.style.height = 'auto'
-  textarea.style.height = `${textarea.scrollHeight}px`
-}
-
 /** Only read before the first open, when nothing can be saved yet. */
 const EMPTY_SNAPSHOT: WorktreeMetaSnapshot = {
   displayName: '',
   comment: '',
   issueInput: '',
   issueProvider: 'github',
-  prInput: ''
+  prInput: '',
+  odooInput: ''
 }
 
 const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
@@ -54,7 +52,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
   const isEditMeta = activeModal === 'edit-meta'
   const isOpen = isEditMeta
@@ -68,6 +65,15 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     typeof modalData.currentDisplayName === 'string' ? modalData.currentDisplayName : ''
   const currentComment =
     typeof modalData.currentComment === 'string' ? modalData.currentComment : ''
+  // Odoo link is read from the live worktree (not modalData) so callers that
+  // open this dialog need no changes.
+  const odooStatus = useAppStore((s) => s.odooStatus)
+  const currentOdooTicket = useAppStore((s) => {
+    const worktree = Object.values(s.worktreesByRepo)
+      .flat()
+      .find((item) => item.id === worktreeId)
+    return worktree?.linkedOdooTicket ?? null
+  })
   const focusField = typeof modalData.focus === 'string' ? modalData.focus : 'comment'
   const reviewProvider: WorktreeReviewProvider =
     modalData.reviewProvider === 'gitlab' ? 'gitlab' : 'github'
@@ -107,6 +113,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [issueInput, setIssueInput] = useState('')
   const [issueProvider, setIssueProvider] = useState<IssueLinkProvider>('github')
   const [reviewInput, setReviewInput] = useState('')
+  const [odooInput, setOdooInput] = useState('')
   const [commentInput, setCommentInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -134,17 +141,22 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     setIssueInput(currentIssue)
     setIssueProvider(currentProvider)
     setReviewInput(currentReview)
+    const seededOdooInput = currentOdooTicket != null ? String(currentOdooTicket) : ''
+    setOdooInput(seededOdooInput)
     setCommentInput(currentComment)
     // Why: the baseline is frozen with the seed instead of tracking the store.
     // A background `orca worktree set --linear-issue` while the dialog is open
     // would otherwise move it, making the untouched field read as dirty — and
     // the next comment-only save would write the stale seed back over the new link.
+    // The Odoo seed is captured for the same reason, plus one of its own: it is a
+    // bare ticket id, so re-resolving it would pick the active instance.
     setSnapshot({
       displayName: currentDisplayName,
       comment: currentComment,
       issueInput: currentIssue,
       issueProvider: currentProvider,
       prInput: worktree?.linkedPR != null ? String(worktree.linkedPR) : '',
+      odooInput: seededOdooInput,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null
     })
     setSaveError(null)
@@ -167,22 +179,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     if (detected) {
       setIssueProvider(detected)
     }
-  }, [])
-
-  const setCommentTextareaRef = useCallback(
-    (textarea: HTMLTextAreaElement | null) => {
-      textareaRef.current = textarea
-      if (textarea && isEditMeta) {
-        resizeCommentTextarea(textarea)
-      }
-    },
-    [isEditMeta]
-  )
-
-  const handleCommentChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setCommentInput(event.target.value)
-    // Why: notes should grow in the same input event; a passive Effect leaves a stale height.
-    resizeCommentTextarea(event.currentTarget)
   }, [])
 
   // Why: bound the parse before it runs on every keystroke — the field accepts
@@ -243,6 +239,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     setSaveError(null)
     try {
       const updates = buildWorktreeMetaUpdates(draft, snapshot, liveLinks, reviewProvider)
+      Object.assign(
+        updates,
+        buildOdooTicketMetaUpdateForStatus(odooInput, snapshot.odooInput, odooStatus)
+      )
 
       const result =
         executionHostId || suppressHostedReviewRefresh
@@ -282,23 +282,13 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     snapshot,
     liveLinks,
     reviewProvider,
+    odooInput,
+    odooStatus,
     updateWorktreeMeta,
     closeModal,
     afterSave,
     mountedRef
   ])
-
-  const handleCommentKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
-      if (isPlainEnter || isScreenSubmitShortcut(e)) {
-        e.preventDefault()
-        e.stopPropagation()
-        handleSave()
-      }
-    },
-    [handleSave]
-  )
 
   const handleIssueKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -382,34 +372,17 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
             value={reviewInput}
           />
 
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.sidebar.WorktreeMetaDialog.9c1d1e9b71', 'Comment')}
-            </label>
-            <textarea
-              ref={setCommentTextareaRef}
-              value={commentInput}
-              onChange={handleCommentChange}
-              onKeyDown={handleCommentKeyDown}
-              placeholder={translate(
-                'auto.components.sidebar.WorktreeMetaDialog.030d484fc0',
-                'Notes about this worktree...'
-              )}
-              rows={3}
-              className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              {translate(
-                'auto.components.sidebar.WorktreeMetaDialog.7f0be5e9a6',
-                'Supports **markdown** — bold, lists, `code`, links. Press Enter or'
-              )}{' '}
-              {submitShortcutLabel}{' '}
-              {translate(
-                'auto.components.sidebar.WorktreeMetaDialog.b48c271d39',
-                'to save, Shift+Enter for a new line.'
-              )}
-            </p>
-          </div>
+          {odooStatus.connected ? (
+            <WorktreeMetaOdooField value={odooInput} onChange={setOdooInput} onEnter={handleSave} />
+          ) : null}
+
+          <WorktreeMetaCommentField
+            active={isEditMeta}
+            onSubmit={handleSave}
+            onValueChange={setCommentInput}
+            textareaRef={textareaRef}
+            value={commentInput}
+          />
         </div>
 
         {saveError ? (

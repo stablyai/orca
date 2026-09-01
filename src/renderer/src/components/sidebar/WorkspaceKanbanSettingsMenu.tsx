@@ -1,5 +1,6 @@
 import React from 'react'
 import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
+import { OdooIcon } from '@/components/icons/OdooIcon'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -13,6 +14,7 @@ import { SettingsSwitch } from '../settings/SettingsFormControls'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
+import WorkspaceStatusOdooStagePopover from './WorkspaceStatusOdooStagePopover'
 import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanSettingsMenuProps = {
@@ -20,6 +22,8 @@ type WorkspaceKanbanSettingsMenuProps = {
   syncTaskStatusFromWorkspaceBoard: boolean
   onSyncTaskStatusFromWorkspaceBoardChange: (enabled: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
+  /** Empty clears the mapping, which stops syncing that column to Odoo. */
+  onChangeStatusOdooStage: (statusId: string, stageName: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
   onMoveStatus: (statusId: string, direction: -1 | 1) => void
@@ -32,6 +36,7 @@ export default function WorkspaceKanbanSettingsMenu({
   syncTaskStatusFromWorkspaceBoard,
   onSyncTaskStatusFromWorkspaceBoardChange,
   onRenameStatus,
+  onChangeStatusOdooStage,
   onChangeStatusColor,
   onChangeStatusIcon,
   onMoveStatus,
@@ -90,8 +95,8 @@ export default function WorkspaceKanbanSettingsMenu({
               </span>
               <span className="block text-[11px] leading-4 text-muted-foreground">
                 {translate(
-                  'auto.components.sidebar.WorkspaceKanbanSettingsMenu.4c2eaa78cc',
-                  'Moving a linked workspace updates its Linear issue status when a matching workflow state exists.'
+                  'auto.components.sidebar.WorkspaceKanbanSettingsMenu.48cdbe3cac',
+                  'Moving a linked workspace updates its Linear issue status when a matching workflow state exists, and its Odoo ticket stage when the column below names one.'
                 )}
               </span>
             </span>
@@ -141,6 +146,10 @@ export default function WorkspaceKanbanSettingsMenu({
                     onChangeColor={onChangeStatusColor}
                     onChangeIcon={onChangeStatusIcon}
                   />
+                  <WorkspaceStatusOdooStagePopover
+                    status={status}
+                    onChange={onChangeStatusOdooStage}
+                  />
                   <Button
                     type="button"
                     variant="ghost"
@@ -187,6 +196,12 @@ export default function WorkspaceKanbanSettingsMenu({
                     <Trash2 className="size-3.5" />
                   </Button>
                 </div>
+                {status.odooStageName ? (
+                  <div className="mt-1 flex items-center gap-1.5 pl-5 text-[11px] text-muted-foreground">
+                    <OdooIcon className="size-3 shrink-0" aria-hidden />
+                    <span className="min-w-0 truncate">{status.odooStageName}</span>
+                  </div>
+                ) : null}
               </div>
             )
           })}

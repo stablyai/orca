@@ -1,4 +1,6 @@
 import { canShowWorkspaceDeleteQuickAction } from './workspace-delete-quick-action'
+import { getWorktreeCardOdooTicketDisplay } from './worktree-card-odoo-ticket-display'
+import { useWorktreeCardOdooTicket } from './use-worktree-card-odoo-ticket'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
 import { useWorktreeCardActivationActions } from './use-worktree-card-activation-actions'
@@ -35,12 +37,19 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const showIssue = foundation.cardProps.includes('issue')
   const showLinearIssue = foundation.cardProps.includes('linear-issue')
   const showJiraIssue = foundation.cardProps.includes('jira-issue')
+  const showOdooTicket = foundation.cardProps.includes('odoo-ticket')
   const showPR = foundation.cardProps.includes('pr')
   const showAutomation = foundation.cardProps.includes('automation')
   const showCli = foundation.cardProps.includes('cli')
   const showComment = foundation.cardProps.includes('comment')
   const showPorts = foundation.cardProps.includes('ports')
   const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus : showPR
+  const odooTicket = useWorktreeCardOdooTicket({
+    linkedOdooTicket: worktree.linkedOdooTicket,
+    linkedOdooInstanceId: worktree.linkedOdooInstanceId,
+    enabled: showOdooTicket
+  })
+  const odooTicketDisplay = getWorktreeCardOdooTicketDisplay(worktree, odooTicket)
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
@@ -115,6 +124,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     showIssue,
     showLinearIssue,
     showJiraIssue,
+    showOdooTicket,
     showPR,
     showAutomation,
     showCli,
@@ -124,6 +134,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     linearIssue: linked.linearIssue,
     linearIssueDisplay: linked.linearIssueDisplay,
     jiraIssueDisplay: linked.jiraIssueDisplay,
+    odooTicketDisplay,
     prDisplay: review.prDisplay,
     linkedGitLabMR: review.linkedGitLabMR,
     linkedBitbucketPR: review.linkedBitbucketPR,

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
+import { TASK_PROVIDERS } from '../shared/task-providers'
 import {
   testState,
   createStore,
@@ -106,7 +107,7 @@ describe('Store', () => {
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().showAutomationsButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual([...TASK_PROVIDERS])
     expect(store.getSettings().experimentalActivity).toBe(false)
     expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().experimentalTerminalAttention).toBe(false)

@@ -1,6 +1,7 @@
 import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { OdooIcon } from '@/components/icons/OdooIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import {
   ContextMenu,
@@ -226,6 +227,17 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('odoo') ? (
+              <TaskProviderShortcut
+                label={translate(
+                  'auto.components.sidebar.SidebarTaskNavButton.844abd8a27',
+                  'Open Odoo tasks'
+                )}
+                onOpen={() => openTaskPage({ taskSource: 'odoo' })}
+              >
+                <OdooIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

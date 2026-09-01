@@ -402,6 +402,14 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type {
+  OdooAttachmentUpload,
+  OdooConnectArgs,
+  OdooCreateTicketArgs,
+  OdooInstanceSelection,
+  OdooTicketFilter,
+  OdooTicketUpdate
+} from '../../shared/odoo-types'
 import type { Tab, TabGroupLayoutNode } from '../../shared/tab-types'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import type {
@@ -1108,6 +1116,32 @@ import {
   searchUsers as searchJiraUsers,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
+import {
+  connect as connectOdoo,
+  disconnect as disconnectOdoo,
+  getStatus as getOdooStatus,
+  selectInstance as selectOdooInstance,
+  testConnection as testOdooConnection
+} from '../odoo/client'
+import {
+  addTicketComment as addOdooTicketComment,
+  getTicketComments as getOdooTicketComments,
+  searchMentionCandidates as searchOdooMentionCandidates,
+  updateTicketComment as updateOdooTicketComment,
+  uploadTicketAttachments as uploadOdooTicketAttachments
+} from '../odoo/ticket-chatter'
+import {
+  createTicket as createOdooTicket,
+  getTicket as getOdooTicket,
+  listAssignableUsers as listOdooAssignableUsers,
+  listProjects as listOdooProjects,
+  listStageNames as listOdooStageNames,
+  listStages as listOdooStages,
+  listTags as listOdooTags,
+  listTickets as listOdooTickets,
+  searchTickets as searchOdooTickets,
+  updateTicket as updateOdooTicket
+} from '../odoo/tickets'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -27002,6 +27036,8 @@ export class OrcaRuntimeService {
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
+    linkedOdooTicket?: number | null
+    linkedOdooInstanceId?: string | null
     linkedWorkItem?: WorkspaceLinkedItem | null
     linkedTaskSourceContext?: TaskSourceContext | null
     comment?: string
@@ -27128,6 +27164,12 @@ export class OrcaRuntimeService {
           ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
           : {}),
         ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+        // Odoo needs its own pair: the stage sync and the sidebar card read the
+        // ticket id + instance rather than `linkedWorkItem`.
+        ...(args.linkedOdooTicket !== undefined ? { linkedOdooTicket: args.linkedOdooTicket } : {}),
+        ...(args.linkedOdooInstanceId !== undefined
+          ? { linkedOdooInstanceId: args.linkedOdooInstanceId }
+          : {}),
         ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
         ...(args.linkedTaskSourceContext !== undefined
           ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
@@ -27790,6 +27832,12 @@ export class OrcaRuntimeService {
         ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
         : {}),
       ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+      // Odoo needs its own pair: the stage sync and the sidebar card read the
+      // ticket id + instance rather than `linkedWorkItem`.
+      ...(args.linkedOdooTicket !== undefined ? { linkedOdooTicket: args.linkedOdooTicket } : {}),
+      ...(args.linkedOdooInstanceId !== undefined
+        ? { linkedOdooInstanceId: args.linkedOdooInstanceId }
+        : {}),
       ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
       ...(args.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
@@ -41422,6 +41470,123 @@ export class OrcaRuntimeService {
     siteId?: string
   ): ReturnType<typeof getJiraProjectStatusOrder> {
     return getJiraProjectStatusOrder(projectKey, siteId)
+  }
+
+  // ── Odoo integration ──
+
+  odooConnect(args: OdooConnectArgs): ReturnType<typeof connectOdoo> {
+    return connectOdoo(args)
+  }
+
+  odooDisconnect(instanceId?: string): { ok: true } {
+    disconnectOdoo(instanceId)
+    return { ok: true }
+  }
+
+  odooSelectInstance(instanceId: OdooInstanceSelection): ReturnType<typeof getOdooStatus> {
+    return selectOdooInstance(instanceId)
+  }
+
+  odooStatus(): ReturnType<typeof getOdooStatus> {
+    return getOdooStatus()
+  }
+
+  odooTestConnection(instanceId?: string): ReturnType<typeof testOdooConnection> {
+    return testOdooConnection(instanceId)
+  }
+
+  odooListTickets(
+    filter?: OdooTicketFilter,
+    limit = 30,
+    instanceId?: OdooInstanceSelection
+  ): ReturnType<typeof listOdooTickets> {
+    return listOdooTickets(filter, Math.min(Math.max(1, limit), 100), instanceId)
+  }
+
+  odooSearchTickets(
+    domain: unknown[],
+    limit = 30,
+    instanceId?: OdooInstanceSelection
+  ): ReturnType<typeof searchOdooTickets> {
+    return searchOdooTickets(domain, Math.min(Math.max(1, limit), 100), instanceId)
+  }
+
+  odooGetTicket(id: number, instanceId?: string): ReturnType<typeof getOdooTicket> {
+    return getOdooTicket(id, instanceId)
+  }
+
+  odooCreateTicket(args: OdooCreateTicketArgs): ReturnType<typeof createOdooTicket> {
+    return createOdooTicket(args)
+  }
+
+  odooUpdateTicket(
+    id: number,
+    updates: OdooTicketUpdate,
+    instanceId?: string
+  ): ReturnType<typeof updateOdooTicket> {
+    return updateOdooTicket(id, updates, instanceId)
+  }
+
+  odooAddTicketComment(
+    id: number,
+    body: string,
+    isNote?: boolean,
+    instanceId?: string,
+    mentionPartnerIds?: number[],
+    attachmentIds?: number[]
+  ): ReturnType<typeof addOdooTicketComment> {
+    return addOdooTicketComment(id, body, isNote, instanceId, mentionPartnerIds, attachmentIds)
+  }
+
+  odooUpdateTicketComment(
+    id: number,
+    body: string,
+    instanceId?: string
+  ): ReturnType<typeof updateOdooTicketComment> {
+    return updateOdooTicketComment(id, body, instanceId)
+  }
+
+  odooTicketComments(id: number, instanceId?: string): ReturnType<typeof getOdooTicketComments> {
+    return getOdooTicketComments(id, instanceId)
+  }
+
+  odooSearchMentionCandidates(
+    ticketId: number,
+    query: string,
+    instanceId?: string
+  ): ReturnType<typeof searchOdooMentionCandidates> {
+    return searchOdooMentionCandidates(ticketId, query, instanceId)
+  }
+
+  odooUploadTicketAttachments(
+    ticketId: number,
+    files: OdooAttachmentUpload[],
+    instanceId?: string
+  ): ReturnType<typeof uploadOdooTicketAttachments> {
+    return uploadOdooTicketAttachments(ticketId, files, instanceId)
+  }
+
+  odooListProjects(instanceId?: OdooInstanceSelection): ReturnType<typeof listOdooProjects> {
+    return listOdooProjects(instanceId)
+  }
+
+  odooListStages(projectId: number, instanceId?: string): ReturnType<typeof listOdooStages> {
+    return listOdooStages(projectId, instanceId)
+  }
+
+  odooListTags(instanceId?: OdooInstanceSelection): ReturnType<typeof listOdooTags> {
+    return listOdooTags(instanceId)
+  }
+
+  odooListStageNames(instanceId?: OdooInstanceSelection): ReturnType<typeof listOdooStageNames> {
+    return listOdooStageNames(instanceId)
+  }
+
+  odooListAssignableUsers(
+    query?: string,
+    instanceId?: string
+  ): ReturnType<typeof listOdooAssignableUsers> {
+    return listOdooAssignableUsers(query, instanceId)
   }
 
   // ── Browser automation ──

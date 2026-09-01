@@ -221,5 +221,29 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'disconnect'
       )
     ]
+  },
+  {
+    title: translate('auto.components.settings.integrations.search.odooTitle', 'Odoo Integration'),
+    description: translate(
+      'auto.components.settings.integrations.search.odooDescription',
+      'Connect an Odoo server to browse and edit project tasks.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.integrations.search.odooKwOdoo', 'odoo'),
+      ...translateSearchKeyword('auto.components.settings.integrations.search.odooKwErp', 'erp'),
+      ...translateSearchKeyword('auto.components.settings.integrations.search.odooKwTask', 'task'),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.c450244ad7',
+        'integration'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.faa0b5a0d9',
+        'api key'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.3c3d3d8ffa',
+        'connect'
+      )
+    ]
   }
 ])

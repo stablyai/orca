@@ -30,10 +30,19 @@ export type WorktreeCardJiraIssueDisplay = {
   url: string
 }
 
+export type WorktreeCardOdooTicketDisplay = {
+  ref: string
+  title: string
+  url?: string
+  stageName?: string
+  labels?: string[]
+}
+
 export type WorktreeCardMetaBadgesProps = {
   issue: WorktreeCardIssueDisplay | null
   linearIssue: WorktreeCardLinearIssueDisplay | null
   jiraIssue?: WorktreeCardJiraIssueDisplay | null
+  odooTicket?: WorktreeCardOdooTicketDisplay | null
   review: WorktreeCardPrDisplay | null
   comment: string | null
   automationProvenance?: AutomationWorkspaceProvenance | null
@@ -59,6 +68,7 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
   onOpenIssueInBrowser?: (url: string) => void
   onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
+  onOpenOdooTicketInOrca?: (event: React.MouseEvent) => void
   onOpenReviewInOrca?: (event: React.MouseEvent) => void
   onOpenReviewInBrowser?: (url: string) => void
   onUnlinkReview?: () => void

@@ -6,6 +6,10 @@ import {
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../../../../shared/automation-precheck'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+// Why derived rather than inline lists: both checks kept 'odoo' out while the
+// shared TaskSourceContext type gained it, so an Odoo-sourced automation was
+// unreachable over RPC. TASK_PROVIDERS is the single source of truth.
+import { isTaskProvider, TASK_PROVIDERS } from '../../../../shared/task-providers'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
@@ -60,7 +64,7 @@ const TaskProviderIdentity = z
       value !== null &&
       typeof value === 'object' &&
       'provider' in value &&
-      ['github', 'gitlab', 'linear', 'jira'].includes(String(value.provider))
+      isTaskProvider(value.provider)
   )
   .optional()
   .nullable()
@@ -68,7 +72,7 @@ const TaskProviderIdentity = z
 const TaskSourceContext = z
   .object({
     kind: z.literal('task-source'),
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
+    provider: z.enum(TASK_PROVIDERS),
     projectId: requiredString('Missing source project id'),
     hostId: ExecutionHostId,
     projectHostSetupId: OptionalNullablePlainString,

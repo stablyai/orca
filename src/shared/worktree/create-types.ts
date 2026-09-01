@@ -89,6 +89,10 @@ export type CreateWorktreeArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  /** Odoo tickets are only addressable per instance, so the stage sync and the
+   *  sidebar card read this pair rather than `linkedWorkItem` alone. */
+  linkedOdooTicket?: number | null
+  linkedOdooInstanceId?: string | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   pushTarget?: GitPushTarget

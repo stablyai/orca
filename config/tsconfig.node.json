@@ -6,6 +6,9 @@
     "./scripts/vitest-host-ports-setup.ts",
     "../src/main/**/*",
     "../src/renderer/src/lib/skill-freshness-display-status.ts",
+    // Leaf renderer modules (shared types only, no DOM) the Odoo live proof drives directly.
+    "../src/renderer/src/components/odoo-auto-workspace-criteria.ts",
+    "../src/renderer/src/components/odoo-comment-mention-query.ts",
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/relay/**/*",

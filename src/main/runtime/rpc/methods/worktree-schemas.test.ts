@@ -148,3 +148,61 @@ describe('worktree RPC schemas', () => {
     ).toBe(false)
   })
 })
+
+describe('linked Odoo ticket ids', () => {
+  it.each([
+    ['create', WorktreeCreate, { repo: 'repo-1', name: 'wt' }],
+    ['update', WorktreeSet, { worktree: 'id:wt-1' }]
+  ])('rejects non-positive and fractional ids on the %s path', (_label, schema, base) => {
+    // Odoo `project.task` ids are positive integers.
+    expect(schema.safeParse({ ...base, linkedOdooTicket: 72 }).success).toBe(true)
+    expect(schema.safeParse({ ...base, linkedOdooTicket: null }).success).toBe(true)
+    expect(schema.safeParse({ ...base, linkedOdooTicket: 0 }).success).toBe(false)
+    expect(schema.safeParse({ ...base, linkedOdooTicket: -5 }).success).toBe(false)
+    expect(schema.safeParse({ ...base, linkedOdooTicket: 7.5 }).success).toBe(false)
+  })
+})
+
+describe('linked Odoo work item over RPC', () => {
+  // Why here and not in the live proof: the button's path was proven against a
+  // real server on the renderer side, but the RPC schema graph is main-only and
+  // the web project cannot import it. This is the remote/CLI half of that proof.
+  const linkedWorkItem = {
+    provider: 'odoo' as const,
+    type: 'issue' as const,
+    number: 80,
+    title: '#80 Fix empty password submit',
+    url: 'http://localhost:8069/odoo/all-tasks/80',
+    odooInstanceId: 'inst-a'
+  }
+
+  it('accepts an Odoo linked work item and keeps its instance', () => {
+    const parsed = WorktreeCreate.safeParse({
+      repo: 'repo-1',
+      name: 'ticket-80',
+      linkedWorkItem,
+      telemetrySource: 'sidebar'
+    })
+
+    expect(parsed.success, parsed.success ? '' : JSON.stringify(parsed.error.issues)).toBe(true)
+    // The instance is what makes the ticket addressable; dropping it here would
+    // bind the workspace to whichever instance happened to be selected.
+    expect(parsed.success && parsed.data.linkedWorkItem?.odooInstanceId).toBe('inst-a')
+  })
+
+  it('still rejects a provider outside the known set', () => {
+    const parsed = WorktreeCreate.safeParse({
+      repo: 'repo-1',
+      name: 'ticket-80',
+      linkedWorkItem: { ...linkedWorkItem, provider: 'bitbucket' },
+      telemetrySource: 'sidebar'
+    })
+
+    // The same rejection issue #11 reported for Odoo — the guard still bites, it
+    // just no longer bites a provider the type union actually allows.
+    expect(parsed.success).toBe(false)
+    expect(parsed.success ? [] : parsed.error.issues.map((issue) => issue.message)).toContain(
+      'Invalid linked work item'
+    )
+  })
+})

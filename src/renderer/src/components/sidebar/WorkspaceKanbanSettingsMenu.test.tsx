@@ -44,6 +44,7 @@ function renderMenu({
         syncTaskStatusFromWorkspaceBoard={false}
         onSyncTaskStatusFromWorkspaceBoardChange={onSyncTaskStatusFromWorkspaceBoardChange}
         onRenameStatus={vi.fn()}
+        onChangeStatusOdooStage={vi.fn()}
         onChangeStatusColor={vi.fn()}
         onChangeStatusIcon={vi.fn()}
         onMoveStatus={vi.fn()}

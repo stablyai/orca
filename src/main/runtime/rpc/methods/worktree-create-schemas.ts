@@ -43,6 +43,10 @@ export const WorktreeCreate = z
     linkedGiteaPR: TriStateLinkedIssue,
     linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
     linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+    // Odoo carries its own pair: the stage sync and the sidebar card read the
+    // ticket id + instance rather than `linkedWorkItem`.
+    linkedOdooTicket: z.number().int().positive().nullable().optional(),
+    linkedOdooInstanceId: z.string().nullable().optional(),
     comment: OptionalString,
     displayName: OptionalString,
     displayNameKind: z.enum(['generated', 'user']).optional(),

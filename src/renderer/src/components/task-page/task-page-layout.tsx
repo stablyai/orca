@@ -67,6 +67,7 @@ import {
   LinearViewsHost,
   type LinearViewsHostProps
 } from '@/components/task-page/linear/linear-views-host'
+import { TaskPageOdooPanel, type TaskPageOdooPanelProps } from '@/components/task-page-odoo-panel'
 import type { GitLabTodo } from '../../../../shared/gitlab-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
@@ -92,6 +93,7 @@ export function TaskPageLayout({
   primaryRepo,
   gitlabList,
   jiraList,
+  odooPanel,
   linearViews,
   newGithubIssue,
   newLinearProject,
@@ -119,6 +121,7 @@ export function TaskPageLayout({
   primaryRepo: Repo | null
   gitlabList: GitlabWorkItemListProps
   jiraList: JiraIssueListHostProps
+  odooPanel: TaskPageOdooPanelProps
   linearViews: LinearViewsHostProps
   newGithubIssue: NewGithubIssueDialogProps
   newLinearProject: NewLinearProjectDialogProps
@@ -168,6 +171,8 @@ export function TaskPageLayout({
             <GitlabWorkItemList {...gitlabList} />
           ) : taskSource === 'jira' ? (
             <JiraIssueListHost {...jiraList} />
+          ) : taskSource === 'odoo' ? (
+            <TaskPageOdooPanel {...odooPanel} />
           ) : taskSource === 'linear' ? (
             <LinearViewsHost {...linearViews} />
           ) : null}

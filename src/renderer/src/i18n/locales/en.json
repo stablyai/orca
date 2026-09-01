@@ -529,6 +529,9 @@
               }
             }
           }
+        },
+        "odoo": {
+          "superseded": "Odoo connection was superseded by a newer request."
         }
       }
     },
@@ -5350,7 +5353,9 @@
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name",
           "folderPathIdentity": "Branch / folder path",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "odooTicketsOption": "Odoo tickets",
+          "odooTicketOption": "Odoo ticket"
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
@@ -5378,7 +5383,8 @@
           "34f03eb0de": "Board settings",
           "26cbc92150": "Workspace board settings",
           "87d24a0c2f": "Sync board and issue status",
-          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
+          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists.",
+          "48cdbe3cac": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists, and its Odoo ticket stage when the column below names one."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
@@ -5419,7 +5425,8 @@
           "automationCreated": "Created by automation",
           "branchIdentity": "Branch",
           "branchFolderPathIdentity": "Branch or folder path",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "odooTicketLoading": "Loading Odoo ticket..."
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -5468,7 +5475,10 @@
           "cliCreated": "Created by Orca CLI",
           "jiraIssue": "Jira {{value0}}",
           "viewOnJira": "View on Jira",
-          "linkedJira": "Linked Jira {{value0}}"
+          "linkedJira": "Linked Jira {{value0}}",
+          "linkedOdoo": "Linked Odoo ticket {{value0}}",
+          "odooTicketDetail": "Odoo ticket {{value0}}",
+          "odooTicketView": "View on Odoo"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",
@@ -5593,7 +5603,10 @@
           "gitlabDescription": "Edit issue links, merge request links, and notes for this workspace.",
           "gitlabMR": "GitLab MR",
           "gitlabPlaceholder": "MR ! or GitLab URL",
-          "gitlabHelp": "Paste a merge request URL, or enter a number. Leave blank to remove the link."
+          "gitlabHelp": "Paste a merge request URL, or enter a number. Leave blank to remove the link.",
+          "odoo_ticket_label": "Odoo Ticket",
+          "odoo_ticket_placeholder": "Ticket # or Odoo URL",
+          "odoo_ticket_hint": "Paste an Odoo task URL, or enter a number. Leave blank to remove the link."
         },
         "WorktreeOpenInMenu": {
           "localOnly": "Local only",
@@ -6189,6 +6202,47 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "SidebarTaskNavButton": {
+          "844abd8a27": "Open Odoo tasks"
+        },
+        "WorkspaceStatusOdooStagePopover": {
+          "3f922ca608": "Odoo stage: {{value0}}",
+          "fa5cb01247": "Link an Odoo stage",
+          "433bed4d29": "Connect Odoo to pick a stage.",
+          "60dd4d219d": "Search stages…",
+          "db8a7f7ae0": "No stage matches.",
+          "1282a439d8": "No stage (do not sync)",
+          "2c61457ed8": "Could not load stages.",
+          "49dcc01885": "Retry"
+        },
+        "odoo": {
+          "board": {
+            "status": {
+              "sync": {
+                "report": {
+                  "4a5685040a": "Odoo ticket {{value0}} could not be read.",
+                  "9f53c5b352": "No Odoo stage is mapped to {{value0}}.",
+                  "e309459198": "Odoo has no stage named \"{{value0}}\" for {{value1}}.",
+                  "94098edcf0": "Several Odoo stages are named \"{{value0}}\", so {{value1}} is ambiguous.",
+                  "69cefc6a59": "Could not move Odoo ticket {{value0}}.",
+                  "3d200a7d84": "Could not sync Odoo ticket {{value0}}."
+                }
+              }
+            }
+          }
+        },
+        "use": {
+          "workspace": {
+            "status": {
+              "provider": {
+                "sync": {
+                  "5af45b21e1": "Odoo sync failed",
+                  "e82ea2f984": "Odoo sync skipped"
+                }
+              }
+            }
+          }
         }
       },
       "shared": {
@@ -7262,7 +7316,9 @@
           "3ba07f933b": "Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.",
           "70e885705b": "Task providers",
           "1683acbac4": "Connect the source hosts Orca can use for pull requests, merge requests, checks, and review status.",
-          "298c65ecac": "Review providers"
+          "298c65ecac": "Review providers",
+          "odooTitle": "Odoo",
+          "odooDescription": "Connect your Odoo server to browse, edit, and comment on project tasks without leaving Orca."
         },
         "KagiSessionLinkForm": {
           "92f0b4e472": "Clear",
@@ -8364,7 +8420,9 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "874f075d00": "Odoo",
+          "cde88ace5c": "Show Odoo in the Tasks source picker and sidebar shortcuts."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -9566,7 +9624,9 @@
             "7166b9090c": "GitHub authentication via the gh CLI.",
             "f16e41cc72": "GitHub Integration",
             "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
-            "af5ae87847": "access token"
+            "af5ae87847": "access token",
+            "odooTitle": "Odoo Integration",
+            "odooDescription": "Connect an Odoo server to browse and edit project tasks."
           }
         },
         "jira": {
@@ -11535,6 +11595,23 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "odoo": {
+          "integration": {
+            "card": {
+              "credentialRemote": "Connect an Odoo server with its URL, database, login, and API key. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+              "credentialLocal": "Connect an Odoo server with its URL, database, login, and API key. Credentials are stored locally and encrypted when local runtime storage supports it.",
+              "connectedSummary": "{{value0}} instance{{value1}} connected",
+              "checking": "Checking Odoo access before showing setup actions.",
+              "tagline": "Browse, edit, and comment on Odoo project tasks.",
+              "addInstance": "Add Odoo instance",
+              "instanceNote": "Each connected Odoo instance stores one API key with the active runtime.",
+              "connectedNoInstances": "Odoo is connected for this runtime. Re-check if the connected instance list looks stale.",
+              "statusConnected": "Connected",
+              "statusNotConnected": "Not connected",
+              "disconnectFailed": "Could not disconnect Odoo."
+            }
+          }
         }
       },
       "right": {
@@ -16169,6 +16246,28 @@
                 }
               }
             }
+          },
+          "odoo": {
+            "allInstances": "All instances",
+            "panel": {
+              "83d54e0f6a": "All instances",
+              "a0b20f5246": "Search tickets by title…",
+              "56db121047": "Refresh",
+              "d0e1575687": "Connect Odoo",
+              "36a83d1d90": "Connect your Odoo server",
+              "c172248418": "Browse, edit, and comment on Odoo tickets directly from here.",
+              "546376384c": "Hide Odoo",
+              "85e1148843": "Failed to switch Odoo instance.",
+              "93d245553c": "Odoo tickets",
+              "42b63f8760": "shown",
+              "f5975fc3d1": "No tickets found",
+              "7bb7235cda": "Try a different filter or search."
+            }
+          },
+          "localized": {
+            "options": {
+              "d92da69eb7": "Odoo"
+            }
           }
         }
       },
@@ -16487,6 +16586,187 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "odoo": {
+        "auto": {
+          "workspace": {
+            "capped_one": "{{count}} more matching ticket was skipped by the per-run limit.",
+            "capped_other": "{{count}} more matching tickets were skipped by the per-run limit.",
+            "created": "Started a workspace for {{value0}}.",
+            "failed": "Could not start a workspace for {{value0}}.",
+            "dialog": {
+              "def72a8110": "Auto-start workspaces",
+              "b32ad78d76": "Starts a workspace for matching tickets on each panel refresh. A ticket that already has one never starts a second.",
+              "6183b72801": "Enabled",
+              "94e897a5f6": "Pick a target project first.",
+              "0abbef1e76": "Project",
+              "d0ee9eab4f": "An Odoo ticket carries no repository, so the target is set here.",
+              "f80f5d71fc": "Pick a project",
+              "82f5c40202": "Base branch",
+              "e383dfcbe7": "Assigned to me",
+              "71667e4cd3": "Priority",
+              "d428eeeeb6": "Any priority when none is picked.",
+              "1438887ad6": "Due within (days)",
+              "ee831d45e1": "Overdue tickets always match. Empty ignores deadlines.",
+              "3c57f063a0": "Require a description",
+              "b4667b375d": "Max per refresh",
+              "18d16befe4": "Bounds how many workspaces one over-broad rule can create.",
+              "06bb829452": "Cancel",
+              "f2040d28d3": "Save",
+              "b2506d68ee": "Empty uses the project's default branch."
+            }
+          }
+        },
+        "ticket": {
+          "assignee": {
+            "picker": {
+              "70dacd306b": "Unassigned",
+              "f803a70f1b": "Search users…",
+              "46182cac96": "No user matches your search."
+            }
+          },
+          "workspace": {
+            "8b2db83b43": "Comment posted.",
+            "c243d3a215": "Could not post the comment.",
+            "1b5eaa43b5": "Add a comment…",
+            "c87b4521ce": "No comments yet",
+            "4411a54695": "Low",
+            "bcaea799c1": "Medium",
+            "2f1f13a17c": "High",
+            "1000c20873": "Urgent",
+            "2c5256318d": "Open in Odoo",
+            "8229d636d2": "Stage",
+            "9809e7ba90": "Priority",
+            "4f1a1c9e6c": "Assignees",
+            "57e34ae785": "Ticket updated.",
+            "9311b4efd0": "Could not update the ticket.",
+            "795c4960cb": "Description",
+            "425ca8bd04": "No description",
+            "c4a1981a5a": "Comments"
+          },
+          "filter": {
+            "multi": {
+              "select": {
+                "93e80c55c9": "{{value0}} +{{value1}}",
+                "3a02612aab": "Nothing to filter on."
+              }
+            }
+          },
+          "kanban": {
+            "7f463f2d0d": "No stage"
+          },
+          "pager": {
+            "a22df7a932": "Previous ticket",
+            "983fd8b806": "Next ticket"
+          },
+          "toolbar": {
+            "2fa7507b51": "Auto-start workspaces",
+            "9be2437ce8": "All stages",
+            "43754b421e": "All assignees",
+            "d60356cf84": "Unassigned",
+            "484da6b802": "All tags",
+            "7f31abc4a5": "All priorities",
+            "7d46008d09": "Ticket view",
+            "53d7b66f1b": "Kanban",
+            "a65ddcf2d6": "List"
+          },
+          "comment": {
+            "composer": {
+              "c49df753eb": "Note logged.",
+              "7c2a8f723f": "Message",
+              "04a559a66a": "Log note",
+              "ff7fc2b56e": "Log an internal note…",
+              "b8735bb0f5": "Attach files",
+              "58e1f1d8b2": "Send message"
+            },
+            "editor": {
+              "1f08f23e28": "Could not update the message.",
+              "a51eb9cb0b": "Cancel",
+              "3d15a0fae6": "Save"
+            },
+            "list": {
+              "be65a1735f": "Note",
+              "bfa6ff4ca4": "Message",
+              "ab0d9439e0": "Edit message"
+            }
+          },
+          "composer": {
+            "attachments": {
+              "3f7df129bf": "Remove attachment"
+            }
+          },
+          "header": {
+            "4d59a1b53f": "Customer"
+          },
+          "mention": {
+            "suggestions": {
+              "bddabd09c6": "Searching people…",
+              "43bd769377": "No matching person"
+            }
+          },
+          "start": {
+            "workspace": {
+              "button": {
+                "a0cf1fc429": "Couldn’t link this ticket. Reconnect Odoo or pick the matching instance, then try again.",
+                "5c1ee6b176": "Unable to open the workspace attached to this ticket.",
+                "afad57a777": "Open workspace attached to ticket",
+                "1bf8ceb7d8": "Open workspace",
+                "ca2a408c53": "More ticket workspace actions",
+                "13e2780468": "Start new workspace",
+                "961543ead1": "Start workspace from ticket"
+              }
+            }
+          }
+        },
+        "connect": {
+          "dialog": {
+            "e4c06861c0": "Connect Odoo server",
+            "79831c1057": "Use your Odoo server URL, database, login, and API key to browse tickets.",
+            "a0859126fa": "Odoo server URL",
+            "b9ff33a00d": "https://odoo.example.com",
+            "458a5cd247": "Database",
+            "17acc54e0a": "mycompany",
+            "8568d8d7ee": "Login",
+            "0dc046475d": "you@example.com",
+            "11fb0827ed": "API key",
+            "c24a2b6fe2": "Odoo API key",
+            "38baf57dd9": "Create an API key in Odoo under Preferences and Account Security.",
+            "d722ded40b": "Cancel",
+            "b8d4744f56": "Verifying…",
+            "ceb0150103": "Connect",
+            "0d81b37e29": "Your API key is sent to the selected remote runtime and stored there with runtime-supported encryption.",
+            "5d8ac0509d": "Your API key is stored locally and encrypted when local runtime storage supports it.",
+            "53ad73eb2d": "Connection failed"
+          }
+        },
+        "saved": {
+          "filter": {
+            "menu": {
+              "88c6da15ed": "Saved filters",
+              "c089bd7f5d": "Presets",
+              "4008391fe0": "Saved",
+              "a9ec70f877": "No saved filter yet. Set up the toolbar, save it below, then pin it to keep it in reach.",
+              "5f484b298e": "Name these filters…",
+              "ac57de0469": "Save"
+            },
+            "row": {
+              "6cba4187fd": "Reorder saved filter",
+              "df9e217790": "Pin to the toolbar",
+              "eaec3d3a60": "Use as default filter",
+              "2e129beeed": "Delete saved filter"
+            }
+          }
+        },
+        "comment": {
+          "attachment": {
+            "draft": {
+              "afbf594adb": "Attachment",
+              "5e08ae0d00": "{{fileName}} is empty.",
+              "ee8fe5dcea": "{{fileName}} would exceed the {{maxSize}} attachment limit.",
+              "73ad77172f": "You can attach up to {{maxCount}} files."
+            }
+          }
+        }
       }
     },
     "i18n": {
@@ -17114,7 +17394,10 @@
         "closed": "Closed review"
       },
       "subagents_one": "{{count}} subagent",
-      "subagents_other": "{{count}} subagents"
+      "subagents_other": "{{count}} subagents",
+      "odoo": {
+        "open": "Open Odoo ticket {{ref}}"
+      }
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",

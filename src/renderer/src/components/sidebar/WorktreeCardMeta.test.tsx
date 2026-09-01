@@ -34,6 +34,7 @@ describe('WorktreeCardDetailsHover', () => {
         workspaceTitle="[Bug]: Hold-to-talk speech-to-text option no longer works"
         issue={null}
         linearIssue={null}
+        odooTicket={null}
         review={null}
         comment={null}
         onEditIssue={vi.fn()}
@@ -55,6 +56,7 @@ describe('WorktreeCardDetailsHover', () => {
         workspaceTitle="Fix stale GH PR"
         issue={null}
         linearIssue={null}
+        odooTicket={null}
         review={{
           provider: 'github',
           number: 456,
@@ -91,6 +93,7 @@ describe('WorktreeCardDetailsHover', () => {
           labels: []
         }}
         linearIssue={null}
+        odooTicket={null}
         review={null}
         comment={null}
         onRenameWorkspaceTitle={vi.fn()}
@@ -116,6 +119,7 @@ describe('WorktreeCardDetailsHover', () => {
       <WorktreeCardDetailsHover
         issue={null}
         linearIssue={null}
+        odooTicket={null}
         review={{
           provider: 'github',
           number: 456,
@@ -167,6 +171,7 @@ describe('WorktreeCardDetailsHover', () => {
           labels: []
         }}
         linearIssue={null}
+        odooTicket={null}
         review={null}
         comment={null}
         onEditIssue={vi.fn()}
@@ -200,6 +205,7 @@ describe('WorktreeCardDetailsHover', () => {
       <WorktreeCardDetailsHover
         issue={null}
         linearIssue={null}
+        odooTicket={null}
         review={{
           provider: 'gitlab',
           number: 77,
@@ -284,6 +290,7 @@ describe('WorktreeCardDetailsHover', () => {
           stateName: 'In Progress',
           labels: ['feature', 'ui']
         }}
+        odooTicket={null}
         review={null}
         comment={null}
         onEditIssue={vi.fn()}
@@ -343,6 +350,7 @@ describe('WorktreeCardDetailsHover', () => {
           identifier: 'ENG-123',
           title: 'Loading Linear issue...'
         }}
+        odooTicket={null}
         review={null}
         comment={null}
         onEditIssue={vi.fn()}
@@ -366,6 +374,7 @@ describe('WorktreeCardDetailsHover', () => {
           title: 'Loading Linear issue...',
           url: 'https://linear.app/acme/issue/ENG-123'
         }}
+        odooTicket={null}
         review={null}
         comment={null}
         onEditIssue={vi.fn()}
@@ -379,5 +388,29 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('Loading Linear issue...')
     expect(markup).toContain('https://linear.app/acme/issue/ENG-123')
     expect(markup).toContain('View on Linear')
+  })
+
+  it('renders the hover panel when an Odoo ticket is the only linked detail', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={null}
+        linearIssue={null}
+        odooTicket={{
+          ref: 'TASK-72',
+          title: 'Chatter attachments',
+          url: 'https://odoo.example.test/odoo/project/1/tasks/72'
+        }}
+        review={null}
+        comment={null}
+        onEditIssue={vi.fn()}
+        onEditComment={vi.fn()}
+        onOpenOdooTicketInOrca={vi.fn()}
+      >
+        <span>TASK-72</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(markup).toContain('Odoo ticket TASK-72')
+    expect(markup).toContain('Chatter attachments')
   })
 })

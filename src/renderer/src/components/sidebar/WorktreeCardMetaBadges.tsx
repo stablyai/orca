@@ -2,6 +2,7 @@ import React from 'react'
 import { CalendarClock, CircleDot, SquareTerminal, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { OdooIcon } from '@/components/icons/OdooIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { MetaIconBadge } from './WorktreeCardMetadataControls'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
@@ -19,6 +20,7 @@ export function hasWorktreeCardDetails({
   issue,
   linearIssue,
   jiraIssue,
+  odooTicket,
   review,
   comment,
   automationProvenance,
@@ -28,6 +30,7 @@ export function hasWorktreeCardDetails({
     issue ||
     linearIssue ||
     jiraIssue ||
+    odooTicket ||
     review ||
     hasComment(comment) ||
     automationProvenance ||
@@ -43,6 +46,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
     issue,
     linearIssue,
     jiraIssue,
+    odooTicket,
     review,
     comment,
     automationProvenance,
@@ -57,6 +61,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       issue,
       linearIssue,
       jiraIssue,
+      odooTicket,
       review,
       comment,
       automationProvenance,
@@ -139,6 +144,17 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           )}
         >
           <JiraIcon className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {odooTicket && (
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.linkedOdoo',
+            'Linked Odoo ticket {{value0}}',
+            { value0: odooTicket.ref }
+          )}
+        >
+          <OdooIcon className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {review && (
