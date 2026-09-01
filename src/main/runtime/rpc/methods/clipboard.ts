@@ -7,8 +7,10 @@ import {
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
 } from '../../../../shared/clipboard-image'
 
+import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/clipboard-image-upload-protocol'
+
 const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
-export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+export { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS }
 export const CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT = 8
 const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/

@@ -61,7 +61,7 @@ async function saveClipboardImageBufferForTarget(
       app.getPath('userData'),
       runtimeEnvironmentId,
       buffer,
-      args?.connectionId ?? null
+      args?.connectionId?.trim() || null
     )
   }
   return saveClipboardImageBufferAsTempFile(buffer, args)
