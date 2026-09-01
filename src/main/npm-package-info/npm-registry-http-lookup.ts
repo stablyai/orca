@@ -1,33 +1,10 @@
 import { net } from 'electron'
 import type { NpmPackageInfo, NpmPackageInfoResult } from '../../shared/npm-package-info-types'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { extractRepositoryUrl, toHttpsUrl } from './npm-manifest-urls'
 
 const REGISTRY_BASE_URL = 'https://registry.npmjs.org'
 const FETCH_TIMEOUT_MS = 8000
-
-/** Extracts an `https:` URL from a raw string, or `null` for anything else. */
-function toHttpsUrl(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null
-  }
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' ? url.toString() : null
-  } catch {
-    return null
-  }
-}
-
-/** npm's `repository` packument field is either a string or `{ type, url }`. */
-function extractRepositoryUrl(repository: unknown): string | null {
-  const raw =
-    typeof repository === 'string'
-      ? repository
-      : typeof repository === 'object' && repository !== null && 'url' in repository
-        ? (repository as { url?: unknown }).url
-        : null
-  return typeof raw === 'string' ? toHttpsUrl(raw.replace(/^git\+/, '')) : null
-}
 
 function parsePackument(packageName: string, doc: Record<string, unknown>): NpmPackageInfo | null {
   const distTags = doc['dist-tags'] as Record<string, unknown> | undefined

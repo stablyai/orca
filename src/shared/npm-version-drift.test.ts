@@ -27,3 +27,20 @@ describe('classifyNpmVersionDrift', () => {
     expect(classifyNpmVersionDrift('1.2.3', 'not-a-version')).toBe('unknown')
   })
 })
+
+describe('classifyNpmVersionDrift when the installed version is ahead', () => {
+  // Why: `latest` can lag what is installed — a `next`/prerelease install, a
+  // linked local build, or a dist-tag that has not moved yet. Reporting
+  // "major update available" to someone who is ahead is worse than silence.
+  it.each([
+    ['20.0.0', '19.2.8'],
+    ['19.3.0', '19.2.8'],
+    ['19.2.9', '19.2.8']
+  ])('does not report an update for installed %s against latest %s', (installed, latest) => {
+    expect(classifyNpmVersionDrift(installed, latest)).toBe('unknown')
+  })
+
+  it('still reports the severity when the installed version is genuinely behind', () => {
+    expect(classifyNpmVersionDrift('18.2.0', '19.2.8')).toBe('major')
+  })
+})

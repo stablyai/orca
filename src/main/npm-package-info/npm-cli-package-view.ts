@@ -1,8 +1,9 @@
 import { runProcess } from '../../shared/child-process/run-process'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import type { NpmPackageInfo, NpmPackageInfoResult } from '../../shared/npm-package-info-types'
 import type { Store } from '../persistence'
 import { resolveRegisteredWorktreePath } from '../ipc/registered-worktree-roots-cache'
+import { extractRepositoryUrl, toHttpsUrl } from './npm-manifest-urls'
 
 const NPM_VIEW_TIMEOUT_MS = 8000
 
@@ -12,30 +13,6 @@ const NPM_VIEW_TIMEOUT_MS = 8000
  * registry path when the local host has no resolvable npm binary at all.
  */
 export type NpmCliPackageViewResult = NpmPackageInfoResult | { status: 'npm-unresolvable' }
-
-/** Extracts an `https:` URL from a raw string, or `null` for anything else. */
-function toHttpsUrl(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null
-  }
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' ? url.toString() : null
-  } catch {
-    return null
-  }
-}
-
-/** npm's `repository` manifest field is either a string or `{ type, url }`. */
-function extractRepositoryUrl(repository: unknown): string | null {
-  const raw =
-    typeof repository === 'string'
-      ? repository
-      : typeof repository === 'object' && repository !== null && 'url' in repository
-        ? (repository as { url?: unknown }).url
-        : null
-  return typeof raw === 'string' ? toHttpsUrl(raw.replace(/^git\+/, '')) : null
-}
 
 function parseManifest(packageName: string, stdout: string): NpmPackageInfo | null {
   try {
@@ -110,7 +87,14 @@ export async function npmCliPackageView(
       cwd,
       // Why pinned: corepack's npm wrapper rewrites the user's package.json to
       // pin a packageManager field unless auto-pin/project-spec are disabled.
-      env: { ...process.env, COREPACK_ENABLE_AUTO_PIN: '0', COREPACK_ENABLE_PROJECT_SPEC: '0' },
+      // Why withCliRuntimeOnPath: a version-manager npm carries a
+      // `#!/usr/bin/env node` shebang, so without pinning its own runtime it
+      // can execute under an unrelated node (orca#10932).
+      env: withCliRuntimeOnPath(program, {
+        ...process.env,
+        COREPACK_ENABLE_AUTO_PIN: '0',
+        COREPACK_ENABLE_PROJECT_SPEC: '0'
+      }),
       timeoutMs: NPM_VIEW_TIMEOUT_MS
     })
   } catch (error) {

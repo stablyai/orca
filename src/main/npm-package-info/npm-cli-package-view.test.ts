@@ -1,19 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 
-const { runProcessMock, resolveCliCommandMock, resolveRegisteredWorktreePathMock } = vi.hoisted(
-  () => ({
-    runProcessMock: vi.fn(),
-    resolveCliCommandMock: vi.fn(),
-    resolveRegisteredWorktreePathMock: vi.fn()
-  })
-)
+const {
+  runProcessMock,
+  resolveCliCommandMock,
+  withCliRuntimeOnPathMock,
+  resolveRegisteredWorktreePathMock
+} = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
+  resolveCliCommandMock: vi.fn(),
+  withCliRuntimeOnPathMock: vi.fn(),
+  resolveRegisteredWorktreePathMock: vi.fn()
+}))
 
 vi.mock('../../shared/child-process/run-process', () => ({
   runProcess: runProcessMock
 }))
 vi.mock('../../shared/node-cli-command-resolution', () => ({
-  resolveCliCommand: resolveCliCommandMock
+  resolveCliCommand: resolveCliCommandMock,
+  withCliRuntimeOnPath: withCliRuntimeOnPathMock
 }))
 vi.mock('../ipc/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: resolveRegisteredWorktreePathMock
@@ -40,6 +45,10 @@ describe('npmCliPackageView', () => {
     resolveCliCommandMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
     resolveCliCommandMock.mockReturnValue('/usr/local/bin/npm')
+    withCliRuntimeOnPathMock.mockReset()
+    // Why passthrough: the real helper only prepends the CLI's own runtime
+    // dir to PATH; these tests assert the env pins it wraps, not that.
+    withCliRuntimeOnPathMock.mockImplementation((_program, env) => env)
     resolveRegisteredWorktreePathMock.mockResolvedValue('/repo/worktree')
   })
 
@@ -166,6 +175,10 @@ describe('npmCliPackageView latest publish date', () => {
     resolveCliCommandMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
     resolveCliCommandMock.mockReturnValue('/usr/local/bin/npm')
+    withCliRuntimeOnPathMock.mockReset()
+    // Why passthrough: the real helper only prepends the CLI's own runtime
+    // dir to PATH; these tests assert the env pins it wraps, not that.
+    withCliRuntimeOnPathMock.mockImplementation((_program, env) => env)
     resolveRegisteredWorktreePathMock.mockResolvedValue('/repo/worktree')
   })
 

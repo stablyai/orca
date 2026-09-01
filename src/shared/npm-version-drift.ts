@@ -4,7 +4,6 @@ export type NpmVersionDrift = 'same' | 'patch' | 'minor' | 'major' | 'prerelease
 
 type ParsedSemverCore = {
   core: [number, number, number]
-  hasPrerelease: boolean
 }
 
 /**
@@ -22,8 +21,7 @@ function parseSemverCore(value: string): ParsedSemverCore | null {
     return null
   }
   return {
-    core: [Number(match[1]), Number(match[2]), Number(match[3])],
-    hasPrerelease: Boolean(match[4])
+    core: [Number(match[1]), Number(match[2]), Number(match[3])]
   }
 }
 
@@ -39,8 +37,16 @@ export function classifyNpmVersionDrift(installed: string, latest: string): NpmV
   if (!installedCore || !latestCore) {
     return 'unknown'
   }
-  if (compareAppVersions(installed, latest) === 0) {
+  const ordering = compareAppVersions(installed, latest)
+  if (ordering === 0) {
     return 'same'
+  }
+  // Why: `latest` can lag what is installed — a next/prerelease install, a
+  // linked local build, or a dist-tag that has not moved. Falling through to
+  // the component diff would tell someone who is ahead that a major update
+  // is available.
+  if (ordering > 0) {
+    return 'unknown'
   }
 
   const [installedMajor, installedMinor, installedPatch] = installedCore.core
