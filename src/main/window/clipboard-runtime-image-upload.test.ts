@@ -81,6 +81,25 @@ describe('saveClipboardImageBufferInRuntime', () => {
     )
   })
 
+  it('normalizes a blank connection to null before forwarding', async () => {
+    // The runtime schema rejects '' (z.string().min(1)); a blank id means
+    // "no connection", exactly like the desktop IPC handler treats it.
+    mockRuntimeUploadMethods()
+    const buffer = Buffer.from([0, 1, 2, 3])
+
+    await expect(saveClipboardImageBufferInRuntime('/data', 'env-1', buffer, '  ')).resolves.toBe(
+      '/tmp/orca-paste-remote.png'
+    )
+    expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
+      1,
+      '/data',
+      'env-1',
+      'clipboard.startImageUpload',
+      { expectedBase64Length: buffer.toString('base64').length, connectionId: null },
+      30_000
+    )
+  })
+
   it('threads the connection into the single-frame fallback on older runtimes', async () => {
     const buffer = Buffer.from([0, 1, 2, 3])
     mockRuntimeUploadMethods({

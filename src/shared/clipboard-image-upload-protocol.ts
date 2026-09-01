@@ -46,8 +46,10 @@ function assertRemotePath(result: unknown): string {
 export async function saveClipboardImageBase64ThroughRuntime(
   call: ClipboardImageUploadRpcCall,
   contentBase64: string,
-  connectionId: string | null
+  rawConnectionId: string | null
 ): Promise<string> {
+  // A blank id means "no connection" — the runtime schema rejects ''.
+  const connectionId = rawConnectionId?.trim() || null
   const startResponse = await call(
     'clipboard.startImageUpload',
     { expectedBase64Length: contentBase64.length, connectionId },
