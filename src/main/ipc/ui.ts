@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
-import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { PersistedUIStateUpdate } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
 
 let trustedUIRendererWebContentsId: number | null = null
@@ -63,7 +63,7 @@ export function registerUIHandlers(
     return store.getUI()
   })
 
-  ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
+  ipcMain.handle('ui:set', (_event, args: PersistedUIStateUpdate) => {
     store.updateUI(args)
   })
 

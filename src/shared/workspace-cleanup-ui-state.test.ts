@@ -34,6 +34,37 @@ describe('workspace cleanup UI state', () => {
     })
   })
 
+  it('keeps dismissals when the browse writer publishes a browse-only patch', () => {
+    const browse = createDefaultWorkspaceCleanupBrowseState()
+    browse.filters.query = 'fresh'
+
+    expect(
+      mergeWorkspaceCleanupUIState(
+        {
+          dismissals: {
+            'wt-1': {
+              worktreeId: 'wt-1',
+              dismissedAt: 1700000000000,
+              fingerprint: 'fp-1',
+              classifierVersion: 2
+            }
+          }
+        },
+        { browse }
+      )
+    ).toEqual({
+      dismissals: {
+        'wt-1': {
+          worktreeId: 'wt-1',
+          dismissedAt: 1700000000000,
+          fingerprint: 'fp-1',
+          classifierVersion: 2
+        }
+      },
+      browse
+    })
+  })
+
   it('accepts browse state published by a compatible peer', () => {
     const current = createDefaultWorkspaceCleanupBrowseState()
     current.filters.query = 'local'

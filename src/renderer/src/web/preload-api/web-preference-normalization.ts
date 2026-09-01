@@ -13,7 +13,10 @@ import type {
 } from '../../../../shared/feature-interactions'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type {
+  PersistedUIState,
+  PersistedUIStateUpdate
+} from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import {
@@ -27,10 +30,10 @@ import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-clean
 
 export function mergeWebUIState(
   base: PersistedUIState,
-  updates: Partial<PersistedUIState>
+  updates: PersistedUIStateUpdate
 ): PersistedUIState {
   const { featureInteractionTelemetryBuckets: _reserved, ...safeUpdates } =
-    updates as Partial<PersistedUIState> & {
+    updates as PersistedUIStateUpdate & {
       featureInteractionTelemetryBuckets?: unknown
     }
   void _reserved

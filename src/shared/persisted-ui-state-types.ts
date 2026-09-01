@@ -205,3 +205,7 @@ export type PersistedUIState = {
   /** Whether this profile may receive automatic contextual tours; missing = renderer hasn't classified the profile yet. */
   contextualToursAutoEligible?: boolean
 }
+
+export type PersistedUIStateUpdate = Omit<Partial<PersistedUIState>, 'workspaceCleanup'> & {
+  workspaceCleanup?: Partial<WorkspaceCleanupUIState>
+}

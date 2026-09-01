@@ -10,11 +10,21 @@ import {
   createDefaultWorkspaceCleanupBrowseState,
   normalizeWorkspaceCleanupBrowseState
 } from '../../../../shared/workspace-cleanup-browse-state'
+import type { WorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup'
+import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
+import type { PersistedUIStateUpdate } from '../../../../shared/persisted-ui-state-types'
 
 const DISMISSAL = {
   worktreeId: 'wt-1',
   dismissedAt: 1700000000000,
   fingerprint: 'fp-1',
+  classifierVersion: 2
+}
+
+const CONCURRENT_DISMISSAL = {
+  worktreeId: 'wt-2',
+  dismissedAt: 1700000001000,
+  fingerprint: 'fp-2',
   classifierVersion: 2
 }
 
@@ -46,7 +56,7 @@ describe('workspace cleanup browse slice', () => {
     )
   })
 
-  it('persists the debounced state alongside the dismissals it would otherwise erase', async () => {
+  it('persists only the debounced state it owns', async () => {
     const uiSet = vi.fn().mockResolvedValue(undefined)
     const store = createStore(uiSet)
 
@@ -61,7 +71,28 @@ describe('workspace cleanup browse slice', () => {
 
     expect(uiSet).toHaveBeenCalledTimes(1)
     expect(uiSet).toHaveBeenCalledWith({
-      workspaceCleanup: { dismissals: { 'wt-1': DISMISSAL }, browse: next }
+      workspaceCleanup: { browse: next }
+    })
+  })
+
+  it('does not revert a dismissal written while the browse update is debounced', async () => {
+    let persisted: WorkspaceCleanupUIState = { dismissals: { 'wt-1': DISMISSAL } }
+    const uiSet = vi.fn(async (updates: PersistedUIStateUpdate): Promise<void> => {
+      persisted = mergeWorkspaceCleanupUIState(persisted, updates.workspaceCleanup) ?? persisted
+    })
+    const store = createStore(uiSet)
+    const nextBrowse = createDefaultWorkspaceCleanupBrowseState()
+    nextBrowse.filters.query = 'stale'
+
+    store.getState().updateWorkspaceCleanupBrowseState(nextBrowse)
+    persisted = mergeWorkspaceCleanupUIState(persisted, {
+      dismissals: { ...persisted.dismissals, 'wt-2': CONCURRENT_DISMISSAL }
+    }) as WorkspaceCleanupUIState
+    await vi.advanceTimersByTimeAsync(WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS)
+
+    expect(persisted).toEqual({
+      dismissals: { 'wt-1': DISMISSAL, 'wt-2': CONCURRENT_DISMISSAL },
+      browse: nextBrowse
     })
   })
 

@@ -1,5 +1,9 @@
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type {
+  PersistedUIState,
+  PersistedUIStateUpdate
+} from '../../../shared/persisted-ui-state-types'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
@@ -42,16 +46,21 @@ export function mergeContextualTourSeenIds(
 }
 
 export function stripMainOwnedTelemetryMarkerFromUI(
-  value: Partial<PersistedState['ui']> | undefined
-): Partial<PersistedState['ui']> {
+  value: PersistedUIState | undefined
+): Partial<PersistedUIState>
+export function stripMainOwnedTelemetryMarkerFromUI(
+  value: PersistedUIStateUpdate | undefined
+): PersistedUIStateUpdate
+export function stripMainOwnedTelemetryMarkerFromUI(
+  value: PersistedUIState | PersistedUIStateUpdate | undefined
+): Partial<PersistedUIState> | PersistedUIStateUpdate {
   if (!value || typeof value !== 'object') {
     return {}
   }
-  const { featureInteractionTelemetryBuckets: _reserved, ...ui } = value as Partial<
-    PersistedState['ui']
-  > & {
-    featureInteractionTelemetryBuckets?: unknown
-  }
+  const { featureInteractionTelemetryBuckets: _reserved, ...ui } =
+    value as PersistedUIStateUpdate & {
+      featureInteractionTelemetryBuckets?: unknown
+    }
   void _reserved
   return ui
 }

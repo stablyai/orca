@@ -1,4 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedUIStateUpdate } from '../../../shared/persisted-ui-state-types'
 import {
   getDefaultUIState,
   normalizeAgentActivityDisplayMode,
@@ -55,7 +56,7 @@ export type UIUpdateOperations = {
 
 export function updatePersistedUI(
   operations: UIUpdateOperations,
-  updates: Partial<PersistedState['ui']>
+  updates: PersistedUIStateUpdate
 ): void {
   if ('browserKagiSessionLink' in updates && !updates.browserKagiSessionLink) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.browserKagiSessionLink)

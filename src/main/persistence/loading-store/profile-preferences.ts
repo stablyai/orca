@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedUIStateUpdate } from '../../../shared/persisted-ui-state-types'
 import { getDefaultOnboardingState } from '../../../shared/constants'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import {
@@ -81,7 +82,7 @@ export class ProfilePreferences {
     )
   }
 
-  updateUI(updates: Partial<PersistedState['ui']>): void {
+  updateUI(updates: PersistedUIStateUpdate): void {
     updatePersistedUI(getUIUpdateOperations(this), updates)
   }
 

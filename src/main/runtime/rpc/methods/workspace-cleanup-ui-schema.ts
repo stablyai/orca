@@ -25,6 +25,6 @@ const WorkspaceCleanupBrowse = z
   .transform((value) => normalizeWorkspaceCleanupBrowseState(value))
 
 export const WorkspaceCleanup = z.object({
-  dismissals: z.record(z.string(), WorkspaceCleanupDismissal),
+  dismissals: z.record(z.string(), WorkspaceCleanupDismissal).optional(),
   browse: WorkspaceCleanupBrowse.optional()
 })
