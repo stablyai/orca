@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
+import type { OrchestrationDeliveryWarning } from '../../shared/orchestration-check-output'
 import type Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
@@ -69,6 +70,12 @@ export type MailboxCheckResult = {
   count: number
   messages: unknown[]
   acknowledged?: string | null
+  replayed?: boolean
+  blockedSince?: string
+  pendingBehind?: number
+  mailboxUnreadCount?: number
+  checkCountDiverged?: boolean
+  deliveryWarning?: OrchestrationDeliveryWarning
 }
 
 export type MailboxCheckOptions = {
