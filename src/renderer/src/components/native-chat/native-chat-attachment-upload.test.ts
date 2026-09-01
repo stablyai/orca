@@ -166,6 +166,30 @@ describe('resolveNativeChatAttachmentOwner', () => {
     })
   })
 
+  it('reports not-ready when a runtime worktree connection has not hydrated', () => {
+    // The worktree row (with its runtime owner) can land before the repos
+    // array that carries the server-owned connectionId — attaching then could
+    // save on the wrong nested host (#17679).
+    expect(
+      resolveNativeChatAttachmentOwnerForWorktree(
+        state({
+          repos: [],
+          worktreesByRepo: {
+            repo: [
+              {
+                id: 'wt-1',
+                repoId: 'repo',
+                path: '/repo/worktree',
+                runtimeOwnerEnvironmentId: 'env-1'
+              } as never
+            ]
+          }
+        }),
+        'wt-1'
+      )
+    ).toEqual({ kind: 'not-ready' })
+  })
+
   it('reports not-ready when a runtime worktree has no known path yet', () => {
     expect(
       resolveNativeChatAttachmentOwner(

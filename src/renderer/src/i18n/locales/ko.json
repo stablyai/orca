@@ -14580,7 +14580,6 @@
         "startDictation": "받아쓰기 시작",
         "stopDictation": "받아쓰기 중지",
         "noSkills": "어울리는 스킬 없음",
-        "localAttachmentUnsupported": "원격 세션에는 로컬 첨부 파일을 사용할 수 없습니다.",
         "removeAttachment": "첨부파일 삭제",
         "pastedImageLabel": "붙여넣은 이미지",
         "imagePasteFailed": "이미지 붙여넣기 실패.",

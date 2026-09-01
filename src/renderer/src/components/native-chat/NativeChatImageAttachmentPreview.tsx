@@ -4,8 +4,6 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-client-target'
-import { useAppStore } from '@/store'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 
@@ -43,17 +41,19 @@ export function NativeChatImageAttachmentPreview({
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
-  const settings = useAppStore((s) => s.settings)
+  // No store subscription: the owning environment id is pinned on the
+  // attachment, and rebuilding the context identity on unrelated settings
+  // writes would re-run the image-cache effects for every chip.
   const runtimeContext = useMemo(
     () =>
       attachment.runtime
         ? {
-            settings: settingsForRuntimeOwner(settings, attachment.runtime.runtimeEnvironmentId),
+            settings: { activeRuntimeEnvironmentId: attachment.runtime.runtimeEnvironmentId },
             worktreeId: attachment.runtime.worktreeId,
             worktreePath: attachment.runtime.worktreePath
           }
         : undefined,
-    [attachment.runtime, settings]
+    [attachment.runtime]
   )
   const previewSrc = useLocalImageSrc(
     isNearViewport || isOpen ? attachment.path : undefined,

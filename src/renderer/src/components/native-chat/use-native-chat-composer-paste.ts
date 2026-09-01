@@ -108,6 +108,10 @@ export function useNativeChatComposerPaste({
     [setNotice]
   )
 
+  // Pasted chips carry no host context: the temp file lives outside the
+  // worktree on remote owners (SSH /var/tmp, runtime OS tmp), where no preview
+  // transport can read it, so the thumbnail falls back to the generic icon.
+  // The attached path itself is host-side and readable by the agent.
   const attachClipboardImageTempFile = useCallback(
     (tempPath: string) => {
       const result = resolveImagePaste(agent, tempPath)
