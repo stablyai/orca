@@ -53,7 +53,28 @@ describe('AppImage CLI redirect', () => {
     ).toBeNull()
   })
 
-  it('routes no-sandbox serve launches through the CLI', () => {
+  it('keeps direct serve launches in Electron when Chromium switches are present', () => {
+    expect(
+      getAppImageCliArgs(
+        [
+          'AppRun',
+          '--no-sandbox',
+          '--disable-features=FedCm,DirectSockets',
+          'serve',
+          '--port',
+          '6768'
+        ],
+        { APPIMAGE: '/opt/orca' },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toBeNull()
+  })
+
+  it('keeps clean serve launches on the CLI path for validation', () => {
     expect(
       getAppImageCliArgs(
         ['AppRun', '--no-sandbox', 'serve', '--port', '6768'],
@@ -65,6 +86,34 @@ describe('AppImage CLI redirect', () => {
         }
       )
     ).toEqual(['serve', '--port', '6768'])
+  })
+
+  it('handles a space-separated Chromium switch value', () => {
+    expect(
+      getAppImageCliArgs(
+        ['AppRun', '--disable-features', 'FedCm', 'serve'],
+        { APPIMAGE: '/opt/orca' },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toBeNull()
+  })
+
+  it('does not broaden the Electron-owned exception to switches after serve', () => {
+    expect(
+      getAppImageCliArgs(
+        ['AppRun', 'serve', '--disable-features=FedCm'],
+        { APPIMAGE: '/opt/orca' },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toEqual(['serve', '--disable-features=FedCm'])
   })
 
   it('removes no-sandbox before forwarding CLI help', () => {
@@ -79,6 +128,20 @@ describe('AppImage CLI redirect', () => {
         }
       )
     ).toEqual(['serve', '--help'])
+  })
+
+  it('still redirects serve help even when Chromium switches are present', () => {
+    expect(
+      getAppImageCliArgs(
+        ['AppRun', '--disable-features=FedCm', 'serve', '--help'],
+        { APPIMAGE: '/opt/orca' },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toEqual(['--disable-features=FedCm', 'serve', '--help'])
   })
 
   it('spawns the unpacked CLI entrypoint with Electron node mode', async () => {
@@ -118,14 +181,14 @@ describe('AppImage CLI redirect', () => {
     expect(spawnOptions?.env).not.toHaveProperty('NODE_REPL_EXTERNAL_MODULE')
   })
 
-  it('forwards an explicit no-sandbox choice to the serve child', async () => {
+  it('keeps a clean no-sandbox serve launch on the CLI path', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-redirect-'))
     const cliEntryPath = join(root, 'app.asar.unpacked', 'out', 'cli', 'index.js')
     await mkdir(join(root, 'app.asar.unpacked', 'out', 'cli'), { recursive: true })
     await writeFile(cliEntryPath, '', 'utf8')
     const spawn = vi.fn((..._args: unknown[]) => ({ status: 0 }))
 
-    maybeRedirectAppImageCliLaunch({
+    const result = maybeRedirectAppImageCliLaunch({
       argv: ['orca-linux.AppImage', '--no-sandbox', 'serve'],
       env: { APPIMAGE: '/opt/orca/orca-linux.AppImage' },
       platform: 'linux',
@@ -136,6 +199,7 @@ describe('AppImage CLI redirect', () => {
       spawn: spawn as never
     })
 
+    expect(result).toEqual({ redirected: true, status: 0 })
     expect(spawn).toHaveBeenCalledWith(
       '/opt/orca/orca-ide',
       [cliEntryPath, 'serve'],

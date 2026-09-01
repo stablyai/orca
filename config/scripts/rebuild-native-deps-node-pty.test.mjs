@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -44,7 +45,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         )
         expect(existsSync(rebuildLogPath)).toBe(false)
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -80,7 +81,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         )
       ).toBe('// napi.h\n')
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -104,7 +105,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       expect(readFileSync(join(runtimeDir, 'conpty.dll'), 'utf8')).toBe('conpty.dll x64')
       expect(readFileSync(join(runtimeDir, 'OpenConsole.exe'), 'utf8')).toBe('OpenConsole.exe x64')
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -132,7 +133,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
         expect(rebuildCall.onlyModules).toEqual(['windows-native-registry'])
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -162,7 +163,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
         expect(rebuildCall.onlyModules).toEqual(['node-pty'])
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -193,7 +194,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         expect(rebuildCall.ignoreModules).toEqual(['cpu-features'])
         expect(rebuildCall.force).toBe(true)
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -221,7 +222,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         )
         expect(existsSync(rebuildLogPath)).toBe(false)
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -251,7 +252,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         expect(rebuildCall.onlyModules).toEqual(['node-pty'])
         expect(rebuildCall.force).toBe(true)
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )

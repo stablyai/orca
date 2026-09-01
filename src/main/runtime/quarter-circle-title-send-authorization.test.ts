@@ -183,10 +183,24 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
       launchIncarnationId: 'initial-incarnation',
       launchToken: expect.any(String)
     })
-    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+    await expect(runtime.getTerminalAgentStatus(handle)).rejects.toThrow('terminal_handle_stale')
+
+    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'replacement-incarnation'
+    })
+    const replacementHandle = runtime.getTerminalHandleForPaneKey(`${TAB_ID}:${LEAF_ID}`)
+    if (replacementHandle === null) {
+      throw new Error('replacement terminal handle was not registered')
+    }
+    expect(replacementHandle).not.toBe(handle)
+    await expect(runtime.getTerminalAgentStatus(replacementHandle)).resolves.toMatchObject({
       isRunningAgent: false
     })
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe('terminal_guard_no_agent')
+    await expect(guardedSendResult(runtime, replacementHandle)).resolves.toBe(
+      'terminal_guard_no_agent'
+    )
   })
 
   it('authorizes a guarded send when the busy title itself names the agent', async () => {

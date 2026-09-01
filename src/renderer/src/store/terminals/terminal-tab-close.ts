@@ -15,6 +15,7 @@ import {
 } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
+import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -121,6 +122,9 @@ export function createTerminalTabCloseActions(
           ...s.directSshPaneRetryHistoryByTabId
         }
         delete nextDirectSshPaneRetryHistoryByTabId[tabId]
+        const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [
+          tabId
+        ])
         // Why: keep the same reference when the closing tab had no unread flag, so unrelated closes don't force full-state selector re-eval.
         let nextUnreadTerminalTabs = s.unreadTerminalTabs
         if (s.unreadTerminalTabs[tabId]) {
@@ -223,6 +227,9 @@ export function createTerminalTabCloseActions(
           directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
           directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId,
           directSshPaneRetryHistoryByTabId: nextDirectSshPaneRetryHistoryByTabId,
+          ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
+            ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
+            : {}),
           ...(nextSleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
             ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessionsByPaneKey }
             : {}),

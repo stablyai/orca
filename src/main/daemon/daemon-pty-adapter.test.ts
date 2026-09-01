@@ -743,6 +743,97 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cause: { kind: 'exited', exitCode: 42 }
       })
     })
+
+    it('does not let an untagged stale-write exit clear a known replacement', async () => {
+      // The daemon-request-router emits this compatibility exit without an incarnation
+      // when a fire-and-forget write targets a session it no longer owns.
+      await adapter.spawn({ cols: 80, rows: 24 })
+      const sessionId = 'replacement-known-before-untagged-exit'
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        client: { onEvent: (listener: (event: unknown) => void) => () => void }
+      }
+      internals.activeSessionIds.add(sessionId)
+      internals.sessionIncarnations.set(sessionId, 'incarnation-new')
+
+      const exits: { id: string; code: number }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const rawEvents: unknown[] = []
+      const removeRawListener = internals.client.onEvent((event) => rawEvents.push(event))
+      try {
+        expect(adapter.write(sessionId, 'stale-input')).toBe(true)
+        await waitFor(() =>
+          rawEvents.some(
+            (event) =>
+              typeof event === 'object' &&
+              event !== null &&
+              (event as { event?: string }).event === 'exit'
+          )
+        )
+      } finally {
+        removeRawListener()
+      }
+
+      expect(exits).toEqual([])
+      expect(internals.activeSessionIds.has(sessionId)).toBe(true)
+      expect(internals.sessionIncarnations.get(sessionId)).toBe('incarnation-new')
+    })
+
+    it('requires incarnation proof when matching an exit received before a spawn reply', () => {
+      const sessionId = 'spawn-reply-incarnation-proof'
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        resultForExitBeforeSpawnReply: (...args: unknown[]) => unknown
+      }
+      internals.activeSessionIds.add(sessionId)
+      internals.sessionIncarnations.set(sessionId, 'incarnation-new')
+
+      const operation = {
+        exitsBySessionId: new Map([[sessionId, [{ code: -1 }]]]),
+        ignoredExitIncarnationIds: new Set<string>(),
+        ignoreNextExit: false
+      }
+      const result = {
+        isNew: true,
+        snapshot: null,
+        pid: null,
+        shellState: 'unsupported',
+        incarnationId: 'incarnation-new'
+      }
+
+      expect(internals.resultForExitBeforeSpawnReply(sessionId, result, operation)).toBeNull()
+      expect(internals.activeSessionIds.has(sessionId)).toBe(true)
+      expect(internals.sessionIncarnations.get(sessionId)).toBe('incarnation-new')
+    })
+
+    it('does not treat an untagged exit as replacement proof when a generation is known', () => {
+      const sessionId = 'spawn-reply-untagged-replacement'
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        resultForExitBeforeSpawnReply: (...args: unknown[]) => unknown
+      }
+      internals.activeSessionIds.add(sessionId)
+      internals.sessionIncarnations.set(sessionId, 'incarnation-before-retry')
+
+      const operation = {
+        exitsBySessionId: new Map([[sessionId, [{ code: 17 }]]]),
+        ignoredExitIncarnationIds: new Set<string>(),
+        ignoreNextExit: false
+      }
+      const result = {
+        isNew: true,
+        snapshot: null,
+        pid: null,
+        shellState: 'unsupported'
+      }
+
+      expect(internals.resultForExitBeforeSpawnReply(sessionId, result, operation)).toBeNull()
+      expect(internals.activeSessionIds.has(sessionId)).toBe(true)
+      expect(internals.sessionIncarnations.get(sessionId)).toBe('incarnation-before-retry')
+    })
   })
 
   describe('serialize / revive', () => {

@@ -10,6 +10,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import {
   applyJournalRow,
   createJournalReducerState,
+  MAX_JOURNAL_APPLIED_SETTLEMENT_IDS,
   referencedBlobDigests,
   renderJournalState,
   type JournalReducerState
@@ -358,6 +359,23 @@ describe('submission and dispatch state machine', () => {
     ])
     expect(state.submissions.size).toBe(0)
     expect(state.receipts.size).toBe(0)
+  })
+})
+
+describe('lifecycle settlement deduplication', () => {
+  it('retains only the newest bounded settlement ids', () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    for (let index = 0; index <= MAX_JOURNAL_APPLIED_SETTLEMENT_IDS; index += 1) {
+      applyJournalRow(state, {
+        kind: 'lifecycle-batch',
+        settlementId: `settlement-${index}`,
+        mutations: [{ kind: 'tombstone', itemId: 'item', revision: index + 1 }],
+        ...base(index + 1)
+      })
+    }
+    expect(state.appliedSettlementIds.size).toBe(MAX_JOURNAL_APPLIED_SETTLEMENT_IDS)
+    expect(state.appliedSettlementIds.has('settlement-0')).toBe(false)
+    expect(state.appliedSettlementIds.has('settlement-1')).toBe(true)
   })
 })
 

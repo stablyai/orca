@@ -71,6 +71,7 @@ import {
 } from './pane-title-overlay-rects'
 import NativeChatView from '../native-chat/NativeChatView'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
+import type { PaneCwdMap } from './resolve-split-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
@@ -105,8 +106,10 @@ import { connectPanePty } from './pty-connection'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
+import { shouldIgnoreStalePanePtyLayoutBinding } from './pty-connection/pane-pty-layout-binding'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
+  bindPanePtyId,
   getMobileFitOverridePtyIds,
   getFitOverrideForPty
 } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -224,7 +227,13 @@ import {
   type TerminalPasteSource,
   type TerminalPasteTextOptions
 } from './terminal-paste-coordinator'
-import { appendTerminalErrorMessage } from './terminal-error-accumulation'
+import {
+  appendPaneTerminalError,
+  clearPaneTerminalError,
+  mapPaneTerminalErrors,
+  terminalErrorForPane,
+  type TerminalErrorsByPaneId
+} from './terminal-error-accumulation'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
@@ -265,7 +274,7 @@ type TerminalPaneProps = {
   isolatedPaneKey?: string | null
   // Why: ephemeral one-off command terminals don't need the header's prominent split affordance (split shortcuts still work).
   showSplitButton?: boolean
-  onPtyExit: (ptyId: string) => void
+  onPtyExit: (ptyId: string, exitCode?: number) => void
   onCloseTab: () => void
 }
 
@@ -337,7 +346,7 @@ function TerminalPane(
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
   // Why: per-pane live cwd via OSC 7 for split-pane cwd inheritance; split actions read it at dispatch. See docs/ssh-split-pane-inherit-cwd.md.
-  const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
+  const paneCwdRef = useRef<PaneCwdMap>(new Map())
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
   // Why: per-pane mirror of kitty keyboard flags; the keyboard policy reads it to encode Option chords as kitty CSI-u for opted-in TUIs.
   const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
@@ -359,6 +368,13 @@ function TerminalPane(
     sshReconnectTargetLabel,
     sshReconnectTargetRemoved
   } = useAppStore(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
+  const sshReconnectOwnsTerminalErrors = Boolean(
+    sshReconnectTargetId && sshReconnectStatus && sshReconnectStatus !== 'connected'
+  )
+  const sshReconnectOwnsTerminalErrorsRef = useRef(sshReconnectOwnsTerminalErrors)
+  useLayoutEffect(() => {
+    sshReconnectOwnsTerminalErrorsRef.current = sshReconnectOwnsTerminalErrors
+  }, [sshReconnectOwnsTerminalErrors])
   useEffect(() => {
     if (!sshReconnectEnvironmentId) {
       return
@@ -404,6 +420,7 @@ function TerminalPane(
   const [agentSessionContinuation, setAgentSessionContinuation] =
     useState<AgentSessionContinuationRequest | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [terminalErrorsByPaneId, setTerminalErrorsByPaneId] = useState<TerminalErrorsByPaneId>({})
   const [paneProcessExitsByPaneId, setPaneProcessExitsByPaneId] = useState<
     Record<number, PaneProcessExit>
   >({})
@@ -488,19 +505,31 @@ function TerminalPane(
     },
     [cancelPendingRenameFrames]
   )
-  const onPtyErrorRef = useRef((_paneId: number, message: string) => {
+  const onPtyErrorRef = useRef((paneId: number, message: string) => {
     if (isTerminalSessionStateSaveFailure(message)) {
       setTerminalError(null)
+      setTerminalErrorsByPaneId({})
       setSessionStateSaveFailureOpen(true)
       return
     }
-    setTerminalError((prev) => appendTerminalErrorMessage(prev, message))
+    const visibleMessage = sshReconnectOwnsTerminalErrorsRef.current
+      ? stripSshReconnectOwnedErrorLines(message)
+      : message
+    if (visibleMessage !== null) {
+      setTerminalErrorsByPaneId((current) =>
+        appendPaneTerminalError(current, paneId, visibleMessage)
+      )
+    }
   })
-  /** Dismissal is the only signal that the user has seen the surface, so it must also release the transports' repeat-suppression memory. */
+  const onPtyErrorClearedRef = useRef((paneId: number, message?: string) => {
+    setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId, message))
+  })
   const dismissTerminalError = useCallback(() => {
+    const paneId = managerRef.current?.getActivePane()?.id ?? null
     setTerminalError(null)
-    for (const transport of paneTransportsRef.current.values()) {
-      transport.notifyErrorSurfaceDismissed?.()
+    if (paneId !== null) {
+      setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+      paneTransportsRef.current.get(paneId)?.notifyErrorSurfaceDismissed?.()
     }
   }, [])
   const onPtyRecoveryStateRef = useRef(
@@ -765,6 +794,11 @@ function TerminalPane(
     if (isVisible) {
       // Why: a hidden 0×0 pane self-heals once shown; clear only the stale zero-dims diagnostic so real errors survive.
       setTerminalError((prev) => (prev && isTerminalZeroDimensionsDiagnostic(prev) ? null : prev))
+      setTerminalErrorsByPaneId((current) =>
+        mapPaneTerminalErrors(current, (message) =>
+          isTerminalZeroDimensionsDiagnostic(message) ? null : message
+        )
+      )
     }
   }, [isVisible, shouldMeasureHiddenStartup])
 
@@ -1085,15 +1119,34 @@ function TerminalPane(
     persistLayoutSnapshot()
   }, [paneCount, paneTitles, persistLayoutSnapshot, terminalTab])
 
-  const writePanePtyLayoutBinding = useCallback(
-    (paneId: number, ptyId: string | null, repairActiveLeafOnClear: boolean): void => {
+  const writePanePtyLayoutBindingForLeaf = useCallback(
+    (
+      leafId: string,
+      ptyId: string | null,
+      repairActiveLeafOnClear: boolean,
+      sourcePaneId?: number
+    ): void => {
       const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
       const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
         existingLayout
       const existingBindings = existingLayout.ptyIdsByLeafId ?? {}
-      const leafId = managerRef.current?.getLeafId(paneId)
-      if (!leafId) {
-        return
+
+      if (ptyId && sourcePaneId !== undefined) {
+        const currentTransportPtyId = paneTransportsRef.current.get(sourcePaneId)?.getPtyId()
+        const tabPtyId = Object.values(useAppStore.getState().tabsByWorktree)
+          .flat()
+          .find((tab) => tab.id === tabId)?.ptyId
+        if (
+          currentTransportPtyId &&
+          currentTransportPtyId !== ptyId &&
+          shouldIgnoreStalePanePtyLayoutBinding({
+            existingPtyId: existingBindings[leafId],
+            nextPtyId: ptyId,
+            tabPtyId
+          })
+        ) {
+          return
+        }
       }
 
       if (ptyId) {
@@ -1131,6 +1184,17 @@ function TerminalPane(
     [setTabLayout, tabId]
   )
 
+  const writePanePtyLayoutBinding = useCallback(
+    (paneId: number, ptyId: string | null, repairActiveLeafOnClear: boolean): void => {
+      const leafId = managerRef.current?.getLeafId(paneId)
+      if (!leafId) {
+        return
+      }
+      writePanePtyLayoutBindingForLeaf(leafId, ptyId, repairActiveLeafOnClear, paneId)
+    },
+    [managerRef, writePanePtyLayoutBindingForLeaf]
+  )
+
   const syncPanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null): void => {
       writePanePtyLayoutBinding(paneId, ptyId, false)
@@ -1138,14 +1202,20 @@ function TerminalPane(
     [writePanePtyLayoutBinding]
   )
 
-  const clearExitedPanePtyLayoutBinding = useCallback(
-    (paneId: number, exitedPtyId: string): void => {
+  const syncPanePtyLayoutBindingForLeaf = useCallback(
+    (leafId: string, ptyId: string | null, sourcePaneId: number): void => {
+      writePanePtyLayoutBindingForLeaf(leafId, ptyId, false, sourcePaneId)
+    },
+    [writePanePtyLayoutBindingForLeaf]
+  )
+
+  const clearExitedPanePtyLayoutBindingForLeaf = useCallback(
+    (leafId: string, exitedPtyId: string): void => {
       const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
       const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
         existingLayout
       const existingBindings = existingLayout.ptyIdsByLeafId ?? {}
-      const leafId = managerRef.current?.getLeafId(paneId)
-      if (!leafId || existingBindings[leafId] !== exitedPtyId) {
+      if (existingBindings[leafId] !== exitedPtyId) {
         return
       }
 
@@ -1163,6 +1233,17 @@ function TerminalPane(
       })
     },
     [setTabLayout, tabId]
+  )
+
+  const clearExitedPanePtyLayoutBinding = useCallback(
+    (paneId: number, exitedPtyId: string): void => {
+      const leafId = managerRef.current?.getLeafId(paneId)
+      if (!leafId) {
+        return
+      }
+      clearExitedPanePtyLayoutBindingForLeaf(leafId, exitedPtyId)
+    },
+    [clearExitedPanePtyLayoutBindingForLeaf, managerRef]
   )
 
   const {
@@ -1201,11 +1282,22 @@ function TerminalPane(
           useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
           useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId))
         }
-        syncPanePtyLayoutBinding(paneId, null)
+        setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+        if (leafId) {
+          syncPanePtyLayoutBindingForLeaf?.(leafId, null, paneId)
+        } else {
+          syncPanePtyLayoutBinding(paneId, null)
+        }
         manager.closePane(paneId)
       }
     },
-    [clearSessionRestoredBannerForPane, onCloseTab, syncPanePtyLayoutBinding, tabId]
+    [
+      clearSessionRestoredBannerForPane,
+      onCloseTab,
+      syncPanePtyLayoutBinding,
+      syncPanePtyLayoutBindingForLeaf,
+      tabId
+    ]
   )
 
   // Cmd+W confirms before killing a shell with a running child (e.g. npm run dev); idle prompts close immediately, and Ctrl+D bypasses by design.
@@ -1337,6 +1429,7 @@ function TerminalPane(
         return false
       }
       const fallbackPtyId = paneTransportsRef.current.get(sourcePaneId)?.getPtyId() ?? null
+      const sourcePaneCwd = paneCwdRef.current.get(sourcePaneId)
       return (
         detachTerminalPaneToTab({
           fallbackPtyId,
@@ -1344,6 +1437,7 @@ function TerminalPane(
           manager: managerRef.current,
           persistLayoutSnapshot,
           sourcePaneId,
+          ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
           sourceTabId: tabId,
           targetGroupId: target.groupId,
           targetIndex: target.insertionIndex,
@@ -1388,6 +1482,7 @@ function TerminalPane(
     onPtyExitRef,
     onAgentExitedRef,
     onPtyErrorRef,
+    onPtyErrorClearedRef,
     onPaneProcessDied: handlePaneProcessDied,
     onPtyRecoveryStateRef,
     clearTabPtyId,
@@ -1407,7 +1502,9 @@ function TerminalPane(
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
+    syncPanePtyLayoutBindingForLeaf,
     clearExitedPanePtyLayoutBinding,
+    clearExitedPanePtyLayoutBindingForLeaf,
     onStartupBound: settleTabStartupCommand,
     setTabPaneExpanded,
     setTabCanExpandPane,
@@ -1585,6 +1682,7 @@ function TerminalPane(
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
+      setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
 
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,
@@ -1602,6 +1700,7 @@ function TerminalPane(
         onPtyExitRef,
         onAgentExitedRef,
         onPtyErrorRef,
+        onPtyErrorClearedRef,
         onPaneProcessDied: handlePaneProcessDied,
         onPtyRecoveryStateRef,
         clearTabPtyId,
@@ -1692,6 +1791,32 @@ function TerminalPane(
   // driver instead (codex-detached-pane-restart), which leaves anything a live
   // transport owns to this effect.
   const panePtyLayoutBindings = savedLayout.ptyIdsByLeafId
+  useLayoutEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+
+    // A replacement can commit tab/layout ownership while a remounted xterm
+    // is still carrying the previous DOM marker. Allow an unbound transport to
+    // catch up, but never let a live mismatched transport overwrite its owner.
+    for (const pane of manager.getPanes()) {
+      const expectedPtyId = panePtyLayoutBindings?.[pane.leafId]
+      if (!expectedPtyId) {
+        continue
+      }
+      const transport = paneTransportsRef.current.get(pane.id)
+      if (transport && transport.getPtyId() && transport.getPtyId() !== expectedPtyId) {
+        continue
+      }
+      if (pane.container.dataset.ptyId === expectedPtyId) {
+        continue
+      }
+      bindPanePtyId(pane.id, expectedPtyId, tabId)
+      pane.container.dataset.ptyId = expectedPtyId
+    }
+  }, [managerRef, panePtyLayoutBindings, paneTransportsRef, tabId])
+
   useEffect(() => {
     const manager = managerRef.current
     if (!manager) {
@@ -2926,25 +3051,25 @@ function TerminalPane(
 
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
-  const showSshReconnectOverlay = Boolean(
-    isActive &&
-    isVisible &&
-    sshReconnectTargetId &&
-    sshReconnectStatus &&
-    sshReconnectStatus !== 'connected'
-  )
-  // Why: while the reconnect banner owns recovery, strip only the SSH-owned lines from the
-  // (possibly aggregated) error, so a later successful connect can't flash the raw ssh:connect
-  // failure and any unrelated error still surfaces after reconnect.
+  const showSshReconnectOverlay = isActive && isVisible && sshReconnectOwnsTerminalErrors
+  // Why: SSH reconnect owns its failures even while this tab is hidden; clear only those lines so
+  // unrelated pane errors survive and no stale connect failure flashes after recovery.
   useEffect(() => {
-    if (!showSshReconnectOverlay || terminalError == null) {
+    if (!sshReconnectOwnsTerminalErrors) {
       return
     }
-    const kept = stripSshReconnectOwnedErrorLines(terminalError)
-    if (kept !== terminalError) {
-      setTerminalError(kept)
-    }
-  }, [showSshReconnectOverlay, terminalError])
+    setTerminalError((current) =>
+      current === null ? null : stripSshReconnectOwnedErrorLines(current)
+    )
+    setTerminalErrorsByPaneId((current) =>
+      mapPaneTerminalErrors(current, stripSshReconnectOwnedErrorLines)
+    )
+  }, [sshReconnectOwnsTerminalErrors])
+  const visibleTerminalError = terminalErrorForPane(
+    terminalError,
+    terminalErrorsByPaneId,
+    activePane?.id ?? null
+  )
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
   const chatLeafStillMounted = chatLeafId
@@ -3080,13 +3205,17 @@ function TerminalPane(
       })}
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
-      {terminalError && isActive && !showSshReconnectOverlay ? (
-        <TerminalErrorToast
-          error={terminalError}
-          onDismiss={dismissTerminalError}
-          onRestartDaemon={() => daemonActions.setPending('restart')}
-        />
-      ) : null}
+      {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
+        ? createPortal(
+            <TerminalErrorToast
+              error={visibleTerminalError}
+              onDismiss={dismissTerminalError}
+              onRestartDaemon={() => daemonActions.setPending('restart')}
+            />,
+            activePane.container,
+            `terminal-error-${activePane.id}`
+          )
+        : null}
       {isActive
         ? managedPanes.map((pane) => {
             const processExit = paneProcessExitsByPaneId[pane.id]

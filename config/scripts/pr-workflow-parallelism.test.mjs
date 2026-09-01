@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from 'node:fs'
+import { existsSync, globSync, readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
@@ -59,6 +59,9 @@ describe('PR workflow parallelism', () => {
     const primerInstall = workflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+    const nodeNextPrimerInstall = nodeNextWorkflow.jobs.test_native_cache.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
 
     expect(workflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
     expect(JSON.parse(workflow.jobs.test.with.node_versions)).toEqual(['24'])
@@ -80,6 +83,9 @@ describe('PR workflow parallelism', () => {
     expect(primerInstall.with['native-runtime']).toBe('node')
     expect(primerInstall.with['node-version']).toBe('24')
     expect(workflow.jobs.test.needs).toContain('test_native_cache')
+    expect(nodeNextPrimerInstall.with['native-runtime']).toBe('node')
+    expect(nodeNextPrimerInstall.with['node-version']).toBe('26')
+    expect(nodeNextWorkflow.jobs.test.needs).toEqual(['test_native_cache'])
   })
 
   it('runs real-shell coverage once outside the general shards', () => {
@@ -177,6 +183,15 @@ describe('PR workflow parallelism', () => {
       // Why this file is excluded: it carries the detector pattern as a literal
       // and would otherwise match itself.
       .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')
+      // TypeScript builds can leave an ignored JavaScript companion beside a source
+      // test. Inspect the source file once so generated output cannot duplicate it.
+      .filter(
+        (testFile) =>
+          !testFile.endsWith('.js') ||
+          !['.ts', '.tsx', '.mjs', '.cjs'].some((extension) =>
+            existsSync(testFile.replace(/\.js$/, extension))
+          )
+      )
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
       .sort()
 

@@ -101,6 +101,14 @@ export type TerminalState = {
   pendingReconnectPtyIdByTabId: Record<string, string>
   /** Retained across relay disconnect after tab.ptyId is cleared so persistence can reattach. */
   lastKnownRelayPtyIdByTabId: Record<string, string>
+  /**
+   * Tabs whose PTY vanished without positive evidence of process death.
+   *
+   * This is session-scoped (never persisted) and protects a tab from the
+   * orphan sweep while its execution host is unavailable. A replacement PTY
+   * or an explicit close settles the marker.
+   */
+  unverifiedPtyLossTabIds: Record<string, true>
   /** Reattach snapshots are consumed once by the pane that receives the replacement PTY. */
   pendingSnapshotByPtyId: Record<
     string,

@@ -66,6 +66,7 @@ export type WorktreeCreationRequest = {
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayName?: string
+  displayNameKind?: 'generated' | 'user'
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision

@@ -7,7 +7,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as osModule from 'node:os'
@@ -149,7 +150,7 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
     server = null
     homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
     if (home) {
-      rmSync(home, { recursive: true, force: true })
+      removeTreeSync(home)
       home = ''
     }
   })

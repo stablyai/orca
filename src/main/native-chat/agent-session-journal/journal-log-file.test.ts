@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { appendJournalRows, JOURNAL_SNAPSHOT_FILE, readJournalSnapshot } from './journal-log-file'
 import type { JournalSnapshotFile } from './journal-log-file'
 import type { JournalRow } from './journal-row-schema'
-import { openAgentSessionJournal } from './journal-store'
+import { openAgentSessionJournal } from './journal-store-factory'
 import {
   projectStructuredAgentSessionStatus,
   projectStructuredItemsToNativeChat

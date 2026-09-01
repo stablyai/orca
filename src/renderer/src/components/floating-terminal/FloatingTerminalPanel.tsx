@@ -89,6 +89,7 @@ import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-w
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
 import { FloatingBrowserSlot } from './FloatingBrowserSlot'
 import { FloatingWorkspaceTabDragContext } from './FloatingWorkspaceTabDragContext'
 import { isFloatingTerminalDragTarget } from './floating-terminal-titlebar-drag-target'
@@ -1912,7 +1913,11 @@ export function FloatingTerminalPanel({
                         // atlas to corrupt) while hidden, and the resume on
                         // reopen rebuilds the renderer from scratch.
                         isVisible={isActive && open}
-                        onPtyExit={(ptyId) => {
+                        onPtyExit={(ptyId, exitCode) => {
+                          if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
+                            useAppStore.getState().markUnverifiedPtyLoss(tab.id)
+                            return
+                          }
                           if (shouldDeferParkedPtyExitTabClose(tab.id, ptyId)) {
                             return
                           }

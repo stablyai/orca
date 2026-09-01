@@ -236,6 +236,7 @@ function linearWorkspaceSignature(workspace: LinearWorkspace): string {
   ].join('\u001f')
 }
 
+/** Cache-invalidation key: broader than `linearWorkspaceScopeSignature`, hashes full viewer and workspace metadata. */
 function linearStatusScopeSignature(status: LinearConnectionStatus): string {
   return JSON.stringify({
     connected: status.connected,
@@ -607,7 +608,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     if (inflightStatusRequest && !force && inflightStatusRequest.contextKey === contextKey) {
       return inflightStatusRequest.promise
     }
-    if (get().linearStatusContextKey !== contextKey) {
+    if (get().linearStatusContextKey !== contextKey && get().linearStatusChecked) {
       set({ linearStatusChecked: false })
     }
 
@@ -732,12 +733,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearStatusChecked: true,
             linearStatusContextKey: contextKey
           })
-        } else {
-          set({
-            linearStatus: status,
-            linearStatusChecked: true,
-            linearStatusContextKey: contextKey
-          })
+        } else if (!get().linearStatusChecked || get().linearStatusContextKey !== contextKey) {
+          // Preserve the status reference when the probe did not change scope.
+          set({ linearStatusChecked: true, linearStatusContextKey: contextKey })
         }
       }
       return result

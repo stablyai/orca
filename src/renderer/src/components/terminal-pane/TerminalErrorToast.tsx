@@ -52,8 +52,7 @@ export function isSshReconnectOwnedTerminalError(error: string): boolean {
   )
 }
 
-// Why: onPtyError aggregates errors into one newline-joined string, so classify per line —
-// drop only the reconnect-owned lines and keep any unrelated error, regardless of order.
+// Error messages are newline-joined for display, so keep unrelated lines regardless of order.
 export function stripSshReconnectOwnedErrorLines(error: string): string | null {
   const kept = error
     .split('\n')

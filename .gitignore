@@ -92,6 +92,9 @@ design-docs/
 # and the tracked reference docs linked from AGENTS.md / README.md).
 docs/**
 !docs/
+# The deployable docs app is source, not local engineering notes.
+!docs/site/
+!docs/site/**
 !docs/assets/
 !docs/assets/**
 !docs/readme/

@@ -23,6 +23,7 @@ import { buildWorkspaceTerminalRowPlan } from './workspace-terminal-row-plan'
 import { buildWorkspaceTerminalReconnectPlan } from './workspace-terminal-reconnect-plan'
 import { buildWorkspaceTerminalLayoutPlan } from './workspace-terminal-layout-plan'
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
+import { retainUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
 export function createWorkspaceTerminalHydrationActions(
   set: TerminalStoreSet,
@@ -189,6 +190,10 @@ export function createWorkspaceTerminalHydrationActions(
           pendingReconnectTabByWorktree,
           pendingReconnectPtyIdByTabId,
           everActivatedWorktreeIds: nextEverActivated,
+          unverifiedPtyLossTabIds: retainUnverifiedPtyLossTabIds(
+            s.unverifiedPtyLossTabIds,
+            validTabIds
+          ),
           // Why: seed hydrated active worktrees so the first activation has a Back target.
           worktreeNavHistory: activeWorktreeId ? [activeWorktreeId] : [],
           worktreeNavHistoryIndex: activeWorktreeId ? 0 : -1,

@@ -76,6 +76,11 @@ async function routeAllMailboxPages(
 
 type DispatchMutationMessageType = 'worker_done' | 'heartbeat' | 'escalation' | 'decision_gate'
 
+const SEND_MESSAGE_TYPE_ERROR = [
+  `Invalid --type. Expected one of: ${MESSAGE_TYPES.join(', ')}.`,
+  'To answer a worker question, use the same Orca CLI executable with orchestration reply --id <msg_id> --body <text>.'
+].join(' ')
+
 function isDispatchMutationMessageType(
   type: string | undefined
 ): type is DispatchMutationMessageType {
@@ -132,17 +137,9 @@ const SendParams = z
     from: OptionalString,
     body: OptionalString,
     type: z
-      .enum([
-        'status',
-        'dispatch',
-        'worker_done',
-        'merge_ready',
-        'escalation',
-        'handoff',
-        'decision_gate',
-        'question',
-        'heartbeat'
-      ])
+      .enum(MESSAGE_TYPES, {
+        error: SEND_MESSAGE_TYPE_ERROR
+      })
       .optional(),
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
     threadId: OptionalString,

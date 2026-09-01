@@ -1,5 +1,6 @@
 import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
+import { isFolderRepo } from '../shared/repo-kind'
 import {
   resolveLocalProjectRuntimeForRepo,
   type ProjectRuntimeResolutionStore
@@ -56,6 +57,28 @@ export function getLocalProjectWorktreeGitOptions(
 ): LocalProjectWorktreeGitOptions {
   const { wslDistro } = getLocalProjectGitExecOptions(store, repo)
   return wslDistro ? { wslDistro } : {}
+}
+
+/**
+ * Git routing for the speculative worktree-create warm-up.
+ *
+ * Deliberately non-throwing where `getLocalProjectWorktreeGitOptions` throws: an
+ * optimistic prefetch must not report a repair-required runtime as a failure, so
+ * an unresolved runtime falls back to the host Git the warm-up used before
+ * routing existed.
+ */
+export function getWorktreeCreatePrefetchGitOptions(
+  store: Store,
+  repo: Repo
+): LocalProjectWorktreeGitOptions {
+  if (isFolderRepo(repo)) {
+    return {}
+  }
+  const projectRuntime = resolveLocalProjectRuntimeForRepo(store, repo)
+  if (!projectRuntime || projectRuntime.status !== 'resolved') {
+    return {}
+  }
+  return getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
 }
 
 export function getLocalProjectWorktreeGitOptionsForRuntime(

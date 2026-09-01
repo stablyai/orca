@@ -640,7 +640,13 @@ export function projectWorktreeTabModelReconciliation(
       return false
     }
     // Why: reconnectable legacy tabs must re-enter the unified model instead of being orphaned.
-    return terminalTabHasReconnectablePty(state, tab.id, tab.ptyId)
+    // A session-scoped unverified-loss marker is also liveness evidence: the
+    // host may have disappeared before it could publish a PTY, so keep the row
+    // visible until a replacement binds or the user closes it.
+    return (
+      terminalTabHasReconnectablePty(state, tab.id, tab.ptyId) ||
+      state.unverifiedPtyLossTabIds[tab.id] === true
+    )
   })
   const orphanTerminalIds = getOrphanTerminalIds(state, worktreeId)
   const ensuredGroupState =

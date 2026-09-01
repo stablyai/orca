@@ -188,7 +188,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
     notes: [
-      'Each terminal reports its current surface ("visible" or "background"); JSON omits visualLayouts unless --include-visual-layouts is passed.'
+      'Each terminal reports its current surface ("visible" or "background") when the host supports it; JSON omits visualLayouts unless --include-visual-layouts is passed.'
     ]
   },
   {

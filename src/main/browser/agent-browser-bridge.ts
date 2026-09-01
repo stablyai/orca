@@ -2861,13 +2861,7 @@ export class AgentBrowserBridge {
   }
 
   private resolveTabIdSafe(webContentsId: number): string | null {
-    const tabs = this.browserManager.getWebContentsIdByTabId()
-    for (const [tabId, wcId] of tabs) {
-      if (wcId === webContentsId) {
-        return tabId
-      }
-    }
-    return null
+    return this.browserManager.getTabIdForWebContentsId(webContentsId)
   }
 
   private requireTargetWebContents(target: ResolvedBrowserCommandTarget): WebContents {

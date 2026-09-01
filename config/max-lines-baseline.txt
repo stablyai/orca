@@ -11,10 +11,6 @@ inline src/main/index.ts
 inline src/main/ipc/filesystem.ts
 inline src/main/ipc/worktree-remote.ts
 inline src/main/rate-limits/service.ts
-inline src/main/runtime/orca-runtime-browser.ts
-inline src/main/runtime/orca-runtime-files.ts
-inline src/main/runtime/orca-runtime.test.ts
-inline src/main/runtime/orca-runtime.ts
 inline src/main/runtime/rpc/methods/orchestration.ts
 inline src/main/ssh/ssh-channel-multiplexer.ts
 inline src/main/ssh/ssh-connection.ts

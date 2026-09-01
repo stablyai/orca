@@ -91,6 +91,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   daemonClientMock.mockImplementation(function MockDaemonClient() {
     return {
       ensureConnected: vi.fn(async () => {}),
+      ensureConnectedWithin: vi.fn(async () => {}),
       getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
       request: vi.fn(async () => ({ sessions: [] })),
       disconnect: vi.fn()

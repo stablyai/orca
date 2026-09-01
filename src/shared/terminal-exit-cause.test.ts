@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   describeTerminalExitCause,
   isDeliberateTerminalExit,
+  isProvenProcessExit,
   resolveProcessExitCause,
   resolveUnreportedExitCause
 } from './terminal-exit-cause'
@@ -95,5 +96,17 @@ describe('isDeliberateTerminalExit', () => {
     expect(isDeliberateTerminalExit({ kind: 'exited', exitCode: 0 })).toBe(false)
     expect(isDeliberateTerminalExit({ kind: 'signaled', signal: 9 })).toBe(false)
     expect(isDeliberateTerminalExit({ kind: 'unknown', reason: 'stop_unverified' })).toBe(false)
+  })
+})
+
+describe('isProvenProcessExit', () => {
+  it('accepts host-vouched process statuses', () => {
+    expect(isProvenProcessExit(0)).toBe(true)
+    expect(isProvenProcessExit(137)).toBe(true)
+  })
+
+  it('rejects the synthetic loss sentinel', () => {
+    // A host shutdown can deliver -1 for every PTY without proving process death.
+    expect(isProvenProcessExit(-1)).toBe(false)
   })
 })

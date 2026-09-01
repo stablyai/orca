@@ -14,6 +14,7 @@ import {
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
 import { materializeRelocatedDaemonHost } from './daemon-host-relocation'
+import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import {
   getDaemonPidPath,
@@ -56,6 +57,9 @@ export function createOutOfProcessLauncher(
 ): DaemonLauncher {
   return async (socketPath, tokenPath, suppliedPidPath, suppliedLaunchNonce) => {
     const entryPath = getDaemonEntryPath()
+    // Why here: everything up to the fork is one recovery, so the adoption connect and the
+    // preflight's probes share a single absolute budget rather than each carrying its own.
+    const recoveryDeadlineMs = Date.now() + DAEMON_RECOVERY_BUDGET_MS
     const pidPath = suppliedPidPath ?? getDaemonPidPath(runtimeDir)
     const launchNonce = suppliedLaunchNonce ?? randomUUID()
     // One-shot: whichever launch consumes it owns the attribution, so a later unrelated launch can't
@@ -69,7 +73,9 @@ export function createOutOfProcessLauncher(
     })
     try {
       // Why: acquire the full pair before control-only probes so an expired inherited deadline can't fire in the probe-to-adoption gap.
-      await adoptionClient.ensureConnected()
+      // Why bounded: unbudgeted this grants a fresh 5s to each of four connect/hello steps, so a
+      // wedged endpoint burns more before recovery starts than recovery itself is allowed.
+      await adoptionClient.ensureConnectedWithin(daemonRecoveryProbeTimeoutMs(recoveryDeadlineMs))
       await reconcileDaemonPidOwnership(adoptionClient, pidPath)
     } catch {
       adoptionClient.disconnect()
@@ -99,6 +105,7 @@ export function createOutOfProcessLauncher(
         socketPath,
         tokenPath,
         entryPath,
+        recoveryDeadlineMs,
         attributedReason,
         releaseAdoptionClient,
         preserveDaemon
@@ -193,6 +200,10 @@ export function createOutOfProcessLauncher(
       // giving up here costs the user every persistent session for the whole run. Something
       // answering the endpoint now is a daemon worth adopting, not a reason to fall back to
       // local PTYs.
+      // Why unbudgeted: the recovery deadline bounds the adopt-or-replace decision, and this runs
+      // after it — past the kill, the fork and the lease. Clamping to the remainder yields a 1ms
+      // probe that loses to its own timer against a live socket, turning the rescue into the total
+      // daemon loss it exists to prevent.
       if (await probeSocket(socketPath)) {
         console.warn(
           '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'

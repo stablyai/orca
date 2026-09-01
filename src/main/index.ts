@@ -69,6 +69,7 @@ import {
 import {
   type CodexPaneHomeRoute,
   getCodexPaneAccount,
+  hasAnyRecordedLegacyWslCodexPane,
   hasRecordedManagedHostCodexPane,
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
@@ -667,6 +668,9 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         }
         currentStore.setWorktreeMeta(worktreeId, {
           displayName,
+          // The first-agent title is an intentional user-facing label; keep it stable after the
+          // generated branch is renamed and across subsequent catalog refreshes.
+          displayNameIsPinned: true,
           pendingFirstAgentMessageRename: false,
           // Success clears the failure badge (redundant with the explicit setRenameError(null)).
           firstAgentMessageRenameError: null
@@ -758,7 +762,16 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
-installServeSupervisorDisconnectQuit(isServeMode)
+// Why these four lines are one step (#16761): the two above decide where userData lives, and
+// everything below may resolve a path. Installing the accessor any later leaves a window where an
+// early resolve either throws — which is what killed `orca serve` — or, worse, memoizes the
+// pre-override directory and silently writes user state to the wrong place for the whole session.
+// Safe this early: ElectronAppEnvironment holds no state and calls `app` lazily per accessor, so it
+// changes no timing, and initDataPath only joins strings.
+setAppEnvironment(new ElectronAppEnvironment())
+// Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
+// changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
+initDataPath()
 
 // Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.
 const TRAY_CREATE_FALLBACK_MS = 12_000
@@ -933,12 +946,11 @@ if (!hasSingleInstanceLock) {
 
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (hasSingleInstanceLock) {
-  // Why first: both accessors throw until installed, and everything below this line
-  // may resolve a path or read a credential. Neither constructor touches `app` or
-  // `safeStorage` — they resolve lazily per call — so installing here changes no
-  // timing, in particular not the pre-ready Keychain service-name resolution and
-  // the app.setName ordering the userData captures below depend on.
-  setAppEnvironment(new ElectronAppEnvironment())
+  // Why first in this block: the accessor throws until installed and everything below may read a
+  // credential. The constructor does not touch `safeStorage` — it resolves lazily per call — so
+  // installing here changes no timing, in particular not the pre-ready Keychain service-name
+  // resolution. The app-environment port and the userData capture install earlier still, next to
+  // the path decision they depend on.
   setSecretStore(new ElectronSecretStore())
   // Why at process level, not per-window: pty.ts registers against injected surfaces so
   // it can load without electron, and an Electron main process always has ipcMain —
@@ -971,8 +983,13 @@ if (hasSingleInstanceLock) {
   installDevParentDisconnectQuit(shouldCoupleToDevParent)
   installDevParentWatchdog(shouldCoupleToDevParent)
   installDevParentSignalQuit(shouldCoupleToDevParent)
-  // Why: run after configureDevUserDataPath but before app.setName('Orca') (whenReady), which changes the resolved path on case-sensitive filesystems.
-  initDataPath()
+  // Why not at module scope with the other lifetime couplings (#16761): this resolves the handoff
+  // path, so it throws until setAppEnvironment() above installs the accessor — which killed every
+  // `orca serve` process before it could listen. After initDataPath() specifically, so the
+  // path-equality check against the CLI's env var uses the dir captured before app.setName().
+  // Safe to defer, and must stay synchronous: no 'disconnect' can be delivered until this module
+  // finishes evaluating, so moving this behind an await would open a real orphan window.
+  installServeSupervisorDisconnectQuit(isServeMode)
   // Why here: initDataPath above gives the canonical userData path for the record file; the write
   // itself lands for the next launch (see macos-press-and-hold-default.ts).
   applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())
@@ -1116,7 +1133,8 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
         macosLoginSessionWatch: process.platform === 'darwin' && !isServeMode
       })
       // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
-      if (codexRuntimeHome && hasRecordedManagedHostCodexPane()) {
+      const hasRetainedManagedHostPane = hasRecordedManagedHostCodexPane()
+      if (codexRuntimeHome && (hasRetainedManagedHostPane || hasAnyRecordedLegacyWslCodexPane())) {
         const livePtyIds = await listLiveDaemonPtyIds()
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
@@ -1124,15 +1142,17 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
           // Why (#16441): each retained home can run a codex app-server grant
           // session. Awaiting them here delayed the first window by N sessions;
           // a retained shell cannot invoke Codex before this provider serves.
-          void reconcileRetainedCodexHookHomes({
-            hookService: codexHookService,
-            hooksEnabled:
-              isAgentStatusHooksEnabled(settings) &&
-              settings?.disabledTuiAgents.includes('codex') !== true,
-            runtimeHomePaths: codexRuntimeHome.getRetainedHostCodexHookHomePaths(livePtyIds)
-          }).catch((error: unknown) => {
-            console.warn('[codex-hook-service] retained Codex home reconcile failed:', error)
-          })
+          if (hasRetainedManagedHostPane) {
+            void reconcileRetainedCodexHookHomes({
+              hookService: codexHookService,
+              hooksEnabled:
+                isAgentStatusHooksEnabled(settings) &&
+                settings?.disabledTuiAgents.includes('codex') !== true,
+              runtimeHomePaths: codexRuntimeHome.getRetainedHostCodexHookHomePaths(livePtyIds)
+            }).catch((error: unknown) => {
+              console.warn('[codex-hook-service] retained Codex home reconcile failed:', error)
+            })
+          }
         }
       }
       // Why: retained shells can invoke Codex immediately after the startup gate.
@@ -1230,7 +1250,7 @@ async function prepareCodexRuntimeHomeForLaunch(
   // Why: a ManagedCodexHomeTemporarilyUnavailableError must escape uncaught —
   // the fallbacks below all key off `null`, which means "system default", so
   // swallowing the refusal would launch the wrong account (#STA-4422).
-  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+  let runtimeHomePath = await codexRuntimeHome!.prepareForCodexLaunchAsync(target, launchEnv, {
     unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
   })
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
@@ -1239,7 +1259,7 @@ async function prepareCodexRuntimeHomeForLaunch(
     // re-resolve if the capability gate rejects it.
     realHomeHooksPrepared = await ensureRealHomeHooksIfSelected()
     if (realHomeHooksPrepared) {
-      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+      runtimeHomePath = await codexRuntimeHome!.prepareForCodexLaunchAsync(target, launchEnv, {
         unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
       })
     }
@@ -1259,13 +1279,11 @@ async function prepareCodexRuntimeHomeForLaunch(
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
     // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
-    const status = hooksEnabled
-      ? ((await codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget)) ??
-        // Why: a managed account's launch home is its own self-contained
-        // CODEX_HOME, so hooks/trust must install there, not the shared mirror.
-        (await codexHookService.install(runtimeHomePath ?? undefined)))
-      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
-        (await codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined)))
+    const status = await codexHookService.prepareRuntimeHomeForLaunch(
+      runtimeHomePath,
+      hookTarget,
+      hooksEnabled
+    )
     if (status.state === 'error') {
       console.warn(
         `[codex-hook-service] failed to ${
@@ -1375,9 +1393,9 @@ async function prepareCodexSessionResumeForLaunch(args: {
             userDataPath: app.getPath('userData')
           })
         } else if (hooksEnabled) {
-          await codexHookService.install(resumeHome)
+          await codexHookService.installForLaunchPrep(resumeHome)
         } else {
-          await codexHookService.refreshRuntimeUserHooks(resumeHome)
+          await codexHookService.refreshRuntimeUserHooksForLaunchPrep(resumeHome)
         }
       } catch (error) {
         // Why: hook repair is best-effort; session provenance must still win over the currently selected home.

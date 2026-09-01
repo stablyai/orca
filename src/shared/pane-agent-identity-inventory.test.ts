@@ -216,8 +216,8 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'resolveCompatibleAgentTypeForOwner',
     classification: 'identity-consumer',
     paths: [
-      ['src/main/runtime/orca-runtime.ts', 3],
       ['src/renderer/src/components/sidebar/worktree-agent-row-type.ts', 2],
+      ['src/main/runtime/runtime-mobile-session-projection.ts', 3],
       ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
       ['src/renderer/src/lib/tab-agent-from-signals.ts', 2],
       ['src/renderer/src/lib/use-tab-agent.ts', 2]

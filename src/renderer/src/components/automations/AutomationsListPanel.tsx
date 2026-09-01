@@ -20,6 +20,7 @@ import type { AutomationRowAction } from './automation-captured-owner'
 import type { AutomationHostTarget } from './automation-host-client'
 import { clampAutomationListSearchQueryInput } from './automation-list-search'
 import {
+  createAutomationListEnterHandler,
   getAutomationListArrowNavigationTarget,
   type AutomationListArrowKey
 } from './automation-list-keyboard-navigation'
@@ -214,6 +215,15 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
       visibleItems
     ]
   )
+  const handleSearchEnter = createAutomationListEnterHandler({
+    items: visibleItems,
+    selectedId: selectedRowKey,
+    selectedExternalKey,
+    selectAutomationRow,
+    selectExternalKey,
+    setActivePaneTab,
+    onOpenDetail
+  })
   React.useEffect(() => {
     if (!pendingKeyboardScrollRef.current) {
       return
@@ -286,6 +296,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
             }
             onClear={() => onListSearchQueryChange('')}
             onArrowNavigate={handleSearchArrowNavigate}
+            onEnter={handleSearchEnter}
           />
           <AutomationListFilterMenu
             filter={listFilter}

@@ -9,10 +9,8 @@ import type {
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
-import {
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 

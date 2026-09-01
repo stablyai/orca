@@ -13,6 +13,14 @@ import {
 import { isShellProcess } from '../../shared/shell-process-detection'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
+export {
+  resolveAgentForegroundProcessesBatch,
+  resolveAgentForegroundProcessesFromIndex,
+  toForegroundProcessEvidence,
+  type BatchedForegroundProcessOptions,
+  type BatchedForegroundProcessRequest,
+  type BatchedForegroundProcessResult
+} from './agent-foreground-process-batch'
 
 export type AgentForegroundProcessResolution = {
   available: boolean

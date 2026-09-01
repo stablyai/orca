@@ -110,6 +110,41 @@ describe('bundled skill guide generator', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
+    'resolves snapshot cleanup through Orca user-data precedence',
+    async () => {
+      const source = await readFile(
+        path.join(projectDir, 'skill-guides', 'orca-per-workspace-env.md'),
+        'utf8'
+      )
+      const assignment =
+        'orca_user_data_path="${ORCA_USER_DATA_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/orca}"'
+      expect(source).toContain(assignment)
+      const renderPath = async (env) =>
+        (
+          await execFileAsync(
+            'bash',
+            ['-u', '-c', `${assignment}; printf '%s' "$orca_user_data_path"`],
+            {
+              env
+            }
+          )
+        ).stdout
+
+      await expect(renderPath({ HOME: '/home/orca' })).resolves.toBe('/home/orca/.config/orca')
+      await expect(
+        renderPath({ HOME: '/home/orca', XDG_CONFIG_HOME: '/srv/config' })
+      ).resolves.toBe('/srv/config/orca')
+      await expect(
+        renderPath({
+          HOME: '/home/orca',
+          XDG_CONFIG_HOME: '/srv/config',
+          ORCA_USER_DATA_PATH: '/var/lib/orca-custom'
+        })
+      ).resolves.toBe('/var/lib/orca-custom')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'keeps Vercel sandbox names valid while preserving the instance suffix',
     async () => {
       const source = await readFile(

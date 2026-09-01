@@ -80,6 +80,10 @@ describe('web runtime session tab actions', () => {
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      activeTabIdByWorktree: {},
+      activeGroupIdByWorktree: {},
       setActiveWorktree: mocks.setActiveWorktree
     })
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(

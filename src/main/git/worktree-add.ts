@@ -6,6 +6,7 @@ import type {
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
+import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import {
   getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   refreshLocalBaseRefForWorktreeCreate
@@ -200,11 +201,17 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
-  await gitExecFileAsync(args, {
-    ...gitExecOptions(repoPath, options),
-    // Why: resolve per call — hoisting this to a module const would freeze the override at import.
-    timeout: resolveWorktreeAddTimeoutMs()
-  })
+  try {
+    await gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, options),
+      // Why: resolve per call — hoisting this to a module const would freeze the override at import.
+      timeout: resolveWorktreeAddTimeoutMs()
+    })
+  } finally {
+    // Git may have written the target's `.git` marker even when it reports a late
+    // failure, so drop any pre-create route before the follow-up commands route.
+    invalidateWslLinkedWorktreeGitRouting(worktreePath)
+  }
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}

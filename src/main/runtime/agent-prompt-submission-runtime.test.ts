@@ -270,7 +270,7 @@ describe('agent prompt submission runtime', () => {
     expect(writes).not.toContain('\r')
   })
 
-  it('stops a chunked paste when permission appears between chunks', async () => {
+  it('does not submit an atomic paste after permission appears', async () => {
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
     let writeChecks = 0
 
@@ -284,12 +284,12 @@ describe('agent prompt submission runtime', () => {
     })
 
     await expect(submission).rejects.toThrow('agent_prompt_blocked')
-    expect(writes).toHaveLength(2)
-    expect(writes[1]).toBe(AGENT_PROMPT_BRACKETED_PASTE_END)
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
     expect(writes).not.toContain('\r')
   })
 
-  it('stops a chunked paste after transient output-only permission', async () => {
+  it('does not submit an atomic paste after transient output-only permission', async () => {
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
     runtime.onPtyData('pty-prompt', 'initial output\n', Date.now())
     let writeChecks = 0
@@ -309,8 +309,8 @@ describe('agent prompt submission runtime', () => {
     })
 
     await expect(submission).rejects.toThrow('agent_prompt_blocked')
-    expect(writes).toHaveLength(2)
-    expect(writes[1]).toBe(AGENT_PROMPT_BRACKETED_PASTE_END)
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
     expect(writes).not.toContain('\r')
   })
 
@@ -736,7 +736,7 @@ describe('agent prompt submission runtime', () => {
 
     await expect(submission).rejects.toThrow('terminal_handle_stale')
     expect(writes).toHaveLength(1)
-    expect(writes[0]).not.toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
+    expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_END)
   })
 
   it('does not send delayed Enter after cancellation during settlement', async () => {

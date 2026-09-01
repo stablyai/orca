@@ -10,6 +10,27 @@ function stepNamed(job, name) {
 }
 
 describe('skill-sharing release workflow', () => {
+  it('keeps artifact builds behind every blocking release gate', () => {
+    const preflight = workflow.jobs['release-preflight']
+    const build = workflow.jobs.build
+    const macBuild = workflow.jobs['build-mac']
+
+    expect(preflight.needs).toEqual([
+      'cut',
+      'terminal-rendering-golden',
+      'skill-sharing-release-gate',
+      'skill-sharing-linux-floor-release-gate'
+    ])
+    expect(preflight.if).toContain('always()')
+    expect(preflight.if).toContain("needs.terminal-rendering-golden.result == 'success'")
+    expect(preflight.if).toContain("needs.skill-sharing-release-gate.result == 'success'")
+    expect(preflight.if).toContain(
+      "needs.skill-sharing-linux-floor-release-gate.result == 'success'"
+    )
+    expect(build.needs).toContain('release-preflight')
+    expect(macBuild.needs).toContain('release-preflight')
+  })
+
   it('blocks publication on native Windows, macOS, and the Linux floor', () => {
     const platform = workflow.jobs['skill-sharing-release-gate']
     const linux = workflow.jobs['skill-sharing-linux-floor-release-gate']

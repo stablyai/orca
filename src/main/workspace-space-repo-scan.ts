@@ -52,6 +52,33 @@ export type WorkspaceSpaceRepoScanResult = {
   worktrees: WorkspaceSpaceWorktree[]
 }
 
+export function summarizeWorkspaceSpaceRows(
+  rows: readonly WorkspaceSpaceWorktree[]
+): Pick<
+  WorkspaceSpaceRepoSummary,
+  'scannedWorktreeCount' | 'unavailableWorktreeCount' | 'totalSizeBytes' | 'reclaimableBytes'
+> {
+  let scannedWorktreeCount = 0
+  let unavailableWorktreeCount = 0
+  let totalSizeBytes = 0
+  let reclaimableBytes = 0
+  for (const row of rows) {
+    if (row.status === 'ok') {
+      scannedWorktreeCount += 1
+    } else {
+      unavailableWorktreeCount += 1
+    }
+    totalSizeBytes += row.sizeBytes
+    reclaimableBytes += row.reclaimableBytes
+  }
+  return {
+    scannedWorktreeCount,
+    unavailableWorktreeCount,
+    totalSizeBytes,
+    reclaimableBytes
+  }
+}
+
 async function listWorktreesForSpaceScan(
   store: Store,
   repo: Repo,
@@ -230,6 +257,7 @@ export async function scanWorkspaceSpaceRepo(args: {
     },
     options.onProgress
   )
+  const summary = summarizeWorkspaceSpaceRows(rows)
   return {
     worktrees: rows,
     summary: {
@@ -239,10 +267,7 @@ export async function scanWorkspaceSpaceRepo(args: {
       path: repo.path,
       isRemote: Boolean(repo.connectionId),
       worktreeCount: rows.length,
-      scannedWorktreeCount: rows.filter((row) => row.status === 'ok').length,
-      unavailableWorktreeCount: rows.filter((row) => row.status !== 'ok').length,
-      totalSizeBytes: rows.reduce((sum, row) => sum + row.sizeBytes, 0),
-      reclaimableBytes: rows.reduce((sum, row) => sum + row.reclaimableBytes, 0),
+      ...summary,
       error: null
     }
   }

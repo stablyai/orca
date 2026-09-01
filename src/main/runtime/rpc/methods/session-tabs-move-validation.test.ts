@@ -109,7 +109,7 @@ describe('session tab move validation', () => {
     expect(snapshot?.tabGroups?.[0]?.tabOrder).toEqual(['terminal-tab', 'agent-session:session-a'])
   })
 
-  it('publishes a structured tab into the active group instead of the first group', () => {
+  it('publishes a structured tab into the active group instead of the first group', async () => {
     const runtime = new OrcaRuntimeService()
     setMobileSessionSnapshot(runtime, {
       worktree: 'wt-1',
@@ -137,7 +137,7 @@ describe('session tab move validation', () => {
       ]
     })
 
-    runtime.publishStructuredAgentSessionTab({
+    await runtime.publishStructuredAgentSessionTab({
       workspaceId: 'wt-1',
       sessionId: 'session-a',
       agent: 'codex',
