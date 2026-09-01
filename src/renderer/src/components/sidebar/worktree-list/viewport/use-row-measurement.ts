@@ -14,6 +14,7 @@ import {
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 import type { WorktreeListVirtualizer } from './use-virtualizer'
+import { useVirtualRowRemovalAnimation } from './use-row-removal-animation'
 
 const recordKeyCountCache = new WeakMap<Record<string, unknown>, number>()
 
@@ -121,6 +122,13 @@ export function useVirtualRowMeasurementSync(args: {
     shouldSkipRestore: shouldSkipScrollAnchorRestore,
     totalSize,
     virtualizer
+  })
+
+  useVirtualRowRemovalAnimation({
+    renderRows,
+    rekeyedRowKeys: lineageRowRekeys,
+    scrollRef,
+    virtualItems
   })
 
   return { virtualItems, measureVirtualRowElement }

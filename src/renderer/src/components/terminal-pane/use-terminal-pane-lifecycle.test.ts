@@ -6,7 +6,6 @@ import {
   createQueuedStartupConsumer,
   getPreviousVisibleForTerminalPane,
   isTerminalPaneVisibilityResume,
-  isTouchIOSUserAgent,
   mapRestoredPaneTitlesByPaneId,
   paneOwnsQueuedStartup,
   resolvePaneLinkCwd,
@@ -137,16 +136,19 @@ describe('applyTerminalPaneCloseRequest', () => {
   it('retires mounted authority and binding while preserving the process and sleeping fence', () => {
     const retireAgentPaneAuthority = vi.fn()
     const syncPanePtyLayoutBinding = vi.fn()
+    const clearExitedPanePtyLayoutBindingForLeaf = vi.fn()
     const clearTabPtyId = vi.fn()
     const transport = { detach: vi.fn(), destroy: vi.fn() }
 
     retireMountedTerminalPaneSurface({
       paneKey: 'legacy-worker:11111111-1111-4111-8111-111111111111',
+      leafId: '11111111-1111-4111-8111-111111111111',
       paneId: 2,
       tabId: 'legacy-worker',
       ptyId: 'pty-legacy',
       retireAgentPaneAuthority,
       syncPanePtyLayoutBinding,
+      clearExitedPanePtyLayoutBindingForLeaf,
       clearTabPtyId,
       transport
     })
@@ -155,7 +157,11 @@ describe('applyTerminalPaneCloseRequest', () => {
       'legacy-worker:11111111-1111-4111-8111-111111111111',
       { preserveSleepingAgentSession: true }
     )
-    expect(syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, null)
+    expect(clearExitedPanePtyLayoutBindingForLeaf).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      'pty-legacy'
+    )
+    expect(syncPanePtyLayoutBinding).not.toHaveBeenCalled()
     expect(clearTabPtyId).toHaveBeenCalledWith('legacy-worker', 'pty-legacy')
     expect(transport.detach).toHaveBeenCalledOnce()
     expect(transport.destroy).not.toHaveBeenCalled()
@@ -672,41 +678,5 @@ describe('terminal pane visibility resume tracking', () => {
       false
     )
     expect(isTerminalPaneVisibilityResume({ previousIsVisible: false, isVisible: true })).toBe(true)
-  })
-})
-
-describe('isTouchIOSUserAgent', () => {
-  it('is false for a real Mac (Macintosh UA, no touch points)', () => {
-    expect(
-      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 0)
-    ).toBe(false)
-  })
-
-  it('is true for iPadOS desktop-mode Safari (Macintosh UA plus touch points)', () => {
-    expect(
-      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 5)
-    ).toBe(true)
-  })
-
-  it('is true for iPhone Safari ("like Mac OS X" UA plus touch points)', () => {
-    expect(
-      isTouchIOSUserAgent(
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15',
-        5
-      )
-    ).toBe(true)
-  })
-
-  it('is false for non-Mac UAs regardless of touch points', () => {
-    expect(isTouchIOSUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36', 5)).toBe(false)
-    expect(
-      isTouchIOSUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 5)
-    ).toBe(false)
-  })
-
-  it('keeps the forwarder on a Mac whose touch peripheral reports a single point', () => {
-    expect(
-      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 1)
-    ).toBe(false)
   })
 })

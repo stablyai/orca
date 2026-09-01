@@ -217,6 +217,35 @@ describe('fetchClaudeRateLimits', () => {
     expect(deleteActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(canonicalAuthPath)
   })
 
+  it('cleans up scoped Keychain credentials when the inactive preview fails', async () => {
+    setPlatform('darwin')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const canonicalAuthPath = realpathSync(ownedAuthPath)
+    vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValueOnce(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'managed-keychain-token' } })
+    )
+    vi.mocked(fetchViaPty).mockRejectedValueOnce(new Error('preview failed'))
+
+    await expect(
+      fetchManagedAccountUsage(
+        { id: 'account-1', managedAuthPath: ownedAuthPath },
+        { allowUsagePanelSupplement: true }
+      )
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 },
+      fableWeekly: null
+    })
+
+    expect(deleteActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(canonicalAuthPath)
+  })
+
   it('stages refreshed macOS inactive account credentials before Fable preview', async () => {
     setPlatform('darwin')
     tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))

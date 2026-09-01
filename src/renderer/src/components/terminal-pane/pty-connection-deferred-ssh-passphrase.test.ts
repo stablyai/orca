@@ -382,6 +382,60 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
+  it('consumes a sole deferred SSH session id after reattach succeeds', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]]),
+      deferredSshSessionIdsByTabId: { 'tab-1': 'saved-session' }
+    }
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
+    await flushAsyncTicks(12)
+
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'saved-session' })
+    )
+    expect(mockStoreState.removeDeferredSshSessionId).toHaveBeenCalledExactlyOnceWith('tab-1')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'saved-session')
+  })
+
+  it('retains a sole deferred SSH session id when its replay is disposed', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('saved-session')
+    transport.connect.mockResolvedValueOnce({
+      id: 'saved-session',
+      replay: 'restored output'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]]),
+      deferredSshSessionIdsByTabId: { 'tab-1': 'saved-session' }
+    }
+    const pane = createPane(1)
+    const deps = createDeps()
+    let binding: ReturnType<typeof connectPanePty> | null = null
+    pane.terminal.write.mockImplementation((_data, callback) => {
+      binding?.dispose()
+      callback?.()
+    })
+
+    binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(12)
+
+    expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
+    expect(mockStoreState.deferredSshSessionIdsByTabId['tab-1']).toBe('saved-session')
+  })
+
   it('spawns a fresh PTY when a deferred SSH session expired', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -418,6 +472,7 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledTimes(2)
     expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'expired-session')
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'expired-session')
+    expect(mockStoreState.removeDeferredSshSessionId).toHaveBeenCalledWith('tab-1')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'fresh-ssh-pty')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
   })
@@ -460,6 +515,66 @@ describe('connectPanePty', () => {
       1
     )
     expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores stale deferred SSH expiry after successor transport registration', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const reattach = createDeferred<undefined>()
+    let reattachOptions: ConnectCallbacks | undefined
+    const staleTransport = createMockTransport('old-pty')
+    staleTransport.connect.mockImplementation(
+      async (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (opts.sessionId) {
+          reattachOptions = opts.callbacks
+          await reattach.promise
+          return undefined
+        }
+        opts.callbacks?.onConnect?.()
+        opts.callbacks?.onReattachDetermined?.()
+        return 'fresh-pty'
+      }
+    )
+    transportFactoryQueue.push(staleTransport)
+    const paneTransportsRef = { current: new Map<number, MockTransport>() }
+    const deps = createDeps({ paneTransportsRef })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'old-pty' }] },
+      ptyIdsByTabId: { 'tab-1': ['old-pty'] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]]),
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'old-pty' }
+    } as StoreState
+
+    const pane = createPane(1)
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      Object.assign(deps, {
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'old-pty' }
+      }) as never
+    )
+    await flushAsyncTicks(12)
+    expect(staleTransport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'old-pty' })
+    )
+    const removeDeferredTargetCallCount =
+      mockStoreState.removeDeferredSshReconnectTarget.mock.calls.length
+
+    const successorTransport = createMockTransport('successor-pty')
+    paneTransportsRef.current.set(pane.id, successorTransport)
+    reattachOptions?.onError?.('SSH_SESSION_EXPIRED: stale lease')
+    reattach.resolve(undefined)
+    await flushAsyncTicks(20)
+
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(mockStoreState.removeDeferredSshReconnectTarget).toHaveBeenCalledTimes(
+      removeDeferredTargetCallCount
+    )
   })
 
   // Why: wires the REAL useNotificationDispatch (not a stub) so deleting the producer breaks the IPC assertion — the user-facing contract.

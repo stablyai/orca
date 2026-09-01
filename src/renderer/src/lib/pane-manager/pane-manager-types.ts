@@ -20,7 +20,13 @@ import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
  *  hint is scoped to pane creation and does not live on the pane afterwards. */
 export type PaneSpawnHints = {
   cwd?: string
+  cwdPromise?: Promise<string>
   ptyId?: string
+}
+
+export type PaneSplitOptions = PaneSpawnHints & {
+  ratio?: number
+  leafId?: string
 }
 
 export type ClosedPaneInfo = {
@@ -114,6 +120,7 @@ export type PaneRenderingDiagnostics = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  webglContextLossesInWindow?: number
   webglAttachFailedSinceRecovery: boolean
   hasComplexScriptOutput: boolean
   terminalWebglAutoDecision: TerminalWebglAutoDecision
@@ -142,6 +149,8 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  // Shared history bounds context-loss retries across resume and settled reveal.
+  webglContextLossTimestamps?: number[]
   // Hidden retained renderers rebuild at the resume boundary, never behind the hidden surface.
   webglRebuildDeferred?: boolean
   // Why per-pane: one pane's failed WebGL attach must not strand every other

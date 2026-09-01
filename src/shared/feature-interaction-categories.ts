@@ -31,6 +31,7 @@ export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
   'cmd-j-create-workspace': 'launcher',
   browser: 'browser',
   'browser-tab-created': 'browser',
+  'client-hosted-browser': 'browser',
   tasks: 'task_management',
   'github-tasks': 'task_management',
   'gitlab-tasks': 'task_management',

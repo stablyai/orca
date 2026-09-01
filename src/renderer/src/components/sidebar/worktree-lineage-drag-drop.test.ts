@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -44,6 +46,20 @@ describe('getWorktreeLineageDropTargetId', () => {
 
     expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBeNull()
   })
+
+  it.each(['status', 'agent'] as const)(
+    'keeps the %s region in the lineage nesting hit zone',
+    (targetRole) => {
+      const { container, target } = makeTarget({
+        worktreeId: 'parent',
+        top: 100,
+        bottom: 200,
+        targetRole
+      })
+
+      expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 150 })).toBe('parent')
+    }
+  )
 })
 
 describe('getReorderedWorktreeIdsToUnnest', () => {
@@ -168,24 +184,30 @@ function makeTarget(args: {
   top: number
   bottom: number
   contained?: boolean
+  targetRole?: 'identity' | 'status' | 'agent'
 }): {
   container: HTMLElement
   target: Element
 } {
-  const row = {
-    getAttribute: (name: string) => (name === 'data-worktree-drag-id' ? args.worktreeId : null)
-  } as HTMLElement
-  const content = {
-    getBoundingClientRect: () => ({ top: args.top, bottom: args.bottom }),
-    closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? row : null)
-  } as HTMLElement
-  const target = {
-    closest: (selector: string) =>
-      selector === '[data-worktree-card-hover-trigger]' ? content : null
-  } as Element
+  const container = document.createElement('div')
+  const row = document.createElement('div')
+  row.setAttribute('data-worktree-drag-id', args.worktreeId)
+  const content = document.createElement('div')
+  content.setAttribute('data-worktree-card-parent-content', '')
+  content.getBoundingClientRect = () => ({ top: args.top, bottom: args.bottom }) as DOMRect
+  const status = document.createElement('div')
+  const identity = document.createElement('div')
+  identity.setAttribute('data-worktree-card-hover-trigger', '')
+  const agent = document.createElement('div')
+  content.append(status, identity, agent)
+  row.append(content)
+  container.append(row)
+
+  const targetByRole = { status, identity, agent }
+  const target = targetByRole[args.targetRole ?? 'identity']
   const contained = args.contained ?? true
-  const container = {
-    contains: (element: Element) => contained && (element === content || element === row)
-  } as HTMLElement
+  if (!contained) {
+    container.removeChild(row)
+  }
   return { container, target }
 }

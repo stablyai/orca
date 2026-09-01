@@ -6,6 +6,8 @@ import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
 import type { Repo } from '../../src/shared/repo-types'
 import { expect, test } from './helpers/orca-app'
+import { revealPairedClientWindow } from './helpers/paired-client-window-reveal'
+import { forwardRendererConsole } from './helpers/renderer-console-forwarding'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient
@@ -94,6 +96,9 @@ async function runSelectedRuntimeAddJourney(
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, runtimeName)
+  // Why: the client renders the workbench under test, and a contained render
+  // crash only names its component stack on the renderer console.
+  forwardRendererConsole(client.page, testInfo)
   const serverUserDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const clientUserDataDir = await client.app.evaluate(({ app }) => app.getPath('userData'))
   const serverRuntime = new RuntimeClient(serverUserDataDir)
@@ -101,16 +106,12 @@ async function runSelectedRuntimeAddJourney(
 
   try {
     const measurements: Record<string, number> = {}
-    if (visible) {
-      await client.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.show()
-      })
-      expect(
-        await client.app.evaluate(
-          ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isVisible() ?? false
-        )
-      ).toBe(true)
-    }
+    // Why: the client is the Playwright-driven surface in both topologies; the hidden-window
+    // parity under test is the HUB's.
+    expect(await revealPairedClientWindow(client)).toMatchObject({
+      isVisible: true,
+      wasVisible: false
+    })
     let startedAt = Date.now()
     await setActiveRuntimePreference(client.page, null)
     await setActiveRuntimePreference(client.page, client.environmentId)
@@ -731,6 +732,12 @@ async function runSelectedRuntimeAddJourney(
       await expect(client.page.getByText(projectName, { exact: false }).first()).toBeVisible()
     }
     expect(await client.getDirectSshAttemptTargetIds()).toEqual([])
+    // Why: revealing the client must not leak into the HUB's window visibility.
+    expect(
+      await electronApp.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().some((window) => window.isVisible())
+      )
+    ).toBe(visible)
     console.info(`[pr11346-routing] ${JSON.stringify({ topology: runtimeName, ...measurements })}`)
     await client.page.screenshot({
       path: testInfo.outputPath(`${visible ? 'headed' : 'hidden-window'}-selected-runtime-add.png`),

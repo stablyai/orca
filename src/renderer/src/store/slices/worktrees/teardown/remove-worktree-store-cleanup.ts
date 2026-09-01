@@ -1,11 +1,14 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
+import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
   worktreeId: string,
-  tabIds: Set<string>
+  tabIds: Set<string>,
+  executionHostId?: ExecutionHostId
 ): void {
   set((s) => {
     const next = { ...s.worktreesByRepo }
@@ -22,6 +25,7 @@ export function applyRemoveWorktreeSuccessState(
     }
     const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
     const nextNativeChatLaunchDraftByTabId = { ...s.nativeChatLaunchDraftByTabId }
+    const nextUnverifiedPtyLossTabIds = { ...s.unverifiedPtyLossTabIds }
     // Why: closeTab deletes these per-tab maps but removeWorktree missed them, leaking a split pane's expand flags.
     const nextExpandedPaneByTabId = { ...s.expandedPaneByTabId }
     const nextCanExpandPaneByTabId = { ...s.canExpandPaneByTabId }
@@ -32,6 +36,7 @@ export function applyRemoveWorktreeSuccessState(
       delete nextAutomaticAgentResumeClaimsByTabId[tabId]
       delete nextNativeChatLaunchPromptByTabId[tabId]
       delete nextNativeChatLaunchDraftByTabId[tabId]
+      delete nextUnverifiedPtyLossTabIds[tabId]
       delete nextExpandedPaneByTabId[tabId]
       delete nextCanExpandPaneByTabId[tabId]
     }
@@ -113,6 +118,10 @@ export function applyRemoveWorktreeSuccessState(
     const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
     const nextMarkdownViewMode =
       removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
+    const nextMarkdownRichModeSizeOverride =
+      removedFileIds.size > 0
+        ? { ...s.markdownRichModeSizeOverride }
+        : s.markdownRichModeSizeOverride
     const nextEditorViewMode = removedFileIds.size > 0 ? { ...s.editorViewMode } : s.editorViewMode
     const nextMarkdownFrontmatterVisible =
       removedFileIds.size > 0 ? { ...s.markdownFrontmatterVisible } : s.markdownFrontmatterVisible
@@ -123,6 +132,7 @@ export function applyRemoveWorktreeSuccessState(
       for (const fileId of removedFileIds) {
         delete nextEditorDrafts[fileId]
         delete nextMarkdownViewMode[fileId]
+        delete nextMarkdownRichModeSizeOverride[fileId]
         delete nextEditorViewMode[fileId]
         delete nextMarkdownFrontmatterVisible[fileId]
         delete nextEditorCursorLine[fileId]
@@ -147,14 +157,11 @@ export function applyRemoveWorktreeSuccessState(
     const nextEverActivatedWorktreeIds = s.everActivatedWorktreeIds.has(worktreeId)
       ? new Set([...s.everActivatedWorktreeIds].filter((id) => id !== worktreeId))
       : s.everActivatedWorktreeIds
-    const nextLastVisitedAtByWorktreeId =
-      worktreeId in s.lastVisitedAtByWorktreeId
-        ? (() => {
-            const next = { ...s.lastVisitedAtByWorktreeId }
-            delete next[worktreeId]
-            return next
-          })()
-        : s.lastVisitedAtByWorktreeId
+    const nextLastVisitedAtByWorktreeId = removeWorktreeVisitEntries(
+      s.lastVisitedAtByWorktreeId,
+      new Set([worktreeId]),
+      executionHostId
+    )
     return {
       worktreesByRepo: next,
       worktreeLineageById: nextLineage,
@@ -165,6 +172,7 @@ export function applyRemoveWorktreeSuccessState(
       automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
       nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
       nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
+      unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds,
       terminalLayoutsByTabId: nextLayouts,
       expandedPaneByTabId: nextExpandedPaneByTabId,
       canExpandPaneByTabId: nextCanExpandPaneByTabId,
@@ -233,6 +241,7 @@ export function applyRemoveWorktreeSuccessState(
       activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
       editorDrafts: nextEditorDrafts,
       markdownViewMode: nextMarkdownViewMode,
+      markdownRichModeSizeOverride: nextMarkdownRichModeSizeOverride,
       editorViewMode: nextEditorViewMode,
       markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
       editorCursorLine: nextEditorCursorLine,

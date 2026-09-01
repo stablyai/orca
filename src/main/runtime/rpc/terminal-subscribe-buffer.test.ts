@@ -595,6 +595,7 @@ describe('terminal subscribe buffering', () => {
         endCol: number
         uri: string
       }[]
+      terminalOwner?: 'shell'
     }) => void)[] = []
     const serializeTerminalBuffer = vi
       .fn()
@@ -611,6 +612,7 @@ describe('terminal subscribe buffering', () => {
               endCol: number
               uri: string
             }[]
+            terminalOwner?: 'shell'
           }>((resolve) => {
             restreamResolves.push(resolve)
           })
@@ -682,7 +684,8 @@ describe('terminal subscribe buffering', () => {
       data: 'newer',
       cols: 100,
       rows: 24,
-      oscLinks: newerOscLinks
+      oscLinks: newerOscLinks,
+      terminalOwner: 'shell'
     })
     await vi.waitFor(() =>
       expect(
@@ -711,6 +714,9 @@ describe('terminal subscribe buffering', () => {
       kind: 'resized',
       oscLinks: newerOscLinks
     })
+    expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).not.toHaveProperty(
+      'terminalOwner'
+    )
 
     runtime.cleanupSubscription('terminal-1:phone-1')
     await dispatchPromise

@@ -25,7 +25,7 @@ function CategoryRoot({
   onOpenField: (field: PaletteFilterField) => void
 }): React.JSX.Element {
   return (
-    <CommandList className="popover-scroll-content scrollbar-sleek max-h-[280px] py-1">
+    <CommandList className="scrollbar-sleek max-h-[280px] py-1">
       <CommandGroup>
         {groups.map((group) => {
           const selectedCount = group.selected.length
@@ -183,7 +183,7 @@ export default function PaletteFilterMenu({
         collisionBoundary={portalContainer ?? undefined}
         onKeyDown={handleKeyDown}
         onCloseAutoFocus={handleCloseAutoFocus}
-        className="w-[290px] p-0"
+        className="popover-wheel-scroll w-[290px] p-0"
       >
         <Command shouldFilter={false} className="bg-transparent">
           {activeGroup == null ? (

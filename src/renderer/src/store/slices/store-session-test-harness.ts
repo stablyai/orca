@@ -22,6 +22,7 @@ export type StoreSessionMockApi = {
   claudeUsage: UsageScannerMocks
   codexUsage: UsageScannerMocks
   openCodeUsage: UsageScannerMocks
+  runtimeEnvironments: { prepareBrowserClientHostPlacement: Mock }
 }
 
 /** window.api double shared by the store session suites; installs itself on globalThis. */
@@ -102,6 +103,9 @@ export function createStoreSessionMockApi(): StoreSessionMockApi {
       getDaily: vi.fn().mockResolvedValue([]),
       getBreakdown: vi.fn().mockResolvedValue([]),
       getRecentSessions: vi.fn().mockResolvedValue([])
+    },
+    runtimeEnvironments: {
+      prepareBrowserClientHostPlacement: vi.fn().mockResolvedValue({ kind: 'server' })
     }
   }
 

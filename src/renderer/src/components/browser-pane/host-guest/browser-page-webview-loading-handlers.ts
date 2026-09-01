@@ -10,7 +10,7 @@ import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
-import { buildLoadError } from '../describe-page/browser-page-load-error'
+import { resolveBrowserWebviewLoadFailure } from '../navigate/browser-webview-load-failure'
 import {
   getBrowserDisplayTitle,
   isChromiumErrorPage,
@@ -163,17 +163,9 @@ export function createBrowserPageWebviewLoadingHandlers({
     })
   }
 
-  const handleFailLoad = (event: {
-    errorCode?: number
-    errorDescription?: string
-    validatedURL?: string
-    isMainFrame?: boolean
-  }): void => {
-    if (event.isMainFrame === false) {
-      return
-    }
-    if (event.errorCode === -3) {
-      // Why: Chromium reports redirect/cancel races as ERR_ABORTED (-3) even when the replacement navigation succeeds; ignore to avoid a false failure.
+  const handleFailLoad = (event: BrowserPageFailLoadEvent): void => {
+    const loadError = resolveBrowserWebviewLoadFailure(event)
+    if (!loadError) {
       return
     }
     trackNextLoadingEventRef.current = false
@@ -181,7 +173,6 @@ export function createBrowserPageWebviewLoadingHandlers({
     if (pendingRecoveryNavigation?.started) {
       recoveryNavigationValidationRef.current = null
     }
-    const loadError = buildLoadError(event)
     activeLoadFailureRef.current = loadError
     onUpdatePageStateRef.current(browserTabId, {
       loading: false,

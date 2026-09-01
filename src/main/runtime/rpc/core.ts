@@ -105,6 +105,10 @@ export type RpcContext = {
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
   ) => () => void
+  // Why: non-terminal binary protocols own their dedicated authenticated subscription socket.
+  registerBinaryMessageHandler?: (
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
+  ) => () => void
 }
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => unknown

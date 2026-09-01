@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import SyncDatabase from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const LEGACY_COORDINATOR_HANDLE = 'term_legacy_coord'
 const LEGACY_COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
@@ -49,7 +50,7 @@ function createAdoptedFixture(options: { settleWork: boolean }): AdoptedFixture 
     spec: 'legacy assignment',
     createdByTerminalHandle: LEGACY_COORDINATOR_HANDLE
   })
-  const dispatch = before.createDispatchContext(task.id, LEGACY_WORKER_HANDLE, LEGACY_WORKER_PANE)
+  const dispatch = createRootDispatch(before, task.id, LEGACY_WORKER_HANDLE, LEGACY_WORKER_PANE)
   const recovery = before.insertMessage({
     from: LEGACY_WORKER_HANDLE,
     to: LEGACY_COORDINATOR_HANDLE,

@@ -47,7 +47,14 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
               rendererGraphEpoch: 1,
               graphStatus: 'ready',
               authoritativeWindowId: null,
-              liveTabCount: 0
+              liveTabCount: 0,
+              degradations: [
+                {
+                  code: 'browser_unavailable',
+                  capability: 'browser.headless.v1',
+                  message: 'Browser automation is unavailable.'
+                }
+              ]
             },
             _meta: { runtimeId: 'runtime-legacy' }
           })}\n`
@@ -71,8 +78,10 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
 
     expect(status.result.runtime).toMatchObject({
       reachable: true,
+      connectionState: 'connected',
       runtimeId: 'runtime-legacy',
-      state: 'ready'
+      state: 'ready',
+      degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
     })
   })
 })

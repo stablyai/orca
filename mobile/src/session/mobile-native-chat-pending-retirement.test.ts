@@ -232,6 +232,38 @@ describe('selectGluedPendingIds', () => {
     ).toEqual(['p1', 'p2'])
   })
 
+  it('retires an image send glued with the text send beside it once its preview rebinds', () => {
+    // Regression: one message typed, images attached, then a second send glued onto the
+    // same input line. The image echo could not match the glued row (its matcher wanted
+    // the whole row to equal the echo), and because an image echo was excluded from the
+    // glue pass it also acted as a barrier — stranding the text send in a run of one,
+    // which `matchGluedRun` rejects. Neither echo could ever retire, so the message
+    // rendered twice over, with the image copy sorting below the reply it preceded.
+    const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two', 5000)]
+    const pending = [
+      { ...pendingSend('p1', 'one', 'm1'), images: ['file:///a.png'] },
+      pendingSend('p2', 'two', 'm1')
+    ]
+    const rebound: ReadonlySet<string> = new Set(['p1'])
+    expect([...selectGluedPendingIds(messages, pending, new Set(), rebound)].sort()).toEqual([
+      'p1',
+      'p2'
+    ])
+    expect(
+      retireLandedMobileNativeChatPending(messages, pending, rebound).map((item) => item.id)
+    ).toEqual([])
+  })
+
+  it('still strands nothing when the glued row belongs to an older baseline', () => {
+    // The per-send boundary still applies to a rebound image echo.
+    const messages = [userTurn('m1', 'one two', 1000), assistantTurn('m2', 'ready', 5000)]
+    const pending = [
+      { ...pendingSend('p1', 'one', 'm2'), images: ['file:///a.png'] },
+      pendingSend('p2', 'two', 'm2')
+    ]
+    expect([...selectGluedPendingIds(messages, pending, new Set(), new Set(['p1']))]).toEqual([])
+  })
+
   it('does nothing for a single pending send', () => {
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two', 5000)]
     expect(retiredIds(messages, [pendingSend('p1', 'one', 'm1')])).toEqual([])
@@ -319,5 +351,29 @@ describe('retireLandedMobileNativeChatPending', () => {
       retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES).map((item) => item.id)
     ).toEqual(['p1'])
     expect(retireLandedMobileNativeChatPending(messages, pending, new Set(['p1']))).toEqual([])
+  })
+})
+
+describe('retireLandedMobileNativeChatPending on a PTY-typed send', () => {
+  // A TUI may record the leading Ctrl+U transport byte as prompt content.
+  const COMPOSER_TEXT = 'run the focused tests\nand summarize failures'
+  const TRANSCRIPT_ROW = `\u0015${COMPOSER_TEXT}`
+
+  it('retires the echo of a row the TUI pasted the Ctrl+U byte into', () => {
+    const messages = [
+      assistantTurn('m1', 'ready', 1000),
+      userTurn('m2', TRANSCRIPT_ROW, 5000),
+      assistantTurn('m3', 'on it', 6000)
+    ]
+    const pending = [pendingSend('p1', COMPOSER_TEXT, 'm1')]
+
+    expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual([])
+  })
+
+  it('still holds the echo when no row carries the text at all', () => {
+    const messages = [assistantTurn('m1', 'ready', 1000)]
+    const pending = [pendingSend('p1', COMPOSER_TEXT, 'm1')]
+
+    expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual(pending)
   })
 })

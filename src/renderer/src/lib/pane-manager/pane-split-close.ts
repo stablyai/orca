@@ -2,6 +2,7 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneManagerOptions,
+  PaneSplitOptions,
   PaneStyleOptions
 } from './pane-manager-types'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
@@ -30,7 +31,7 @@ type MovedPaneSplitState = {
 type SplitManagedPaneArgs = {
   paneId: number
   direction: 'vertical' | 'horizontal'
-  opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+  opts?: PaneSplitOptions
   sourceContainer?: HTMLElement
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
@@ -148,6 +149,7 @@ function openSplitPane(
   // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
   const spawnHints = {
     ...(cwd ? { cwd } : {}),
+    ...(args.opts?.cwdPromise ? { cwdPromise: args.opts.cwdPromise } : {}),
     ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {})
   }
   args.publishPaneCreated(newPane, Object.keys(spawnHints).length > 0 ? spawnHints : undefined)

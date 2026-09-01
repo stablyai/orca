@@ -13,6 +13,7 @@ import { SkillUploadOperationLifecycle } from './skill-upload-operation-lifecycl
 import { SkillUploadRetainedPaths } from './skill-upload-retained-paths'
 import type { SkillUploadSessionServiceOptions } from './skill-upload-session-service-options'
 import {
+  createSkillUploadSessionRecord,
   skillUploadBeginResult,
   type SkillUploadSessionRecord
 } from './skill-upload-session-record'
@@ -42,8 +43,8 @@ export class SkillUploadSessionService {
     const leaveOperation = await this.operations.enterBegin(() => this.assertAvailable())
     try {
       await this.initialize()
-      this.assertAvailable()
       await this.prune()
+      this.assertAvailable()
       const existing = request.transferId
         ? [...this.sessions.values()].find((session) => session.transferId === request.transferId)
         : undefined
@@ -55,22 +56,22 @@ export class SkillUploadSessionService {
         return skillUploadBeginResult(existing)
       }
       if (this.sessions.size + this.retainedPaths.failedCleanupCount >= MAX_SESSIONS) {
+        await this.retainedPaths.retryFailedCleanup()
+      }
+      this.assertAvailable()
+      if (this.sessions.size + this.retainedPaths.failedCleanupCount >= MAX_SESSIONS) {
         throw new Error('skill-upload-session-limit')
       }
       const id = randomUUID()
       const path = join(this.ownership.directory, `${id}.tar.gz`)
       const handle = await open(path, 'wx+', 0o600)
-      const session: SkillUploadSessionRecord = {
-        id,
-        path,
-        package: request.package,
-        transferId: request.transferId ?? null,
-        handle,
-        idleTimer: null,
-        bytesReceived: 0,
-        touchedAt: Date.now(),
-        committed: false
+      try {
+        this.assertAvailable()
+      } catch (error) {
+        await this.retainedPaths.removeUnpublished(path, () => handle.close())
+        throw error
       }
+      const session = createSkillUploadSessionRecord(id, path, request, handle)
       this.sessions.set(id, session)
       this.touch(session)
       return skillUploadBeginResult(session)

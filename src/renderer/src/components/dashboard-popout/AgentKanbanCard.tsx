@@ -87,6 +87,7 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.agentType === b.agentType &&
     a.bucket === b.bucket &&
     a.dotState === b.dotState &&
+    a.workingMode === b.workingMode &&
     a.task === b.task &&
     a.lastUserMessage === b.lastUserMessage &&
     a.lastAgentMessage === b.lastAgentMessage &&

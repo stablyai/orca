@@ -48,8 +48,13 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, createMockProc, installObservableDaemonTestProvider } =
-    setupPtyIpcSuite()
+  const {
+    handlers,
+    mainWindow,
+    mainWindowIpcEvent,
+    createMockProc,
+    installObservableDaemonTestProvider
+  } = setupPtyIpcSuite()
 
   describe('agent_started telemetry', () => {
     // Why: telemetry-plan.md§Agent launch semantics — agent_started fires only after provider.spawn resolves; a malformed payload must not emit a silent event.
@@ -190,7 +195,7 @@ describe('registerPtyHandlers', () => {
       expect(responseChannelRegistrations.length).toBe(1)
       // Drain the in-flight requests so the test doesn't leak timers.
       for (const requestId of getSentRequestIds()) {
-        listener(null, { requestId, snapshot: null })
+        listener(mainWindowIpcEvent, { requestId, snapshot: null })
       }
       await Promise.all(inflight)
     })
@@ -202,11 +207,11 @@ describe('registerPtyHandlers', () => {
       const requestIdA = ids[0]
       const requestIdB = ids[1]
 
-      listener(null, {
+      listener(mainWindowIpcEvent, {
         requestId: requestIdB,
         snapshot: { data: 'B-data', cols: 80, rows: 24 }
       })
-      listener(null, {
+      listener(mainWindowIpcEvent, {
         requestId: requestIdA,
         snapshot: { data: 'A-data', cols: 100, rows: 30, lastTitle: 'A-title' }
       })
@@ -224,11 +229,11 @@ describe('registerPtyHandlers', () => {
       const pending = controller.serializeBuffer('pty-1')
       const realRequestId = getSentRequestIds()[0]
 
-      listener(null, {
+      listener(mainWindowIpcEvent, {
         requestId: 'not-a-real-id',
         snapshot: { data: 'irrelevant', cols: 1, rows: 1 }
       })
-      listener(null, { requestId: undefined, snapshot: null })
+      listener(mainWindowIpcEvent, { requestId: undefined, snapshot: null })
 
       let resolved = false
       void pending.then(() => {
@@ -237,7 +242,10 @@ describe('registerPtyHandlers', () => {
       await new Promise((r) => setTimeout(r, 0))
       expect(resolved).toBe(false)
 
-      listener(null, { requestId: realRequestId, snapshot: { data: 'ok', cols: 80, rows: 24 } })
+      listener(mainWindowIpcEvent, {
+        requestId: realRequestId,
+        snapshot: { data: 'ok', cols: 80, rows: 24 }
+      })
       await expect(pending).resolves.toEqual({ data: 'ok', cols: 80, rows: 24 })
     })
     it('resolves to null and removes the entry when the 750ms timeout fires', async () => {
@@ -255,7 +263,7 @@ describe('registerPtyHandlers', () => {
       const { listener, controller } = setup()
       const pending = controller.serializeBuffer('pty-bad')
       const requestId = getSentRequestIds()[0]
-      listener(null, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
+      listener(mainWindowIpcEvent, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
       await expect(pending).resolves.toBeNull()
     })
   })

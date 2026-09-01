@@ -11,6 +11,7 @@ import type { RelayGitStreamExec } from './git-stdout-stream'
 import type { GitUpstreamStatus } from '../shared/git-status-types'
 import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
+import { collectGitStatusLineStatInputs } from '../shared/git-status-line-stat-inputs'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
   applyLineStats,
@@ -83,7 +84,8 @@ export async function getStatusOp(
 }> {
   const worktreePath = params.worktreePath as string
   const lineStatsCacheKey = `relay\0${worktreePath}`
-  const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
+  const lineStatsWriteToken =
+    params.includeLineStats === false ? null : beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
   // Why: untrusted RPC input spliced into a git argv — only an OID shape may pass.
   const branchLineTotalMergeBase = readGitBranchLineTotalMergeBaseParam(
@@ -197,7 +199,7 @@ export async function getStatusOp(
   }
 
   // Why: skip numstat after the limit to avoid reintroducing its cost.
-  if (!didHitLimit) {
+  if (!didHitLimit && lineStatsWriteToken !== null) {
     const branchLineTotalInput = buildBranchLineTotalInput(
       git,
       worktreePath,
@@ -218,7 +220,7 @@ export async function getStatusOp(
       recompute: () => attachLineStats(git, worktreePath, entries, options.signal),
       ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     }))
-  } else {
+  } else if (lineStatsWriteToken !== null) {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
 
@@ -274,11 +276,7 @@ async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
-  const hasStaged = entries.some((entry) => entry.area === 'staged')
-  const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
-  const untrackedPaths = entries
-    .filter((entry) => entry.area === 'untracked')
-    .map((entry) => entry.path as string)
+  const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(git, worktreePath, true, signal) : Promise.resolve(emptyStats),
@@ -287,11 +285,12 @@ async function attachLineStats(
   ])
   for (const entry of entries) {
     const filePath = entry.path as string
+    const area = entry.area
     applyLineStats(
       entry as { added?: number; removed?: number },
-      entry.area === 'staged'
+      area === 'staged'
         ? (stagedStats ?? emptyStats).get(filePath)
-        : entry.area === 'unstaged'
+        : area === 'unstaged'
           ? (unstagedStats ?? emptyStats).get(filePath)
           : untrackedStats.get(filePath)
     )

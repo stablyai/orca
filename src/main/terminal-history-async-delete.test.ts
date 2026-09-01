@@ -1,15 +1,10 @@
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 let userDataDir: string
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: () => userDataDir
-  }
-}))
 
 import { hashWorktreeId } from './terminal-history-paths'
 import {
@@ -24,6 +19,7 @@ import {
 describe('deleteWorktreeHistoryDir main-thread safety', () => {
   beforeEach(() => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-history-async-'))
+    installFakeAppEnvironment({ getPath: () => userDataDir })
   })
 
   afterEach(async () => {

@@ -2,15 +2,22 @@ import { describe, expect, it } from 'vitest'
 import type {
   Automation,
   AutomationRun,
+  AutomationRunStatus,
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
 import {
   applyAutomationListView,
   countAutomationListFilters,
+  EMPTY_AUTOMATION_LIST_FILTER,
+  filterAutomationListRows,
+  filterExternalAutomationListEntries,
   isAutomationListFilterActive,
-  nextAutomationListSort
+  nextAutomationListSort,
+  type AutomationListFilter
 } from './automation-list-view'
+import { hostStableKey } from '../../../../shared/automation-owner-key'
+import type { AutomationListRow } from './automation-list-row-identity'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
@@ -100,7 +107,15 @@ function makeExternalEntry(
     runs: [],
     ...overrides
   }
-  return { key: `${manager.id}:${job.id}`, manager, job }
+  return {
+    key: `${manager.id}:${job.id}`,
+    scope: {
+      owner: { authority: { kind: 'desktop' }, selector: { kind: 'self' } },
+      provider: manager.provider
+    },
+    manager,
+    job
+  }
 }
 
 describe('automation-list-view', () => {
@@ -179,6 +194,98 @@ describe('automation-list-view', () => {
       sort: { field: 'name', direction: 'asc' }
     })
     expect(items.map((item) => item.name)).toEqual(['Alpha digest', 'Zebra job'])
+  })
+
+  it('filters catalog rows by status, agent, and the projected last-run status', () => {
+    function makeCatalogRow(
+      id: string,
+      overrides: Partial<Automation>,
+      lastRunStatus?: AutomationRunStatus
+    ): AutomationListRow {
+      return {
+        key: `row|host|${id}`,
+        automation: makeAutomation({ id, ...overrides }),
+        hostLabel: 'This computer',
+        usageSummary: lastRunStatus
+          ? {
+              knownRuns: 1,
+              unavailableRuns: 0,
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheTokens: 0,
+              reasoningOutputTokens: 0,
+              totalTokens: 0,
+              estimatedCostUsd: null,
+              lastRunStatus,
+              lastRunAt: 111
+            }
+          : null
+      }
+    }
+    const rows = [
+      makeCatalogRow('paused-codex', { enabled: false, agentId: 'codex' }),
+      makeCatalogRow('failed-claude', { agentId: 'claude' }, 'dispatch_failed'),
+      makeCatalogRow('succeeded-codex', { agentId: 'codex' }, 'completed'),
+      makeCatalogRow('never-codex', { agentId: 'codex' })
+    ]
+    const ids = (filter: Partial<AutomationListFilter>) =>
+      filterAutomationListRows(rows, { ...EMPTY_AUTOMATION_LIST_FILTER, ...filter }).map(
+        (row) => row.automation.id
+      )
+
+    expect(ids({ status: 'paused' })).toEqual(['paused-codex'])
+    expect(ids({ agentIds: ['claude'] })).toEqual(['failed-claude'])
+    expect(ids({ lastRun: 'failed' })).toEqual(['failed-claude'])
+    expect(ids({ lastRun: 'succeeded' })).toEqual(['succeeded-codex'])
+    expect(ids({ lastRun: 'never' })).toEqual(['paused-codex', 'never-codex'])
+    // Inactive filter keeps the input identity so nothing re-renders for it.
+    expect(filterAutomationListRows(rows, EMPTY_AUTOMATION_LIST_FILTER)).toBe(rows)
+  })
+
+  it('narrows rows to any of the selected hosts and drops pre-catalog rows', () => {
+    const hostRow = (id: string, targetId: string | null): AutomationListRow => ({
+      key: `row|${targetId ?? 'unscoped'}|${id}`,
+      automation: makeAutomation({ id }),
+      catalogRef:
+        targetId === null
+          ? null
+          : { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId } },
+      hostLabel: targetId ?? '',
+      usageSummary: null
+    })
+    const rows = [hostRow('on-a', 'ssh-a'), hostRow('on-b', 'ssh-b'), hostRow('legacy', null)]
+    const keyOf = (row: AutomationListRow): string =>
+      row.catalogRef ? hostStableKey(row.catalogRef) : ''
+    const ids = (hostStableKeys: readonly string[]) =>
+      filterAutomationListRows(rows, { ...EMPTY_AUTOMATION_LIST_FILTER, hostStableKeys }).map(
+        (row) => row.automation.id
+      )
+
+    // Multi-select is any-of; a pre-catalog row names no host and is excluded.
+    expect(ids([keyOf(rows[0]), keyOf(rows[1])])).toEqual(['on-a', 'on-b'])
+    expect(ids([keyOf(rows[1])])).toEqual(['on-b'])
+  })
+
+  it('excludes external jobs from any agent filter and honors their status', () => {
+    const entries = [makeExternalEntry({ enabled: false, state: 'disabled' })]
+    expect(
+      filterExternalAutomationListEntries(entries, {
+        ...EMPTY_AUTOMATION_LIST_FILTER,
+        agentIds: ['codex']
+      })
+    ).toEqual([])
+    expect(
+      filterExternalAutomationListEntries(entries, {
+        ...EMPTY_AUTOMATION_LIST_FILTER,
+        status: 'paused'
+      })
+    ).toHaveLength(1)
+    expect(
+      filterExternalAutomationListEntries(entries, {
+        ...EMPTY_AUTOMATION_LIST_FILTER,
+        status: 'enabled'
+      })
+    ).toEqual([])
   })
 
   it('sorts by last run newest first and keeps never-run rows last', () => {

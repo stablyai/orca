@@ -14,6 +14,8 @@ import {
   acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
+  clearWebSessionTabsTrackingForEnvironment,
+  resolveHostSessionTabIdForWebSessionTab,
   shouldApplyWebSessionTabsSnapshot,
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
@@ -40,6 +42,91 @@ vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
 }))
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
+
+  it('projects structured agent sessions as native unified tabs', () => {
+    const agentTab = {
+      type: 'agent-session' as const,
+      id: 'agent-session:session-1',
+      title: 'Codex Chat',
+      sessionId: 'session-1',
+      agent: 'codex' as const,
+      isActive: true
+    }
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([agentTab], {
+        activeTabId: agentTab.id,
+        activeTabType: 'agent-session',
+        tabGroups: [
+          {
+            id: 'host-group-1',
+            activeTabId: agentTab.id,
+            tabOrder: [agentTab.id]
+          }
+        ]
+      }),
+      ENV,
+      NOW
+    )
+
+    expect(patch.unifiedTabsByWorktree?.[WT]).toEqual([
+      expect.objectContaining({
+        id: 'structured-agent-session-session-1',
+        entityId: 'session-1',
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex'
+      })
+    ])
+    expect(patch.activeTabTypeByWorktree?.[WT]).toBe('agent-session')
+    expect(
+      resolveHostSessionTabIdForWebSessionTab(
+        { ...makeState(), ...patch },
+        { environmentId: ENV, worktreeId: WT, tabId: 'structured-agent-session-session-1' }
+      )
+    ).toBe(agentTab.id)
+  })
+
+  it('removes a restored structured tab when the host publishes no structured sessions', () => {
+    const structuredTab: Tab = {
+      id: 'structured-agent-session-session-1',
+      entityId: 'session-1',
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        activeTabId: structuredTab.id,
+        activeTabIdByWorktree: { [WT]: structuredTab.id },
+        activeTabType: 'agent-session',
+        activeTabTypeByWorktree: { [WT]: 'agent-session' },
+        unifiedTabsByWorktree: { [WT]: [structuredTab] },
+        tabBarOrderByWorktree: { [WT]: [structuredTab.id] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: structuredTab.id,
+              tabOrder: [structuredTab.id]
+            }
+          ]
+        }
+      }),
+      makeSnapshot([], { activeTabType: null }),
+      ENV,
+      NOW
+    )
+
+    expect(patch.unifiedTabsByWorktree?.[WT]).toBeUndefined()
+    expect(patch.activeTabTypeByWorktree?.[WT]).toBe('terminal')
+  })
 
   it('ignores stale or duplicate same-epoch snapshots after a newer version was applied', () => {
     const state = makeState()
@@ -80,6 +167,102 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabType: null
     })
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
+  })
+
+  it('rejects a delayed frame from an epoch superseded by a later restart', () => {
+    const beforeRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-restart',
+      snapshotVersion: 5,
+      activeTabType: null
+    })
+    const pendingRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-pending-restart',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    const afterRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-after-restart',
+      snapshotVersion: 2,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(beforeRestart, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(pendingRestart, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(afterRestart, ENV)).toBe(true)
+
+    // The pending publication may still be queued on another subscription;
+    // once the ready restart epoch wins, it must not roll the mirror back.
+    expect(shouldApplyWebSessionTabsSnapshot(pendingRestart, ENV)).toBe(false)
+  })
+
+  it('rejects an unseen old epoch when its runtime process was retired', () => {
+    const beforeRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-runtime-restart',
+      snapshotVersion: 7,
+      activeTabType: null
+    })
+    const afterRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-after-runtime-restart',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    const delayedOldEpoch = makeSnapshot([], {
+      publicationEpoch: 'epoch-never-observed-by-this-worktree',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(beforeRestart, ENV, 'runtime-old')).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(afterRestart, ENV, 'runtime-new')).toBe(true)
+    // The epoch was never accepted for this worktree, but its runtime process
+    // is known to be retired, so it cannot roll the restart back.
+    expect(shouldApplyWebSessionTabsSnapshot(delayedOldEpoch, ENV, 'runtime-old')).toBe(false)
+
+    // Teardown starts a fresh identity epoch; a later connection may reuse the
+    // same test id without inheriting the retired-runtime fence.
+    clearWebSessionTabsTrackingForEnvironment(ENV)
+    expect(shouldApplyWebSessionTabsSnapshot(delayedOldEpoch, ENV, 'runtime-old')).toBe(true)
+  })
+
+  it('keeps a removed worktree fenced against delayed predecessor epochs', () => {
+    const beforeRemoval = makeSnapshot([], {
+      publicationEpoch: 'epoch-before-removal',
+      snapshotVersion: 3,
+      activeTabType: null
+    })
+    const removed = {
+      ...makeSnapshot([], {
+        publicationEpoch: 'epoch-removed',
+        snapshotVersion: 0,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null
+      }),
+      removed: true as const
+    }
+
+    expect(shouldApplyWebSessionTabsSnapshot(beforeRemoval, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(removed, ENV)).toBe(true)
+    expect(
+      shouldApplyWebSessionTabsSnapshot(
+        makeSnapshot([], {
+          publicationEpoch: 'epoch-before-removal',
+          snapshotVersion: 4,
+          activeTabType: null
+        }),
+        ENV
+      )
+    ).toBe(false)
+    expect(
+      shouldApplyWebSessionTabsSnapshot(
+        makeSnapshot([], {
+          publicationEpoch: 'epoch-recreated',
+          snapshotVersion: 1,
+          activeTabType: null
+        }),
+        ENV
+      )
+    ).toBe(true)
   })
 
   it('accepts a replayed same-epoch same-version snapshot after a transport reconnect', () => {

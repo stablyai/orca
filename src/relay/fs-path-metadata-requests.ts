@@ -3,16 +3,10 @@ import { join } from 'node:path'
 import { sortDirEntries } from '../shared/file-name-sort'
 import { expandTilde } from './context'
 
-async function isDirectoryEntry(
+async function resolveSymlinkDirectoryEntry(
   dirPath: string,
   entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }
 ): Promise<boolean> {
-  if (entry.isDirectory()) {
-    return true
-  }
-  if (!entry.isSymbolicLink()) {
-    return false
-  }
   try {
     // Why: the file explorer needs target type for symlinked directories so a
     // workspace link to an external folder expands instead of opening as a file.
@@ -43,13 +37,26 @@ function fileStatFromLstat(stats: Awaited<ReturnType<typeof lstat>>) {
 export async function readRelayDir(params: Record<string, unknown>) {
   const dirPath = expandTilde(params.dirPath as string)
   const entries = await readdir(dirPath, { withFileTypes: true })
-  const mapped = await Promise.all(
-    entries.map(async (entry) => ({
+  const mapped: { name: string; isDirectory: boolean; isSymlink: boolean }[] = []
+  const symlinkProbes: Promise<void>[] = []
+  for (const entry of entries) {
+    const mappedEntry = {
       name: entry.name,
-      isDirectory: await isDirectoryEntry(dirPath, entry),
+      isDirectory: entry.isDirectory(),
       isSymlink: entry.isSymbolicLink()
-    }))
-  )
+    }
+    mapped.push(mappedEntry)
+    if (!mappedEntry.isDirectory && mappedEntry.isSymlink) {
+      symlinkProbes.push(
+        resolveSymlinkDirectoryEntry(dirPath, entry).then((isDirectory) => {
+          mappedEntry.isDirectory = isDirectory
+        })
+      )
+    }
+  }
+  if (symlinkProbes.length > 0) {
+    await Promise.all(symlinkProbes)
+  }
   return sortDirEntries(mapped)
 }
 

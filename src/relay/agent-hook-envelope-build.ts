@@ -1,7 +1,7 @@
 // Pure mapping from a parsed hook event plus its raw body onto the `agent.hook` envelope that goes
 // over the SSH channel. Sits beside agent-hook-envelope-publication.ts, which owns shedding and
 // redelivery of the same envelope.
-import type { AgentHookEventPayload } from '../shared/agent-hook-listener'
+import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
 
 // Why: cap metadata to prevent a misbehaving CLI growing the cache unboundedly.

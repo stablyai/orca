@@ -14,9 +14,14 @@ import {
   resetTerminalLinkifierHoverState
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import { focusActivePane } from './pane-helpers'
-import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
+import { useAppStore } from '@/store'
+import { auditPaneWeightParity } from './terminal-render-desync-weight-probe'
 import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
 import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
+import {
+  presentPaneViewport,
+  presentPaneViewportPreservingSynchronizedOutput
+} from '@/lib/pane-manager/pane-webgl-renderer'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -72,6 +77,7 @@ export function resumeTerminalVisibility({
   // restore path avoids content matching so duplicate agent log lines do
   // not jump to the wrong history entry.
   captureViewportPositions(!wasVisible)
+  let repairedDpr = false
   withSuppressedScrollTracking(() => {
     if (shouldUseLightTabResume) {
       let flushedDeferredMetrics = false
@@ -83,13 +89,12 @@ export function resumeTerminalVisibility({
         // change that landed while this tab was hidden has no other repair point.
         repairPaneWebglCanvasDprMismatch(pane)
       }
+      auditPaneWeightParity(manager.getPanes(), useAppStore.getState().settings)
       // Why: intra-worktree tab switches only toggle the overlay. Keeping
       // synchronous drain and atlas rebuilds off this path avoids racing the
       // overlay's delayed geometry fit. Still request hidden-output recovery:
       // agent TUIs can suppress hidden bytes until the pane is foregrounded.
       requestLightTabBacklogRecovery(manager)
-      // Why: reveal is the lifecycle boundary that owns hidden renderer repair.
-      scheduleTabRevealWebglAtlasRecovery()
       if (flushedDeferredMetrics) {
         // Why: the light path normally skips fitting, but flushed metrics changed
         // cell size — refit so cols/rows match before the overlay settles.
@@ -101,18 +106,33 @@ export function resumeTerminalVisibility({
     } else {
       // fitAllRevealedPanes flushes after WebGL reattaches, avoiding a redundant
       // full refresh in the suspended DOM renderer while preserving first paint.
-      resumeTerminalVisibilityHeavy(manager, isActive)
+      repairedDpr = resumeTerminalVisibilityHeavy(manager, isActive)
     }
     enforceTerminalViewportIntents(manager)
     if (!shouldUseLightTabResume) {
-      // Why: this clear wipes the glyph atlas shared with other same-config
-      // terminals; refresh after reset so rebuilt atlases repaint from xterm.
-      resetAndRefreshAllTerminalWebglAtlases('visibility-resume')
+      auditPaneWeightParity(manager.getPanes(), useAppStore.getState().settings)
     }
-    // Why: the synchronous recovery above can fire before the revealed pane is
-    // attached and laid out. Follow up after layout with one shared-atlas-safe
-    // recovery covering every visible terminal manager.
-    manager.scheduleRevealRepaint()
+    if (shouldUseLightTabResume) {
+      // Why: preserve the last coherent frame while a TUI holds DEC 2026. The
+      // settled refresh arms xterm's watchdog without clearing shared GPU data.
+      manager.scheduleRevealPresent()
+    } else if (repairedDpr) {
+      // Why: the atlas still holds glyphs rasterized at the old backing-store
+      // DPR, so it cannot wait two frames — rebuild before the next paint.
+      resetAndRefreshAllTerminalWebglAtlases('visibility-resume-dpr')
+      manager.scheduleRevealRepaint()
+    } else {
+      // Why: a hidden pane's parsed output updated the cell model without
+      // presenting, so the reveal diff reports those cells unchanged. Force one
+      // present now; the settled rebuild is two frames out and would otherwise
+      // leave pre-hide pixels composited until then.
+      for (const pane of manager.getPanes()) {
+        presentPaneViewportPreservingSynchronizedOutput(pane)
+      }
+      // Why: one settled rebuild repairs recreated rendering without paying a
+      // duplicate global atlas rebuild before the pane is attached and measured.
+      manager.scheduleRevealRepaint()
+    }
   })
 }
 
@@ -161,6 +181,13 @@ export function recoverVisibleTerminalWindowWake({
   // Why: backlog writes can expose transient viewport geometry while parsing.
   syncTerminalViewportIntents(manager)
   for (const pane of manager.getPanes()) {
+    // Why: clamshell undock / monitor move changes devicePixelRatio while the
+    // pane can stay "visible" with a stale WebGL backing store. The addon's
+    // device-pixel observer misses that (no CSS-box change, or no box while
+    // the lid was closed). Repair here — not only on tab reveal.
+    if (repairPaneWebglCanvasDprMismatch(pane)) {
+      presentPaneViewport(pane)
+    }
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: WINDOW_WAKE_FLUSH_CHARS })
     // Why: window blur fires mouseleave, clearing xterm's current link but not
@@ -199,7 +226,7 @@ function requestLightTabBacklogRecovery(manager: PaneManager): void {
   }
 }
 
-function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean): void {
+function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean): boolean {
   // Why: hidden panes can accumulate large PTY bursts while Chromium is
   // occluded. Drain a bounded slice before fitting; the scheduler keeps
   // ordering and continues the rest asynchronously so return-to-app does
@@ -214,6 +241,15 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
   // Windows (ANGLE -> D3D11) it can be 100-500 ms but a deferred resume
   // would paint a stretched DOM-fallback flash, which is worse UX.
   manager.resumeRendering()
+  // Why: unchanged grid geometry can skip the reveal fit, but a retained WebGL
+  // canvas may still carry the previous display's backing-store DPR. The
+  // caller's atlas recovery presents the final shared-atlas generation.
+  let repairedDpr = false
+  for (const pane of manager.getPanes()) {
+    if (repairPaneWebglCanvasDprMismatch(pane)) {
+      repairedDpr = true
+    }
+  }
   // Why: resumeRendering just re-attached WebGL, whose cell metrics briefly differ
   // from the DOM renderer's; a raw fit here reflows on a transient one-column-off
   // grid and garbles diff-painting inline TUIs (grok minimize→restore).
@@ -221,6 +257,7 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
   if (isActive) {
     focusActivePane(manager)
   }
+  return repairedDpr
 }
 
 function enforceTerminalViewportIntents(manager: PaneManager): void {

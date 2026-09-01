@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ipc/ssh'
+import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ssh/ssh-target-registry'
 import { getPublicSshState } from '../../public-ssh-state'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 

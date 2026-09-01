@@ -16,6 +16,8 @@ function makeAgentStatusEntry(args: {
   worktreeId?: string
   parentPaneKey?: string
   restoredUnconfirmed?: true
+  workingMode?: AgentStatusEntry['workingMode']
+  interrupted?: true
 }): AgentStatusEntry {
   return {
     paneKey: args.paneKey,
@@ -26,6 +28,8 @@ function makeAgentStatusEntry(args: {
     stateHistory: [],
     worktreeId: args.worktreeId,
     restoredUnconfirmed: args.restoredUnconfirmed,
+    workingMode: args.workingMode,
+    interrupted: args.interrupted,
     orchestration: args.parentPaneKey
       ? {
           taskId: 'task-1',
@@ -165,6 +169,54 @@ describe('selectWorktreeAgentActivitySummary', () => {
       hasLiveDone: true
     })
     expect(nowSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('separates passive monitoring from active working', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const summary = selectWorktreeAgentActivitySummary(
+      {
+        tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+        agentStatusEpoch: 1,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({
+            paneKey,
+            state: 'working',
+            workingMode: 'monitoring'
+          })
+        },
+        migrationUnsupportedByPtyId: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        retainedAgentsByPaneKey: {}
+      },
+      'repo::/wt-1'
+    )
+
+    expect(summary).toMatchObject({ hasLiveWorking: false, hasLiveMonitoring: true })
+  })
+
+  it('separates interrupted outcomes from clean completion', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const summary = selectWorktreeAgentActivitySummary(
+      {
+        tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+        agentStatusEpoch: 2,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({
+            paneKey,
+            state: 'done',
+            interrupted: true
+          })
+        },
+        migrationUnsupportedByPtyId: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        retainedAgentsByPaneKey: {}
+      },
+      'repo::/wt-1'
+    )
+
+    expect(summary).toMatchObject({ hasInterrupted: true, hasLiveDone: false })
   })
 
   it('lets an unconfirmed restored row suppress only its pane title', () => {

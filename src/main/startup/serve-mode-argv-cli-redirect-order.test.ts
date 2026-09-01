@@ -4,10 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { getAppImageCliArgs } from './appimage-cli-redirect'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-mode-argv'
 
-// Why: index.ts must run both CLI redirects before rewriting argv. Rewriting
-// first replaces the `serve` positional with `--serve`, so the redirect's
-// command-name lookup finds a port number instead of a command and bails —
-// silently dropping AppImage serve launches out of the CLI path (#12677).
+// Why: index.ts runs CLI redirects before rewriting argv. Direct AppImage serve
+// stays in Electron so launch switches do not cross into the strict Node-mode
+// CLI parser; other CLI commands still depend on redirect ordering (#12677).
 
 const REDIRECT_OPTIONS = {
   platform: 'linux' as const,
@@ -24,13 +23,18 @@ function rewriteAsIndexDoes(argv: string[]): string[] {
 describe('serve argv rewrite vs AppImage CLI redirect ordering', () => {
   const launchArgv = ['/opt/orca/orca-ide', '--no-sandbox', 'serve', '--port', '7777', '--json']
 
-  it('hands the launch argv to the CLI when the redirect runs first', () => {
+  it('keeps clean serve validation on the CLI path', () => {
     expect(getAppImageCliArgs(launchArgv, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toEqual([
       'serve',
       '--port',
       '7777',
       '--json'
     ])
+  })
+
+  it('keeps an injected Chromium switch in Electron before argv rewriting', () => {
+    const injected = [...launchArgv.slice(0, 2), '--disable-features=FedCm', ...launchArgv.slice(2)]
+    expect(getAppImageCliArgs(injected, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toBeNull()
   })
 
   it('loses the redirect if the rewrite runs first', () => {
@@ -45,14 +49,17 @@ describe('serve argv rewrite vs AppImage CLI redirect ordering', () => {
     expect(getAppImageCliArgs(argv, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toEqual(['status'])
   })
 
-  // Why source text: the ordering only exists as statement order at index.ts module scope, and the
+  // Why source text: the ordering is the preflight phase's executable statement order, and the
   // cases above stay green if it is reversed — nothing else would catch the regression.
-  it('keeps index.ts running both CLI redirects before the argv rewrite', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+  it('keeps the preflight running both CLI redirects before the argv rewrite', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
+      'utf8'
+    )
     const packagedRedirect = source.indexOf('maybeRedirectPackagedCliEntryLaunch({')
     const appImageRedirect = source.indexOf('maybeRedirectAppImageCliLaunch({')
     const rewrite = source.indexOf('process.argv = normalizeServeModeArgv(process.argv)')
-    const serveModeCheck = source.indexOf("const isServeMode = process.argv.includes('--serve')")
+    const serveModeCheck = source.indexOf("state.isServeMode = process.argv.includes('--serve')")
 
     expect(packagedRedirect).toBeGreaterThanOrEqual(0)
     expect(appImageRedirect).toBeGreaterThanOrEqual(0)

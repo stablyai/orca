@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { toggleAgentDashboardFromShortcut } from './useIpcEvents'
+import { toggleAgentDashboardFromShortcut } from './ipc-events/agent-dashboard-command'
 
 function makeState(
   overrides: {

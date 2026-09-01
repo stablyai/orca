@@ -10,6 +10,8 @@ import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 export { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
+const RELAY_ERROR_CLOSE_GRACE_MS = 250
+
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
@@ -46,6 +48,7 @@ export function connectMobileRelayForPairing(args: {
   let requestCounter = 0
   let closed = false
   let intentionallyClosed = false
+  let transportErrorTimer: ReturnType<typeof setTimeout> | null = null
   let outerReady = false
   let authenticated = false
   let resolveAuthenticated!: () => void
@@ -111,8 +114,21 @@ export function connectMobileRelayForPairing(args: {
       })
       .catch((error: unknown) => fail(asError(error)))
   }
-  socket.onerror = () => fail(new Error('relay transport error'))
-  socket.onclose = (event) => fail(new RelayOuterError(event.code || 1006))
+  // WebSocket implementations commonly emit `error` immediately before
+  // `close`; the bounded fallback represents an opaque 1006 close.
+  socket.onerror = () => {
+    transportErrorTimer ??= setTimeout(() => {
+      transportErrorTimer = null
+      fail(new RelayOuterError(1006))
+    }, RELAY_ERROR_CLOSE_GRACE_MS)
+  }
+  socket.onclose = (event) => {
+    if (transportErrorTimer) {
+      clearTimeout(transportErrorTimer)
+      transportErrorTimer = null
+    }
+    fail(new RelayOuterError(event.code || 1006))
+  }
 
   function acceptRelayHello(raw: unknown): void {
     if (typeof raw !== 'string') {
@@ -144,6 +160,10 @@ export function connectMobileRelayForPairing(args: {
       return
     }
     closed = true
+    if (transportErrorTimer) {
+      clearTimeout(transportErrorTimer)
+      transportErrorTimer = null
+    }
     if (intentionallyClosed) {
       log('info', 'Relay: pairing socket closed', cellHost)
     } else {

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
-import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
 const dispatchAgentHookTerminalLifecycle = vi.fn()

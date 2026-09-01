@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type {
+  RemoteWorkspaceObservedSnapshot,
   RemoteWorkspaceSession,
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
@@ -169,7 +170,8 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     vi.mocked(ipcMain.removeHandler).mockReset()
     getSshConnectionStoreMock.mockReset()
     getSshConnectionStoreMock.mockReturnValue({
-      listTargets: () => targets
+      listTargets: () => targets,
+      getTarget: (targetId: string) => targets.find((target) => target.id === targetId)
     })
     getRepoMock.mockReset()
     getWorkspaceSessionMock.mockReset()
@@ -225,12 +227,26 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   async function callSetForConnectedTargets(args: {
     session?: WorkspaceSessionState
     hydratedTargetIds?: unknown
+    expectedRevisionsByTargetId?: unknown
+    expectedHostObservationTokensByTargetId?: unknown
   }): Promise<unknown> {
     const handler = handlers.get('remoteWorkspace:setForConnectedTargets')
     if (!handler) {
       throw new Error('remoteWorkspace:setForConnectedTargets handler was never registered')
     }
     return handler(null, args)
+  }
+
+  async function observeTarget(targetId: string): Promise<RemoteWorkspaceObservedSnapshot> {
+    const handler = handlers.get('remoteWorkspace:get')
+    if (!handler) {
+      throw new Error('remoteWorkspace:get handler was never registered')
+    }
+    const observed = await handler(null, { targetId })
+    if (!observed || typeof observed !== 'object' || !('hostObservationToken' in observed)) {
+      throw new Error(`remoteWorkspace:get did not observe ${targetId}`)
+    }
+    return observed as RemoteWorkspaceObservedSnapshot
   }
 
   it('does not write without an explicit non-empty hydrated target set', async () => {
@@ -241,15 +257,31 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     await expect(
       callSetForConnectedTargets({ session: baseSession, hydratedTargetIds: ['target-1', 42] })
     ).resolves.toEqual([])
+    await expect(
+      callSetForConnectedTargets({ session: baseSession, hydratedTargetIds: ['target-1'] })
+    ).resolves.toEqual([])
+    await expect(
+      callSetForConnectedTargets({
+        session: baseSession,
+        hydratedTargetIds: ['target-1'],
+        expectedRevisionsByTargetId: { 'target-1': 7 }
+      })
+    ).resolves.toEqual([])
 
     expect(getSshConnectionStoreMock).not.toHaveBeenCalled()
     expect(getActiveMultiplexerMock).not.toHaveBeenCalled()
   })
 
   it('writes only to explicitly hydrated connected targets', async () => {
+    const observation = await observeTarget('target-1')
     const result = await callSetForConnectedTargets({
       session: baseSession,
-      hydratedTargetIds: ['target-1', 'missing-target']
+      hydratedTargetIds: ['target-1', 'missing-target'],
+      expectedRevisionsByTargetId: { 'target-1': 7, 'missing-target': 7 },
+      expectedHostObservationTokensByTargetId: {
+        'target-1': observation.hostObservationToken,
+        'missing-target': 'unreachable-target-observation'
+      }
     })
 
     expect(result).toMatchObject([{ targetId: 'target-1', result: { ok: true } }])
@@ -282,7 +314,14 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       terminalLayoutsByTabId: {}
     })
 
-    await callSetForConnectedTargets({ hydratedTargetIds: ['target-1'] })
+    const observation = await observeTarget('target-1')
+    await callSetForConnectedTargets({
+      hydratedTargetIds: ['target-1'],
+      expectedRevisionsByTargetId: { 'target-1': 7 },
+      expectedHostObservationTokensByTargetId: {
+        'target-1': observation.hostObservationToken
+      }
+    })
 
     expect(requestByTargetId.get('target-1')).toHaveBeenCalledWith(
       'workspace.patch',
@@ -295,5 +334,22 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
         })
       })
     )
+  })
+
+  it('does not invalidate an upload authority when an unchanged snapshot is polled', async () => {
+    const first = await observeTarget('target-1')
+    const second = await observeTarget('target-1')
+    expect(second.hostObservationToken).toBe(first.hostObservationToken)
+
+    const result = await callSetForConnectedTargets({
+      session: baseSession,
+      hydratedTargetIds: ['target-1'],
+      expectedRevisionsByTargetId: { 'target-1': first.revision },
+      expectedHostObservationTokensByTargetId: {
+        'target-1': first.hostObservationToken
+      }
+    })
+
+    expect(result).toMatchObject([{ targetId: 'target-1', result: { ok: true } }])
   })
 })

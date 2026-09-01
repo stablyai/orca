@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   state: null as MockAppState | null,
   automationVisiblePageIds: new Set<string>(),
   mobileDrivenPageIds: new Set<string>(),
+  remotelyViewedPageIds: new Set<string>(),
   focusGroup: vi.fn()
 }))
 
@@ -40,35 +41,63 @@ vi.mock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
     pageIds.some((pageId) => mocks.mobileDrivenPageIds.has(pageId))
 }))
 
+vi.mock('@/lib/pane-manager/browser-remote-viewer-state', () => ({
+  useBrowserRemoteViewerForAny: (pageIds: readonly string[]) =>
+    pageIds.some((pageId) => mocks.remotelyViewedPageIds.has(pageId))
+}))
+
 vi.mock('./browser-workspace-pane', () => ({
   default: ({
     browserTab,
     isActive,
-    findShortcutScope
+    chromeShortcutScope
   }: {
     browserTab: BrowserTabState
     isActive: boolean
-    findShortcutScope?: string
+    chromeShortcutScope?: string
   }) => (
     <span
       data-browser-pane-id={browserTab.id}
       data-browser-pane-active={isActive ? 'true' : 'false'}
-      data-browser-find-shortcut-scope={findShortcutScope}
+      data-browser-find-shortcut-scope={chromeShortcutScope}
     />
   )
 }))
 
+import {
+  applyClientHostedBrowserRows,
+  clearClientHostedBrowserRowSelection,
+  selectClientHostedBrowserRow
+} from '@/lib/pane-manager/client-hosted-browser-row-state'
 import BrowserPaneOverlayLayer, { RetainedBrowserPaneOverlayLayer } from './BrowserPaneOverlayLayer'
+
+const HOST_ROW = {
+  browserPageId: 'page-hosted',
+  worktreeId: 'wt-1',
+  url: 'https://example.test/hosted',
+  title: 'Hosted',
+  loading: false,
+  browserHostClientId: 'host-a',
+  hostDeviceName: 'Studio',
+  hostAbsent: false
+}
 
 describe('BrowserPaneOverlayLayer', () => {
   beforeEach(() => {
     mocks.automationVisiblePageIds.clear()
     mocks.mobileDrivenPageIds.clear()
+    mocks.remotelyViewedPageIds.clear()
     mocks.focusGroup.mockClear()
     mocks.state = createState()
   })
 
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    // The row store is module-level, so a leftover row would render an extra pane in every
+    // sibling test.
+    clearClientHostedBrowserRowSelection()
+    applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [] })
+  })
 
   it('defers browser slots for a restricted hidden mount, then retains them after activation', () => {
     const view = render(
@@ -275,12 +304,72 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-id="browser-b"')
     expect(markup).toContain('data-browser-pane-active="false"')
   })
+
+  it('keeps a remotely viewed hidden browser pane mounted', () => {
+    mocks.remotelyViewedPageIds.add('page-b')
+
+    const markup = renderOverlay({ isWorktreeActive: false })
+
+    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
+    expect(markup).toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-active="false"')
+  })
+
+  // Why the style and not just mountedness: paintability drives the slot's `display`, and
+  // display:none is the exact park that stops Chromium producing frames. A mounted pane inside a
+  // display:none slot still goes dark, so mount assertions alone cannot see this regression.
+  it('paints the slot of a remotely viewed inactive browser pane', () => {
+    expect(slotDisplay('browser-b')).toBe('none')
+
+    cleanup()
+    mocks.remotelyViewedPageIds.add('page-b')
+
+    expect(slotDisplay('browser-b')).toBe('flex')
+  })
+
+  // Why DOM order and not just presence: the host-row pane carries no guest and paints over
+  // whichever webview the group was showing. Both siblings are absolutely positioned onto the same
+  // anchor, so the only thing putting it on top is being last — a reorder is invisible to every
+  // other assertion here and would bury it under a guest.
+  it('renders the client-hosted host-row pane after every browser slot', () => {
+    applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [HOST_ROW] })
+    selectClientHostedBrowserRow({
+      worktreeId: 'wt-1',
+      browserPageId: HOST_ROW.browserPageId,
+      groupId: 'group-1',
+      groupActiveTabIdAtSelection: 'tab-a'
+    })
+
+    const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+
+    const ordered = [
+      ...view.container.querySelectorAll(
+        '[data-browser-overlay-tab-id],[data-client-hosted-browser-host-row-pane]'
+      )
+    ].map(
+      (node) =>
+        node.getAttribute('data-browser-overlay-tab-id') ??
+        `host-row:${node.getAttribute('data-client-hosted-browser-host-row-pane')}`
+    )
+    expect(ordered).toEqual(['browser-a', 'browser-b', 'host-row:page-hosted'])
+  })
 })
 
 function renderOverlay({ isWorktreeActive }: { isWorktreeActive: boolean }): string {
   return renderToStaticMarkup(
     <BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={isWorktreeActive} />
   )
+}
+
+function slotDisplay(browserTabId: string): string {
+  const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={true} />)
+  const slot = view.container.querySelector<HTMLElement>(
+    `[data-browser-overlay-tab-id="${browserTabId}"]`
+  )
+  if (!slot) {
+    throw new Error(`no overlay slot rendered for ${browserTabId}`)
+  }
+  return slot.style.display
 }
 
 function createState(): MockAppState {

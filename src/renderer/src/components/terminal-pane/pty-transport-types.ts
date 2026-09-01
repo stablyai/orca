@@ -15,6 +15,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
+import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -44,6 +45,7 @@ export type PtyBufferSnapshot = {
   /** Effective kitty flags the owner of this image proved at `seq`. Absent
    *  means unknown; never rewrite that silence into a known `0`. */
   kittyKeyboardFlags?: number
+  terminalOwner?: 'shell'
 }
 
 /** Metadata for one authoritative replay payload. */
@@ -56,6 +58,8 @@ export type PtyReplayDataMeta = {
   /** The boundary `kittyKeyboardFlags` describes, recorded as the renderer's
    *  ordered high-water so a quiet pane can still publish a coherent snapshot. */
   snapshotSeq?: number
+  alternateScreen?: boolean
+  terminalOwner?: 'shell'
 }
 
 export type LocalPtySessionMetadata = {
@@ -86,6 +90,7 @@ export type PtyConnectResult = {
    *  domain `snapshotSeq` main reconciled for the same attach boundary. Absent
    *  means unknown, never a proven inactive protocol. */
   snapshotKittyKeyboardFlags?: number
+  snapshotTerminalOwner?: 'shell'
   snapshotSeq?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
@@ -112,6 +117,7 @@ type PtyCallbacks = {
   onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
+  onErrorCleared?: (message: string) => void
   onExit?: (code: number) => void
   onWriteUnavailable?: () => void
   onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
@@ -154,6 +160,8 @@ export type PtyTransport = {
     startupCommandDelivery?: StartupCommandDelivery
     /** Reject a stale restored identity before this transport can publish global PTY handlers. */
     admitPtyId?: (ptyId: string) => boolean
+    /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
+    shouldContinue?: () => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
@@ -173,6 +181,8 @@ export type PtyTransport = {
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
+  /** Settles retained pre-connect input when a deferred spawn is abandoned before connect. */
+  abandonPreconnectInput?: () => void
   claimViewport?: (cols: number, rows: number) => boolean
   /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
   setOutputPaused?: (paused: boolean) => boolean
@@ -221,6 +231,12 @@ export type PtyTransport = {
 
 export type IpcPtyTransportOptions = {
   cwd?: string
+  /** Retain bounded user input while a visible split waits to start its PTY. */
+  bufferInputUntilConnect?: boolean
+  /** Seed a fresh transport with input handed off from a remounted deferred split. */
+  preconnectInput?: readonly PtyPreconnectInputEntry[]
+  /** Records newly retained input against a remount-safe deferred split handoff. */
+  onPreconnectInput?: (input: PtyPreconnectInputEntry) => void
   cwdFallback?: 'worktree'
   env?: Record<string, string>
   envToDelete?: string[]
@@ -245,7 +261,7 @@ export type IpcPtyTransportOptions = {
   projectRuntime?: ProjectExecutionRuntimeResolution
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   telemetry?: EventProps<'agent_started'>
-  onPtyExit?: (ptyId: string) => void
+  onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */

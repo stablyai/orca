@@ -87,15 +87,13 @@ function positionScore(entry: SearchableWorkspaceTab): number {
 }
 
 function resolveWorkspaceTabLastActiveAt(entry: SearchableWorkspaceTab): number | null {
-  // Agent activity wins when present; then explicit tab focus; otherwise fall back to worktree.
-  const candidate =
-    maxAgentActivityAt(entry.agentMetadata) ??
-    entry.tab.lastFocusedAt ??
-    (entry.worktree.lastActivityAt || null)
+  // Why: explicit tab activity outranks the worktree fallback; creation only clamps stale signals.
+  const tabLocalActivity =
+    Math.max(maxAgentActivityAt(entry.agentMetadata) ?? 0, entry.tab.lastFocusedAt ?? 0) || null
+  const candidate = tabLocalActivity || entry.worktree.lastActivityAt || null
   if (candidate == null) {
     return null
   }
-  // Never report activity older than the tab itself (e.g. a stale worktree signal).
   return Math.max(candidate, entry.tab.createdAt)
 }
 

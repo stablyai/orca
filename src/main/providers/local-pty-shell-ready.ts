@@ -11,6 +11,7 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getFishCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
   encodeShellStartupFeatures,
@@ -63,12 +64,17 @@ export function getBashWrapperLaunchArgs(): string[] | null {
  */
 export function getShellLaunchConfig(
   shellPath: string,
-  features: readonly ShellStartupFeature[]
+  features: readonly ShellStartupFeature[],
+  startupCommand?: string
 ): ShellReadyLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+  const wrapperFeatures =
+    startupCommand !== undefined && !features.includes('startup')
+      ? [...features, 'startup' as const]
+      : features
 
   if (shellName === 'zsh') {
-    if (features.length === 0) {
+    if (wrapperFeatures.length === 0) {
       return UNWRAPPED
     }
     if (!wrapperTreeUsable()) {
@@ -81,7 +87,10 @@ export function getShellLaunchConfig(
       env: {
         ...inheritedZdotdirEnv(resolveInheritedZdotdir(process.env)),
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
-        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
+        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(wrapperFeatures),
+        ...(startupCommand !== undefined
+          ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand }
+          : {})
       },
       supportsReadyMarker: features.includes('ready')
     }
@@ -99,7 +108,10 @@ export function getShellLaunchConfig(
     return {
       args,
       env: {
-        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
+        [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(wrapperFeatures),
+        ...(startupCommand !== undefined
+          ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand }
+          : {})
       },
       supportsReadyMarker: features.includes('ready')
     }
@@ -120,15 +132,20 @@ export function getShellLaunchConfig(
 
   // Why: mirrors daemon/shell-ready.ts; markerless fish stays unwrapped. The
   // selection is baked into the init command, so fish needs no feature env var.
-  if (shellName === 'fish' && features.includes('ready')) {
+  if (shellName === 'fish' && (features.includes('ready') || startupCommand !== undefined)) {
     return {
       args: [
         '-l',
         '-C',
-        `${getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED)}\n${getFishCodexShellLaunchPreflight()}`
+        `${getFishShellReadyInitCommand(
+          SHELL_READY_MARKER_ESCAPED,
+          features.includes('ready'),
+          startupCommand !== undefined
+        )}\n${getFishCodexShellLaunchPreflight()}`
       ],
-      env: {},
-      supportsReadyMarker: true
+      env:
+        startupCommand !== undefined ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand } : {},
+      supportsReadyMarker: features.includes('ready')
     }
   }
 

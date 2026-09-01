@@ -12,6 +12,7 @@ import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-gate'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatSessionOptions } from './use-mobile-native-chat-session-options'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
@@ -90,6 +91,7 @@ export function useMobileNativeChatController(args: {
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
+    getComposerEditGeneration: getChatComposerEditGeneration,
     pending: chatPending,
     imagePreviewsByMessageId: chatImagePreviewsByMessageId,
     captureSendOrigin,
@@ -115,15 +117,18 @@ export function useMobileNativeChatController(args: {
     transcriptSettled: nativeChatSession.status === 'ready'
   })
 
-  const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null
-  const nativeChatAgentWorking = nativeChatStatus?.state === 'working'
+  const activeTabStatus = activeSessionTab?.agentStatus
+  const activeTabAgentWorking =
+    activeTabStatus?.state === 'working' && activeTabStatus.workingMode !== 'monitoring'
+  const nativeChatStatus = activeChatResolution ? activeTabStatus : null
+  const nativeChatAgentWorking = activeChatResolution != null && activeTabAgentWorking
   // Deliberately not gated on the chat view being visible: the streaming gate
   // has to tell "hidden mid-turn" from "the turn ended".
-  const nativeChatStreamLive = activeSessionTab?.agentStatus?.state === 'working'
+  const nativeChatStreamLive = activeTabAgentWorking
   // Throttle the streaming bubble: OpenCode emits a status frame per streamed
   // part, and each one re-renders and re-parses the whole accumulated markdown.
   const nativeChatStreamingText = useThrottledLatestValue(
-    nativeChatAgentWorking ? nativeChatStatus?.lastAssistantMessage : undefined,
+    mobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking),
     NATIVE_CHAT_STREAM_THROTTLE_MS
   )
   const {
@@ -259,6 +264,7 @@ export function useMobileNativeChatController(args: {
     nativeChatAgent: activeChatResolution?.agent ?? null,
     chatComposerText,
     setChatComposerText,
+    getChatComposerEditGeneration,
     chatPending,
     chatImagePreviewsByMessageId,
     nativeChatSession,

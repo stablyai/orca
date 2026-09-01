@@ -7,6 +7,7 @@ import type * as UpdaterModule from './updater'
 import type * as RecoveryModule from './linux-package-update-recovery'
 import type { UpdateStatus } from '../shared/update-status-types'
 import { PRE_COMMIT_INSTALL_FAILURE } from './updater-test-harness'
+import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
   browserWindowMock,
@@ -166,6 +167,8 @@ function probeRevalidation(): RevalidationProbe {
   }
 }
 
+warmUpdaterModule()
+
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
@@ -183,7 +186,9 @@ describe('updater', () => {
     const settleQuitAndInstall = async (): Promise<void> => {
       await vi.advanceTimersByTimeAsync(100)
       await revalidation.drain()
-      for (let turn = 0; turn < 40; turn += 1) {
+      // Full Node 26 shards can briefly starve the libuv poll phase while other workers transform
+      // tests; keep the operation alive long enough to avoid leaking it into the next test.
+      for (let turn = 0; turn < 200; turn += 1) {
         await new Promise((resolve) => realSetTimeout(resolve, 0))
       }
       await vi.advanceTimersByTimeAsync(0)
@@ -237,7 +242,7 @@ describe('updater', () => {
         return Promise.resolve(undefined)
       })
       const send = vi.fn()
-      const updater = await import('./updater')
+      const updater = await loadUpdaterModule()
       updater.setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -265,7 +270,7 @@ describe('updater', () => {
         vi.resetModules()
         autoUpdaterMock.autoInstallOnAppQuit = true
         getLinuxRootPackageTypeMock.mockReturnValue(packageType)
-        const { setupAutoUpdater } = await import('./updater')
+        const { setupAutoUpdater } = await loadUpdaterModule()
 
         setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
           getLastUpdateCheckAt: () => Date.now(),
@@ -278,7 +283,7 @@ describe('updater', () => {
 
     it('keeps interactive install-on-quit when no root-package marker is present', async () => {
       autoUpdaterMock.autoInstallOnAppQuit = false
-      const { setupAutoUpdater } = await import('./updater')
+      const { setupAutoUpdater } = await loadUpdaterModule()
 
       setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
         getLastUpdateCheckAt: () => Date.now(),
@@ -295,7 +300,7 @@ describe('updater', () => {
       ] as const) {
         vi.resetModules()
         autoUpdaterMock.autoInstallOnAppQuit = true
-        const { setupAutoUpdater } = await import('./updater')
+        const { setupAutoUpdater } = await loadUpdaterModule()
 
         setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
           getLastUpdateCheckAt: () => Date.now(),

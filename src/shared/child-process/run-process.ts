@@ -2,56 +2,25 @@ import {
   spawn as nodeSpawn,
   spawnSync as nodeSpawnSync,
   type ChildProcess,
+  type ChildProcessWithoutNullStreams,
   type SpawnOptions as NodeSpawnOptions
 } from 'node:child_process'
 import { buildWindowsCmdShimCommandLine, isCmdInterpretedProgram } from './windows-command-line'
+import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 
-/**
- * The single place Orca starts a child process.
- *
- * Why one place: six decisions have to be made every time a child is spawned,
- * POSIX forgives all six, and Windows punishes each of them differently —
- * console visibility, argument quoting, `.cmd` interpretation, binary
- * resolution, timeout policy, and how the tree is later terminated. Made
- * per-call-site, they were right in some files and wrong in others, and the
- * wrong ones reached users as stolen keyboard focus, mangled agent prompts and
- * orphaned process trees.
- *
- * Callers outside this directory must not import `node:child_process`; a guard
- * test enforces that against a shrinking allowlist.
- */
+import { createOutputSink } from './bounded-output-sink'
+import { createChildTerminationReporter } from './child-termination-reporter'
 
-export type ProcessSpec = {
-  /**
-   * Program to run. On Windows this should already be an absolute path —
-   * spawning by bare name depends on the child's PATH, which under Group Policy
-   * or a stripped Electron environment can resolve to nothing.
-   */
-  program: string
-  args?: readonly string[]
-  cwd?: string
-  env?: NodeJS.ProcessEnv
-  /** Kill the process (and, on Windows, its console) after this long. */
-  timeoutMs?: number
-  /** Written to stdin then closed. Omit to leave stdin empty and closed. */
-  input?: string
-  /** Cap on captured stdout/stderr; output past it is discarded. */
-  maxOutputBytes?: number
-  /** Kills the process when aborted; the result still reports the exit. */
-  signal?: AbortSignal
-}
-
-export type ProcessResult = {
-  code: number | null
-  signal: NodeJS.Signals | null
-  stdout: string
-  stderr: string
-  /** True when the process was killed by `timeoutMs` rather than exiting. */
-  timedOut: boolean
-}
-
-export const DEFAULT_PROCESS_TIMEOUT_MS = 30_000
-export const DEFAULT_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
+export type {
+  ChildProcessHandle,
+  SpawnedProcess,
+  ProcessSpec,
+  ProcessTerminationBarrier,
+  ProcessResult
+} from './process-spec'
+export { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
+import type { ProcessSpec, ProcessResult } from './process-spec'
+import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 /**
  * Grace between the timeout kill and giving up on the child's exit.
  *
@@ -62,6 +31,14 @@ export const DEFAULT_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
  * caller the same dead promise.
  */
 const PROCESS_EXIT_GRACE_MS = 2_000
+/**
+ * Last resort for a barrier caller once tree termination could not be verified.
+ *
+ * Why bounded: waiting for the root's exit is what stops an unverified caller
+ * mutating shared state under a live child, but a tree that neither dies nor
+ * reports would otherwise leave the promise pending for the app's lifetime.
+ */
+const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
 
 export type ResolvedSpawn = {
   file: string
@@ -81,15 +58,18 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
   const base: NodeSpawnOptions = {
     cwd: spec.cwd,
     env: spec.env,
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
     // Why unconditional: Orca's main process is GUI-subsystem and owns no
     // console, so every console-subsystem child it starts gets a fresh visible
     // conhost that takes foreground — keystrokes typed into an Orca terminal at
     // that moment land in the black box instead.
     windowsHide: true,
+    detached: spec.detached,
+    windowsVerbatimArguments: spec.windowsVerbatimArguments,
     // Why never `shell: true`: it concatenates arguments without escaping (Node
     // itself warns DEP0190) and it silently makes windowsHide a no-op.
-    shell: false
+    shell: false,
+    ...(spec.terminationBarrier && platform !== 'win32' ? { detached: true } : {})
   }
 
   if (platform !== 'win32' || !isCmdInterpretedProgram(spec.program)) {
@@ -116,36 +96,13 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
  * `runProcess` handles that for you; here it cannot, because a blanket handler
  * would also defeat callers that track and remove their own listeners.
  */
-export function spawnProcess(spec: ProcessSpec): ChildProcess {
+export function spawnProcess(spec: ProcessSpec): ChildProcessWithoutNullStreams {
   const resolved = resolveSpawn(spec, process.platform)
-  return nodeSpawn(resolved.file, [...resolved.args], resolved.options)
-}
-
-/**
- * Collects output up to a cap, so a chatty child cannot grow the heap.
- *
- * Accepts strings as well as buffers: a stream someone called `setEncoding` on
- * emits strings, and concatenating those as buffers throws inside a `data`
- * handler, where the rejection has nowhere to go and the caller just hangs.
- */
-function createOutputSink(maxBytes: number): {
-  write: (chunk: Buffer | string) => void
-  text: () => string
-} {
-  const chunks: Buffer[] = []
-  let bytes = 0
-  return {
-    write(raw) {
-      const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw)
-      const remaining = maxBytes - bytes
-      if (remaining <= 0) {
-        return
-      }
-      chunks.push(chunk.length > remaining ? chunk.subarray(0, remaining) : chunk)
-      bytes += chunk.length
-    },
-    text: () => Buffer.concat(chunks).toString('utf8')
-  }
+  return nodeSpawn(
+    resolved.file,
+    [...resolved.args],
+    resolved.options
+  ) as ChildProcessWithoutNullStreams
 }
 
 /**
@@ -155,13 +112,19 @@ function createOutputSink(maxBytes: number): {
  * the process could not be started at all.
  */
 export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
+  if (spec.signal?.aborted) {
+    spec.onChildTerminated?.()
+    return Promise.resolve({ code: null, signal: null, stdout: '', stderr: '', timedOut: false })
+  }
   const maxOutputBytes = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
 
   return new Promise<ProcessResult>((resolve, reject) => {
+    const terminationReporter = createChildTerminationReporter(spec.onChildTerminated)
     let child: ChildProcess
     try {
       child = spawnProcess(spec)
     } catch (error) {
+      terminationReporter.report()
       reject(error)
       return
     }
@@ -170,6 +133,14 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
     const stderr = createOutputSink(maxOutputBytes)
     let timedOut = false
     let settled = false
+    let barrierStopping = false
+    let barrierAttemptComplete = false
+    let barrierTerminationVerified = false
+    let initialBarrierTermination: Promise<boolean> | undefined
+    let deferredExit: { code: number | null; signal: NodeJS.Signals | null } | null = null
+    let deferredClose: { code: number | null; signal: NodeJS.Signals | null } | null = null
+    let deferredError: Error | null = null
+    let rootExitedBeforeBarrier = false
 
     const settle = (act: () => void): void => {
       if (settled) {
@@ -178,12 +149,18 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
       settled = true
       clearTimeout(timer)
       clearTimeout(graceTimer)
+      clearTimeout(barrierDeadlineTimer)
       spec.signal?.removeEventListener('abort', onAbort)
       act()
     }
 
     child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
-    child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      stderr.write(chunk)
+      if (typeof spec.terminationBarrier === 'object') {
+        spec.terminationBarrier.observeStderr?.(chunk)
+      }
+    })
     // Why listeners that do nothing: an unhandled `error` on a stream is an
     // uncaught exception, and that takes the whole main process down. A child
     // that exits without reading makes the queued stdin write fail with EPIPE,
@@ -195,37 +172,131 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
     }
 
     let graceTimer: ReturnType<typeof setTimeout> | undefined
+    let barrierDeadlineTimer: ReturnType<typeof setTimeout> | undefined
+    const signalBarrierTree = (signal?: NodeJS.Signals): Promise<boolean> =>
+      (typeof spec.terminationBarrier === 'object'
+        ? spec.terminationBarrier.signal(child, signal)
+        : signalProcessTree(child, signal)
+      ).catch(() => false)
+    const forceBarrierTree = (): Promise<boolean> =>
+      (typeof spec.terminationBarrier === 'object'
+        ? spec.terminationBarrier.force(child)
+        : forceTerminateProcessTree(child)
+      ).catch(() => false)
+
+    const resolveFromClose = (code: number | null, signal: NodeJS.Signals | null): void =>
+      settle(() =>
+        resolve({ code, signal, stdout: stdout.text(), stderr: stderr.text(), timedOut })
+      )
+
+    const settleBarrierOutcome = (): void => {
+      const rootExit = deferredClose ?? deferredExit
+      if (deferredError) {
+        settle(() => reject(deferredError))
+        return
+      }
+      resolveFromClose(rootExit?.code ?? null, rootExit?.signal ?? null)
+    }
+
+    const resolveBarrierIfSafe = (): void => {
+      const rootExit = deferredClose ?? deferredExit
+      if (barrierTerminationVerified || (rootExitedBeforeBarrier && rootExit)) {
+        settleBarrierOutcome()
+        return
+      }
+      if (!barrierAttemptComplete) {
+        return
+      }
+      // Why a second deadline: the tree survived every attempt and the root has
+      // gone silent, so nothing else will ever settle this promise.
+      barrierDeadlineTimer ??= setTimeout(settleBarrierOutcome, BARRIER_UNVERIFIED_EXIT_GRACE_MS)
+      barrierDeadlineTimer.unref?.()
+    }
 
     /**
-     * Stop the child, then settle whether or not it complies.
+     * Stop the child, then settle.
      *
-     * Why settle regardless: `close` only fires once the child is really gone,
-     * so one that traps the signal would hold the caller forever -- and both
-     * the pwsh cache and the snapshot reader hand later callers their in-flight
-     * promise, so a single unkillable child would wedge every one of them.
+     * Without a barrier, settle whether or not the child complies. With one, wait
+     * for verified tree termination or a root exit first — a descendant can keep
+     * `close` pending after the root exits, but failed verification must not let
+     * callers mutate shared state — then settle on the deadline regardless.
      */
     const stopAndSettle = (): void => {
-      terminate(child)
-      graceTimer ??= setTimeout(() => {
-        terminate(child, 'SIGKILL')
-        settle(() =>
-          resolve({
-            code: null,
-            signal: null,
-            stdout: stdout.text(),
-            stderr: stderr.text(),
-            timedOut
+      if (spec.terminationBarrier) {
+        barrierStopping = true
+        initialBarrierTermination ??= signalBarrierTree()
+        if (process.platform === 'win32') {
+          void initialBarrierTermination.then((terminated) => {
+            if (!terminated) {
+              return
+            }
+            barrierAttemptComplete = true
+            barrierTerminationVerified = true
+            terminationReporter.report()
+            resolveBarrierIfSafe()
           })
-        )
+        }
+      } else {
+        terminate(child)
+      }
+      graceTimer ??= setTimeout(() => {
+        if (spec.terminationBarrier) {
+          const initialTermination = initialBarrierTermination ?? Promise.resolve(false)
+          if (process.platform === 'win32') {
+            if (typeof spec.terminationBarrier === 'object') {
+              void Promise.all([initialTermination, forceBarrierTree()]).then(
+                ([initialTerminated, forceTerminated]) => {
+                  barrierAttemptComplete = true
+                  barrierTerminationVerified = initialTerminated || forceTerminated
+                  terminationReporter.reportIf(barrierTerminationVerified)
+                  if (!barrierTerminationVerified) {
+                    // The barrier never confirmed the tree died, so the root
+                    // would otherwise outlive the abort or timeout.
+                    terminate(child, 'SIGKILL')
+                  }
+                  resolveBarrierIfSafe()
+                }
+              )
+              return
+            }
+            void initialTermination.then((terminated) => {
+              if (!terminated) {
+                terminate(child, 'SIGKILL')
+              }
+              barrierAttemptComplete = true
+              barrierTerminationVerified = terminated
+              terminationReporter.reportIf(barrierTerminationVerified)
+              resolveBarrierIfSafe()
+            })
+            return
+          }
+          void Promise.all([initialTermination, forceBarrierTree()]).then(
+            ([_initialTerminated, forceTerminated]) => {
+              barrierAttemptComplete = true
+              barrierTerminationVerified = forceTerminated
+              terminationReporter.reportIf(barrierTerminationVerified)
+              if (!barrierTerminationVerified) {
+                terminate(child, 'SIGKILL')
+              }
+              resolveBarrierIfSafe()
+            }
+          )
+          return
+        }
+        terminate(child, 'SIGKILL')
+        resolveFromClose(null, null)
       }, PROCESS_EXIT_GRACE_MS)
       graceTimer.unref?.()
     }
 
-    const timer = setTimeout(() => {
-      timedOut = true
-      stopAndSettle()
-    }, spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
-    timer.unref?.()
+    const timer =
+      spec.timeoutMs === null
+        ? undefined
+        : setTimeout(() => {
+            timedOut = true
+            stopAndSettle()
+          }, spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
+    timer?.unref?.()
 
     // Why the same escalation: an aborted caller has stopped waiting, so an
     // unkillable child must not keep the promise alive on their behalf either.
@@ -238,12 +309,36 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
       onAbort()
     }
 
-    child.once('error', (error) => settle(() => reject(error)))
-    child.once('close', (code, signal) =>
-      settle(() =>
-        resolve({ code, signal, stdout: stdout.text(), stderr: stderr.text(), timedOut })
-      )
-    )
+    child.once('error', (error) => {
+      terminationReporter.reportIf(!child.pid)
+      if (barrierStopping) {
+        deferredError = error
+        resolveBarrierIfSafe()
+        return
+      }
+      settle(() => reject(error))
+    })
+    child.once('exit', (code, signal) => {
+      if (!barrierStopping) {
+        rootExitedBeforeBarrier = true
+      }
+      deferredExit = { code, signal }
+      if (barrierStopping) {
+        resolveBarrierIfSafe()
+      }
+    })
+    child.once('close', (code, signal) => {
+      terminationReporter.report()
+      if (!barrierStopping) {
+        rootExitedBeforeBarrier = true
+      }
+      if (barrierStopping) {
+        deferredClose = { code, signal }
+        resolveBarrierIfSafe()
+        return
+      }
+      resolveFromClose(code, signal)
+    })
 
     // Why close rather than leave open: a child that reads stdin (a hook
     // draining its payload, a CLI probing for a TTY) otherwise blocks until the
@@ -252,12 +347,7 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
   })
 }
 
-/**
- * Best-effort termination of a captured child.
- *
- * Deliberately root-only: descendant reaping is the job-object owner's
- * responsibility, not every caller's.
- */
+/** Best-effort root termination, or whole-tree termination for barrier callers. */
 function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
   try {
     child.kill(signal)
@@ -279,7 +369,7 @@ export function runProcessSync(spec: ProcessSpec): ProcessResult {
   const result = nodeSpawnSync(resolved.file, [...resolved.args], {
     ...resolved.options,
     input: spec.input,
-    timeout: spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS,
+    timeout: spec.timeoutMs === null ? undefined : (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS),
     maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
     encoding: 'buffer'
   })

@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { chmodSync, linkSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
+import { chmodSync, linkSync, mkdtempSync, readFileSync, rmSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createServer, type Server } from 'node:net'
+import { connect, createServer, type Server } from 'node:net'
 import { DaemonServer } from './daemon-server'
+import type { ConnectedDaemonClient } from './daemon-client-connections'
 import { DaemonClient } from './client'
-import { isDaemonGoneError } from './daemon-pty-adapter'
+import { isDaemonGoneError } from './daemon-endpoint-errors'
 import { DAEMON_ENDPOINT_LOST_MESSAGE } from './daemon-endpoint-ownership'
+import { encodeNdjson } from './ndjson'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import { PROTOCOL_VERSION } from './types'
 import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-harness'
 
 // A killed process must actually report its exit: teardown waits
@@ -31,6 +34,21 @@ function createMockSubprocess(): SubprocessHandle {
     },
     dispose() {}
   }
+}
+type DaemonServerInternals = {
+  endpoint: {
+    hasLostOwnership(): boolean
+    requestRetirementForLoss(): void
+    checkOwnership(): void
+    ownershipLossStreak: number
+    ownershipLost: boolean
+  }
+  lifecycle: {
+    retirementRequested: boolean
+    state: string
+    server: Server | null
+  }
+  connections: { clients: Map<string, ConnectedDaemonClient> }
 }
 
 describe('daemon server error handling', () => {
@@ -88,8 +106,8 @@ describe('daemon server error handling', () => {
         ).rejects.toThrow(/no longer owns its endpoint/)
 
         // And it stands down rather than lingering as an unreachable host.
-        const daemon = server as unknown as { retirementRequested: boolean }
-        expect(daemon.retirementRequested).toBe(true)
+        const daemon = server as unknown as DaemonServerInternals
+        expect(daemon.lifecycle.retirementRequested).toBe(true)
       } finally {
         await new Promise<void>((resolve) => usurper.close(() => resolve()))
       }
@@ -108,17 +126,14 @@ describe('daemon server error handling', () => {
         spawnSubprocess: () => createMockSubprocess()
       })
       await server.start()
-      const daemon = server as unknown as {
-        hasLostEndpointOwnership: () => boolean
-        retirementRequested: boolean
-      }
+      const daemon = server as unknown as DaemonServerInternals
 
       try {
         // Drop search permission on the directory so the ownership stat fails EACCES.
         chmodSync(dir, 0o600)
 
-        expect(daemon.hasLostEndpointOwnership()).toBe(false)
-        expect(daemon.retirementRequested).toBe(false)
+        expect(daemon.endpoint.hasLostOwnership()).toBe(false)
+        expect(daemon.lifecycle.retirementRequested).toBe(false)
       } finally {
         chmodSync(dir, 0o700)
       }
@@ -150,8 +165,8 @@ describe('daemon server error handling', () => {
         linkSync(usurperBind, socketPath)
 
         // The guard is still armed here — no creation has been refused yet.
-        const daemon = server as unknown as { hasLostEndpointOwnership: () => boolean }
-        expect(daemon.hasLostEndpointOwnership()).toBe(true)
+        const daemon = server as unknown as DaemonServerInternals
+        expect(daemon.endpoint.hasLostOwnership()).toBe(true)
 
         await expect(
           client.request('createOrAttach', {
@@ -198,14 +213,11 @@ describe('daemon server error handling', () => {
         ).rejects.toThrow(/no longer owns its endpoint/)
 
         // Simulate a late client completing its handshake and clearing pending retirement.
-        const daemon = server as unknown as {
-          retirementRequested: boolean
-          hasLostEndpointOwnership: () => boolean
-        }
-        daemon.retirementRequested = false
+        const daemon = server as unknown as DaemonServerInternals
+        daemon.lifecycle.retirementRequested = false
 
         // The loss must still be remembered, so creation stays closed.
-        expect(daemon.hasLostEndpointOwnership()).toBe(true)
+        expect(daemon.endpoint.hasLostOwnership()).toBe(true)
         await expect(
           client.request('createOrAttach', { sessionId: 'b', cols: 80, rows: 24 })
         ).rejects.toThrow(/no longer owns its endpoint/)
@@ -248,16 +260,13 @@ describe('daemon server error handling', () => {
 
         // Losing the endpoint with nothing left to drain must stand the daemon down, even
         // though this client is still connected.
-        const daemon = server as unknown as {
-          requestRetirementForLostEndpoint: () => void
-          idleShutdownState: string
-        }
-        expect(daemon.idleShutdownState).toBe('running')
-        daemon.requestRetirementForLostEndpoint()
+        const daemon = server as unknown as DaemonServerInternals
+        expect(daemon.lifecycle.state).toBe('running')
+        daemon.endpoint.requestRetirementForLoss()
 
         // Drained and unreachable: it must begin standing down rather than wait for this
         // client, which can never make it routable again.
-        expect(daemon.idleShutdownState).not.toBe('running')
+        expect(daemon.lifecycle.state).not.toBe('running')
       } finally {
         await new Promise<void>((resolve) => usurper.close(() => resolve()))
       }
@@ -320,19 +329,15 @@ describe('daemon server error handling', () => {
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
 
-        const daemon = server as unknown as {
-          retirementRequested: boolean
-          endpointOwnershipLost: boolean
-          checkEndpointOwnership: () => void
-        }
+        const daemon = server as unknown as DaemonServerInternals
         // Retirement is already pending for an unrelated reason.
-        daemon.retirementRequested = true
+        daemon.lifecycle.retirementRequested = true
 
-        daemon.checkEndpointOwnership()
-        daemon.checkEndpointOwnership()
+        daemon.endpoint.checkOwnership()
+        daemon.endpoint.checkOwnership()
 
         // The loss must be recorded regardless, so a later hello cannot undo it.
-        expect(daemon.endpointOwnershipLost).toBe(true)
+        expect(daemon.endpoint.ownershipLost).toBe(true)
       } finally {
         await new Promise<void>((resolve) => usurper.close(() => resolve()))
       }
@@ -352,12 +357,7 @@ describe('daemon server error handling', () => {
         spawnSubprocess: () => createMockSubprocess()
       })
       await server.start()
-      const daemon = server as unknown as {
-        checkEndpointOwnership: () => void
-        hasLostEndpointOwnership: () => boolean
-        endpointOwnershipLost: boolean
-        endpointOwnershipLossStreak: number
-      }
+      const daemon = server as unknown as DaemonServerInternals
       // A second name for our own socket inode, so ownership can be handed back.
       const ourAlias = join(dir, '.ours')
       linkSync(socketPath, ourAlias)
@@ -369,21 +369,21 @@ describe('daemon server error handling', () => {
         // First loss.
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
-        daemon.checkEndpointOwnership()
-        expect(daemon.endpointOwnershipLossStreak).toBe(1)
-        expect(daemon.endpointOwnershipLost).toBe(false)
+        daemon.endpoint.checkOwnership()
+        expect(daemon.endpoint.ownershipLossStreak).toBe(1)
+        expect(daemon.endpoint.ownershipLost).toBe(false)
 
         // Ownership demonstrably returns, observed through the admission path.
         unlinkSync(socketPath)
         linkSync(ourAlias, socketPath)
-        expect(daemon.hasLostEndpointOwnership()).toBe(false)
-        expect(daemon.endpointOwnershipLossStreak).toBe(0)
+        expect(daemon.endpoint.hasLostOwnership()).toBe(false)
+        expect(daemon.endpoint.ownershipLossStreak).toBe(0)
 
         // A later isolated loss is confirmation #1, not #2, so it must not retire.
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
-        daemon.checkEndpointOwnership()
-        expect(daemon.endpointOwnershipLost).toBe(false)
+        daemon.endpoint.checkOwnership()
+        expect(daemon.endpoint.ownershipLost).toBe(false)
       } finally {
         await new Promise<void>((resolve) => usurper.close(() => resolve()))
       }
@@ -400,19 +400,21 @@ describe('daemon server error handling', () => {
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
-    const daemon = server as unknown as { server: Server | null }
+    const daemon = server as unknown as DaemonServerInternals
 
-    expect(daemon.server?.listenerCount('error')).toBe(1)
+    expect(daemon.lifecycle.server?.listenerCount('error')).toBe(1)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       // Twice on purpose: a one-shot listener survives the first error and dies on the second,
       // so a single emit cannot tell a permanent handler from `once`.
-      expect(() => daemon.server?.emit('error', new Error('EMFILE: accept failed'))).not.toThrow()
       expect(() =>
-        daemon.server?.emit('error', new Error('EMFILE: accept failed again'))
+        daemon.lifecycle.server?.emit('error', new Error('EMFILE: accept failed'))
+      ).not.toThrow()
+      expect(() =>
+        daemon.lifecycle.server?.emit('error', new Error('EMFILE: accept failed again'))
       ).not.toThrow()
       expect(warn).toHaveBeenCalledTimes(2)
-      expect(daemon.server?.listenerCount('error')).toBe(1)
+      expect(daemon.lifecycle.server?.listenerCount('error')).toBe(1)
     } finally {
       warn.mockRestore()
     }
@@ -420,6 +422,44 @@ describe('daemon server error handling', () => {
     client = new DaemonClient({ socketPath, tokenPath })
     await client.ensureConnected()
     expect(client.isConnected()).toBe(true)
+  })
+
+  it('rejects unsupported hello roles without replacing an authenticated stream', async () => {
+    const onAuthenticatedClientPair = vi.fn()
+    server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      onAuthenticatedClientPair,
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+    client = new DaemonClient({ socketPath, tokenPath })
+    await client.ensureConnected()
+    const daemon = server as unknown as DaemonServerInternals
+    const connectedClient = [...daemon.connections.clients.values()][0]
+    const originalStream = connectedClient.streamSocket
+
+    const unsupported = connect(socketPath)
+    unsupported.on('error', () => {})
+    await new Promise<void>((resolve) => unsupported.once('connect', resolve))
+    const response = new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      unsupported.once('data', (data) => resolve(JSON.parse(data.toString())))
+    })
+    unsupported.write(
+      encodeNdjson({
+        type: 'hello',
+        version: PROTOCOL_VERSION,
+        token: readFileSync(tokenPath, 'utf8'),
+        clientId: connectedClient.clientId,
+        role: 'observer'
+      })
+    )
+    await expect(response).resolves.toMatchObject({ ok: false, error: 'Invalid role' })
+    unsupported.destroy()
+
+    expect(connectedClient.streamSocket).toBe(originalStream)
+    expect(connectedClient.authenticatedPairEstablished).toBe(true)
+    expect(onAuthenticatedClientPair).toHaveBeenCalledOnce()
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -443,14 +483,14 @@ describe('daemon server error handling', () => {
         spawnSubprocess: () => createMockSubprocess()
       })
       const started = server.start()
-      const daemon = server as unknown as { server: Server | null }
-      await vi.waitFor(() => expect(daemon.server?.listening).toBe(true))
-      daemon.server?.emit('error', new Error('injected accept failure'))
+      const daemon = server as unknown as DaemonServerInternals
+      await vi.waitFor(() => expect(daemon.lifecycle.server?.listening).toBe(true))
+      daemon.lifecycle.server?.emit('error', new Error('injected accept failure'))
 
       await expect(started).rejects.toThrow('injected accept failure')
       // Why wait: start() rejects the moment the error lands, while publication is still in
       // flight. Reporting failure must end with the daemon actually not serving.
-      await vi.waitFor(() => expect(daemon.server).toBeNull())
+      await vi.waitFor(() => expect(daemon.lifecycle.server).toBeNull())
       await expect(waitForEndpointUnreachable(socketPath)).resolves.toBe(true)
     }
   )

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import { spawnMock } from './pty-ipc-mock-registry'
-import { posixOnlyIt } from './pty-ipc-test-constants'
+import { posixOnlyIt, TEST_MANAGED_ROOT } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { registerPtyHandlers, setLocalPtyProvider, type PrepareCodexSessionResume } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -55,9 +57,16 @@ describe('registerPtyHandlers', () => {
   describe('spawn environment', () => {
     describe('unverifiable Codex resume provenance', () => {
       const RESUME_SESSION_ID = '019f81b9-19a9-7651-a8d1-352d9420bd11'
-      const ORIGIN_HOME = '/managed/origin/home'
-      const OTHER_HOME = '/managed/other/home'
-      const ORIGIN_ROLLOUT = `${ORIGIN_HOME}/sessions/2026/07/20/rollout-2026-07-20T12-00-00-${RESUME_SESSION_ID}.jsonl`
+      const ORIGIN_HOME = join(TEST_MANAGED_ROOT, 'origin', 'home')
+      const OTHER_HOME = join(TEST_MANAGED_ROOT, 'other', 'home')
+      const ORIGIN_ROLLOUT = join(
+        ORIGIN_HOME,
+        'sessions',
+        '2026',
+        '07',
+        '20',
+        `rollout-2026-07-20T12-00-00-${RESUME_SESSION_ID}.jsonl`
+      )
 
       // Why: main's real provenance rule via the same prepareCodexSessionResume that
       // index.ts calls, so the outcome wiring is exercised rather than restated. This
@@ -160,7 +169,7 @@ describe('registerPtyHandlers', () => {
             await Promise.resolve()
             vi.runAllTimers()
 
-            expect(mockProc.proc.write).toHaveBeenCalledWith('codex\n')
+            expect(mockProc.proc.write).not.toHaveBeenCalled()
             expect(mockProc.proc.write).not.toHaveBeenCalledWith(
               expect.stringContaining(RESUME_SESSION_ID)
             )
@@ -168,6 +177,7 @@ describe('registerPtyHandlers', () => {
             // The pane still runs under the selected account — but with nothing to resume.
             const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
             expect(env.CODEX_HOME).toBe(OTHER_HOME)
+            expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe('codex')
             expect(selectedHome).toHaveBeenCalled()
           } finally {
             vi.useRealTimers()
@@ -203,12 +213,11 @@ describe('registerPtyHandlers', () => {
           await Promise.resolve()
           vi.runAllTimers()
 
-          expect(mockProc.proc.write).toHaveBeenCalledWith(
-            `codex 'resume' '${RESUME_SESSION_ID}'\n`
-          )
+          expect(mockProc.proc.write).not.toHaveBeenCalled()
           expect(spawned.agentResumeUnavailable).toBeUndefined()
           const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
           expect(env.CODEX_HOME).toBe(ORIGIN_HOME)
+          expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(`codex 'resume' '${RESUME_SESSION_ID}'`)
           expect(selectedHome).not.toHaveBeenCalled()
         } finally {
           vi.useRealTimers()
@@ -230,7 +239,9 @@ describe('registerPtyHandlers', () => {
           await Promise.resolve()
           vi.runAllTimers()
 
-          expect(mockProc.proc.write).toHaveBeenCalledWith('codex\n')
+          expect(mockProc.proc.write).not.toHaveBeenCalled()
+          const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+          expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe('codex')
           expect(spawned.agentResumeUnavailable).toBe(true)
         } finally {
           vi.useRealTimers()

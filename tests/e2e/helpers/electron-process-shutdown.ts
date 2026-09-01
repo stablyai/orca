@@ -138,6 +138,38 @@ async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
   await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
 }
 
+/**
+ * Force-quit: SIGKILL the app and every helper process under it, with no SIGTERM first and no
+ * chance to run shutdown code. Killing the whole tree matches what an OS force-quit does, and keeps
+ * orphaned renderer/GPU children from outliving the test worker.
+ *
+ * Use `closeElectronAppForE2E` for an ordinary quit — this exists for specs that need a client to
+ * vanish without unwinding its sockets or subscriptions.
+ */
+export async function forceQuitElectronAppForE2E(app: ElectronApplication): Promise<void> {
+  const proc = app.process()
+  const pid = proc.pid
+  if (pid) {
+    if (process.platform === 'win32') {
+      try {
+        execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
+          stdio: 'ignore'
+        })
+      } catch {
+        /* already dead or taskkill unavailable */
+      }
+    } else {
+      // Capture the tree before the root dies, so descendants cannot be reparented out of reach.
+      for (const targetPid of [...readPosixDescendantPids(pid), pid].toReversed()) {
+        killPid(targetPid, 'SIGKILL')
+      }
+    }
+  }
+  await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
+  // Hands the dead app back to Playwright so worker teardown has nothing left to wait on.
+  await app.close().catch(() => undefined)
+}
+
 export async function closeElectronAppForE2E(app: ElectronApplication): Promise<void> {
   const proc = app.process()
   try {

@@ -26,8 +26,10 @@ vi.mock('../ai-vault/remote-session-scanner', () => ({
   scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
 }))
 vi.mock('../wsl', () => ({
-  getWslHomeAsync: vi.fn(),
-  listWslDistrosAsync: vi.fn().mockResolvedValue([])
+  listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([])
+}))
+vi.mock('../wsl-running-path-filter', () => ({
+  filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH unavailable',

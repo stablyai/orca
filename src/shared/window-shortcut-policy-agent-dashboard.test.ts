@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getWindowShortcutActionId,
-  resolveWindowShortcutAction
-} from './window-shortcut-policy'
+import { getWindowShortcutActionId, resolveWindowShortcutAction } from './window-shortcut-policy'
 
 const input = {
   code: 'KeyD',

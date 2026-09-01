@@ -1,8 +1,20 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { attachWebgl, clearTerminalWebglAttachBackoff, disposeWebgl } from './pane-webgl-renderer'
+import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-policy'
+
+export function clearPaneWebglContextLossForRetry(pane: ManagedPaneInternal): boolean {
+  if (!pane.webglDisabledAfterContextLoss) {
+    return true
+  }
+  if (!canRetryPaneWebglAfterContextLoss(pane)) {
+    return false
+  }
+  pane.webglDisabledAfterContextLoss = false
+  return true
+}
 
 export function reattachWebglIfNeeded(pane: ManagedPaneInternal): void {
-  if (pane.gpuRenderingEnabled && !pane.webglAddon && !pane.webglDisabledAfterContextLoss) {
+  if (pane.gpuRenderingEnabled && !pane.webglAddon && clearPaneWebglContextLossForRetry(pane)) {
     attachWebgl(pane)
   }
 }

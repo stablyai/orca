@@ -33,9 +33,3 @@ export function scheduleImagePasteWebglAtlasRecovery(): void {
   // one-shot event, so recover immediately rather than debouncing.
   scheduleAtlasRecoveryBurst('image-paste')
 }
-
-export function scheduleTabRevealWebglAtlasRecovery(): void {
-  // Why: a tab reveal is an explicit renderer lifecycle boundary where hidden
-  // GPU state can be stale; ordinary PTY output must not clear the shared atlas.
-  scheduleAtlasRecoveryBurst('tab-reveal')
-}

@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   createHookListenerState,
-  hasPendingAgentResultText,
-  normalizeHookPayload,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import { hasPendingAgentResultText } from './agent-hook-listener/grok-result-discovery'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 

@@ -201,6 +201,23 @@ describe('buildDashboardSnapshot', () => {
     expect(card.unseen).toBe(true)
   })
 
+  it('keeps monitoring in the working bucket with a passive dot state', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ state: 'working', workingMode: 'monitoring' })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0]).toMatchObject({
+      bucket: 'working',
+      dotState: 'working',
+      workingMode: 'monitoring'
+    })
+  })
+
   it('publishes terminal-backed orchestrated workers under their direct parent', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({

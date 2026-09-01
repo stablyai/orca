@@ -140,6 +140,59 @@ describe('createJiraSlice runtime context', () => {
     expect(store.getState().jiraIssueCache['selected::ORC-1']?.data?.title).toBe('Remote issue')
   })
 
+  it('does not repopulate an old-site cache after selecting a new site', async () => {
+    const store = createTestStore()
+    const oldSiteIssues = deferred<JiraIssue[]>()
+    store.setState({
+      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' }
+    })
+    jiraSearchIssues.mockReturnValueOnce(oldSiteIssues.promise)
+    jiraSelectSite.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedSiteId: 'site-2'
+    })
+
+    const oldSiteRequest = store.getState().searchJiraIssues('project = ALP', 30)
+    await store.getState().selectJiraSite('site-2')
+    oldSiteIssues.resolve([issue('ALP-1')])
+
+    await expect(oldSiteRequest).resolves.toMatchObject([{ key: 'ALP-1' }])
+    expect(store.getState().jiraStatus.selectedSiteId).toBe('site-2')
+    expect(store.getState().jiraSearchCache).toEqual({})
+  })
+
+  it('isolates out-of-order issue reads from different source hosts', async () => {
+    const store = createTestStore()
+    const sourceA = jiraSourceContext('runtime-a')
+    const sourceB = jiraSourceContext('runtime-b')
+    const runtimeAIssue = deferred<JiraIssue | null>()
+    const runtimeBIssue = deferred<JiraIssue | null>()
+    jiraGetIssue
+      .mockReturnValueOnce(runtimeAIssue.promise)
+      .mockReturnValueOnce(runtimeBIssue.promise)
+
+    const requestA = store.getState().fetchJiraIssue('ALP-1', 'site-1', {
+      sourceContext: sourceA
+    })
+    const requestB = store.getState().fetchJiraIssue('ALP-1', 'site-1', {
+      sourceContext: sourceB
+    })
+    runtimeBIssue.resolve({ ...issue('ALP-1'), title: 'Runtime B' })
+    await requestB
+    runtimeAIssue.resolve({ ...issue('ALP-1'), title: 'Runtime A' })
+    await requestA
+
+    expect(
+      store.getState().jiraIssueCache[`${getTaskSourceCacheScope(sourceA)}::site-1::ALP-1`]?.data
+        ?.title
+    ).toBe('Runtime A')
+    expect(
+      store.getState().jiraIssueCache[`${getTaskSourceCacheScope(sourceB)}::site-1::ALP-1`]?.data
+        ?.title
+    ).toBe('Runtime B')
+  })
+
   it('routes explicit source reads through their source context when focused runtime changes', async () => {
     const store = createTestStore()
     store.setState({

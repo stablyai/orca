@@ -20,6 +20,12 @@ export class SkillUploadRetainedPaths {
     this.failedCleanup.add(path)
   }
 
+  async removeUnpublished(path: string, close: () => Promise<void>): Promise<void> {
+    this.retainFailedCleanup(path)
+    await close().catch(() => undefined)
+    await this.removeFailedCleanup(path).catch(() => undefined)
+  }
+
   async removeTransferred(path: string): Promise<void> {
     await rm(path, { force: true })
     this.transferred.delete(path)
@@ -32,5 +38,9 @@ export class SkillUploadRetainedPaths {
 
   async removeAllFailedCleanup(): Promise<void> {
     await Promise.all([...this.failedCleanup].map((path) => this.removeFailedCleanup(path)))
+  }
+
+  async retryFailedCleanup(): Promise<void> {
+    await Promise.allSettled([...this.failedCleanup].map((path) => this.removeFailedCleanup(path)))
   }
 }

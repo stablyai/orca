@@ -3,8 +3,8 @@ import type { Store } from '../persistence'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createWorktreeHeadIdentityRefreshState,
-  refreshWorktreeHeadIdentities,
-  type WorktreeHeadIdentityRefreshState
+  disposeWorktreeHeadIdentityRefreshState,
+  refreshWorktreeHeadIdentities
 } from './worktree-head-identity-refresh'
 import {
   collectLocalWorktreeBaseChanges,
@@ -14,9 +14,11 @@ import {
 import {
   clearPendingWorktreeBaseNotifications,
   scheduleWorktreeBaseNotification,
-  supportsWorktreeHeadIdentityRefresh
+  supportsWorktreeHeadIdentityRefresh,
+  type WorktreeBaseNotificationWatch
 } from './worktree-base-directory-notifications'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
+import { EMPTY_HEAD_IDENTITY_SCOPE } from './worktree-head-identity-scope'
 import {
   buildWorktreeBaseDirectoryWatchTargets,
   clearWorktreeBaseDirectoryWatchTargetWarnings
@@ -35,17 +37,10 @@ import {
 } from './worktree-git-status-ref-watch'
 import { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
 
-type ActiveWatch = WorktreeBaseWatchTarget & {
-  mainWindow: BrowserWindow
+type ActiveWatch = WorktreeBaseNotificationWatch & {
   subscription: { unsubscribe: () => Promise<void> }
-  notifyTimer: ReturnType<typeof setTimeout> | null
-  pendingStructureRepoIds: Set<string>
-  pendingGitStatusRepoIds: Set<string>
-  pendingHeadIdentityRepoIds: Set<string>
-  headIdentityRefresh: WorktreeHeadIdentityRefreshState
   gitStatusRefPaths: Set<string>
   watcherFailureRefresh: WorktreeWatcherFailureRefreshCooldown
-  disposed: boolean
 }
 
 const activeWatches = new Map<string, ActiveWatch>()
@@ -126,6 +121,7 @@ function createActiveWatch(
     pendingStructureRepoIds: new Set(),
     pendingGitStatusRepoIds: new Set(),
     pendingHeadIdentityRepoIds: new Set(),
+    pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
     headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
     gitStatusRefPaths,
     watcherFailureRefresh: new WorktreeWatcherFailureRefreshCooldown(),
@@ -233,6 +229,7 @@ async function removeWatch(key: string): Promise<void> {
   activeWatches.delete(key)
   watch.disposed = true
   clearTimeout(watch.notifyTimer ?? undefined)
+  disposeWorktreeHeadIdentityRefreshState(watch.headIdentityRefresh)
   clearPendingWorktreeBaseNotifications(watch)
   await watch.subscription.unsubscribe().catch((error) => {
     console.warn(`[worktree-base-watcher] failed to unwatch ${watch.path}:`, error)

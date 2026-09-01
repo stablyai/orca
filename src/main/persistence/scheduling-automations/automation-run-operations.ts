@@ -10,7 +10,6 @@ import {
   nextAutomationRunNumber,
   pruneAutomationRuns
 } from '../../../shared/automation-run-retention'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -20,10 +19,19 @@ import {
 } from './automation-context-migration'
 
 export type AutomationRunOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   flush: () => void
   recordManualRun: () => void
   getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null
+}
+
+function touchAutomation(state: PersistedState, automationId: string, now: number): void {
+  if (!state.automations.some((entry) => entry.id === automationId)) {
+    return
+  }
+  state.automations = state.automations.map((entry) =>
+    entry.id === automationId ? { ...entry, lastRunAt: now, updatedAt: now } : entry
+  )
 }
 
 export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
@@ -89,6 +97,43 @@ export function createAutomationRun(
   return run
 }
 
+export function recordRepeatedAutomationSkip(
+  operations: AutomationRunOperations,
+  automationId: string,
+  error: string,
+  scheduledFor: number
+): AutomationRun | null {
+  const runs = operations.state.automationRuns ?? []
+  const latest = runs
+    .filter((run) => run.automationId === automationId)
+    .reduce<AutomationRun | null>(
+      (newest, run) => (!newest || run.createdAt > newest.createdAt ? run : newest),
+      null
+    )
+  if (
+    !latest ||
+    latest.status !== 'skipped_unavailable' ||
+    latest.trigger !== 'scheduled' ||
+    latest.error !== error
+  ) {
+    return null
+  }
+  if ((latest.lastOccurrenceAt ?? latest.scheduledFor) === scheduledFor) {
+    return latest
+  }
+  const now = Date.now()
+  const updated: AutomationRun = {
+    ...latest,
+    occurrenceCount: (latest.occurrenceCount ?? 1) + 1,
+    lastOccurrenceAt: scheduledFor
+  }
+  // Replaced, not patched in place: the list projection caches on array identity.
+  operations.state.automationRuns = runs.map((run) => (run.id === latest.id ? updated : run))
+  touchAutomation(operations.state, automationId, now)
+  operations.flush()
+  return updated
+}
+
 export function updateAutomationRun(
   operations: AutomationRunOperations,
   result: AutomationDispatchResult
@@ -133,12 +178,11 @@ export function updateAutomationRun(
     startedAt: current.startedAt ?? now,
     dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
   }
-  operations.state.automationRuns[index] = updated
-  const automation = operations.state.automations.find((entry) => entry.id === updated.automationId)
-  if (automation) {
-    automation.lastRunAt = now
-    automation.updatedAt = now
-  }
+  // Replaced, not patched in place: the list projection caches on array identity.
+  operations.state.automationRuns = operations.state.automationRuns.map((run) =>
+    run.id === result.runId ? updated : run
+  )
+  touchAutomation(operations.state, updated.automationId, now)
   operations.flush()
   return updated
 }

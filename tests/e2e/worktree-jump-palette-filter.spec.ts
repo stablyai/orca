@@ -1,4 +1,4 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -132,6 +132,23 @@ async function selectRemoteHost(page: Page, useKeyboard = false): Promise<void> 
   await filterTrigger(page).click()
 }
 
+async function openComposerFromTypedName(page: Page): Promise<Locator> {
+  await openPalette(page)
+  const input = palette(page).getByPlaceholder(SEARCH_PLACEHOLDER)
+  await input.fill(`cmd-j-enter-${Date.now()}`)
+  await expect(palette(page).locator('[cmdk-item][data-value="__create_worktree__"]')).toBeVisible()
+
+  await input.press('Enter')
+
+  const createDialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+  await expect(createDialog).toBeVisible()
+  // Why assert focus: the composer auto-focuses the name field, so Escape always
+  // lands on an input the user never chose. A page-style "blur the field first"
+  // handler reachable from here would silently cost a second press.
+  await expect(createDialog.locator('[data-workspace-name-input="true"]')).toBeFocused()
+  return createDialog
+}
+
 test.describe('Worktree jump-palette filters', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -179,5 +196,36 @@ test.describe('Worktree jump-palette filters', () => {
     await openPalette(orcaPage)
     await searchFixtureWorkspaces(orcaPage, fixture)
     await expect(filterTrigger(orcaPage)).not.toContainText('1')
+  })
+
+  test('pressing Enter creates a worktree from a typed name', async ({ orcaPage }) => {
+    const createDialog = await openComposerFromTypedName(orcaPage)
+
+    await orcaPage.keyboard.press('Escape')
+
+    await expect(createDialog).toBeHidden()
+  })
+
+  test('Escape closes the composer opened over the Automations page', async ({ orcaPage }) => {
+    // Why this view: Cmd+J has no view guard, and a page mounted under the palette
+    // keeps its own capture-phase Escape listener registered. Window capture runs
+    // before Radix's document capture, so a preventDefault there vetoes dismissal.
+    await orcaPage.evaluate(() => window.__store?.getState().openAutomationsPage())
+    const automationsHeading = orcaPage.getByRole('heading', { name: 'Automations', level: 1 })
+    await expect(automationsHeading).toBeVisible()
+
+    const createDialog = await openComposerFromTypedName(orcaPage)
+
+    await orcaPage.keyboard.press('Escape')
+
+    await expect(createDialog).toBeHidden()
+    // The page declined the press rather than consuming it, so it is still open.
+    await expect(automationsHeading).toBeVisible()
+
+    // Why a second press: with nothing layered above, the real page chrome must not
+    // trip the overlay check, or Escape would never close Automations again.
+    await orcaPage.keyboard.press('Escape')
+
+    await expect(automationsHeading).toBeHidden()
   })
 })

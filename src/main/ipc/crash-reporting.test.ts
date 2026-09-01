@@ -138,7 +138,7 @@ describe('registerCrashReportingHandlers', () => {
     _resetRendererErrorReportDedupeForTests()
   })
 
-  it('copies the latest pending diagnostic text to the clipboard', async () => {
+  it('copies the requested captured report to the clipboard', async () => {
     const latest = report()
     registerCrashReportingHandlers({
       getById: vi.fn(async () => latest),
@@ -151,6 +151,7 @@ describe('registerCrashReportingHandlers', () => {
     } as never)
 
     const result = await handlers.get('crashReports:copyLatestDiagnostics')?.(null, {
+      reportId: latest.id,
       notes: 'extra /Users/alice/project'
     })
 

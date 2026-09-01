@@ -47,6 +47,30 @@ export type ChecksPanelRefreshGitIdentitySnapshot =
       head?: string
       branch: string | null
     }
+// Fingerprint HEAD/dirty/upstream/base/execution-host so a stale snapshot can't keep an enabled Create open when any of them move.
+export function buildChecksPanelEligibilityGitFingerprint(input: {
+  headOid: string | null
+  hasUncommittedChanges: boolean | undefined
+  hasUpstream: boolean | undefined
+  ahead: number | undefined
+  behind: number | undefined
+  base: string | null
+  runtimeEnvironmentId: string | null
+  repoConnectionId: string | null
+  localExecutionScope: string | null
+}): string {
+  return JSON.stringify({
+    headOid: input.headOid ?? null,
+    hasUncommittedChanges: input.hasUncommittedChanges ?? null,
+    hasUpstream: input.hasUpstream ?? null,
+    ahead: input.ahead ?? null,
+    behind: input.behind ?? null,
+    base: input.base ?? null,
+    runtimeEnvironmentId: input.runtimeEnvironmentId ?? null,
+    repoConnectionId: input.repoConnectionId ?? null,
+    localExecutionScope: input.localExecutionScope ?? null
+  })
+}
 
 export function buildChecksPanelGitStatusContextKey(
   input: ChecksPanelGitStatusContextInput

@@ -6,9 +6,11 @@ import {
   getCmdExePath,
   getRegExePath,
   getSpawnArgsForWindows,
+  wrapWindowsStartWait,
   isPermissionError,
   isWindowsBatchScript,
   resolveWindowsCommand,
+  UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from './win32-utils'
 
@@ -117,6 +119,46 @@ describe('getSpawnArgsForWindows', () => {
       const { spawnArgs } = getSpawnArgsForWindows('C:\\Tools\\idea.cmd', ['C:\\workspaces\\orca'])
       expect(spawnArgs).toEqual(['/d', '/c', 'C:\\Tools\\idea.cmd', 'C:\\workspaces\\orca'])
     })
+  })
+
+  it('wraps an interactive login in start /wait with an empty title argv', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = wrapWindowsStartWait(getCmdExePath(), [
+        '/d',
+        '/c',
+        'C:\\Tools\\claude.cmd',
+        'auth',
+        'login',
+        '--claudeai'
+      ])
+      expect(spawnCmd).toBe(getCmdExePath())
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        'start',
+        '',
+        '/wait',
+        getCmdExePath(),
+        '/d',
+        '/c',
+        'C:\\Tools\\claude.cmd',
+        'auth',
+        'login',
+        '--claudeai'
+      ])
+      expect(spawnArgs[3]).toBe('')
+      expect(spawnArgs).not.toContain('/B')
+      expect(spawnArgs).not.toContain('""')
+    })
+  })
+
+  it('rejects cmd metacharacters in executable paths passed through start /wait', () => {
+    expect(() => wrapWindowsStartWait('C:\\Users\\A%B\\codex.exe', ['login'])).toThrow(
+      UnsafeWindowsBatchArgumentsError
+    )
+    expect(() => wrapWindowsStartWait('C:\\Tools\\codex.exe', ['log&in'])).toThrow(
+      UnsafeWindowsBatchArgumentsError
+    )
   })
 
   it('leaves .exe GUI launches alone even when detachedGui is requested', () => {

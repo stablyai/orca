@@ -38,6 +38,12 @@ export async function createOrAttachTerminalSession(
     throw new SessionNotFoundError(opts.sessionId)
   }
 
+  // Why no ownership settle here: attach is synchronous by contract. A viewer
+  // connecting inside an in-flight recovery proof (~100ms) gets the pre-reset
+  // snapshot and the injected reset arrives in-order over its stream — a
+  // self-healing first frame. Waiting instead created a race window (cancel,
+  // exit, kill during the await) that produced repeated regressions. Checkpoint
+  // readers that need a settled owner use getSettledSnapshot.
   if (existing && existing.isAlive && !existing.isTerminating) {
     const snapshot = existing.getSnapshot()
     existing.detachAllClients()
@@ -144,7 +150,23 @@ async function spawnAndPublishSession(
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   const token = session.attachClient(opts.streamClient)
 
-  if (opts.command && !subprocess.startupCommandDeliveredInShellArgs) {
+  const startupCommandWritten =
+    Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
+  // Why: without this, a missing command and a lost one log identically.
+  // Length, never the text -- launches can carry credentials.
+  try {
+    deps.reportReadinessEvent?.('startup-command-delivery', {
+      sessionId: opts.sessionId,
+      written: startupCommandWritten,
+      hasCommand: Boolean(opts.command),
+      commandLength: opts.command?.length ?? 0,
+      viaShellArgs: subprocess.startupCommandDeliveredInShellArgs === true,
+      queuedByShellReadyBarrier: shellReadySupported
+    })
+  } catch {
+    // Diagnostics must never turn a live PTY into a failed create.
+  }
+  if (startupCommandWritten && opts.command) {
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.write(

@@ -118,6 +118,14 @@ type FloatingWorkspaceUnreadState = Pick<
   AppState,
   'tabsByWorktree' | 'unreadTerminalTabs' | 'unreadAgentCompletionPanes'
 >
+type FloatingWorkspaceUnreadCache = {
+  tabs: NonNullable<AppState['tabsByWorktree'][string]>
+  unreadTerminalTabs: AppState['unreadTerminalTabs']
+  unreadAgentCompletionPanes: AppState['unreadAgentCompletionPanes']
+  hasUnread: boolean
+}
+
+let floatingWorkspaceUnreadCache: FloatingWorkspaceUnreadCache | null = null
 
 /**
  * True when any terminal tab in the floating workspace has an unacknowledged
@@ -129,32 +137,57 @@ type FloatingWorkspaceUnreadState = Pick<
  * removed tabs cannot light it). Bells mark `unreadTerminalTabs[tabId]`;
  * completions mark `unreadAgentCompletionPanes[paneKey]` — both ungated.
  *
- * Returns a primitive boolean, so subscribers re-render only when it flips, and
- * the empty-workspace early return keeps the common case O(1) despite Zustand
- * rerunning selectors on every write.
+ * The launcher and floating overlay both stay mounted. Cache their shared
+ * reference projection so the second consumer and unrelated Zustand writes
+ * return in O(1) without repeating either unread-map scan.
  */
 export function selectFloatingWorkspaceHasUnread(state: FloatingWorkspaceUnreadState): boolean {
-  const tabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
-  if (!tabs || tabs.length === 0) {
-    return false
+  const tabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
+  const cached = floatingWorkspaceUnreadCache
+  if (
+    cached &&
+    cached.tabs === tabs &&
+    cached.unreadTerminalTabs === state.unreadTerminalTabs &&
+    cached.unreadAgentCompletionPanes === state.unreadAgentCompletionPanes
+  ) {
+    return cached.hasUnread
   }
-  const floatingTabIds = new Set<string>()
-  for (const tab of tabs) {
-    if (state.unreadTerminalTabs[tab.id]) {
-      return true
+
+  let hasUnread = false
+  if (tabs.length > 0) {
+    const floatingTabIds = new Set<string>()
+    for (const tab of tabs) {
+      if (state.unreadTerminalTabs[tab.id]) {
+        hasUnread = true
+        break
+      }
+      floatingTabIds.add(tab.id)
     }
-    floatingTabIds.add(tab.id)
-  }
-  // paneKey is `${tabId}:${leafId}` and tabIds never contain ":", so the prefix
-  // up to the first ":" is the owning tab id.
-  for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
-    const separatorIndex = paneKey.indexOf(':')
-    const tabId = separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
-    if (floatingTabIds.has(tabId)) {
-      return true
+    if (!hasUnread) {
+      // paneKey is `${tabId}:${leafId}` and tabIds never contain ":", so the
+      // prefix up to the first ":" is the owning tab id.
+      for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
+        const separatorIndex = paneKey.indexOf(':')
+        const tabId = separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
+        if (floatingTabIds.has(tabId)) {
+          hasUnread = true
+          break
+        }
+      }
     }
   }
-  return false
+
+  floatingWorkspaceUnreadCache = {
+    tabs,
+    unreadTerminalTabs: state.unreadTerminalTabs,
+    unreadAgentCompletionPanes: state.unreadAgentCompletionPanes,
+    hasUnread
+  }
+  return hasUnread
+}
+
+export function resetFloatingWorkspaceUnreadSelectorCacheForTest(): void {
+  floatingWorkspaceUnreadCache = null
 }
 
 export function getAllWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): Worktree[] {

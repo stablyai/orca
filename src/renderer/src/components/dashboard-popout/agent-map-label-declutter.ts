@@ -137,7 +137,12 @@ function baselineBox(
  *  idle neighbour has to drop its own. */
 function labelPriority(worktree: AgentMapWorktreeRing): number {
   const attention = worktree.statusCounts.blocked + worktree.statusCounts.waiting
-  return attention * 1_000_000 + worktree.statusCounts.working * 10_000 + worktree.agents.length
+  return (
+    attention * 1_000_000 +
+    worktree.statusCounts.working * 10_000 +
+    worktree.statusCounts.monitoring * 1_000 +
+    worktree.agents.length
+  )
 }
 
 /** Worth drawing before collisions are considered: all-idle workspaces stay

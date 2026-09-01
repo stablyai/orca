@@ -1,7 +1,7 @@
 import type { LinearClient } from '@linear/sdk'
 import type { RawRelationNode } from './issue-context-raw'
 import { isAuthError } from './client'
-import { classifyLinearWriteFailure, LinearWriteFailure } from './issues'
+import { classifyLinearWriteFailure, LinearWriteFailure } from './linear-issue-write-support'
 
 type RelationMutationResponse = {
   issueRelationCreate?: {

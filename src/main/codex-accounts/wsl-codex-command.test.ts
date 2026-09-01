@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildWslCodexAvailabilityArgs,
+  buildWslCodexAvailabilityScript,
   buildWslCodexAppServerArgs,
   buildWslCodexIdentityProbe,
   buildWslCodexLoginArgs
@@ -8,14 +8,16 @@ import {
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 
 describe('WSL Codex commands', () => {
-  it('checks the alias-neutral PATH from the distro login shell', () => {
-    const args = buildWslCodexAvailabilityArgs('Ubuntu24-Dev')
+  // The distro argv and the login-shell PATH are the runner's now (its probe
+  // lane caches the same getent-resolved login environment); only the
+  // alias-neutral lookup is still this module's to get right.
+  it('checks the alias-neutral PATH the runner supplies', () => {
+    const script = buildWslCodexAvailabilityScript()
 
-    expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu24-Dev', '--exec', 'sh', '-c'])
-    expect(args.at(-1)).toContain('getent passwd')
-    expect(args.at(-1)).toContain('_orca_lookup_command=')
-    expect(args.at(-1)).toContain('codex')
-    expect(args.at(-1)).not.toContain('bash -ic')
+    expect(script).toContain('_orca_lookup_command=')
+    expect(script).toContain("'codex'")
+    expect(script).toContain('[ -n "$resolved" ]')
+    expect(script).not.toContain('bash -ic')
   })
 
   it('launches the resolved Codex executable with its quoted managed home', () => {

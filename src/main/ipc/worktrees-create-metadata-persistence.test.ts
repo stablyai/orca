@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import {
+  handleMock,
   removeHandlerMock,
   listWorktreesMock,
   getPullRequestPushTargetMock,
@@ -13,6 +14,35 @@ import {
   makeWorktreeMeta
 } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+
+const WORKTREE_HANDLER_CHANNELS = [
+  'worktrees:listAll',
+  'worktrees:list',
+  'worktrees:listRetiredNames',
+  'worktrees:listDetected',
+  'worktrees:listKnownForExecutionHost',
+  'worktrees:forgetRemovedForExecutionHost',
+  'worktrees:cancelListDetected',
+  'worktrees:create',
+  'worktrees:adoptProvisionedRoot',
+  'worktrees:prefetchCreateBase',
+  'worktrees:resolvePrBase',
+  'worktrees:resolveMrBase',
+  'worktrees:remove',
+  'worktrees:forgetLocal',
+  'worktrees:forceDeletePreservedBranch',
+  'worktrees:updateMeta',
+  'worktrees:listLineage',
+  'worktrees:listLineageForHost',
+  'worktrees:updateLineage',
+  'worktrees:persistSortOrder',
+  'worktrees:getBranchRenameFailureOutput',
+  'hooks:check',
+  'hooks:inspectSetupScriptImports',
+  'hooks:createIssueCommandRunner',
+  'hooks:readIssueCommand',
+  'hooks:writeIssueCommand'
+] as const
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -47,6 +77,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -110,6 +143,20 @@ describe('registerWorktreeHandlers', () => {
     expect(handlers['worktrees:getBranchRenameFailureOutput']).toBeDefined()
   })
 
+  it('removes exactly the installed channel set before installing the first handler', () => {
+    const removedChannels = removeHandlerMock.mock.calls.map(([channel]) => channel)
+    const installedChannels = handleMock.mock.calls.map(([channel]) => channel)
+
+    expect(new Set(removedChannels)).toEqual(new Set(WORKTREE_HANDLER_CHANNELS))
+    expect(new Set(removedChannels)).toEqual(new Set(installedChannels))
+    expect(new Set(installedChannels)).toEqual(new Set(WORKTREE_HANDLER_CHANNELS))
+    expect(removedChannels).toHaveLength(WORKTREE_HANDLER_CHANNELS.length)
+    expect(installedChannels).toHaveLength(WORKTREE_HANDLER_CHANNELS.length)
+    expect(Math.max(...removeHandlerMock.mock.invocationCallOrder)).toBeLessThan(
+      Math.min(...handleMock.mock.invocationCallOrder)
+    )
+  })
+
   it('persistSortOrder only reorders existing worktrees and never mints meta for a stale id', () => {
     const liveId = 'repo-1::/workspace/repo'
     const staleId = 'removed-repo::/workspace/gone'
@@ -158,6 +205,36 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(result).toMatchObject({ comment: 'keep me', isPinned: true })
   })
+  it('routes metadata updates through the explicitly selected host', () => {
+    store.setWorktreeMetaForHost.mockImplementation((_worktreeId, _executionHostId, meta) => meta)
+
+    const result = handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      executionHostId: 'ssh:build-box',
+      updates: { comment: 'remote note' }
+    })
+
+    expect(store.setWorktreeMetaForHost).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      'ssh:build-box',
+      { comment: 'remote note' }
+    )
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ comment: 'remote note' })
+  })
+
+  it('rejects malformed execution-host identities at the IPC boundary', () => {
+    expect(() =>
+      handlers['worktrees:updateMeta'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        executionHostId: 'container:untrusted',
+        updates: { comment: 'must not write' }
+      })
+    ).toThrow('Invalid execution host identity.')
+
+    expect(store.setWorktreeMetaForHost).not.toHaveBeenCalled()
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
 
   it('pushes a remote-client invalidation for renames but not read-state updates', () => {
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
@@ -174,6 +251,20 @@ describe('registerWorktreeHandlers', () => {
       updates: { displayName: 'Renamed workspace' }
     })
     expect(runtimeStub.notifyWorktreesChangedForRemoteClients).toHaveBeenCalledWith('repo-1')
+  })
+
+  it('persists display-name provenance at the host boundary', () => {
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      updates: { displayName: 'Agent label' }
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      expect.objectContaining({ displayName: 'Agent label', displayNameIsPinned: true })
+    )
   })
 
   it('does not trust renderer-authored automation provenance during local create', async () => {
@@ -240,6 +331,29 @@ describe('registerWorktreeHandlers', () => {
         displayName: 'Fix: dashboards for PRs'
       })
     })
+  })
+
+  it('pins a legacy name-only user create when the branch matches', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature',
+        head: 'abc123',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature'
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature',
+      expect.objectContaining({ displayName: 'feature', displayNameIsPinned: true })
+    )
   })
 
   it('persists linked issue and PR metadata during local create', async () => {

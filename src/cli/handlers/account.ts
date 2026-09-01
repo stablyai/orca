@@ -14,13 +14,15 @@ import {
 } from '../../main/claude-accounts/keychain'
 import {
   getVersionManagerBinPaths,
-  resolveCliCommand
+  resolveCliCommand,
+  withCliRuntimeOnPath
 } from '../../shared/node-cli-command-resolution'
 import {
   getSpawnArgsForWindows,
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
+import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
@@ -112,13 +114,25 @@ async function runAgentLoginInTerminal(
       )
       return
     }
-    const env = addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
-    const child = spawn(spawnCmd, spawnArgs, {
-      // Why: JSON mode reserves stdout for the response envelope while keeping
-      // the interactive login attached to the user's terminal via stderr.
-      stdio: ['inherit', json ? process.stderr : 'inherit', 'inherit'],
-      env
-    })
+    // Why paired after the seed: addAgentNodePaths prepends the *newest* version
+    // manager bin, which is not necessarily where this CLI lives. Pairing last puts
+    // the CLI's own node in front of that seed (stablyai/orca#10932).
+    const env = withCliRuntimeOnPath(
+      resolvedCommand,
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
+    )
+    const consoleStdio = stdioForWindowsInteractiveChild(json)
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(spawnCmd, spawnArgs, {
+        // Why: JSON mode reserves stdout for the response envelope while keeping
+        // the interactive login attached to the user's terminal via stderr.
+        stdio: consoleStdio.stdio,
+        env
+      })
+    } finally {
+      consoleStdio.dispose()
+    }
     session.child = child
     child.once('error', (error) =>
       rejectPromise(

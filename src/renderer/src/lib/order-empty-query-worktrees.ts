@@ -2,6 +2,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isPaletteCurrentWorktree } from './palette-repo-resolution'
 import { compareWorktreeDisplayName } from './worktree-display-name-order'
+import { getWorktreeVisitTimestamp } from './worktree-visit-recency'
 
 export type OrderEmptyQueryInputs = {
   visibleWorktrees: readonly Worktree[]
@@ -51,8 +52,8 @@ export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEm
   // visited SSH worktree below the fold — the exact bug the feature
   // fixes. Compare presence first, then value within each tier.
   const sorted = [...switchable].sort((a, b) => {
-    const aVisited = lastVisitedAtByWorktreeId[a.id]
-    const bVisited = lastVisitedAtByWorktreeId[b.id]
+    const aVisited = getWorktreeVisitTimestamp(lastVisitedAtByWorktreeId, a)
+    const bVisited = getWorktreeVisitTimestamp(lastVisitedAtByWorktreeId, b)
     if (aVisited != null && bVisited != null) {
       if (bVisited !== aVisited) {
         return bVisited - aVisited

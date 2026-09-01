@@ -10,8 +10,10 @@ description: >-
   "share HTML/Markdown", "public artifact link", "share skills", or "control the browser inside
   Orca". Prefer this over raw `git worktree`, ad hoc
   PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
-  Use Computer Use for browser windows, webviews, or desktop UI outside Orca's
-  embedded browser.
+  Use Computer Use for external browser windows, webviews, or desktop UI only
+  when the task requires OS/window-level control such as focus, menus, dialogs,
+  coordinates, or screenshots. Use `orca-cli` for Orca's embedded pages and a
+  page-automation tool such as Playwright or CDP for external pages.
 ---
 
 # Orca CLI
@@ -199,7 +201,7 @@ Terminal rules:
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
-- For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --inject` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
+- For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --format` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
 - Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout (agent in the first terminal — do not also `terminal create` the same agent).
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - Terminal handles are runtime-scoped. Use `startupTerminal.handle` as the sole agent handle when `worktree create --agent` returns it; if Orca restarts, omits the handle, or returns `terminal_handle_stale`, reacquire with `terminal list` and continue with the replacement only.
@@ -309,7 +311,7 @@ ORCA skills share --skill <selector> [--skill <selector> ...] --bundle-name <nam
 
 The built-in browser is Orca's embedded browser tab surface, scoped to Orca worktrees; it is not Chrome/Safari or desktop app UI.
 
-These commands control only Orca's embedded browser tabs. For external Chrome/Safari/webviews or Orca app chrome/settings, use the Computer Use skill/tool. If the user explicitly asks for Orca CLI desktop control, use `orca computer ...`; do not use browser commands for desktop UI.
+These commands control only Orca's embedded browser tabs. For external Chrome/Safari/webviews or Orca app chrome/settings, use the Computer Use skill/tool only when the task requires OS/window-level control. Use `orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages. If the user explicitly asks for Orca CLI desktop control, use `orca computer ...`; do not use browser commands for desktop UI.
 
 Use a snapshot-interact-re-snapshot loop:
 
@@ -367,12 +369,14 @@ Browser rules:
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
 - Less common workflows can use typed commands above or `orca exec --command "<agent-browser command>"` passthrough.
 - If `fill` or `type` fails on a custom input, try `orca focus --element @e1 --json` then `orca inserttext --text "text" --json`.
+- Client-hosted pages have interactive-session affinity: the page renders in the paired desktop's own browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` when it is closed, asleep, or disconnected. Server-hosted pages keep running with no desktop attached, so prefer server placement for long-running or unattended browser automation.
 
 Common recoveries:
 
 - `browser_no_tab`: open a tab with `orca tab create --url <url> --json`.
 - `browser_stale_ref`: run `orca snapshot --json` and retry with fresh refs.
 - `browser_tab_not_found`: run `orca tab list --json` before switching or closing.
+- `browser_host_unavailable`: the desktop hosting that page is offline. Bring it back, or create the page for server placement when the work must survive without an interactive session.
 
 ## Next Action
 

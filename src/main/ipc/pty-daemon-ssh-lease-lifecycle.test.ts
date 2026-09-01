@@ -72,7 +72,8 @@ describe('registerPtyHandlers', () => {
           )
         })
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,
@@ -136,7 +137,8 @@ describe('registerPtyHandlers', () => {
       })
       it('does not tombstone an SSH lease when explicit kill shutdown fails transiently', async () => {
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         registerSshPtyProvider('ssh-1', {
           spawn: vi.fn(),
@@ -188,7 +190,8 @@ describe('registerPtyHandlers', () => {
       it('marks an SSH lease terminated after runtime controller kill succeeds', async () => {
         const shutdown = vi.fn(async () => undefined)
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         const runtime = {
           setPtyController: vi.fn(),
@@ -289,7 +292,9 @@ describe('registerPtyHandlers', () => {
         await Promise.resolve()
 
         expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, {
+          providerExitObserved: true
+        })
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
@@ -342,7 +347,9 @@ describe('registerPtyHandlers', () => {
         await expect(stopPromise).resolves.toBe(true)
 
         expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, {
+          providerExitObserved: true
+        })
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
@@ -404,7 +411,8 @@ describe('registerPtyHandlers', () => {
         vi.useFakeTimers()
         const shutdown = vi.fn(async () => undefined)
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         const runtime = {
           setPtyController: vi.fn(),

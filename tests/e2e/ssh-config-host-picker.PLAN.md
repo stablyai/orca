@@ -16,15 +16,15 @@ Commits under test (vs main):
 
 ## Already covered (do **not** re-test in E2E)
 
-| Area | Where |
-|------|--------|
-| `listConfigHosts` / `resolveConfigHost` IPC registration | `src/main/ipc/ssh.test.ts` |
-| Search, result limit, suppressed aliases, alreadyInOrca | `ssh-config-host-picker.test.ts` |
-| Generation guard, freeze-while-resolving, late resolve | `AddRemoteHostDialog.config-picker.test.tsx` |
-| Bulk `importConfig()` without `reAdopt` | `add-remote-host-ssh-actions.test.ts` |
-| Alias folding / duplicate save check | `ssh-target-duplicate.test.ts` |
-| `configured-only` host registry / setup fail-closed | unit tests in shared + project-host-workspace-target |
-| Settings modal viewport stability | `ssh-host-form-modal.spec.ts` |
+| Area                                                     | Where                                                |
+| -------------------------------------------------------- | ---------------------------------------------------- |
+| `listConfigHosts` / `resolveConfigHost` IPC registration | `src/main/ipc/ssh.test.ts`                           |
+| Search, result limit, suppressed aliases, alreadyInOrca  | `ssh-config-host-picker.test.ts`                     |
+| Generation guard, freeze-while-resolving, late resolve   | `AddRemoteHostDialog.config-picker.test.tsx`         |
+| Bulk `importConfig()` without `reAdopt`                  | `add-remote-host-ssh-actions.test.ts`                |
+| Alias folding / duplicate save check                     | `ssh-target-duplicate.test.ts`                       |
+| `configured-only` host registry / setup fail-closed      | unit tests in shared + project-host-workspace-target |
+| Settings modal viewport stability                        | `ssh-host-form-modal.spec.ts`                        |
 
 E2E is reserved for real Electron HOME isolation, real `~/.ssh/config` parse,
 real `ssh -G` resolve, and user-visible DOM outcomes.
@@ -66,74 +66,74 @@ Optional second file if the Settings Import case grows:
 
 ### P1 — Empty config empty state
 
-| | |
-|--|--|
-| **Setup** | Do not create `~/.ssh/config` (or write empty file). |
-| **Steps** | Open Add SSH host → Fill from ~/.ssh/config… |
+|            |                                                                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Setup**  | Do not create `~/.ssh/config` (or write empty file).                                                                                    |
+| **Steps**  | Open Add SSH host → Fill from ~/.ssh/config…                                                                                            |
 | **Expect** | Dialog title **Choose from ~/.ssh/config**; body **No hosts in ~/.ssh/config**; **Add all to Orca** disabled; **Back** returns to form. |
 
 ### P2 — Seeded hosts listed with summary lines
 
-| | |
-|--|--|
-| **Setup** | Write config with ≥2 concrete Hosts, e.g. `e2e-alpha` / `e2e-bravo` with HostName, User, Port. |
-| **Steps** | Open picker. |
+|            |                                                                                                                       |
+| ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Setup**  | Write config with ≥2 concrete Hosts, e.g. `e2e-alpha` / `e2e-bravo` with HostName, User, Port.                        |
+| **Steps**  | Open picker.                                                                                                          |
 | **Expect** | Host list `SSH config hosts` shows both aliases; subtitle `user@hostname:port`; button **Add all 2 to Orca** enabled. |
 
 ### P3 — Select host prefills form (and Save persists)
 
-| | |
-|--|--|
-| **Setup** | Config Host `e2e-prod` → HostName `prod.example.test`, User `deploy`, Port `2222`. |
-| **Steps** | Pick `e2e-prod` → wait for form → click **Save**. |
-| **Expect** | After pick: Host/alias field = `prod.example.test`, Username `deploy`, Port `2222`, Label `e2e-prod` (or alias); optional toast *Filled from e2e-prod*; Identity file may stay empty with config hint. After Save: dialog closes; target appears in Settings → SSH (or listTargets shows matching host). |
+|            |                                                                                                                                                                                                                                                                                                          |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Setup**  | Config Host `e2e-prod` → HostName `prod.example.test`, User `deploy`, Port `2222`.                                                                                                                                                                                                                       |
+| **Steps**  | Pick `e2e-prod` → wait for form → click **Save**.                                                                                                                                                                                                                                                        |
+| **Expect** | After pick: Host/alias field = `prod.example.test`, Username `deploy`, Port `2222`, Label `e2e-prod` (or alias); optional toast _Filled from e2e-prod_; Identity file may stay empty with config hint. After Save: dialog closes; target appears in Settings → SSH (or listTargets shows matching host). |
 
 ### P4 — Filter narrows list
 
-| | |
-|--|--|
-| **Setup** | Hosts `e2e-alpha`, `e2e-bravo`. |
-| **Steps** | Open picker; filter `bravo`. |
+|            |                                                                          |
+| ---------- | ------------------------------------------------------------------------ |
+| **Setup**  | Hosts `e2e-alpha`, `e2e-bravo`.                                          |
+| **Steps**  | Open picker; filter `bravo`.                                             |
 | **Expect** | Only bravo row; alpha gone; **No matching hosts** if filter is nonsense. |
 
 ### P5 — Already-in-Orca badge + disabled row
 
-| | |
-|--|--|
-| **Setup** | Config hosts alpha + bravo. Seed Orca target with `configHost`/`label` matching alpha (via `ssh.addTarget`). |
-| **Steps** | Open picker. |
-| **Expect** | Alpha shows **In Orca** badge and is not clickable; bravo still selectable; **Add all 1 to Orca** (not 2). |
+|            |                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------ |
+| **Setup**  | Config hosts alpha + bravo. Seed Orca target with `configHost`/`label` matching alpha (via `ssh.addTarget`). |
+| **Steps**  | Open picker.                                                                                                 |
+| **Expect** | Alpha shows **In Orca** badge and is not clickable; bravo still selectable; **Add all 1 to Orca** (not 2).   |
 
 ### P6 — Add all N to Orca imports new hosts only
 
-| | |
-|--|--|
-| **Setup** | Config with 2 new hosts; no Orca targets for them. |
-| **Steps** | **Add all 2 to Orca** → wait for success toast / return to form or list refresh. |
+|            |                                                                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Setup**  | Config with 2 new hosts; no Orca targets for them.                                                                                  |
+| **Steps**  | **Add all 2 to Orca** → wait for success toast / return to form or list refresh.                                                    |
 | **Expect** | Both targets exist (DOM in Settings SSH and/or listTargets); re-open picker shows **All hosts already in Orca** / both **In Orca**. |
 
 ### P7 — Add all does **not** re-adopt deleted hosts
 
-| | |
-|--|--|
-| **Setup** | Config with alpha + bravo; Add all → remove alpha via API (creates suppress tombstone). |
-| **Steps** | Re-open picker; note count; optionally click Add all again. |
+|            |                                                                                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Setup**  | Config with alpha + bravo; Add all → remove alpha via API (creates suppress tombstone).                                                        |
+| **Steps**  | Re-open picker; note count; optionally click Add all again.                                                                                    |
 | **Expect** | Alpha absent from picker (suppressed) or not re-created; only new hosts counted; `listTargets` still lacks deleted alpha after second Add all. |
 
 ### P8 — Back discards pending pick path
 
-| | |
-|--|--|
-| **Setup** | Seeded config. |
-| **Steps** | Open picker → **Back** without selecting. |
+|            |                                                        |
+| ---------- | ------------------------------------------------------ |
+| **Setup**  | Seeded config.                                         |
+| **Steps**  | Open picker → **Back** without selecting.              |
 | **Expect** | Form fields still empty (Host blank); no filled toast. |
 
 ### P9 — Settings Import re-adopts (contrast with P7)
 
-| | |
-|--|--|
-| **Setup** | Same as P7 after delete. |
-| **Steps** | Settings → SSH → **Import** (explicit reAdopt path). |
+|            |                                                                        |
+| ---------- | ---------------------------------------------------------------------- |
+| **Setup**  | Same as P7 after delete.                                               |
+| **Steps**  | Settings → SSH → **Import** (explicit reAdopt path).                   |
 | **Expect** | Deleted config host reappears as an Orca target; toast sync count ≥ 1. |
 
 ---
@@ -155,17 +155,17 @@ Skip: 100-host truncation, resolve races, GSSAPI system-default, composer host-a
 
 ## Implementation status (done)
 
-| Case | Spec |
-|------|------|
-| P1 empty state | `ssh-config-host-picker.spec.ts` |
-| P2 list + Add all enabled | `ssh-config-host-picker.spec.ts` |
+| Case                                  | Spec                             |
+| ------------------------------------- | -------------------------------- |
+| P1 empty state                        | `ssh-config-host-picker.spec.ts` |
+| P2 list + Add all enabled             | `ssh-config-host-picker.spec.ts` |
 | P3 select + Save (+ N3 identity hint) | `ssh-config-host-picker.spec.ts` |
-| P4 filter | `ssh-config-host-picker.spec.ts` |
-| P5 In Orca badge / count | `ssh-config-host-import.spec.ts` |
-| P6 Add all imports | `ssh-config-host-import.spec.ts` |
-| P7 no re-adopt after delete | `ssh-config-host-import.spec.ts` |
-| P8 Back without select | `ssh-config-host-picker.spec.ts` |
-| P9 Settings Import re-adopts | `ssh-config-host-import.spec.ts` |
+| P4 filter                             | `ssh-config-host-picker.spec.ts` |
+| P5 In Orca badge / count              | `ssh-config-host-import.spec.ts` |
+| P6 Add all imports                    | `ssh-config-host-import.spec.ts` |
+| P7 no re-adopt after delete           | `ssh-config-host-import.spec.ts` |
+| P8 Back without select                | `ssh-config-host-picker.spec.ts` |
+| P9 Settings Import re-adopts          | `ssh-config-host-import.spec.ts` |
 
 Shared helpers: `tests/e2e/helpers/ssh-config-host-picker.ts`
 

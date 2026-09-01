@@ -29,6 +29,8 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+import { canUseStructuredNativeChat } from '@/lib/structured-native-chat-availability'
+import { startStructuredCodexLaunch } from '@/lib/structured-agent-session-launch'
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -56,8 +58,16 @@ export type LaunchAgentInNewTabResult = {
   tabId: string | null
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
+  /** The host will publish and focus a structured tab asynchronously. */
+  focusAfterMenuClose?: 'structured-session'
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
 } | null
+
+export function shouldQueueTerminalFocusAfterMenuClose(
+  result: NonNullable<LaunchAgentInNewTabResult>
+): boolean {
+  return result.tabId === null && result.focusAfterMenuClose !== 'structured-session'
+}
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -170,6 +180,21 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
         ? { promptDeliveryResult: webHostDelivery }
         : {})
+    }
+  }
+
+  const launchDirectStructuredChat =
+    agent === 'codex' &&
+    !hasPrompt &&
+    store.settings?.experimentalNativeChat === true &&
+    canUseStructuredNativeChat(store, worktreeId)
+  if (launchDirectStructuredChat) {
+    startStructuredCodexLaunch(worktreeId)
+    return {
+      tabId: null,
+      startupPlan,
+      pasteDraftAfterLaunch: false,
+      focusAfterMenuClose: 'structured-session'
     }
   }
 

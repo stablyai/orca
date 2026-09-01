@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
+import {
+  RelayDirectorMoveNotNewerError,
+  resolvePairingInviteThroughDirector
+} from './mobile-relay-invite-director'
 
 class FakeSocket {
   sent: string[] = []
@@ -59,7 +62,7 @@ describe('pairing invite director resolution', () => {
     })
   })
 
-  it('rejects same/older epochs and untrusted extra fields', async () => {
+  it('rejects malformed moves with untrusted extra fields', async () => {
     const socket = new FakeSocket()
     const resolving = resolvePairingInviteThroughDirector({
       relay,
@@ -75,6 +78,31 @@ describe('pairing invite director resolution', () => {
       })
     })
 
-    await expect(resolving).rejects.toThrow(/not strictly newer/)
+    await expect(resolving).rejects.toThrow(/invalid relay director move/)
+  })
+
+  it('describes a same-epoch move without accepting it', async () => {
+    const socket = new FakeSocket()
+    const resolving = resolvePairingInviteThroughDirector({
+      relay,
+      createSocket: () => socket as unknown as WebSocket
+    })
+    socket.onmessage?.({
+      data: JSON.stringify({
+        type: 'relay-moved',
+        v: 1,
+        cellUrl: relay.cellUrl,
+        assignmentEpoch: relay.assignmentEpoch
+      })
+    })
+
+    const error = await resolving.catch((value: unknown) => value)
+    expect(error).toBeInstanceOf(RelayDirectorMoveNotNewerError)
+    expect(error).toMatchObject({
+      cellUrl: relay.cellUrl,
+      assignmentEpoch: relay.assignmentEpoch,
+      currentCellUrl: relay.cellUrl,
+      currentAssignmentEpoch: relay.assignmentEpoch
+    })
   })
 })

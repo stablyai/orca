@@ -27,6 +27,7 @@ export type TerminalPaneRecoveryReason =
   // rejection frame is the evidence instead — it came from the process that
   // owns the PTY, over a connection that is by construction still up.
   | 'input-rejected-by-host'
+  | 'reattach-unverifiable'
   // A restore was requested for a certified-dead pipeline (reveal path).
   | 'restore-blocked'
 
@@ -83,6 +84,15 @@ type RecoveryBudget =
   | { allowed: false; declinedBy: 'window-cap'; retryInMs: number }
   | { allowed: false; declinedBy: 'cooldown'; retryInMs: number }
 
+function shouldScheduleRecoveryRetry(request: RecoveryRequest, budget: RecoveryBudget): boolean {
+  return (
+    !budget.allowed &&
+    (budget.declinedBy === 'cooldown'
+      ? request.terminalRecoveryGeneration !== undefined
+      : request.reason !== 'reattach-unverifiable')
+  )
+}
+
 function recoveryBudget(tabId: string, now: number): RecoveryBudget {
   const timestamps = recoveryTimestampsByTabId.get(tabId) ?? []
   const recent = timestamps.filter((t) => now - t < RECOVERY_WINDOW_MS)
@@ -124,6 +134,12 @@ export function registerTerminalPaneRecoveryInstance(tabId: string): {
       const pendingRetry = pendingRetryByTabId.get(tabId)
       pendingRetry?.requestsByInstanceId.delete(id)
       if (pendingRetry?.requestsByInstanceId.size === 0) {
+        cancelPendingRecoveryRetry(tabId)
+      }
+      const getTab = useAppStore.getState().getTab
+      if (getTab && !getTab(tabId)) {
+        recoveryTimestampsByTabId.delete(tabId)
+        recoveryGenerationByTabId.delete(tabId)
         cancelPendingRecoveryRetry(tabId)
       }
     }
@@ -200,12 +216,15 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   if (!isCurrentTerminalRecoveryRequest(request)) {
     return false
   }
+  // A terminal-backed tab is intentionally hidden while native chat owns the
+  // provider. Late xterm callbacks from that hidden surface must not remount
+  // the tab and race the handoff's owner transition.
+  if (useAppStore.getState().getTab?.(request.tabId)?.viewMode === 'chat') {
+    return false
+  }
   const budget = recoveryBudget(request.tabId, Date.now())
   if (!budget.allowed) {
-    if (
-      budget.declinedBy === 'window-cap' ||
-      (budget.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
-    ) {
+    if (shouldScheduleRecoveryRetry(request, budget)) {
       scheduleRecoveryRetry(request, budget.retryInMs)
     }
     return false
@@ -239,10 +258,7 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     }
     const recheck = recoveryBudget(request.tabId, Date.now())
     if (!recheck.allowed) {
-      if (
-        recheck.declinedBy === 'window-cap' ||
-        (recheck.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
-      ) {
+      if (shouldScheduleRecoveryRetry(request, recheck)) {
         scheduleRecoveryRetry(request, recheck.retryInMs)
       }
       return false

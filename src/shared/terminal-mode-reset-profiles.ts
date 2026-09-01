@@ -23,6 +23,10 @@ export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x
 // Why: the normal-buffer fallback can follow a dead TUI, so its stale pen and saved pen must not reach the surviving shell.
 export const POST_REPLAY_REATTACH_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l${SAVE_GROUNDED_CURSOR}`
 
+// Why: a foreground shell proves an alternate-screen owner died without its
+// ?1049l cleanup; leave the renderer on the shell's normal buffer as well.
+export const POST_REPLAY_DEAD_TUI_RESET = `\x1b[?1049l${POST_REPLAY_REATTACH_RESET}`
+
 // Why: an alt-screen reattach replays the daemon's rehydrateSequences, which re-arm the live TUI's
 // mouse modes; wiping them one write later hands drags back to xterm's row selection (#8291).
 // Normal-buffer panes keep RESET_MOUSE_REPORTING so a dead TUI's stale modes never reach a shell (#7893).

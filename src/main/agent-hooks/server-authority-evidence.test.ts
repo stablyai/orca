@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 

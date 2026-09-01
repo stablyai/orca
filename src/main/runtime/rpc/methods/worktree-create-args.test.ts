@@ -26,4 +26,32 @@ describe('buildManagedWorktreeCreateArgs', () => {
       nameWasGenerated: true
     })
   })
+
+  it('keeps the legacy CLI marker on a name-only create request', () => {
+    const args = buildManagedWorktreeCreateArgs(
+      WorktreeCreate.parse({ repo: 'id:repo-1', name: 'feature' }),
+      { ...PROVENANCE, cliProvenance: { kind: 'created-by-cli', createdAt: 1 } }
+    )
+
+    expect(args).toMatchObject({
+      name: 'feature',
+      cliProvenance: { kind: 'created-by-cli', createdAt: 1 }
+    })
+    expect(args.displayName).toBeUndefined()
+  })
+
+  it('carries the parent-pick provenance only when the client marked it manual', () => {
+    // Why: older clients never send it, and those creates really are CLI-flag equivalents.
+    expect(
+      build({ repo: 'id:repo-1', name: 'child', parentWorkspace: 'folder:f1' }).lineage
+    ).not.toHaveProperty('parentWorkspaceOrigin')
+    expect(
+      build({
+        repo: 'id:repo-1',
+        name: 'child',
+        parentWorkspace: 'folder:f1',
+        parentWorkspaceOrigin: 'manual'
+      }).lineage
+    ).toMatchObject({ parentWorkspaceOrigin: 'manual' })
+  })
 })

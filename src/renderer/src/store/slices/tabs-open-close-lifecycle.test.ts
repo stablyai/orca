@@ -347,12 +347,12 @@ describe('TabsSlice', () => {
       expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
     })
 
-    it('activates the previously-active tab (MRU) instead of the visual neighbor', () => {
+    it('activates the previously-active tab across content types', () => {
       const t1 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'browser')
+      const t3 = store.getState().createUnifiedTab(WT, 'editor')
 
-      // Visit order ...→t3→t1→t3; closing t3 should jump to t1 (MRU previous), not the visual neighbor t2.
+      // Visit order ...→t3→t1→t3; closing t3 should jump to t1, not browser neighbor t2.
       store.getState().activateTab(t1.id)
       store.getState().activateTab(t3.id)
       store.getState().closeUnifiedTab(t3.id)

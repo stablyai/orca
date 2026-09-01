@@ -1,15 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { Script } from 'node:vm'
 import { describe, expect, it } from 'vitest'
+import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
 
 const terminalWebViewSource = readFileSync(
   new URL('./TerminalWebView.tsx', import.meta.url),
   'utf8'
 )
-const terminalHtmlSource = readFileSync(
+const terminalHtmlModuleSource = readFileSync(
   new URL('./terminal-webview-html.ts', import.meta.url),
   'utf8'
 )
+const terminalHtmlFragmentSource = readFileSync(
+  new URL('./terminal-webview-html/fragment-01.ts', import.meta.url),
+  'utf8'
+)
+// Read behavior from the assembled document; the module source only contains
+// fragment imports and cannot prove the injected code is present.
+const terminalHtmlSource = readTerminalWebViewHtmlSource()
 const terminalWebglRecoverySource = readFileSync(
   new URL('./terminal-webview-webgl-recovery-injected.ts', import.meta.url),
   'utf8'
@@ -75,7 +83,9 @@ describe('TerminalWebView text zoom', () => {
     const end = terminalWebViewSource.indexOf('/>', start)
     expect(end).toBeGreaterThan(start)
     const webViewProps = terminalWebViewSource.slice(start, end)
-    expect(terminalHtmlSource).toContain('export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }')
+    expect(terminalHtmlModuleSource).toContain(
+      'export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }'
+    )
     expect(webViewProps).toContain('source={XTERM_WEBVIEW_SOURCE}')
     expect(webViewProps).not.toContain('source={{ html: XTERM_HTML }}')
   })
@@ -140,7 +150,7 @@ describe('TerminalWebView text zoom', () => {
   })
 
   it('loads Unicode 11 before replaying mobile terminal bytes', () => {
-    expect(terminalHtmlSource).toContain('XTERM_ENGINE_JS')
+    expect(terminalHtmlFragmentSource).toContain('XTERM_ENGINE_JS')
     expect(terminalHtmlSource).toContain('window.Unicode11Addon.Unicode11Addon')
     const open = terminalHtmlSource.indexOf('term.open(surface)')
     const unicode = terminalHtmlSource.indexOf("term.unicode.activeVersion = '11'")
