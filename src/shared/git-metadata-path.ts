@@ -1,6 +1,13 @@
 import { posix, win32 } from 'node:path'
 import { parseWslUncPath, toWindowsWslDrivePath, toWindowsWslPath } from './wsl-paths'
 
+export type GitMetadataPathOptions = {
+  /** Host that reads the pointer back. Defaults to the current process platform. */
+  platform?: NodeJS.Platform
+  /** Distro that wrote the pointer, for callers whose base path does not encode one. Windows-only. */
+  wslDistro?: string
+}
+
 /**
  * Resolve a Git metadata pointer (a `.git` gitfile payload or a `commondir`) in the path namespace
  * of the host that reads it.
@@ -12,14 +19,15 @@ import { parseWslUncPath, toWindowsWslDrivePath, toWindowsWslPath } from './wsl-
 export function resolveGitMetadataPath(
   basePath: string,
   rawPath: string,
-  platform: NodeJS.Platform = process.platform
+  options: GitMetadataPathOptions = {}
 ): string | null {
+  const platform = options.platform ?? process.platform
   const value = rawPath.trim()
   if (!value) {
     return null
   }
   if (value.startsWith('/')) {
-    const translated = translateGuestPointer(value, basePath, platform)
+    const translated = translateGuestPointer(value, basePath, platform, options.wslDistro)
     if (translated) {
       return translated
     }
@@ -30,17 +38,24 @@ export function resolveGitMetadataPath(
 
 /**
  * The Win32 spelling of a POSIX-rooted pointer, or null to leave it alone. A WSL UNC base names the
- * distro that wrote the pointer; failing that, only a drvfs mount has a spelling we can derive, and
- * only a Windows host needs one.
+ * distro that wrote the pointer and outranks the caller's guess; failing both, only a drvfs mount
+ * has a spelling we can derive.
+ *
+ * Only a Windows host is translated at all, so a caller-named distro cannot make a POSIX host
+ * fabricate a Win32 path. A WSL UNC base is exempt because that spelling only exists on Windows.
  */
 function translateGuestPointer(
   value: string,
   basePath: string,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  wslDistro: string | undefined
 ): string | null {
-  const distro = parseWslUncPath(basePath)?.distro
-  if (distro) {
-    return toWindowsWslPath(value, distro)
+  const baseDistro = parseWslUncPath(basePath)?.distro
+  if (baseDistro) {
+    return toWindowsWslPath(value, baseDistro)
   }
-  return platform === 'win32' ? toWindowsWslDrivePath(value) : null
+  if (platform !== 'win32') {
+    return null
+  }
+  return wslDistro ? toWindowsWslPath(value, wslDistro) : toWindowsWslDrivePath(value)
 }
