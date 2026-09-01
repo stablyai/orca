@@ -4,8 +4,8 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-n
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   TUI_AGENT_AUTO_PICK_ORDER,
+  filterEnabledTuiAgents,
   isTuiAgentEnabled,
-  normalizeDisabledTuiAgents,
   pickTuiAgent
 } from '../../../src/shared/tui-agent-selection'
 
@@ -77,6 +77,5 @@ export function filterEnabledMobileTuiAgents<T extends TuiAgent>(
   agents: Iterable<T>,
   disabled?: unknown
 ): T[] {
-  const disabledSet = new Set(normalizeDisabledTuiAgents(disabled))
-  return [...agents].filter((agent) => !disabledSet.has(agent))
+  return filterEnabledTuiAgents(agents, asDisabledList(disabled))
 }
