@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { readFileSync, rmSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 
@@ -101,17 +101,20 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
-function waitForDisplaySocket(displayNumber: number, deadline: number): boolean {
-  const socket = xvfbSocketPath(displayNumber)
-  // Why: Xvfb creates its socket asynchronously after spawn; Electron must not
-  // boot before it exists or display init still fails.
+// Why not socket presence alone: a stale socket we failed to unlink (a root-owned one left by a
+// crashed system Xvfb, which `User=orca` serve cannot remove) still exists after our own Xvfb
+// refused to bind the display. Treating that as ready sets DISPLAY to a dead server and Chromium
+// dies in Ozone init with SIGSEGV instead of reporting an unusable display.
+function waitForDisplayReady(displayNumber: number, deadline: number): boolean {
+  const isReady = (): boolean =>
+    isUnixSocket(xvfbSocketPath(displayNumber)) && isManagedDisplayServerAlive(displayNumber)
   while (Date.now() < deadline) {
-    if (existsSync(socket)) {
+    if (isReady()) {
       return true
     }
     sleepSync(XVFB_POLL_INTERVAL_MS)
   }
-  return existsSync(socket)
+  return isReady()
 }
 
 // Validate display syntax and local sockets before Chromium reaches Ozone initialization.
@@ -246,9 +249,12 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
     return false
   }
 
-  const ready = waitForDisplaySocket(VIRTUAL_DISPLAY_NUMBER, Date.now() + XVFB_STARTUP_TIMEOUT_MS)
+  const ready = waitForDisplayReady(VIRTUAL_DISPLAY_NUMBER, Date.now() + XVFB_STARTUP_TIMEOUT_MS)
   if (!ready) {
-    console.warn('[serve] Xvfb did not become ready in time; browser panes may be unavailable.')
+    console.warn(
+      `[serve] Xvfb did not take ownership of ${VIRTUAL_DISPLAY}; browser panes are unavailable. ` +
+        'A stale socket from another user can block the rebind.'
+    )
     stopVirtualDisplay()
     return false
   }

@@ -37,6 +37,22 @@ function mockLiveXDisplay(pid = 4321): void {
   vi.spyOn(process, 'kill').mockImplementation(() => true)
 }
 
+function mockXvfbTakesDisplay(pid = 1234): void {
+  let bound = false
+  statSyncMock.mockImplementation(() => ({ isSocket: () => true }))
+  readFileSyncMock.mockImplementation(() => {
+    if (!bound) {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    }
+    return `${pid}\n`
+  })
+  vi.spyOn(process, 'kill').mockImplementation(() => true)
+  spawnMock.mockImplementation(() => {
+    bound = true
+    return { pid, once: vi.fn(), kill: vi.fn(), killed: false }
+  })
+}
+
 describe('ensureVirtualDisplayForHeadlessServe', () => {
   beforeEach(() => {
     spawnMock.mockReset()
@@ -147,12 +163,8 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
   // leaves a lockless socket on Orca's OWN :99. Adopting it would resurrect the orphan-socket bug.
   it('does not adopt its own :99 socket when the lock is missing', async () => {
     setPlatform('linux')
-    statSyncMock.mockReturnValue({ isSocket: () => true })
     existsSyncMock.mockReturnValue(true)
-    readFileSyncMock.mockImplementation(() => {
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    spawnMock.mockReturnValue({ pid: 1234, once: vi.fn(), kill: vi.fn(), killed: false })
+    mockXvfbTakesDisplay()
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
@@ -183,14 +195,21 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
 
   it('treats a stale socket (dead server) as no display and starts a fresh Xvfb', async () => {
     setPlatform('linux')
-    statSyncMock.mockReturnValue({ isSocket: () => true }) // orphan socket present
     existsSyncMock.mockReturnValue(true) // lock present
-    readFileSyncMock.mockReturnValue('9999\n')
-    // PID is gone: process.kill throws ESRCH.
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw new Error('ESRCH')
+    let bound = false
+    statSyncMock.mockImplementation(() => ({ isSocket: () => true }))
+    readFileSyncMock.mockImplementation(() => (bound ? '1234\n' : '9999\n'))
+    // The orphan lock names a dead PID; the freshly spawned Xvfb is alive.
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid) => {
+      if (pid === 9999) {
+        throw new Error('ESRCH')
+      }
+      return true as never
     })
-    spawnMock.mockReturnValue({ pid: 1234, once: vi.fn(), kill: vi.fn(), killed: false })
+    spawnMock.mockImplementation(() => {
+      bound = true
+      return { pid: 1234, once: vi.fn(), kill: vi.fn(), killed: false }
+    })
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
@@ -203,6 +222,48 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     )
     expect(process.env.DISPLAY).toBe(':99')
     killSpy.mockRestore()
+  })
+
+  // A root-owned stale :99 socket (crashed system Xvfb, serve running as User=orca) cannot be
+  // unlinked, so our Xvfb refuses to bind and exits. Trusting the surviving socket set DISPLAY to a
+  // dead server and Chromium died in Ozone init with SIGSEGV.
+  it('reports failure when a stale socket blocks the Xvfb rebind', async () => {
+    setPlatform('linux')
+    statSyncMock.mockReturnValue({ isSocket: () => true })
+    // Removal fails (foreign owner) and no lock ever appears, because Xvfb never took the display.
+    rmSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    })
+    readFileSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    spawnMock.mockReturnValue({ pid: 4242, once: vi.fn(), kill: vi.fn(), killed: false })
+    const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
+
+    expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(false)
+    expect(process.env.DISPLAY).toBeUndefined()
+  })
+
+  it('accepts the display once the spawned Xvfb owns its lock', async () => {
+    setPlatform('linux')
+    let lockWritten = false
+    statSyncMock.mockImplementation(() => ({ isSocket: () => lockWritten }))
+    rmSyncMock.mockImplementation(() => {})
+    readFileSyncMock.mockImplementation(() => {
+      if (!lockWritten) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return '4242\n'
+    })
+    vi.spyOn(process, 'kill').mockImplementation(() => true)
+    spawnMock.mockImplementation(() => {
+      lockWritten = true
+      return { pid: 4242, once: vi.fn(), kill: vi.fn(), killed: false }
+    })
+    const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
+
+    expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
+    expect(process.env.DISPLAY).toBe(':99')
   })
 
   describe('hasUsableLinuxDisplay', () => {
@@ -262,9 +323,9 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       })
       const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
 
-      expect(
-        hasUsableLinuxDisplay({ DISPLAY: ':0', ELECTRON_OZONE_PLATFORM_HINT: 'x11' })
-      ).toBe(true)
+      expect(hasUsableLinuxDisplay({ DISPLAY: ':0', ELECTRON_OZONE_PLATFORM_HINT: 'x11' })).toBe(
+        true
+      )
     })
 
     it('still rejects a missing socket even when no lock file exists', async () => {
