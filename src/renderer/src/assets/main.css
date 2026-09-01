@@ -247,6 +247,21 @@
   --tab-group-split-divider-strong: #71717a;
 }
 
+/* Why: app ships no CJK font; Chinese used to hit mixed OS sans-serif fallbacks
+   (uneven stroke weight). Pin one CJK family per Chinese locale. */
+:root:lang(zh) {
+  --app-font-family:
+    'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
+    'Noto Sans SC', sans-serif;
+}
+
+/* Why: :lang(zh) also matches zh-TW; same specificity, later rule wins for TC fonts. */
+:root:lang(zh-TW) {
+  --app-font-family:
+    'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei',
+    'Noto Sans TC', sans-serif;
+}
+
 /* ── Dark Mode ───────────────────────────────────────── */
 
 .dark {

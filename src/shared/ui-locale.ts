@@ -1,5 +1,6 @@
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
@@ -9,7 +10,7 @@ import {
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'zh-TW', 'ko', 'ja', 'es'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -22,8 +23,14 @@ export function normalizeSupportedUiLocale(locale: string | undefined): Supporte
   const tag = normalizeLocaleTag(locale)
   const primary = tag.split('-')[0]
   if (primary === 'zh') {
-    if (tag.startsWith('zh-tw') || tag.startsWith('zh-hk') || tag.startsWith('zh-hant')) {
-      return DEFAULT_UI_LOCALE
+    // Why: these regions use Traditional Chinese even when the locale omits an explicit Hant script.
+    if (
+      tag.startsWith('zh-tw') ||
+      tag.startsWith('zh-hk') ||
+      tag.startsWith('zh-mo') ||
+      tag.startsWith('zh-hant')
+    ) {
+      return 'zh-TW'
     }
     return 'zh'
   }
@@ -44,6 +51,9 @@ export function resolveUiLocale(
   }
   if (language === UI_LANGUAGE_CHINESE) {
     return 'zh'
+  }
+  if (language === UI_LANGUAGE_CHINESE_TRADITIONAL) {
+    return 'zh-TW'
   }
   if (language === UI_LANGUAGE_KOREAN) {
     return 'ko'

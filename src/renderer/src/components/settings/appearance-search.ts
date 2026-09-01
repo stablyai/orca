@@ -47,6 +47,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       ...translateSearchKeyword('settings.appearance.language.system', 'System'),
       ...translateSearchKeyword('settings.appearance.language.english', 'English'),
       ...translateSearchKeyword('settings.appearance.language.chinese', '中文（简体）'),
+      ...translateSearchKeyword('settings.appearance.language.chineseTraditional', '中文（繁體）'),
       ...translateSearchKeyword('settings.appearance.language.korean', '한국어'),
       ...translateSearchKeyword('settings.appearance.language.japanese', '日本語'),
       ...translateSearchKeyword('settings.appearance.language.spanish', 'Español'),

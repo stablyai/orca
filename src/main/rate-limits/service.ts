@@ -20,7 +20,11 @@ import {
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
-import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
+import {
+  fetchAntigravityRateLimits,
+  probeAntigravityAuthConfigured
+} from './antigravity-usage-fetcher'
+import { readAntigravityCredentials } from './antigravity-credentials'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -179,6 +183,9 @@ export class RateLimitService {
     grok: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  // Why: Antigravity durability is independent of Gemini CLI OAuth; probe
+  // Windows Credential Manager (or unsupported/missing) on fetch cycles.
+  private antigravityAuthConfigured = false
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -389,6 +396,7 @@ export class RateLimitService {
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       grokAuthConfigured: this.grokAuthConfigured,
+      antigravityAuthConfigured: this.antigravityAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(
@@ -1637,6 +1645,8 @@ export class RateLimitService {
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    // Why: credential lookup may spawn PowerShell on Windows, so start it without delaying every provider.
+    const antigravityAuthReadPromise = readAntigravityCredentials(signal)
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -1684,6 +1694,16 @@ export class RateLimitService {
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+    const antigravityResultPromise = antigravityAuthReadPromise
+      .then(async (credentialsReadResult) => {
+        signal.throwIfAborted()
+        const rateLimits = await fetchAntigravityRateLimits({ credentialsReadResult, signal })
+        return { credentialsReadResult, rateLimits }
+      })
+      .then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
 
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
@@ -1767,9 +1787,6 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
-
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
         ? opencodeGoResult.value
@@ -1844,7 +1861,6 @@ export class RateLimitService {
       this.trackActiveFailureStreak('codex', codex)
     }
     this.trackActiveFailureStreak('gemini', gemini)
-    this.trackActiveFailureStreak('antigravity', antigravity)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -1871,7 +1887,6 @@ export class RateLimitService {
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax
@@ -1879,10 +1894,31 @@ export class RateLimitService {
         : this.state.minimax
     })
 
-    const grokResult = await grokResultPromise
+    const [antigravityResult, grokResult] = await Promise.all([
+      antigravityResultPromise,
+      grokResultPromise
+    ])
     if (signal.aborted) {
       return
     }
+    this.antigravityAuthConfigured =
+      antigravityResult.status === 'fulfilled' &&
+      probeAntigravityAuthConfigured(antigravityResult.value.credentialsReadResult)
+    const antigravity =
+      antigravityResult.status === 'fulfilled'
+        ? antigravityResult.value.rateLimits
+        : ({
+            provider: 'antigravity',
+            session: null,
+            weekly: null,
+            buckets: [],
+            updatedAt: Date.now(),
+            error:
+              antigravityResult.reason instanceof Error
+                ? antigravityResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
     const grok =
       grokResult.status === 'fulfilled'
         ? grokResult.value
@@ -1894,9 +1930,11 @@ export class RateLimitService {
             error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
+    this.trackActiveFailureStreak('antigravity', antigravity)
     this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,
+      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       grok: this.applyStalePolicy(grok, previousState.grok)
     })
   }

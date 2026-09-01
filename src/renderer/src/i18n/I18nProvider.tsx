@@ -35,7 +35,16 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
       return
     }
     requestedLocale.current = locale
-    void i18n.changeLanguage(locale)
+    let active = true
+    void i18n.changeLanguage(locale).then(() => {
+      // Why: lazy catalog loads can finish out of order; only the latest request may update document semantics.
+      if (active && requestedLocale.current === locale) {
+        document.documentElement.lang = locale
+      }
+    })
+    return () => {
+      active = false
+    }
   }, [locale, pluginLanguagePacks])
 
   return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>

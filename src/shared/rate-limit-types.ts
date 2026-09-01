@@ -133,6 +133,11 @@ export type RateLimitState = {
   minimaxCookieConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /**
+   * True when main can read an Antigravity OAuth entry (Windows Credential
+   * Manager target `gemini:antigravity`). Independent of Gemini CLI OAuth.
+   */
+  antigravityAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

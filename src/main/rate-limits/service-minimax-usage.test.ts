@@ -25,6 +25,15 @@ vi.mock('./gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
 }))
 
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn(),
+  probeAntigravityAuthConfigured: vi.fn((result: { status: string }) => result.status === 'ok')
+}))
+
+vi.mock('./antigravity-credentials', () => ({
+  readAntigravityCredentials: vi.fn(async () => ({ status: 'missing' as const }))
+}))
+
 vi.mock('./kimi-fetcher', () => ({
   fetchKimiRateLimits: vi.fn()
 }))

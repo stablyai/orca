@@ -72,6 +72,7 @@ describe('I18nProvider startup language', () => {
     })
 
     expect(changeLanguage).toHaveBeenCalledWith('es')
+    await vi.waitFor(() => expect(document.documentElement.lang).toBe('es'))
   })
 
   it('applies persisted English even if i18n reports it as already active', async () => {

@@ -71,7 +71,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     claudeManagedAccounts: [],
     opencodeSessionCookie: '',
     geminiCliOAuthEnabled: false,
-    antigravityUsageConfigured: false,
+    antigravityAuthConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
     ...overrides
@@ -121,11 +121,7 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
-    // Why: antigravity durability requires the Gemini OAuth opt-in; the
-    // checked item alone must not suppress the usage setup CTA.
-    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
-      false
-    )
+    expect(hasUsageProviderSettings(usageSettings({ antigravityAuthConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
   })
@@ -160,21 +156,13 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
   })
 
-  it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
+  it('treats only Antigravity auth-on-disk as durable', () => {
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
-        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+        usageSettings({ antigravityAuthConfigured: true })
       )
     ).toBe(true)
-    // Why: the snapshot mirrors the Gemini fetch — without the OAuth opt-in it
-    // is permanently unavailable, so the checked item alone is not durable.
-    expect(
-      hasUsageProviderSettingsForProvider(
-        'antigravity',
-        usageSettings({ antigravityUsageConfigured: true })
-      )
-    ).toBe(false)
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
@@ -324,38 +312,27 @@ describe('getVisibleUsageProvider', () => {
     ).toBe(null)
   })
 
-  it('keeps Antigravity visible while the snapshot is pending when checked and Gemini OAuth is on', () => {
-    const visible = getVisibleUsageProvider(
-      'antigravity',
-      null,
-      usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
-    )
-    expect(visible).toMatchObject({
-      provider: 'antigravity',
-      status: 'fetching',
-      session: null,
-      weekly: null
-    })
-  })
-
-  it('hides Antigravity while Gemini OAuth is off even when its status item is checked', () => {
-    // Why: without the OAuth opt-in the mirrored snapshot is permanently
-    // 'unavailable'; the default-on item must not pin a dead bar.
+  it('keeps Antigravity visible while pending only when auth is on disk', () => {
+    expect(getVisibleUsageProvider('antigravity', null, usageSettings())).toBe(null)
     expect(
       getVisibleUsageProvider(
         'antigravity',
         null,
-        usageSettings({ antigravityUsageConfigured: true })
+        usageSettings({ antigravityAuthConfigured: true })
       )
-    ).toBe(null)
+    ).toMatchObject({ provider: 'antigravity', status: 'fetching' })
+  })
+
+  it('hides Antigravity when auth is missing even if unavailable snapshot exists', () => {
+    expect(getVisibleUsageProvider('antigravity', null, usageSettings())).toBe(null)
     expect(
       getVisibleUsageProvider(
         'antigravity',
         provider('unavailable', {
           provider: 'antigravity',
-          error: 'Gemini CLI OAuth is disabled in settings'
+          error: 'Antigravity login not found — sign in to Antigravity first'
         }),
-        usageSettings({ antigravityUsageConfigured: true })
+        usageSettings()
       )
     ).toBe(null)
   })
@@ -481,7 +458,7 @@ describe('isUsageEmptyState', () => {
     ).toBe(true)
   })
 
-  it('does not show the setup CTA while checked Antigravity usage is awaiting a snapshot', () => {
+  it('does not show the setup CTA while Antigravity auth is awaiting a snapshot', () => {
     expect(
       isUsageEmptyState(
         {
@@ -494,14 +471,12 @@ describe('isUsageEmptyState', () => {
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
-        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+        usageSettings({ antigravityAuthConfigured: true })
       )
     ).toBe(false)
   })
 
-  it('still shows the setup CTA when Antigravity is checked but Gemini OAuth is off', () => {
-    // Why: the default-on Antigravity item is not configured usage on its own;
-    // it must not hide the teaching CTA from users who set nothing up.
+  it('still shows the setup CTA when Antigravity is not configured', () => {
     expect(
       isUsageEmptyState(
         {
@@ -514,7 +489,7 @@ describe('isUsageEmptyState', () => {
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
-        usageSettings({ antigravityUsageConfigured: true })
+        usageSettings()
       )
     ).toBe(true)
   })

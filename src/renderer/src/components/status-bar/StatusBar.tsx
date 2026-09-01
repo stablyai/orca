@@ -1174,13 +1174,21 @@ const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function VerboseProviderUsage({
   p,
-  display
+  display,
+  compact
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
+  compact: boolean
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
-    const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+    // Why: Antigravity buckets are Claude/Gemini × 5h/weekly, not Gemini Pro/Flash.
+    // Compact mode keeps only the 5h family chips so four windows do not crowd the bar.
+    const antigravityBuckets = p.buckets.filter((b) => (compact ? b.windowMinutes === 300 : true))
+    const visibleBuckets =
+      p.provider === 'antigravity'
+        ? antigravityBuckets
+        : p.buckets.filter((b) => STATUS_BAR_BUCKET_NAMES.has(b.name))
     return (
       <>
         {visibleBuckets.map((bucket, index) => (
@@ -1315,7 +1323,7 @@ export function ProviderSegment({
           {tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
-          <VerboseProviderUsage p={p} display={display} />
+          <VerboseProviderUsage p={p} display={display} compact={compact} />
         </>
       ) : tightest ? (
         <WindowLabel
@@ -2108,16 +2116,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
 
-  // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
-  // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
-  // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
-  const antigravityUsageConfigured =
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
   // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   const usageSettings = {
     ...settings,
-    antigravityUsageConfigured,
+    antigravityAuthConfigured: rateLimits.antigravityAuthConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured
   }
@@ -2144,11 +2146,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
-  const showAntigravity =
-    visibleAntigravity !== null &&
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
+  // Why: Antigravity usage is Credential Manager auth, not PATH — same as MiniMax.
+  // CLI detection still gates the settings toggle, not the usage meter itself.
+  const showAntigravity = visibleAntigravity !== null && statusBarItems.includes('antigravity')
+  // Why: MiniMax is cookie-auth rather than a CLI, so PATH detection does not apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
     visibleGrok !== null &&

@@ -143,7 +143,21 @@ export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
-    const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
+    const bucketSections = p.buckets.map((b) => {
+      // Why: Antigravity weekly buckets already encode the window in the name
+      // (Claude W / Gemini W); do not re-append a separate weekly row.
+      if (p.provider === 'antigravity' && b.windowMinutes === 10_080) {
+        return { label: b.name, window: b as RateLimitWindow }
+      }
+      if (p.provider === 'antigravity') {
+        const fiveHour = translate('auto.components.status.bar.StatusBar.d79c3362c4', '5h')
+        return { label: `${b.name} ${fiveHour}`, window: b as RateLimitWindow }
+      }
+      return { label: b.name, window: b as RateLimitWindow }
+    })
+    if (p.provider === 'antigravity') {
+      return bucketSections
+    }
     return [
       ...bucketSections,
       {

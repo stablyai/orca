@@ -39,6 +39,7 @@ const mockStoreState = {
     },
     minimaxCookieConfigured: false,
     grokAuthConfigured: true,
+    antigravityAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
