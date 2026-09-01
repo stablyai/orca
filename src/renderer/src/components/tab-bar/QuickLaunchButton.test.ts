@@ -257,6 +257,25 @@ describe('QuickLaunchAgentMenuItems', () => {
     expect(rowMarkup(html, 'Codex')).not.toContain('⌘⌥T')
     expect(html).not.toContain('Disabled agent')
   })
+
+  it('ignores a disabled custom default', () => {
+    shortcutLabelMock.mockReturnValue('⌘⌥T')
+    storeState.settings.customAgentProfiles = [
+      {
+        id: 'disabled-default',
+        name: 'Disabled default',
+        executable: 'disabled',
+        args: [],
+        enabled: false,
+        isDefault: true
+      }
+    ]
+
+    const html = renderAgentMenuItems()
+
+    expect(html).not.toContain('Disabled default')
+    expect(rowMarkup(html, 'Codex')).toContain('⌘⌥T')
+  })
 })
 
 describe('shouldShowLaunchWatchdogTimeout', () => {

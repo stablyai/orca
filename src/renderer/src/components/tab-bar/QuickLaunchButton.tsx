@@ -150,8 +150,8 @@ function QuickLaunchAgentMenuItemsInner({
   }
   const rawCustomProfiles = useAppStore((s) => s.settings?.customAgentProfiles)
   const customProfiles = normalizeCustomAgentProfiles(rawCustomProfiles)
-  const defaultCustomAgent = customProfiles.find((profile) => profile.isDefault) ?? null
   const enabledCustomProfiles = customProfiles.filter(isCustomAgentProfileEnabled)
+  const defaultCustomAgent = enabledCustomProfiles.find((profile) => profile.isDefault) ?? null
   const launchableCustomProfiles =
     prompt !== undefined
       ? []
