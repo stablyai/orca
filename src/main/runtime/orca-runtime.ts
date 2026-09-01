@@ -35074,6 +35074,12 @@ export class OrcaRuntimeService {
       store,
       scanRepo: (repo, projectRuntimeByRepoId) =>
         this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
+      lastSuccessfulScan: (repo) => {
+        const cached = this.worktreeScanCache.get(
+          `${repo.id}\0${getRepoExecutionHostId(repo)}`
+        )?.result
+        return cached?.ok ? cached.worktrees : null
+      },
       listFolderWorkspaces: (repo, repoOwnerCount) =>
         listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
     }

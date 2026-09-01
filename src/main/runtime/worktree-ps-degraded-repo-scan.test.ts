@@ -173,6 +173,52 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
+  it('keeps the last successful branch and name when a later remote scan stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      const listWorktrees = vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            path: REPO_PATH,
+            head: 'abc',
+            branch: 'main',
+            isBare: false,
+            isMainWorktree: true
+          },
+          {
+            path: WORKTREE_PATH,
+            head: 'def',
+            branch: 'feature',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ])
+        .mockImplementation(neverSettles)
+      getSshGitProviderMock.mockReturnValue({ listWorktrees })
+      const runtime = new OrcaRuntimeService(
+        makeStore({
+          connectionId: SSH_CONNECTION_ID,
+          metaById: {
+            [WORKTREE_ID]: makeMeta({ displayName: '' }),
+            [MAIN_WORKTREE_ID]: makeMeta({ displayName: '', instanceId: 'parent-instance' })
+          }
+        }) as never
+      )
+
+      await runtime.getWorktreePs(10_000)
+      await vi.advanceTimersByTimeAsync(31_000)
+      const degraded = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
+
+      const worktree = degraded.worktrees.find((row) => row.worktreeId === WORKTREE_ID)
+      expect(worktree?.branch).toBe('feature')
+      expect(worktree?.displayName).toBe('feature')
+      expect(listWorktrees).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps persisted worktrees when a remote repo is unreachable', async () => {
     getSshGitProviderMock.mockReturnValue(undefined)
     const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
