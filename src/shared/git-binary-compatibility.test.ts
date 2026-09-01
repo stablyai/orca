@@ -276,6 +276,39 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ).rejects.toMatchObject({ code: 1 })
   })
 
+  it('packs loose refs and reads the maintenance opt-out at the baseline', async () => {
+    // Why: idle ref maintenance runs `pack-refs --all --prune` on every supported
+    // Git rather than the 2.45+ `--auto` form, and reads `maintenance.auto` to
+    // honour a user who disabled Git's own auto-maintenance. Both must work at 2.25.
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    const packedRef = 'refs/remotes/origin/compat-pack-refs'
+    await runGit(['update-ref', packedRef, head])
+    await expect(readFile(join(repoPath, '.git', packedRef), 'utf-8')).resolves.toContain(head)
+
+    await expect(runGit(['pack-refs', '--all', '--prune'])).resolves.toBeDefined()
+
+    // The loose file is gone and the ref still resolves through packed-refs.
+    await expect(readFile(join(repoPath, '.git', packedRef), 'utf-8')).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+    await expect(runGit(['rev-parse', '--verify', packedRef])).resolves.toMatchObject({
+      stdout: `${head}\n`
+    })
+    await expect(readFile(join(repoPath, '.git', 'packed-refs'), 'utf-8')).resolves.toContain(
+      packedRef
+    )
+
+    // `--get` exits 1 on an unset key; that absence must read as consent, not opt-out.
+    await expect(runGit(['config', '--bool', '--get', 'maintenance.auto'])).rejects.toMatchObject({
+      code: 1
+    })
+    await runGit(['config', 'maintenance.auto', 'false'])
+    await expect(runGit(['config', '--bool', '--get', 'maintenance.auto'])).resolves.toMatchObject({
+      stdout: 'false\n'
+    })
+    await runGit(['config', '--unset', 'maintenance.auto'])
+  })
+
   it('fetches hosted review heads into dedicated refs', async () => {
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     await runGit(['update-ref', 'refs/pull/42/head', head])

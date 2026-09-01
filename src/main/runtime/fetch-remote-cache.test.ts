@@ -133,9 +133,11 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     const first = runtime.fetchRemoteWithCache('/repo/c', 'origin')
     const second = runtime.fetchRemoteWithCache('/repo/c', 'origin')
 
-    // Allow both callers to register before we resolve.
-    await Promise.resolve()
-    await Promise.resolve()
+    // Allow both callers to register before we resolve. Each canonicalizes the
+    // repo key first, so the dispatch lands several microtasks in.
+    for (let tick = 0; tick < 8; tick += 1) {
+      await Promise.resolve()
+    }
     expect(fetchCallCount()).toBe(1)
 
     resolveFetch()

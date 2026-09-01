@@ -70,6 +70,8 @@ export const mainProcessState = {
   headlessBrowserDisplayAvailable: false,
   starNag: null as StarNagService | null,
   agentAwakeService: null as AgentAwakeService | null,
+  uninstallRepoMaintenanceIdleGate: null as (() => Promise<void>) | null,
+  repoMaintenanceShutdown: Promise.resolve() as Promise<void>,
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
   publishProviderSessionChanges: null as

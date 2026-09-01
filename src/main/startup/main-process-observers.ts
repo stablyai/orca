@@ -18,6 +18,7 @@ import { AgentSessionTransitionRecorder } from '../stats/agent-session-transitio
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
+import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessObservers(): void {
@@ -35,6 +36,10 @@ export function initializeMainProcessObservers(): void {
   )
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   state.agentAwakeService.setStatuses([])
+  state.uninstallRepoMaintenanceIdleGate = installRepoMaintenanceIdleGate({
+    isQuitting: () => state.isQuitting,
+    getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
+  })
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
   const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
     const ownedIdentities = identities.map((identity) => ({

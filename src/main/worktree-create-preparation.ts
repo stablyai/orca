@@ -61,6 +61,11 @@ type ConsumePreparedWorktreeArgs = {
 const preparations = new Map<string, PreparationEntry>()
 const staleCleanupInFlight = new Map<string, Promise<void>>()
 
+/** A prepared checkout is a create that is either in flight or imminent. */
+export function hasPendingWorktreeCreatePreparations(): boolean {
+  return preparations.size > 0 || staleCleanupInFlight.size > 0
+}
+
 function pathOps(path: string): Pick<typeof posix, 'dirname' | 'join' | 'normalize'> {
   return isWindowsAbsolutePathLike(path) ? win32 : posix
 }
