@@ -74,4 +74,20 @@ describe('readCodexRolloutSessionMetaId', () => {
       undefined
     )
   })
+
+  it('surfaces an aborted read instead of reporting an unprovable rollout', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-codex-session-meta-'))
+    tempRoots.push(root)
+    const rollout = join(root, 'rollout.jsonl')
+    await writeFile(rollout, JSON.stringify({ type: 'session_meta', payload: { id: 'aborted' } }))
+    const controller = new AbortController()
+    mocks.readTranscriptSlice.mockImplementationOnce(async () => {
+      controller.abort()
+      throw new Error('aborted')
+    })
+
+    await expect(readCodexRolloutSessionMetaId(rollout, controller.signal)).rejects.toThrow(
+      'aborted'
+    )
+  })
 })
