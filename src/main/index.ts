@@ -1763,8 +1763,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       providerSessionOnly,
       promptInteractionKey,
       restoredUnconfirmed,
-      observation,
-      isReplay
+      observation
     }) => {
       if (mainWindow?.isDestroyed()) {
         return
@@ -1785,9 +1784,6 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
           providerSessionOnly: true
         })
         return
-      }
-      if (!restoredUnconfirmed) {
-        maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       }
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
@@ -3207,6 +3203,24 @@ void app.whenReady().then(async () => {
       receivedAt: enriched.receivedAt
     })
   })
+  agentHookServer.subscribeEnrichedStatus(
+    /** Arms first-work branch rename on the additive tap: it is store/runtime-only work, and headless serve never registers the main-window fanout. */
+    ({
+      paneKey,
+      tabId,
+      worktreeId,
+      payload,
+      providerSessionOnly,
+      restoredUnconfirmed,
+      isReplay
+    }) => {
+      // Why: mirrors the window fanout gates — session-identity refreshes carry no turn state, and restored rows are historical claims.
+      if (providerSessionOnly || restoredUnconfirmed) {
+        return
+      }
+      maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
+    }
+  )
   runtimeService.onWorktreeLifecycle((event) => {
     emitPluginWorktreeLifecycle(event)
   })
