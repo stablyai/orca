@@ -32,10 +32,13 @@ const INDEX_BACKSTOP_TICKS = 15
 const GIT_COMMON_SNAPSHOT_CONCURRENCY = 8
 
 // Why: on hosts without native narrow-watch support (or once its crash fuse
-// trips), this poller's own per-tick structural fan-out is the only signal —
-// a fixed 2s cadence at hundreds of worktrees turns it into a near-permanent
-// scan loop. Stretch the interval so a scan stays a minority of its own duty
-// cycle, capped so external changes still surface in a bounded time.
+// trips), the O(n) per-entry sweep below is the only source of per-worktree
+// change detection — a fixed 2s cadence at hundreds of worktrees turns it into
+// a near-permanent scan loop. Only the sweep's own cadence stretches (see
+// `shouldSweep` in startGitCommonPolling); the cheap structural tripwire
+// (readdir, dir signature, primary files, newly-added entries) stays on the
+// fixed `pollIntervalMs` so worktree add/remove and HEAD changes never inherit
+// this stretch.
 const ADAPTIVE_CADENCE_TARGET_DUTY_CYCLE = 0.1
 const ADAPTIVE_CADENCE_MAX_INTERVAL_MS = 30_000
 
@@ -79,7 +82,10 @@ async function snapshotGitCommon(
   previous?: GitCommonSnapshot,
   includePrimary = true,
   forceFullScan = false,
-  statusRefPaths = new Set<string>()
+  statusRefPaths = new Set<string>(),
+  // Why: false on a tripwire-only tick (adaptive cadence, sweep not yet due) — carries
+  // over unchanged entries and only stats genuinely new ones, instead of O(n) re-stats.
+  sweepEntries = true
 ): Promise<GitCommonSnapshot> {
   const worktreesDir = join(commonDirPath, 'worktrees')
   const [worktreesDirSignature, primarySignatures, statusRefSignatures] = await Promise.all([
@@ -111,11 +117,26 @@ async function snapshotGitCommon(
     }
   }
 
-  const entries = new Map<string, GitCommonEntrySnapshot>()
-  await forEachWithConcurrency(entryPaths, GIT_COMMON_SNAPSHOT_CONCURRENCY, async (entryPath) => {
-    const previousEntry = previous?.entries.get(entryPath)
-    entries.set(entryPath, await snapshotGitCommonEntry(entryPath, previousEntry, forceFullScan))
-  })
+  const entryPathSet = new Set(entryPaths)
+  const entries = new Map<string, GitCommonEntrySnapshot>(previous?.entries)
+  for (const entryPath of entries.keys()) {
+    if (!entryPathSet.has(entryPath)) {
+      entries.delete(entryPath)
+    }
+  }
+  // Why: a tripwire-only tick still stats brand-new entries (bounded by how many
+  // worktrees actually appeared this tick, not total count) so adds show up immediately.
+  const pathsToSnapshot = sweepEntries
+    ? entryPaths
+    : entryPaths.filter((path) => !entries.has(path))
+  await forEachWithConcurrency(
+    pathsToSnapshot,
+    GIT_COMMON_SNAPSHOT_CONCURRENCY,
+    async (entryPath) => {
+      const previousEntry = previous?.entries.get(entryPath)
+      entries.set(entryPath, await snapshotGitCommonEntry(entryPath, previousEntry, forceFullScan))
+    }
+  )
   // Why: the expensive per-entry `index` read stays gated on each entry's own dir signature; onFullScan
   // now reflects an ungated index-metadata backstop fan-out (forceFullScan) — the real periodic cost —
   // rather than the always-run worktrees-dir readdir.
@@ -126,15 +147,16 @@ async function snapshotGitCommon(
     primarySignatures,
     statusRefPaths,
     statusRefSignatures,
-    didFullScan: forceFullScan
+    didFullScan: forceFullScan && sweepEntries
   }
 }
 
 export type GitCommonPollingOptions = {
   /** Reconciliation backstop: never trust the per-entry gate, re-stat every tick. */
   forceFullScanEveryTick?: boolean
-  /** This is the ONLY signal (no native watch, or its crash fuse tripped): stretch
-   *  cadence when the entry count makes a scan take a large fraction of the interval. */
+  /** This is the ONLY signal (no native watch, or its crash fuse tripped): stretch the
+   *  O(n) per-entry sweep's cadence when entry count makes it take a large fraction of
+   *  the interval. The cheap structural tripwire (add/remove, HEAD) stays on `pollIntervalMs`. */
   adaptiveCadence?: boolean
 }
 
@@ -151,7 +173,9 @@ export async function startGitCommonPolling(
   let disposed = false
   let ticking = false
   let tickCount = 0
-  const initialSnapshotStartedAt = Date.now()
+  // Why: 0 (never) rather than seeding from the bootstrap snapshot's duration — the first
+  // regular tick already sweeps unconditionally, so no seed heuristic is needed at all.
+  let nextSweepDueAt = 0
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -159,11 +183,6 @@ export async function startGitCommonPolling(
     false,
     new Set(getStatusRefPaths())
   )
-  // Seed from the baseline snapshot so a large worktree count never opens with
-  // a burst of 2s-cadence scans before the first tick has a duration to learn from.
-  let currentIntervalMs = options.adaptiveCadence
-    ? computeAdaptiveIntervalMs(pollIntervalMs, Date.now() - initialSnapshotStartedAt)
-    : pollIntervalMs
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
@@ -188,16 +207,25 @@ export async function startGitCommonPolling(
       options.forceFullScanEveryTick === true ||
       forceFullScan ||
       tickCount % INDEX_BACKSTOP_TICKS === 0
+    // Why: non-adaptive callers always sweep (unchanged behavior); adaptive callers sweep
+    // only when due or forced, so the tripwire below still runs every tick regardless.
+    const shouldSweep =
+      !options.adaptiveCadence || shouldForceFullScan || Date.now() >= nextSweepDueAt
     try {
       const next = await snapshotGitCommon(
         commonDirPath,
         snapshot,
         includePrimary,
         shouldForceFullScan,
-        new Set(getStatusRefPaths())
+        new Set(getStatusRefPaths()),
+        shouldSweep
       )
       if (disposed) {
         return
+      }
+      if (shouldSweep && options.adaptiveCadence) {
+        nextSweepDueAt =
+          Date.now() + computeAdaptiveIntervalMs(pollIntervalMs, Date.now() - startedAt)
       }
       if (next.didFullScan) {
         onFullScan?.()
@@ -213,14 +241,14 @@ export async function startGitCommonPolling(
       ticking = false
     }
     if (!disposed) {
-      const elapsed = Date.now() - startedAt
-      if (options.adaptiveCadence) {
-        currentIntervalMs = computeAdaptiveIntervalMs(pollIntervalMs, elapsed)
-      }
-      // Why: clamp to [0, currentIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
+      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
       // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
       // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
-      const nextDelay = Math.max(0, Math.min(currentIntervalMs, currentIntervalMs - elapsed))
+      // This stays fixed (never adaptive) so the structural tripwire keeps its `pollIntervalMs` cadence.
+      const nextDelay = Math.max(
+        0,
+        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
+      )
       timer = setTimeout(() => void tick(), nextDelay)
       timer.unref?.()
     }
@@ -236,7 +264,7 @@ export async function startGitCommonPolling(
     void tick(true)
   })
 
-  timer = setTimeout(() => void tick(), currentIntervalMs)
+  timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
   return {

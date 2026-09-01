@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import type {
   WorktreeBasePollEvent,
@@ -11,11 +11,14 @@ import type {
 
 // Why: measure the fan-out this poller issues per scan (peak concurrent `stat`
 // calls, `readdir` call count as a proxy for "a scan started") without
-// depending on real disk timing (#17828).
-const { statDelayMs, readdirCalls, concurrency } = vi.hoisted(() => ({
+// depending on real disk timing (#17828). `entryZeroHeadStatCalls` tracks stats
+// on a specific pre-existing entry's HEAD file, which only a per-entry sweep
+// (not the cheap structural tripwire) re-reads.
+const { statDelayMs, readdirCalls, concurrency, entryZeroHeadStatCalls } = vi.hoisted(() => ({
   statDelayMs: { current: 0 },
   readdirCalls: { count: 0 },
-  concurrency: { current: 0, peak: 0 }
+  concurrency: { current: 0, peak: 0 },
+  entryZeroHeadStatCalls: { count: 0 }
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -29,6 +32,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     stat: async (...args: Parameters<typeof actual.stat>) => {
       concurrency.current += 1
       concurrency.peak = Math.max(concurrency.peak, concurrency.current)
+      const path = args[0]
+      if (typeof path === 'string' && path.endsWith(`wt-0${sep}HEAD`)) {
+        entryZeroHeadStatCalls.count += 1
+      }
       try {
         if (statDelayMs.current > 0) {
           await new Promise((resolve) => setTimeout(resolve, statDelayMs.current))
@@ -70,6 +77,7 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     readdirCalls.count = 0
     concurrency.current = 0
     concurrency.peak = 0
+    entryZeroHeadStatCalls.count = 0
   })
 
   afterEach(async () => {
@@ -105,7 +113,7 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     expect(readdirCalls.count).toBeLessThan(10)
   })
 
-  it('stretches the fallback cadence when a scan is slow relative to the base interval', async () => {
+  it('stretches only the per-entry sweep cadence, keeping the structural tripwire on pollIntervalMs', async () => {
     const commonDir = await makeCommonDir(2)
     dirsToRemove.push(commonDir)
     statDelayMs.current = 60
@@ -122,17 +130,23 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     )
     cleanups.push(() => sub.unsubscribe())
 
+    // Let the bootstrap snapshot's own (unconditional) sweep settle, then measure.
+    await new Promise((resolve) => setTimeout(resolve, baseIntervalMs * 2))
     readdirCalls.count = 0
-    // A scan several times slower than the 20ms base interval should push the
-    // next tick out well beyond baseIntervalMs, not fire again almost immediately.
-    await new Promise((resolve) => setTimeout(resolve, baseIntervalMs * 5))
-    expect(readdirCalls.count).toBe(0)
+    entryZeroHeadStatCalls.count = 0
+    // A scan several times slower than the 20ms base interval stretches the sweep's
+    // own cadence, but the cheap readdir/dir-signature tripwire must keep firing
+    // every ~baseIntervalMs regardless — worktree add/remove and HEAD must not
+    // inherit the sweep's stretch (#17828 follow-up: staleness trade-off).
     await vi.waitFor(
       () => {
-        expect(readdirCalls.count).toBeGreaterThan(0)
+        expect(readdirCalls.count).toBeGreaterThan(3)
       },
-      { timeout: 5_000 }
+      { timeout: 2_000 }
     )
+    // wt-0 already existed at bootstrap, so a tripwire-only tick must carry its
+    // entry over rather than re-stat it; far fewer sweeps than tripwire ticks ran.
+    expect(entryZeroHeadStatCalls.count).toBeLessThan(readdirCalls.count)
   })
 
   it('does not stretch cadence for callers that opt out of adaptive cadence', async () => {

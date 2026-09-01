@@ -82,7 +82,9 @@ export async function startGitCommonNarrowWatch(
             false,
             () => [],
             // Crash fuse tripped: this poller is now the sole change signal until a
-            // future existence-poll upgrade, so its cadence must scale with entry count.
+            // future existence-poll upgrade (follow-up: #17878). adaptiveCadence keeps
+            // add/remove and HEAD detection on `pollIntervalMs` while scaling only the
+            // O(n) per-entry sweep, so this fallback degrades gracefully at high counts.
             { adaptiveCadence: true }
           )
         )
