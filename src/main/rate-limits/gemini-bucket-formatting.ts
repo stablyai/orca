@@ -79,6 +79,9 @@ export function deriveSessionSummary(buckets: RateLimitBucket[]): RateLimitWindo
   const mostConstrained = buckets.reduce((worst, bucket) => {
     return bucket.usedPercent > worst.usedPercent ? bucket : worst
   })
+  if (mostConstrained.windowMinutes === undefined) {
+    return null
+  }
   const { name: _name, ...window } = mostConstrained
-  return window
+  return { ...window, windowMinutes: mostConstrained.windowMinutes }
 }
