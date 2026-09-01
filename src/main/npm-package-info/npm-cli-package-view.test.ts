@@ -39,6 +39,36 @@ function processResult(overrides: Partial<Record<string, unknown>> = {}) {
   }
 }
 
+const HTTPS_REGISTRY_PROBE = { stdout: 'https://registry.npmjs.org/\n' }
+
+/** Routes the registry probe away from the per-test `npm view` response. */
+function mockNpmView(view: ReturnType<typeof processResult>): void {
+  runProcessMock.mockImplementation(async (spec: { args: string[] }) =>
+    spec.args.includes('config') ? processResult(HTTPS_REGISTRY_PROBE) : view
+  )
+}
+
+function mockNpmViewError(error: unknown): void {
+  runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
+    if (spec.args.includes('config')) {
+      return processResult(HTTPS_REGISTRY_PROBE)
+    }
+    throw error
+  })
+}
+
+/** The spec of the `npm view` spawn, skipping the registry probe. */
+function viewSpec(): {
+  program: string
+  args: string[]
+  env: Record<string, string>
+  cwd: string
+  timeoutMs: number
+} {
+  const call = runProcessMock.mock.calls.find((c) => (c[0].args as string[]).includes('view'))
+  return call![0]
+}
+
 describe('npmCliPackageView', () => {
   beforeEach(() => {
     runProcessMock.mockReset()
@@ -53,16 +83,16 @@ describe('npmCliPackageView', () => {
   })
 
   it('resolves the npm binary before spawning, with the exact argv, cwd, env pins and timeout', async () => {
-    runProcessMock.mockResolvedValue(
-      processResult({ stdout: JSON.stringify({ name: 'react', version: '19.0.0' }) })
-    )
+    mockNpmView(processResult({ stdout: JSON.stringify({ name: 'react', version: '19.0.0' }) }))
 
     await npmCliPackageView('react', '/repo/worktree', fakeStore)
 
     expect(resolveCliCommandMock).toHaveBeenCalledWith('npm')
     expect(resolveRegisteredWorktreePathMock).toHaveBeenCalledWith('/repo/worktree', fakeStore)
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
-    const spec = runProcessMock.mock.calls[0]![0]
+    // Two spawns: the registry probe that refuses a non-https `.npmrc`, then
+    // the lookup itself.
+    expect(runProcessMock).toHaveBeenCalledTimes(2)
+    const spec = viewSpec()
     expect(spec.program).toBe('/usr/local/bin/npm')
     expect(spec.args).toEqual([
       'view',
@@ -88,7 +118,7 @@ describe('npmCliPackageView', () => {
   })
 
   it('returns ok with the parsed manifest fields on success', async () => {
-    runProcessMock.mockResolvedValue(
+    mockNpmView(
       processResult({
         stdout: JSON.stringify({
           name: 'react',
@@ -117,9 +147,7 @@ describe('npmCliPackageView', () => {
   })
 
   it('maps npm E404 to not-found', async () => {
-    runProcessMock.mockResolvedValue(
-      processResult({ code: 1, stderr: 'npm error code E404\nnpm error 404 Not Found' })
-    )
+    mockNpmView(processResult({ code: 1, stderr: 'npm error code E404\nnpm error 404 Not Found' }))
 
     const result = await npmCliPackageView('does-not-exist', '/repo/worktree', fakeStore)
 
@@ -127,7 +155,7 @@ describe('npmCliPackageView', () => {
   })
 
   it('maps every other non-zero exit to unavailable', async () => {
-    runProcessMock.mockResolvedValue(processResult({ code: 1, stderr: 'network unreachable' }))
+    mockNpmView(processResult({ code: 1, stderr: 'network unreachable' }))
 
     const result = await npmCliPackageView('react', '/repo/worktree', fakeStore)
 
@@ -135,7 +163,7 @@ describe('npmCliPackageView', () => {
   })
 
   it('maps a timed-out probe to unavailable with reason timeout', async () => {
-    runProcessMock.mockResolvedValue(processResult({ code: null, timedOut: true }))
+    mockNpmView(processResult({ code: null, timedOut: true }))
 
     const result = await npmCliPackageView('react', '/repo/worktree', fakeStore)
 
@@ -153,7 +181,7 @@ describe('npmCliPackageView', () => {
 
   it('reports npm-unresolvable when spawning the resolved binary fails with ENOENT', async () => {
     const enoent = Object.assign(new Error('spawn npm ENOENT'), { code: 'ENOENT' })
-    runProcessMock.mockRejectedValue(enoent)
+    mockNpmViewError(enoent)
 
     const result = await npmCliPackageView('react', '/repo/worktree', fakeStore)
 
@@ -161,7 +189,7 @@ describe('npmCliPackageView', () => {
   })
 
   it('maps a non-ENOENT spawn failure to unavailable with reason error', async () => {
-    runProcessMock.mockRejectedValue(new Error('EACCES: permission denied'))
+    mockNpmViewError(new Error('EACCES: permission denied'))
 
     const result = await npmCliPackageView('react', '/repo/worktree', fakeStore)
 
@@ -187,7 +215,7 @@ describe('npmCliPackageView latest publish date', () => {
   // explicitly is the only way the CLI path can populate the date the
   // tooltip promises.
   it('requests the time field and maps the latest version publish date', async () => {
-    runProcessMock.mockResolvedValue(
+    mockNpmView(
       processResult({
         stdout: JSON.stringify({
           description: 'React is a JavaScript library for building user interfaces.',
@@ -206,7 +234,7 @@ describe('npmCliPackageView latest publish date', () => {
 
     const result = await npmCliPackageView('react', '/repo/worktree', fakeStore)
 
-    const args = runProcessMock.mock.calls[0]?.[0]?.args as string[]
+    const args = viewSpec().args
     expect(args).toContain('time')
     expect(result).toMatchObject({
       status: 'ok',
@@ -216,5 +244,42 @@ describe('npmCliPackageView latest publish date', () => {
         repositoryUrl: 'https://github.com/facebook/react.git'
       }
     })
+  })
+})
+
+describe('npmCliPackageView hostile .npmrc containment', () => {
+  beforeEach(() => {
+    runProcessMock.mockReset()
+    resolveCliCommandMock.mockReset()
+    resolveRegisteredWorktreePathMock.mockReset()
+    resolveCliCommandMock.mockReturnValue('/usr/local/bin/npm')
+    resolveRegisteredWorktreePathMock.mockReset()
+    resolveRegisteredWorktreePathMock.mockResolvedValue('/repo/worktree')
+    withCliRuntimeOnPathMock.mockReset()
+    withCliRuntimeOnPathMock.mockImplementation((_program, env) => env)
+  })
+
+  // Why: a project `.npmrc` committed in the repository redirects `npm view`
+  // to any host it names, and `${VAR}` substitution pulls values straight from
+  // the child environment. Forwarding the whole process env would hand a
+  // hostile repository the user's tokens the moment someone hovers.
+  it('does not forward arbitrary environment variables to npm', async () => {
+    process.env.NPM_TOKEN = 'canary-should-not-leak'
+    mockNpmView(processResult({ stdout: 'https://registry.npmjs.org/\n' }))
+    await npmCliPackageView('react', '/repo/worktree', fakeStore)
+    const env = viewSpec().env
+    delete process.env.NPM_TOKEN
+    expect(env.NPM_TOKEN).toBeUndefined()
+    expect(env.PATH).toBeDefined()
+  })
+
+  it('skips the CLI when the resolved registry is not https', async () => {
+    runProcessMock.mockImplementation(async () =>
+      processResult({ stdout: 'http://127.0.0.1:59999/\n' })
+    )
+    const result = await npmCliPackageView('react', '/repo/worktree', fakeStore)
+    expect(result).toEqual({ status: 'npm-unresolvable' })
+    // Only the registry probe ran; the lookup itself never did.
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 })

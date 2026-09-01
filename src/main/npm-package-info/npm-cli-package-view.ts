@@ -8,6 +8,70 @@ import { extractRepositoryUrl, toHttpsUrl } from './npm-manifest-urls'
 const NPM_VIEW_TIMEOUT_MS = 8000
 
 /**
+ * Why an allowlist instead of `process.env`: a project `.npmrc` committed in a
+ * repository can point npm at any host AND substitute `${VAR}` from the child
+ * environment, so forwarding the parent environment would hand a hostile
+ * repository whatever secret it names the moment someone hovers a dependency.
+ */
+const NPM_ENV_ALLOWLIST = [
+  'PATH',
+  'Path',
+  'HOME',
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'SystemRoot',
+  'windir',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'LANG',
+  'LC_ALL',
+  'NODE_EXTRA_CA_CERTS'
+]
+
+function buildNpmEnv(program: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const key of NPM_ENV_ALLOWLIST) {
+    const value = process.env[key]
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+  // Why pinned: corepack's npm wrapper rewrites the user's package.json to pin
+  // a packageManager field unless auto-pin/project-spec are disabled.
+  env.COREPACK_ENABLE_AUTO_PIN = '0'
+  env.COREPACK_ENABLE_PROJECT_SPEC = '0'
+  // Why withCliRuntimeOnPath: a version-manager npm carries a
+  // `#!/usr/bin/env node` shebang, so without pinning its own runtime it can
+  // execute under an unrelated node (orca#10932).
+  return withCliRuntimeOnPath(program, env)
+}
+
+/**
+ * The project `.npmrc` decides which host `npm view` talks to. Anything but
+ * https is refused and the caller degrades to the public registry, so a
+ * repository cannot aim a hover at a plaintext host of its choosing.
+ */
+async function resolvesToHttpsRegistry(program: string, cwd: string): Promise<boolean> {
+  const probe = await runProcess({
+    program,
+    args: ['config', 'get', 'registry'],
+    cwd,
+    env: buildNpmEnv(program),
+    timeoutMs: NPM_VIEW_TIMEOUT_MS
+  })
+  if (probe.timedOut || probe.code !== 0) {
+    return false
+  }
+  try {
+    return new URL(probe.stdout.trim()).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+/**
  * Extends the shared result contract with a signal private to this module:
  * the orchestration service (Phase 1.5) reads it to fall back to the HTTP
  * registry path when the local host has no resolvable npm binary at all.
@@ -65,6 +129,9 @@ export async function npmCliPackageView(
 
   let result: Awaited<ReturnType<typeof runProcess>>
   try {
+    if (!(await resolvesToHttpsRegistry(program, cwd))) {
+      return { status: 'npm-unresolvable' }
+    }
     result = await runProcess({
       program,
       // Why the explicit field list: a bare `npm view <pkg> --json` returns the
@@ -85,16 +152,7 @@ export async function npmCliPackageView(
         'repository'
       ],
       cwd,
-      // Why pinned: corepack's npm wrapper rewrites the user's package.json to
-      // pin a packageManager field unless auto-pin/project-spec are disabled.
-      // Why withCliRuntimeOnPath: a version-manager npm carries a
-      // `#!/usr/bin/env node` shebang, so without pinning its own runtime it
-      // can execute under an unrelated node (orca#10932).
-      env: withCliRuntimeOnPath(program, {
-        ...process.env,
-        COREPACK_ENABLE_AUTO_PIN: '0',
-        COREPACK_ENABLE_PROJECT_SPEC: '0'
-      }),
+      env: buildNpmEnv(program),
       timeoutMs: NPM_VIEW_TIMEOUT_MS
     })
   } catch (error) {
