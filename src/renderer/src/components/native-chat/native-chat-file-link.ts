@@ -58,7 +58,7 @@ function findStructuredTabWorktreeId(
   return null
 }
 
-function findWorktreeFallback(
+export function findWorktreeFallback(
   worktreesByRepo: NativeChatFileLinkState['worktreesByRepo'],
   worktreeId: string
 ): Pick<Worktree, 'id' | 'path'> | null {

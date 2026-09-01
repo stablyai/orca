@@ -167,6 +167,23 @@ describe('resolveNativeChatAttachmentOwner', () => {
     })
   })
 
+  it('resolves the worktree path from the catalog fallback while the index hydrates', () => {
+    // The tab entry path resolves via resolveNativeChatFileLinkContext, which
+    // falls back to worktreesByRepo when the known-worktree index is empty.
+    // The structured path (also used by the stale-owner assert's
+    // re-resolution) must use the same fallback, or a mid-upload assert would
+    // spuriously fail a legitimate attach as "host changed".
+    expect(
+      resolveNativeChatAttachmentOwnerForWorktree(
+        state({
+          repos: [{ id: 'repo', connectionId: null, executionHostId: 'runtime:env-1' }] as never,
+          getKnownWorktreeById: () => undefined
+        }),
+        'wt-1'
+      )
+    ).toMatchObject({ kind: 'runtime', worktreePath: '/repo/worktree' })
+  })
+
   it('reports not-ready when a runtime worktree connection has not hydrated', () => {
     // The worktree row (with its runtime owner) can land before the repos
     // array that carries the server-owned connectionId — attaching then could

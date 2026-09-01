@@ -14,6 +14,7 @@ import { reportTerminalDropUploadSkipsAndFailures } from '../terminal-pane/termi
 import { uploadPathsToRuntimeDropDir } from '../terminal-pane/runtime-drop-dir-upload'
 import {
   findTerminalTabWorktreeId,
+  findWorktreeFallback,
   resolveNativeChatFileLinkContext
 } from './native-chat-file-link'
 import {
@@ -80,10 +81,14 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   worktreeId: string,
   terminalTabId?: string
 ): NativeChatAttachmentOwner {
+  // Both branches share the worktreesByRepo fallback so a capture through the
+  // tab path and a later tab-less re-resolution (the stale-owner assert)
+  // resolve the same path during index hydration.
   const resolveWorktreePath = (): string | undefined =>
     terminalTabId
       ? resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
-      : state.getKnownWorktreeById(worktreeId)?.path
+      : (state.getKnownWorktreeById(worktreeId)?.path ??
+        findWorktreeFallback(state.worktreesByRepo, worktreeId)?.path)
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   if (runtimeEnvironmentId) {
     const worktreePath = resolveWorktreePath()
