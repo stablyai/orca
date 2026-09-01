@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import {
+  UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
+  type RuntimeMobileSessionTabsResult
+} from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
@@ -126,6 +129,288 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(patch.unifiedTabsByWorktree?.[WT]).toBeUndefined()
     expect(patch.activeTabTypeByWorktree?.[WT]).toBe('terminal')
+  })
+
+  it('prunes an aged null-PTY tab after an authoritative host snapshot omits it', () => {
+    const staleTab: TerminalTab = {
+      id: 'stale-local-tab',
+      ptyId: null,
+      worktreeId: WT,
+      title: 'Claude',
+      defaultTitle: 'Claude',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 31_000,
+      launchAgent: 'claude'
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        repos: [{ id: 'repo', connectionId: null, executionHostId: `runtime:${ENV}` }],
+        worktreesByRepo: { repo: [{ id: WT, repoId: 'repo' }] },
+        tabsByWorktree: { [WT]: [staleTab] },
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: staleTab.id,
+              entityId: staleTab.id,
+              groupId: 'group-1',
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: staleTab.title,
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: staleTab.createdAt,
+              isPreview: false,
+              isPinned: false
+            }
+          ]
+        }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Codex',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          launchAgent: 'codex',
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.map((tab) => tab.id)).toEqual([
+      toWebTerminalSurfaceTabId('host-tab-1')
+    ])
+    expect(patch.unifiedTabsByWorktree?.[WT]?.map((tab) => tab.entityId)).toEqual([
+      toWebTerminalSurfaceTabId('host-tab-1')
+    ])
+    expect(patch.ptyIdsByTabId?.[toWebTerminalSurfaceTabId('host-tab-1')]).toEqual([
+      `remote:${ENV}@@terminal-1`
+    ])
+  })
+
+  it('keeps a fresh null-PTY placeholder during its create grace period', () => {
+    const freshTab: TerminalTab = {
+      id: 'fresh-local-tab',
+      ptyId: null,
+      worktreeId: WT,
+      title: 'Codex',
+      defaultTitle: 'Codex',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 29_000,
+      launchAgent: 'codex'
+    }
+
+    const state = makeState({ tabsByWorktree: { [WT]: [freshTab] } })
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([], { activeTabType: null }),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect({ ...state, ...patch }.tabsByWorktree[WT]).toEqual([freshTab])
+  })
+
+  it('keeps an aged null-PTY tab while a live PTY binding remains', () => {
+    const livePtyId = `remote:${ENV}@@terminal-live`
+    const reconnectingTab: TerminalTab = {
+      id: 'reconnecting-tab',
+      ptyId: null,
+      worktreeId: WT,
+      title: 'Terminal',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 60_000,
+      pendingActivationSpawn: true
+    }
+    const state = makeState({
+      repos: [{ id: 'repo', connectionId: null, executionHostId: `runtime:${ENV}` }],
+      worktreesByRepo: { repo: [{ id: WT, repoId: 'repo' }] },
+      tabsByWorktree: { [WT]: [reconnectingTab] },
+      ptyIdsByTabId: { [reconnectingTab.id]: [livePtyId] }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Other terminal',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-other'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const applied = { ...state, ...patch }
+
+    expect(applied.tabsByWorktree[WT]).toContainEqual(reconnectingTab)
+    expect(applied.ptyIdsByTabId[reconnectingTab.id]).toEqual([livePtyId])
+  })
+
+  it('keeps an aged null-PTY tab while PTY loss is unverifiable', () => {
+    const tab: TerminalTab = {
+      id: 'unverified-tab',
+      ptyId: null,
+      worktreeId: WT,
+      title: 'Terminal',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 60_000
+    }
+    const state = makeState({
+      repos: [{ id: 'repo', connectionId: null, executionHostId: `runtime:${ENV}` }],
+      worktreesByRepo: { repo: [{ id: WT, repoId: 'repo' }] },
+      tabsByWorktree: { [WT]: [tab] },
+      unverifiedPtyLossTabIds: { [tab.id]: true }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([], { activeTabType: null }),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect({ ...state, ...patch }.tabsByWorktree[WT]).toEqual([tab])
+  })
+
+  it('keeps an aged null-PTY tab when the host inventory is not published yet', () => {
+    const tab: TerminalTab = {
+      id: 'restart-placeholder',
+      ptyId: null,
+      worktreeId: WT,
+      title: 'Terminal',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 60_000
+    }
+    const state = makeState({
+      repos: [{ id: 'repo', connectionId: null, executionHostId: `runtime:${ENV}` }],
+      worktreesByRepo: { repo: [{ id: WT, repoId: 'repo' }] },
+      tabsByWorktree: { [WT]: [tab] }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([], {
+        publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
+        snapshotVersion: 0,
+        activeTabType: null
+      }),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect({ ...state, ...patch }.tabsByWorktree[WT]).toEqual([tab])
+  })
+
+  it('keeps an aged null-PTY tab when another runtime publishes the same worktree id', () => {
+    const tab: TerminalTab = {
+      id: 'other-runtime-placeholder',
+      ptyId: null,
+      worktreeId: WT,
+      title: 'Terminal',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 60_000,
+      pendingActivationSpawn: true
+    }
+    const state = makeState({
+      repos: [{ id: 'repo', connectionId: null, executionHostId: `runtime:${ENV}` }],
+      worktreesByRepo: { repo: [{ id: WT, repoId: 'repo' }] },
+      tabsByWorktree: { [WT]: [tab] }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Other runtime terminal',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-other'
+        }
+      ]),
+      'other-runtime',
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect({ ...state, ...patch }.tabsByWorktree[WT]).toContainEqual(tab)
+  })
+
+  it('keeps a pending activation tab when worktree ownership is ambiguous', () => {
+    const tab: TerminalTab = {
+      id: 'ambiguous-owner-pending-tab',
+      ptyId: null,
+      worktreeId: WT,
+      title: 'Terminal',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 1,
+      pendingActivationSpawn: true
+    }
+    const state = makeState({
+      tabsByWorktree: { [WT]: [tab] },
+      detectedWorktreesByRepo: {
+        'repo-a': {
+          worktrees: [{ id: WT, repoId: 'repo-a', hostId: 'runtime:runtime-a' }]
+        },
+        'repo-b': {
+          worktrees: [{ id: WT, repoId: 'repo-b', hostId: 'runtime:runtime-b' }]
+        }
+      }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Terminal',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      'runtime-a',
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect({ ...state, ...patch }.tabsByWorktree[WT]).toContainEqual(tab)
   })
 
   it('ignores stale or duplicate same-epoch snapshots after a newer version was applied', () => {

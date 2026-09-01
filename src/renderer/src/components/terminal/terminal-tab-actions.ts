@@ -38,6 +38,7 @@ import {
   validatePrecomputedTerminalCloseState,
   type PrecomputedTerminalCloseState
 } from './terminal-close-target'
+import { resolveTerminalTabRuntimeEnvironment } from './terminal-tab-runtime-environment'
 export type { PrecomputedTerminalCloseState } from './terminal-close-target'
 export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
 
@@ -91,8 +92,16 @@ export function closeTerminalTab(
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
+  const terminalRuntimeEnvironment = resolveTerminalTabRuntimeEnvironment(
+    state,
+    owningWorktreeId,
+    terminalTabId
+  )
   const worktreeRoute = resolveTerminalWorktreeRoute(state, owningWorktreeId)
-  if (!worktreeRoute) {
+  if (
+    terminalRuntimeEnvironment.kind === 'conflict' ||
+    (!worktreeRoute && terminalRuntimeEnvironment.kind === 'none')
+  ) {
     options?.onCancel?.()
     return
   }
@@ -139,7 +148,10 @@ export function closeTerminalTab(
     return
   }
 
-  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
+  const runtimeEnvironmentId =
+    terminalRuntimeEnvironment.kind === 'runtime'
+      ? terminalRuntimeEnvironment.environmentId
+      : (worktreeRoute?.runtimeEnvironmentId ?? null)
   const structuredSessionId = structuredTerminalSessionId(
     state.unifiedTabsByWorktree?.[owningWorktreeId],
     terminalTabId

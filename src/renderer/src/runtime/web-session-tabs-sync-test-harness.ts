@@ -6,7 +6,7 @@ import { resetWebSessionReorderIntentForTests } from './web-session-reorder-inte
 import { resetWebAgentSessionHandoffsForTests } from './web-agent-session-handoff'
 import {
   resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
+  type WebSessionTabsSyncInputState
 } from './web-session-tabs-sync'
 
 export const WT = 'repo::/worktree'
@@ -37,8 +37,8 @@ export function layoutHasGroup(layout: TabGroupLayoutNode | undefined, groupId: 
 }
 
 export function makeState(
-  overrides: Partial<WebSessionTabsSyncState> = {}
-): WebSessionTabsSyncState {
+  overrides: Partial<WebSessionTabsSyncInputState> = {}
+): WebSessionTabsSyncInputState {
   return {
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
