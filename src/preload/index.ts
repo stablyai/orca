@@ -62,6 +62,7 @@ import { sessionApi } from './api/session-bridge'
 import { remoteWorkspaceApi } from './api/remote-workspace-bridge'
 import { updaterApi } from './api/updater-bridge'
 import { docPreviewApi } from './api/doc-preview-bridge'
+import { npmPackageInfoApi } from './api/npm-package-info-bridge'
 import { notebookApi } from './api/notebook-bridge'
 import { fsApi } from './api/fs-bridge'
 import { gitApi } from './api/git-bridge'
@@ -160,6 +161,7 @@ const api = {
   remoteWorkspace: remoteWorkspaceApi,
   updater: updaterApi,
   docPreview: docPreviewApi,
+  npmPackageInfo: npmPackageInfoApi,
   notebook: notebookApi,
   fs: fsApi,
   git: gitApi,

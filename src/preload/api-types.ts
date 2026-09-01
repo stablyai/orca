@@ -36,6 +36,7 @@ import type { JiraApi } from './api/jira-api'
 import type { LinearApi } from './api/linear-api'
 import type { MobileApi } from './api/mobile-api'
 import type { NativeChatApi } from './api/native-chat-api'
+import type { NpmPackageInfoApi } from './api/npm-package-info-api'
 import type { OnboardingApi, StarNagApi } from './api/onboarding-api'
 import type { OrcaProfileApi } from './api/orca-profile-api'
 import type {
@@ -126,6 +127,7 @@ export type PreloadApi = {
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
   docPreview: DocPreviewApi['docPreview']
+  npmPackageInfo: NpmPackageInfoApi['npmPackageInfo']
   stats: StatsApi
   memory: MemoryApi
   claudeUsage: ClaudeUsageApi

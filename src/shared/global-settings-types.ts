@@ -95,6 +95,11 @@ export type GlobalSettings = {
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** Privacy gate for the package.json dependency hover: disables the npm CLI
+   *  and registry HTTP lookups (installed version still reads from disk).
+   *  Optional so a required field never breaks exhaustive GlobalSettings
+   *  fixtures; effective value is read as `?? true`. */
+  npmPackageInfoOnlineLookupsEnabled?: boolean
   /** Why: mirrors terminal selection-paste muscle memory without mutating the
    *  normal system clipboard; Linux and macOS enable it by default, Windows
    *  leaves middle-click semantics unchanged unless the user opts in. */
