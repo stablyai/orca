@@ -31,6 +31,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     gitHistoryState,
     handleAbortOperationForConflict,
     handleCommitAction,
+    handleContinueOperation,
     handleContextMenu,
     handleOpenDiff,
     handleResolveConflictsWithAI,
@@ -41,10 +42,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleUnstagePaths,
     hasUncommittedEntries,
     isAbortingOperation,
+    isAdvancingOperation,
     isExecutingBulk,
     isGitHistoryVisible,
     loadCommitFiles,
     normalizedFilter,
+    operationProgress,
     openAllDiffs,
     openBranchAllDiffs,
     openCommitFile,
@@ -89,7 +92,10 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         conflictOperation={conflictOperation}
         sourceControlAiActionsVisible={sourceControlAiActionsVisible}
         isAbortingOperation={isAbortingOperation}
+        isAdvancingOperation={isAdvancingOperation}
+        operationProgress={operationProgress}
         onAbortOperation={handleAbortOperationForConflict}
+        onContinueOperation={handleContinueOperation}
         onResolveWithAi={() => void handleResolveConflictsWithAI()}
         onReviewConflicts={() => {
           openConflictReview(

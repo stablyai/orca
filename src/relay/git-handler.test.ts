@@ -50,6 +50,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.bulkUnstage')
     expect(methods).toContain('git.abortMerge')
     expect(methods).toContain('git.abortRebase')
+    expect(methods).toContain('git.continueSequencer')
     expect(methods).toContain('git.checkout')
     expect(methods).toContain('git.localBranches')
     expect(methods).toContain('git.discard')
@@ -157,6 +158,133 @@ describe('GitHandler', () => {
       await expect(
         fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8').then(normalizeGitFileText)
       ).resolves.toBe('feature\n')
+    })
+  })
+
+  describe('sequencer continue', () => {
+    // Why: a hostile ambient editor is the regression this suite guards — `--continue`
+    // must never consult it (an unsuppressed real editor would hang the relay forever).
+    beforeEach(() => {
+      vi.stubEnv('GIT_EDITOR', 'false')
+    })
+
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    // Two branches touching the same line, left on `feature` with `base` diverged.
+    const seedDivergedBranches = (): string => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      const baseBranch = execFileSync('git', ['branch', '--show-current'], {
+        cwd: tmpDir,
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      }).trim()
+      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'feature\n')
+      gitCommit(tmpDir, 'feature change')
+      execFileSync('git', ['checkout', baseBranch], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'main\n')
+      gitCommit(tmpDir, 'main change')
+      return baseBranch
+    }
+
+    const resolveConflict = (): void => {
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'resolved\n')
+      execFileSync('git', ['add', 'file.txt'], { cwd: tmpDir, stdio: 'pipe' })
+    }
+
+    const readFileText = async (): Promise<string> =>
+      fs.readFile(path.join(tmpDir, 'file.txt'), 'utf-8').then(normalizeGitFileText)
+
+    it('continues a conflicted rebase without waiting on an editor', async () => {
+      const baseBranch = seedDivergedBranches()
+      execFileSync('git', ['checkout', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      expect(() =>
+        execFileSync('git', ['rebase', baseBranch], { cwd: tmpDir, stdio: 'pipe' })
+      ).toThrow()
+      resolveConflict()
+
+      await dispatcher.callRequest('git.continueSequencer', {
+        worktreePath: tmpDir,
+        operation: 'rebase'
+      })
+
+      await expect(fs.access(path.join(tmpDir, '.git', 'rebase-merge'))).rejects.toThrow()
+      await expect(fs.access(path.join(tmpDir, '.git', 'rebase-apply'))).rejects.toThrow()
+      await expect(readFileText()).resolves.toBe('resolved\n')
+    })
+
+    it('treats a continue that advances into the next conflict as success', async () => {
+      const baseBranch = seedDivergedBranches()
+      execFileSync('git', ['checkout', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'feature two\n')
+      gitCommit(tmpDir, 'feature change two')
+      expect(() =>
+        execFileSync('git', ['rebase', baseBranch], { cwd: tmpDir, stdio: 'pipe' })
+      ).toThrow()
+      resolveConflict()
+
+      // Git exits nonzero here (it committed step 1, then stopped on step 2's
+      // conflict) — the moved HEAD must read as success, exactly like the local path.
+      await dispatcher.callRequest('git.continueSequencer', {
+        worktreePath: tmpDir,
+        operation: 'rebase'
+      })
+
+      await expect(fs.access(path.join(tmpDir, '.git', 'rebase-merge'))).resolves.toBeUndefined()
+    })
+
+    it('still rejects a continue that could not advance', async () => {
+      const baseBranch = seedDivergedBranches()
+      execFileSync('git', ['checkout', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      expect(() =>
+        execFileSync('git', ['rebase', baseBranch], { cwd: tmpDir, stdio: 'pipe' })
+      ).toThrow()
+
+      // Conflict left unresolved: git refuses, HEAD does not move, the error surfaces.
+      await expect(
+        dispatcher.callRequest('git.continueSequencer', {
+          worktreePath: tmpDir,
+          operation: 'rebase'
+        })
+      ).rejects.toThrow()
+
+      await expect(fs.access(path.join(tmpDir, '.git', 'rebase-merge'))).resolves.toBeUndefined()
+    })
+
+    it('continues a conflicted merge without waiting on an editor', async () => {
+      seedDivergedBranches()
+      expect(() =>
+        execFileSync('git', ['merge', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      ).toThrow()
+      resolveConflict()
+
+      await dispatcher.callRequest('git.continueSequencer', {
+        worktreePath: tmpDir,
+        operation: 'merge'
+      })
+
+      await expect(fs.access(path.join(tmpDir, '.git', 'MERGE_HEAD'))).rejects.toThrow()
+      await expect(readFileText()).resolves.toBe('resolved\n')
+    })
+
+    it('continues a conflicted cherry-pick without waiting on an editor', async () => {
+      seedDivergedBranches()
+      expect(() =>
+        execFileSync('git', ['cherry-pick', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      ).toThrow()
+      resolveConflict()
+
+      await dispatcher.callRequest('git.continueSequencer', {
+        worktreePath: tmpDir,
+        operation: 'cherry-pick'
+      })
+
+      await expect(fs.access(path.join(tmpDir, '.git', 'CHERRY_PICK_HEAD'))).rejects.toThrow()
+      await expect(readFileText()).resolves.toBe('resolved\n')
     })
   })
 

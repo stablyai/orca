@@ -84,11 +84,18 @@ export function shouldShowSourceControlBranchContextChrome(
 // the case this row exists for — a rebased branch that has also fallen behind its base.
 export function buildSourceControlCompareBaseStats(
   summary: GitBranchCompareSummary | null | undefined,
-  baseRef: string
+  baseRef: string,
+  operationInProgress = false
 ): SourceControlBranchContextStat[] {
   if (summary?.status !== 'ready') {
     return []
   }
+  // Why: mid-rebase HEAD is a transient replay commit, so every count here is
+  // measured against a tree the user never asked about. No number beats a wrong one.
+  if (operationInProgress) {
+    return []
+  }
+
   const baseLabel = formatSourceControlRefLabel(baseRef)
   const stats: SourceControlBranchContextStat[] = []
   const commitsAhead = summary.commitsAhead

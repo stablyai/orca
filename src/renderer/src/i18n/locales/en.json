@@ -11841,7 +11841,6 @@
             "413a3ba113": "conflict",
             "27a50fe970": "Review conflicts",
             "f6cb48b6fe": "Resolve with AI",
-            "3eeccbb221": "Resolved files move back to normal changes after they leave the live conflict state.",
             "c321542ee2": "Delete note on line {{value0}}",
             "b656381c18": "Delete note",
             "c085946bda": "Copy note on line {{value0}}",
@@ -12606,7 +12605,8 @@
                     "edc2d82a2b": "Merge in progress",
                     "5c3707aa44": "Rebase in progress",
                     "ffe53a1da6": "Cherry-pick in progress",
-                    "35eb76d323": "Operation in progress"
+                    "35eb76d323": "Operation in progress",
+                    "d047be3812": "Rebasing onto {{value0}}"
                   }
                 }
               },
@@ -12635,6 +12635,28 @@
                   "e7876a2bde": "Stage at least one file to generate a message.",
                   "0904be2505": "Clear the message to regenerate.",
                   "1ea9ba37aa": "Pick an agent in Settings -> Git -> Source Control AI."
+                }
+              },
+              "panel": {
+                "head": {
+                  "identity": {
+                    "chip": {
+                      "1a7c4e9b30": "rebasing",
+                      "2f5d81c744": "merging",
+                      "3b9e027a51": "cherry-picking",
+                      "4c1a63f8d2": "Current branch: {{value0}} ({{value1}})",
+                      "5d2b74a9e3": "{{value0}} — HEAD is detached at {{value1}} until the operation finishes."
+                    }
+                  }
+                }
+              },
+              "sync": {
+                "use": {
+                  "conflict": {
+                    "advance": {
+                      "b84fcd7ea6": "Continue {{value0}} failed"
+                    }
+                  }
                 }
               }
             }
@@ -17000,6 +17022,13 @@
         "hours": "{{value0}}h",
         "days": "{{value0}}d",
         "underOneMinute": "<1m"
+      }
+    },
+    "sourceControl": {
+      "operationBanner": {
+        "continueMerge": "Continue merge",
+        "continueCherryPick": "Continue cherry-pick",
+        "continueRebase": "Continue rebase"
       }
     }
   },

@@ -4,7 +4,10 @@ import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-source-control-styles'
 import { MobileSourceControlPrChip } from './MobileSourceControlPrChip'
 import type { MobilePrChipSummary } from './mobile-pr-chip-summary'
-import { mobileConflictAbortLabel } from './mobile-source-control-conflict-abort'
+import {
+  mobileConflictAbortLabel,
+  mobileConflictContinueLabel
+} from './mobile-source-control-conflict-actions'
 
 type Props = {
   branchLabel: string
@@ -13,11 +16,16 @@ type Props = {
   stagedCount: number
   branchCount: number
   conflictOperation: string | null
-  // True while any serial git IO is in flight — disables Abort so ops don't race.
+  // Why: git refuses `--continue` while any file is unmerged — hide the button then.
+  hasUnresolvedConflicts: boolean
+  // True while any serial git IO is in flight — disables Abort/Continue so ops don't race.
   conflictBusy: boolean
   // True only while abort-merge / abort-rebase itself is running (label accuracy).
   conflictAborting: boolean
+  // True only while the matching continue call itself is running (label accuracy).
+  conflictAdvancing: boolean
   onAbortConflict: (operation: string) => void
+  onContinueConflict: (operation: string) => void
   // The PR chip is shown only on repos with a hosted-review remote; null hides it.
   prChip: MobilePrChipSummary | null
   onOpenPr: () => void
@@ -33,9 +41,12 @@ export function MobileSourceControlBranchCard({
   stagedCount,
   branchCount,
   conflictOperation,
+  hasUnresolvedConflicts,
   conflictBusy,
   conflictAborting,
+  conflictAdvancing,
   onAbortConflict,
+  onContinueConflict,
   prChip,
   onOpenPr
 }: Props) {
@@ -60,6 +71,21 @@ export function MobileSourceControlBranchCard({
       {showConflict ? (
         <View style={styles.conflictRow}>
           <Text style={styles.conflictText}>{conflictOperation}</Text>
+          {!hasUnresolvedConflicts ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.abortButton,
+                conflictBusy && styles.abortButtonDisabled,
+                pressed && !conflictBusy && styles.abortPressed
+              ]}
+              disabled={conflictBusy}
+              onPress={() => onContinueConflict(conflictOperation)}
+            >
+              <Text style={styles.abortText}>
+                {mobileConflictContinueLabel(conflictOperation, conflictAdvancing)}
+              </Text>
+            </Pressable>
+          ) : null}
           {conflictOperation === 'merge' || conflictOperation === 'rebase' ? (
             <Pressable
               style={({ pressed }) => [

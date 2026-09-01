@@ -13,6 +13,7 @@ import type {
   MobileCommitFailureRecovery,
   RecordMobileCommitFailure
 } from './mobile-commit-failure-recovery'
+import { useMobileConflictSequencerRunners } from './use-mobile-conflict-sequencer-runners'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -292,18 +293,7 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet
   })
 
-  // Abort an in-progress merge/rebase from the conflict banner.
-  const abortConflictOperation = useCallback(
-    async (operation: string) => {
-      const method =
-        operation === 'merge' ? 'git.abortMerge' : operation === 'rebase' ? 'git.abortRebase' : null
-      if (!method) {
-        return
-      }
-      await runGitAction(`abort-${operation}`, method, {})
-    },
-    [runGitAction]
-  )
+  const conflictRunners = useMobileConflictSequencerRunners(runGitAction)
 
   return {
     runGitAction,
@@ -316,7 +306,7 @@ export function useMobileSourceControlRunners(params: Params) {
     openBranchPicker,
     openHistory,
     checkoutBranch,
-    abortConflictOperation,
+    ...conflictRunners,
     ...actionSheetRunners
   }
 }

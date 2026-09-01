@@ -11,6 +11,7 @@ const RPC_TO_RUNTIME_COMMAND = {
   'git.conflictOperation': 'getRuntimeGitConflictOperation',
   'git.abortMerge': 'abortRuntimeGitMerge',
   'git.abortRebase': 'abortRuntimeGitRebase',
+  'git.continueSequencer': 'continueRuntimeGitSequencer',
   'git.checkout': 'checkoutRuntimeGitBranch',
   'git.localBranches': 'listRuntimeGitLocalBranches',
   'git.diff': 'getRuntimeGitDiff',

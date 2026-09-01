@@ -60,6 +60,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'git.commit',
   'git.commitCompare',
   'git.commitDiff',
+  'git.continueSequencer',
   'git.discard',
   'git.discoverCommitMessageModels',
   'git.diff',

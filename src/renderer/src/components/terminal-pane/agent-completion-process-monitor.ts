@@ -103,6 +103,10 @@ export function createAgentCompletionProcessMonitor({
       const exited = state.lastForegroundAgent
       state.pendingProcessExitAgent = null
       if (options.shouldSuppressConfirmedProcessExitCompletion?.(exited) !== true) {
+        // Process inspection is the only exit signal when a hard-killed TUI
+        // never emits a shell boundary; let the pane disarm its terminal modes
+        // before the surviving shell receives pointer reports.
+        options.onConfirmedProcessExit?.(exited)
         const replayIdentityBeforeExit = identityScope.getLast()
         const committed = dispatchCompletion('process-exit', exited.processName, {
           terminalIdleConfirmed: true,

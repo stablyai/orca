@@ -10,6 +10,7 @@ const PUBLIC_RUNTIME_GIT_CLIENT_FUNCTIONS = [
   'cancelRuntimeGenerateCommitMessage',
   'cancelRuntimeGeneratePullRequestFields',
   'commitRuntimeGit',
+  'continueRuntimeGitSequencer',
   'discardRuntimeGitPath',
   'discoverRuntimeCommitMessageModels',
   'fastForwardRuntimeGit',

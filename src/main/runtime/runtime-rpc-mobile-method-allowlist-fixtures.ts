@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { OrcaRuntimeService } from './orca-runtime'
 
@@ -33,6 +33,7 @@ export function createMobileRpcSurfaceRuntime() {
   const rebaseRuntimeGitFromBase: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const abortRuntimeGitMerge: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const abortRuntimeGitRebase: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
+  const continueRuntimeGitSequencer: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const bulkStageRuntimeGitPaths: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const bulkUnstageRuntimeGitPaths: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const getRuntimeGitDiff: MobileRpcMock = vi.fn().mockResolvedValue({
@@ -130,6 +131,7 @@ export function createMobileRpcSurfaceRuntime() {
     rebaseRuntimeGitFromBase,
     abortRuntimeGitMerge,
     abortRuntimeGitRebase,
+    continueRuntimeGitSequencer,
     bulkStageRuntimeGitPaths,
     bulkUnstageRuntimeGitPaths,
     getRuntimeGitDiff,
@@ -179,4 +181,26 @@ export function createMobileRpcSurfaceRuntime() {
     mocks: runtime,
     expectedCodexResetScope
   }
+}
+
+export async function dispatchMobileSequencerRpcs(
+  dispatch: (request: Record<string, unknown>) => Promise<void>,
+  deviceToken: string
+): Promise<void> {
+  await dispatch({
+    id: 'req_git.continueSequencer',
+    method: 'git.continueSequencer',
+    deviceToken,
+    params: { worktree: 'id:wt-1', operation: 'rebase' }
+  })
+}
+
+export function expectMobileSequencerRpcsDispatched(
+  replies: Record<string, unknown>[],
+  mocks: ReturnType<typeof createMobileRpcSurfaceRuntime>['mocks']
+): void {
+  expect(replies).toContainEqual(
+    expect.objectContaining({ id: 'req_git.continueSequencer', ok: true })
+  )
+  expect(mocks.continueRuntimeGitSequencer).toHaveBeenCalledWith('id:wt-1', 'rebase')
 }

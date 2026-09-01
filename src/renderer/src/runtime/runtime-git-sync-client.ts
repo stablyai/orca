@@ -1,7 +1,9 @@
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../../shared/git-fork-sync'
+import type { GitSequencerOperation } from '../../../shared/git-sequencer-step'
 import type { GitUpstreamStatus } from '../../../shared/git-status-types'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
 import type { GitPushTarget } from '../../../shared/worktree/types'
+import { isRuntimeMethodNotFoundError } from '@/store/slices/worktrees/listing/runtime-worktree-rpc-errors'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -38,6 +40,38 @@ export async function abortRuntimeGitRebase(context: RuntimeGitContext): Promise
     { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
     { timeoutMs: 30_000 }
   )
+}
+
+export async function continueRuntimeGitSequencer(
+  context: RuntimeGitContext,
+  operation: GitSequencerOperation
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.continueSequencer({
+      worktreePath: resolveLocalWorktreePath(context),
+      operation,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  try {
+    await callRuntimeRpc(
+      target,
+      'git.continueSequencer',
+      { worktree: toRuntimeWorktreeSelector(context.worktreeId), operation },
+      { timeoutMs: 30_000 }
+    )
+  } catch (error) {
+    // Why: mixed client/host versions are the normal state; the raw method-not-found
+    // text would otherwise surface verbatim in the failure toast.
+    if (isRuntimeMethodNotFoundError(error)) {
+      throw new Error(
+        `This remote Orca host is running an older version that cannot continue a ${operation}. Update Orca on the host, then try again.`
+      )
+    }
+    throw error
+  }
 }
 
 export async function getRuntimeGitUpstreamStatus(

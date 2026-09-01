@@ -30,6 +30,7 @@ export const commitChangesMock: IpcMock = vi.fn()
 export const getStatusMock: IpcMock = vi.fn()
 export const abortMergeMock: IpcMock = vi.fn()
 export const abortRebaseMock: IpcMock = vi.fn()
+export const continueSequencerMock: IpcMock = vi.fn()
 export const getDiffMock: IpcMock = vi.fn()
 export const getBranchCompareMock: IpcMock = vi.fn()
 export const getBranchDiffMock: IpcMock = vi.fn()
@@ -101,6 +102,8 @@ export const gitStatusModuleMock = {
   bulkDiscardChanges: bulkDiscardChangesMock,
   discardChanges: discardChangesMock
 }
+
+export const gitSequencerActionsModuleMock = { continueSequencer: continueSequencerMock }
 
 export const gitIgnoredPathsMock = { checkIgnoredPaths: checkIgnoredPathsMock }
 
@@ -220,6 +223,7 @@ const ALL_MOCKS = [
   crashBreadcrumbMock,
   folderPromotionMock,
   gitStatusModuleMock,
+  gitSequencerActionsModuleMock,
   gitIgnoredPathsMock,
   gitWorktreeMock,
   sshFilesystemDispatchMock,

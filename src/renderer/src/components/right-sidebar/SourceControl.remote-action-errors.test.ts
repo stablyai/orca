@@ -56,6 +56,42 @@ describe('SourceControl remote action error reconciliation', () => {
     ).toBe(errors)
   })
 
+  it('clears a failed Continue once its operation settles, however it ended', () => {
+    const errors = {
+      'wt-1': {
+        kind: 'continue_operation' as const,
+        message: 'Continue rebase failed',
+        rawError: 'Continue rebase failed'
+      }
+    }
+
+    expect(
+      clearRemoteActionErrorsForCompletedConflictOperations({
+        remoteActionErrors: errors,
+        previousConflictOperations: { 'wt-1': 'rebase' },
+        currentConflictOperations: { 'wt-1': 'unknown' }
+      })
+    ).toEqual({ 'wt-1': null })
+  })
+
+  it('keeps a failed Continue while its operation is still in progress', () => {
+    const errors = {
+      'wt-1': {
+        kind: 'continue_operation' as const,
+        message: 'Continue cherry-pick failed',
+        rawError: 'Continue cherry-pick failed'
+      }
+    }
+
+    expect(
+      clearRemoteActionErrorsForCompletedConflictOperations({
+        remoteActionErrors: errors,
+        previousConflictOperations: { 'wt-1': 'cherry-pick' },
+        currentConflictOperations: { 'wt-1': 'cherry-pick' }
+      })
+    ).toBe(errors)
+  })
+
   it('clears pull and sync conflict errors after their merge operation completes', () => {
     const errors = {
       'wt-pull': {

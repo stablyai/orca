@@ -60,6 +60,8 @@ import {
   getCommitCompare,
   getCommitDiff
 } from '../git/status'
+import { continueSequencer } from '../git/sequencer-actions'
+import type { GitSequencerOperation } from '../../shared/git-sequencer-step'
 import { getHistory } from '../git/history'
 import {
   cancelGenerateCommitMessageLocal,
@@ -1386,6 +1388,29 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       await abortRebase(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
+    }
+  )
+
+  ipcMain.handle(
+    'git:continueSequencer',
+    async (
+      _event,
+      args: { worktreePath: string; operation: GitSequencerOperation; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.continueSequencer(args.worktreePath, args.operation)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await continueSequencer(args.operation, worktreePath, gitOptions)
     }
   )
 

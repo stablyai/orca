@@ -1,3 +1,8 @@
+import {
+  gitSequencerAdvanced,
+  gitSequencerContinueStep,
+  isGitSequencerOperation
+} from '../shared/git-sequencer-step'
 import { execFile, spawn, type ExecFileOptions } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
@@ -15,6 +20,7 @@ import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
+import { editorSuppressedGitEnv } from '../shared/git-sequencer-editor-env'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import type {
   GitHandlerCommandOptions,
@@ -102,6 +108,7 @@ export class GitHandler {
       (params, context) => this.responseAck(params, context),
       (params, context) => this.cancelResponseStream(params, context)
     )
+    this.dispatcher.onRequest('git.continueSequencer', (p) => this.continueSequencer(p))
     // Why: a detached client's git.responseAck frames never arrive; wake any pump parked on the ack window so it re-checks staleness and exits.
     this.dispatcher.onClientDetached?.(() => this.responseStreams.wakeAll())
   }
@@ -166,7 +173,9 @@ export class GitHandler {
   ): Promise<GitHandlerCommandResult> {
     const expandedCwd = expandTilde(cwd)
     const run = async (): Promise<{ stdout: string; stderr: string }> => {
-      const env = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
+      const baseEnv = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
+      // Why: an ambient editor can leave a headless --continue blocked forever.
+      const env = opts?.suppressEditor ? editorSuppressedGitEnv(baseEnv) : baseEnv
       if (opts?.disableOptionalLocks) {
         env.GIT_OPTIONAL_LOCKS = '0'
       }
@@ -201,6 +210,44 @@ export class GitHandler {
       maxBuffer: MAX_GIT_BUFFER
     })) as { stdout: Buffer }
     return stdout
+  }
+
+  private async readSequencerMarkerOid(
+    worktreePath: string,
+    marker: string
+  ): Promise<string | null> {
+    try {
+      const { stdout } = await this.git(['rev-parse', '-q', '--verify', marker], worktreePath)
+      return stdout.trim() || null
+    } catch {
+      return null
+    }
+  }
+
+  private async continueSequencer(params: Record<string, unknown>) {
+    const operation = params.operation
+    if (!isGitSequencerOperation(operation)) {
+      throw new Error(`Unsupported sequencer operation: ${String(operation)}`)
+    }
+    this.clearGitMutationReadCaches()
+    const worktreePath = params.worktreePath as string
+    const { args, marker } = gitSequencerContinueStep(operation)
+    const markerBefore = await this.readSequencerMarkerOid(worktreePath, marker)
+    try {
+      await this.git([...args], worktreePath, { suppressEditor: true, terminationBarrier: true })
+    } catch (error) {
+      const markerAfter = await this.readSequencerMarkerOid(worktreePath, marker)
+      if (!gitSequencerAdvanced(markerBefore, markerAfter)) {
+        throw error
+      }
+      // The sequencer advanced, but git still reported an error; retain that signal for diagnostics.
+      console.warn(
+        `[relay/git] \`git ${args.join(' ')}\` advanced ${marker} to ${markerAfter} but exited nonzero:`,
+        error
+      )
+    } finally {
+      this.clearGitMutationReadCaches()
+    }
   }
 
   private async spawnClone(

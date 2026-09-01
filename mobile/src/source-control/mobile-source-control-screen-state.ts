@@ -134,6 +134,16 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
   return branch || head?.slice(0, 7) || 'No branch'
 }
 
+/** Branch-card sync summary; null while upstream status is still unknown. */
+export function formatUpstreamSyncLabel(
+  upstream: { hasUpstream: boolean; ahead: number; behind: number } | undefined
+): string | null {
+  if (!upstream) {
+    return null
+  }
+  return upstream.hasUpstream ? `${upstream.ahead} ahead, ${upstream.behind} behind` : 'No upstream'
+}
+
 export function statusColor(status: MobileGitFileStatus): string {
   switch (status) {
     case 'added':

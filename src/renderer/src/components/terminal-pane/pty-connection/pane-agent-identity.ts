@@ -114,6 +114,18 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   }
   session.visibleForegroundSamplePending = false
   session.visibleForegroundSampleSettled = false
+  session.resetStaleAgentTerminalModes = (): void => {
+    // A process-exit probe can be the only signal after a hard-killed TUI, so
+    // reset the emulator before the surviving shell sees pointer reports.
+    replayIntoTerminal(session.pane, session.deps.replayingPanesRef, POST_REPLAY_REATTACH_RESET, {
+      breadcrumbIdentity: {
+        tabId: session.deps.tabId,
+        worktreeId: session.deps.worktreeId,
+        ptyId: session.transport.getPtyId()
+      },
+      shouldRefreshViewportSynchronously: session.shouldRefreshForegroundSynchronously
+    })
+  }
   session.settleDeferredCommandFinishedStatusDrop = (
     options: { confirmedShell?: boolean } = {}
   ): void => {
@@ -159,17 +171,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
       session.clearStaleAgentTabTitleOnConfirmedShell()
-      // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
-      // surviving shell then receives pointer moves as typed SGR reports; the
-      // replay guard keeps xterm's auto-replies from leaking to the shell.
-      replayIntoTerminal(session.pane, session.deps.replayingPanesRef, POST_REPLAY_REATTACH_RESET, {
-        breadcrumbIdentity: {
-          tabId: session.deps.tabId,
-          worktreeId: session.deps.worktreeId,
-          ptyId: session.transport.getPtyId()
-        },
-        shouldRefreshViewportSynchronously: session.shouldRefreshForegroundSynchronously
-      })
+      session.resetStaleAgentTerminalModes()
       if (reason === 'visible-pty') {
         useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
         return

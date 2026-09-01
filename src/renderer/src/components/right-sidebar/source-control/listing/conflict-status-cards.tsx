@@ -1,174 +1,206 @@
 import React from 'react'
-import { GitMerge, GitPullRequestArrow, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { GitMerge, GitPullRequestArrow, TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
+import { shortGitHead } from '@/lib/worktree-git-identity-display'
+import type {
+  GitConflictOperation,
+  GitOperationProgress
+} from '../../../../../../shared/git-status-types'
+import { SourceControlOperationBannerActions } from './operation-banner-actions'
 
-export function ConflictSummaryCard({
+/**
+ * Shared shell for both conflict states. Why: `git rebase --continue` can land
+ * straight in a new conflict, swapping ConflictSummaryCard for OperationBanner
+ * mid-flight — a shared shell keeps the box identical so only its contents change.
+ */
+export function OperationCardShell({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div
+      className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2"
+      data-testid="source-control-operation-card"
+    >
+      {children}
+    </div>
+  )
+}
+
+function conflictsHeading(conflictOperation: GitConflictOperation): string {
+  if (conflictOperation === 'merge') {
+    return translate(
+      'auto.components.right.sidebar.source.control.conflict.status.cards.5302a1ddba',
+      'Merge conflicts'
+    )
+  }
+  if (conflictOperation === 'rebase') {
+    return translate(
+      'auto.components.right.sidebar.source.control.conflict.status.cards.7f3af87549',
+      'Rebase conflicts'
+    )
+  }
+  if (conflictOperation === 'cherry-pick') {
+    return translate(
+      'auto.components.right.sidebar.source.control.conflict.status.cards.6a8e9ad490',
+      'Cherry-pick conflicts'
+    )
+  }
+  return translate(
+    'auto.components.right.sidebar.source.control.conflict.status.cards.bdf8772106',
+    'Conflicts'
+  )
+}
+
+// Full 40-char oids only get truncated by CSS, which reads as a broken value.
+// shortGitHead keeps this abbreviation in step with the head identity chip's.
+function shortenOnto(onto: string | undefined): string | undefined {
+  return onto && /^[0-9a-f]{40}$/i.test(onto) ? shortGitHead(onto) : onto
+}
+
+function inProgressHeading(conflictOperation: GitConflictOperation): string {
+  if (conflictOperation === 'merge') {
+    return translate(
+      'auto.components.right.sidebar.source.control.conflict.status.cards.edc2d82a2b',
+      'Merge in progress'
+    )
+  }
+  if (conflictOperation === 'rebase') {
+    return translate(
+      'auto.components.right.sidebar.source.control.conflict.status.cards.5c3707aa44',
+      'Rebase in progress'
+    )
+  }
+  if (conflictOperation === 'cherry-pick') {
+    return translate(
+      'auto.components.right.sidebar.source.control.conflict.status.cards.ffe53a1da6',
+      'Cherry-pick in progress'
+    )
+  }
+  return translate(
+    'auto.components.right.sidebar.source.control.conflict.status.cards.35eb76d323',
+    'Operation in progress'
+  )
+}
+
+type SharedOperationCardProps = {
+  conflictOperation: GitConflictOperation
+  sourceControlAiActionsVisible: boolean
+  isResolvingWithAI: boolean
+  isAbortingOperation?: boolean
+  isAdvancingOperation?: boolean
+  onAbortOperation?: (operation: GitConflictOperation) => void
+  onContinueOperation?: (operation: GitConflictOperation) => void
+}
+
+export function ConflictSummaryBody({
   conflictOperation,
   unresolvedCount,
   sourceControlAiActionsVisible,
   isResolvingWithAI,
   isAbortingOperation = false,
+  isAdvancingOperation = false,
   onAbortOperation,
+  onContinueOperation,
   onResolveWithAI,
   onReview
-}: {
-  conflictOperation: GitConflictOperation
+}: SharedOperationCardProps & {
   unresolvedCount: number
-  sourceControlAiActionsVisible: boolean
-  isResolvingWithAI: boolean
-  isAbortingOperation?: boolean
-  onAbortOperation?: (operation: GitConflictOperation) => void
   onResolveWithAI: () => void
   onReview: () => void
 }): React.JSX.Element {
-  const operationLabel =
-    conflictOperation === 'merge'
-      ? translate(
-          'auto.components.right.sidebar.source.control.conflict.status.cards.5302a1ddba',
-          'Merge conflicts'
-        )
-      : conflictOperation === 'rebase'
-        ? translate(
-            'auto.components.right.sidebar.source.control.conflict.status.cards.7f3af87549',
-            'Rebase conflicts'
-          )
-        : conflictOperation === 'cherry-pick'
-          ? translate(
-              'auto.components.right.sidebar.source.control.conflict.status.cards.6a8e9ad490',
-              'Cherry-pick conflicts'
-            )
-          : translate(
-              'auto.components.right.sidebar.source.control.conflict.status.cards.bdf8772106',
-              'Conflicts'
-            )
-
   return (
-    <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
-      <div className="flex items-start gap-2">
-        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium text-foreground" aria-live="polite">
-            {translate(
-              'auto.components.right.sidebar.SourceControl.d7a5942e41',
-              '{{value0}}: {{value1}} unresolved',
-              { value0: operationLabel, value1: unresolvedCount }
-            )}
-          </div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.right.sidebar.SourceControl.3eeccbb221',
-              'Resolved files move back to normal changes after they leave the live conflict state.'
-            )}
-          </div>
+    <>
+      <div className="flex items-center gap-2">
+        <TriangleAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 text-xs font-medium text-foreground" aria-live="polite">
+          {translate(
+            'auto.components.right.sidebar.SourceControl.d7a5942e41',
+            '{{value0}}: {{value1}} unresolved',
+            { value0: conflictsHeading(conflictOperation), value1: unresolvedCount }
+          )}
         </div>
       </div>
-      <div className="mt-2">
-        {sourceControlAiActionsVisible ? (
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            className="h-7 w-full text-xs"
-            disabled={isResolvingWithAI}
-            onClick={onResolveWithAI}
-          >
-            {isResolvingWithAI ? (
-              <RefreshCw className="size-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="size-3.5" />
-            )}
-            {translate('auto.components.right.sidebar.SourceControl.f6cb48b6fe', 'Resolve with AI')}
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={cn(sourceControlAiActionsVisible && 'mt-1.5', 'h-7 w-full text-xs')}
-          onClick={onReview}
-        >
-          <GitMerge className="size-3.5" />
-          {translate('auto.components.right.sidebar.SourceControl.27a50fe970', 'Review conflicts')}
-        </Button>
-        {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
-          <Button
-            type="button"
-            // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
-            variant="outline"
-            size="sm"
-            className="mt-1.5 h-7 w-full text-xs"
-            disabled={isResolvingWithAI || isAbortingOperation}
-            onClick={() => onAbortOperation(conflictOperation)}
-          >
-            {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
-            {conflictOperation === 'rebase'
-              ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-              : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
-          </Button>
-        ) : null}
-      </div>
-    </div>
+      <SourceControlOperationBannerActions
+        conflictOperation={conflictOperation}
+        hasUnresolvedConflicts
+        sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+        isResolvingWithAI={isResolvingWithAI}
+        isAbortingOperation={isAbortingOperation}
+        isAdvancingOperation={isAdvancingOperation}
+        onAbortOperation={onAbortOperation}
+        onContinueOperation={onContinueOperation}
+        onResolveWithAI={onResolveWithAI}
+        onReviewConflicts={onReview}
+      />
+    </>
+  )
+}
+
+/** Standalone card. The panel composes OperationCardShell + a body directly so the box survives a mid-flight swap. */
+export function ConflictSummaryCard(
+  props: React.ComponentProps<typeof ConflictSummaryBody>
+): React.JSX.Element {
+  return (
+    <OperationCardShell>
+      <ConflictSummaryBody {...props} />
+    </OperationCardShell>
   )
 }
 
 // Why: separate from ConflictSummaryCard because a rebase/merge/cherry-pick can be in progress with no conflicts (between steps, or resolved but pre-continue).
-export function OperationBanner({
+export function OperationBannerBody({
   conflictOperation,
+  sourceControlAiActionsVisible = false,
+  isResolvingWithAI = false,
   isAbortingOperation = false,
-  onAbortOperation
-}: {
+  isAdvancingOperation = false,
+  operationProgress = null,
+  onAbortOperation,
+  onContinueOperation,
+  onResolveWithAI
+}: Partial<SharedOperationCardProps> & {
   conflictOperation: GitConflictOperation
-  isAbortingOperation?: boolean
-  onAbortOperation?: (operation: GitConflictOperation) => void
+  operationProgress?: GitOperationProgress | null
+  onResolveWithAI?: () => void
 }): React.JSX.Element {
-  const label =
-    conflictOperation === 'merge'
-      ? translate(
-          'auto.components.right.sidebar.source.control.conflict.status.cards.edc2d82a2b',
-          'Merge in progress'
-        )
-      : conflictOperation === 'rebase'
-        ? translate(
-            'auto.components.right.sidebar.source.control.conflict.status.cards.5c3707aa44',
-            'Rebase in progress'
-          )
-        : conflictOperation === 'cherry-pick'
-          ? translate(
-              'auto.components.right.sidebar.source.control.conflict.status.cards.ffe53a1da6',
-              'Cherry-pick in progress'
-            )
-          : translate(
-              'auto.components.right.sidebar.source.control.conflict.status.cards.35eb76d323',
-              'Operation in progress'
-            )
-
   const Icon = conflictOperation === 'rebase' ? GitPullRequestArrow : GitMerge
+  const onto = shortenOnto(operationProgress?.onto?.trim())
+  const heading =
+    conflictOperation === 'rebase' && onto
+      ? translate(
+          'auto.components.right.sidebar.source.control.conflict.status.cards.d047be3812',
+          'Rebasing onto {{value0}}',
+          { value0: onto }
+        )
+      : inProgressHeading(conflictOperation)
 
   return (
-    <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
+    <>
       <div className="flex items-center justify-center gap-2">
         <Icon className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        <span className="text-xs font-medium text-foreground">{label}</span>
+        <span className="min-w-0 truncate text-xs font-medium text-foreground" title={heading}>
+          {heading}
+        </span>
       </div>
-      {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
-        <Button
-          type="button"
-          // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
-          variant="outline"
-          size="sm"
-          className="mt-2 h-7 w-full text-xs"
-          disabled={isAbortingOperation}
-          onClick={() => onAbortOperation(conflictOperation)}
-        >
-          {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
-          {conflictOperation === 'rebase'
-            ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-            : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
-        </Button>
-      ) : null}
-    </div>
+      <SourceControlOperationBannerActions
+        conflictOperation={conflictOperation}
+        sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+        isResolvingWithAI={isResolvingWithAI}
+        isAbortingOperation={isAbortingOperation}
+        isAdvancingOperation={isAdvancingOperation}
+        onAbortOperation={onAbortOperation}
+        onContinueOperation={onContinueOperation}
+        onResolveWithAI={onResolveWithAI}
+      />
+    </>
+  )
+}
+
+/** Standalone card; see ConflictSummaryCard for why the panel does not use this directly. */
+export function OperationBanner(
+  props: React.ComponentProps<typeof OperationBannerBody>
+): React.JSX.Element {
+  return (
+    <OperationCardShell>
+      <OperationBannerBody {...props} />
+    </OperationCardShell>
   )
 }

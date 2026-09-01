@@ -17,6 +17,7 @@ import type {
   SourceControlTextActionId
 } from '../../../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control-ai-recipe-save'
+import { canSendConflictsToAgent } from './conflict-handoff-gate'
 import { buildResolveConflictsPrompt } from './prompts'
 import {
   saveSourceControlAiActionRecipeForTarget,
@@ -160,7 +161,7 @@ export function useSourceControlAi({
     if (!activeWorktreeId) {
       return
     }
-    if (unresolvedConflicts.length === 0) {
+    if (!canSendConflictsToAgent(unresolvedConflicts.length, conflictOperation)) {
       toast.message(
         translate(
           'auto.components.right.sidebar.use.source.control.ai.cfafa92509',
@@ -170,7 +171,7 @@ export function useSourceControlAi({
       return
     }
     setResolveConflictsComposerOpen(true)
-  }, [activeWorktreeId, unresolvedConflicts.length])
+  }, [activeWorktreeId, conflictOperation, unresolvedConflicts.length])
 
   const {
     isLaunchingCommitFailureAgent,

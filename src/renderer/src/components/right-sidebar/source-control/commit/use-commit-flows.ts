@@ -1,6 +1,7 @@
 import type { SourceControlPanelFoundation } from '../panel/use-panel-foundation'
 import { useSourceControlCreatePrIntentCommitMessage } from '../review/use-create-pr-intent-commit-message'
 import { useSourceControlConflictAbort } from '../sync/use-conflict-abort'
+import { useSourceControlConflictAdvance } from '../sync/use-conflict-advance'
 import { useSourceControlRemoteActionRunner } from '../sync/use-remote-action-runner'
 import { useSourceControlCommitAction } from './use-commit-action'
 import { useSourceControlCommitMessageGeneration } from './use-commit-message-generation'
@@ -32,6 +33,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     getCreatePrIntentOperationTarget,
     grouped,
     isAbortingOperation,
+    isAdvancingOperation,
     openCommitGenerationDialog,
     pullBranch,
     pushBranch,
@@ -44,6 +46,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     remoteStatusForActions,
     resolvedCommitMessageAi,
     setAbortOperationInFlightByWorktree,
+    setAdvanceOperationInFlightByWorktree,
     setCommitErrorForWorktree,
     setCommitInFlightByWorktree,
     setCommitMessageGenerationRecord,
@@ -141,13 +144,27 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     setRemoteActionErrors,
     worktreePath
   })
+  const conflictAdvance = useSourceControlConflictAdvance({
+    activeRepoSettings,
+    activeWorktreeId,
+    conflictOperation,
+    isAbortingOperation,
+    isAdvancingOperation,
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef,
+    refreshGitHistoryRef,
+    setAdvanceOperationInFlightByWorktree,
+    setRemoteActionErrors,
+    worktreePath
+  })
 
   return {
     ...commitAction,
     ...commitMessageGeneration,
     ...createPrIntentCommitMessage,
     ...remoteActionRunner,
-    ...conflictAbort
+    ...conflictAbort,
+    ...conflictAdvance
   }
 }
 

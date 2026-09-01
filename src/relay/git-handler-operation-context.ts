@@ -11,6 +11,7 @@ export type GitHandlerCommandOptions = {
   disableOptionalLocks?: boolean
   signal?: AbortSignal
   nonInteractive?: boolean
+  suppressEditor?: boolean
   stdin?: string
   timeout?: number
   terminationBarrier?: boolean

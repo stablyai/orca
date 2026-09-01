@@ -47,6 +47,10 @@ function remoteActionErrorMatchesSettledConflictOperation(
   if (kind === 'pull' || kind === 'sync') {
     return operation === 'merge' || operation === 'rebase'
   }
+  // Why: a failed Continue is moot once its operation is gone, however it ended.
+  if (kind === 'continue_operation') {
+    return operation === 'merge' || operation === 'rebase' || operation === 'cherry-pick'
+  }
   return false
 }
 

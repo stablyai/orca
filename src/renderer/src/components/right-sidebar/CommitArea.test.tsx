@@ -714,7 +714,7 @@ describe('ConflictSummaryCard', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('renders abort actions with the quiet outline review-conflicts button treatment', () => {
+  it('gives Review conflicts and abort the same outline treatment', () => {
     const mergeMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="merge"
@@ -796,7 +796,7 @@ describe('OperationBanner', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('renders abort actions with the quiet outline button treatment', () => {
+  it('renders abort as an outlined alternative, never the loudest action', () => {
     const mergeMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
     )
@@ -806,5 +806,62 @@ describe('OperationBanner', () => {
 
     expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
     expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
+  })
+
+  it('offers Resolve with AI so abort is not the only exit from a stopped operation', () => {
+    const markup = renderToStaticMarkup(
+      <OperationBanner
+        conflictOperation="rebase"
+        sourceControlAiActionsVisible
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('Resolve with AI')
+    expect(buttonContaining(markup, 'Resolve with AI')).toContain('data-variant="default"')
+    expect(buttonContaining(markup, 'Abort rebase')).toContain('data-variant="outline"')
+  })
+
+  it('offers Resolve with AI for cherry-pick, which has no abort action', () => {
+    const markup = renderToStaticMarkup(
+      <OperationBanner
+        conflictOperation="cherry-pick"
+        sourceControlAiActionsVisible
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('Resolve with AI')
+    expect(markup).not.toContain('Abort')
+  })
+
+  it('hides Resolve with AI when source control AI actions are disabled', () => {
+    const markup = renderToStaticMarkup(
+      <OperationBanner
+        conflictOperation="rebase"
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('Resolve with AI')
+    expect(markup).toContain('Abort rebase')
+  })
+
+  it('disables both actions while an abort is in flight', () => {
+    const markup = renderToStaticMarkup(
+      <OperationBanner
+        conflictOperation="rebase"
+        sourceControlAiActionsVisible
+        isAbortingOperation
+        onAbortOperation={vi.fn()}
+        onResolveWithAI={vi.fn()}
+      />
+    )
+
+    expect(buttonContaining(markup, 'Resolve with AI')).toContain('disabled')
+    expect(buttonContaining(markup, 'Abort rebase')).toContain('disabled')
   })
 })

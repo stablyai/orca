@@ -3,7 +3,10 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import {
+  getWorktreeGitIdentityDisplay,
+  getWorktreeGitOperationIdentityDisplay
+} from '@/lib/worktree-git-identity-display'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
@@ -35,8 +38,11 @@ export function useSourceControlWorktreeContext() {
   const activeRepoPath = activeRepo?.path ?? null
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
   const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
-  const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
-  const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
+  const plainGitIdentityDisplay = activeWorktree
+    ? getWorktreeGitIdentityDisplay(activeWorktree)
+    : null
+  const branchName =
+    plainGitIdentityDisplay?.kind === 'branch' ? plainGitIdentityDisplay.branchName : ''
   const entries = useAppStore((s) =>
     activeWorktreeId
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
@@ -69,6 +75,23 @@ export function useSourceControlWorktreeContext() {
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
   const conflictOperationsByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+  const operationProgress = useAppStore((s) =>
+    activeWorktreeId ? (s.gitOperationProgressByWorktree?.[activeWorktreeId] ?? null) : null
+  )
+  // Why: git detaches HEAD mid-rebase, so the plain identity would read "Detached
+  // HEAD · <sha>" and hide the branch being replayed.
+  const gitIdentityDisplay = useMemo(
+    () =>
+      activeWorktree
+        ? getWorktreeGitOperationIdentityDisplay({
+            branch: activeWorktree.branch,
+            head: activeWorktree.head,
+            conflictOperation,
+            operationHeadName: operationProgress?.headName ?? null
+          })
+        : null,
+    [activeWorktree, conflictOperation, operationProgress?.headName]
+  )
   // Why: leave undefined until fetchUpstreamStatus resolves; a synthetic "no upstream" flashes "Publish Branch" on worktree switch.
   const remoteStatus = useAppStore((s) =>
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
@@ -163,6 +186,7 @@ export function useSourceControlWorktreeContext() {
     branchSummary,
     conflictOperation,
     conflictOperationsByWorktree,
+    operationProgress,
     entries,
     gitIdentityDisplay,
     hasUncommittedEntries,

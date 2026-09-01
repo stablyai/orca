@@ -8,6 +8,7 @@ import type {
   GitBranchLineTotal,
   GitConflictKind,
   GitConflictOperation,
+  GitOperationProgress,
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
@@ -32,6 +33,9 @@ export type EditorGitSlice = {
   gitBranchLineTotalByWorktree: Record<string, GitBranchLineTotal | null>
   gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
+  // Why: absent means the host never reported progress (old host, capped snapshot,
+  // unreadable state dir) — the banner must degrade, not render "step 0 of 0".
+  gitOperationProgressByWorktree: Record<string, GitOperationProgress>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
   trackConflictPath: (worktreeId: string, path: string, conflictKind: GitConflictKind) => void
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void

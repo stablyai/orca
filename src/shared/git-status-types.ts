@@ -12,6 +12,29 @@ export type GitConflictKind =
 export type GitConflictResolutionStatus = 'unresolved' | 'resolved_locally'
 export type GitConflictStatusSource = 'git' | 'session'
 export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'unknown'
+
+// Which todo command stopped the sequencer. 'edit'/'break' mean git paused on
+// purpose; 'pick' means it was replaying a commit (conflict, or an empty patch).
+export type GitSequencerStop = 'edit' | 'break' | 'pick'
+
+// Progress of an in-flight rebase/cherry-pick, read from the rebase state
+// directory (rebase-merge/ or rebase-apply/).
+//
+// Every field is optional and ABSENT MEANS UNKNOWN, never zero. A host that
+// predates these fields omits them, so a reader must degrade to the
+// operation-only banner rather than render "step 0 of 0".
+export type GitOperationProgress = {
+  // Branch being replayed (rebase-merge/head-name), with refs/heads/ stripped.
+  headName?: string
+  // Ref or OID the sequence replays onto (rebase-merge/onto).
+  onto?: string
+  // 1-based index of the commit being replayed. Only meaningful with totalSteps.
+  currentStep?: number
+  totalSteps?: number
+  // Subject line of the commit being replayed.
+  commitSubject?: string
+  stoppedBy?: GitSequencerStop
+}
 export type GitSubmoduleStatus = {
   commitChanged: boolean
   trackedChanges: boolean
@@ -85,6 +108,9 @@ export type GitStatusResult = {
   // Only computed when the request carried a merge-base OID (the renderer's
   // visibility gate), and omitted — never zeroed — whenever it cannot be trusted.
   branchLineTotal?: GitBranchLineTotal
+  // Absent whenever conflictOperation is 'unknown', when the state directory
+  // cannot be read, and on every host that predates this field.
+  operationProgress?: GitOperationProgress
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a

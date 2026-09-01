@@ -4,6 +4,7 @@ import type {
   GitDiffResult
 } from '../../shared/git-diff-compare-types'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type { GitSequencerOperation } from '../../shared/git-sequencer-step'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -45,6 +46,7 @@ export type IGitProvider = {
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>
+  continueSequencer(worktreePath: string, operation: GitSequencerOperation): Promise<void>
   checkoutBranch(worktreePath: string, branch: string): Promise<void>
   listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
   getBranchCompare(

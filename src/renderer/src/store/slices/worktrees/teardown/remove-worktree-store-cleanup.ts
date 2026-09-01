@@ -90,6 +90,8 @@ export function applyRemoveWorktreeSuccessState(
     delete nextGitIgnoredPathsByWorktree[worktreeId]
     const nextGitConflictOperationByWorktree = { ...s.gitConflictOperationByWorktree }
     delete nextGitConflictOperationByWorktree[worktreeId]
+    const nextGitOperationProgressByWorktree = { ...s.gitOperationProgressByWorktree }
+    delete nextGitOperationProgressByWorktree[worktreeId]
     const nextTrackedConflictPathsByWorktree = { ...s.trackedConflictPathsByWorktree }
     delete nextTrackedConflictPathsByWorktree[worktreeId]
     const nextGitBranchChangesByWorktree = { ...s.gitBranchChangesByWorktree }
@@ -253,6 +255,7 @@ export function applyRemoveWorktreeSuccessState(
       gitBranchLineTotalByWorktree: nextGitBranchLineTotalByWorktree,
       gitIgnoredPathsByWorktree: nextGitIgnoredPathsByWorktree,
       gitConflictOperationByWorktree: nextGitConflictOperationByWorktree,
+      gitOperationProgressByWorktree: nextGitOperationProgressByWorktree,
       trackedConflictPathsByWorktree: nextTrackedConflictPathsByWorktree,
       gitBranchChangesByWorktree: nextGitBranchChangesByWorktree,
       gitBranchCompareSummaryByWorktree: nextGitBranchCompareSummaryByWorktree,

@@ -9,6 +9,7 @@ import {
   getStatusMock,
   abortMergeMock,
   abortRebaseMock,
+  continueSequencerMock,
   stageFileMock,
   bulkStageFilesMock,
   bulkUnstageFilesMock,
@@ -37,6 +38,10 @@ vi.mock(
 vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
+)
+vi.mock(
+  '../git/sequencer-actions',
+  async () => (await import('./filesystem-test-harness')).gitSequencerActionsModuleMock
 )
 vi.mock(
   '../git/check-ignored-paths',
@@ -419,6 +424,31 @@ describe('registerFilesystemHandlers', () => {
     })
     expect(sshProvider.abortRebase).toHaveBeenCalledWith('/remote/repo')
   })
+
+  it.each(['merge', 'rebase', 'cherry-pick'] as const)(
+    'routes a %s continue through local and SSH git providers',
+    async (operation) => {
+      registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+      continueSequencerMock.mockResolvedValue(undefined)
+      const sshProvider = { continueSequencer: vi.fn().mockResolvedValue(undefined) }
+      getSshGitProviderMock.mockReturnValue(sshProvider)
+
+      registerFilesystemHandlers(store as never)
+
+      await handlers.get('git:continueSequencer')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        operation
+      })
+      await handlers.get('git:continueSequencer')!(null, {
+        worktreePath: '/remote/repo',
+        operation,
+        connectionId: 'ssh-1'
+      })
+
+      expect(continueSequencerMock).toHaveBeenCalledWith(operation, WORKTREE_FEATURE_PATH, {})
+      expect(sshProvider.continueSequencer).toHaveBeenCalledWith('/remote/repo', operation)
+    }
+  )
 
   it('rejects git file paths that escape the selected worktree', async () => {
     registerFilesystemHandlers(store as never)

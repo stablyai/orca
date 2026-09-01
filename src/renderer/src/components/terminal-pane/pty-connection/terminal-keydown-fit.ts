@@ -204,6 +204,16 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         currentAgentForExited !== exited.agent
       )
     },
+    onConfirmedProcessExit: () => {
+      session.clearStaleAgentTabTitleOnConfirmedShell?.()
+      session.resetStaleAgentTerminalModes?.()
+      useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
+      useAppStore.getState().setPaneForegroundAgent(session.cacheKey, {
+        agent: null,
+        shellForeground: true
+      })
+      session.settleDeferredCommandFinishedStatusDrop?.({ confirmedShell: true })
+    },
     dispatchCompletion: (title, meta) => {
       if (meta?.source === 'process-exit') {
         session.clearSuppressedTitleSideEffects()

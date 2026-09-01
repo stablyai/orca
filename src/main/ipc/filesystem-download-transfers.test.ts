@@ -35,6 +35,10 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
 vi.mock(
+  '../git/sequencer-actions',
+  async () => (await import('./filesystem-test-harness')).gitSequencerActionsModuleMock
+)
+vi.mock(
   '../git/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )

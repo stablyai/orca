@@ -1,7 +1,14 @@
 import React from 'react'
 import { translate } from '@/i18n/i18n'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
-import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
+import type {
+  GitConflictOperation,
+  GitOperationProgress
+} from '../../../../../../shared/git-status-types'
+import {
+  ConflictSummaryBody,
+  OperationBannerBody,
+  OperationCardShell
+} from './conflict-status-cards'
 import { EmptyState } from './empty-state'
 import { TooManyChangesBanner } from './too-many-changes-banner'
 
@@ -15,7 +22,10 @@ export function SourceControlContentStatus({
   conflictOperation,
   sourceControlAiActionsVisible,
   isAbortingOperation,
+  isAdvancingOperation,
+  operationProgress,
   onAbortOperation,
+  onContinueOperation,
   onResolveWithAi,
   onReviewConflicts,
   repositoryHuge,
@@ -33,7 +43,10 @@ export function SourceControlContentStatus({
   conflictOperation: GitConflictOperation
   sourceControlAiActionsVisible: boolean
   isAbortingOperation: boolean
+  isAdvancingOperation: boolean
+  operationProgress: GitOperationProgress | null
   onAbortOperation: (operation: GitConflictOperation) => void
+  onContinueOperation: (operation: GitConflictOperation) => void
   onResolveWithAi: () => void
   onReviewConflicts: () => void
   repositoryHuge: { limit: number } | null | undefined
@@ -49,28 +62,39 @@ export function SourceControlContentStatus({
 }): React.JSX.Element {
   return (
     <>
-      {unresolvedConflictCount > 0 && (
+      {/* Why: `git rebase --continue` can advance straight into a new conflict, so this
+          swaps ConflictSummaryCard for OperationBanner mid-flight. One wrapper for both
+          keeps the container mounted in place, so only the card contents change. */}
+      {(unresolvedConflictCount > 0 || conflictOperation !== 'unknown') && (
         <div className="px-3 pb-2">
-          <ConflictSummaryCard
-            conflictOperation={conflictOperation}
-            unresolvedCount={unresolvedConflictCount}
-            sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-            isResolvingWithAI={false}
-            isAbortingOperation={isAbortingOperation}
-            onAbortOperation={onAbortOperation}
-            onResolveWithAI={onResolveWithAi}
-            onReview={onReviewConflicts}
-          />
-        </div>
-      )}
-      {/* Why: show the operation banner when a rebase/merge/cherry-pick is in progress with no unresolved conflicts. */}
-      {unresolvedConflictCount === 0 && conflictOperation !== 'unknown' && (
-        <div className="px-3 pb-2">
-          <OperationBanner
-            conflictOperation={conflictOperation}
-            isAbortingOperation={isAbortingOperation}
-            onAbortOperation={onAbortOperation}
-          />
+          <OperationCardShell>
+            {unresolvedConflictCount > 0 ? (
+              <ConflictSummaryBody
+                conflictOperation={conflictOperation}
+                unresolvedCount={unresolvedConflictCount}
+                sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+                isResolvingWithAI={false}
+                isAbortingOperation={isAbortingOperation}
+                isAdvancingOperation={isAdvancingOperation}
+                onAbortOperation={onAbortOperation}
+                onContinueOperation={onContinueOperation}
+                onResolveWithAI={onResolveWithAi}
+                onReview={onReviewConflicts}
+              />
+            ) : (
+              <OperationBannerBody
+                conflictOperation={conflictOperation}
+                sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+                isResolvingWithAI={false}
+                isAbortingOperation={isAbortingOperation}
+                isAdvancingOperation={isAdvancingOperation}
+                operationProgress={operationProgress}
+                onAbortOperation={onAbortOperation}
+                onContinueOperation={onContinueOperation}
+                onResolveWithAI={onResolveWithAi}
+              />
+            )}
+          </OperationCardShell>
         </div>
       )}
       {repositoryHuge && (

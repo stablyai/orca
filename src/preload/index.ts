@@ -20,6 +20,7 @@ import {
 } from '../shared/doc-preview-scheme'
 import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { AppIdentity } from '../shared/app-identity'
+import type { GitSequencerOperation } from '../shared/git-sequencer-step'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
@@ -3641,6 +3642,11 @@ const api = {
       ipcRenderer.invoke('git:abortMerge', args),
     abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('git:abortRebase', args),
+    continueSequencer: (args: {
+      worktreePath: string
+      operation: GitSequencerOperation
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:continueSequencer', args),
     diff: (args: {
       worktreePath: string
       filePath: string

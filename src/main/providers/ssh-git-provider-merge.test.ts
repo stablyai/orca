@@ -19,6 +19,27 @@ describe('SshGitProvider merge operations', () => {
     })
   })
 
+  it.each(['merge', 'rebase', 'cherry-pick'] as const)(
+    'continueSequencer sends git.continueSequencer for a %s',
+    async (operation) => {
+      const mux = {
+        request: vi.fn().mockResolvedValue(undefined),
+        notify: vi.fn(),
+        onNotification: vi.fn(),
+        dispose: vi.fn(),
+        isDisposed: vi.fn().mockReturnValue(false)
+      }
+      const provider = new SshGitProvider('conn-1', mux as never)
+
+      await provider.continueSequencer('/home/user/repo', operation)
+
+      expect(mux.request).toHaveBeenCalledWith('git.continueSequencer', {
+        worktreePath: '/home/user/repo',
+        operation
+      })
+    }
+  )
+
   it('abortRebase sends git.abortRebase request', async () => {
     const mux = {
       request: vi.fn().mockResolvedValue(undefined),

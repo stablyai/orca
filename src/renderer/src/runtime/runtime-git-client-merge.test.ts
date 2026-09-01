@@ -3,11 +3,16 @@ import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
-import { abortRuntimeGitMerge, abortRuntimeGitRebase } from './runtime-git-client'
+import {
+  abortRuntimeGitMerge,
+  abortRuntimeGitRebase,
+  continueRuntimeGitSequencer
+} from './runtime-git-client'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitAbortMerge = vi.fn()
 const gitAbortRebase = vi.fn()
+const gitContinueSequencer = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 const runtimeCall = vi.fn()
@@ -16,6 +21,8 @@ beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   gitAbortMerge.mockReset()
   gitAbortRebase.mockReset()
+  gitContinueSequencer.mockReset()
+  gitContinueSequencer.mockResolvedValue(undefined)
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeCall.mockReset()
@@ -24,7 +31,11 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      git: { abortMerge: gitAbortMerge, abortRebase: gitAbortRebase },
+      git: {
+        abortMerge: gitAbortMerge,
+        abortRebase: gitAbortRebase,
+        continueSequencer: gitContinueSequencer
+      },
       runtime: { call: runtimeCall },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
@@ -81,6 +92,56 @@ describe('runtime git client merge operations', () => {
     expect(gitAbortRebase).toHaveBeenCalledWith({ connectionId: 'ssh-1', worktreePath: '/repo' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
+
+  const SEQUENCER_OPERATIONS = ['merge', 'rebase', 'cherry-pick'] as const
+
+  it.each(SEQUENCER_OPERATIONS)('uses local git IPC to continue a %s', async (operation) => {
+    await continueRuntimeGitSequencer(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      operation
+    )
+
+    expect(gitContinueSequencer).toHaveBeenCalledWith({
+      connectionId: 'ssh-1',
+      operation,
+      worktreePath: '/repo'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it.each(SEQUENCER_OPERATIONS)(
+    'routes a %s continue through the active runtime',
+    async (operation) => {
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'rpc-1',
+        ok: true,
+        result: { success: true },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+
+      await continueRuntimeGitSequencer(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo'
+        },
+        operation
+      )
+
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'git.continueSequencer',
+        params: { worktree: 'id:wt-1', operation },
+        timeoutMs: 30_000
+      })
+      expect(gitContinueSequencer).not.toHaveBeenCalled()
+    }
+  )
 
   it('routes abort rebase through the active runtime', async () => {
     runtimeEnvironmentCall.mockResolvedValue({

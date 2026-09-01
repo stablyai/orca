@@ -12,11 +12,13 @@ import {
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../../../shared/git-status-line-stats-cache'
+import { readGitRebaseProgress } from '../../../shared/git-rebase-progress'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
+import { resolveGitDir } from './resolve-git-dir'
 import { parseUnmergedEntry } from './status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
 import {
@@ -113,6 +115,15 @@ async function runGetStatus(
 
   // Why: detectConflictOperation and git status are independent, so run them concurrently to save I/O latency.
   const conflictPromise = detectConflictOperation(worktreePath)
+  // Why: only a rebase has readable step state (rebase-merge/rebase-apply) — a
+  // cherry-pick's sequencer dir has no reader here, so probing it would be pure ENOENT churn.
+  const operationProgressPromise = conflictPromise
+    .then(async (operation) =>
+      operation === 'rebase'
+        ? await readGitRebaseProgress(await resolveGitDir(worktreePath))
+        : undefined
+    )
+    .catch(() => undefined)
   // Why: core.quotePath=false keeps non-ASCII paths as raw UTF-8, not octal escapes, so entry.path is readable and lookups match.
   const statusArgs = [
     '-c',
@@ -242,11 +253,14 @@ async function runGetStatus(
     throw error
   }
 
+  const operationProgress = await operationProgressPromise
+
   return {
     entries,
     conflictOperation,
     head,
     branch,
+    ...(operationProgress ? { operationProgress } : {}),
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),

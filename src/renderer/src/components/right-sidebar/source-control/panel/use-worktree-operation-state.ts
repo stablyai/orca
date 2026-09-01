@@ -48,7 +48,11 @@ export function useSourceControlWorktreeOperationState({
   const [abortOperationInFlightByWorktree, setAbortOperationInFlightByWorktree] = useState<
     Record<string, boolean>
   >({})
+  const [advanceOperationInFlightByWorktree, setAdvanceOperationInFlightByWorktree] = useState<
+    Record<string, boolean>
+  >({})
   const isAbortingOperation = abortOperationInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  const isAdvancingOperation = advanceOperationInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   // Why: per-worktree shape (like commit) so navigating worktrees mid-generation never cancels the in-flight request.
   const generateInFlightRef = useRef<Record<string, boolean>>({})
@@ -143,6 +147,7 @@ export function useSourceControlWorktreeOperationState({
     setRemoteActionErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
     setAbortOperationInFlightByWorktree((prev) => pruneRecord(prev))
+    setAdvanceOperationInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateErrors((prev) => pruneRecord(prev))
     setCreatePrIntentInFlightByWorktree((prev) => pruneRecord(prev))
@@ -190,6 +195,7 @@ export function useSourceControlWorktreeOperationState({
 
   return {
     abortOperationInFlightByWorktree,
+    advanceOperationInFlightByWorktree,
     activeRemoteActionSequence,
     commitDraftsRef,
     commitError,
@@ -207,12 +213,14 @@ export function useSourceControlWorktreeOperationState({
     generateInFlightByWorktree,
     generateInFlightRef,
     isAbortingOperation,
+    isAdvancingOperation,
     isCommitting,
     isCreatePrIntentInFlight,
     isCreatingPr,
     remoteActionError,
     remoteActionErrorSequenceByWorktreeRef,
     setAbortOperationInFlightByWorktree,
+    setAdvanceOperationInFlightByWorktree,
     setCommitErrorForWorktree,
     setCommitInFlightByWorktree,
     setCreatePrInFlightByWorktree,

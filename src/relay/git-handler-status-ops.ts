@@ -8,7 +8,8 @@ import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
 import type { GitExec } from './git-handler-ops'
 import type { RelayGitStreamExec } from './git-stdout-stream'
-import type { GitUpstreamStatus } from '../shared/git-status-types'
+import type { GitOperationProgress, GitUpstreamStatus } from '../shared/git-status-types'
+import { readGitRebaseProgress } from '../shared/git-rebase-progress'
 import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
 import { collectGitStatusLineStatInputs } from '../shared/git-status-line-stat-inputs'
@@ -81,6 +82,7 @@ export async function getStatusOp(
   didHitLimit?: boolean
   statusLength?: number
   branchLineTotal?: GitBranchLineTotal
+  operationProgress?: GitOperationProgress
 }> {
   const worktreePath = params.worktreePath as string
   const lineStatsCacheKey = `relay\0${worktreePath}`
@@ -94,6 +96,15 @@ export async function getStatusOp(
   // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
   const limit = resolveGitStatusLimit(params.limit)
   const conflictPromise = detectConflictOperation(worktreePath)
+  // Why: only a rebase has readable step state (rebase-merge/rebase-apply) — a
+  // cherry-pick's sequencer dir has no reader here, so probing it would be pure ENOENT churn.
+  const operationProgressPromise = conflictPromise
+    .then(async (operation) =>
+      operation === 'rebase'
+        ? await readGitRebaseProgress(await resolveGitDir(worktreePath))
+        : undefined
+    )
+    .catch(() => undefined)
   // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
   const statusArgs = [
     '-c',
@@ -231,12 +242,15 @@ export async function getStatusOp(
     throw error
   }
 
+  const operationProgress = await operationProgressPromise
+
   return {
     entries,
     conflictOperation,
     head,
     branch,
     upstreamStatus,
+    ...(operationProgress ? { operationProgress } : {}),
     ...(includeIgnored ? { ignoredPaths } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {})

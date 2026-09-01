@@ -1,4 +1,5 @@
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type { GitSequencerOperation } from '../../shared/git-sequencer-step'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
@@ -9,6 +10,11 @@ export type GitOperationApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
   abortMerge: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
   abortRebase: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+  continueSequencer: (args: {
+    worktreePath: string
+    operation: GitSequencerOperation
+    connectionId?: string
+  }) => Promise<void>
   fetch: (args: {
     worktreePath: string
     connectionId?: string

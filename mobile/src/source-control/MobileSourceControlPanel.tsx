@@ -14,7 +14,10 @@ import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
-import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
+import {
+  isMobileConflictAborting,
+  isMobileConflictAdvancing
+} from './mobile-source-control-conflict-actions'
 import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
@@ -110,8 +113,10 @@ export function MobileSourceControlPanel({
     syncLabel,
     unstagedCount,
     stagedCount,
+    hasUnresolvedConflicts,
     branchEntries,
-    abortConflictOperation
+    abortConflictOperation,
+    continueConflictOperation
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
   const ready = screenState.kind === 'ready'
@@ -275,6 +280,7 @@ export function MobileSourceControlPanel({
   // Git status always reports a conflictOperation enum; 'unknown' means none.
   const hasActiveConflict = conflictOperation != null && conflictOperation !== 'unknown'
   const conflictAborting = isMobileConflictAborting(busyAction, conflictOperation)
+  const conflictAdvancing = isMobileConflictAdvancing(busyAction, conflictOperation)
 
   return (
     <View ref={setRootRef} style={styles.container}>
@@ -297,9 +303,12 @@ export function MobileSourceControlPanel({
           stagedCount={stagedCount}
           branchCount={branchEntries.length}
           conflictOperation={conflictOperation}
+          hasUnresolvedConflicts={hasUnresolvedConflicts}
           conflictBusy={busyAction !== null}
           conflictAborting={conflictAborting}
+          conflictAdvancing={conflictAdvancing}
           onAbortConflict={(operation) => void abortConflictOperation(operation)}
+          onContinueConflict={(operation) => void continueConflictOperation(operation)}
           prChip={prChip}
           onOpenPr={openPrTab}
         />

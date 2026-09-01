@@ -138,12 +138,14 @@ describe('agent completion coordinator', () => {
   it('still detects an unannounced process exit while hidden, at the slower cadence', async () => {
     let foregroundProcess: string | null = 'codex'
     const dispatchCompletion = vi.fn()
+    const onConfirmedProcessExit = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
       inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
       dispatchCompletion,
+      onConfirmedProcessExit,
       isLive: () => true,
       shouldPollProcessCadence: () => false
     })
@@ -165,6 +167,10 @@ describe('agent completion coordinator', () => {
       source: 'process-exit',
       quietedHookDone: false,
       terminalIdleConfirmed: true
+    })
+    expect(onConfirmedProcessExit).toHaveBeenCalledExactlyOnceWith({
+      agent: 'codex',
+      processName: 'codex'
     })
   })
 
@@ -368,6 +374,7 @@ describe('agent completion coordinator', () => {
   it('suppresses confirmed process exit when the owner vetoes the exited process', async () => {
     let foregroundProcess: string | null = 'codex'
     const dispatchCompletion = vi.fn()
+    const onConfirmedProcessExit = vi.fn()
     const shouldSuppressConfirmedProcessExitCompletion = vi.fn(() => true)
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
@@ -376,6 +383,7 @@ describe('agent completion coordinator', () => {
       inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
       dispatchCompletion,
       shouldSuppressConfirmedProcessExitCompletion,
+      onConfirmedProcessExit,
       isLive: () => true
     })
 
@@ -391,6 +399,7 @@ describe('agent completion coordinator', () => {
       processName: 'codex'
     })
     expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(onConfirmedProcessExit).not.toHaveBeenCalled()
   })
 
   it('suppresses process-exit backstop after a title completion already notified the turn', async () => {

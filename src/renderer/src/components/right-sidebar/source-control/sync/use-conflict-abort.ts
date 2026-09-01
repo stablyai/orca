@@ -1,14 +1,12 @@
 import { useCallback } from 'react'
-import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import { getConnectionId } from '@/lib/connection-context'
 import { abortRuntimeGitMerge, abortRuntimeGitRebase } from '@/runtime/runtime-git-client'
 import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
 import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
-import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
+import { useSourceControlConflictOperationRunner } from './use-conflict-operation-runner'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 
 /**
@@ -38,9 +36,23 @@ export function useSourceControlConflictAbort({
   worktreePath: string | null
 }) {
   const confirmAction = useConfirmationDialog()
+  const runConflictOperation = useSourceControlConflictOperationRunner({
+    activeRepoSettings,
+    activeWorktreeId,
+    conflictOperation,
+    isBlocked: isAbortingOperation,
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef,
+    refreshGitHistoryRef,
+    setInFlightByWorktree: setAbortOperationInFlightByWorktree,
+    setRemoteActionErrors,
+    worktreePath
+  })
 
   const handleAbortOperation = useCallback(
     async (requestedOperation: AbortConflictOperation): Promise<void> => {
+      // Why: re-checked by the runner, but guarded here too so a mismatched or
+      // already-running operation never even shows the confirmation dialog.
       if (
         !activeWorktreeId ||
         !worktreePath ||
@@ -66,57 +78,24 @@ export function useSourceControlConflictAbort({
         return
       }
 
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
-      setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
-      try {
-        const context = {
-          // Why: route the abort by the repo OWNER host, not the focused runtime.
-          settings: activeRepoSettings,
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        }
-        const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
-        await abortGitOperation(context)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : `Failed to abort ${label}`
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.SourceControl.f99560ab29',
-            'Abort {{value0}} failed',
-            { value0: label }
-          ),
-          { description: message }
-        )
-        setRemoteActionErrors((prev) => ({
-          ...prev,
-          [activeWorktreeId]: {
-            kind: isRebase ? 'abort_rebase' : 'abort_merge',
-            message,
-            rawError: message
-          }
-        }))
-      } finally {
-        setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
-        refreshSourceControlAfterRemoteAction({
-          refreshGitStatus: refreshActiveGitStatusAfterMutation,
-          refreshBranchCompare: refreshBranchCompareRef.current,
-          refreshGitHistory: refreshGitHistoryRef.current
-        })
-      }
+      await runConflictOperation({
+        requestedOperation,
+        errorKind: isRebase ? 'abort_rebase' : 'abort_merge',
+        failureToast: translate(
+          'auto.components.right.sidebar.SourceControl.f99560ab29',
+          'Abort {{value0}} failed',
+          { value0: label }
+        ),
+        fallbackMessage: `Failed to abort ${label}`,
+        run: (context) => (isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge)(context)
+      })
     },
     [
-      activeRepoSettings,
       activeWorktreeId,
       confirmAction,
       conflictOperation,
       isAbortingOperation,
-      refreshActiveGitStatusAfterMutation,
-      refreshBranchCompareRef,
-      refreshGitHistoryRef,
-      setAbortOperationInFlightByWorktree,
-      setRemoteActionErrors,
+      runConflictOperation,
       worktreePath
     ]
   )

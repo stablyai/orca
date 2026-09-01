@@ -29,6 +29,7 @@ import { useMobileSourceControlCommitFailure } from './use-mobile-source-control
 import {
   buildMobileGitStatusEntryViews,
   formatBranchLabel,
+  formatUpstreamSyncLabel,
   type MobileBranchEntryView
 } from './mobile-source-control-screen-state'
 
@@ -163,12 +164,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const branchLabel = formatBranchLabel(status?.branch, status?.head)
   const upstream = status?.upstreamStatus
   const upstreamKnown = upstream !== undefined
-  const syncLabel =
-    upstream && upstream.hasUpstream
-      ? `${upstream.ahead} ahead, ${upstream.behind} behind`
-      : upstream && !upstream.hasUpstream
-        ? 'No upstream'
-        : null
+  const syncLabel = formatUpstreamSyncLabel(upstream)
 
   const { sendGitRequest, sendCommitRequest, runGitSyncSteps } = useMobileGitRequests({
     client,
@@ -300,6 +296,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     unstageablePaths,
     stagedCount,
     unstagedCount,
+    hasUnresolvedConflicts,
     branchLabel,
     upstream,
     upstreamKnown,

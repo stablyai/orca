@@ -6,6 +6,10 @@ import {
   reconcileOpenFilesForStatus
 } from '../git/git-status-reconciliation'
 import {
+  areGitOperationProgressEqual,
+  resolveNextGitOperationProgress
+} from '../git/operation-progress-state'
+import {
   branchCompareMatchesStatusHead,
   createLoadingBranchCompareSummary,
   getKnownGitHead
@@ -18,6 +22,7 @@ export function createGitStatusActions(
   EditorSlice,
   | 'gitStatusByWorktree'
   | 'gitStatusHeadByWorktree'
+  | 'gitOperationProgressByWorktree'
   | 'gitStatusHugeByWorktree'
   | 'gitBranchLineTotalByWorktree'
   | 'gitIgnoredPathsByWorktree'
@@ -34,6 +39,7 @@ export function createGitStatusActions(
     gitBranchLineTotalByWorktree: {},
     gitIgnoredPathsByWorktree: {},
     gitConflictOperationByWorktree: {},
+    gitOperationProgressByWorktree: {},
     trackedConflictPathsByWorktree: {},
     trackConflictPath: (worktreeId, path, conflictKind) =>
       set((s) => {
@@ -160,6 +166,17 @@ export function createGitStatusActions(
             (prevBranchLineTotal.generated?.removed ?? null) ===
               (nextBranchLineTotal.generated?.removed ?? null))
 
+        const prevOperationProgress = s.gitOperationProgressByWorktree?.[worktreeId] ?? null
+        const nextOperationProgress = resolveNextGitOperationProgress({
+          incoming: status.operationProgress,
+          previous: prevOperationProgress,
+          statusIsComplete
+        })
+        const operationProgressUnchanged = areGitOperationProgressEqual(
+          prevOperationProgress,
+          nextOperationProgress
+        )
+
         const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
         const nextStatusHead = getKnownGitHead(status.head)
         const statusHeadUnchanged = prevStatusHead === nextStatusHead
@@ -180,6 +197,7 @@ export function createGitStatusActions(
           ignoredUnchanged &&
           hugeUnchanged &&
           branchLineTotalUnchanged &&
+          operationProgressUnchanged &&
           statusHeadUnchanged &&
           !shouldInvalidateBranchCompare
         ) {
@@ -202,6 +220,16 @@ export function createGitStatusActions(
             ? { ...s.gitStatusHugeByWorktree, [worktreeId]: nextHuge }
             : (() => {
                 const copy = { ...s.gitStatusHugeByWorktree }
+                delete copy[worktreeId]
+                return copy
+              })()
+
+        const nextOperationProgressMap = operationProgressUnchanged
+          ? s.gitOperationProgressByWorktree
+          : nextOperationProgress
+            ? { ...s.gitOperationProgressByWorktree, [worktreeId]: nextOperationProgress }
+            : (() => {
+                const copy = { ...s.gitOperationProgressByWorktree }
                 delete copy[worktreeId]
                 return copy
               })()
@@ -230,6 +258,7 @@ export function createGitStatusActions(
           gitStatusHugeByWorktree: nextHugeMap,
           gitBranchLineTotalByWorktree: nextBranchLineTotalMap,
           gitStatusHeadByWorktree: nextStatusHeadMap,
+          gitOperationProgressByWorktree: nextOperationProgressMap,
           gitStatusByWorktree: statusUnchanged
             ? s.gitStatusByWorktree
             : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
@@ -258,11 +287,17 @@ export function createGitStatusActions(
             ? {}
             : s.trackedConflictPathsByWorktree[worktreeId]
         const trackedUnchanged = nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
+        // Why: progress describes the operation that just ended; leaving it would keep a stale step meter.
+        const nextProgress = { ...s.gitOperationProgressByWorktree }
+        if (operation === 'unknown') {
+          delete nextProgress[worktreeId]
+        }
         return {
           gitConflictOperationByWorktree: {
             ...s.gitConflictOperationByWorktree,
             [worktreeId]: operation
           },
+          ...(operation === 'unknown' ? { gitOperationProgressByWorktree: nextProgress } : {}),
           ...(trackedUnchanged
             ? {}
             : {

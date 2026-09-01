@@ -5,7 +5,11 @@ import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { remoteRpcContentBudget } from '../../shared/remote-rpc-content-budget'
 import { DeviceRegistry } from './device-registry'
-import { createMobileRpcSurfaceRuntime } from './runtime-rpc-mobile-method-allowlist-fixtures'
+import {
+  createMobileRpcSurfaceRuntime,
+  dispatchMobileSequencerRpcs,
+  expectMobileSequencerRpcsDispatched
+} from './runtime-rpc-mobile-method-allowlist-fixtures'
 
 describe('OrcaRuntimeRpcServer', () => {
   it('limits mobile-scoped WebSocket tokens to the mobile RPC surface', async () => {
@@ -394,6 +398,7 @@ describe('OrcaRuntimeRpcServer', () => {
       deviceToken: mobile.token,
       params: { worktree: 'id:wt-1' }
     })
+    await dispatchMobileSequencerRpcs(dispatch, mobile.token)
     await dispatch({
       id: 'req_git_bulk_unstage',
       method: 'git.bulkUnstage',
@@ -584,6 +589,7 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_git_abort_rebase', ok: true })
     )
+    expectMobileSequencerRpcsDispatched(replies, mocks)
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_git_bulk_unstage', ok: true })
     )
