@@ -29,7 +29,14 @@ export const agentStatusChangedPayloadSchema = z.object({
   worktreeId: z.string().min(1).max(2048).nullable(),
   paneKey: z.string().min(1).max(2048),
   state: z.string().min(1).max(256),
-  receivedAt: z.number().finite().positive()
+  receivedAt: z.number().finite().positive(),
+  // Why (#15639): several agents can share one worktree, and paneKey alone
+  // cannot name WHICH session changed. The provider's own session id and
+  // transcript path are already captured on the status entry; surface them so
+  // plugins correlate without guessing by transcript mtime. Optional because
+  // not every agent CLI reports a session on every status event.
+  sessionId: z.string().min(1).max(2048).optional(),
+  transcriptPath: z.string().min(1).max(4096).optional()
 })
 
 export const PLUGIN_EVENT_PAYLOAD_SCHEMAS: Record<PluginEventName, z.ZodTypeAny> = {
