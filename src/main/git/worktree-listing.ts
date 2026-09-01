@@ -62,7 +62,7 @@ export async function listWorktreesUnshared(
     const visibleWorktrees = options.includeCreatePreparations
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-    return annotateSparseCheckoutStatus(repoPath, visibleWorktrees)
+    return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
   } catch (err) {
     if (getErrorCode(err) === 'ENOENT') {
       try {
@@ -94,12 +94,13 @@ export async function listWorktreesStrict(
   const visibleWorktrees = options.includeCreatePreparations
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-  return annotateSparseCheckoutStatus(repoPath, visibleWorktrees)
+  return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
 }
 
 async function annotateSparseCheckoutStatus(
   repoPath: string,
-  worktrees: GitWorktreeInfo[]
+  worktrees: GitWorktreeInfo[],
+  options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   const annotated = [...worktrees]
   let nextIndex = 0
@@ -112,7 +113,7 @@ async function annotateSparseCheckoutStatus(
       if (!worktree || worktree.isBare || worktree.isSparse) {
         continue
       }
-      const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path)
+      const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path, options)
       if (isSparse) {
         annotated[index] = { ...worktree, isSparse }
       }
@@ -255,15 +256,19 @@ export async function describeCreatedWorktree(
       return undefined
     }
   }
-  const [described] = await annotateSparseCheckoutStatus(repoPath, [
-    {
-      path: translateWorktreePath(created.topLevel, repoPath, options),
-      head,
-      branch: expectedRef,
-      isBare: false,
-      // `git worktree add` only ever produces a linked worktree.
-      isMainWorktree: false
-    }
-  ])
+  const [described] = await annotateSparseCheckoutStatus(
+    repoPath,
+    [
+      {
+        path: translateWorktreePath(created.topLevel, repoPath, options),
+        head,
+        branch: expectedRef,
+        isBare: false,
+        // `git worktree add` only ever produces a linked worktree.
+        isMainWorktree: false
+      }
+    ],
+    options
+  )
   return described
 }
