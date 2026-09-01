@@ -109,7 +109,7 @@ export async function scanAiVaultSessions(
         getCodexHome: (candidate) => candidate.codexHome,
         getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
       },
-      (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal),
+      (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
       options.signal
     )
 

@@ -272,8 +272,10 @@ async function parseResumableCandidate(args: {
     path: file.path,
     start: startOffset,
     onLine: (line) => state.consumeLine(line),
-    onLineBytes: state.consumeLineBytes,
-    shouldStop: state.shouldStop
+    // Bound: the optional hooks are declared as methods, so a parser written
+    // with method syntax must not lose `this` on the way into the reader.
+    onLineBytes: state.consumeLineBytes?.bind(state),
+    shouldStop: state.shouldStop?.bind(state)
   })
   if (args.stats) {
     args.stats.bytesRead += readResult.bytesRead

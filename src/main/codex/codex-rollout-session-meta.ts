@@ -1,11 +1,17 @@
 import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
+import type { WslTranscriptFsTaskPriority } from '../native-chat/wsl-transcript-fs-gate'
 
 const ROLLOUT_READ_LIMIT = 64 * 1024
 
-/** Read the Codex session id without streaming the full rollout transcript. */
+/**
+ * Read the Codex session id without streaming the full rollout transcript.
+ * Defaults to `exact` because the live-resume proof is interactive; the AI
+ * Vault scan passes `scan` so a bulk sweep cannot starve it.
+ */
 export async function readCodexRolloutSessionMetaId(
   filePath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  priority: WslTranscriptFsTaskPriority = 'exact'
 ): Promise<string | null> {
   let head: Buffer
   try {
@@ -14,7 +20,7 @@ export async function readCodexRolloutSessionMetaId(
     // transcript gate's deadline instead of blocking the scan (#15453). A
     // listed rollout may also vanish before it is read — Codex prunes and
     // rewrites these files — and one missing file must not abort the scan.
-    head = await readTranscriptSlice(filePath, 0, ROLLOUT_READ_LIMIT, 'scan', signal)
+    head = await readTranscriptSlice(filePath, 0, ROLLOUT_READ_LIMIT, priority, signal)
   } catch {
     return null
   }
