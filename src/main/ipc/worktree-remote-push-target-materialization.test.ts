@@ -78,12 +78,21 @@ describe('materializeWorktreePushTargetRemote', () => {
 
     expect(result).toEqual({ ...target, remoteCreated: true })
     const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
-    expect(calls).toContainEqual(['remote', 'add', FORK_REMOTE, FORK_URL])
+    // Mint uses the narrow `-t <branch> --no-tags` add form (#17887), not a bare `remote add`.
+    expect(calls).toContainEqual([
+      'remote',
+      'add',
+      '-t',
+      target.branchName,
+      '--no-tags',
+      FORK_REMOTE,
+      FORK_URL
+    ])
     expect(calls).toContainEqual(['config', `remote.${FORK_REMOTE}.orca-created`, 'true'])
     expect(calls).toContainEqual([
       'fetch',
       FORK_REMOTE,
-      `+refs/heads/${target.branchName}:refs/remotes/${FORK_REMOTE}/${target.branchName}`
+      `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
     ])
   })
 })

@@ -87,7 +87,8 @@ describe('prepareWorktreePushTargetWithExec', () => {
     await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
 
     // Why: cleanup's ownership check must survive a store purge (worktree-push-target-cleanup.ts).
-    expect(callsMatching(exec, ['config'])).toEqual([
+    // Narrowing the refspec (#17887) also writes `config` calls, so scope to the marker itself.
+    expect(callsMatching(exec, ['config', 'remote.pr-contributor-orca.orca-created'])).toEqual([
       ['config', 'remote.pr-contributor-orca.orca-created', 'true']
     ])
   })
@@ -100,7 +101,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
 
     await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
 
-    expect(callsMatching(exec, ['config'])).toEqual([])
+    expect(callsMatching(exec, ['config', 'remote.pr-contributor-orca.orca-created'])).toEqual([])
   })
 
   it('reuses an existing remote pointing at the same fork (SSH vs HTTPS) without adding', async () => {
