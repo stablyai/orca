@@ -70,6 +70,24 @@ describe('mapRuntimeError', () => {
     })
   })
 
+  it('preserves worker disposition recovery data across RPC', () => {
+    const data = {
+      effectsApplied: true,
+      acknowledged: 'delivery_1',
+      runId: 'run_1',
+      dispatchIds: ['ctx_1']
+    }
+    const error = Object.assign(new Error('Worker disposition is required.'), {
+      code: 'worker_disposition_required',
+      data
+    })
+
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
+      ok: false,
+      error: { code: 'worker_disposition_required', data }
+    })
+  })
+
   it.each(['remote_runtime_unavailable', 'runtime_timeout', 'invalid_runtime_response'])(
     'preserves structured remote transport failure %s',
     (code) => {

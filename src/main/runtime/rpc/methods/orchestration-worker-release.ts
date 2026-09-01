@@ -33,12 +33,16 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
       const db = runtime.getOrchestrationDb()
       if (db.getFederatedDispatch(params.dispatch)) {
         // Fail closed: the worker server owns that terminal; a home-side close would be a guess.
+        const retained = db.retainFederatedWorkerDisposition(
+          params.dispatch,
+          'federation_unsupported'
+        )
         return {
           dispatchId: params.dispatch,
           state: 'retained',
           reason: 'federation_unsupported',
           processAction: 'none',
-          archive: null,
+          archive: archiveSummary(retained),
           recovery:
             'Connected-server workers do not support release yet; inspect the worker server directly.'
         }
@@ -98,6 +102,16 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
     params: WorkerDispatchParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      if (db.getFederatedDispatch(params.dispatch)) {
+        const retained = db.retainFederatedWorkerDisposition(params.dispatch, 'user_requested')
+        return {
+          dispatchId: params.dispatch,
+          state: 'retained' as const,
+          reason: 'user_requested' as const,
+          processAction: 'none' as const,
+          archive: archiveSummary(retained)
+        }
+      }
       const retained = db.retainWorkerTerminalResource(params.dispatch)
       if (retained.disposition === 'already_released') {
         return {

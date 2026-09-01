@@ -55,6 +55,7 @@ import type { WorkerDispatchStartMethods } from './worker-dispatch/worker-dispat
 import type { WorkerDispatchStopMethods } from './worker-dispatch/worker-dispatch-stop'
 import type { WorkerTerminalRecoveryMethods } from './worker-dispatch/worker-terminal-recovery'
 import type { WorkerTerminalArchiveMethods } from './worker-terminal/worker-terminal-archive'
+import type { WorkerDispositionBarrierMethods } from './worker-disposition/worker-disposition-barrier'
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
@@ -112,6 +113,7 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   WorkerTerminalReleaseMethods &
   WorkerTerminalArchiveMethods &
   WorkerTerminalListingMethods &
+  WorkerDispositionBarrierMethods &
   DispatchContextStoreMethods &
   DispatchCapabilityMethods &
   DispatchLookupMethods &

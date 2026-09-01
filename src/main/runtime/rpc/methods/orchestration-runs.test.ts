@@ -3,6 +3,7 @@ import { buildRegistry, type RpcContext } from '../core'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
+import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 describe('orchestration RPC methods', () => {
@@ -69,6 +70,48 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('lightweight Runs', () => {
+    function createCompletedOwnedWorker() {
+      const runId = db.getCurrentRunForPane(coordinatorPaneKey)?.id
+      if (!runId) {
+        throw new Error('Expected a bound Run')
+      }
+      const task = db.createTask({ spec: 'supervised work', runId })
+      const { dispatch } = db.createStartingWorkerDispatch({
+        taskId: task.id,
+        startOptions: {},
+        creator: { kind: 'system' },
+        maxDepth: 1
+      })
+      const terminalHandle = 'term_worker'
+      const paneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      db.prepareStartingWorkerAuthority({
+        dispatchId: dispatch.id,
+        handle: terminalHandle,
+        paneKey,
+        processIncarnation: 'runtime_test:term_worker:1',
+        worktreeId: 'repo::worktree',
+        effects: [],
+        setupState: 'skipped',
+        terminalOwnership: 'created'
+      })
+      db.markWorkerDispatchReady(dispatch.id)
+      const message = db.insertMessage({
+        from: terminalHandle,
+        to: `run:${runId}`,
+        subject: 'Done',
+        type: 'worker_done',
+        payload: JSON.stringify({
+          taskId: task.id,
+          dispatchId: dispatch.id,
+          outcome: 'succeeded'
+        }),
+        senderPaneKey: paneKey,
+        runId
+      })
+      reconcileLifecycleMessage(db, message)
+      return { dispatchId: dispatch.id, runId }
+    }
+
     it('creates and binds a Run to the runtime-resolved caller pane', async () => {
       setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(
@@ -126,6 +169,117 @@ describe('orchestration RPC methods', () => {
       await expect(
         call('orchestration.runUse', { id: 'run_legacy_local', from: 'term_new' })
       ).rejects.toMatchObject({ code: 'run_not_found' })
+    })
+
+    it('does not create a new Run while the current Run has an undispositioned worker', async () => {
+      setup()
+      const worker = createCompletedOwnedWorker()
+
+      await expect(
+        call('orchestration.runCreate', {
+          objective: 'Abandon the completed worker',
+          from: 'term_coord'
+        })
+      ).rejects.toMatchObject({
+        code: 'worker_disposition_required',
+        data: { dispatchIds: [worker.dispatchId] }
+      })
+
+      const current = (await call('orchestration.runCurrent', { from: 'term_coord' })) as {
+        run: { id: string } | null
+      }
+      const listed = (await call('orchestration.runList', {})) as {
+        runs: { objective: string }[]
+      }
+      expect(current.run?.id).toBe(worker.runId)
+      expect(listed.runs).not.toContainEqual(
+        expect.objectContaining({ objective: 'Abandon the completed worker' })
+      )
+    })
+
+    it('allows a replacement coordinator to rebind the same blocked Run', async () => {
+      setup()
+      const worker = createCompletedOwnedWorker()
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_coord' || handle === 'term_replacement' ? coordinatorPaneKey : null
+      )
+
+      const rebound = (await call('orchestration.runUse', {
+        id: worker.runId,
+        from: 'term_replacement'
+      })) as { run: { id: string; coordinator_handle: string; consumer_generation: number } }
+      expect(rebound.run).toMatchObject({
+        id: worker.runId,
+        coordinator_handle: 'term_replacement',
+        consumer_generation: 2
+      })
+    })
+
+    it('does not mistake a startup failure for an accepted worker report', async () => {
+      setup()
+      const runId = db.getCurrentRunForPane(coordinatorPaneKey)?.id as string
+      const task = db.createTask({ spec: 'startup failure', runId })
+      const { dispatch } = db.createStartingWorkerDispatch({
+        taskId: task.id,
+        startOptions: {},
+        creator: { kind: 'system' },
+        maxDepth: 1
+      })
+      db.prepareStartingWorkerAuthority({
+        dispatchId: dispatch.id,
+        handle: 'term_worker',
+        paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        processIncarnation: 'runtime_test:term_worker:1',
+        worktreeId: 'repo::worktree',
+        effects: [],
+        setupState: 'failed',
+        terminalOwnership: 'created'
+      })
+      db.failWorkerStart(
+        dispatch.id,
+        'terminal_ready',
+        JSON.stringify({ provenance: 'worker_report', body: 'spoofed startup failure' })
+      )
+      const workers = (await call('orchestration.workerList', {
+        run: runId,
+        terminalState: 'reclaimable'
+      })) as { workers: { dispatchId: string }[] }
+      expect(workers.workers).toEqual([expect.objectContaining({ dispatchId: dispatch.id })])
+
+      await expect(
+        call('orchestration.runCreate', {
+          objective: 'Recovery Run',
+          from: 'term_coord'
+        })
+      ).resolves.toMatchObject({ run: { objective: 'Recovery Run' } })
+    })
+
+    it('does not switch Runs until the source worker is explicitly retained', async () => {
+      setup()
+      const worker = createCompletedOwnedWorker()
+      const target = db.createRun({
+        objective: 'Target Run',
+        coordinatorHandle: 'term_other',
+        coordinatorPaneKey: 'tab_other:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      })
+
+      await expect(
+        call('orchestration.runUse', { id: target.id, from: 'term_coord' })
+      ).rejects.toMatchObject({
+        code: 'worker_disposition_required',
+        data: { dispatchIds: [worker.dispatchId] }
+      })
+      const stillCurrent = (await call('orchestration.runCurrent', { from: 'term_coord' })) as {
+        run: { id: string } | null
+      }
+      expect(stillCurrent.run?.id).toBe(worker.runId)
+
+      await call('orchestration.workerRetain', { dispatch: worker.dispatchId })
+      const switched = (await call('orchestration.runUse', {
+        id: target.id,
+        from: 'term_coord'
+      })) as { run: { id: string } }
+      expect(switched.run.id).toBe(target.id)
     })
 
     it('requires an explicit binding before task mutation', async () => {

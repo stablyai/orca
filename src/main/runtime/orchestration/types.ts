@@ -156,6 +156,7 @@ export type WorkerDispatchRow = {
   residual_resources: string
   start_options: string
   last_error: string | null
+  worker_report_settled_at: string | null
   created_at: string
   updated_at: string
 }

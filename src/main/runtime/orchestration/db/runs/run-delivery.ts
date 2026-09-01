@@ -149,6 +149,7 @@ export function acknowledgeRunDelivery(
         'This mailbox Delivery belongs to a fenced consumer generation.'
       )
     }
+    this.requireRunWorkerDisposition(params.runId)
     if (delivery.status === 'acknowledged') {
       this.db.exec('COMMIT')
       return { delivery: exposeDeliveryTimestamps(delivery), duplicate: true }

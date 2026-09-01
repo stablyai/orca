@@ -55,6 +55,7 @@ import { attachWorkerDispatchStart } from './worker-dispatch/worker-dispatch-sta
 import { attachWorkerDispatchStop } from './worker-dispatch/worker-dispatch-stop'
 import { attachWorkerTerminalRecovery } from './worker-dispatch/worker-terminal-recovery'
 import { attachWorkerTerminalArchive } from './worker-terminal/worker-terminal-archive'
+import { attachWorkerDispositionBarrier } from './worker-disposition/worker-disposition-barrier'
 import { attachWorkerTerminalListing } from './worker-terminal/worker-terminal-listing'
 import { attachWorkerTerminalRelease } from './worker-terminal/worker-terminal-release'
 import { attachWorkerTerminalResourceStore } from './worker-terminal/worker-terminal-resource-store'
@@ -113,6 +114,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachWorkerTerminalRelease(ctor)
   attachWorkerTerminalArchive(ctor)
   attachWorkerTerminalListing(ctor)
+  attachWorkerDispositionBarrier(ctor)
   attachDispatchContextStore(ctor)
   attachDispatchCapability(ctor)
   attachDispatchLookup(ctor)

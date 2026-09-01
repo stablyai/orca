@@ -47,9 +47,15 @@ export class OrchestrationMailboxNotificationCoordinator<
     }
     const waiters = this.deps.getMessageWaiters(mailboxHandle)
     const arrivedTypes = directTypes ?? (messageType ? [messageType] : undefined)
+    // A completed supervised worker must interrupt every actionable Run wait. The Delivery
+    // still includes all unread rows, so the coordinator sees worker_done even when it asked
+    // to wake only for another type and can disposition that worker before waiting again.
+    const requiresWorkerDisposition =
+      mailboxHandle.startsWith('run:') && arrivedTypes?.includes('worker_done') === true
     const consumers = waiters
       ? [...waiters].filter(
           (waiter) =>
+            requiresWorkerDisposition ||
             !arrivedTypes ||
             !waiter.typeFilter ||
             arrivedTypes.some((type) => waiter.typeFilter?.includes(type))

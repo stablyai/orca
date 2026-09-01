@@ -150,7 +150,9 @@ export function settleWorkerReportInTransaction(
   this.db
     .prepare(
       `UPDATE worker_dispatches
-       SET state = ?, stage = 'settled', updated_at = datetime('now')
+       SET state = ?, stage = 'settled',
+           worker_report_settled_at = COALESCE(worker_report_settled_at, datetime('now')),
+           updated_at = datetime('now')
        WHERE dispatch_id = ? AND state = ?`
     )
     .run(

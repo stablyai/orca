@@ -126,22 +126,24 @@ export function unbindOtherRunsForPane(
   paneKey: string,
   exceptRunId?: string
 ): void {
-  for (const run of this.runsBoundToPane(paneKey)) {
-    if (run.id !== exceptRunId) {
-      if (run.coordinator_handle) {
-        this.routeAllUnreadDirectMessagesToRunMailbox(run.id, run.coordinator_handle)
-      }
-      this.db
-        .prepare(
-          `UPDATE runs
-           SET coordinator_handle = NULL, coordinator_pane_key = NULL,
-               consumer_generation = consumer_generation + 1,
-               updated_at = datetime('now')
-           WHERE id = ?`
-        )
-        .run(run.id)
-      this.fenceOutstandingDelivery(run.id)
+  const runsToUnbind = this.runsBoundToPane(paneKey).filter((run) => run.id !== exceptRunId)
+  for (const run of runsToUnbind) {
+    this.requireRunWorkerDisposition(run.id)
+  }
+  for (const run of runsToUnbind) {
+    if (run.coordinator_handle) {
+      this.routeAllUnreadDirectMessagesToRunMailbox(run.id, run.coordinator_handle)
     }
+    this.db
+      .prepare(
+        `UPDATE runs
+         SET coordinator_handle = NULL, coordinator_pane_key = NULL,
+             consumer_generation = consumer_generation + 1,
+             updated_at = datetime('now')
+         WHERE id = ?`
+      )
+      .run(run.id)
+    this.fenceOutstandingDelivery(run.id)
   }
 }
 

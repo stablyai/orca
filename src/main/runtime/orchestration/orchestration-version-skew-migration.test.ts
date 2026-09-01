@@ -181,6 +181,166 @@ describe('OrchestrationDb version-skew migration', () => {
     expect(db.getQuestion(question.message.id)).toMatchObject({ status: 'pending' })
   })
 
+  it('backfills accepted worker-report provenance while upgrading v30', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-worker-report-migration-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const run = db.createRun({
+      objective: 'Pre-v31 worker report',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const openDb = db
+    const startWorker = (spec: string, handle: string) => {
+      const task = openDb.createTask({ spec, runId: run.id })
+      const { dispatch } = openDb.createStartingWorkerDispatch({
+        taskId: task.id,
+        startOptions: {},
+        creator: { kind: 'system' },
+        maxDepth: 1
+      })
+      openDb.prepareStartingWorkerAuthority({
+        dispatchId: dispatch.id,
+        handle,
+        paneKey: `tab_${handle}:leaf_${handle}`,
+        processIncarnation: `runtime:${handle}:1`,
+        worktreeId: 'repo::worktree',
+        effects: [],
+        setupState: 'completed',
+        terminalOwnership: 'created'
+      })
+      return { task, dispatch }
+    }
+    const succeeded = startWorker('complete before update', 'term_succeeded')
+    db.markWorkerDispatchReady(succeeded.dispatch.id)
+    db.settleWorkerReport({
+      taskId: succeeded.task.id,
+      dispatchId: succeeded.dispatch.id,
+      outcome: 'succeeded',
+      result: 'completed before v31'
+    })
+    const failed = startWorker('fail before update', 'term_failed')
+    db.markWorkerDispatchReady(failed.dispatch.id)
+    const failedMessage = db.insertMessage({
+      from: 'term_failed',
+      to: `run:${run.id}`,
+      subject: 'Failed',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: failed.task.id,
+        dispatchId: failed.dispatch.id,
+        outcome: 'failed'
+      }),
+      runId: run.id
+    })
+    db.settleWorkerReport({
+      taskId: failed.task.id,
+      dispatchId: failed.dispatch.id,
+      outcome: 'failed',
+      result: 'legacy failed worker report'
+    })
+    const spoofed = startWorker('spoof before update', 'term_spoofed')
+    db.failWorkerStart(
+      spoofed.dispatch.id,
+      'terminal_ready',
+      JSON.stringify({ provenance: 'worker_report', messageId: failedMessage.id })
+    )
+    db.resetMessages()
+    const markerField = startWorker('reserved marker field', 'term_marker_field')
+    db.markWorkerDispatchReady(markerField.dispatch.id)
+    const markerFieldMessage = db.insertMessage({
+      from: 'term_marker_field',
+      to: `run:${run.id}`,
+      subject: 'Failed with extra field',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: markerField.task.id,
+        dispatchId: markerField.dispatch.id,
+        outcome: 'failed',
+        _orcaLifecycleRejection: {}
+      }),
+      runId: run.id
+    })
+    db.settleWorkerReport({
+      taskId: markerField.task.id,
+      dispatchId: markerField.dispatch.id,
+      outcome: 'failed',
+      result: JSON.stringify({
+        provenance: 'worker_report',
+        messageId: markerFieldMessage.id
+      })
+    })
+    db.abandonWorkerDispatch(markerField.dispatch.id)
+    db.db.prepare('UPDATE tasks SET result = NULL WHERE id = ?').run(markerField.task.id)
+    const rejected = startWorker('rejected lifecycle marker', 'term_rejected')
+    const rejectedMessage = db.insertMessage({
+      from: 'term_rejected',
+      to: `run:${run.id}`,
+      subject: 'Rejected',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: rejected.task.id,
+        dispatchId: rejected.dispatch.id,
+        outcome: 'failed',
+        _orcaLifecycleRejection: { code: 'sender_not_assignee', reason: 'wrong pane' }
+      }),
+      runId: run.id
+    })
+    db.failWorkerStart(
+      rejected.dispatch.id,
+      'terminal_ready',
+      JSON.stringify({ provenance: 'worker_report', messageId: rejectedMessage.id })
+    )
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    raw.exec('ALTER TABLE worker_dispatches DROP COLUMN worker_report_settled_at')
+    raw.pragma('user_version = 30')
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+    const provenance = db.db
+      .prepare(
+        `SELECT dispatch_id, worker_report_settled_at
+           FROM worker_dispatches
+          WHERE dispatch_id IN (?, ?, ?, ?, ?)
+          ORDER BY rowid`
+      )
+      .all(
+        succeeded.dispatch.id,
+        failed.dispatch.id,
+        spoofed.dispatch.id,
+        markerField.dispatch.id,
+        rejected.dispatch.id
+      )
+    expect(provenance).toEqual([
+      {
+        dispatch_id: succeeded.dispatch.id,
+        worker_report_settled_at: expect.any(String)
+      },
+      { dispatch_id: failed.dispatch.id, worker_report_settled_at: expect.any(String) },
+      { dispatch_id: spoofed.dispatch.id, worker_report_settled_at: null },
+      {
+        dispatch_id: markerField.dispatch.id,
+        worker_report_settled_at: expect.any(String)
+      },
+      { dispatch_id: rejected.dispatch.id, worker_report_settled_at: null }
+    ])
+    let barrierError: unknown
+    try {
+      db.requireRunWorkerDisposition(run.id)
+    } catch (error) {
+      barrierError = error
+    }
+    expect(barrierError).toMatchObject({
+      code: 'worker_disposition_required',
+      data: {
+        dispatchIds: [succeeded.dispatch.id, failed.dispatch.id, markerField.dispatch.id]
+      }
+    })
+  })
+
   it('does not repair an incomplete schema written by a future binary', () => {
     const dbPath = createLegacySchemaClaimingVersion(20)
     const raw = new Database(dbPath)

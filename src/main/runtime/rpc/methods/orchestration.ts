@@ -1009,6 +1009,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             : {})
         })
         const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
+        const requireDispositionWhenWorkerReportsAreHidden = (messages: MessageRow[]) => {
+          if (!messages.some((message) => message.type === 'worker_done')) {
+            db.requireRunWorkerDisposition(run.id, {
+              acknowledgedDeliveryId: acknowledged?.delivery.id
+            })
+          }
+        }
         const readDelivery = (wakeTypes?: MessageType[]) =>
           db.getOrCreateRunDelivery({
             runId: run.id,
@@ -1017,6 +1024,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           })
         let peeked = params.peek ? readPeek() : []
         if (params.peek && peeked.length > 0) {
+          if (params.wait) {
+            requireDispositionWhenWorkerReportsAreHidden(peeked)
+          }
           return peekResult(peeked)
         }
         let current = params.peek ? undefined : readDelivery(params.wait ? typeFilter : undefined)
@@ -1052,6 +1062,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           }
         }
 
+        db.requireRunWorkerDisposition(run.id, {
+          acknowledgedDeliveryId: acknowledged?.delivery.id
+        })
         const waitResult = await runtime.waitForMessage(address, {
           typeFilter: typeFilter as string[] | undefined,
           timeoutMs: params.timeoutMs ?? undefined,
@@ -1084,6 +1097,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             'waiter_exists',
             `Run ${run.id} already has an active actionable waiter.`
           )
+        }
+        if (waitResult === 'timed_out' || waitResult === 'cancelled') {
+          db.requireRunWorkerDisposition(run.id, {
+            acknowledgedDeliveryId: acknowledged?.delivery.id
+          })
         }
         if (waitResult === 'timed_out') {
           if (params.peek) {
@@ -1123,6 +1141,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
         if (params.peek) {
           peeked = readPeek()
+          requireDispositionWhenWorkerReportsAreHidden(peeked)
           return {
             ...peekResult(peeked),
             timedOut: false,
@@ -1131,6 +1150,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           }
         }
         current = readDelivery(typeFilter)
+        requireDispositionWhenWorkerReportsAreHidden(current?.messages ?? [])
         return {
           runId: run.id,
           deliveryId: current?.delivery.id ?? null,
