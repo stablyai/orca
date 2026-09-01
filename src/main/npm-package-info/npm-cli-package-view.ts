@@ -40,13 +40,24 @@ function extractRepositoryUrl(repository: unknown): string | null {
 function parseManifest(packageName: string, stdout: string): NpmPackageInfo | null {
   try {
     const manifest = JSON.parse(stdout) as Record<string, unknown>
+    // Why the bracketed key: with field selectors npm returns a flat object
+    // keyed by the literal selectors, so `dist-tags.latest` is one key rather
+    // than a nested path.
+    const latestVersion =
+      typeof manifest['dist-tags.latest'] === 'string'
+        ? (manifest['dist-tags.latest'] as string)
+        : typeof manifest.version === 'string'
+          ? manifest.version
+          : null
+    const time = manifest.time as Record<string, unknown> | undefined
     return {
       packageName,
       description: typeof manifest.description === 'string' ? manifest.description : null,
-      latestVersion: typeof manifest.version === 'string' ? manifest.version : null,
-      // `npm view <pkg> --json` (no field selector) does not include publish
-      // dates in the returned single-version manifest.
-      latestPublishedAt: null,
+      latestVersion,
+      latestPublishedAt:
+        latestVersion && typeof time?.[latestVersion] === 'string'
+          ? (time[latestVersion] as string)
+          : null,
       homepageUrl: toHttpsUrl(manifest.homepage),
       repositoryUrl: extractRepositoryUrl(manifest.repository),
       source: 'npm-cli'
@@ -57,7 +68,7 @@ function parseManifest(packageName: string, stdout: string): NpmPackageInfo | nu
 }
 
 /**
- * Runs the local npm CLI (`npm view <pkg> --json --silent`) to read registry
+ * Runs the local npm CLI (`npm view --json -- <pkg> <fields>`) to read registry
  * metadata as configured by the host's own `.npmrc` (private registries,
  * scopes, auth) — the same source of truth VS Code uses.
  */
@@ -79,7 +90,23 @@ export async function npmCliPackageView(
   try {
     result = await runProcess({
       program,
-      args: ['view', packageName, '--json', '--silent'],
+      // Why the explicit field list: a bare `npm view <pkg> --json` returns the
+      // latest version's manifest, which carries no publish dates. Selectors
+      // are what make npm include `time`. `--` keeps a package name that
+      // begins with a dash from being read as a flag.
+      args: [
+        'view',
+        '--json',
+        '--silent',
+        '--',
+        packageName,
+        'description',
+        'dist-tags.latest',
+        'homepage',
+        'version',
+        'time',
+        'repository'
+      ],
       cwd,
       // Why pinned: corepack's npm wrapper rewrites the user's package.json to
       // pin a packageManager field unless auto-pin/project-spec are disabled.

@@ -55,7 +55,19 @@ describe('npmCliPackageView', () => {
     expect(runProcessMock).toHaveBeenCalledTimes(1)
     const spec = runProcessMock.mock.calls[0]![0]
     expect(spec.program).toBe('/usr/local/bin/npm')
-    expect(spec.args).toEqual(['view', 'react', '--json', '--silent'])
+    expect(spec.args).toEqual([
+      'view',
+      '--json',
+      '--silent',
+      '--',
+      'react',
+      'description',
+      'dist-tags.latest',
+      'homepage',
+      'version',
+      'time',
+      'repository'
+    ])
     expect(spec.cwd).toBe('/repo/worktree')
     expect(spec.timeoutMs).toBe(8000)
     expect(spec.env.COREPACK_ENABLE_AUTO_PIN).toBe('0')
@@ -145,5 +157,51 @@ describe('npmCliPackageView', () => {
     const result = await npmCliPackageView('react', '/repo/worktree', fakeStore)
 
     expect(result).toEqual({ status: 'unavailable', reason: 'error' })
+  })
+})
+
+describe('npmCliPackageView latest publish date', () => {
+  beforeEach(() => {
+    runProcessMock.mockReset()
+    resolveCliCommandMock.mockReset()
+    resolveRegisteredWorktreePathMock.mockReset()
+    resolveCliCommandMock.mockReturnValue('/usr/local/bin/npm')
+    resolveRegisteredWorktreePathMock.mockResolvedValue('/repo/worktree')
+  })
+
+  // Why: `npm view <pkg> --json` without field selectors returns the latest
+  // version's manifest, which carries no publish dates. Requesting `time`
+  // explicitly is the only way the CLI path can populate the date the
+  // tooltip promises.
+  it('requests the time field and maps the latest version publish date', async () => {
+    runProcessMock.mockResolvedValue(
+      processResult({
+        stdout: JSON.stringify({
+          description: 'React is a JavaScript library for building user interfaces.',
+          'dist-tags.latest': '19.2.8',
+          homepage: 'https://react.dev/',
+          version: '19.2.8',
+          time: {
+            created: '2011-10-26T17:46:21.942Z',
+            '19.2.7': '2026-07-01T10:00:00.000Z',
+            '19.2.8': '2026-08-20T10:00:00.000Z'
+          },
+          repository: { type: 'git', url: 'git+https://github.com/facebook/react.git' }
+        })
+      })
+    )
+
+    const result = await npmCliPackageView('react', '/repo/worktree', fakeStore)
+
+    const args = runProcessMock.mock.calls[0]?.[0]?.args as string[]
+    expect(args).toContain('time')
+    expect(result).toMatchObject({
+      status: 'ok',
+      info: {
+        latestVersion: '19.2.8',
+        latestPublishedAt: '2026-08-20T10:00:00.000Z',
+        repositoryUrl: 'https://github.com/facebook/react.git'
+      }
+    })
   })
 })
