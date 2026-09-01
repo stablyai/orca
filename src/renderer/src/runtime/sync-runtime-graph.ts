@@ -54,6 +54,7 @@ import { applyNativeChatLaunchDraftResolved } from './native-chat-launch-draft-r
 type RegisteredTerminalTab = {
   tabId: string
   worktreeId: string
+  getIsVisible?: () => boolean
   getManager: () => PaneManager | null
   getContainer: () => HTMLDivElement | null
   getPtyIdForPane: (paneId: number) => string | null
@@ -857,7 +858,7 @@ async function syncRuntimeGraph(): Promise<void> {
         leafId,
         paneRuntimeId: pane.id,
         ptyId,
-        surface: 'visible',
+        surface: registeredTab.getIsVisible?.() === false ? 'background' : 'visible',
         paneTitle: paneTitles[pane.id] ?? null,
         title: resolveRuntimeTerminalTitle(
           tab,

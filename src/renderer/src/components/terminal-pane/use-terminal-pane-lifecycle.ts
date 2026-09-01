@@ -1076,6 +1076,7 @@ export function useTerminalPaneLifecycle({
     const unregisterRuntimeTab = registerRuntimeTerminalTab({
       tabId,
       worktreeId,
+      getIsVisible: () => isVisibleRef.current,
       getManager: () => managerRef.current,
       getContainer: () => containerRef.current,
       getPtyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null,
@@ -2287,6 +2288,9 @@ export function useTerminalPaneLifecycle({
     })
     previousVisibleForReconcileRef.current = { tabId, cwd, isVisible }
     isVisibleRef.current = isVisible
+    if (previousIsVisible !== null && previousIsVisible !== isVisible) {
+      scheduleRuntimeGraphSync()
+    }
     const resumedFromHidden = isTerminalPaneVisibilityResume({ previousIsVisible, isVisible })
     for (const panePtyBinding of panePtyBindingsRef.current.values()) {
       const bindingWithVisibility = panePtyBinding as IDisposable & {
