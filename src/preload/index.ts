@@ -592,6 +592,7 @@ const api = {
         throw new Error('Failed to stage renderer state before unload.')
       }
     },
+    awaitBeforeUnloadCheckpoint,
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
     prepareTerminalStartupRestoration: (): Promise<void> =>
@@ -5344,6 +5345,9 @@ const api = {
     }
   }
 }
+
+/** The bridge object the renderer receives; checked against PreloadApi in preload-api-implementation-completeness.ts. */
+export type PreloadApiImplementation = typeof api
 
 // Expose Electron APIs via contextBridge when context-isolated, otherwise attach to the DOM global.
 if (process.contextIsolated) {

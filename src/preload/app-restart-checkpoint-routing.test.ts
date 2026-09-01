@@ -92,6 +92,20 @@ describe('native preload destructive app actions', () => {
     })
   }
 
+  // Why: the lazy-chunk recovery reload joins this member through `?.()`, so leaving
+  // it off the bridge reads as "checkpoint fine" and reloads over unsaved buffers.
+  it('exposes the durable checkpoint join the recovery reload refuses on', async () => {
+    const api = await loadApi()
+    invoke.mockImplementation(async (channel: string) =>
+      channel === 'app:await-before-unload-checkpoint' ? { ok: false } : undefined
+    )
+
+    expect(typeof api.app.awaitBeforeUnloadCheckpoint).toBe('function')
+    await expect(api.app.awaitBeforeUnloadCheckpoint()).rejects.toThrow(
+      'Failed to persist renderer state before unload.'
+    )
+  })
+
   it('preserves both macOS keyboard preload adapters', async () => {
     const api = await loadApi()
     invoke.mockResolvedValue(undefined)
