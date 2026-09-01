@@ -7,6 +7,7 @@ import {
   FULL_HEAD_IDENTITY_SCOPE,
   headIdentityScopeForEntry,
   LISTING_HEAD_IDENTITY_SCOPE,
+  mergeHeadIdentityScopes,
   PRIMARY_HEAD_IDENTITY_SCOPE,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
@@ -233,9 +234,15 @@ function classifyGitCommonEvent(
     return NO_CHANGE
   }
   if (parts.length === 2) {
+    // Name the entry as well as the listing: a remove+add reusing one admin dir
+    // name coalesces into a single refresh, and the listing alone would keep
+    // serving the removed worktree's cached head.
     return event.type === 'update'
       ? NO_CHANGE
-      : structuralChange(repoIds, LISTING_HEAD_IDENTITY_SCOPE)
+      : structuralChange(
+          repoIds,
+          mergeHeadIdentityScopes(LISTING_HEAD_IDENTITY_SCOPE, headIdentityScopeForEntry(parts[1]))
+        )
   }
   if (parts.length === 3) {
     if (GIT_COMMON_LINKED_STRUCTURAL_FILES.has(parts[2])) {

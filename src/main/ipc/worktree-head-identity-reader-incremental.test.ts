@@ -160,6 +160,59 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     expect(cache.entries.has('wt-b')).toBe(false)
   })
 
+  it('re-reads an admin entry whose name was removed and immediately reused', async () => {
+    const { commonDir, cache, pathA } = await seed()
+    // One debounce window can coalesce `git worktree remove` + `git worktree
+    // add` onto the same admin dir name, so the listing alone is not enough.
+    await rm(join(commonDir, 'worktrees', 'wt-a'), { recursive: true, force: true })
+    await writeLooseRef(commonDir, 'refs/heads/reused', OID_D)
+    const reusedPath = await addLinkedWorktree(commonDir, 'wt-a', 'ref: refs/heads/reused')
+
+    const identities = await readGitCommonHeadIdentities(
+      commonDir,
+      cache,
+      mergeHeadIdentityScopes(LISTING_HEAD_IDENTITY_SCOPE, headIdentityScopeForEntry('wt-a'))
+    )
+
+    expect(reusedPath).toBe(pathA)
+    expect(identities).toContainEqual({
+      worktreePath: reusedPath,
+      head: OID_D,
+      branch: 'refs/heads/reused'
+    })
+  })
+
+  it('keeps the memo when the worktrees listing fails for anything but absence', async () => {
+    const { commonDir, cache, pathA, pathB } = await seed()
+    // Stand in for EIO/ESTALE/EMFILE: readdir rejects with ENOTDIR, which is
+    // not evidence that every worktree was removed.
+    await rm(join(commonDir, 'worktrees'), { recursive: true, force: true })
+    await writeFile(join(commonDir, 'worktrees'), 'not a directory\n')
+
+    const identities = await readGitCommonHeadIdentities(
+      commonDir,
+      cache,
+      LISTING_HEAD_IDENTITY_SCOPE
+    )
+
+    expect(headOf(identities, pathA)).toBe(OID_B)
+    expect(headOf(identities, pathB)).toBe(OID_C)
+  })
+
+  it('reports an absent worktrees dir as genuinely empty', async () => {
+    const { commonDir, cache, pathA } = await seed()
+    await rm(join(commonDir, 'worktrees'), { recursive: true, force: true })
+
+    const identities = await readGitCommonHeadIdentities(
+      commonDir,
+      cache,
+      LISTING_HEAD_IDENTITY_SCOPE
+    )
+
+    expect(headOf(identities, pathA)).toBeUndefined()
+    expect(cache.entries.size).toBe(0)
+  })
+
   it('re-reads every entry after a packed-refs rewrite', async () => {
     const { commonDir, cache, pathA, pathB } = await seed()
     // A fetch repacked refs: the loose files are gone and the oids moved, with

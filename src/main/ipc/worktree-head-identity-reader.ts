@@ -154,12 +154,15 @@ async function readLinkedEntryIdentity(
   )
 }
 
-async function listLinkedEntryNames(commonDirPath: string): Promise<string[]> {
+// Why: mirrors worktree-git-common-polling — a TRANSIENT readdir failure
+// (EIO/ESTALE/EMFILE, network hiccup) must not masquerade as "every worktree
+// removed" and drop the whole memo. Only a genuinely absent dir is empty.
+async function listLinkedEntryNames(commonDirPath: string): Promise<string[] | null> {
   try {
     const entries = await readdir(join(commonDirPath, 'worktrees'), { withFileTypes: true })
     return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
-  } catch {
-    return []
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : null
   }
 }
 
@@ -228,13 +231,21 @@ export async function readGitCommonHeadIdentities(
 
   let entryNames = cache.entryNames
   if (entryNames === null || scope.all || scope.listing) {
-    entryNames = await listLinkedEntryNames(commonDirPath)
-    const listed = new Set(entryNames)
-    for (const name of cache.entries.keys()) {
-      if (!listed.has(name)) {
-        cache.entries.delete(name)
+    const listing = await listLinkedEntryNames(commonDirPath)
+    if (listing !== null) {
+      entryNames = listing
+      const listed = new Set(listing)
+      for (const name of cache.entries.keys()) {
+        if (!listed.has(name)) {
+          cache.entries.delete(name)
+        }
       }
     }
+  }
+  if (entryNames === null) {
+    // Unreadable on the very first pass: report only the primary and leave the
+    // memo unset so the next refresh re-enumerates.
+    return cache.primary ? [cache.primary] : []
   }
 
   const staleNames = entryNames.filter(

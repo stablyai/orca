@@ -47,7 +47,12 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       structureRepoIds: ['repo-1'],
       gitStatusRepoIds: [],
       headIdentityRepoIds: [],
-      headIdentityScope: LISTING_HEAD_IDENTITY_SCOPE
+      // Named as well as listed, so a remove+add reusing the name cannot keep
+      // serving the removed worktree's cached head.
+      headIdentityScope: {
+        ...LISTING_HEAD_IDENTITY_SCOPE,
+        entryNames: new Set(['wt-b'])
+      }
     })
     expect(
       matchingWorktreeBaseRepoIds(target, {
