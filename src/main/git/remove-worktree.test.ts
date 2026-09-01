@@ -668,7 +668,7 @@ describe('removeWorktree sparse-checkout cache invalidation', () => {
   })
 
   it('drops the removed worktree path so a re-created worktree at the same path is re-detected', async () => {
-    await detectSparseCheckoutCached('/repo-feature')
+    await detectSparseCheckoutCached('/repo', '/repo-feature')
     expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(1)
 
     mockGitCommands({
@@ -690,7 +690,7 @@ branch refs/heads/feature/test
     // re-annotates every row it saw (including the untouched main worktree), caching a fresh entry
     // for `/repo`. Only the removed path's own entry must be gone, proven by a fresh stat call below.
     const statCallsBefore = statMock.mock.calls.length
-    expect(await detectSparseCheckoutCached('/repo-feature')).toBe(false)
+    expect(await detectSparseCheckoutCached('/repo', '/repo-feature')).toBe(false)
     expect(statMock.mock.calls.length).toBeGreaterThan(statCallsBefore)
   })
 })

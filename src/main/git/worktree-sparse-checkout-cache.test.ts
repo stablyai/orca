@@ -13,9 +13,20 @@ import {
   __getSparseCheckoutStateCacheSizeForTests,
   __resetSparseCheckoutStateCacheForTests,
   clearSparseCheckoutStateCache,
+  clearSparseCheckoutStateCacheForRepo,
   detectSparseCheckoutCached,
-  invalidateSparseCheckoutState
+  invalidateSparseCheckoutState,
+  onSparseCheckoutStateChanged
 } from './worktree-sparse-checkout-cache'
+
+const RECONCILE_WINDOW_MS = 5 * 60_000
+
+// A real setTimeout tick, not a faked one, to flush the microtask chain a background
+// stale-while-revalidate detect runs on without needing vi.useFakeTimers() (which would also
+// have to fake Date.now(), the thing these tests drive manually via the Date.now spy below).
+async function flushBackgroundRevalidation(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
 
 beforeEach(() => {
   detectSparseCheckoutMock.mockReset()
@@ -23,11 +34,11 @@ beforeEach(() => {
 })
 
 describe('detectSparseCheckoutCached', () => {
-  it('caches a detection result across repeated calls for the same path', async () => {
+  it('caches a detection result across repeated calls for the same repo+path', async () => {
     detectSparseCheckoutMock.mockResolvedValue(true)
 
-    expect(await detectSparseCheckoutCached('/repo/wt-a')).toBe(true)
-    expect(await detectSparseCheckoutCached('/repo/wt-a')).toBe(true)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
 
     expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
   })
@@ -37,64 +48,140 @@ describe('detectSparseCheckoutCached', () => {
       async (worktreePath: string) => worktreePath === '/repo/wt-sparse'
     )
 
-    expect(await detectSparseCheckoutCached('/repo/wt-sparse')).toBe(true)
-    expect(await detectSparseCheckoutCached('/repo/wt-full')).toBe(false)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-sparse')).toBe(true)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-full')).toBe(false)
     expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('scopes the cache by repo, so the same path under two repos is detected independently', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+
+    expect(await detectSparseCheckoutCached('/repo-a', '/shared-mount/wt')).toBe(true)
+    expect(await detectSparseCheckoutCached('/repo-b', '/shared-mount/wt')).toBe(true)
+
+    expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats an equivalent path spelling (trailing slash, redundant segment) as the same cache entry', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/./wt-a/')).toBe(true)
+
+    expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
   })
 
   it('caches a false result too, so a worktree that stays non-sparse costs one detect', async () => {
     detectSparseCheckoutMock.mockResolvedValue(false)
 
-    expect(await detectSparseCheckoutCached('/repo/wt-a')).toBe(false)
-    expect(await detectSparseCheckoutCached('/repo/wt-a')).toBe(false)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(false)
+    expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(false)
 
     expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
   })
 
-  it('re-detects once the reconcile window elapses, bounding staleness from unwitnessed external edits', async () => {
-    vi.useFakeTimers()
+  it('serves the stale value immediately past the reconcile window and corrects it in the background', async () => {
+    const nowSpy = vi.spyOn(Date, 'now')
     try {
-      detectSparseCheckoutMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+      nowSpy.mockReturnValue(1_000)
+      detectSparseCheckoutMock.mockResolvedValueOnce(false)
+      expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(false)
 
-      expect(await detectSparseCheckoutCached('/repo/wt-a')).toBe(false)
-
-      // Just under the 5-minute reconcile window: still trusts the cached value.
-      vi.advanceTimersByTime(5 * 60_000 - 1)
-      expect(await detectSparseCheckoutCached('/repo/wt-a')).toBe(false)
+      // Just under the window: still trusts the cached value, no re-detect.
+      nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS - 1)
+      expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(false)
       expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
 
-      // Past the window: re-detects and picks up the external toggle.
-      vi.advanceTimersByTime(2)
-      expect(await detectSparseCheckoutCached('/repo/wt-a')).toBe(true)
+      // Past the window: both calls return the (stale) cached value, and only one kicks a
+      // background re-detect. Read both without awaiting in between — the underlying function
+      // never suspends before returning the stale value, so two calls issued back-to-back in the
+      // same tick are the only reliable way to observe "both concurrent callers stay stale" without
+      // racing the background revalidation's own microtask.
+      nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
+      detectSparseCheckoutMock.mockResolvedValueOnce(true)
+      const firstPastWindow = detectSparseCheckoutCached('/repo', '/repo/wt-a')
+      const secondPastWindow = detectSparseCheckoutCached('/repo', '/repo/wt-a')
+      expect(await firstPastWindow).toBe(false)
+      expect(await secondPastWindow).toBe(false)
+      expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(2)
+
+      await flushBackgroundRevalidation()
+
+      // The corrected value is now served without needing another window to elapse.
+      expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
       expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(2)
     } finally {
-      vi.useRealTimers()
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('notifies the registered change listener only when a background revalidation flips the answer', async () => {
+    const listener = vi.fn()
+    onSparseCheckoutStateChanged(listener)
+    const nowSpy = vi.spyOn(Date, 'now')
+    try {
+      nowSpy.mockReturnValue(1_000)
+      detectSparseCheckoutMock.mockResolvedValueOnce(false)
+      await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+
+      nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
+      detectSparseCheckoutMock.mockResolvedValueOnce(false)
+      await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+      await flushBackgroundRevalidation()
+      expect(listener).not.toHaveBeenCalled()
+
+      nowSpy.mockReturnValue(1_000 + 2 * RECONCILE_WINDOW_MS + 2)
+      detectSparseCheckoutMock.mockResolvedValueOnce(true)
+      await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+      await flushBackgroundRevalidation()
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith('/repo', '/repo/wt-a', true)
+    } finally {
+      nowSpy.mockRestore()
+      onSparseCheckoutStateChanged(undefined)
     }
   })
 })
 
 describe('invalidateSparseCheckoutState', () => {
-  it('drops only the named path, leaving other cached paths untouched', async () => {
+  it('drops only the named repo+path, leaving other cached paths untouched', async () => {
     detectSparseCheckoutMock.mockResolvedValue(true)
-    await detectSparseCheckoutCached('/repo/wt-a')
-    await detectSparseCheckoutCached('/repo/wt-b')
+    await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+    await detectSparseCheckoutCached('/repo', '/repo/wt-b')
 
-    invalidateSparseCheckoutState('/repo/wt-a')
+    invalidateSparseCheckoutState('/repo', '/repo/wt-a')
     expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(1)
 
     detectSparseCheckoutMock.mockClear()
-    await detectSparseCheckoutCached('/repo/wt-a')
-    await detectSparseCheckoutCached('/repo/wt-b')
+    await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+    await detectSparseCheckoutCached('/repo', '/repo/wt-b')
     expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
     expect(detectSparseCheckoutMock).toHaveBeenCalledWith('/repo/wt-a')
   })
 })
 
-describe('clearSparseCheckoutStateCache', () => {
-  it('drops every cached path, matching the blunt clear-all used on any worktree-change notification', async () => {
+describe('clearSparseCheckoutStateCacheForRepo', () => {
+  it('drops only the named repo`s entries, leaving a sibling repo`s warm cache intact', async () => {
     detectSparseCheckoutMock.mockResolvedValue(true)
-    await detectSparseCheckoutCached('/repo/wt-a')
-    await detectSparseCheckoutCached('/repo/wt-b')
+    await detectSparseCheckoutCached('/repo-a', '/repo-a/wt-1')
+    await detectSparseCheckoutCached('/repo-b', '/repo-b/wt-1')
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(2)
+
+    clearSparseCheckoutStateCacheForRepo('/repo-a')
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(1)
+
+    detectSparseCheckoutMock.mockClear()
+    await detectSparseCheckoutCached('/repo-a', '/repo-a/wt-1')
+    await detectSparseCheckoutCached('/repo-b', '/repo-b/wt-1')
+    expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('clearSparseCheckoutStateCache', () => {
+  it('drops every cached path across every repo, matching the fallback used when a repo cannot be resolved', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+    await detectSparseCheckoutCached('/repo-a', '/repo-a/wt-1')
+    await detectSparseCheckoutCached('/repo-b', '/repo-b/wt-1')
     expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(2)
 
     clearSparseCheckoutStateCache()

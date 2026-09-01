@@ -23,8 +23,8 @@ export async function moveWorktree(
     // A failed move can still have rewritten one `.git` marker, so re-probe both paths.
     invalidateWslLinkedWorktreeGitRouting(oldPath)
     invalidateWslLinkedWorktreeGitRouting(newPath)
-    invalidateSparseCheckoutState(oldPath)
-    invalidateSparseCheckoutState(newPath)
+    invalidateSparseCheckoutState(repoPath, oldPath)
+    invalidateSparseCheckoutState(repoPath, newPath)
     bumpWorktreeScanGeneration(repoPath)
   }
 }

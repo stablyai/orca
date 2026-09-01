@@ -62,7 +62,7 @@ export async function listWorktreesUnshared(
     const visibleWorktrees = options.includeCreatePreparations
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-    return annotateSparseCheckoutStatus(visibleWorktrees)
+    return annotateSparseCheckoutStatus(repoPath, visibleWorktrees)
   } catch (err) {
     if (getErrorCode(err) === 'ENOENT') {
       try {
@@ -94,10 +94,11 @@ export async function listWorktreesStrict(
   const visibleWorktrees = options.includeCreatePreparations
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-  return annotateSparseCheckoutStatus(visibleWorktrees)
+  return annotateSparseCheckoutStatus(repoPath, visibleWorktrees)
 }
 
 async function annotateSparseCheckoutStatus(
+  repoPath: string,
   worktrees: GitWorktreeInfo[]
 ): Promise<GitWorktreeInfo[]> {
   const annotated = [...worktrees]
@@ -111,7 +112,7 @@ async function annotateSparseCheckoutStatus(
       if (!worktree || worktree.isBare || worktree.isSparse) {
         continue
       }
-      const isSparse = await detectSparseCheckoutCached(worktree.path)
+      const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path)
       if (isSparse) {
         annotated[index] = { ...worktree, isSparse }
       }
@@ -254,7 +255,7 @@ export async function describeCreatedWorktree(
       return undefined
     }
   }
-  const [described] = await annotateSparseCheckoutStatus([
+  const [described] = await annotateSparseCheckoutStatus(repoPath, [
     {
       path: translateWorktreePath(created.topLevel, repoPath, options),
       head,

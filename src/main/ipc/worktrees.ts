@@ -20,7 +20,10 @@ import { registerWorktreeRemovalHandlers } from './worktrees/removal/register-wo
 import type { WorktreeIpcContext } from './worktrees/worktree-ipc-context'
 
 registerDetectedWorktreeScanInvalidation()
-registerSparseCheckoutCacheInvalidation()
+
+// Why not module scope like the invalidation above: this needs `mainWindow`/`store`, which only
+// exist once a window is attached, and must track the current ones across re-registration.
+let disposeSparseCheckoutCacheInvalidation: (() => void) | undefined
 
 const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:listAll',
@@ -70,6 +73,12 @@ export function registerWorktreeHandlers(
   for (const channel of WORKTREE_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
+
+  disposeSparseCheckoutCacheInvalidation?.()
+  disposeSparseCheckoutCacheInvalidation = registerSparseCheckoutCacheInvalidation(
+    mainWindow,
+    store
+  )
 
   registerWorktreeCatalogHandlers(context)
   registerHostCatalogHandlers(context)

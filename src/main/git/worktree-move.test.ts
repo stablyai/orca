@@ -65,8 +65,8 @@ describe('moveWorktree', () => {
 
   it('drops cached sparse-checkout state for both the old and new path', async () => {
     detectSparseCheckoutMock.mockResolvedValue(true)
-    await detectSparseCheckoutCached('/ws/cunner')
-    await detectSparseCheckoutCached('/ws/worktree-creation-spinner')
+    await detectSparseCheckoutCached('/repo', '/ws/cunner')
+    await detectSparseCheckoutCached('/repo', '/ws/worktree-creation-spinner')
     expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(2)
 
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
@@ -77,8 +77,8 @@ describe('moveWorktree', () => {
 
   it('drops cached sparse-checkout state for both paths even when the move fails', async () => {
     detectSparseCheckoutMock.mockResolvedValue(true)
-    await detectSparseCheckoutCached('/ws/cunner')
-    await detectSparseCheckoutCached('/ws/taken')
+    await detectSparseCheckoutCached('/repo', '/ws/cunner')
+    await detectSparseCheckoutCached('/repo', '/ws/taken')
 
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: destination exists'))
     await expect(moveWorktree('/repo', '/ws/cunner', '/ws/taken')).rejects.toThrow()

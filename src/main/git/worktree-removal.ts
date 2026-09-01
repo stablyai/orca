@@ -41,7 +41,7 @@ export async function removeWorktree(
     )
   } finally {
     invalidateWslLinkedWorktreeGitRouting(worktreePath)
-    invalidateSparseCheckoutState(worktreePath)
+    invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
 }
