@@ -3852,6 +3852,7 @@
           "cfe2282ffa": "未知"
         },
         "GrokUsagePane": {
+          "9c68bb8686": "使用限额重置",
           "g8h9i0j1k2": "Grok 使用量",
           "b2d3e4f5c6": "来自 Grok CLI OAuth（~/.grok/auth.json）的每周订阅额度。与状态栏使用同一来源。",
           "c3e4f5a6b7": "在账户中设置",
@@ -9831,6 +9832,11 @@
           }
         },
         "GrokAccountsSection": {
+          "bd0e82282e": "使用限额重置",
+          "5447d40963": "与 grok.com 的“设置 → 使用情况”中相同的 SuperGrok 重置令牌。可从状态栏的 Grok 使用情况菜单中兑换。",
+          "56ff2eca20": "1 个重置可用",
+          "c98d7e49ed": "{{value0}} 个重置可用",
+          "08661af78b": "打开 grok.com 使用情况",
           "a1b2c3d4e5": "Grok (xAI)",
           "f6e5d4c3b2": "显示来自 Grok CLI 登录的每周额度使用量（会话文件 ~/.grok/auth.json）。",
           "0d8e77bc40": "Grok CLI 文档",

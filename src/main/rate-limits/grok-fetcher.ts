@@ -10,6 +10,8 @@ import {
   type GrokAuthReadResult,
   type GrokAuthSession
 } from './grok-auth'
+import { supplementGrokRateLimitResetCredits } from './grok-reset-credit-client'
+import type { RateLimitResetCredits } from './codex-reset-credit-client'
 
 // Why: billing URL and headers must match Grok CLI or xAI rejects the request.
 const GROK_CLI_PROXY_BASE =
@@ -293,7 +295,11 @@ async function fetchMonthlyUsageFallback(
 
 // Why: Orca never runs grok login; it only reads the session file the CLI updates.
 export async function fetchGrokRateLimits(
-  options: { signal?: AbortSignal; authReadResult?: GrokAuthReadResult } = {}
+  options: {
+    signal?: AbortSignal
+    authReadResult?: GrokAuthReadResult
+    previousRateLimitResetCredits?: RateLimitResetCredits
+  } = {}
 ): Promise<ProviderRateLimits> {
   const readResult = options.authReadResult ?? readGrokAuthSession()
   if (readResult.status === 'missing') {
@@ -328,7 +334,14 @@ export async function fetchGrokRateLimits(
     }
     const weekly = mapWeeklyCredits(config)
     if (weekly) {
-      return billingUsageResult({ weekly }, config, session)
+      return await supplementGrokRateLimitResetCredits(
+        billingUsageResult({ weekly }, config, session),
+        session,
+        {
+          signal: options.signal,
+          previousRateLimitResetCredits: options.previousRateLimitResetCredits
+        }
+      )
     }
     // Why: the credits view can already carry the monthly budget pair; that pair
     // is a monthly window, so publish it as one rather than mislabelling it
@@ -344,7 +357,14 @@ export async function fetchGrokRateLimits(
       return fallback.result
     }
     if (fallback.window) {
-      return billingUsageResult({ monthly: fallback.window }, config, session)
+      return await supplementGrokRateLimitResetCredits(
+        billingUsageResult({ monthly: fallback.window }, config, session),
+        session,
+        {
+          signal: options.signal,
+          previousRateLimitResetCredits: options.previousRateLimitResetCredits
+        }
+      )
     }
     // Why: an account that reports spend fields but no computable percentage is
     // not a quota-less plan — say the usage is unknown instead of implying zero.

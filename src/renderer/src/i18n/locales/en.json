@@ -4296,6 +4296,7 @@
           "cfe2282ffa": "Unknown"
         },
         "GrokUsagePane": {
+          "9c68bb8686": "Usage-limit resets",
           "g8h9i0j1k2": "Grok usage",
           "b2d3e4f5c6": "Weekly subscription credits from Grok CLI OAuth (~/.grok/auth.json). Same source as the status bar.",
           "c3e4f5a6b7": "Set up in Accounts",
@@ -11043,6 +11044,11 @@
           }
         },
         "GrokAccountsSection": {
+          "bd0e82282e": "Usage-limit resets",
+          "5447d40963": "Same SuperGrok reset tokens as Settings → Usage on grok.com. Redeem from the Grok usage menu in the status bar.",
+          "56ff2eca20": "1 reset available",
+          "c98d7e49ed": "{{value0}} resets available",
+          "08661af78b": "Open grok.com Usage",
           "a1b2c3d4e5": "Grok (xAI)",
           "f6e5d4c3b2": "Shows weekly credit usage from your Grok CLI sign-in (session file ~/.grok/auth.json).",
           "0d8e77bc40": "Grok CLI docs",

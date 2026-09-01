@@ -65,7 +65,7 @@ export type ProviderRateLimits = {
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */
   buckets?: RateLimitBucket[]
-  /** Available earned Codex rate-limit reset credits, if reported. */
+  /** Available reset credits or tokens reported by the provider. */
   rateLimitResetCredits?: {
     availableCount: number
     /** Total earned reset credits, including spent or expired credits, if reported. */

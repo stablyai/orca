@@ -27,6 +27,10 @@ const mockStoreState = {
         resetsAt: null,
         resetDescription: 'Tue'
       },
+      rateLimitResetCredits: {
+        availableCount: 2,
+        nextExpiresAt: null
+      },
       updatedAt: 1,
       error: null,
       status: 'ok'
@@ -81,6 +85,8 @@ describe('GrokUsagePane', () => {
     render(<GrokUsagePane />)
 
     expect(screen.getByTestId('grok-usage-pane')).toBeInTheDocument()
+    expect(screen.getByText('Usage-limit resets')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
     expect(storeMocks.refreshGrokRateLimits).not.toHaveBeenCalled()
   })
 

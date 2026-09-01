@@ -128,7 +128,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
     const grokResultPromise = fetchGrokRateLimits({
       signal,
-      authReadResult: grokAuthReadResult
+      authReadResult: grokAuthReadResult,
+      previousRateLimitResetCredits: previousState.grok?.rateLimitResetCredits ?? undefined
     }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const

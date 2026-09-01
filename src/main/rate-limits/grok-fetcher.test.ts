@@ -31,7 +31,8 @@ function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body
+    json: async () => body,
+    arrayBuffer: async () => new ArrayBuffer(0)
   } as Response
 }
 
@@ -125,7 +126,9 @@ describe('fetchGrokRateLimits', () => {
     expect(result.weekly?.usedPercent).toBe(0)
     expect(result.weekly?.resetsAt).toBe(Date.parse('2026-07-24T19:38:56.948570+00:00'))
     expect(result.monthly).toBeUndefined()
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(
+      netFetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/billing')).length
+    ).toBe(1)
   })
 
   // Why: #15740 — an absent creditUsagePercent alongside explicitly-emitted zero
@@ -322,7 +325,9 @@ describe('fetchGrokRateLimits', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer access-token' })
       })
     )
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(
+      netFetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/billing')).length
+    ).toBe(2)
   })
 
   // Why: 'unavailable' would make applyStalePolicy discard the last good
@@ -356,7 +361,9 @@ describe('fetchGrokRateLimits', () => {
 
     const result = await fetchGrokRateLimits()
     expect(result.status).toBe('ok')
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(
+      netFetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/billing')).length
+    ).toBe(1)
   })
 
   it('returns unavailable when billing response has no config', async () => {
@@ -365,6 +372,9 @@ describe('fetchGrokRateLimits', () => {
 
     const result = await fetchGrokRateLimits()
     expect(result.status).toBe('unavailable')
+    expect(
+      netFetchMock.mock.calls.some(([url]) => String(url).includes('GetRemainingResets'))
+    ).toBe(false)
   })
 
   it('aborts the billing request when the caller aborts', async () => {

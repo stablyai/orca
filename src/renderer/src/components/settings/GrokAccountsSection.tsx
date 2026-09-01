@@ -8,7 +8,9 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import type { GrokAccountStatus } from '../../../../shared/rate-limit-types'
 import { SearchableSetting } from './SearchableSetting'
+import { formatResetCreditExpiry } from '../status-bar/tooltip'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
+const GROK_USAGE_URL = 'https://grok.com/?_s=usage'
 
 export function GrokAccountsSection(): React.JSX.Element {
   const refreshGrokRateLimits = useAppStore((s) => s.refreshGrokRateLimits)
@@ -61,6 +63,11 @@ export function GrokAccountsSection(): React.JSX.Element {
   const unavailableReason =
     signedIn && !usageWindow && grokUsage?.status === 'unavailable'
       ? (grokUsage.error ?? null)
+      : null
+  const resetCreditCount = grokUsage?.rateLimitResetCredits?.availableCount ?? null
+  const resetCreditExpiry =
+    resetCreditCount !== null
+      ? formatResetCreditExpiry(grokUsage?.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
       : null
 
   return (
@@ -214,6 +221,50 @@ export function GrokAccountsSection(): React.JSX.Element {
           keywords={['grok', 'xai', 'usage', 'credits', 'oauth']}
         >
           <p className="text-xs text-muted-foreground">{unavailableReason}</p>
+        </SearchableSetting>
+      ) : null}
+
+      {resetCreditCount !== null ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GrokAccountsSection.bd0e82282e',
+            'Usage-limit resets'
+          )}
+          description={translate(
+            'auto.components.settings.GrokAccountsSection.5447d40963',
+            'Same SuperGrok reset tokens as Settings → Usage on grok.com. Redeem from the Grok usage menu in the status bar.'
+          )}
+          keywords={['grok', 'xai', 'reset', 'credits', 'usage']}
+        >
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge variant="secondary" className="tabular-nums">
+              {resetCreditCount === 1
+                ? translate(
+                    'auto.components.settings.GrokAccountsSection.56ff2eca20',
+                    '1 reset available'
+                  )
+                : translate(
+                    'auto.components.settings.GrokAccountsSection.c98d7e49ed',
+                    '{{value0}} resets available',
+                    { value0: String(resetCreditCount) }
+                  )}
+            </Badge>
+            {resetCreditExpiry ? (
+              <span className="text-muted-foreground">{resetCreditExpiry}</span>
+            ) : null}
+            <a
+              href={GROK_USAGE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+            >
+              {translate(
+                'auto.components.settings.GrokAccountsSection.08661af78b',
+                'Open grok.com Usage'
+              )}
+              <ExternalLink className="size-3" />
+            </a>
+          </div>
         </SearchableSetting>
       ) : null}
     </section>
