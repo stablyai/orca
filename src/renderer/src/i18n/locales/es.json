@@ -3464,6 +3464,19 @@
             "f90b3d7a16": "Run Kimi to refresh",
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
+          "GrokResetMenu": {
+            "1d0a238e8b": "No se pudo usar el restablecimiento de SuperGrok. Inténtalo de nuevo.",
+            "5083fdb684": "Abrir detalles de Grok y el restablecimiento del límite de uso",
+            "febaa254bf": "¿Restablecer los límites de Grok?",
+            "2fd82006e3": "Esto usa un token de restablecimiento del límite de uso de SuperGrok para la cuenta con sesión iniciada y restablece inmediatamente el límite semanal actual.",
+            "3fc8633cbf": "No volver a preguntar",
+            "d2801b1ae1": "Cancelar",
+            "de40a51f9b": "Aplicando restablecimiento…",
+            "3ca4f108f6": "Restablecer ahora",
+            "5b42bad652": "1 restablecimiento del límite disponible",
+            "d101726b6a": "{{value0}} restablecimientos del límite disponibles",
+            "58b2e3f032": "Administrar cuentas…"
+          },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
           },

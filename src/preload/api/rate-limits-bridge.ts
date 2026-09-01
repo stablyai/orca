@@ -13,6 +13,8 @@ export const rateLimitsApi = {
     ipcRenderer.invoke('rateLimits:refreshCodexForTarget', target),
   consumeCodexResetCredit: (): Promise<CodexRateLimitResetResult> =>
     ipcRenderer.invoke('rateLimits:consumeCodexResetCredit'),
+  consumeGrokResetCredit: (): Promise<CodexRateLimitResetResult> =>
+    ipcRenderer.invoke('rateLimits:consumeGrokResetCredit'),
   refreshClaudeForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
     ipcRenderer.invoke('rateLimits:refreshClaudeForTarget', target),
   setPollingInterval: (ms: number): Promise<void> =>

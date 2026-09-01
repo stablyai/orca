@@ -49,6 +49,7 @@ export type RateLimitsApi = {
   refresh: () => Promise<RateLimitState>
   refreshCodexForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
   consumeCodexResetCredit: () => Promise<CodexRateLimitResetResult>
+  consumeGrokResetCredit: () => Promise<CodexRateLimitResetResult>
   refreshClaudeForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
   setPollingInterval: (ms: number) => Promise<void>
   fetchInactiveClaudeAccounts: () => Promise<void>

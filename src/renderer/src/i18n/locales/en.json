@@ -3912,6 +3912,19 @@
               }
             }
           },
+          "GrokResetMenu": {
+            "1d0a238e8b": "Could not use the SuperGrok reset. Try again.",
+            "5083fdb684": "Open Grok details and usage-limit reset",
+            "febaa254bf": "Reset Grok limits?",
+            "2fd82006e3": "This uses one SuperGrok usage-limit reset token for the signed-in account and clears the current weekly pool immediately.",
+            "3fc8633cbf": "Don't ask again",
+            "d2801b1ae1": "Cancel",
+            "de40a51f9b": "Using reset…",
+            "3ca4f108f6": "Reset now",
+            "5b42bad652": "1 rate-limit reset available",
+            "d101726b6a": "{{value0}} rate-limit resets available",
+            "58b2e3f032": "Manage Accounts…"
+          },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
           },

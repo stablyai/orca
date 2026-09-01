@@ -49,6 +49,10 @@ export function encodeStringField(field: number, value: string): Uint8Array<Arra
   return encodeLengthDelimited(field, textEncoder.encode(value))
 }
 
+export function encodeRedeemResetRequest(tokenId: string): Uint8Array<ArrayBuffer> {
+  return encodeStringField(10, tokenId)
+}
+
 function encodeTimestampSeconds(seconds: number): Uint8Array<ArrayBuffer> {
   return concatBytes([encodeKey(1, 0), encodeVarint(seconds)])
 }

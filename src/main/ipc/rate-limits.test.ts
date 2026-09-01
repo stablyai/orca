@@ -32,10 +32,14 @@ function makeService(): {
   refresh: ReturnType<typeof vi.fn>
   refreshGrok: ReturnType<typeof vi.fn>
   consumeCodexRateLimitResetCredit: ReturnType<typeof vi.fn>
+  consumeGrokRateLimitResetCredit: ReturnType<typeof vi.fn>
 } {
   const refresh = vi.fn(() => Promise.resolve({} as RateLimitState))
   const refreshGrok = vi.fn(() => Promise.resolve({} as RateLimitState))
   const consumeCodexRateLimitResetCredit = vi.fn(() =>
+    Promise.resolve({ outcome: 'noCredit', state: {} as RateLimitState })
+  )
+  const consumeGrokRateLimitResetCredit = vi.fn(() =>
     Promise.resolve({ outcome: 'noCredit', state: {} as RateLimitState })
   )
   const service = {
@@ -45,6 +49,7 @@ function makeService(): {
     refreshCodexForTarget: vi.fn(() => Promise.resolve({} as RateLimitState)),
     refreshClaudeForTarget: vi.fn(() => Promise.resolve({} as RateLimitState)),
     consumeCodexRateLimitResetCredit,
+    consumeGrokRateLimitResetCredit,
     setPollingInterval: vi.fn(() => Promise.resolve()),
     fetchInactiveClaudeAccountsOnOpen: vi.fn(() => Promise.resolve()),
     fetchInactiveCodexAccountsOnOpen: vi.fn(() => Promise.resolve())
@@ -53,7 +58,8 @@ function makeService(): {
     service: service as unknown as RateLimitService,
     refresh,
     refreshGrok,
-    consumeCodexRateLimitResetCredit
+    consumeCodexRateLimitResetCredit,
+    consumeGrokRateLimitResetCredit
   }
 }
 
@@ -99,5 +105,15 @@ describe('registerRateLimitHandlers', () => {
 
     expect(codexAccounts.consumeCurrentRateLimitResetCredit).toHaveBeenCalledOnce()
     expect(consumeCodexRateLimitResetCredit).not.toHaveBeenCalled()
+  })
+
+  it('delegates Grok reset consumption to RateLimitService', async () => {
+    const { service, consumeGrokRateLimitResetCredit } = makeService()
+    registerRateLimitHandlers(service, makeCodexAccounts().service)
+    const handler = ipcState.handleHandlers.get('rateLimits:consumeGrokResetCredit')
+
+    await handler!({})
+
+    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledOnce()
   })
 })
