@@ -1344,6 +1344,7 @@ jobs:
       # otherwise undecodable. The main bundle is platform-independent, so one
       # leg publishes the maps for the whole release.
       - name: Bundle main-process source maps
+        id: bundle-main-sourcemaps
         if: matrix.platform == 'linux-x64'
         shell: bash
         env:
@@ -1351,9 +1352,17 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$(find out/main -name '*.js.map' -print -quit)" ]; then
-            echo "::error::No main-process source maps in out/main. Did build.sourcemap regress in electron.vite.config.ts?"
-            exit 1
+            # Older cut tags predate the hidden-source-map build setting. They
+            # are valid legacy releases, but have no map bundle to publish.
+            if grep -Eq "sourcemap:[[:space:]]*['\"]hidden['\"]" electron.vite.config.ts; then
+              echo "::error::No main-process source maps in out/main despite build.sourcemap='hidden'."
+              exit 1
+            fi
+            echo "has_maps=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::Cut ref predates hidden main-process source maps; skipping map publication."
+            exit 0
           fi
+          echo "has_maps=true" >>"$GITHUB_OUTPUT"
           # Why: every entry in electron-builder's `files` is a negation, so
           # app-builder prepends `**/*` and packs anything left in the workspace
           # root into app.asar. Stage the bundle outside the checkout instead.
@@ -1361,7 +1370,7 @@ jobs:
           ls -l "$RUNNER_TEMP/orca-sourcemaps-$TAG.zip"
 
       - name: Publish main-process source maps
-        if: matrix.platform == 'linux-x64'
+        if: matrix.platform == 'linux-x64' && steps.bundle-main-sourcemaps.outputs.has_maps == 'true'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
