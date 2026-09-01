@@ -1,8 +1,7 @@
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { extname, isAbsolute, posix, relative, resolve } from 'node:path'
-
 const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
 const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/']
 const STATIC_WEB_CONTENT_TYPES = new Map([
@@ -17,6 +16,42 @@ const STATIC_WEB_CONTENT_TYPES = new Map([
   ['.woff2', 'font/woff2']
 ])
 
+export async function createStaticWebClientResponse(
+  staticRoot: string,
+  request: Request
+): Promise<Response> {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
+  }
+  const pathname = parseStaticPathname(request.url)
+  if (!pathname || !isAllowedStaticWebPath(pathname)) {
+    return new Response(null, { status: pathname ? 404 : 400 })
+  }
+  const resolvedRoot = resolve(staticRoot)
+  const absolutePath = resolve(resolvedRoot, pathname.slice(1))
+  const relativePath = relative(resolvedRoot, absolutePath)
+  if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    return new Response(null, { status: 404 })
+  }
+  let fileStat
+  try {
+    fileStat = await stat(absolutePath)
+  } catch {
+    return new Response(null, { status: 404 })
+  }
+  if (!fileStat.isFile()) {
+    return new Response(null, { status: 404 })
+  }
+  const headers = {
+    'Content-Type':
+      STATIC_WEB_CONTENT_TYPES.get(extname(absolutePath)) ?? 'application/octet-stream',
+    'Content-Length': String(fileStat.size),
+    'Cache-Control': pathname.startsWith('/assets/')
+      ? 'public, max-age=31536000, immutable'
+      : 'no-cache'
+  }
+  return new Response(request.method === 'HEAD' ? null : await readFile(absolutePath), { headers })
+}
 export function createStaticWebClientHandler(staticRoot: string): RequestListener {
   const resolvedRoot = resolve(staticRoot)
   return (request, response) => {

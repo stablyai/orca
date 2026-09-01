@@ -6,6 +6,7 @@ import {
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 
+import { canUseBunPty, spawnBunPty } from './bun-pty-process'
 export type SpawnedDaemonPty = {
   process: pty.IPty
   shellPath: string
@@ -28,6 +29,18 @@ export function spawnNativeDaemonPty(args: {
 }): SpawnedDaemonPty {
   let reportsChildExitStatus = true
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
+    if (canUseBunPty()) {
+      const proc = spawnBunPty({
+        file: shellPath,
+        args: shellArgs,
+        cwd,
+        env: args.env,
+        cols: args.cols,
+        rows: args.rows
+      })
+      args.onMacosTccSpawnStrategy?.('direct')
+      return proc
+    }
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
     // Why: children inherit job membership, so the host job must exist before the first Windows PTY.
     if (process.platform === 'win32') {

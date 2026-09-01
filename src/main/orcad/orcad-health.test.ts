@@ -122,11 +122,14 @@ describe('collectTerminalDaemonHealth', () => {
 })
 
 describe('collectOrcadHealth', () => {
-  it('carries build identity and the Node ABI native addons must match', async () => {
+  it('identifies the actual host runtime separately from legacy Node ABI fields', async () => {
     const health = await collectOrcadHealth('1.2.3')
     expect(health.buildVersion).toBe('1.2.3')
     expect(health.nodeVersion).toBe(process.versions.node)
     expect(health.nodeAbi).toBe(process.versions.modules)
+    expect(health.runtimeKind).toBe('node')
+    expect(health.runtimeVersion).toBeUndefined()
+    expect(health.ptyBackend).toBe('node-pty')
     expect(health.platform).toBe(process.platform)
     expect(health.terminalDaemon.state).toBe('live')
   })

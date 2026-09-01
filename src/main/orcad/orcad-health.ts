@@ -54,9 +54,13 @@ export type OrcadHealth = {
   /** Content hash of the running orcad bundle — the deployed build's identity. */
   buildHash: string
   buildVersion: string
+  /** Legacy Node fields remain for mixed-version clients; Bun reports its emulated values here. */
   nodeVersion: string
-  /** `process.versions.modules`: the ABI every native addon on this host must match. */
   nodeAbi: string
+  /** Actual JavaScript runtime, which controls built-in APIs and native addon behavior. */
+  runtimeKind?: 'node' | 'bun'
+  runtimeVersion?: string
+  ptyBackend?: 'node-pty' | 'bun-terminal'
   platform: NodeJS.Platform
   arch: string
   pid: number
@@ -142,11 +146,16 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
 }
 
 export async function collectOrcadHealth(buildVersion: string): Promise<OrcadHealth> {
+  const bunVersion = (process.versions as typeof process.versions & { bun?: string }).bun
+  const runtimeKind = bunVersion ? 'bun' : 'node'
   return {
     buildHash: computeOrcadBuildHash(),
     buildVersion,
     nodeVersion: process.versions.node,
     nodeAbi: process.versions.modules ?? 'unknown',
+    runtimeKind,
+    ...(bunVersion ? { runtimeVersion: bunVersion } : {}),
+    ptyBackend: bunVersion ? 'bun-terminal' : 'node-pty',
     platform: process.platform,
     arch: process.arch,
     pid: process.pid,

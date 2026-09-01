@@ -173,9 +173,17 @@ function resolveLaunch(userDataDir) {
   const target =
     flagIndex !== -1 ? process.argv[flagIndex + 1] : (process.env.ORCA_SMOKE_TARGET ?? 'electron')
   if (target === 'orcad') {
+    const runtimeIndex = process.argv.indexOf('--runtime')
+    const runtime =
+      runtimeIndex !== -1
+        ? process.argv[runtimeIndex + 1]
+        : (process.env.ORCA_SMOKE_RUNTIME ?? 'node')
+    if (runtime !== 'node' && runtime !== 'bun') {
+      throw new Error(`--runtime (or ORCA_SMOKE_RUNTIME) must be 'node' or 'bun', got '${runtime}'`)
+    }
     return {
-      label: `orcad (${ORCAD_ENTRY})`,
-      command: process.execPath,
+      label: `orcad/${runtime} (${ORCAD_ENTRY})`,
+      command: runtime === 'bun' ? (process.env.BUN_EXECUTABLE ?? 'bun') : process.execPath,
       args: [ORCAD_ENTRY, '--port', String(PORT), '--json'],
       env: { ORCA_USER_DATA: userDataDir }
     }

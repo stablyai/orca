@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import SyncDatabase from './sync-database'
 
 const temporaryDirectories: string[] = []
@@ -22,6 +22,7 @@ async function createDatabase(): Promise<SyncDatabase.Database> {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(lockHolders.splice(0).map((worker) => worker.terminate()))
   for (const db of openDatabases.splice(0)) {
     try {
@@ -33,6 +34,50 @@ afterEach(async () => {
   await Promise.all(
     temporaryDirectories.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )
+})
+
+describe('SyncDatabase Bun compatibility', () => {
+  it('adapts bun:sqlite constructor options and busy timeout', () => {
+    const statement = {}
+    const bunDatabase = {
+      close: vi.fn(),
+      exec: vi.fn(),
+      prepare: vi.fn((_sql: string) => statement)
+    }
+    let constructorOptions: { readonly?: boolean; strict: boolean } | undefined
+    class BunDatabase {
+      constructor(_path: unknown, options: { readonly?: boolean; strict: boolean }) {
+        constructorOptions = options
+      }
+
+      close(): void {
+        bunDatabase.close()
+      }
+
+      exec(sql: string): void {
+        bunDatabase.exec(sql)
+      }
+
+      prepare(sql: string): object {
+        bunDatabase.prepare(sql)
+        return statement
+      }
+    }
+    const builtinModule = vi
+      .spyOn(process, 'getBuiltinModule')
+      .mockReturnValueOnce(undefined as never)
+      .mockReturnValueOnce({ Database: BunDatabase } as never)
+
+    const db = new SyncDatabase(':memory:', { readonly: true, timeout: 250 })
+
+    expect(builtinModule).toHaveBeenNthCalledWith(1, 'node:sqlite')
+    expect(builtinModule).toHaveBeenNthCalledWith(2, 'bun:sqlite')
+    expect(constructorOptions).toEqual({ readonly: true, strict: true })
+    expect(bunDatabase.exec).toHaveBeenCalledWith('PRAGMA busy_timeout = 250')
+    expect(db.prepare('SELECT 1')).toBe(statement)
+    db.close()
+    expect(bunDatabase.close).toHaveBeenCalledOnce()
+  })
 })
 
 describe('SyncDatabase statement cache', () => {

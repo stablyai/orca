@@ -50,7 +50,7 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
 // A line is a hit when it calls bare `fetch(` or touches `globalThis.fetch` /
 // `global.fetch` in any way (call, alias, fallback like `input.fetch ??
 // globalThis.fetch`). `typeof globalThis.fetch` type annotations are exempt.
-const GLOBAL_FETCH_LINE = /(^|[^.\w])fetch\(|(?<!typeof )\bglobal(This)?\.fetch\b/
+const GLOBAL_FETCH_LINE = /(^|[^:.\w])fetch\(|(?<!typeof )\bglobal(This)?\.fetch\b/
 
 const SCANNED_ROOTS = ['main', 'cli', 'relay']
 

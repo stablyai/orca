@@ -28,12 +28,56 @@ function isStatementCacheable(sql: string): boolean {
 }
 
 // Why: SSH companions target Node 18 and import this adapter without opening SQLite.
+// Bun-backed orcad uses Bun's synchronous driver through the same narrow database shape.
 function loadDatabaseSync(): typeof DatabaseSync {
   if (typeof process.getBuiltinModule !== 'function') {
     throw new Error('node:sqlite is unavailable in this Node.js runtime')
   }
-  return (process.getBuiltinModule('node:sqlite') as { DatabaseSync: typeof DatabaseSync })
-    .DatabaseSync
+  const nodeSqlite = process.getBuiltinModule('node:sqlite') as
+    | { DatabaseSync?: typeof DatabaseSync }
+    | undefined
+  if (typeof nodeSqlite?.DatabaseSync === 'function') {
+    return nodeSqlite.DatabaseSync
+  }
+
+  type BunDatabase = Pick<DatabaseSync, 'close' | 'exec' | 'prepare'>
+  type BunDatabaseConstructor = new (
+    path: SqlitePath,
+    options: { readonly?: boolean; strict: boolean }
+  ) => BunDatabase
+  const bunSqlite = process.getBuiltinModule('bun:sqlite') as
+    | { Database?: BunDatabaseConstructor }
+    | undefined
+  if (typeof bunSqlite?.Database !== 'function') {
+    throw new Error('node:sqlite is unavailable in this Node.js runtime')
+  }
+  const BunDatabase = bunSqlite.Database
+
+  return class BunDatabaseSync {
+    private readonly database: BunDatabase
+
+    constructor(path: SqlitePath, options: { readOnly?: boolean; timeout?: number } = {}) {
+      this.database = new BunDatabase(path, {
+        ...(options.readOnly ? { readonly: true } : {}),
+        strict: true
+      })
+      if (options.timeout !== undefined && Number.isFinite(options.timeout)) {
+        this.database.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.trunc(options.timeout))}`)
+      }
+    }
+
+    exec(sql: string): void {
+      this.database.exec(sql)
+    }
+
+    prepare(sql: string): StatementSync {
+      return this.database.prepare(sql)
+    }
+
+    close(): void {
+      this.database.close()
+    }
+  } as unknown as typeof DatabaseSync
 }
 
 class SyncDatabase {
