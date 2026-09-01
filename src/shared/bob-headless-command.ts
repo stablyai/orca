@@ -21,7 +21,7 @@ const BOB_OPTIONS_WITH_OPTIONAL_VALUE = new Set(['--resume', '-r'])
 const BOB_EXECUTABLE_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1|js|mjs|cjs)$/i
 
 const BOB_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
-const BOB_PACKAGE_PATH_RE = /node_modules[\\/]bobshell[\\/]/i
+const BOB_PACKAGE_PATH_RE = /(?:^|[\\/])node_modules[\\/]bobshell[\\/]/i
 
 function isBobExecutableToken(token: string): boolean {
   const path = token.trim().replace(/^["']|["']$/g, '')
