@@ -202,6 +202,7 @@ describe('AgentHookServer listener replay', () => {
 
   it('suppresses local HTTP hook writes for a recently closed tab', async () => {
     const server = new AgentHookServer()
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
     await server.start({ env: 'production' })
     try {
       const env = server.buildPtyEnv()
@@ -224,8 +225,97 @@ describe('AgentHookServer listener replay', () => {
       await expect(postHook('late local')).resolves.toMatchObject({ status: 204 })
 
       expect(server.getStatusSnapshot()).toEqual([])
+      expect(debug).toHaveBeenCalledTimes(1)
+      expect(debug).toHaveBeenCalledWith('[agent-hooks] agent-status-suppressed', {
+        reason: 'closed-tab',
+        paneKey: PANE,
+        tabId: 'tab-1',
+        source: 'claude'
+      })
     } finally {
       server.stop()
+      debug.mockRestore()
+    }
+  })
+
+  it('logs remote hook suppression for a recently closed tab', () => {
+    const server = new AgentHookServer()
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    try {
+      server.dropStatusEntriesByTabPrefix('tab-1')
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          source: 'claude',
+          hookEventName: 'Stop',
+          payload: { state: 'done', prompt: 'late remote', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      expect(debug).toHaveBeenCalledTimes(1)
+      expect(debug).toHaveBeenCalledWith('[agent-hooks] agent-status-suppressed', {
+        reason: 'closed-tab',
+        paneKey: PANE,
+        tabId: 'tab-1',
+        source: 'claude'
+      })
+    } finally {
+      debug.mockRestore()
+    }
+  })
+
+  it('logs terminal status suppression for a recently closed tab', () => {
+    const server = new AgentHookServer()
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    try {
+      server.dropStatusEntriesByTabPrefix('tab-1')
+
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'done', prompt: 'late terminal', agentType: 'codex' }
+      })
+
+      expect(debug).toHaveBeenCalledTimes(1)
+      expect(debug).toHaveBeenCalledWith('[agent-hooks] agent-status-suppressed', {
+        reason: 'closed-tab',
+        paneKey: PANE,
+        tabId: 'tab-1'
+      })
+    } finally {
+      debug.mockRestore()
+    }
+  })
+
+  it('does not log closed-tab suppression for a pane-only fence', () => {
+    const server = new AgentHookServer()
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    try {
+      server.retirePaneAuthority(PANE)
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          source: 'claude',
+          hookEventName: 'Stop',
+          payload: { state: 'done', prompt: 'retired pane', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+
+      expect(debug).not.toHaveBeenCalledWith(
+        '[agent-hooks] agent-status-suppressed',
+        expect.anything()
+      )
+    } finally {
+      debug.mockRestore()
     }
   })
 

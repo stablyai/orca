@@ -1199,6 +1199,23 @@ export class AgentHookServer {
     }
   }
 
+  private logClosedTabStatusSuppression(
+    paneKey: string,
+    source: AgentHookSource | undefined
+  ): void {
+    const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const tabId = parsePaneKey(ownerPaneKey)?.tabId
+    if (!tabId || !this.closedAgentStatusTabIds.has(tabId)) {
+      return
+    }
+    console.debug('[agent-hooks] agent-status-suppressed', {
+      reason: 'closed-tab',
+      paneKey: ownerPaneKey,
+      tabId,
+      ...(source ? { source } : {})
+    })
+  }
+
   private getAgentStatusDisposition(
     paneKey: string,
     event?: {
@@ -1217,6 +1234,7 @@ export class AgentHookServer {
       this.closedAgentStatusPaneKeys.has(ownerPaneKey)
     const tabId = parsePaneKey(ownerPaneKey)?.tabId
     if (tabId && this.closedAgentStatusTabIds.has(tabId)) {
+      this.logClosedTabStatusSuppression(ownerPaneKey, event?.source)
       return 'suppress'
     }
     if (!paneRetired) {
