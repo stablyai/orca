@@ -83,6 +83,25 @@ export function zoomDashboardPopoutIfFocused(direction: UIZoomDirection): boolea
 
 // In-process listeners (the dashboard relay clears its cached snapshot on close).
 const popoutOpenListeners = new Set<(open: boolean) => void>()
+export type DashboardPopoutFreezeEvent =
+  | { type: 'unresponsive'; webContentsId: number }
+  | { type: 'responsive'; webContentsId: number }
+  | { type: 'process_gone'; webContentsId: number }
+  | { type: 'closed'; webContentsId: number }
+const popoutFreezeListeners = new Set<(event: DashboardPopoutFreezeEvent) => void>()
+
+export function onDashboardPopoutFreezeEvent(
+  listener: (event: DashboardPopoutFreezeEvent) => void
+): () => void {
+  popoutFreezeListeners.add(listener)
+  return () => popoutFreezeListeners.delete(listener)
+}
+
+function emitPopoutFreezeEvent(event: DashboardPopoutFreezeEvent): void {
+  for (const listener of Array.from(popoutFreezeListeners)) {
+    listener(event)
+  }
+}
 
 /** Subscribe to pop-out open/close transitions in the main process. */
 export function onDashboardPopoutOpenChanged(listener: (open: boolean) => void): () => void {
@@ -194,6 +213,16 @@ export function createOrFocusDashboardPopout(
   window.webContents.session.setPermissionCheckHandler(() => false)
   dashboardPopoutWindow = window
   broadcastPopoutOpenChanged(true)
+  const webContentsId = window.webContents.id
+  window.webContents.on('unresponsive', () =>
+    emitPopoutFreezeEvent({ type: 'unresponsive', webContentsId })
+  )
+  window.webContents.on('responsive', () =>
+    emitPopoutFreezeEvent({ type: 'responsive', webContentsId })
+  )
+  window.webContents.on('render-process-gone', () =>
+    emitPopoutFreezeEvent({ type: 'process_gone', webContentsId })
+  )
 
   // Why: uiZoomLevel is the app-wide UI zoom; without this the pop-out always
   // renders at 100% while the main window honors the persisted level.
@@ -283,6 +312,7 @@ export function createOrFocusDashboardPopout(
   app.on('before-quit', freezeBounds)
 
   window.on('closed', () => {
+    emitPopoutFreezeEvent({ type: 'closed', webContentsId })
     app.removeListener('before-quit', freezeBounds)
     unsubscribeUIChanged?.()
     if (dashboardPopoutWindow === window) {

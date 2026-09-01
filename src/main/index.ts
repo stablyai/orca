@@ -257,6 +257,7 @@ import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { shutdownPairedRuntimeBrowserClientHosts } from './browser/paired-runtime-browser-client-host-runtime'
 import {
   getDashboardPopoutWindow,
+  onDashboardPopoutFreezeEvent,
   zoomDashboardPopoutIfFocused
 } from './window/dashboard-popout-window'
 import {
@@ -376,7 +377,12 @@ import {
   recordCrashBreadcrumb
 } from './crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
-import { installMainThreadHangWatchdog } from './hang-watchdog/main-thread-hang-watchdog'
+import {
+  drainWatchdogLaneEvents,
+  installMainThreadHangWatchdog,
+  queueWatchdogLaneEvent,
+  type WatchdogLaneEvent
+} from './hang-watchdog/main-thread-hang-watchdog'
 import {
   consumeHangDetectionMarker,
   hangDetectionMarkerPath
@@ -390,6 +396,13 @@ import {
 import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from './crash-reporting/process-gone-recorder'
 import { startCrashpadCapture } from './crash-reporting/crashpad-capture'
 import { startPreGoneProcessMetricsSampling } from './crash-reporting/process-gone-diagnostics'
+import { captureFreezeCensus, sanitizeFreezeCensus } from './crash-reporting/freeze-census'
+import { installFreezeTestHooks } from './crash-reporting/freeze-test-hooks'
+import {
+  createRendererUnresponsiveEpisodeMachine,
+  shouldSuppressRendererUnresponsive,
+  type RendererEpisodeSessionBudget
+} from './crash-reporting/renderer-unresponsive-episodes'
 import { resolveExpectedTeardownScope } from './crash-reporting/expected-teardown-state'
 import {
   advanceSyntheticTitleSpinnerEntries,
@@ -425,6 +438,148 @@ import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher
 import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
 
 let mainWindow: BrowserWindow | null = null
+let telemetryReady = false
+const rendererFreezeEpisodes = new Map<
+  number,
+  ReturnType<typeof createRendererUnresponsiveEpisodeMachine>
+>()
+const rendererFreezeEpisodeBudget: RendererEpisodeSessionBudget = { count: 0 }
+
+onDashboardPopoutFreezeEvent((event) => {
+  const machine = rendererEpisodeMachine(event.webContentsId)
+  if (event.type === 'unresponsive') {
+    const episode = machine.onUnresponsive()
+    if (!episode) {
+      return
+    }
+    const census = captureFreezeCensus()
+    recordDurableCrashBreadcrumb('renderer_unresponsive_detected', {
+      episode_id: episode.episodeId,
+      ...census
+    })
+    track('renderer_unresponsive_detected', {
+      episode_id: episode.episodeId,
+      window_kind: 'popout',
+      ...census
+    })
+  } else if (event.type === 'responsive') {
+    const episode = machine.onResponsive()
+    if (!episode) {
+      return
+    }
+    const census = captureFreezeCensus()
+    recordDurableCrashBreadcrumb('renderer_unresponsive_closed', {
+      episode_id: episode.episodeId,
+      outcome: episode.outcome,
+      duration_ms: episode.durationMs,
+      ...census
+    })
+    track('renderer_unresponsive_closed', {
+      episode_id: episode.episodeId,
+      outcome: episode.outcome,
+      duration_ms: episode.durationMs,
+      ...census
+    })
+  } else if (event.type === 'process_gone') {
+    const episode = machine.onProcessGone()
+    if (episode) {
+      const census = captureFreezeCensus()
+      recordDurableCrashBreadcrumb('renderer_unresponsive_closed', {
+        episode_id: episode.episodeId,
+        outcome: episode.outcome,
+        duration_ms: episode.durationMs,
+        ...census
+      })
+      track('renderer_unresponsive_closed', {
+        episode_id: episode.episodeId,
+        outcome: episode.outcome,
+        duration_ms: episode.durationMs,
+        ...census
+      })
+    }
+  } else if (event.type === 'closed') {
+    const episode = machine.onAbandoned()
+    if (episode) {
+      const census = captureFreezeCensus()
+      recordDurableCrashBreadcrumb('renderer_unresponsive_closed', {
+        episode_id: episode.episodeId,
+        outcome: episode.outcome,
+        duration_ms: episode.durationMs,
+        ...census
+      })
+      track('renderer_unresponsive_closed', {
+        episode_id: episode.episodeId,
+        outcome: episode.outcome,
+        duration_ms: episode.durationMs,
+        ...census
+      })
+    }
+    rendererFreezeEpisodes.delete(event.webContentsId)
+  }
+})
+
+function reportWatchdogLaneEvent(
+  event: WatchdogLaneEvent,
+  droppedCount = 0,
+  emitDurable = true
+): void {
+  const census = sanitizeFreezeCensus(event.census ?? captureFreezeCensus())
+  const payload = {
+    unresponsive_ms: Math.round(event.unresponsiveMs),
+    self_recovered: event.outcome !== 'system_slept',
+    ...(event.outcome ? { outcome: event.outcome } : {}),
+    ...(event.episodeId !== undefined ? { episode_id: event.episodeId } : {}),
+    ...(droppedCount > 0 ? { dropped_count: droppedCount } : {}),
+    ...census
+  }
+  if (emitDurable) {
+    recordDurableCrashBreadcrumb('main_thread_hang_detected', {
+      unresponsiveMs: payload.unresponsive_ms,
+      selfRecovered: payload.self_recovered,
+      ...(payload.outcome ? { outcome: payload.outcome } : {}),
+      ...(payload.episode_id !== undefined ? { episodeId: payload.episode_id } : {}),
+      ...(droppedCount > 0 ? { droppedCount } : {}),
+      ...census
+    })
+  }
+  if (telemetryReady) {
+    track('main_thread_hang_detected', payload)
+  } else {
+    queueWatchdogLaneEvent(event)
+  }
+}
+
+function rendererEpisodeMachine(webContentsId: number) {
+  let machine = rendererFreezeEpisodes.get(webContentsId)
+  if (!machine) {
+    machine = createRendererUnresponsiveEpisodeMachine({
+      maxEpisodes: 5,
+      sessionBudget: rendererFreezeEpisodeBudget,
+      isSuppressed: () =>
+        shouldSuppressRendererUnresponsive({
+          isDev: !app.isPackaged,
+          isDevToolsOpened: Boolean(
+            (mainWindow?.webContents.id === webContentsId
+              ? mainWindow.webContents
+              : getDashboardPopoutWindow()?.webContents.id === webContentsId
+                ? getDashboardPopoutWindow()?.webContents
+                : null
+            )?.isDevToolsOpened?.()
+          ),
+          debuggerAttached: Boolean(
+            (mainWindow?.webContents.id === webContentsId
+              ? mainWindow.webContents
+              : getDashboardPopoutWindow()?.webContents.id === webContentsId
+                ? getDashboardPopoutWindow()?.webContents
+                : null
+            )?.debugger?.isAttached?.()
+          )
+        })
+    })
+    rendererFreezeEpisodes.set(webContentsId, machine)
+  }
+  return machine
+}
 /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
 let isQuitting = false
 let store: Store | null = null
@@ -1563,6 +1718,15 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       clearExpectedRendererReload()
     },
     onRendererProcessGone: (details, webContentsId) => {
+      const episode = rendererEpisodeMachine(webContentsId).onProcessGone()
+      if (episode) {
+        track('renderer_unresponsive_closed', {
+          episode_id: episode.episodeId,
+          outcome: episode.outcome,
+          duration_ms: episode.durationMs,
+          ...captureFreezeCensus()
+        })
+      }
       recordProcessGoneCrash(
         'renderer',
         'renderer',
@@ -1573,6 +1737,64 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         },
         webContentsId
       )
+    },
+    onRendererUnresponsive: (webContentsId) => {
+      const machine = rendererEpisodeMachine(webContentsId)
+      const episode = machine.onUnresponsive()
+      if (!episode) {
+        return
+      }
+      const census = captureFreezeCensus()
+      recordDurableCrashBreadcrumb('renderer_unresponsive_detected', {
+        episode_id: episode.episodeId,
+        ...census
+      })
+      track('renderer_unresponsive_detected', {
+        episode_id: episode.episodeId,
+        window_kind: 'main',
+        ...census
+      })
+    },
+    onRendererResponsive: (webContentsId) => {
+      const episode = rendererEpisodeMachine(webContentsId).onResponsive()
+      if (!episode) {
+        return
+      }
+      const census = captureFreezeCensus()
+      recordDurableCrashBreadcrumb('renderer_unresponsive_closed', {
+        episode_id: episode.episodeId,
+        outcome: episode.outcome,
+        duration_ms: episode.durationMs,
+        ...census
+      })
+      track('renderer_unresponsive_closed', {
+        episode_id: episode.episodeId,
+        outcome: episode.outcome,
+        duration_ms: episode.durationMs,
+        ...census
+      })
+    },
+    onRendererClosed: (webContentsId) => {
+      // process-gone callback above owns pairing precedence; this hook is for teardown abandonment.
+      if (mainWindow?.isDestroyed()) {
+        const episode = rendererEpisodeMachine(webContentsId).onAbandoned()
+        if (episode) {
+          const census = captureFreezeCensus()
+          recordDurableCrashBreadcrumb('renderer_unresponsive_closed', {
+            episode_id: episode.episodeId,
+            outcome: episode.outcome,
+            duration_ms: episode.durationMs,
+            ...census
+          })
+          track('renderer_unresponsive_closed', {
+            episode_id: episode.episodeId,
+            outcome: episode.outcome,
+            duration_ms: episode.durationMs,
+            ...census
+          })
+        }
+      }
+      rendererFreezeEpisodes.delete(webContentsId)
     },
     shouldRecoverRenderer: (details, webContentsId) =>
       shouldRecoverRendererAfterProcessGone({
@@ -2423,7 +2645,12 @@ void app.whenReady().then(async () => {
       session.defaultSession
     )
   })
-  installMainThreadHangWatchdog({ userDataPath: getCanonicalUserDataPath() })
+  installMainThreadHangWatchdog({
+    userDataPath: getCanonicalUserDataPath(),
+    heartbeatCensus: () =>
+      captureFreezeCensus({ windowCount: BrowserWindow.getAllWindows().length }),
+    onHangResolved: (event) => reportWatchdogLaneEvent(event)
+  })
   const hangDetection = consumeHangDetectionMarker(
     hangDetectionMarkerPath(getCanonicalUserDataPath())
   )
@@ -2431,7 +2658,9 @@ void app.whenReady().then(async () => {
     recordDurableCrashBreadcrumb('main_thread_hang_detected', {
       unresponsiveMs: hangDetection.unresponsiveMs,
       previousPid: hangDetection.parentPid,
-      selfRecovered: hangDetection.selfRecovered
+      selfRecovered: hangDetection.selfRecovered,
+      ...(hangDetection.detectedAtMs !== undefined && { episodeId: hangDetection.detectedAtMs }),
+      ...sanitizeFreezeCensus(hangDetection.census)
     })
   }
   // Why: install certificate decisions before any webview or headless window issues its first TLS request.
@@ -2687,6 +2916,12 @@ void app.whenReady().then(async () => {
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
+  installFreezeTestHooks()
+  telemetryReady = true
+  const queuedWatchdog = drainWatchdogLaneEvents()
+  queuedWatchdog.events.forEach((event, index) =>
+    reportWatchdogLaneEvent(event, index === 0 ? queuedWatchdog.dropped_count : 0, false)
+  )
   // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
   // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
   // number the watchdog exists to produce would sit unread on the user's disk. Must run after
@@ -2694,7 +2929,9 @@ void app.whenReady().then(async () => {
   if (hangDetection) {
     track('main_thread_hang_detected', {
       unresponsive_ms: Math.round(hangDetection.unresponsiveMs),
-      self_recovered: hangDetection.selfRecovered
+      self_recovered: hangDetection.selfRecovered,
+      ...(hangDetection.detectedAtMs !== undefined && { episode_id: hangDetection.detectedAtMs }),
+      ...sanitizeFreezeCensus(hangDetection.census)
     })
   }
   // Why: the trust-grant module is bundled into plain-node CLI entries where

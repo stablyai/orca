@@ -9,4 +9,20 @@ export type HangWatchdogWorkerData = {
   checkIntervalMs: number
 }
 
-export type MainToHangWatchdogWorkerMessage = { type: 'heartbeat' } | { type: 'shutdown' }
+export type HangWatchdogCensus = Record<string, number>
+export type HangWatchdogWorkerEvent = {
+  type: 'hang_resolved' | 'hang_suspended'
+  marker: {
+    detectedAt: number
+    detectedAtMs?: number
+    parentPid: number
+    unresponsiveMs: number
+    selfRecovered: boolean
+    census?: HangWatchdogCensus
+  }
+}
+export type MainToHangWatchdogWorkerMessage =
+  | { type: 'heartbeat'; census?: HangWatchdogCensus }
+  | { type: 'suspend' }
+  | { type: 'resume' }
+  | { type: 'shutdown' }

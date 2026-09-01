@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,6 +17,7 @@ import {
   recordHangObservation,
   runWatchdog
 } from './main-thread-hang-watchdog-entry'
+import type { MainToHangWatchdogWorkerMessage } from './hang-watchdog-worker-protocol'
 
 describe('recordHangObservation', () => {
   let dir: string
@@ -173,6 +174,52 @@ describe('watchdog worker entry', () => {
       vi.advanceTimersByTime(1_000)
       expect(port.close).toHaveBeenCalledOnce()
       expect(consumeHangDetectionMarker(markerPath)).toBeNull()
+    } finally {
+      rmSync(markerPath, { force: true })
+    }
+  })
+
+  it('closes a detected episode as system_slept through the worker message channel', () => {
+    const markerPath = join(tmpdir(), `hang-watchdog-suspend-${process.pid}.json`)
+    let onMessage: ((message: MainToHangWatchdogWorkerMessage) => void) | undefined
+    const port = {
+      on: vi.fn(
+        (_event: 'message', listener: (message: MainToHangWatchdogWorkerMessage) => void) => {
+          onMessage = listener
+        }
+      ),
+      close: vi.fn(),
+      postMessage: vi.fn()
+    }
+    try {
+      runWatchdog(
+        {
+          parentPid: process.pid,
+          markerPath,
+          timeoutMs: 100,
+          checkIntervalMs: 25
+        },
+        port
+      )
+      onMessage?.({
+        type: 'heartbeat',
+        census: { census_window_count: 2, census_git_inflight: 3 }
+      })
+      vi.advanceTimersByTime(125)
+      expect(JSON.parse(readFileSync(markerPath, 'utf8'))).toMatchObject({
+        selfRecovered: false,
+        census: { census_window_count: 2, census_git_inflight: 3 }
+      })
+
+      onMessage?.({ type: 'suspend' })
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'hang_suspended',
+          marker: expect.objectContaining({ selfRecovered: false })
+        })
+      )
+      expect(consumeHangDetectionMarker(markerPath)).toBeNull()
+      onMessage?.({ type: 'resume' })
     } finally {
       rmSync(markerPath, { force: true })
     }

@@ -33,6 +33,12 @@ afterEach(() => {
 })
 
 describe('GitAdmissionScheduler', () => {
+  it('counts routed in-flight commands once for freeze census', async () => {
+    const scheduler = new GitAdmissionScheduler({ generalCap: 2, networkCap: 2, routeCap: 2 })
+    const grant = await scheduler.acquire({ args: ['fetch', 'origin'], cwd: '/repo' })
+    expect(scheduler.censusCounts().inflight).toBe(1)
+    grant.release()
+  })
   it('pins the global base budgets and absolute maximum', () => {
     expect(GENERAL_CAP).toBeGreaterThanOrEqual(2)
     expect(GENERAL_CAP).toBeLessThanOrEqual(4)

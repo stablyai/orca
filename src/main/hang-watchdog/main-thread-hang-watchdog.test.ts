@@ -31,6 +31,7 @@ vi.mock('electron', () => ({
 }))
 
 import { installMainThreadHangWatchdog } from './main-thread-hang-watchdog'
+import { publishSystemResume, publishSystemSuspend } from '../system-power-lifecycle'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -65,26 +66,34 @@ describe('installMainThreadHangWatchdog', () => {
   })
 
   afterEach(() => {
+    publishSystemResume()
     vi.useRealTimers()
     delete process.env.ORCA_HANG_WATCHDOG_FORCE
     delete process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS
     delete process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS
   })
 
-  it('is a no-op off macOS', () => {
-    expect(
-      withPlatform('win32', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
-    ).toBeNull()
-    expect(
-      withPlatform('linux', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
-    ).toBeNull()
-    expect(workerState.calls).toHaveLength(0)
-  })
+  it.each(['darwin', 'win32', 'linux'] as NodeJS.Platform[])(
+    'installs on %s when packaged',
+    (platform) => {
+      workerState.instance = fakeWorker()
+      expect(
+        withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+      ).not.toBeNull()
+      expect(workerState.calls).toHaveLength(1)
+    }
+  )
 
   it('is a no-op in unpackaged builds unless forced', () => {
     appMock.isPackaged = false
     expect(
       withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+    ).toBeNull()
+    expect(
+      withPlatform('win32', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+    ).toBeNull()
+    expect(
+      withPlatform('linux', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
     process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
     const worker = fakeWorker()
@@ -172,9 +181,23 @@ describe('installMainThreadHangWatchdog', () => {
     withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     const exitListener = worker.once.mock.calls.find(([event]) => event === 'exit')?.[1]
     expect(exitListener).toEqual(expect.any(Function))
+    worker.postMessage.mockClear()
     exitListener()
     vi.advanceTimersByTime(6_000)
     expect(worker.postMessage).not.toHaveBeenCalled()
+  })
+
+  it('forwards system power transitions to the watchdog worker', () => {
+    const worker = fakeWorker()
+    workerState.instance = worker
+    withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+    worker.postMessage.mockClear()
+    publishSystemSuspend()
+    publishSystemResume()
+    expect(worker.postMessage.mock.calls.map(([message]) => message.type)).toEqual([
+      'suspend',
+      'resume'
+    ])
   })
 
   it('returns null and stays inert when worker construction fails', () => {

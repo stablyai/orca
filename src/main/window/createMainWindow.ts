@@ -126,6 +126,14 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  // Main-side unresponsive hooks remain active even while the renderer is frozen.
+  mainWindow.webContents.on('unresponsive', () =>
+    opts?.onRendererUnresponsive?.(rendererWebContentsId)
+  )
+  mainWindow.webContents.on('responsive', () => opts?.onRendererResponsive?.(rendererWebContentsId))
+  // A window close is the abandonment edge; render-process-gone owns the
+  // process_gone edge in the focus lifecycle and must win this race.
+  mainWindow.on('closed', () => opts?.onRendererClosed?.(rendererWebContentsId))
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)

@@ -125,6 +125,39 @@ export function collectProcessGoneMetricDetails(metrics: ProcessMetricLike[]): C
   return details
 }
 
+/** Synchronous process buckets shared by freeze capture and crash diagnostics. */
+export function collectProcessMetricBuckets(metrics: ProcessMetricLike[]): {
+  browserMB: number
+  rendererMB: number
+  gpuMB: number
+  otherMB: number
+  rendererPrivateMB?: number
+  commitTotalMB?: number
+} {
+  const details = collectProcessGoneMetricDetails(metrics)
+  let commitTotalMB = 0
+  let hasCommit = false
+  for (const metric of metrics) {
+    const privateMB = memoryKBFieldMB(metric.memory?.privateBytes)
+    if (privateMB !== undefined) {
+      commitTotalMB += privateMB
+      hasCommit = true
+    }
+  }
+  return {
+    browserMB: Number(details.processMetricsBrowserWorkingSetMB ?? 0),
+    rendererMB: Number(details.processMetricsRendererWorkingSetMB ?? 0),
+    gpuMB: Number(details.processMetricsGpuWorkingSetMB ?? 0),
+    otherMB:
+      Number(details.processMetricsUtilityWorkingSetMB ?? 0) +
+      Number(details.processMetricsOtherWorkingSetMB ?? 0),
+    ...(typeof details.processMetricsRendererPrivateMB === 'number'
+      ? { rendererPrivateMB: details.processMetricsRendererPrivateMB }
+      : {}),
+    ...(hasCommit ? { commitTotalMB } : {})
+  }
+}
+
 type LiveProcessGoneMetrics = {
   details: CrashReportDetails
   identitiesByPid: Map<number, ProcessMetricIdentity> | null

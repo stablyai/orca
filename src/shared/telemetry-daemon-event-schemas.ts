@@ -46,7 +46,56 @@ export const remoteOutboundBudgetCloseSchema = z
 export const mainThreadHangDetectedSchema = z
   .object({
     unresponsive_ms: z.number().int().nonnegative(),
-    self_recovered: z.boolean()
+    self_recovered: z.boolean(),
+    outcome: z.enum(['system_slept']).optional(),
+    census_window_count: z.number().int().nonnegative().optional(),
+    census_pane_count_local: z.number().int().nonnegative().optional(),
+    census_agent_count: z.number().int().nonnegative().optional(),
+    census_git_inflight: z.number().int().nonnegative().optional(),
+    census_git_queued: z.number().int().nonnegative().optional(),
+    metrics_browser_mb: z.number().int().nonnegative().optional(),
+    metrics_renderer_mb: z.number().int().nonnegative().optional(),
+    metrics_gpu_mb: z.number().int().nonnegative().optional(),
+    metrics_other_mb: z.number().int().nonnegative().optional(),
+    metrics_renderer_private_mb: z.number().int().nonnegative().optional(),
+    metrics_commit_total_mb: z.number().int().nonnegative().optional(),
+    sysmem_total_mb: z.number().int().nonnegative().optional(),
+    sysmem_free_mb: z.number().int().nonnegative().optional(),
+    episode_id: z.number().int().nonnegative().optional(),
+    dropped_count: z.number().int().nonnegative().optional()
+  })
+  .strict()
+
+const freezeCensusFields = {
+  census_window_count: z.number().int().nonnegative().optional(),
+  census_pane_count_local: z.number().int().nonnegative().optional(),
+  census_agent_count: z.number().int().nonnegative().optional(),
+  census_git_inflight: z.number().int().nonnegative().optional(),
+  census_git_queued: z.number().int().nonnegative().optional(),
+  metrics_browser_mb: z.number().int().nonnegative().optional(),
+  metrics_renderer_mb: z.number().int().nonnegative().optional(),
+  metrics_gpu_mb: z.number().int().nonnegative().optional(),
+  metrics_other_mb: z.number().int().nonnegative().optional(),
+  metrics_renderer_private_mb: z.number().int().nonnegative().optional(),
+  metrics_commit_total_mb: z.number().int().nonnegative().optional(),
+  sysmem_total_mb: z.number().int().nonnegative().optional(),
+  sysmem_free_mb: z.number().int().nonnegative().optional()
+}
+
+export const rendererUnresponsiveDetectedSchema = z
+  .object({
+    episode_id: z.number().int().nonnegative(),
+    window_kind: z.enum(['main', 'popout']),
+    ...freezeCensusFields
+  })
+  .strict()
+
+export const rendererUnresponsiveClosedSchema = z
+  .object({
+    episode_id: z.number().int().nonnegative(),
+    outcome: z.enum(['recovered', 'process_gone', 'abandoned']),
+    duration_ms: z.number().int().nonnegative(),
+    ...freezeCensusFields
   })
   .strict()
 

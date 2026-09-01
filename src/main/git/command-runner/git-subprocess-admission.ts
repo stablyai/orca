@@ -1,6 +1,7 @@
 import { uncRouteKey } from '../../providers/working-directory-validation'
 import { classifyGitCommand } from '../wsl-direct-git-read-commands'
 import { createAbortError } from './abort-error'
+import { createGitAdmissionRuntime } from './git-admission-census-runtime'
 import { GitAdmissionWaiterQueue } from './git-admission-waiter-queue'
 import {
   ADMISSION_TIER_VALUE,
@@ -14,7 +15,6 @@ import {
   type GitAdmissionGrant,
   type GitAdmissionRequest
 } from './git-admission-state'
-
 export type {
   GitAdmissionEvent,
   GitAdmissionGrant,
@@ -30,16 +30,13 @@ export {
   ROUTE_CAP,
   ROUTE_HEADROOM
 } from './git-admission-state'
-
 function commandClass(args: readonly string[]): AdmissionClass {
   return classifyGitCommand(args) === 'network' ? 'network' : 'general'
 }
-
 function routeKey(request: GitAdmissionRequest): string | null {
   const distro = request.wslDistro?.trim().toLowerCase()
   return distro ? `wsl:${distro}` : uncRouteKey(request.cwd)
 }
-
 export class GitAdmissionScheduler {
   private readonly config: AdmissionSchedulerConfig
   private readonly budgets = new Map<string, AdmissionBudget>()
@@ -105,6 +102,14 @@ export class GitAdmissionScheduler {
           { baseUsed: budget.baseUsed, headroomUsed: budget.headroomUsed }
         ])
       )
+    }
+  }
+  censusCounts(): { inflight: number; queued: number } {
+    return {
+      inflight: [...this.budgets]
+        .filter(([key]) => key === 'general' || key === 'network')
+        .reduce((sum, [, budget]) => sum + budget.baseUsed + budget.headroomUsed, 0),
+      queued: this.waiters.count
     }
   }
 
@@ -306,20 +311,13 @@ export class GitAdmissionScheduler {
     )
   }
 }
-
-let scheduler = new GitAdmissionScheduler()
-
+const admissionRuntime = createGitAdmissionRuntime(() => new GitAdmissionScheduler())
 export function acquireGitAdmission(request: GitAdmissionRequest): Promise<GitAdmissionGrant> {
-  if (process.env.ORCA_GIT_ADMISSION_DISABLED === '1') {
-    return Promise.resolve({ queueWaitMs: 0, release: () => {} })
-  }
-  return scheduler.acquire(request)
+  return admissionRuntime.acquire(request)
 }
-
 export function _resetGitAdmissionForTests(replacement = new GitAdmissionScheduler()): void {
-  scheduler = replacement
+  admissionRuntime.reset(replacement)
 }
-
 export function _gitAdmissionSnapshotForTests(): ReturnType<GitAdmissionScheduler['snapshot']> {
-  return scheduler.snapshot()
+  return admissionRuntime.snapshot()
 }

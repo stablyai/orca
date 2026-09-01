@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  claimHangDetectionMarker,
   consumeHangDetectionMarker,
   hangDetectionMarkerPath,
+  removeClaimedHangDetectionMarker,
   writeHangDetectionMarker
 } from './hang-detection-marker'
 
@@ -46,6 +48,22 @@ describe('hang detection marker', () => {
       selfRecovered: true
     })
     expect(consumeHangDetectionMarker(markerPath)?.selfRecovered).toBe(true)
+  })
+
+  it('removes a claimed marker after live delivery', () => {
+    const markerPath = hangDetectionMarkerPath(dir)
+    writeHangDetectionMarker(markerPath, {
+      detectedAt: 1,
+      detectedAtMs: 1,
+      parentPid: 2,
+      unresponsiveMs: 45000,
+      selfRecovered: true
+    })
+    expect(claimHangDetectionMarker(markerPath)?.detectedAtMs).toBe(1)
+    const claimedPath = join(dir, 'main-thread-hang.claimed.1.json')
+    expect(existsSync(claimedPath)).toBe(true)
+    expect(() => removeClaimedHangDetectionMarker(markerPath, 1)).not.toThrow()
+    expect(existsSync(claimedPath)).toBe(false)
   })
 
   it('returns null for a missing marker', () => {

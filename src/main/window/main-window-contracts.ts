@@ -9,6 +9,9 @@ export type CreateMainWindowOptions = {
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => void
+  onRendererUnresponsive?: (webContentsId: number) => void
+  onRendererResponsive?: (webContentsId: number) => void
+  onRendererClosed?: (webContentsId: number) => void
   /** Returns true when Orca should reload after renderer loss; update-relaunch/quit tear down children intentionally, so don't fight shutdown. */
   shouldRecoverRenderer?: (
     details: Electron.RenderProcessGoneDetails,

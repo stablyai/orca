@@ -18,6 +18,8 @@ import {
   daemonLifecycleSchema,
   daemonStartFailedSchema,
   mainThreadHangDetectedSchema,
+  rendererUnresponsiveDetectedSchema,
+  rendererUnresponsiveClosedSchema,
   remoteOutboundBudgetCloseSchema,
   runtimeRpcStartFailedSchema,
   settingsChangedSchema
@@ -121,6 +123,8 @@ export const eventSchemas = {
 
   daemon_start_failed: daemonStartFailedSchema,
   main_thread_hang_detected: mainThreadHangDetectedSchema,
+  renderer_unresponsive_detected: rendererUnresponsiveDetectedSchema,
+  renderer_unresponsive_closed: rendererUnresponsiveClosedSchema,
   daemon_lifecycle: daemonLifecycleSchema,
   daemon_audit_eligibility: daemonAuditEligibilitySchema,
   runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
