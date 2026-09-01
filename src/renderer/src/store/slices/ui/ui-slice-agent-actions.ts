@@ -211,7 +211,15 @@ export function createUiAgentActions(
         const migrationUnsupported = Object.values(s.migrationUnsupportedByPtyId ?? {})
         // Why: only reallocate if an ack advances; compare prev<stamp not !== — the stamp ticks every ms and !== would rewrite the map every call.
         let next: Record<string, number> | null = null
+        // Why: one ack, two records - leaving this set keeps the tab dot lit.
+        let nextUnreadCompletions: Record<string, true> | null = null
         for (const key of paneKeys) {
+          if (s.unreadAgentCompletionPanes?.[key]) {
+            if (nextUnreadCompletions === null) {
+              nextUnreadCompletions = { ...s.unreadAgentCompletionPanes }
+            }
+            delete nextUnreadCompletions[key]
+          }
           const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
           // Why not plain Date.now(): a remote/SSH execution host can stamp a turn ahead of this clock,
           // and every unread rule is `ackAt < turnTimestamp`. A behind-the-turn ack can never clear the
@@ -252,7 +260,13 @@ export function createUiAgentActions(
             next[key] = stamp
           }
         }
-        return next ? { acknowledgedAgentsByPaneKey: next } : s
+        if (!next && !nextUnreadCompletions) {
+          return s
+        }
+        return {
+          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
+          ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {})
+        }
       })
       const notificationIds = [...notificationIdsToDismiss]
       if (notificationIds.length > 0 && typeof window !== 'undefined') {

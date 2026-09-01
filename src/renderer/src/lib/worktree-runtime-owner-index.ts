@@ -297,11 +297,9 @@ export function findIndexedFolderWorkspaceOwner(
   return resolution?.kind === 'resolved' ? resolution.owner : null
 }
 
-export function findIndexedProjectGroupOwner(
-  projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
-  projectGroupId: string,
-  executionHostId?: ExecutionHostId
-): ProjectGroupOwnerRecord | null {
+function getProjectGroupOwnerIndex(
+  projectGroups: readonly ProjectGroupOwnerRecord[] | undefined
+): ReadonlyMap<string, IndexedProjectGroupOwnerResolution> | null {
   if (!projectGroups) {
     return null
   }
@@ -310,8 +308,25 @@ export function findIndexedProjectGroupOwner(
     index = buildCatalogOwnerIndex(projectGroups)
     projectGroupOwnerIndexCache.set(projectGroups, index)
   }
-  const resolution = index.get(
+  return index
+}
+
+export function findIndexedProjectGroupOwner(
+  projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
+  projectGroupId: string,
+  executionHostId?: ExecutionHostId
+): ProjectGroupOwnerRecord | null {
+  const resolution = getProjectGroupOwnerIndex(projectGroups)?.get(
     executionHostId ? `${projectGroupId}\0${executionHostId}` : projectGroupId
   )
   return resolution?.kind === 'resolved' ? resolution.owner : null
+}
+
+// Why: a duplicate groupId across the local and runtime catalogs makes the
+// unscoped lookup return no owner; callers must abort rather than guess a host.
+export function isProjectGroupIdAmbiguous(
+  projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
+  projectGroupId: string
+): boolean {
+  return getProjectGroupOwnerIndex(projectGroups)?.get(projectGroupId)?.kind === 'ambiguous'
 }

@@ -15,6 +15,7 @@ import {
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
+import { GIT_HISTORY_COMMIT_FORMAT, parseGitHistoryLog } from './git-history-log-parser'
 import {
   githubPullRequestHeadLocalRef,
   gitlabMergeRequestHeadLocalRef,
@@ -377,5 +378,30 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await expect(
       runGit(['show', '--end-of-options', `${pinnedOid}:absent.txt`])
     ).rejects.toBeDefined()
+  })
+  // Why pin this: an older Git echoes %(decorate:…) and exits zero, so only %D
+  // in the same record carries the badges (#15507). Asserts the echo and the recovery.
+  it('reads commit decorations on both sides of the %(decorate:...) boundary', async () => {
+    await writeFile(join(repoPath, 'decorated.txt'), 'decorated\n')
+    await runGit(['add', 'decorated.txt'])
+    await runGit(['commit', '-qm', 'decorated commit'])
+    await runGit(['tag', 'compat-decorated'])
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+
+    const log = await runGit([
+      'log',
+      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
+      '-z',
+      '--decorate=full',
+      '-n1',
+      head
+    ])
+
+    expect(log.stdout.includes('%(decorate')).toBe(!supports(2, 43))
+
+    const [item] = parseGitHistoryLog(log.stdout)
+    expect(item?.id).toBe(head)
+    expect(item?.subject).toBe('decorated commit')
+    expect(item?.references?.map((ref) => ref.id)).toContain('refs/tags/compat-decorated')
   })
 })

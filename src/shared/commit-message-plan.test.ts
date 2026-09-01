@@ -64,6 +64,36 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('keeps Pi extensions enabled for extension-provided models', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'pi',
+        model: 'extension-provider/local-model'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'pi',
+        args: [
+          '--print',
+          '--no-session',
+          '--no-tools',
+          '--no-skills',
+          '--no-context-files',
+          '--mode',
+          'text',
+          '--model',
+          'extension-provider/local-model'
+        ],
+        stdinPayload: 'PROMPT',
+        label: 'Pi'
+      }
+    })
+  })
+
   it('keeps OpenCode preset command overrides while sending the prompt on stdin', () => {
     const result = planCommitMessageGeneration(
       {

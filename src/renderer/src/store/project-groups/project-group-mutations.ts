@@ -17,6 +17,12 @@ import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalo
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { repoWithFetchedOwner, settingsForRepoOwner } from '../repos/owner-routing'
 import { projectGroupWithFetchedOwner } from './project-group-owner-stamping'
+import { getCatalogOwnerHostId } from '@/lib/worktree-runtime-owner-index'
+import {
+  getProjectGroupRuntimeTarget,
+  getProjectGroupTargetHostId,
+  resolveProjectGroupMutationTarget
+} from './project-group-mutation-routing'
 
 export function createProjectGroupMutationActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -62,10 +68,11 @@ export function createProjectGroupMutationActions(
     updateProjectGroup: async (groupId, updates, options) => {
       try {
         // Why: the sidebar lists groups from every host, so the mutation follows the group's owner, not the focused host.
-        const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
-        const target = getActiveRuntimeTarget(
-          settingsForProjectGroupOwner(get(), groupId, options?.hostId)
-        )
+        const route = resolveProjectGroupMutationTarget(get(), groupId, options)
+        if (!route) {
+          return false
+        }
+        const { target, ownerHostId } = route
         const updated =
           target.kind === 'local'
             ? await window.api.projectGroups.update({ groupId, updates })
@@ -97,10 +104,11 @@ export function createProjectGroupMutationActions(
     deleteProjectGroup: async (groupId, options) => {
       try {
         // Why: deletion targets the group's owner host (see updateProjectGroup); focus may be elsewhere.
-        const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
-        const target = getActiveRuntimeTarget(
-          settingsForProjectGroupOwner(get(), groupId, options?.hostId)
-        )
+        const route = resolveProjectGroupMutationTarget(get(), groupId, options)
+        if (!route) {
+          return false
+        }
+        const { target, ownerHostId } = route
         const deleted =
           target.kind === 'local'
             ? await window.api.projectGroups.delete({ groupId })
@@ -124,7 +132,40 @@ export function createProjectGroupMutationActions(
     },
 
     deleteProjectGroupWithContainedProjects: async (groupId, options) => {
-      const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options.hostId)
+      const requestedHostId = options.executionHostId ?? options.hostId
+      if (
+        requestedHostId &&
+        !get().projectGroups.some(
+          (group) => group.id === groupId && getCatalogOwnerHostId(group) === requestedHostId
+        )
+      ) {
+        return {
+          status: 'missing-group',
+          groupId,
+          requestedProjectIds: [],
+          removedProjectIds: [],
+          failedProjectRemovals: []
+        }
+      }
+      const executionTarget = options.executionHostId
+        ? getProjectGroupRuntimeTarget(get(), groupId, options.executionHostId)
+        : null
+      if (options.executionHostId && !executionTarget) {
+        return {
+          status: 'group-delete-failed',
+          groupId,
+          requestedProjectIds: [],
+          removedProjectIds: [],
+          failedProjectRemovals: []
+        }
+      }
+      const target =
+        executionTarget?.target ??
+        getActiveRuntimeTarget(settingsForProjectGroupOwner(get(), groupId, requestedHostId))
+      const ownerHostId =
+        executionTarget?.ownerHostId ??
+        resolveProjectGroupOwnerHostId(get(), groupId, requestedHostId) ??
+        getProjectGroupTargetHostId(target)
       const targets = selectProjectGroupRemovalTargets(
         get().projectGroups,
         get().repos,
@@ -136,15 +177,16 @@ export function createProjectGroupMutationActions(
         return {
           status: 'missing-group',
           groupId,
-          requestedProjectIds,
+          requestedProjectIds: [],
           removedProjectIds: [],
           failedProjectRemovals: []
         }
       }
 
-      const deleted = await get().deleteProjectGroup(groupId, {
-        hostId: ownerHostId ?? undefined
-      })
+      const deleted = await get().deleteProjectGroup(
+        groupId,
+        options.executionHostId ? { executionHostId: ownerHostId } : { hostId: ownerHostId }
+      )
       if (!deleted) {
         return {
           status: 'group-delete-failed',
@@ -206,12 +248,26 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    moveProjectToGroup: async (projectId, groupId, order) => {
+    moveProjectToGroup: async (projectId, groupId, order, options) => {
       try {
-        if (!findRepoForHost(get().repos, projectId, { settings: get().settings })) {
+        const resolvedGroup = groupId
+          ? getProjectGroupRuntimeTarget(get(), groupId, options?.executionHostId)
+          : null
+        if (groupId && !resolvedGroup) {
           return false
         }
-        const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
+        // Why: the source repo and destination group may belong to different hosts.
+        const sourceRepo = findRepoForHost(get().repos, projectId, {
+          settings: get().settings,
+          hostId: options?.executionHostId
+        })
+        if (!sourceRepo) {
+          return false
+        }
+        const repoHostId = getRepoExecutionHostId(sourceRepo)
+        const target =
+          resolvedGroup?.target ??
+          getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, repoHostId))
         const moved =
           target.kind === 'local'
             ? await window.api.projectGroups.moveProject({
