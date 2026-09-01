@@ -49,7 +49,7 @@ function driftSeverityLabel(installed: string, latest: string): string | null {
   }
 }
 
-function buildInstalledLine(installedVersion: InstalledPackageVersionResult): string {
+function buildInstalledText(installedVersion: InstalledPackageVersionResult): string {
   const label = translate(
     'auto.components.editor.PackageJsonDependencyHoverMarkdown.d3f501d912',
     'Installed'
@@ -58,92 +58,83 @@ function buildInstalledLine(installedVersion: InstalledPackageVersionResult): st
     'auto.components.editor.PackageJsonDependencyHoverMarkdown.5107bd60a9',
     'Not installed'
   )
-  const value =
-    installedVersion.status === 'installed'
-      ? escapeMarkdownText(installedVersion.version)
-      : notInstalled
-  return `- ${label}: ${value}`
+  return installedVersion.status === 'installed'
+    ? `${label}: ${escapeMarkdownText(installedVersion.version)}`
+    : notInstalled
 }
 
-function buildLinkLine(labelKey: string, fallback: string, url: string | null): string | null {
+function buildLink(labelKey: string, fallback: string, url: string | null): string | null {
   const safeUrl = toSafeHttpsLink(url)
   if (!safeUrl) {
     return null
   }
-  return `- [${escapeMarkdownText(translate(labelKey, fallback))}](${safeUrl})`
+  return `[${escapeMarkdownText(translate(labelKey, fallback))}](${safeUrl})`
 }
 
-function buildOkResultLines(
-  info: Extract<NpmPackageInfoResult, { status: 'ok' }>['info'],
+/** Version facts describe one subject, so they share a line instead of reading
+ * as a list of unrelated peers. */
+function buildFactsBlock(
+  result: NpmPackageInfoResult,
   installedVersion: InstalledPackageVersionResult
-): string[] {
-  const lines: string[] = []
-  if (info.description) {
-    lines.push(escapeMarkdownText(info.description))
-  }
-  if (info.latestVersion) {
+): string {
+  const facts = [buildInstalledText(installedVersion)]
+  if (result.status === 'ok' && result.info.latestVersion) {
     const latestLabel = translate(
       'auto.components.editor.PackageJsonDependencyHoverMarkdown.20c64d5223',
       'Latest'
     )
-    const publishedAt = info.latestPublishedAt
-      ? ` (${formatUiRelativeTimeFromDate(info.latestPublishedAt)})`
+    const publishedAt = result.info.latestPublishedAt
+      ? ` (${formatUiRelativeTimeFromDate(result.info.latestPublishedAt)})`
       : ''
-    lines.push(`- ${latestLabel}: ${escapeMarkdownText(info.latestVersion)}${publishedAt}`)
+    facts.push(`${latestLabel}: ${escapeMarkdownText(result.info.latestVersion)}${publishedAt}`)
     if (installedVersion.status === 'installed') {
-      const severity = driftSeverityLabel(installedVersion.version, info.latestVersion)
+      const severity = driftSeverityLabel(installedVersion.version, result.info.latestVersion)
       if (severity) {
-        lines.push(`- ${severity}`)
+        facts.push(severity)
       }
     }
   }
-  const homepageLine = buildLinkLine(
-    'auto.components.editor.PackageJsonDependencyHoverMarkdown.029b0fdf8a',
-    'Homepage',
-    info.homepageUrl
-  )
-  if (homepageLine) {
-    lines.push(homepageLine)
-  }
-  const repositoryLine = buildLinkLine(
-    'auto.components.editor.PackageJsonDependencyHoverMarkdown.45cf3d1be0',
-    'Repository',
-    info.repositoryUrl
-  )
-  if (repositoryLine) {
-    lines.push(repositoryLine)
-  }
-  return lines
+  return facts.join(' · ')
 }
 
-function buildResultLines(
-  result: NpmPackageInfoResult,
-  installedVersion: InstalledPackageVersionResult
-): string[] {
+function buildLinksBlock(result: NpmPackageInfoResult): string | null {
+  if (result.status !== 'ok') {
+    return null
+  }
+  const links = [
+    buildLink(
+      'auto.components.editor.PackageJsonDependencyHoverMarkdown.029b0fdf8a',
+      'Homepage',
+      result.info.homepageUrl
+    ),
+    buildLink(
+      'auto.components.editor.PackageJsonDependencyHoverMarkdown.45cf3d1be0',
+      'Repository',
+      result.info.repositoryUrl
+    )
+  ].filter((link): link is string => link !== null)
+  return links.length > 0 ? links.join(' · ') : null
+}
+
+function buildStatusBlock(result: NpmPackageInfoResult): string | null {
   switch (result.status) {
     case 'ok':
-      return buildOkResultLines(result.info, installedVersion)
+      return result.info.description ? escapeMarkdownText(result.info.description) : null
     case 'not-found':
-      return [
-        translate(
-          'auto.components.editor.PackageJsonDependencyHoverMarkdown.45dba0fe67',
-          'Package not found on the npm registry.'
-        )
-      ]
+      return translate(
+        'auto.components.editor.PackageJsonDependencyHoverMarkdown.45dba0fe67',
+        'Package not found on the npm registry.'
+      )
     case 'lookup-disabled':
-      return [
-        translate(
-          'auto.components.editor.PackageJsonDependencyHoverMarkdown.5b15fa0805',
-          'Package metadata lookups are disabled in Settings.'
-        )
-      ]
+      return translate(
+        'auto.components.editor.PackageJsonDependencyHoverMarkdown.5b15fa0805',
+        'Package metadata lookups are disabled in Settings.'
+      )
     case 'unavailable':
-      return [
-        translate(
-          'auto.components.editor.PackageJsonDependencyHoverMarkdown.b9c4f13783',
-          'Could not complete the lookup. Check your connection and try again.'
-        )
-      ]
+      return translate(
+        'auto.components.editor.PackageJsonDependencyHoverMarkdown.b9c4f13783',
+        'Could not complete the lookup. Check your connection and try again.'
+      )
   }
 }
 
@@ -151,17 +142,21 @@ function buildResultLines(
  * Every registry-supplied string is markdown-escaped and every link is
  * protocol-allowlisted to `https:` before it reaches Monaco's non-trusted
  * `MarkdownString` — registry content is attacker-influencable.
+ *
+ * Blocks are separated by blank lines rather than rendered as a bullet list:
+ * a name, a description, a set of version facts and a pair of links are not
+ * peers, and bullets imply that they are.
  */
 export function buildPackageJsonDependencyHoverMarkdown(params: {
   packageName: string
   installedVersion: InstalledPackageVersionResult
   result: NpmPackageInfoResult
 }): string {
-  const lines = [
+  const blocks = [
     `**${escapeMarkdownText(params.packageName)}**`,
-    '',
-    buildInstalledLine(params.installedVersion),
-    ...buildResultLines(params.result, params.installedVersion)
-  ]
-  return lines.join('\n')
+    buildStatusBlock(params.result),
+    buildFactsBlock(params.result, params.installedVersion),
+    buildLinksBlock(params.result)
+  ].filter((block): block is string => block !== null && block.length > 0)
+  return blocks.join('\n\n')
 }
