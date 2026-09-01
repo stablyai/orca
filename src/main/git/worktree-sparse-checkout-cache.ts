@@ -79,7 +79,13 @@ async function revalidateInBackground(
 ): Promise<void> {
   try {
     const isSparse = await detectSparseCheckout(worktreePath)
-    sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
+    // Guard against a race with an explicit invalidate/clear that ran while this was in flight:
+    // if the key is gone, something deliberately dropped it (removed/moved worktree, repo-scoped
+    // clear) and writing the stale result back would resurrect an entry that should stay absent
+    // until the next real read.
+    if (sparseCheckoutStateCache.has(key)) {
+      sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
+    }
     if (isSparse !== previousIsSparse) {
       changeListener?.(repoPath, worktreePath, isSparse)
     }

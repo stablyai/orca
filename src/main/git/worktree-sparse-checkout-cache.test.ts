@@ -115,6 +115,34 @@ describe('detectSparseCheckoutCached', () => {
     }
   })
 
+  it('does not resurrect an entry that was explicitly invalidated while a background revalidation was in flight', async () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    let resolveDetect: (isSparse: boolean) => void = () => {}
+    try {
+      nowSpy.mockReturnValue(1_000)
+      detectSparseCheckoutMock.mockResolvedValueOnce(false)
+      await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+
+      // Past the window: kicks a background re-detect that we hold open.
+      nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
+      detectSparseCheckoutMock.mockImplementationOnce(
+        () => new Promise<boolean>((resolve) => (resolveDetect = resolve))
+      )
+      await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+
+      // The worktree is removed (or the repo cache is cleared) while the detect above is in flight.
+      invalidateSparseCheckoutState('/repo', '/repo/wt-a')
+      expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(0)
+
+      // The in-flight detect now resolves; it must not write the entry back.
+      resolveDetect(true)
+      await flushBackgroundRevalidation()
+      expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(0)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   it('notifies the registered change listener only when a background revalidation flips the answer', async () => {
     const listener = vi.fn()
     onSparseCheckoutStateChanged(listener)
