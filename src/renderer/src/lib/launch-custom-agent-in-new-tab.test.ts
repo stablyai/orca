@@ -33,11 +33,18 @@ const repointedProfile = {
   executable: 'claude',
   args: []
 }
+const disabledProfile = {
+  id: 'disabled',
+  name: 'Disabled',
+  executable: 'disabled',
+  args: [],
+  enabled: false
+}
 
 const store = {
   settings: {
     terminalWindowsShell: 'powershell.exe',
-    customAgentProfiles: [codexLunaProfile, genericProfile, repointedProfile]
+    customAgentProfiles: [codexLunaProfile, genericProfile, repointedProfile, disabledProfile]
   },
   sshConnectionStates: new Map(),
   sshStateByEnvironment: new Map(),
@@ -193,6 +200,13 @@ describe('launchCustomAgentInNewTab', () => {
     expect(
       launchCustomAgentInNewTab({ profileId: 'removed-profile', worktreeId: 'wt-1' })
     ).toBeNull()
+    expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
+  it('does not launch a disabled profile', async () => {
+    const { launchCustomAgentInNewTab } = await import('./launch-custom-agent-in-new-tab')
+
+    expect(launchCustomAgentInNewTab({ profileId: 'disabled', worktreeId: 'wt-1' })).toBeNull()
     expect(mocks.createTab).not.toHaveBeenCalled()
   })
 })

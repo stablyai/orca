@@ -44,12 +44,14 @@ import {
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue
 } from './agent-availability-settings'
-import { AgentAvailabilityControl, type AgentCatalogRowProps } from './AgentCatalogRow'
+import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
 import {
   CUSTOM_AGENT_PROFILES_MAX,
-  normalizeCustomAgentProfiles
+  getDefaultCustomAgentProfile,
+  normalizeCustomAgentProfiles,
+  setDefaultCustomAgentProfile
 } from '../../../../shared/custom-agent-profile'
 import { duplicateBuiltInAgentAsCustom } from './custom-agent-profile-draft'
 import {
@@ -63,8 +65,7 @@ import { resolveStartupShell } from '../../../../shared/tui-agent-startup-shell'
 export {
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue,
-  getAgentsPaneSearchEntries,
-  AgentAvailabilityControl
+  getAgentsPaneSearchEntries
 }
 
 type AgentsPaneProps = {
@@ -195,6 +196,7 @@ export function AgentsPane({
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
   const customAgentProfiles = normalizeCustomAgentProfiles(settings.customAgentProfiles)
+  const defaultCustomAgent = getDefaultCustomAgentProfile(customAgentProfiles)
   const detectedAgents =
     detectedIds === null ? [] : catalog.filter((agent) => detectedIds.has(agent.id))
   const enabledDetectedAgents = detectedAgents.filter((agent) =>
@@ -213,6 +215,14 @@ export function AgentsPane({
       enabled
     })
   }
+  const setBuiltInDefault = (agent: TuiAgent | 'blank' | null): void => {
+    updateSettings({
+      defaultTuiAgent: agent,
+      ...(defaultCustomAgent
+        ? { customAgentProfiles: setDefaultCustomAgentProfile(customAgentProfiles, null) }
+        : {})
+    })
+  }
   const getRowProps = (
     agent: (typeof catalog)[number],
     isDetected: boolean
@@ -225,11 +235,11 @@ export function AgentsPane({
     defaultEnv: getTuiAgentDefaultEnv(agent.id),
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, disabledAgents),
-    isDefault: isDetected && defaultAgent === agent.id,
+    isDefault: isDetected && !defaultCustomAgent && defaultAgent === agent.id,
     cmdOverride: isDetected ? cmdOverrides[agent.id] : undefined,
     argsOverride: resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs),
     envOverride: resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv),
-    onSetDefault: isDetected ? () => updateSettings({ defaultTuiAgent: agent.id }) : () => {},
+    onSetDefault: isDetected ? () => setBuiltInDefault(agent.id) : undefined,
     onSetEnabled: (enabled) => setAgentEnabled(agent.id, enabled),
     onSaveOverride: isDetected
       ? (value) => {
@@ -251,7 +261,7 @@ export function AgentsPane({
       if (customAgentProfiles.length >= CUSTOM_AGENT_PROFILES_MAX) {
         toast.error(
           translate(
-            'auto.components.settings.AgentsPane.customAgentLimit',
+            'auto.components.settings.CustomAgentProfilesSection.limit',
             'Custom agents are limited to {{value0}} profiles.',
             { value0: String(CUSTOM_AGENT_PROFILES_MAX) }
           )
@@ -297,11 +307,17 @@ export function AgentsPane({
     <div className="space-y-8">
       <AgentDefaultSetting
         defaultAgent={defaultAgent}
+        defaultCustomAgent={defaultCustomAgent}
         detectedIds={detectedIds}
         enabledDetectedAgents={enabledDetectedAgents}
         catalog={catalog}
         description={getSettingOwnershipSummary('agentLaunchDefaults').description}
-        onSetDefault={(agent) => updateSettings({ defaultTuiAgent: agent })}
+        onSetDefault={setBuiltInDefault}
+        onSetCustomDefault={(profileId) =>
+          updateSettings({
+            customAgentProfiles: setDefaultCustomAgentProfile(customAgentProfiles, profileId)
+          })
+        }
       />
       <AgentRuntimeSetting
         settings={settings}
@@ -324,12 +340,6 @@ export function AgentsPane({
           updateSettings(applyAgentPermissionMode({ mode, agentDefaultArgs, agentDefaultEnv }))
         }
       />
-      <CustomAgentProfilesSection
-        ref={customProfilesRef}
-        profiles={customAgentProfiles}
-        catalog={catalog}
-        onProfilesChange={(profiles) => updateSettingsOrThrow({ customAgentProfiles: profiles })}
-      />
       <AgentDetectionCatalog
         detectedAgents={detectedAgents}
         undetectedAgents={undetectedAgents}
@@ -340,6 +350,16 @@ export function AgentsPane({
         activeServerName={activeServerName}
         onRefresh={() => void refreshTargetAgents()}
         getRowProps={getRowProps}
+        afterDetectedAgents={
+          <CustomAgentProfilesSection
+            ref={customProfilesRef}
+            profiles={customAgentProfiles}
+            catalog={catalog}
+            onProfilesChange={(profiles) =>
+              updateSettingsOrThrow({ customAgentProfiles: profiles })
+            }
+          />
+        }
       />
     </div>
   )

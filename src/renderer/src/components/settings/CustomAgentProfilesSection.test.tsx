@@ -22,6 +22,70 @@ function renderWithTooltips(children: ReactNode): ReturnType<typeof render> {
 }
 
 describe('CustomAgentProfilesSection', () => {
+  it('uses the installed-agent row controls and expands editing in place', async () => {
+    const user = userEvent.setup()
+    renderWithTooltips(
+      <CustomAgentProfilesSection
+        profiles={[
+          {
+            id: 'codex-luna',
+            name: 'Codex Luna',
+            executable: 'codex',
+            args: ['--model', 'luna']
+          }
+        ]}
+        catalog={getAgentCatalog()}
+        onProfilesChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByRole('radiogroup', { name: 'Codex Luna availability' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Set default' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Edit Codex Luna' }))
+    expect(screen.getByLabelText('Name')).toHaveValue('Codex Luna')
+
+    await user.click(screen.getByRole('button', { name: 'Close Codex Luna editor' }))
+    expect(screen.queryByLabelText('Name')).toBeNull()
+  })
+
+  it('sets a custom default and clears it when the profile is disabled', async () => {
+    const user = userEvent.setup()
+    const onProfilesChange = vi.fn().mockResolvedValue(undefined)
+    const profile = {
+      id: 'codex-luna',
+      name: 'Codex Luna',
+      executable: 'codex',
+      args: ['--model', 'luna']
+    } as const
+    const view = renderWithTooltips(
+      <CustomAgentProfilesSection
+        profiles={[profile]}
+        catalog={getAgentCatalog()}
+        onProfilesChange={onProfilesChange}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Set default' }))
+    await waitFor(() =>
+      expect(onProfilesChange).toHaveBeenCalledWith([{ ...profile, isDefault: true }])
+    )
+
+    view.rerender(
+      <TooltipProvider>
+        <CustomAgentProfilesSection
+          profiles={[{ ...profile, isDefault: true }]}
+          catalog={getAgentCatalog()}
+          onProfilesChange={onProfilesChange}
+        />
+      </TooltipProvider>
+    )
+    await user.click(screen.getByRole('radio', { name: 'Disabled' }))
+    await waitFor(() =>
+      expect(onProfilesChange).toHaveBeenLastCalledWith([{ ...profile, enabled: false }])
+    )
+  })
+
   it('creates a generic profile with ordered literal arguments', async () => {
     const user = userEvent.setup()
     const onProfilesChange = vi.fn().mockResolvedValue(undefined)
@@ -102,7 +166,7 @@ describe('CustomAgentProfilesSection', () => {
     ])
   })
 
-  it('keeps a failed checked write visible in the editor', async () => {
+  it('keeps a failed write visible until the editor is cancelled', async () => {
     const user = userEvent.setup()
     renderWithTooltips(
       <CustomAgentProfilesSection
@@ -116,26 +180,8 @@ describe('CustomAgentProfilesSection', () => {
     await user.type(screen.getByLabelText('Name'), 'Dhimanex')
     await user.type(screen.getByLabelText('Executable'), 'dhimanex')
     await user.click(screen.getByRole('button', { name: 'Save' }))
-
     expect(await screen.findByRole('alert')).toHaveTextContent('Settings write failed')
     expect(screen.getByLabelText('Name')).toHaveValue('Dhimanex')
-  })
-
-  it('clears a failed write when the editor is cancelled', async () => {
-    const user = userEvent.setup()
-    renderWithTooltips(
-      <CustomAgentProfilesSection
-        profiles={[]}
-        catalog={getAgentCatalog()}
-        onProfilesChange={vi.fn().mockRejectedValue(new Error('Settings write failed'))}
-      />
-    )
-
-    await user.click(screen.getByRole('button', { name: 'Create custom agent' }))
-    await user.type(screen.getByLabelText('Name'), 'Dhimanex')
-    await user.type(screen.getByLabelText('Executable'), 'dhimanex')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Settings write failed')
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
 

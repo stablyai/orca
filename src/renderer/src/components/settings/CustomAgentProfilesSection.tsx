@@ -1,18 +1,20 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { Pencil, Plus, Terminal, Trash2 } from 'lucide-react'
+import { Plus, Terminal, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import {
   CUSTOM_AGENT_PROFILES_MAX,
+  isCustomAgentProfileEnabled,
   normalizeCustomAgentProfile,
-  normalizeCustomAgentProfiles,
+  setDefaultCustomAgentProfile,
   type CustomAgentProfile
 } from '../../../../shared/custom-agent-profile'
 import { Button } from '../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsBadge, SettingsSubsectionHeader } from './SettingsFormControls'
+import { AgentRowAction, AgentSettingsRow } from './AgentSettingsRow'
 import {
   createCustomAgentProfileDraft,
   type CustomAgentProfileDraft
@@ -92,6 +94,24 @@ export const CustomAgentProfilesSection = forwardRef<
     setPersistenceError(null)
     requestAnimationFrame(() => returnFocusRef.current?.focus())
   }
+  const persistProfiles = async (next: CustomAgentProfile[]): Promise<boolean> => {
+    if (mutationInFlightRef.current) {
+      return false
+    }
+    mutationInFlightRef.current = true
+    setSaving(true)
+    setPersistenceError(null)
+    try {
+      await onProfilesChange(next)
+      return true
+    } catch (error) {
+      setPersistenceError(error instanceof Error ? error.message : String(error))
+      return false
+    } finally {
+      mutationInFlightRef.current = false
+      setSaving(false)
+    }
+  }
   const save = async (): Promise<void> => {
     if (!editor) {
       return
@@ -114,27 +134,55 @@ export const CustomAgentProfilesSection = forwardRef<
     const next = editor.originalId
       ? profiles.map((profile) => (profile.id === editor.originalId ? normalized : profile))
       : [...profiles, normalized]
-    setSaving(true)
-    try {
-      await onProfilesChange(normalizeCustomAgentProfiles(next))
+    if (await persistProfiles(next)) {
       closeEditor()
-    } catch (error) {
-      setPersistenceError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setSaving(false)
     }
   }
+  const setEnabled = (profile: CustomAgentProfile, enabled: boolean): void => {
+    const next = profiles.map((candidate) => {
+      if (candidate.id !== profile.id) {
+        return candidate
+      }
+      const { enabled: _enabled, isDefault: _isDefault, ...rest } = candidate
+      return enabled ? rest : { ...rest, enabled: false }
+    })
+    void persistProfiles(next)
+  }
+
+  const editorElement = editor ? (
+    <CustomAgentProfileEditor
+      editor={editor}
+      catalog={catalog}
+      profiles={profiles}
+      saving={saving}
+      persistenceError={persistenceError}
+      nameInputRef={nameInputRef}
+      onChange={(profile) => {
+        setPersistenceError(null)
+        setEditor((current) => (current ? { ...current, profile } : null))
+      }}
+      onSave={() => void save()}
+      onCancel={closeEditor}
+    />
+  ) : null
 
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
-        title={translate(
-          'auto.components.settings.CustomAgentProfilesSection.title',
-          'Custom agents'
-        )}
+        title={
+          <span className="flex items-center gap-2">
+            {translate(
+              'auto.components.settings.CustomAgentProfilesSection.title',
+              'Custom agents'
+            )}
+            {profiles.length > 0 ? (
+              <SettingsBadge tone="accent">{profiles.length}</SettingsBadge>
+            ) : null}
+          </span>
+        }
         description={translate(
           'auto.components.settings.CustomAgentProfilesSection.description',
-          'Create independent launch profiles with a command and literal arguments.'
+          'Named launch profiles with literal arguments. Codex history comes from Installed → Codex.'
         )}
         action={
           <Button
@@ -160,83 +208,74 @@ export const CustomAgentProfilesSection = forwardRef<
         <div className="rounded-md border border-dashed border-border/50 px-3 py-4 text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.CustomAgentProfilesSection.empty',
-            'No custom agents yet. Create one from scratch or duplicate a built-in agent below.'
+            'No custom agents yet. Create one or duplicate an installed agent above.'
           )}
         </div>
       ) : null}
 
       {profiles.length > 0 ? (
         <div className="divide-y divide-border/40">
-          {profiles.map((profile) => (
-            <div key={profile.id} className="flex items-center gap-3 py-3">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
-                <Terminal className="size-4 text-muted-foreground" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="text-sm font-medium leading-none">{profile.name}</span>
-                <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                  {profileSummary(profile)}
-                </div>
-              </div>
-              <ProfileAction
-                label={translate(
-                  'auto.components.settings.CustomAgentProfilesSection.edit',
-                  'Edit {{value0}}',
-                  { value0: profile.name }
-                )}
-                disabled={Boolean(editor) || saving}
-                onClick={() =>
-                  openEditor({
-                    originalId: profile.id,
-                    profile: { ...profile, args: [...profile.args] }
-                  })
+          {profiles.map((profile) => {
+            const isEditing = editor?.originalId === profile.id
+            return (
+              <AgentSettingsRow
+                key={profile.id}
+                label={profile.name}
+                icon={
+                  profile.baseAgent ? (
+                    <AgentIcon agent={profile.baseAgent} size={16} />
+                  ) : (
+                    <Terminal className="size-4 text-muted-foreground" />
+                  )
+                }
+                summary={profileSummary(profile)}
+                isEnabled={isCustomAgentProfileEnabled(profile)}
+                isDefault={profile.isDefault === true}
+                onSetEnabled={(enabled) => setEnabled(profile, enabled)}
+                onSetDefault={() =>
+                  void persistProfiles(setDefaultCustomAgentProfile(profiles, profile.id))
+                }
+                secondAction={
+                  <DeleteProfileAction
+                    profile={profile}
+                    disabled={Boolean(editor) || saving}
+                    onDelete={() =>
+                      persistProfiles(profiles.filter((candidate) => candidate.id !== profile.id))
+                    }
+                    onDeleted={() => requestAnimationFrame(() => createButtonRef.current?.focus())}
+                  />
+                }
+                detailsOpen={isEditing}
+                toggleDetailsLabel={
+                  isEditing
+                    ? translate(
+                        'auto.components.settings.CustomAgentProfilesSection.closeEditor',
+                        'Close {{value0}} editor',
+                        { value0: profile.name }
+                      )
+                    : translate(
+                        'auto.components.settings.CustomAgentProfilesSection.editProfile',
+                        'Edit {{value0}}',
+                        { value0: profile.name }
+                      )
+                }
+                onToggleDetails={() =>
+                  isEditing
+                    ? closeEditor()
+                    : openEditor({
+                        originalId: profile.id,
+                        profile: { ...profile, args: [...profile.args] }
+                      })
                 }
               >
-                <Pencil className="size-3.5" />
-              </ProfileAction>
-              <DeleteProfileAction
-                profile={profile}
-                disabled={Boolean(editor) || saving}
-                onBegin={() => {
-                  if (mutationInFlightRef.current) {
-                    return false
-                  }
-                  mutationInFlightRef.current = true
-                  setSaving(true)
-                  setPersistenceError(null)
-                  return true
-                }}
-                onDelete={() =>
-                  onProfilesChange(profiles.filter((candidate) => candidate.id !== profile.id))
-                }
-                onDeleted={() => requestAnimationFrame(() => createButtonRef.current?.focus())}
-                onError={setPersistenceError}
-                onFinish={() => {
-                  mutationInFlightRef.current = false
-                  setSaving(false)
-                }}
-              />
-            </div>
-          ))}
+                {isEditing ? editorElement : null}
+              </AgentSettingsRow>
+            )
+          })}
         </div>
       ) : null}
 
-      {editor ? (
-        <CustomAgentProfileEditor
-          editor={editor}
-          catalog={catalog}
-          profiles={profiles}
-          saving={saving}
-          persistenceError={persistenceError}
-          nameInputRef={nameInputRef}
-          onChange={(profile) => {
-            setPersistenceError(null)
-            setEditor((current) => (current ? { ...current, profile } : null))
-          }}
-          onSave={() => void save()}
-          onCancel={closeEditor}
-        />
-      ) : null}
+      {editor?.originalId === null ? editorElement : null}
       {persistenceError && !editor ? (
         <p className="text-xs text-destructive" role="alert">
           {persistenceError}
@@ -249,19 +288,13 @@ export const CustomAgentProfilesSection = forwardRef<
 function DeleteProfileAction({
   profile,
   disabled,
-  onBegin,
   onDelete,
-  onDeleted,
-  onError,
-  onFinish
+  onDeleted
 }: {
   profile: CustomAgentProfile
   disabled: boolean
-  onBegin: () => boolean
-  onDelete: () => void | Promise<void>
+  onDelete: () => Promise<boolean>
   onDeleted: () => void
-  onError: (message: string) => void
-  onFinish: () => void
 }): React.JSX.Element {
   const confirm = useConfirmationDialog()
   const label = translate(
@@ -270,72 +303,29 @@ function DeleteProfileAction({
     { value0: profile.name }
   )
   const handleDelete = async (): Promise<void> => {
-    if (!onBegin()) {
-      return
-    }
-    try {
-      const accepted = await confirm({
-        title: translate(
-          'auto.components.settings.CustomAgentProfilesSection.deleteTitle',
-          'Delete {{value0}}?',
-          { value0: profile.name }
-        ),
-        description: translate(
-          'auto.components.settings.CustomAgentProfilesSection.deleteDescription',
-          'Existing terminals keep their captured launch command. This removes the profile from future launches.'
-        ),
-        confirmLabel: translate(
-          'auto.components.settings.CustomAgentProfilesSection.delete',
-          'Delete'
-        ),
-        confirmVariant: 'destructive'
-      })
-      if (!accepted) {
-        return
-      }
-      await onDelete()
+    const accepted = await confirm({
+      title: translate(
+        'auto.components.settings.CustomAgentProfilesSection.deleteTitle',
+        'Delete {{value0}}?',
+        { value0: profile.name }
+      ),
+      description: translate(
+        'auto.components.settings.CustomAgentProfilesSection.deleteDescription',
+        'Existing terminals keep their captured launch command. This removes the profile from future launches.'
+      ),
+      confirmLabel: translate(
+        'auto.components.settings.CustomAgentProfilesSection.delete',
+        'Delete'
+      ),
+      confirmVariant: 'destructive'
+    })
+    if (accepted && (await onDelete())) {
       onDeleted()
-    } catch (error) {
-      onError(error instanceof Error ? error.message : String(error))
-    } finally {
-      onFinish()
     }
   }
   return (
-    <ProfileAction label={label} disabled={disabled} onClick={() => void handleDelete()}>
+    <AgentRowAction label={label} disabled={disabled} onClick={() => void handleDelete()}>
       <Trash2 className="size-3.5" />
-    </ProfileAction>
-  )
-}
-export function ProfileAction({
-  label,
-  disabled = false,
-  onClick,
-  children
-}: {
-  label: string
-  disabled?: boolean
-  onClick: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled={disabled}
-          onClick={onClick}
-          aria-label={label}
-          className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
+    </AgentRowAction>
   )
 }

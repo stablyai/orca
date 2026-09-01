@@ -1,12 +1,8 @@
 import { useState } from 'react'
-import { Check, ChevronDown, Copy, ExternalLink } from 'lucide-react'
+import { Copy, ExternalLink } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { Button } from '../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { SettingsBadge, SettingsSegmentedControl } from './SettingsFormControls'
 import type { AgentSessionSourceHomeControl } from './codex-session-source-home-control'
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
 import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
@@ -15,46 +11,7 @@ import {
   AgentDefaultArgsInput,
   AgentDefaultEnvInput
 } from './AgentLaunchDefaultsEditor'
-
-type AgentAvailability = 'enabled' | 'disabled'
-
-export function AgentAvailabilityControl({
-  label,
-  isEnabled,
-  onSetEnabled
-}: {
-  label: string
-  isEnabled: boolean
-  onSetEnabled: (enabled: boolean) => void
-}): React.JSX.Element {
-  const value: AgentAvailability = isEnabled ? 'enabled' : 'disabled'
-  return (
-    <SettingsSegmentedControl<AgentAvailability>
-      value={value}
-      onChange={(next) => {
-        if (next !== value) {
-          onSetEnabled(next === 'enabled')
-        }
-      }}
-      ariaLabel={translate(
-        'auto.components.settings.AgentsPane.1c9a9679ec',
-        '{{value0}} availability',
-        { value0: label }
-      )}
-      size="sm"
-      options={[
-        {
-          value: 'enabled',
-          label: translate('auto.components.settings.AgentsPane.d4d2a45d63', 'Enabled')
-        },
-        {
-          value: 'disabled',
-          label: translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')
-        }
-      ]}
-    />
-  )
-}
+import { AgentRowAction, AgentSettingsRow } from './AgentSettingsRow'
 
 export type AgentCatalogRowProps = {
   agentId: TuiAgent
@@ -69,13 +26,13 @@ export type AgentCatalogRowProps = {
   cmdOverride: string | undefined
   argsOverride: string
   envOverride: Record<string, string>
-  onSetDefault: () => void
+  onSetDefault?: () => void
   onSetEnabled: (enabled: boolean) => void
   onSaveOverride: (value: string) => void
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
   onDuplicateAsCustom: () => void
-  duplicateAsCustomDisabled?: boolean
+  duplicateAsCustomDisabled: boolean
   sessionSourceHome?: AgentSessionSourceHomeControl
 }
 
@@ -98,7 +55,7 @@ export function AgentCatalogRow({
   onSaveArgs,
   onSaveEnv,
   onDuplicateAsCustom,
-  duplicateAsCustomDisabled = false,
+  duplicateAsCustomDisabled,
   sessionSourceHome
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
@@ -108,131 +65,61 @@ export function AgentCatalogRow({
   )
 
   return (
-    <div className={cn('py-3', !isDetected && 'opacity-70')}>
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
-          <AgentIcon agent={agentId} size={16} />
-        </div>
-        <div className="min-w-0 flex-1 sm:min-w-[12rem]">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium leading-none">{label}</span>
-            {!isEnabled && (
-              <SettingsBadge tone="muted">
-                {translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')}
-              </SettingsBadge>
-            )}
-          </div>
-          <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-            {cmdOverride ? (
-              <span>
-                <span className="text-muted-foreground/60 line-through">{defaultCmd}</span>
-                <span className="ml-1.5 text-foreground/80">{cmdOverride}</span>
-              </span>
-            ) : (
-              defaultCmd
-            )}
-            {argsOverride && <span className="ml-1.5 text-foreground/70">{argsOverride}</span>}
-            {envSummary && <span className="ml-1.5 text-foreground/60">{envSummary}</span>}
-          </div>
-        </div>
-
-        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem_1.75rem] items-center gap-1.5">
-          <AgentAvailabilityControl
-            label={label}
-            isEnabled={isEnabled}
-            onSetEnabled={onSetEnabled}
-          />
-          <div className="flex justify-start">
-            {isDetected && isEnabled && (
-              <Button
-                type="button"
-                variant={isDefault ? 'secondary' : 'ghost'}
-                size="xs"
-                onClick={onSetDefault}
-                title={
-                  isDefault
-                    ? translate('auto.components.settings.AgentsPane.d7625cf8b2', 'Default agent')
-                    : translate('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')
-                }
-                className="h-7 w-full justify-center gap-1 text-xs"
-              >
-                {isDefault && <Check className="size-3" />}
-                {isDefault
-                  ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
-                  : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
-              </Button>
-            )}
-          </div>
-          <a
-            href={homepageUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={
-              isDetected
-                ? translate('auto.components.settings.AgentsPane.fe4d630c94', 'Docs')
-                : translate('auto.components.settings.AgentsPane.f95b5c79b8', 'Install')
-            }
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-          >
-            <ExternalLink className="size-3.5" />
-          </a>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled={duplicateAsCustomDisabled}
-                onClick={onDuplicateAsCustom}
-                aria-label={translate(
-                  'auto.components.settings.AgentCatalogRow.duplicateAsCustom',
-                  'Duplicate {{value0}} as custom agent',
-                  { value0: label }
-                )}
-                className="size-7 text-muted-foreground hover:text-foreground"
-              >
-                <Copy className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {translate(
-                'auto.components.settings.AgentCatalogRow.duplicateAsCustom',
-                'Duplicate {{value0}} as custom agent',
-                { value0: label }
-              )}
-            </TooltipContent>
-          </Tooltip>
-          <div className="flex size-7 items-center justify-center">
-            {isDetected && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setCmdOpen((previous) => !previous)}
-                aria-label={
-                  cmdOpen
-                    ? translate(
-                        'auto.components.settings.AgentsPane.cea7d97be1',
-                        'Collapse command override'
-                      )
-                    : translate(
-                        'auto.components.settings.AgentsPane.dc4a2ffdc0',
-                        'Expand command override'
-                      )
-                }
-                className="size-7 text-muted-foreground hover:text-foreground"
-              >
-                <ChevronDown
-                  className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
-                />
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {isDetected && cmdOpen && (
-        <div className="mt-3 pl-10">
+    <AgentSettingsRow
+      label={label}
+      icon={<AgentIcon agent={agentId} size={16} />}
+      summary={
+        <>
+          {cmdOverride ? (
+            <span>
+              <span className="text-muted-foreground/60 line-through">{defaultCmd}</span>
+              <span className="ml-1.5 text-foreground/80">{cmdOverride}</span>
+            </span>
+          ) : (
+            defaultCmd
+          )}
+          {argsOverride ? <span className="ml-1.5 text-foreground/70">{argsOverride}</span> : null}
+          {envSummary ? <span className="ml-1.5 text-foreground/60">{envSummary}</span> : null}
+        </>
+      }
+      isEnabled={isEnabled}
+      isDefault={isDefault}
+      onSetEnabled={onSetEnabled}
+      onSetDefault={isDetected ? onSetDefault : undefined}
+      muted={!isDetected}
+      firstAction={
+        <a
+          href={homepageUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={
+            isDetected
+              ? translate('auto.components.settings.AgentsPane.fe4d630c94', 'Docs')
+              : translate('auto.components.settings.AgentsPane.f95b5c79b8', 'Install')
+          }
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+        >
+          <ExternalLink className="size-3.5" />
+        </a>
+      }
+      secondAction={
+        <AgentRowAction
+          label={translate(
+            'auto.components.settings.AgentCatalogRow.duplicateAsCustom',
+            'Duplicate {{value0}} as custom agent',
+            { value0: label }
+          )}
+          disabled={duplicateAsCustomDisabled}
+          onClick={onDuplicateAsCustom}
+        >
+          <Copy className="size-3.5" />
+        </AgentRowAction>
+      }
+      detailsOpen={cmdOpen}
+      onToggleDetails={isDetected ? () => setCmdOpen((previous) => !previous) : undefined}
+    >
+      {isDetected ? (
+        <>
           <AgentCommandOverrideInput
             key={cmdOverride ?? defaultCmd}
             defaultCmd={defaultCmd}
@@ -273,8 +160,8 @@ export function AgentCatalogRow({
               'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
             )}
           </p>
-        </div>
-      )}
-    </div>
+        </>
+      ) : null}
+    </AgentSettingsRow>
   )
 }

@@ -27,6 +27,8 @@ export type CustomAgentProfile = {
   baseAgentExecutable?: string
   executable: string
   args: readonly string[]
+  enabled?: boolean
+  isDefault?: boolean
 }
 
 export type CustomAgentLaunch = {
@@ -80,12 +82,15 @@ export function normalizeCustomAgentProfile(value: unknown): CustomAgentProfile 
   }
   const baseAgent =
     isTuiAgent(row.baseAgent) && baseAgentExecutable === executable ? row.baseAgent : null
+  const enabled = row.enabled !== false
   return {
     id,
     name,
     ...(baseAgent ? { baseAgent, baseAgentExecutable: executable } : {}),
     executable,
-    args
+    args,
+    ...(!enabled ? { enabled: false } : {}),
+    ...(enabled && row.isDefault === true ? { isDefault: true } : {})
   }
 }
 
@@ -95,6 +100,7 @@ export function normalizeCustomAgentProfiles(value: unknown): CustomAgentProfile
   }
   const profiles: CustomAgentProfile[] = []
   const ids = new Set<string>()
+  let hasDefault = false
   const names = new Set<string>(
     [...Object.keys(TUI_AGENT_DISPLAY_NAMES), ...Object.values(TUI_AGENT_DISPLAY_NAMES)].map(
       (name) => name.toLowerCase()
@@ -112,6 +118,13 @@ export function normalizeCustomAgentProfiles(value: unknown): CustomAgentProfile
     if (ids.has(profile.id) || names.has(foldedName)) {
       continue
     }
+    if (profile.isDefault) {
+      if (hasDefault) {
+        delete profile.isDefault
+      } else {
+        hasDefault = true
+      }
+    }
     ids.add(profile.id)
     names.add(foldedName)
     profiles.push(profile)
@@ -119,15 +132,31 @@ export function normalizeCustomAgentProfiles(value: unknown): CustomAgentProfile
   return profiles
 }
 
+export function isCustomAgentProfileEnabled(profile: CustomAgentProfile): boolean {
+  return profile.enabled !== false
+}
+
+export function getDefaultCustomAgentProfile(profiles: unknown): CustomAgentProfile | null {
+  return normalizeCustomAgentProfiles(profiles).find((profile) => profile.isDefault) ?? null
+}
+
+export function setDefaultCustomAgentProfile(
+  profiles: readonly CustomAgentProfile[],
+  profileId: string | null
+): CustomAgentProfile[] {
+  return profiles.map((profile) => {
+    const { isDefault: _isDefault, ...rest } = profile
+    return profile.id === profileId && isCustomAgentProfileEnabled(profile)
+      ? { ...rest, isDefault: true }
+      : rest
+  })
+}
+
 export function buildCustomAgentLaunch(
   profile: CustomAgentProfile,
   shell: AgentStartupShell
-): CustomAgentLaunch | null {
-  const normalized = normalizeCustomAgentProfile(profile)
-  if (!normalized) {
-    return null
-  }
-  const argv: [string, ...string[]] = [normalized.executable, ...normalized.args]
+): CustomAgentLaunch {
+  const argv: [string, ...string[]] = [profile.executable, ...profile.args]
   return shell === 'posix'
     ? { command: buildShellCommandFromArgv(argv, shell) }
     : buildCustomAgentWindowsLaunch(argv, shell)

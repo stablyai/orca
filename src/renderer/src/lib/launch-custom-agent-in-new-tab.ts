@@ -13,6 +13,7 @@ import { worktreeUsesWslPath } from '@/store/terminals/terminal-workspace-routin
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import {
   buildCustomAgentLaunch,
+  isCustomAgentProfileEnabled,
   normalizeCustomAgentProfiles
 } from '../../../shared/custom-agent-profile'
 import { parseExecutionHostId } from '../../../shared/execution-host'
@@ -23,7 +24,7 @@ export function launchCustomAgentInNewTab(args: {
   profileId: string
   worktreeId: string
   groupId?: string
-}): { tabId: string | null } | null {
+}): { tabId: string } | null {
   const store = useAppStore.getState()
   const profile = normalizeCustomAgentProfiles(store.settings?.customAgentProfiles).find(
     (candidate) => candidate.id === args.profileId
@@ -33,6 +34,15 @@ export function launchCustomAgentInNewTab(args: {
       translate(
         'auto.lib.launchCustomAgentInNewTab.profileRemoved',
         'This custom agent was removed. Choose another agent.'
+      )
+    )
+    return null
+  }
+  if (!isCustomAgentProfileEnabled(profile)) {
+    toast.error(
+      translate(
+        'auto.lib.launchCustomAgentInNewTab.profileDisabled',
+        'This custom agent is disabled. Enable it in Agent settings to launch it.'
       )
     )
     return null
@@ -103,9 +113,6 @@ export function launchCustomAgentInNewTab(args: {
     })
   )
   const launch = buildCustomAgentLaunch(profile, shell)
-  if (!launch) {
-    return null
-  }
 
   const tab = store.createTab(args.worktreeId, args.groupId, undefined, {
     ...(profile.baseAgent ? { launchAgent: profile.baseAgent } : {}),

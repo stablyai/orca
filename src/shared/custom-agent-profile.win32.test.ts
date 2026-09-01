@@ -46,13 +46,12 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
       },
       'cmd'
     )
-    expect(launch).not.toBeNull()
 
     const result = await runProcess({
       program: getCmdExePath(),
       args: ['/d', '/q', '/v:on'],
-      input: `${launch!.command}\r\nexit /b %errorlevel%\r\n`,
-      env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV, ...launch!.env },
+      input: `${launch.command}\r\nexit /b %errorlevel%\r\n`,
+      env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV, ...launch.env },
       timeoutMs: 30_000
     })
 
@@ -80,8 +79,7 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
       },
       'powershell'
     )
-    expect(launch).not.toBeNull()
-    const argvEnv = Object.keys(launch!.env ?? {})[0]
+    const argvEnv = Object.keys(launch.env ?? {})[0]
     expect(argvEnv).toBeTruthy()
 
     const result = await runProcess({
@@ -92,9 +90,9 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
         '-ExecutionPolicy',
         'Bypass',
         '-Command',
-        `${launch!.command}; if (Test-Path Env:${argvEnv}) { exit 86 }`
+        `${launch.command}; if (Test-Path Env:${argvEnv}) { exit 86 }`
       ],
-      env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV, ...launch!.env },
+      env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV, ...launch.env },
       timeoutMs: 30_000
     })
 
@@ -115,7 +113,6 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
       },
       'powershell'
     )
-    expect(launch).not.toBeNull()
 
     const result = await runProcess({
       program: 'powershell.exe',
@@ -125,9 +122,9 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
         '-ExecutionPolicy',
         'Bypass',
         '-Command',
-        `${launch!.command}; Write-Output "ORCA_EXIT:$($LASTEXITCODE)"; exit $LASTEXITCODE`
+        `${launch.command}; Write-Output "ORCA_EXIT:$($LASTEXITCODE)"; exit $LASTEXITCODE`
       ],
-      env: { ...process.env, ...launch!.env },
+      env: { ...process.env, ...launch.env },
       timeoutMs: 30_000
     })
 
@@ -147,19 +144,18 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
       },
       'cmd'
     )
-    expect(launch).not.toBeNull()
 
     const result = await runProcess({
       program: getCmdExePath(),
       args: ['/d', '/q', '/v:on'],
-      input: `${launch!.command}\r\nexit /b %errorlevel%\r\n`,
+      input: `${launch.command}\r\nexit /b %errorlevel%\r\n`,
       env: {
         ...process.env,
         ...WINDOWS_ARGUMENT_CORPUS_ENV,
         PATH: `${shimDir};${process.env.PATH ?? ''}`,
         TEMP: runnerTempDir,
         TMP: runnerTempDir,
-        ...launch!.env
+        ...launch.env
       },
       timeoutMs: 30_000
     })
@@ -183,13 +179,12 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
       },
       'cmd'
     )
-    expect(launch).not.toBeNull()
 
     const result = await runProcess({
       program: getCmdExePath(),
       args: ['/d', '/q', '/v:off'],
-      input: `${launch!.command}\r\nexit /b %errorlevel%\r\n`,
-      env: { ...process.env, PATH: `${shimDir};${process.env.PATH ?? ''}`, ...launch!.env },
+      input: `${launch.command}\r\nexit /b %errorlevel%\r\n`,
+      env: { ...process.env, PATH: `${shimDir};${process.env.PATH ?? ''}`, ...launch.env },
       timeoutMs: 30_000
     })
 
@@ -213,14 +208,13 @@ describeOnWindows('custom agent Windows argument round-trip', () => {
       },
       'cmd'
     )
-    expect(launch).not.toBeNull()
-    expect(launch!.command.length).toBeLessThan(8192)
+    expect(launch.command.length).toBeLessThan(8192)
 
     const result = await runProcess({
       program: getCmdExePath(),
       args: ['/d', '/q', '/v:off'],
-      input: `${launch!.command}\r\nexit /b %errorlevel%\r\n`,
-      env: { ...process.env, ...launch!.env },
+      input: `${launch.command}\r\nexit /b %errorlevel%\r\n`,
+      env: { ...process.env, ...launch.env },
       timeoutMs: 30_000
     })
 

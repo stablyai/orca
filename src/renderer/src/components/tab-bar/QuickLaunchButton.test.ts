@@ -231,6 +231,32 @@ describe('QuickLaunchAgentMenuItems', () => {
     expect(html).not.toContain('No agents detected')
     expect(html).not.toContain('<hr')
   })
+
+  it('orders the enabled custom default first and assigns it the new-agent shortcut', () => {
+    shortcutLabelMock.mockReturnValue('⌘⌥T')
+    storeState.settings.customAgentProfiles = [
+      {
+        id: 'disabled',
+        name: 'Disabled agent',
+        executable: 'disabled',
+        args: [],
+        enabled: false
+      },
+      {
+        id: 'codex-luna',
+        name: 'Codex Luna',
+        executable: 'codex',
+        args: ['--model', 'luna'],
+        isDefault: true
+      }
+    ]
+
+    const html = renderAgentMenuItems()
+
+    expect(rowMarkup(html, 'Codex Luna')).toContain('⌘⌥T')
+    expect(rowMarkup(html, 'Codex')).not.toContain('⌘⌥T')
+    expect(html).not.toContain('Disabled agent')
+  })
 })
 
 describe('shouldShowLaunchWatchdogTimeout', () => {

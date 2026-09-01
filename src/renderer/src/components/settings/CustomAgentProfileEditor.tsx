@@ -10,7 +10,7 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-na
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { AgentRowAction } from './AgentSettingsRow'
 import type { CustomAgentProfileDraft } from './custom-agent-profile-draft'
 
 export type CustomAgentEditorState = {
@@ -58,40 +58,10 @@ export function validateCustomAgentDraft(
   if (!normalizeCustomAgentProfile(draft)) {
     errors.profile = translate(
       'auto.components.settings.CustomAgentProfilesSection.invalidProfile',
-      'The executable and arguments must be literal text without control characters.'
+      'The name, executable, and arguments must be literal text without control characters.'
     )
   }
   return errors
-}
-
-function ArgumentAction({
-  label,
-  onClick,
-  children
-}: {
-  label: string
-  onClick: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClick}
-          aria-label={label}
-          className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
 }
 
 export function CustomAgentProfileEditor({
@@ -146,7 +116,7 @@ export function CustomAgentProfileEditor({
 
   return (
     <form
-      className="space-y-4 rounded-md border border-border/60 bg-muted/20 p-4"
+      className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault()
         onSave()
@@ -232,7 +202,7 @@ export function CustomAgentProfileEditor({
                 )
               }
             />
-            <ArgumentAction
+            <AgentRowAction
               label={translate(
                 'auto.components.settings.CustomAgentProfileEditor.removeArgument',
                 'Remove argument {{value0}}',
@@ -241,7 +211,7 @@ export function CustomAgentProfileEditor({
               onClick={() => removeArgument(index)}
             >
               <X className="size-3.5" />
-            </ArgumentAction>
+            </AgentRowAction>
           </div>
         ))}
       </div>

@@ -10,13 +10,12 @@ export type CustomAgentProfileDraft = CustomAgentProfile
 
 function uniqueCopyName(name: string, reservedNames: readonly string[]): string {
   const names = new Set(reservedNames.map((value) => value.trim().toLowerCase()))
-  for (let suffix = 1; suffix <= reservedNames.length + 1; suffix += 1) {
+  for (let suffix = 1; ; suffix += 1) {
     const candidate = suffix === 1 ? `${name} copy` : `${name} copy ${suffix}`
     if (!names.has(candidate.toLowerCase())) {
       return candidate
     }
   }
-  return `${name} copy ${Date.now().toString(36)}`
 }
 
 function literalTokens(value: string, shell: AgentStartupShell): string[] | null {

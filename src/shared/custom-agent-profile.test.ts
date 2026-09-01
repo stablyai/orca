@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCustomAgentLaunch,
+  getDefaultCustomAgentProfile,
   normalizeCustomAgentProfile,
-  normalizeCustomAgentProfiles
+  normalizeCustomAgentProfiles,
+  setDefaultCustomAgentProfile
 } from './custom-agent-profile'
 
 describe('custom agent profiles', () => {
@@ -82,6 +84,50 @@ describe('custom agent profiles', () => {
     ).toEqual({ id: 'repointed', name: 'Repointed', executable: 'claude', args: [] })
   })
 
+  it('keeps one enabled custom default and clears it when that profile is disabled', () => {
+    const profiles = normalizeCustomAgentProfiles([
+      {
+        id: 'luna',
+        name: 'Codex Luna',
+        executable: 'codex',
+        args: ['--model', 'luna'],
+        isDefault: true
+      },
+      {
+        id: 'fast',
+        name: 'Codex Fast',
+        executable: 'codex',
+        args: ['--fast'],
+        isDefault: true
+      }
+    ])
+
+    expect(getDefaultCustomAgentProfile(profiles)?.id).toBe('luna')
+    expect(profiles[1].isDefault).toBeUndefined()
+    expect(
+      setDefaultCustomAgentProfile(
+        profiles.map((profile) =>
+          profile.id === 'fast' ? { ...profile, enabled: false } : profile
+        ),
+        'fast'
+      )
+    ).toEqual([
+      {
+        id: 'luna',
+        name: 'Codex Luna',
+        executable: 'codex',
+        args: ['--model', 'luna']
+      },
+      {
+        id: 'fast',
+        name: 'Codex Fast',
+        executable: 'codex',
+        args: ['--fast'],
+        enabled: false
+      }
+    ])
+  })
+
   it('drops malformed, duplicate, and control-character-bearing profiles', () => {
     const valid = {
       id: 'safe',
@@ -146,19 +192,19 @@ describe('custom agent profiles', () => {
       args: ['--model', 'luna pro', '$HOME', '']
     } as const
     const powershellLaunch = buildCustomAgentLaunch(profile, 'powershell')
-    expect(powershellLaunch?.command).toMatch(
+    expect(powershellLaunch.command).toMatch(
       /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+; \$orcaAgentExit = \$LASTEXITCODE; Remove-Item Env:ORCA_CUSTOM_AGENT_WINDOWS_ARGV_V1 -ErrorAction SilentlyContinue; & cmd\.exe \/d \/c exit \$orcaAgentExit$/
     )
-    expect(powershellLaunch?.command).not.toContain(profile.executable)
-    expect(powershellLaunch?.env).toBeDefined()
+    expect(powershellLaunch.command).not.toContain(profile.executable)
+    expect(powershellLaunch.env).toBeDefined()
     expect(buildCustomAgentLaunch(profile, 'posix')).toEqual({
       command: `'C:'"\\\\"'Program Files'"\\\\"'Codex'"\\\\"'codex.exe' '--model' 'luna pro' '$HOME' ''`
     })
     const cmdLaunch = buildCustomAgentLaunch(profile, 'cmd')
-    expect(cmdLaunch?.command).toMatch(
+    expect(cmdLaunch.command).toMatch(
       /^powershell\.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+ & set "ORCA_CUSTOM_AGENT_WINDOWS_ARGV_V1="$/
     )
-    expect(cmdLaunch?.command).not.toContain(profile.executable)
-    expect(cmdLaunch?.env).toEqual(powershellLaunch?.env)
+    expect(cmdLaunch.command).not.toContain(profile.executable)
+    expect(cmdLaunch.env).toEqual(powershellLaunch.env)
   })
 })
