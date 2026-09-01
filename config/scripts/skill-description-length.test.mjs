@@ -27,17 +27,21 @@ describe('bundled skill metadata stays within the Agent Skills spec limit', () =
     expect(entries.length).toBeGreaterThan(0)
 
     const over = []
+    const empty = []
     for (const entry of entries) {
       const skillPath = join(skillsRoot, entry.name, 'SKILL.md')
       const skill = readFileSync(skillPath, 'utf8')
       const desc = extractDescription(skill)
-      if (desc.length > MAX_DESCRIPTION_LENGTH) {
+      if (!desc.trim()) {
+        empty.push(`${entry.name}: missing or empty description`)
+      } else if (desc.length > MAX_DESCRIPTION_LENGTH) {
         over.push(
           `${entry.name}: description is ${desc.length} chars (limit ${MAX_DESCRIPTION_LENGTH})`,
         )
       }
     }
 
+    expect(empty).toEqual([])
     expect(over).toEqual([])
   })
 })

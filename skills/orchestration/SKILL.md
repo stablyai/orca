@@ -5,15 +5,15 @@ description: >-
   messages, blocking ask/reply flows, task dispatch, worker_done/escalation
   waits, task DAGs, decision gates, coordinator loops, or decomposing work
   across agents. Use `orca-cli` instead for full ownership handoffs ("hand
-  off", "handoff", "handover", "give this to another agent", "another
+  off", "handoff", "handover", "give this to another agent", or "another
   worktree") when the user did not ask to supervise, monitor, wait, or
-  coordinate a DAG. Use `orca-cli` for terminal control, shell commands,
-  worktree management, reading or waiting on terminals, and automating Orca's
-  embedded browser. Use Computer Use for external browser windows, webviews,
-  Orca app UI, or desktop UI outside Orca's embedded browser when
-  OS/window-level control (focus, menus, dialogs, coordinates, screenshots)
-  is required. Use `orca-cli` for Orca's embedded pages and Playwright or CDP
-  for external pages.
+  coordinate a DAG. Use `orca-cli` for terminal control, shell prompts,
+  worktree management, and reading or waiting on terminals. Use Computer Use
+  for external browser windows, webviews, Orca app UI, or desktop UI outside
+  Orca's embedded browser only when the task requires OS/window-level control
+  such as focus, menus, dialogs, coordinates, or screenshots. Use `orca-cli`
+  for Orca's embedded pages and a page-automation tool such as Playwright or
+  CDP for external pages.
 ---
 
 # Orca Orchestration
