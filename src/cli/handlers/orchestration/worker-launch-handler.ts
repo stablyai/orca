@@ -1,6 +1,10 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
+import {
+  getOptionalStringFlag,
+  getOptionalStringFlagRejectingEmpty,
+  getRequiredStringFlag
+} from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
@@ -46,10 +50,12 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       displayName: getOptionalStringFlag(flags, 'display-name'),
       comment: getOptionalStringFlag(flags, 'comment'),
       setup: getOptionalStringFlag(flags, 'setup'),
-      agent: getOptionalStringFlag(flags, 'agent'),
+      // Why: an omitted --agent falls back to the Settings default, so an explicit
+      // empty --agent/--terminal must error rather than read as omitted.
+      agent: getOptionalStringFlagRejectingEmpty(flags, 'agent'),
       model,
       effort,
-      terminal: getOptionalStringFlag(flags, 'terminal'),
+      terminal: getOptionalStringFlagRejectingEmpty(flags, 'terminal'),
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
       run: getOptionalStringFlag(flags, 'run'),

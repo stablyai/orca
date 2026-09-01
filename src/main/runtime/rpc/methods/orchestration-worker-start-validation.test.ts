@@ -25,6 +25,15 @@ function fakeRuntime(
 
 const baseParams = { task: 'task_1', from: 'term_1', worktree: 'current' }
 
+function captureError(run: () => unknown): unknown {
+  try {
+    run()
+  } catch (error) {
+    return error
+  }
+  throw new Error('expected the call to throw')
+}
+
 describe('worker-start agent resolution', () => {
   it('falls back to the Settings default agent when --agent is omitted', () => {
     const result = prepareLocalWorkerStart({
@@ -46,20 +55,20 @@ describe('worker-start agent resolution', () => {
   })
 
   it('rejects a mistyped --agent instead of falling back to the default', () => {
-    expect(() =>
-      prepareLocalWorkerStart({
-        params: { ...baseParams, agent: 'codx' },
-        createsWorktree: false,
-        runtime: fakeRuntime('gemini').runtime
+    for (const agent of ['codx', '']) {
+      expect(
+        captureError(() =>
+          prepareLocalWorkerStart({
+            params: { ...baseParams, agent },
+            createsWorktree: false,
+            runtime: fakeRuntime('gemini').runtime
+          })
+        )
+      ).toMatchObject({
+        code: 'agent_unconfigured',
+        message: `Unknown --agent "${agent}".`
       })
-    ).toThrow(/Unknown --agent "codx"/)
-    expect(() =>
-      prepareLocalWorkerStart({
-        params: { ...baseParams, agent: '' },
-        createsWorktree: false,
-        runtime: fakeRuntime('gemini').runtime
-      })
-    ).toThrow(/Unknown --agent ""/)
+    }
   })
 
   it('still fails when --agent is omitted and no usable default exists', () => {
@@ -68,9 +77,14 @@ describe('worker-start agent resolution', () => {
       fakeRuntime('blank'),
       fakeRuntime('gemini', ['gemini'])
     ]) {
-      expect(() =>
-        prepareLocalWorkerStart({ params: baseParams, createsWorktree: false, runtime })
-      ).toThrow(/--agent/)
+      expect(
+        captureError(() =>
+          prepareLocalWorkerStart({ params: baseParams, createsWorktree: false, runtime })
+        )
+      ).toMatchObject({
+        code: 'agent_unconfigured',
+        message: expect.stringContaining('--agent')
+      })
     }
   })
 

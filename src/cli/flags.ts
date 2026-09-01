@@ -29,6 +29,23 @@ export function getOptionalStringFlag(
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+// Why: getOptionalStringFlag reads `--flag ""` as omitted; a command whose omitted
+// flag falls back to a default must reject the empty form instead of silently
+// launching the fallback.
+export function getOptionalStringFlagRejectingEmpty(
+  flags: Map<string, string | boolean>,
+  name: string
+): string | undefined {
+  if (!flags.has(name)) {
+    return undefined
+  }
+  const value = flags.get(name)
+  if (typeof value === 'string' && value.length > 0) {
+    return value
+  }
+  throw new RuntimeClientError('invalid_argument', `--${name} requires a value`)
+}
+
 /**
  * A JSON-valued flag, rejected up front when a native argv boundary stripped its quotes so the
  * error names the shell instead of the user's value (#16706). The value itself is still parsed
