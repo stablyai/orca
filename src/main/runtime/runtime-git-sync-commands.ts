@@ -9,6 +9,10 @@ import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
+import {
+  materializeWorktreePushTargetRemote,
+  materializeWorktreePushTargetRemoteSsh
+} from '../ipc/worktree-remote'
 import { localGitOptionsForTarget, type RuntimeGitCommandHost } from './runtime-git-command-target'
 
 export class RuntimeGitSyncCommands {
@@ -73,10 +77,22 @@ export class RuntimeGitSyncCommands {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.fetchRemote(target.worktree.path, pushTarget)
+      const materializedPushTarget = pushTarget
+        ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
+        : undefined
+      await provider.fetchRemote(target.worktree.path, materializedPushTarget)
       return { ok: true }
     }
-    await gitFetch(target.worktree.path, pushTarget, {
+    const materializedPushTarget = pushTarget
+      ? await materializeWorktreePushTargetRemote(
+          target.worktree.path,
+          pushTarget,
+          undefined,
+          target.repo?.id,
+          localGitOptionsForTarget(target)
+        )
+      : undefined
+    await gitFetch(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
@@ -111,10 +127,22 @@ export class RuntimeGitSyncCommands {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.pullBranch(target.worktree.path, pushTarget)
+      const materializedPushTarget = pushTarget
+        ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
+        : undefined
+      await provider.pullBranch(target.worktree.path, materializedPushTarget)
       return { ok: true }
     }
-    await gitPull(target.worktree.path, pushTarget, {
+    const materializedPushTarget = pushTarget
+      ? await materializeWorktreePushTargetRemote(
+          target.worktree.path,
+          pushTarget,
+          undefined,
+          target.repo?.id,
+          localGitOptionsForTarget(target)
+        )
+      : undefined
+    await gitPull(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
@@ -131,10 +159,22 @@ export class RuntimeGitSyncCommands {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.fastForwardBranch(target.worktree.path, pushTarget)
+      const materializedPushTarget = pushTarget
+        ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
+        : undefined
+      await provider.fastForwardBranch(target.worktree.path, materializedPushTarget)
       return { ok: true }
     }
-    await gitFastForward(target.worktree.path, pushTarget, {
+    const materializedPushTarget = pushTarget
+      ? await materializeWorktreePushTargetRemote(
+          target.worktree.path,
+          pushTarget,
+          undefined,
+          target.repo?.id,
+          localGitOptionsForTarget(target)
+        )
+      : undefined
+    await gitFastForward(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
@@ -170,12 +210,24 @@ export class RuntimeGitSyncCommands {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.pushBranch(target.worktree.path, publish === true, pushTarget, {
+      const materializedPushTarget = pushTarget
+        ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
+        : undefined
+      await provider.pushBranch(target.worktree.path, publish === true, materializedPushTarget, {
         forceWithLease: forceWithLease === true
       })
       return { ok: true }
     }
-    await gitPush(target.worktree.path, publish === true, pushTarget, {
+    const materializedPushTarget = pushTarget
+      ? await materializeWorktreePushTargetRemote(
+          target.worktree.path,
+          pushTarget,
+          undefined,
+          target.repo?.id,
+          localGitOptionsForTarget(target)
+        )
+      : undefined
+    await gitPush(target.worktree.path, publish === true, materializedPushTarget, {
       forceWithLease: forceWithLease === true,
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'

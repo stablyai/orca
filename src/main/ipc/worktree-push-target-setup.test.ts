@@ -5,7 +5,8 @@ import {
   configureCreatedWorktreePushTargetWithExec,
   ensureUniqueRemoteName,
   findRemoteForUrl,
-  prepareWorktreePushTargetWithExec
+  prepareWorktreePushTargetWithExec,
+  remoteAlreadyMatchesUrl
 } from './worktree-push-target-setup'
 
 type ExecMock = Mock<GitRemoteExec>
@@ -78,6 +79,28 @@ describe('prepareWorktreePushTargetWithExec', () => {
       remoteUrl: FORK_SSH,
       remoteCreated: true
     })
+  })
+
+  it('records repo-local provenance on the remote it adds (#17828)', async () => {
+    const exec = makeRepoExec({ origin: 'git@github.com:stablyai/orca.git' })
+
+    await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
+
+    // Why: cleanup's ownership check must survive a store purge (worktree-push-target-cleanup.ts).
+    expect(callsMatching(exec, ['config'])).toEqual([
+      ['config', 'remote.pr-contributor-orca.orca-created', 'true']
+    ])
+  })
+
+  it('does not record provenance when reusing an existing remote', async () => {
+    const exec = makeRepoExec({
+      origin: 'git@github.com:stablyai/orca.git',
+      'pr-contributor-orca': FORK_HTTPS
+    })
+
+    await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
+
+    expect(callsMatching(exec, ['config'])).toEqual([])
   })
 
   it('reuses an existing remote pointing at the same fork (SSH vs HTTPS) without adding', async () => {
@@ -155,6 +178,38 @@ describe('findRemoteForUrl', () => {
   it('returns null when no remote points at the fork', async () => {
     const exec = makeRepoExec({ origin: 'git@github.com:stablyai/orca.git' })
     await expect(findRemoteForUrl(exec, REPO, FORK_SSH)).resolves.toBeNull()
+  })
+})
+
+describe('remoteAlreadyMatchesUrl', () => {
+  it('matches an exact URL', async () => {
+    const exec = makeRepoExec({ 'pr-contributor-orca': FORK_SSH })
+    await expect(
+      remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
+    ).resolves.toBe(true)
+  })
+
+  it('matches by GitHub owner/repo across URL protocols', async () => {
+    const exec = makeRepoExec({ 'pr-contributor-orca': FORK_HTTPS })
+    await expect(
+      remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
+    ).resolves.toBe(true)
+  })
+
+  it('returns false when the named remote points elsewhere', async () => {
+    const exec = makeRepoExec({
+      'pr-contributor-orca': 'git@github.com:someone-else/orca.git'
+    })
+    await expect(
+      remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
+    ).resolves.toBe(false)
+  })
+
+  it('returns false when the named remote does not exist', async () => {
+    const exec = makeRepoExec({ origin: 'git@github.com:stablyai/orca.git' })
+    await expect(
+      remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
+    ).resolves.toBe(false)
   })
 })
 

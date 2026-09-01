@@ -112,7 +112,8 @@ import {
   configureCreatedWorktreePushTargetWithExec,
   ensureUniqueRemoteName,
   findRemoteForUrl,
-  prepareWorktreePushTargetWithExec
+  prepareWorktreePushTargetWithExec,
+  remoteAlreadyMatchesUrl
 } from './worktree-push-target-setup'
 import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
 import { isENOENT } from './filesystem-path-containment'
@@ -993,6 +994,28 @@ export async function prepareWorktreePushTarget(
   return prepared
 }
 
+// Why: on-demand twin of `prepareWorktreePushTarget` for push/pull/fetch/
+// fast-forward (#17828) -- a deferred fork remote is materialized the first
+// time it's needed. The cheap named-remote probe keeps every push after the
+// first one down to a single extra subprocess instead of repeating the
+// O(remotes) scan `prepareWorktreePushTargetWithExec` does when it must add.
+export async function materializeWorktreePushTargetRemote(
+  repoPath: string,
+  target: GitPushTarget,
+  store?: WorktreePushTargetStore,
+  repoId?: string,
+  gitOptions: { wslDistro?: string } = {}
+): Promise<GitPushTarget> {
+  if (!target.remoteUrl || target.remoteCreated) {
+    return target
+  }
+  const execGit: GitRemoteExec = (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions })
+  if (await remoteAlreadyMatchesUrl(execGit, repoPath, target.remoteName, target.remoteUrl)) {
+    return target
+  }
+  return prepareWorktreePushTarget(repoPath, target, store, repoId, gitOptions)
+}
+
 function isPushTargetRemoteCreatedByKnownWorktree(
   store: WorktreePushTargetStore,
   target: GitPushTarget,
@@ -1062,7 +1085,7 @@ export async function configureCreatedWorktreePushTarget(
   )
 }
 
-async function prepareWorktreePushTargetSsh(
+export async function prepareWorktreePushTargetSsh(
   provider: SshGitProvider,
   repoPath: string,
   target: GitPushTarget,
@@ -1106,6 +1129,8 @@ async function prepareWorktreePushTargetSsh(
         }
         throw error
       }
+      // Why: repo-local provenance mirroring the local path (worktree-push-target-setup.ts).
+      await provider.exec(['config', `remote.${remoteName}.orca-created`, 'true'], repoPath)
       remoteCreated = true
       remoteAddedHere = true
     }
@@ -1127,6 +1152,27 @@ async function prepareWorktreePushTargetSsh(
     throw error
   }
   return { ...sanitizedTarget, remoteName, ...(remoteCreated ? { remoteCreated: true } : {}) }
+}
+
+// SSH twin of `materializeWorktreePushTargetRemote` -- the relay has no store
+// access and trusts `pushTarget.remoteName` already exists, so a deferred fork
+// remote must be materialized client-side before dispatching push/pull/fetch/
+// fast-forward over the mux (#17828).
+export async function materializeWorktreePushTargetRemoteSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  target: GitPushTarget,
+  store?: WorktreePushTargetStore,
+  repoId?: string
+): Promise<GitPushTarget> {
+  if (!target.remoteUrl || target.remoteCreated) {
+    return target
+  }
+  const execGit: GitRemoteExec = (args, cwd) => provider.exec(args, cwd)
+  if (await remoteAlreadyMatchesUrl(execGit, repoPath, target.remoteName, target.remoteUrl)) {
+    return target
+  }
+  return prepareWorktreePushTargetSsh(provider, repoPath, target, store, repoId)
 }
 
 export async function cleanupUnusedWorktreePushTargetRemoteSsh(
@@ -1763,17 +1809,9 @@ export async function createRemoteWorktree(
     }
   }
 
-  let preparedPushTarget: GitPushTarget | undefined
-  if (args.pushTarget) {
-    // Why: fork-PR SSH worktrees need contributor-remote setup before create, else Push/Sync target origin.
-    preparedPushTarget = await prepareWorktreePushTargetSsh(
-      provider,
-      repo.path,
-      args.pushTarget,
-      store,
-      repo.id
-    )
-  }
+  // Why: defer the remote add + fetch to first push/pull/fetch/fast-forward
+  // (#17828) instead of paying it at create time for a read-only review.
+  const preparedPushTarget: GitPushTarget | undefined = args.pushTarget
 
   try {
     await timing.time('git_worktree_add', async () =>
@@ -1854,8 +1892,10 @@ export async function createRemoteWorktree(
   const now = Date.now()
   // Why: PR/MR worktrees start from a head ref/SHA but Source Control must compare against the review target branch.
   const metadataBaseRef = args.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch
-  let configuredPushTarget: GitPushTarget | undefined
-  if (preparedPushTarget) {
+  // Why: `--set-upstream-to` needs the remote to exist -- true for a same-repo
+  // target but not for a fork remote, which materializes lazily (#17828).
+  let configuredPushTarget: GitPushTarget | undefined = preparedPushTarget
+  if (preparedPushTarget && !preparedPushTarget.remoteUrl) {
     configuredPushTarget = await configureCreatedWorktreePushTargetWithExec(
       (args, cwd) => provider.exec(args, cwd),
       created.path,
@@ -2369,20 +2409,9 @@ export async function createLocalWorktree(
   }
   emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
 
-  let preparedPushTarget: GitPushTarget | undefined
-  const requestedPushTarget = args.pushTarget
-  if (requestedPushTarget) {
-    // Why: validate/fetch the contributor remote before create so a failure doesn't leave a half-created worktree with conflicts on retry.
-    preparedPushTarget = await timing.time('prepare_push_target', () =>
-      prepareWorktreePushTarget(
-        repo.path,
-        requestedPushTarget,
-        store,
-        repo.id,
-        localWorktreeGitOptions
-      )
-    )
-  }
+  // Why: defer the remote add + fetch to first push/pull/fetch/fast-forward
+  // (#17828) instead of paying it at create time for a read-only review.
+  const preparedPushTarget: GitPushTarget | undefined = args.pushTarget
 
   const suggestLocalBaseRefUpdate =
     !settings.refreshLocalBaseRefOnWorktreeCreate &&
@@ -2522,9 +2551,10 @@ export async function createLocalWorktree(
     await retireGeneratedWorktreeName(store, repo, settings, effectiveSanitizedName)
   }
 
-  let configuredPushTarget: GitPushTarget | undefined
-  if (preparedPushTarget) {
-    // Why: fork-PR review worktrees publish back to the PR author's branch; set upstream so Push/Sync use the contributor remote, not origin.
+  // Why: `--set-upstream-to` needs the remote to exist -- true for a same-repo
+  // target but not for a fork remote, which materializes lazily (#17828).
+  let configuredPushTarget: GitPushTarget | undefined = preparedPushTarget
+  if (preparedPushTarget && !preparedPushTarget.remoteUrl) {
     configuredPushTarget = await configureCreatedWorktreePushTarget(
       worktreePath,
       branchName,

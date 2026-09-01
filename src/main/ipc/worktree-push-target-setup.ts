@@ -49,6 +49,34 @@ export async function findRemoteForUrl(
   return null
 }
 
+// O(1) probe used before materializing on demand (push/pull/fetch/fast-forward):
+// a single `remote get-url <name>` avoids the O(remotes) `findRemoteForUrl` scan
+// once a fork remote already exists under its expected name (#17828).
+export async function remoteAlreadyMatchesUrl(
+  execGit: GitRemoteExec,
+  repoPath: string,
+  remoteName: string,
+  remoteUrl: string
+): Promise<boolean> {
+  try {
+    const { stdout } = await execGit(['remote', 'get-url', remoteName], repoPath)
+    const candidateUrl = stdout.trim()
+    if (candidateUrl === remoteUrl) {
+      return true
+    }
+    const target = parseGitHubOwnerRepo(remoteUrl)
+    const candidate = parseGitHubOwnerRepo(candidateUrl)
+    return Boolean(
+      target &&
+      candidate &&
+      target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
+      target.repo.toLowerCase() === candidate.repo.toLowerCase()
+    )
+  } catch {
+    return false
+  }
+}
+
 export async function ensureUniqueRemoteName(
   execGit: GitRemoteExec,
   repoPath: string,
@@ -111,6 +139,9 @@ export async function prepareWorktreePushTargetWithExec(
         repoPath
       )
       await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
+      // Why: repo-local provenance that survives a store purge and is removed
+      // atomically with the remote itself, unlike the store's `remoteCreated` flag.
+      await execGit(['config', `remote.${remoteName}.orca-created`, 'true'], repoPath)
       remoteCreated = true
       remoteAddedHere = true
     }
