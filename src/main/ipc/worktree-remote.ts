@@ -110,6 +110,7 @@ import {
   findRemoteForUrl,
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
+import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
 import { isENOENT } from './filesystem-path-containment'
 import {
   registerCreatedWorktreeRoot,
@@ -966,7 +967,7 @@ export async function prepareWorktreePushTarget(
   gitOptions: { wslDistro?: string } = {}
 ): Promise<GitPushTarget> {
   await validateGitPushTarget(repoPath, target, gitOptions)
-  return prepareWorktreePushTargetWithExec(
+  const prepared = await prepareWorktreePushTargetWithExec(
     (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
     repoPath,
     target,
@@ -979,6 +980,13 @@ export async function prepareWorktreePushTarget(
           )
         : false
   )
+  // Why: opportunistically narrow any other fork remote in this repo still on the old
+  // wide refspec (pre-#17828 mint, or reused before this fix). Rate-limited and
+  // fire-and-forget so a large leaked-remote backlog never slows down this create.
+  if (store && repoId) {
+    void migrateForkRemoteRefspecs(repoPath, repoId, store, gitOptions)
+  }
+  return prepared
 }
 
 function isPushTargetRemoteCreatedByKnownWorktree(

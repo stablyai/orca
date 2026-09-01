@@ -9,6 +9,7 @@ import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
+import { fetchForkRemoteWithStaleRefspecRepair } from './fork-remote-stale-branch-refspec'
 import { runWithGitReadCacheInvalidation } from './status'
 import { runWithGitWorktreeOperationLock } from '../../shared/git-worktree-operation-lock'
 
@@ -284,9 +285,15 @@ export async function gitFetch(
   try {
     if (pushTarget) {
       const target = await validateGitPushTarget(worktreePath, pushTarget, options)
-      await gitExecFileAsync(
-        ['fetch', '--prune', target.remoteName],
-        gitOptionsForWorktree(worktreePath, options)
+      const runtimeOptions = gitOptionsForWorktree(worktreePath, options)
+      await fetchForkRemoteWithStaleRefspecRepair(
+        (args, cwd) => gitExecFileAsync(args, { ...runtimeOptions, cwd }),
+        worktreePath,
+        target.remoteName,
+        () =>
+          gitExecFileAsync(['fetch', '--prune', target.remoteName], runtimeOptions).then(
+            () => undefined
+          )
       )
       return
     }

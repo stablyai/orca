@@ -29,7 +29,8 @@ function makeRepoExec(remotes: Record<string, string>): ExecMock {
       return { stdout: `${url}\n`, stderr: '' }
     }
     if (args[0] === 'remote' && args[1] === 'add') {
-      remotes[args[2]!] = args[3]!
+      // Why: name/url are always the last two args, regardless of `-t`/`--no-tags` flags.
+      remotes[args.at(-2)!] = args.at(-1)!
       return { stdout: '', stderr: '' }
     }
     if (args[0] === 'remote' && args[1] === 'remove') {
@@ -62,7 +63,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
     const result = await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
 
     expect(callsMatching(exec, ['remote', 'add'])).toEqual([
-      ['remote', 'add', 'pr-contributor-orca', FORK_SSH]
+      ['remote', 'add', '-t', 'contributor/fix', '--no-tags', 'pr-contributor-orca', FORK_SSH]
     ])
     expect(callsMatching(exec, ['fetch'])).toEqual([
       [
@@ -118,7 +119,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
     const result = await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
 
     expect(callsMatching(exec, ['remote', 'add'])).toEqual([
-      ['remote', 'add', 'pr-contributor-orca-2', FORK_SSH]
+      ['remote', 'add', '-t', 'contributor/fix', '--no-tags', 'pr-contributor-orca-2', FORK_SSH]
     ])
     expect(result.remoteName).toBe('pr-contributor-orca-2')
     expect(result.remoteCreated).toBe(true)
