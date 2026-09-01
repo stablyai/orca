@@ -13,6 +13,9 @@ const NAMED_TERMINAL_BACKGROUND_COLORS: Record<string, RgbaColor> = {
 
 const LIGHT_SURFACE_CONTRAST_REFERENCE = { r: 0, g: 0, b: 0 }
 const DARK_SURFACE_CONTRAST_REFERENCE = { r: 255, g: 255, b: 255 }
+const LIGHT_SURFACE_FOREGROUND = '#0a0a0a'
+const DARK_SURFACE_FOREGROUND = '#fafafa'
+const MINIMUM_TEXT_CONTRAST = 4.5
 
 export function isTerminalBackgroundLight(
   background: string | undefined,
@@ -35,6 +38,27 @@ export function resolveOpaqueTerminalBackground(
 ): string | null {
   const composited = compositeTerminalBackground(background, options)
   return composited ? `rgb(${composited.r} ${composited.g} ${composited.b})` : null
+}
+
+export function resolveReadableTerminalForeground(
+  foreground: string | undefined,
+  background: string | undefined,
+  options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
+): string {
+  const compositedBackground = compositeTerminalBackground(background, options)
+  const parsedForeground = parseCssRgbColor(foreground)
+  if (compositedBackground && parsedForeground) {
+    const opaqueForeground =
+      parsedForeground.a < 1
+        ? compositeRgb(parsedForeground, compositedBackground, parsedForeground.a)
+        : parsedForeground
+    if (contrastRatio(opaqueForeground, compositedBackground) >= MINIMUM_TEXT_CONTRAST) {
+      return foreground!
+    }
+  }
+  return isTerminalBackgroundLight(background, options)
+    ? LIGHT_SURFACE_FOREGROUND
+    : DARK_SURFACE_FOREGROUND
 }
 
 function compositeTerminalBackground(

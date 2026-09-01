@@ -4,6 +4,14 @@ import { describe, expect, it } from 'vitest'
 const mainCss = readFileSync(new URL('./main.css', import.meta.url), 'utf8')
 const richMarkdownCss = readFileSync(new URL('./rich-markdown-editor.css', import.meta.url), 'utf8')
 const popoutSource = readFileSync(new URL('../popout.tsx', import.meta.url), 'utf8')
+const pdfViewerSource = readFileSync(
+  new URL('../components/editor/PdfViewer.tsx', import.meta.url),
+  'utf8'
+)
+const markdownSurfaceSource = readFileSync(
+  new URL('../components/editor/EditorMarkdownFileSurface.tsx', import.meta.url),
+  'utf8'
+)
 const themePreviewSources = [
   '../components/settings/use-settings-navigation-model.ts',
   '../components/onboarding/use-onboarding-flow.ts'
@@ -58,6 +66,11 @@ describe('custom app appearance styles', () => {
     )
     expect(richMarkdownCss).not.toContain('.dark .rich-markdown')
     expect(richMarkdownCss).toContain('.orca-editor-dark .rich-markdown')
+    expect(mainCss).toContain('@custom-variant editor-dark')
+    expect(mainCss).not.toMatch(/\.dark \.orca-diff-comment/)
+    expect(mainCss).toContain('.orca-editor-dark .orca-diff-comment')
+    expect(pdfViewerSource).toContain('editor-dark:[--pdf-viewer-bg:#18181b]')
+    expect(markdownSurfaceSource).toContain('editor-dark:text-amber-100')
   })
 
   it('keeps stable theme bases and plugin security token ownership', () => {
