@@ -2,14 +2,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { RepoRefMaintenance } from './repo-ref-maintenance'
 import {
   REF_MAINTENANCE_ATTEMPT_DEADLINE_MS,
-  RepoRefMaintenance,
   REF_MAINTENANCE_PACKED_COOLDOWN_MS,
   type RefMaintenanceSpan,
   type RepoRefMaintenanceOptions,
   type RepoRefMaintenanceTarget
-} from './repo-ref-maintenance'
+} from './repo-ref-maintenance-policy'
 
 const QUIET_MS = 1000
 const THRESHOLD = 5
@@ -37,6 +37,11 @@ async function saturatingRefsDirectory(): Promise<string> {
   return refs
 }
 
+/** Stands in for a pack that moved the refs into packed-refs before erroring. */
+async function emptyRefsDirectory(refs: string): Promise<void> {
+  await rm(refs, { recursive: true, force: true })
+}
+
 function attributesOf(span: RefMaintenanceSpan): Record<string, unknown> {
   return (span as unknown as { recorded: Record<string, unknown> }).recorded
 }
@@ -54,14 +59,18 @@ function recordingSpan(): RefMaintenanceSpan {
 type Harness = {
   maintenance: RepoRefMaintenance
   spans: RefMaintenanceSpan[]
-  packRefs: (() => Promise<void>) & { mock: { calls: unknown[] } }
+  packRefs: ((signal: AbortSignal) => Promise<void>) & { mock: { calls: unknown[] } }
 }
 
 function createHarness(
-  overrides: Partial<RepoRefMaintenanceOptions> & { packRefs?: () => Promise<void> } = {}
+  overrides: Partial<RepoRefMaintenanceOptions> & {
+    packRefs?: (signal: AbortSignal) => Promise<void>
+  } = {}
 ): Harness {
   const spans: RefMaintenanceSpan[] = []
-  const packRefs = vi.fn<() => Promise<void>>(overrides.packRefs ?? (async () => {}))
+  const packRefs = vi.fn<(signal: AbortSignal) => Promise<void>>(
+    overrides.packRefs ?? (async () => {})
+  )
   const maintenance = new RepoRefMaintenance({
     quietPeriodMs: QUIET_MS,
     looseRefThreshold: THRESHOLD,
@@ -79,7 +88,7 @@ function createHarness(
 function target(
   key: string,
   refsDirectory: string,
-  packRefs: () => Promise<void>,
+  packRefs: (signal: AbortSignal) => Promise<void>,
   extra: Partial<RepoRefMaintenanceTarget> = {}
 ): RepoRefMaintenanceTarget {
   return {
@@ -88,6 +97,15 @@ function target(
     packRefs,
     ...extra
   }
+}
+
+/** Resolves the first time the pack starts, so tests never race real filesystem I/O. */
+function packStartSignal(): { started: Promise<AbortSignal>; onStart: (s: AbortSignal) => void } {
+  let onStart: (s: AbortSignal) => void = () => {}
+  const started = new Promise<AbortSignal>((resolve) => {
+    onStart = resolve
+  })
+  return { started, onStart }
 }
 
 function yieldToIo(): Promise<void> {
@@ -207,23 +225,28 @@ describe('RepoRefMaintenance gating', () => {
     expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('packed')
   })
 
-  it('gives up on an attempt that never settles instead of wedging the single flight', async () => {
-    const { maintenance, spans, packRefs } = createHarness()
-
-    maintenance.arm({
-      key: 'local::/hung/.git',
-      resolveRefsDirectory: () => new Promise(() => {}),
-      packRefs
-    })
-    await vi.advanceTimersByTimeAsync(QUIET_MS)
-    await vi.advanceTimersByTimeAsync(REF_MAINTENANCE_ATTEMPT_DEADLINE_MS)
-
-    // The hung repo released the slot, so a healthy repo behind it still runs.
+  it('aborts an attempt that outlives the deadline rather than abandoning it', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
-    maintenance.arm(target('local::/next/.git', refs, packRefs))
-    await elapseQuietPeriod(maintenance)
-    expect(packRefs).toHaveBeenCalledTimes(1)
-    expect(spans).toHaveLength(2)
+    const { started, onStart } = packStartSignal()
+    const { maintenance, spans } = createHarness()
+
+    maintenance.arm(
+      target('local::/stuck/.git', refs, async (signal) => {
+        onStart(signal)
+        // A killed git child rejects; only an abort ends this one, same as the real thing.
+        await new Promise<void>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason as Error))
+        })
+      })
+    )
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    const observed = await started
+    await vi.advanceTimersByTimeAsync(REF_MAINTENANCE_ATTEMPT_DEADLINE_MS)
+    await maintenance.whenAttemptSettled()
+
+    expect(observed.aborted).toBe(true)
+    // A stall is not a yield: back off rather than retrying straight into it.
+    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('timed_out')
   })
 
   it('skips a repository whose common dir cannot be resolved', async () => {
@@ -273,6 +296,94 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     expect(concurrent).toBe(0)
   })
 
+  it('stops a running pack for work that is about to touch refs, and retries it', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    let started = 0
+    const first = packStartSignal()
+    const { maintenance, spans } = createHarness()
+    const repo = target('local::/yield/.git', refs, async (signal) => {
+      started += 1
+      first.onStart(signal)
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason as Error))
+      })
+    })
+
+    maintenance.arm(repo)
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    const observed = await first.started
+
+    const release = await maintenance.pause('worktree-remove')
+
+    // pause() only resolves once the pack has really stopped, so the caller's
+    // ref deletion never races `packed-refs.lock`.
+    expect(observed.aborted).toBe(true)
+    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('interrupted')
+
+    // Nothing may start again while the caller holds the window open.
+    await vi.advanceTimersByTimeAsync(QUIET_MS * 8)
+    expect(started).toBe(1)
+
+    // An interrupt is not a failure: releasing lets the retry through.
+    release()
+    await vi.advanceTimersByTimeAsync(QUIET_MS * 8)
+    await until(() => started === 2)
+    expect(started).toBe(2)
+  })
+
+  it('reopens the window only when the last overlapping caller releases', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    const { maintenance, packRefs } = createHarness()
+
+    const outer = await maintenance.pause('worktree-add')
+    const inner = await maintenance.pause('git-fetch')
+    maintenance.arm(target('local::/nested/.git', refs, packRefs))
+
+    await elapseQuietPeriod(maintenance, 8)
+    expect(packRefs).not.toHaveBeenCalled()
+
+    inner()
+    await elapseQuietPeriod(maintenance, 8)
+    expect(packRefs).not.toHaveBeenCalled()
+
+    outer()
+    await elapseQuietPeriod(maintenance, 8)
+    expect(packRefs).toHaveBeenCalledTimes(1)
+  })
+
+  it('restarts every armed countdown when the user does ref work themselves', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    const { maintenance, packRefs } = createHarness()
+
+    maintenance.arm(target('local::/a/.git', refs, packRefs))
+    maintenance.arm(target('local::/b/.git', refs, packRefs))
+    await vi.advanceTimersByTimeAsync(QUIET_MS - 1)
+
+    // A manual fetch says the user is at the keyboard, so nothing may fire yet.
+    maintenance.postponeAll()
+    await vi.advanceTimersByTimeAsync(QUIET_MS - 1)
+    expect(packRefs).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await until(() => packRefs.mock.calls.length > 0)
+    expect(packRefs).toHaveBeenCalled()
+  })
+
+  it('costs nothing when no pack is running', async () => {
+    const { maintenance } = createHarness()
+
+    const release = await maintenance.pause('git-fetch')
+    release()
+    // Releasing twice must not leave the window wedged shut.
+    release()
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    const { packRefs } = createHarness()
+    maintenance.arm(target('local::/free/.git', refs, packRefs))
+    await elapseQuietPeriod(maintenance)
+
+    expect(packRefs).toHaveBeenCalledTimes(1)
+  })
+
   it('does not re-pack a repository inside its cooldown', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     let clock = 0
@@ -292,6 +403,46 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     maintenance.arm(repo)
     await elapseQuietPeriod(maintenance)
     expect(packRefs).toHaveBeenCalledTimes(2)
+  })
+
+  it('counts a pack that could not lock every ref as a success', async () => {
+    // Field-observed on a machine running several Orca sessions: a branch moved
+    // mid-pack, Git reported an error, and 36,688 loose refs still became 3.
+    // Retrying that aggressively would be wrong -- the backlog is gone.
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    const { maintenance, spans } = createHarness()
+    const repo = target('local::/raced/.git', refs, async () => {
+      await emptyRefsDirectory(refs)
+      throw new Error("error: cannot lock ref 'refs/heads/moved'")
+    })
+
+    maintenance.arm(repo)
+    await elapseQuietPeriod(maintenance)
+
+    expect(attributesOf(spans[0])).toMatchObject({
+      'repo.maintenance_outcome': 'packed',
+      'git.pack_refs_partial': true,
+      'git.loose_ref_count_after': 0
+    })
+
+    // And it serves the full post-pack cooldown rather than retrying.
+    maintenance.arm(repo)
+    await elapseQuietPeriod(maintenance)
+    expect(spans).toHaveLength(1)
+  })
+
+  it('records a failure when the pack left the backlog in place', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    const { maintenance, spans } = createHarness({
+      packRefs: async () => {
+        throw new Error('permission denied')
+      }
+    })
+
+    maintenance.arm(target('local::/denied/.git', refs, () => Promise.reject(new Error('denied'))))
+    await elapseQuietPeriod(maintenance)
+
+    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('failed')
   })
 
   it('records a failure instead of throwing, and backs off', async () => {

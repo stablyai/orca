@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const readRepoCommonDirFromGitMock = vi.hoisted(() => vi.fn())
+const subscribeAdmissionMock = vi.hoisted(() =>
+  vi.fn<(listener: (event: { phase: string; queued: number }) => void) => () => void>(
+    () => () => {}
+  )
+)
 
 vi.mock('./runner', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
@@ -13,27 +18,38 @@ vi.mock('./worktree-list-reader', async (importOriginal) => ({
   readRepoCommonDirFromGit: readRepoCommonDirFromGitMock
 }))
 
+vi.mock('./command-runner/git-subprocess-admission', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  subscribeGitAdmissionEvents: subscribeAdmissionMock
+}))
+
+import { _resetCanonicalRepoKeyCacheForTests } from './canonical-repo-key'
 import {
   _resetLocalRepoRefMaintenanceForTests,
   armLocalRepoRefMaintenance,
   createLocalRepoRefMaintenanceTarget,
   getLocalRepoRefMaintenance,
-  setRepoMaintenanceActivityProbe
+  setRepoMaintenanceActivityProbe,
+  withRepoRefMaintenancePaused
 } from './local-repo-ref-maintenance'
+
+const NO_ABORT = new AbortController().signal
 
 function target(wslDistro?: string): ReturnType<typeof createLocalRepoRefMaintenanceTarget> {
   return createLocalRepoRefMaintenanceTarget({
     key: 'local::/repo/.git',
     repoPath: wslDistro ? '//wsl$/Ubuntu/home/dev/repo' : '/repo',
-    ...(wslDistro ? { wslDistro } : {}),
-    isBusy: () => false
+    ...(wslDistro ? { wslDistro } : {})
   })
 }
 
 beforeEach(() => {
   gitExecFileAsyncMock.mockReset()
   readRepoCommonDirFromGitMock.mockReset()
+  subscribeAdmissionMock.mockReset()
+  subscribeAdmissionMock.mockImplementation(() => () => {})
   delete process.env.ORCA_DISABLE_REPO_REF_MAINTENANCE
+  _resetCanonicalRepoKeyCacheForTests()
   _resetLocalRepoRefMaintenanceForTests()
 })
 
@@ -44,10 +60,48 @@ afterEach(() => {
 })
 
 describe('local repo ref maintenance target', () => {
+  it('gives its admission slot back as soon as other git queues behind it', async () => {
+    // A `pack-refs` holds a general slot for minutes on a degraded repository.
+    // That is only acceptable while nothing else wants one.
+    readRepoCommonDirFromGitMock.mockResolvedValue('/repo/.git')
+    const interrupt = vi
+      .spyOn(getLocalRepoRefMaintenance(), 'interrupt')
+      .mockResolvedValue(undefined)
+    let listener: ((event: { phase: string; queued: number }) => void) | undefined
+    subscribeAdmissionMock.mockImplementation((fn) => {
+      listener = fn
+      return () => {
+        listener = undefined
+      }
+    })
+    let finish: (() => void) | undefined
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ stdout: '', stderr: '' })
+        })
+    )
+
+    const packing = target().packRefs(new AbortController().signal)
+    await vi.waitFor(() => expect(listener).toBeDefined())
+
+    // An event with nothing queued is not pressure; the pack keeps its slot.
+    listener?.({ phase: 'release', queued: 0 })
+    expect(interrupt).not.toHaveBeenCalled()
+
+    listener?.({ phase: 'release', queued: 1 })
+    expect(interrupt).toHaveBeenCalledTimes(1)
+
+    finish?.()
+    await packing
+    // The subscription is torn down with the pack, not left dangling.
+    expect(listener).toBeUndefined()
+  })
+
   it('runs pack-refs at the background tier with a long deadline', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
-    await target().packRefs()
+    await target().packRefs(new AbortController().signal)
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['pack-refs', '--all', '--prune'],
@@ -62,31 +116,31 @@ describe('local repo ref maintenance target', () => {
       'gc.auto 6700\nmaintenance.auto false\n'
     ]) {
       gitExecFileAsyncMock.mockResolvedValue({ stdout, stderr: '' })
-      await expect(target().isOptedOut?.()).resolves.toBe(true)
+      await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(true)
     }
 
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'maintenance.auto true\ngc.auto 6700\n',
       stderr: ''
     })
-    await expect(target().isOptedOut?.()).resolves.toBe(false)
+    await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(false)
 
     // `git config --get-regexp` exits non-zero when nothing matches.
     gitExecFileAsyncMock.mockRejectedValue(new Error('exit 1'))
-    await expect(target().isOptedOut?.()).resolves.toBe(false)
+    await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(false)
   })
 
   it('walks the POSIX refs directory for a native repo', async () => {
     readRepoCommonDirFromGitMock.mockResolvedValue('/repo/.git')
 
-    await expect(target().resolveRefsDirectory()).resolves.toBe('/repo/.git/refs')
+    await expect(target().resolveRefsDirectory(NO_ABORT)).resolves.toBe('/repo/.git/refs')
   })
 
   it('translates a WSL repo answer back to the UNC path the main process can open', async () => {
     // Git answers in its own execution space, which for WSL is a Linux path.
     readRepoCommonDirFromGitMock.mockResolvedValue('/home/dev/repo/.git')
 
-    await expect(target('Ubuntu').resolveRefsDirectory()).resolves.toBe(
+    await expect(target('Ubuntu').resolveRefsDirectory(NO_ABORT)).resolves.toBe(
       '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo\\.git\\refs'
     )
   })
@@ -94,7 +148,7 @@ describe('local repo ref maintenance target', () => {
   it('reports an unresolvable repository rather than guessing a path', async () => {
     readRepoCommonDirFromGitMock.mockResolvedValue(undefined)
 
-    await expect(target().resolveRefsDirectory()).resolves.toBeUndefined()
+    await expect(target().resolveRefsDirectory(NO_ABORT)).resolves.toBeUndefined()
   })
 })
 
@@ -103,7 +157,7 @@ describe('local repo ref maintenance scheduling', () => {
     process.env.ORCA_DISABLE_REPO_REF_MAINTENANCE = '1'
     const arm = vi.spyOn(getLocalRepoRefMaintenance(), 'arm')
 
-    armLocalRepoRefMaintenance({ key: 'local::/repo/.git', repoPath: '/repo', isBusy: () => false })
+    armLocalRepoRefMaintenance({ key: 'local::/repo/.git', repoPath: '/repo' })
 
     expect(arm).not.toHaveBeenCalled()
   })
@@ -111,9 +165,36 @@ describe('local repo ref maintenance scheduling', () => {
   it('arms through the shared single-flight instance otherwise', () => {
     const arm = vi.spyOn(getLocalRepoRefMaintenance(), 'arm')
 
-    armLocalRepoRefMaintenance({ key: 'local::/repo/.git', repoPath: '/repo', isBusy: () => false })
+    armLocalRepoRefMaintenance({ key: 'local::/repo/.git', repoPath: '/repo' })
 
     expect(arm).toHaveBeenCalledTimes(1)
+  })
+
+  it('is free when nothing has ever been armed', async () => {
+    // The common case by far: no timers, no instance, no reason to pay anything.
+    await expect(withRepoRefMaintenancePaused('git-fetch', async () => 'done')).resolves.toBe(
+      'done'
+    )
+  })
+
+  it('holds the window shut for the duration of ref-touching work', async () => {
+    readRepoCommonDirFromGitMock.mockResolvedValue('/repo/.git')
+    _resetLocalRepoRefMaintenanceForTests({ quietPeriodMs: 1, looseRefThreshold: 0 })
+    setRepoMaintenanceActivityProbe(() => false)
+    const maintenance = getLocalRepoRefMaintenance()
+    const packRefs = vi.fn(async () => {})
+    maintenance.arm({
+      key: 'local::/repo/.git',
+      resolveRefsDirectory: async () => '/repo/.git/refs',
+      packRefs
+    })
+
+    await withRepoRefMaintenancePaused('branch-delete', async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      expect(packRefs).not.toHaveBeenCalled()
+    })
+
+    await vi.waitFor(() => expect(packRefs).toHaveBeenCalledTimes(1))
   })
 
   it('routes the app activity probe into the shared instance', async () => {

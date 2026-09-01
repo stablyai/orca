@@ -1,72 +1,23 @@
 import { countLooseRefs } from './loose-ref-count'
+import {
+  LOOSE_REF_PACK_THRESHOLD,
+  REF_MAINTENANCE_ATTEMPT_DEADLINE_MS,
+  REF_MAINTENANCE_CLEAN_COOLDOWN_MS,
+  REF_MAINTENANCE_FAILURE_COOLDOWN_MS,
+  REF_MAINTENANCE_PACKED_COOLDOWN_MS,
+  REF_MAINTENANCE_QUIET_PERIOD_MS,
+  RefMaintenanceInterrupted,
+  type RefMaintenanceOutcome,
+  type RefMaintenanceSpan,
+  type RepoRefMaintenanceOptions,
+  type RepoRefMaintenanceTarget
+} from './repo-ref-maintenance-policy'
 
 /**
- * Idle-time loose-ref packing for repositories Orca itself degrades.
- *
- * Orca strips git's auto-maintenance off its own frequent fetches
- * (`GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS`) and never compensated, so an
- * Orca-driven checkout accumulates loose refs forever and every ref
- * enumeration -- `show-ref`, `for-each-ref`, worktree create -- pays for them.
- * This is the compensation: after a repo goes quiet, probe it, and pack only
- * when the backlog is real.
- *
- * The engine is host-agnostic on purpose. The execution host owns everything
- * that touches execution, so each host supplies its own target (which git to
- * run, which filesystem to walk) and all state here is keyed per host.
+ * The scheduler half of idle loose-ref packing: when to probe, when to pack,
+ * when to stand down. The thresholds and the host contract it works against
+ * live in `./repo-ref-maintenance-policy`.
  */
-
-/**
- * Below this, ref enumeration is already fast and `pack-refs` would cost more
- * than it saves.
- *
- * Git's own files-backend auto heuristic (2.47+) packs at
- * `max(16, log2(packed_refs_bytes / 100) * 5)` loose refs -- about 76 for the
- * 4.1 MB `packed-refs` that motivated this work. A flat 1000 is roughly an
- * order of magnitude more conservative on purpose: this runs unasked against a
- * real checkout, and being late is cheap where being wrong is not.
- */
-export const LOOSE_REF_PACK_THRESHOLD = 1000
-
-/** No fetch, create, or other tracked write on the repo for this long. */
-export const REF_MAINTENANCE_QUIET_PERIOD_MS = 10 * 60_000
-
-/** Packing empties the backlog; there is nothing to do again for a long while. */
-export const REF_MAINTENANCE_PACKED_COOLDOWN_MS = 12 * 60 * 60_000
-
-/** A healthy or unresolvable repo should not be re-probed on every quiet window. */
-export const REF_MAINTENANCE_CLEAN_COOLDOWN_MS = 6 * 60 * 60_000
-
-/** A failing repo (permissions, stale lock) must not be retried in a loop. */
-export const REF_MAINTENANCE_FAILURE_COOLDOWN_MS = 6 * 60 * 60_000
-
-/**
- * `pack-refs --prune` unlinks one file per loose ref. Paying off a 36k-ref
- * backlog measured at ~83s on APFS, so the deadline has to clear a cold repo on
- * a slow disk by a wide margin. A kill mid-run is safe -- git renames
- * `packed-refs` into place atomically and the surviving loose refs stay
- * authoritative -- but it wastes the work.
- */
-export const PACK_REFS_TIMEOUT_MS = 15 * 60_000
-
-/**
- * Ancient, safe on the Git 2.25 baseline, and does exactly one thing.
- *
- * Not `pack-refs --auto`: that arrived in 2.45 and unconditionally rewrote
- * `packed-refs` on the files backend until 2.47, so it is both unavailable at
- * our baseline and wrong on two shipped releases. Not `git maintenance run`
- * either -- newer, and it pulls in commit-graph and repack work we did not ask
- * for. `--all` is required because the backlog is `refs/heads` and
- * `refs/remotes`, which a bare `pack-refs` leaves alone.
- */
-export const PACK_REFS_ARGS = ['pack-refs', '--all', '--prune'] as const
-
-/**
- * Backstop on a whole attempt. Every Git child is already deadlined, but
- * `opendir` on a hung network or WSL share never settles and neither does an
- * admission wait -- and the whole app shares one maintenance slot, so one hang
- * would otherwise wedge every repository for the life of the process.
- */
-export const REF_MAINTENANCE_ATTEMPT_DEADLINE_MS = PACK_REFS_TIMEOUT_MS + 5 * 60_000
 
 /** Give up until the next real activity rather than re-arming forever. */
 const MAX_DEFERRALS = 6
@@ -74,43 +25,6 @@ const MAX_DEFERRALS = 6
 const MAX_DEFERRAL_BACKOFF_MULTIPLIER = 8
 /** Armed repos are evicted oldest-first past this; the next write on one re-arms it. */
 const MAX_TRACKED_REPOS = 64
-
-export type RefMaintenanceOutcome =
-  | 'packed'
-  | 'below_threshold'
-  | 'unresolved'
-  | 'opted_out'
-  | 'deferred'
-  | 'timed_out'
-  | 'failed'
-
-/** Structurally satisfied by the tracer's `ActiveSpan`. */
-export type RefMaintenanceSpan = {
-  setAttribute(key: string, value: unknown): void
-}
-
-export type RepoRefMaintenanceTarget = {
-  /** Repo identity scoped to its execution host; all state here is keyed by it. */
-  readonly key: string
-  /** Absolute `refs/` path *on the host that runs the walk*, or undefined if unresolvable. */
-  resolveRefsDirectory(): Promise<string | undefined>
-  /** A user who told Git not to auto-maintain this repo has told Orca too. */
-  isOptedOut?(): Promise<boolean>
-  /** True while work on *this repo* is in flight -- a fetch, a create, a removal. */
-  isBusy?(): boolean
-  packRefs(): Promise<void>
-}
-
-export type RepoRefMaintenanceOptions = {
-  now?: () => number
-  /** True while app-wide work this must not race is in flight (create, live agent, battery, quit). */
-  isBusy?: () => boolean
-  /** Wraps one attempt so a host can trace it; must invoke and await `attempt`. */
-  observe?: (attempt: (span: RefMaintenanceSpan) => Promise<void>) => Promise<void>
-  quietPeriodMs?: number
-  looseRefThreshold?: number
-  onError?: (error: unknown) => void
-}
 
 type TrackedRepo = {
   target: RepoRefMaintenanceTarget
@@ -120,18 +34,9 @@ type TrackedRepo = {
 
 const noopSpan: RefMaintenanceSpan = { setAttribute: () => {} }
 
-/** True if `work` settled first. The abandoned work keeps running; it just stops blocking. */
-async function settlesWithin(work: Promise<void>, deadlineMs: number): Promise<boolean> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const deadline = new Promise<false>((resolve) => {
-    timer = setTimeout(() => resolve(false), deadlineMs)
-    timer.unref?.()
-  })
-  try {
-    return await Promise.race([work.then(() => true), deadline])
-  } finally {
-    clearTimeout(timer)
-  }
+/** A deadline means something is stuck: back off instead of retrying straight away. */
+function hitDeadline(signal: AbortSignal): boolean {
+  return signal.reason instanceof RefMaintenanceInterrupted && signal.reason.deadline
 }
 
 export class RepoRefMaintenance {
@@ -145,7 +50,13 @@ export class RepoRefMaintenance {
   private readonly onError: (error: unknown) => void
   // Why: at most one pack-refs anywhere. It holds a general git admission slot
   // for its whole run, and two at once would halve git throughput on a small host.
+  // The slot is never released while a pack that could hold `packed-refs.lock`
+  // is still running -- an interrupt cancels the work and waits for it to stop.
   private inFlight: Promise<void> | null = null
+  private inFlightAbort: AbortController | null = null
+  // Why a count, not a flag: several ref-touching operations overlap routinely
+  // (a create's fetch inside a create), and the last one out reopens the window.
+  private suspensions = 0
   private lastAttempt: Promise<void> = Promise.resolve()
   private disposed = false
 
@@ -183,8 +94,68 @@ export class RepoRefMaintenance {
     return this.lastAttempt
   }
 
+  /**
+   * Stop any pack that is running and resolve once it really has stopped.
+   *
+   * Callers about to touch refs await this so a collision costs a few hundred
+   * milliseconds instead of failing on `packed-refs.lock`. A no-op, and free,
+   * when nothing is running -- which is almost always.
+   */
+  interrupt(reason: string): Promise<void> {
+    const running = this.inFlight
+    if (!running) {
+      return Promise.resolve()
+    }
+    this.inFlightAbort?.abort(new RefMaintenanceInterrupted(reason))
+    return running.catch(() => {})
+  }
+
+  /**
+   * Push every armed repository's attempt out by a full quiet period.
+   *
+   * User-initiated ref work is evidence the user is active in the app, not just
+   * in one repo, and it is free -- no key to resolve, no subprocess, nothing at
+   * all when nothing is armed.
+   */
+  postponeAll(): void {
+    if (this.disposed) {
+      return
+    }
+    for (const [key, tracked] of this.tracked) {
+      if (tracked.timer) {
+        clearTimeout(tracked.timer)
+      }
+      tracked.deferrals = 0
+      this.schedule(key, tracked)
+    }
+  }
+
+  /**
+   * Hold the repository open for work that is about to touch refs.
+   *
+   * Stronger than `interrupt` alone, which only cancels what is running now: no
+   * attempt can start for any repository until the returned release is called,
+   * so a quiet-period timer cannot fire into the middle of the caller's work.
+   */
+  async pause(reason: string): Promise<() => void> {
+    this.suspensions += 1
+    let released = false
+    try {
+      await this.interrupt(reason)
+    } catch {
+      // interrupt() never rejects, but a release must exist even if it did.
+    }
+    return () => {
+      if (!released) {
+        released = true
+        this.suspensions -= 1
+      }
+    }
+  }
+
   dispose(): void {
     this.disposed = true
+    this.inFlightAbort?.abort(new RefMaintenanceInterrupted('disposed'))
     for (const tracked of this.tracked.values()) {
       if (tracked.timer) {
         clearTimeout(tracked.timer)
@@ -222,13 +193,24 @@ export class RepoRefMaintenance {
     }
   }
 
-  private defer(key: string, tracked: TrackedRepo): void {
+  /**
+   * `counted` spends the give-up budget. Waiting behind another repository's
+   * pack, or yielding to work Orca asked us to yield to, does not: both end on
+   * their own, so charging for them would let a busy machine starve a repo
+   * until its next fetch. Only "the app is busy" is charged.
+   */
+  private defer(key: string, tracked: TrackedRepo, counted: boolean): void {
     // A fetch that landed while this attempt was probing already re-armed the
     // repo; that entry is fresher, so the deferral must not overwrite it.
-    if (this.disposed || this.tracked.has(key) || tracked.deferrals >= MAX_DEFERRALS) {
+    if (this.disposed || this.tracked.has(key)) {
       return
     }
-    tracked.deferrals += 1
+    if (counted) {
+      if (tracked.deferrals >= MAX_DEFERRALS) {
+        return
+      }
+      tracked.deferrals += 1
+    }
     this.tracked.set(key, tracked)
     const multiplier = Math.min(2 ** tracked.deferrals, MAX_DEFERRAL_BACKOFF_MULTIPLIER)
     this.schedule(key, tracked, this.quietPeriodMs * multiplier)
@@ -244,25 +226,30 @@ export class RepoRefMaintenance {
     if (cooldownUntil !== undefined && this.now() < cooldownUntil) {
       return
     }
-    if (this.inFlight !== null || this.isBusy(tracked)) {
-      this.defer(key, tracked)
+    if (this.inFlight !== null) {
+      this.defer(key, tracked, false)
       return
     }
-    const run = this.observe(async (span) => {
-      const settled = await settlesWithin(
-        this.packIfNeeded(key, tracked, span),
-        REF_MAINTENANCE_ATTEMPT_DEADLINE_MS
-      )
-      if (!settled) {
-        this.settle(key, span, 'timed_out', REF_MAINTENANCE_FAILURE_COOLDOWN_MS)
-      }
-    })
+    if (this.suspensions > 0 || this.isBusy(tracked)) {
+      this.defer(key, tracked, true)
+      return
+    }
+    const abort = new AbortController()
+    const deadline = setTimeout(
+      () => abort.abort(new RefMaintenanceInterrupted('attempt deadline', true)),
+      REF_MAINTENANCE_ATTEMPT_DEADLINE_MS
+    )
+    deadline.unref?.()
+    const run = this.observe((span) => this.packIfNeeded(key, tracked, span, abort.signal))
     this.inFlight = run
+    this.inFlightAbort = abort
     try {
       await run
     } finally {
+      clearTimeout(deadline)
       if (this.inFlight === run) {
         this.inFlight = null
+        this.inFlightAbort = null
       }
     }
   }
@@ -270,20 +257,31 @@ export class RepoRefMaintenance {
   private async packIfNeeded(
     key: string,
     tracked: TrackedRepo,
-    span: RefMaintenanceSpan
+    span: RefMaintenanceSpan,
+    signal: AbortSignal
   ): Promise<void> {
     span.setAttribute('repo.maintenance_key', key)
-    if (await tracked.target.isOptedOut?.()) {
+    // Every await below carries the signal, so a caller waiting in `pause()` is
+    // never stuck behind a probe that has already been told to stop.
+    if (await tracked.target.isOptedOut?.(signal)) {
       this.settle(key, span, 'opted_out', REF_MAINTENANCE_CLEAN_COOLDOWN_MS)
       return
     }
-    const refsDirectory = await tracked.target.resolveRefsDirectory()
+    if (signal.aborted) {
+      this.yieldTo(key, tracked, span, signal)
+      return
+    }
+    const refsDirectory = await tracked.target.resolveRefsDirectory(signal)
     if (!refsDirectory) {
       this.settle(key, span, 'unresolved', REF_MAINTENANCE_CLEAN_COOLDOWN_MS)
       return
     }
     const budget = this.looseRefThreshold + 1
-    const before = await countLooseRefs(refsDirectory, budget)
+    const before = await countLooseRefs(refsDirectory, budget, signal)
+    if (signal.aborted) {
+      this.yieldTo(key, tracked, span, signal)
+      return
+    }
     span.setAttribute('git.loose_ref_count', before.count)
     span.setAttribute('git.loose_ref_threshold', this.looseRefThreshold)
     // A saturated walk stopped early, so `count` is a floor -- never read it as "clean".
@@ -292,25 +290,52 @@ export class RepoRefMaintenance {
       return
     }
     // The quiet window can close while the probe walks; re-check before spending a git slot.
-    if (this.isBusy(tracked)) {
+    if (this.suspensions > 0 || this.isBusy(tracked)) {
       span.setAttribute('repo.maintenance_outcome', 'deferred' satisfies RefMaintenanceOutcome)
-      this.defer(key, tracked)
+      this.defer(key, tracked, true)
       return
     }
     const startedAt = this.now()
+    let partial = false
     try {
-      await tracked.target.packRefs()
+      await tracked.target.packRefs(signal)
     } catch (error) {
       span.setAttribute('repo.maintenance_error', String(error))
+      if (signal.aborted) {
+        // Orca asked for this, and a killed pack-refs loses nothing.
+        this.yieldTo(key, tracked, span, signal)
+        return
+      }
+      partial = true
+    }
+    span.setAttribute('git.pack_refs_ms', this.now() - startedAt)
+    // Judge by the backlog, not by the exit code. On a machine running several
+    // Orca sessions a branch moving mid-pack is the normal case, and Git's
+    // response -- leave that one ref loose, pack the rest -- is the correct one.
+    // Measured in the field: 36,688 loose refs down to 3, reported as an error.
+    const after = await countLooseRefs(refsDirectory, budget, signal)
+    span.setAttribute('git.loose_ref_count_after', after.count)
+    if (partial && (after.saturated || after.count >= this.looseRefThreshold)) {
       this.settle(key, span, 'failed', REF_MAINTENANCE_FAILURE_COOLDOWN_MS)
       return
     }
-    span.setAttribute('git.pack_refs_ms', this.now() - startedAt)
-    span.setAttribute(
-      'git.loose_ref_count_after',
-      (await countLooseRefs(refsDirectory, budget)).count
-    )
+    span.setAttribute('git.pack_refs_partial', partial)
     this.settle(key, span, 'packed', REF_MAINTENANCE_PACKED_COOLDOWN_MS)
+  }
+
+  /** Record an aborted attempt: retry soon if Orca yielded, back off if it stalled. */
+  private yieldTo(
+    key: string,
+    tracked: TrackedRepo,
+    span: RefMaintenanceSpan,
+    signal: AbortSignal
+  ): void {
+    if (hitDeadline(signal)) {
+      this.settle(key, span, 'timed_out', REF_MAINTENANCE_FAILURE_COOLDOWN_MS)
+      return
+    }
+    span.setAttribute('repo.maintenance_outcome', 'interrupted' satisfies RefMaintenanceOutcome)
+    this.defer(key, tracked, false)
   }
 
   private settle(

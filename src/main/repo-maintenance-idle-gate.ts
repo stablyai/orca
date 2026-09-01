@@ -1,6 +1,7 @@
-import { powerMonitor } from 'electron'
+import { app, powerMonitor } from 'electron'
 import {
   disposeLocalRepoRefMaintenance,
+  interruptLocalRepoRefMaintenance,
   setRepoMaintenanceActivityProbe
 } from './git/local-repo-ref-maintenance'
 import { hasWorktreeRemovalsInFlight } from './ipc/worktrees/worktree-ipc-context'
@@ -22,7 +23,9 @@ export type RepoMaintenanceIdleInputs = {
   getWorkingAgentCount: () => number
 }
 
-export function installRepoMaintenanceIdleGate(inputs: RepoMaintenanceIdleInputs): () => void {
+export function installRepoMaintenanceIdleGate(
+  inputs: RepoMaintenanceIdleInputs
+): () => Promise<void> {
   setRepoMaintenanceActivityProbe(
     () =>
       inputs.isQuitting() ||
@@ -31,11 +34,26 @@ export function installRepoMaintenanceIdleGate(inputs: RepoMaintenanceIdleInputs
       hasWorktreeRemovalsInFlight() ||
       isOnBatteryPower()
   )
+  // Checking these only at admission would still let a change seconds later buy
+  // a minute of unrequested work: unplugging, or the user coming back to a
+  // window they left. Both stop the pack outright -- it holds a general git
+  // admission slot for its whole run, and nothing it has done is lost.
+  const onBattery = (): void => {
+    void interruptLocalRepoRefMaintenance('on battery')
+  }
+  const onFocus = (): void => {
+    void interruptLocalRepoRefMaintenance('window focused')
+  }
+  powerMonitor.on('on-battery', onBattery)
+  app.on('browser-window-focus', onFocus)
   return () => {
+    app.off('browser-window-focus', onFocus)
+    powerMonitor.off('on-battery', onBattery)
     // Order matters: clearing the probe alone would leave armed timers running
     // against a gate that can no longer see agents, creates, or shutdown.
-    disposeLocalRepoRefMaintenance()
+    const stopped = disposeLocalRepoRefMaintenance()
     setRepoMaintenanceActivityProbe(null)
+    return stopped
   }
 }
 

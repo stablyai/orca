@@ -5,7 +5,13 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { countLooseRefs } from '../../shared/loose-ref-count'
 import { RepoRefMaintenance } from '../../shared/repo-ref-maintenance'
-import { createLocalRepoRefMaintenanceTarget } from './local-repo-ref-maintenance'
+import {
+  _resetLocalRepoRefMaintenanceForTests,
+  createLocalRepoRefMaintenanceTarget,
+  getLocalRepoRefMaintenance,
+  setRepoMaintenanceActivityProbe
+} from './local-repo-ref-maintenance'
+import { forceDeleteLocalBranch } from './worktree-branch-removal'
 
 const roots: string[] = []
 // Large enough that the deferral ladder (1x, 2x, 4x ... capped at 8x) outlasts
@@ -56,14 +62,13 @@ function createMaintenance(onPackRefs: () => void = () => {}): {
     arm: (repoPath: string) => {
       const target = createLocalRepoRefMaintenanceTarget({
         key: `local::${repoPath}`,
-        repoPath,
-        isBusy: () => false
+        repoPath
       })
       maintenance.arm({
         ...target,
-        packRefs: async () => {
+        packRefs: async (signal) => {
           onPackRefs()
-          await target.packRefs()
+          await target.packRefs(signal)
         }
       })
     }
@@ -89,6 +94,7 @@ async function settleUntil(
 }
 
 afterEach(async () => {
+  _resetLocalRepoRefMaintenanceForTests()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -163,16 +169,15 @@ describe('idle ref maintenance against real Git', () => {
     for (const { repoPath } of repos) {
       const target = createLocalRepoRefMaintenanceTarget({
         key: `local::${repoPath}`,
-        repoPath,
-        isBusy: () => false
+        repoPath
       })
       maintenance.arm({
         ...target,
-        packRefs: async () => {
+        packRefs: async (signal) => {
           concurrent += 1
           peak = Math.max(peak, concurrent)
           try {
-            await target.packRefs()
+            await target.packRefs(signal)
           } finally {
             concurrent -= 1
           }
@@ -195,4 +200,47 @@ describe('idle ref maintenance against real Git', () => {
       })
     }
   }, 60_000)
+})
+
+describe('yielding the repository to work that deletes refs', () => {
+  it('stops a running pack so a real branch deletion never hits packed-refs.lock', async () => {
+    // The defect this closes: the veto stopped a pack from starting during a
+    // deletion, but nothing stopped a deletion starting during a pack -- and
+    // `update-ref -d` then fails on the lock with no cause the user can see.
+    const { repoPath } = await createRepo(0)
+    git(repoPath, ['branch', 'doomed'])
+    const head = git(repoPath, ['rev-parse', 'refs/heads/doomed'])
+
+    let packs = 0
+    let firstPackSignal: AbortSignal | undefined
+    _resetLocalRepoRefMaintenanceForTests({ quietPeriodMs: QUIET_MS, looseRefThreshold: 1 })
+    setRepoMaintenanceActivityProbe(() => false)
+    getLocalRepoRefMaintenance().arm({
+      key: `local::${repoPath}`,
+      resolveRefsDirectory: async () => join(repoPath, '.git', 'refs'),
+      packRefs: async (signal) => {
+        packs += 1
+        firstPackSignal ??= signal
+        await new Promise<void>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason as Error))
+        })
+      }
+    })
+    for (let attempt = 0; attempt < 200 && packs === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
+    }
+    expect(packs).toBe(1)
+
+    // The real deletion path, which routes through withRepoRefMaintenancePaused.
+    await expect(forceDeleteLocalBranch(repoPath, 'doomed', head)).resolves.toBeUndefined()
+
+    // The pack that was running when the deletion arrived was cancelled for it...
+    expect(firstPackSignal?.aborted).toBe(true)
+    expect(git(repoPath, ['branch', '--list', 'doomed'])).toBe('')
+    // ...and an interrupt is not a failure, so the sweep comes back on its own.
+    for (let attempt = 0; attempt < 200 && packs < 2; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
+    }
+    expect(packs).toBe(2)
+  }, 30_000)
 })

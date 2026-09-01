@@ -1,11 +1,12 @@
-import { uncRouteKey } from '../../providers/working-directory-validation'
-import { classifyGitCommand } from '../wsl-direct-git-read-commands'
 import { createAbortError } from './abort-error'
+import { publishAdmissionEvent } from './git-admission-event-bus'
 import { GitAdmissionWaiterQueue } from './git-admission-waiter-queue'
 import {
   ADMISSION_TIER_VALUE,
   AdmissionEventPublisher,
   DEFAULT_ADMISSION_SCHEDULER_CONFIG,
+  commandClass,
+  routeKey,
   type AdmissionBudget,
   type AdmissionClass,
   type AdmissionSchedulerConfig,
@@ -20,6 +21,7 @@ export type {
   GitAdmissionGrant,
   GitAdmissionRequest
 } from './git-admission-state'
+export { subscribeGitAdmissionEvents } from './git-admission-event-bus'
 export {
   GENERAL_CAP,
   GENERAL_HEADROOM,
@@ -30,15 +32,6 @@ export {
   ROUTE_CAP,
   ROUTE_HEADROOM
 } from './git-admission-state'
-
-function commandClass(args: readonly string[]): AdmissionClass {
-  return classifyGitCommand(args) === 'network' ? 'network' : 'general'
-}
-
-function routeKey(request: GitAdmissionRequest): string | null {
-  const distro = request.wslDistro?.trim().toLowerCase()
-  return distro ? `wsl:${distro}` : uncRouteKey(request.cwd)
-}
 
 export class GitAdmissionScheduler {
   private readonly config: AdmissionSchedulerConfig
@@ -307,7 +300,11 @@ export class GitAdmissionScheduler {
   }
 }
 
-let scheduler = new GitAdmissionScheduler()
+function createScheduler(): GitAdmissionScheduler {
+  return new GitAdmissionScheduler({ onAdmissionEvent: publishAdmissionEvent })
+}
+
+let scheduler = createScheduler()
 
 export function acquireGitAdmission(request: GitAdmissionRequest): Promise<GitAdmissionGrant> {
   if (process.env.ORCA_GIT_ADMISSION_DISABLED === '1') {
@@ -316,7 +313,7 @@ export function acquireGitAdmission(request: GitAdmissionRequest): Promise<GitAd
   return scheduler.acquire(request)
 }
 
-export function _resetGitAdmissionForTests(replacement = new GitAdmissionScheduler()): void {
+export function _resetGitAdmissionForTests(replacement = createScheduler()): void {
   scheduler = replacement
 }
 

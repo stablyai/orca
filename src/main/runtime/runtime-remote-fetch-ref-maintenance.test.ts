@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const armMock = vi.hoisted(() => vi.fn())
+const busyProbeMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../git/runner', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
@@ -15,18 +16,29 @@ vi.mock('../git/runner', async (importOriginal) => ({
 
 vi.mock('../git/local-repo-ref-maintenance', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  armLocalRepoRefMaintenance: armMock
+  armLocalRepoRefMaintenance: armMock,
+  setRepoRefMaintenanceBusyProbe: busyProbeMock
 }))
 
+import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
 import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
 
-function armedTargets(): { key: string; isBusy?: () => boolean }[] {
-  return armMock.mock.calls.map(([args]) => args as { key: string; isBusy?: () => boolean })
+function armedTargets(): { key: string }[] {
+  return armMock.mock.calls.map(([args]) => args as { key: string })
+}
+
+/** The per-repo "a fetch is in flight" answer the controller registers for a key. */
+function busyProbeFor(key: string): (() => boolean) | undefined {
+  return busyProbeMock.mock.calls.findLast(([registered]) => registered === key)?.[1] as
+    | (() => boolean)
+    | undefined
 }
 
 beforeEach(() => {
+  _resetCanonicalRepoKeyCacheForTests()
   gitExecFileAsyncMock.mockReset()
   armMock.mockReset()
+  busyProbeMock.mockReset()
   gitExecFileAsyncMock.mockImplementation(async (argv: string[]) =>
     argv[0] === 'rev-parse' ? { stdout: '/repo/.git\n', stderr: '' } : { stdout: '', stderr: '' }
   )
@@ -92,8 +104,8 @@ describe('fetch-armed ref maintenance', () => {
   it('reports the repo as busy while another fetch on it is in flight', async () => {
     const controller = new RuntimeRemoteFetchController()
     await controller.getOrStartRemoteFetch('/repo', 'first')
-    const target = armedTargets()[0]
-    expect(target?.isBusy?.()).toBe(false)
+    const isBusy = busyProbeFor('local::/repo/.git')
+    expect(isBusy?.()).toBe(false)
 
     let releaseFetch: (() => void) | undefined
     gitExecFileAsyncMock.mockImplementation(async (argv: string[]) => {
@@ -107,11 +119,11 @@ describe('fetch-armed ref maintenance', () => {
     })
     const second = controller.getOrStartRemoteFetch('/repo', 'second')
     await vi.waitFor(() => expect(releaseFetch).toBeDefined())
-    expect(target?.isBusy?.()).toBe(true)
+    expect(isBusy?.()).toBe(true)
 
     releaseFetch?.()
     await second
-    expect(target?.isBusy?.()).toBe(false)
+    expect(isBusy?.()).toBe(false)
   })
 
   it('arms even when the fetch fails, because a partial fetch still writes refs', async () => {

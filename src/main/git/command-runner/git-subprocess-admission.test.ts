@@ -6,7 +6,8 @@ import {
   NETWORK_CAP,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests,
-  acquireGitAdmission
+  acquireGitAdmission,
+  subscribeGitAdmissionEvents
 } from './git-subprocess-admission'
 import type { GitAdmissionEvent } from './git-admission-state'
 
@@ -554,5 +555,44 @@ describe('GitAdmissionScheduler', () => {
         }
       ])
     )
+  })
+})
+
+describe('admission event subscription', () => {
+  it('tells a long-running holder that other git is queueing behind it', async () => {
+    // Idle repo maintenance holds a general slot for minutes; this is how it
+    // learns to give the slot back instead of starving interactive work.
+    const events: GitAdmissionEvent[] = []
+    const unsubscribe = subscribeGitAdmissionEvents((event) => events.push(event))
+    try {
+      const held = await Promise.all(
+        Array.from({ length: GENERAL_CAP }, () => acquireGitAdmission(local('background')))
+      )
+      expect(events.at(-1)?.queued).toBe(0)
+
+      const queued = acquireGitAdmission(local('status'))
+      // The scheduler dequeues a waiter before publishing its own grant, so a
+      // lone waiter is only visible as a non-zero `queued` on somebody else's
+      // event -- which is exactly what the holder needs to see.
+      held[0].release()
+
+      expect(events.some((event) => event.queued > 0)).toBe(true)
+      for (const grant of held.slice(1)) {
+        grant.release()
+      }
+      ;(await queued).release()
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('stops delivering once unsubscribed', async () => {
+    const events: GitAdmissionEvent[] = []
+    subscribeGitAdmissionEvents((event) => events.push(event))()
+
+    const grant = await acquireGitAdmission(local())
+    grant.release()
+
+    expect(events).toHaveLength(0)
   })
 })
