@@ -58,7 +58,7 @@ describe('web fallback proxy chain — npmPackageInfo (real createFallbackProxy/
     expect(result).toBeUndefined()
   })
 
-  it('feeds the real fallback-proxy lookup into resolvePackageJsonDependencyHover and folds it into lookup-disabled, keeping the installed version visible', async () => {
+  it('feeds the real fallback-proxy lookup into resolvePackageJsonDependencyHover and still renders the installed version', async () => {
     const { api } = await installApi()
 
     const result = await resolvePackageJsonDependencyHover({

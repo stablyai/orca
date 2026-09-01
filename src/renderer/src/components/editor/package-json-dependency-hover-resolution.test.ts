@@ -97,7 +97,9 @@ describe('resolvePackageJsonDependencyHover', () => {
     })
   })
 
-  it('never calls lookupPackageInfo when it is absent (no crash, no throw)', async () => {
+  // Orca web has no lookup at all. Nothing known about the package means no
+  // hover, rather than a tooltip whose only content is our own limitation.
+  it('renders no hover when the lookup is absent and the package is not installed', async () => {
     const result = await resolvePackageJsonDependencyHover({
       modelText: TEXT,
       offset: REACT_KEY_OFFSET,
@@ -107,7 +109,21 @@ describe('resolvePackageJsonDependencyHover', () => {
       lookupPackageInfo: undefined
     })
 
-    expect(result).not.toBeNull()
+    expect(result).toBeNull()
+  })
+
+  it('still renders the installed version when the lookup is absent', async () => {
+    const result = await resolvePackageJsonDependencyHover({
+      modelText: TEXT,
+      offset: REACT_KEY_OFFSET,
+      isCancelled: () => false,
+      resolveContext: () => CONTEXT,
+      resolveInstalledVersion: async () => ({ status: 'installed', version: '18.2.0' }),
+      lookupPackageInfo: undefined
+    })
+
+    expect(result?.markdown).toContain('18.2.0')
+    expect(result?.markdown).not.toMatch(/not found|disabled|Could not complete/i)
   })
 
   describe('catalog handling', () => {

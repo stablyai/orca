@@ -21,9 +21,20 @@ function okResult(overrides: Partial<NpmPackageInfo> = {}): NpmPackageInfoResult
   }
 }
 
+/** Asserts a hover was produced; the null case has its own tests below. */
+function buildMarkdown(
+  params: Parameters<typeof buildPackageJsonDependencyHoverMarkdown>[0]
+): string {
+  const markdown = buildPackageJsonDependencyHoverMarkdown(params)
+  if (markdown === null) {
+    throw new Error('expected hover markdown, got null')
+  }
+  return markdown
+}
+
 describe('buildPackageJsonDependencyHoverMarkdown', () => {
   it('renders the installed version when the package is installed', () => {
-    const markdown = buildPackageJsonDependencyHoverMarkdown({
+    const markdown = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'installed', version: '19.0.0' },
       result: okResult()
@@ -34,7 +45,7 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
   })
 
   it('renders "not installed" when the package has no local install', () => {
-    const markdown = buildPackageJsonDependencyHoverMarkdown({
+    const markdown = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'not-installed' },
       result: okResult()
@@ -44,7 +55,7 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
   })
 
   it('escapes registry-supplied description text and never renders it as a link', () => {
-    const markdown = buildPackageJsonDependencyHoverMarkdown({
+    const markdown = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'not-installed' },
       result: okResult({ description: '[click](javascript:alert(1))' })
@@ -55,14 +66,14 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
   })
 
   it('renders the homepage as a clickable link only when https', () => {
-    const markdownHttps = buildPackageJsonDependencyHoverMarkdown({
+    const markdownHttps = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'not-installed' },
       result: okResult({ homepageUrl: 'https://react.dev' })
     })
     expect(markdownHttps).toContain('(https://react.dev)')
 
-    const markdownHttp = buildPackageJsonDependencyHoverMarkdown({
+    const markdownHttp = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'not-installed' },
       result: okResult({ homepageUrl: 'http://react.dev' as never })
@@ -71,12 +82,12 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
   })
 
   it('distinguishes patch drift from major drift', () => {
-    const patchMarkdown = buildPackageJsonDependencyHoverMarkdown({
+    const patchMarkdown = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'installed', version: '1.2.3' },
       result: okResult({ latestVersion: '1.2.9' })
     })
-    const majorMarkdown = buildPackageJsonDependencyHoverMarkdown({
+    const majorMarkdown = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'installed', version: '1.0.0' },
       result: okResult({ latestVersion: '3.0.0' })
@@ -88,7 +99,7 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
   })
 
   it('does not flag equal installed and latest versions as outdated', () => {
-    const markdown = buildPackageJsonDependencyHoverMarkdown({
+    const markdown = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'installed', version: '1.2.3' },
       result: okResult({ latestVersion: '1.2.3' })
@@ -98,7 +109,7 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
   })
 
   it('renders a non-semver installed version as plain text with no outdated marker', () => {
-    const markdown = buildPackageJsonDependencyHoverMarkdown({
+    const markdown = buildMarkdown({
       packageName: 'react',
       installedVersion: { status: 'installed', version: 'workspace:*' },
       result: okResult({ latestVersion: '19.0.0' })
@@ -106,37 +117,6 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
 
     expect(markdown).toMatch(/workspace:\\?\*/)
     expect(markdown.toLowerCase()).not.toContain('update available')
-  })
-
-  it('renders three distinguishable messages for not-found, lookup-disabled, and unavailable', () => {
-    const notFound = buildPackageJsonDependencyHoverMarkdown({
-      packageName: 'react',
-      installedVersion: { status: 'not-installed' },
-      result: { status: 'not-found' }
-    })
-    const disabled = buildPackageJsonDependencyHoverMarkdown({
-      packageName: 'react',
-      installedVersion: { status: 'not-installed' },
-      result: { status: 'lookup-disabled' }
-    })
-    const unavailable = buildPackageJsonDependencyHoverMarkdown({
-      packageName: 'react',
-      installedVersion: { status: 'not-installed' },
-      result: { status: 'unavailable', reason: 'timeout' }
-    })
-
-    const messages = new Set([notFound, disabled, unavailable])
-    expect(messages.size).toBe(3)
-  })
-
-  it('still shows the installed version alongside a lookup-disabled message', () => {
-    const markdown = buildPackageJsonDependencyHoverMarkdown({
-      packageName: 'react',
-      installedVersion: { status: 'installed', version: '19.0.0' },
-      result: { status: 'lookup-disabled' }
-    })
-
-    expect(markdown).toContain('19.0.0')
   })
 
   describe('latest version publish date', () => {
@@ -150,7 +130,7 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
     })
 
     it('renders a relative wording for a recent publish timestamp', () => {
-      const markdown = buildPackageJsonDependencyHoverMarkdown({
+      const markdown = buildMarkdown({
         packageName: 'react',
         installedVersion: { status: 'installed', version: '19.0.0' },
         result: okResult({
@@ -165,7 +145,7 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
     })
 
     it('renders a relative wording for an old publish timestamp instead of leaking the raw key or ISO string', () => {
-      const markdown = buildPackageJsonDependencyHoverMarkdown({
+      const markdown = buildMarkdown({
         packageName: 'react',
         installedVersion: { status: 'installed', version: '19.0.0' },
         result: okResult({
@@ -179,4 +159,38 @@ describe('buildPackageJsonDependencyHoverMarkdown', () => {
       expect(markdown).not.toMatch(/auto\.components\.editor/)
     })
   })
+})
+
+describe('never explains what it could not fetch', () => {
+  // Why: VS Code's npm extension returns no hover at all when a lookup yields
+  // nothing (`getInfoContribution` → `null`), and synthesizes a minimal record
+  // when only the installed version is known. Saying "not found on the npm
+  // registry" to someone whose package lives on a private registry is worse
+  // than saying nothing: the package exists, we simply never asked its host.
+  it.each([['not-found' as const], ['unavailable' as const], ['lookup-disabled' as const]])(
+    'shows the installed version alone for %s, with no failure wording',
+    (status) => {
+      const markdown = buildMarkdown({
+        packageName: '@acme/design-system',
+        installedVersion: { status: 'installed', version: '2.4.0' },
+        result: status === 'unavailable' ? { status, reason: 'network' } : { status }
+      })
+
+      expect(markdown).toContain('2.4.0')
+      expect(markdown).not.toMatch(/not found|disabled|Could not complete/i)
+    }
+  )
+
+  it.each([['not-found' as const], ['unavailable' as const], ['lookup-disabled' as const]])(
+    'renders no hover for %s when nothing at all is known',
+    (status) => {
+      const markdown = buildPackageJsonDependencyHoverMarkdown({
+        packageName: '@acme/design-system',
+        installedVersion: { status: 'not-installed' },
+        result: status === 'unavailable' ? { status, reason: 'network' } : { status }
+      })
+
+      expect(markdown).toBeNull()
+    }
+  )
 })

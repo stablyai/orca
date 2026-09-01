@@ -116,26 +116,11 @@ function buildLinksBlock(result: NpmPackageInfoResult): string | null {
   return links.length > 0 ? links.join(' · ') : null
 }
 
-function buildStatusBlock(result: NpmPackageInfoResult): string | null {
-  switch (result.status) {
-    case 'ok':
-      return result.info.description ? escapeMarkdownText(result.info.description) : null
-    case 'not-found':
-      return translate(
-        'auto.components.editor.PackageJsonDependencyHoverMarkdown.45dba0fe67',
-        'Package not found on the npm registry.'
-      )
-    case 'lookup-disabled':
-      return translate(
-        'auto.components.editor.PackageJsonDependencyHoverMarkdown.5b15fa0805',
-        'Package metadata lookups are disabled in Settings.'
-      )
-    case 'unavailable':
-      return translate(
-        'auto.components.editor.PackageJsonDependencyHoverMarkdown.b9c4f13783',
-        'Could not complete the lookup. Check your connection and try again.'
-      )
+function buildDescriptionBlock(result: NpmPackageInfoResult): string | null {
+  if (result.status !== 'ok' || !result.info.description) {
+    return null
   }
+  return escapeMarkdownText(result.info.description)
 }
 
 /**
@@ -151,10 +136,20 @@ export function buildPackageJsonDependencyHoverMarkdown(params: {
   packageName: string
   installedVersion: InstalledPackageVersionResult
   result: NpmPackageInfoResult
-}): string {
+}): string | null {
+  // Why nothing rather than a failure message: a package on a private registry
+  // is not missing, we simply never asked its host. Telling that user "not
+  // found on the npm registry" on every internal dependency is worse than
+  // showing no hover, which is what VS Code's npm extension does when a lookup
+  // yields nothing.
+  const hasRegistryInfo = params.result.status === 'ok'
+  const hasInstalledVersion = params.installedVersion.status === 'installed'
+  if (!hasRegistryInfo && !hasInstalledVersion) {
+    return null
+  }
   const blocks = [
     `**${escapeMarkdownText(params.packageName)}**`,
-    buildStatusBlock(params.result),
+    buildDescriptionBlock(params.result),
     buildFactsBlock(params.result, params.installedVersion),
     buildLinksBlock(params.result)
   ].filter((block): block is string => block !== null && block.length > 0)

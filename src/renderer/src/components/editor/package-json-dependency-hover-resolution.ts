@@ -76,5 +76,10 @@ export async function resolvePackageJsonDependencyHover(
     installedVersion,
     result
   })
+  // Nothing known about the package: no hover at all rather than a tooltip
+  // that only explains our own failure.
+  if (!markdown) {
+    return null
+  }
   return { markdown, startOffset: location.startOffset, endOffset: location.endOffset }
 }

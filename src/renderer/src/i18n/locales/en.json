@@ -14818,10 +14818,7 @@
           "45cf3d1be0": "Repository",
           "c3f3a43d24": "Major update available",
           "fe70f0740d": "Minor update available",
-          "7776f659ae": "Patch update available",
-          "5b15fa0805": "Package metadata lookups are disabled in Settings.",
-          "45dba0fe67": "Package not found on the npm registry.",
-          "b9c4f13783": "Could not complete the lookup. Check your connection and try again."
+          "7776f659ae": "Patch update available"
         },
         "PdfFind": {
           "cd65b1d6b0": "Close",
