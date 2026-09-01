@@ -146,6 +146,7 @@ export const FILE_ICON_BY_EXTENSION: Record<string, LucideIcon> = {
   r: FileCode,
   rar: FileArchive,
   rb: FileCode,
+  rmarkdown: FileText,
   rmd: FileText,
   rst: FileText,
   rs: FileCode,

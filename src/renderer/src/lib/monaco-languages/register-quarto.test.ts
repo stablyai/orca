@@ -111,6 +111,15 @@ describe('registerQuartoLanguage', () => {
     })
   })
 
+  it('keeps an escaped ```{{python}} cell out of the engine tokenizer', () => {
+    // Why: Quarto's double-brace form shows a cell without running it, and it
+    // matches no markdown fence rule — the closing fence would open a block.
+    const escapedCell = matchLine('root', '```{{python}}')
+    expect(escapedCell?.action).toMatchObject({ next: '@codeblock' })
+    expect(escapedCell?.action.nextEmbedded).toBeUndefined()
+    expect(matchLine('codeblock', '```')?.action).toMatchObject({ next: '@pop' })
+  })
+
   it('keeps markdown fences and headings working', () => {
     const plainFence = matchLine('root', '```python')
     expect(plainFence?.action).toMatchObject({ next: '@codeblockgh', nextEmbedded: '$1' })

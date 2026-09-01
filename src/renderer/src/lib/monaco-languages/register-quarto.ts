@@ -40,6 +40,10 @@ export const quartoMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/.*$/, 'variable.source']
     ],
     root: [
+      // ```{{python}} escapes a cell so Quarto shows it without running it. It
+      // matches no Markdown fence rule, so without this the closing fence would
+      // be read as an opening one and swallow the rest of the document.
+      [/^\s*```+\s*\{\{[^}]*\}\}.*$/, { token: 'string', next: '@codeblock' }],
       // ```{ojs} / ```{d3} are JavaScript dialects Monaco has no language id for.
       [
         /^\s*```+\s*\{\s*(?:ojs|d3)\b[^}]*\}.*$/,
