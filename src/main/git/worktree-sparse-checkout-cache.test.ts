@@ -143,6 +143,39 @@ describe('detectSparseCheckoutCached', () => {
     }
   })
 
+  it('does not let a stale in-flight revalidation clobber a fresh value written after remove+recreate at the same path', async () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    let resolveStaleDetect: (isSparse: boolean) => void = () => {}
+    try {
+      nowSpy.mockReturnValue(1_000)
+      detectSparseCheckoutMock.mockResolvedValueOnce(false)
+      await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+
+      // Past the window: kicks a background re-detect that we hold open (simulates a slow probe
+      // racing a worktree removal + recreation at the same path).
+      nowSpy.mockReturnValue(1_000 + RECONCILE_WINDOW_MS + 1)
+      detectSparseCheckoutMock.mockImplementationOnce(
+        () => new Promise<boolean>((resolve) => (resolveStaleDetect = resolve))
+      )
+      await detectSparseCheckoutCached('/repo', '/repo/wt-a')
+
+      // The worktree is removed (invalidate) and a new one is recreated at the exact same path,
+      // repopulating the key with a fresh, different value via a normal cold read.
+      invalidateSparseCheckoutState('/repo', '/repo/wt-a')
+      detectSparseCheckoutMock.mockResolvedValueOnce(true)
+      expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
+
+      // The stale in-flight detect from before the remove+recreate now resolves with the old
+      // answer. A presence-only guard would let this overwrite the fresh entry above; the fix
+      // must compare entry identity and refuse to write back over a value it didn't produce.
+      resolveStaleDetect(false)
+      await flushBackgroundRevalidation()
+      expect(await detectSparseCheckoutCached('/repo', '/repo/wt-a')).toBe(true)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   it('notifies the registered change listener only when a background revalidation flips the answer', async () => {
     const listener = vi.fn()
     onSparseCheckoutStateChanged(listener)

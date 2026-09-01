@@ -67,7 +67,7 @@ export async function detectSparseCheckoutCached(
   }
   // Stale-while-revalidate: serve the still-cached value now and correct it in the background,
   // deduplicated so concurrent readers past the window don't each start their own probe.
-  cached.revalidating ??= revalidateInBackground(key, repoPath, worktreePath, cached.isSparse)
+  cached.revalidating ??= revalidateInBackground(key, repoPath, worktreePath, cached)
   return cached.isSparse
 }
 
@@ -75,25 +75,24 @@ async function revalidateInBackground(
   key: string,
   repoPath: string,
   worktreePath: string,
-  previousIsSparse: boolean
+  startingEntry: SparseCheckoutCacheEntry
 ): Promise<void> {
   try {
     const isSparse = await detectSparseCheckout(worktreePath)
-    // Guard against a race with an explicit invalidate/clear that ran while this was in flight:
-    // if the key is gone, something deliberately dropped it (removed/moved worktree, repo-scoped
-    // clear) and writing the stale result back would resurrect an entry that should stay absent
-    // until the next real read.
-    if (sparseCheckoutStateCache.has(key)) {
+    // Identity guard against a race with an explicit invalidate/clear -- or a remove+recreate at
+    // the same path that repopulates the key with a fresh cold read -- while this was in flight.
+    // A `has()`/presence check can't tell "still mine" from "someone else's fresh value" sharing
+    // the key; comparing the map's current entry object to the one we started from can.
+    if (sparseCheckoutStateCache.get(key) === startingEntry) {
       sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
     }
-    if (isSparse !== previousIsSparse) {
+    if (isSparse !== startingEntry.isSparse) {
       changeListener?.(repoPath, worktreePath, isSparse)
     }
   } catch {
-    // Leave the stale entry in place (if not already replaced/invalidated); the next read retries.
-    const entry = sparseCheckoutStateCache.get(key)
-    if (entry?.revalidating) {
-      entry.revalidating = undefined
+    // Leave whatever's there in place; the next read past the window retries.
+    if (sparseCheckoutStateCache.get(key) === startingEntry) {
+      startingEntry.revalidating = undefined
     }
   }
 }
