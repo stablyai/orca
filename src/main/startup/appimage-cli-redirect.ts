@@ -148,10 +148,13 @@ export function getAppImageCliArgs(
   }
 
   const args = argv.slice(1)
+  const cliArgs = args.filter((arg) => !APPIMAGE_DESKTOP_FLAGS.has(arg))
+  if (env.ORCA_APPIMAGE_CLI_LAUNCH === '1') {
+    return cliArgs
+  }
   if (args.length === 0) {
     return null
   }
-  const cliArgs = args.filter((arg) => !APPIMAGE_DESKTOP_FLAGS.has(arg))
   if (cliArgs.some((arg) => HELP_FLAGS.has(arg))) {
     return cliArgs
   }
@@ -200,10 +203,12 @@ function flagName(arg: string): string {
 
 function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env }
-  childEnv.ORCA_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
-  childEnv.ORCA_NODE_REPL_EXTERNAL_MODULE = env.NODE_REPL_EXTERNAL_MODULE ?? ''
+  childEnv.ORCA_NODE_OPTIONS = env.ORCA_NODE_OPTIONS ?? env.NODE_OPTIONS ?? ''
+  childEnv.ORCA_NODE_REPL_EXTERNAL_MODULE =
+    env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? env.NODE_REPL_EXTERNAL_MODULE ?? ''
   childEnv.ELECTRON_RUN_AS_NODE = '1'
   delete childEnv.NODE_OPTIONS
   delete childEnv.NODE_REPL_EXTERNAL_MODULE
+  delete childEnv.ORCA_APPIMAGE_CLI_LAUNCH
   return childEnv
 }
