@@ -223,39 +223,20 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
 const CAPABILITIES = [
   {
     key: 'components.onboarding.integrations.capabilities.startWorkspaceFromIssue',
-    get value() {
-      return translate(
-        'components.onboarding.integrations.capabilities.startWorkspaceFromIssue',
-        'Start a workspace from any GitHub issue or pull request, prefilled with its title and context'
-      )
-    }
+    fallback:
+      'Start a workspace from any GitHub issue or pull request, prefilled with its title and context'
   },
   {
     key: 'components.onboarding.integrations.capabilities.browseIssues',
-    get value() {
-      return translate(
-        'components.onboarding.integrations.capabilities.browseIssues',
-        'Browse GitHub issues and pull requests in the Tasks view without leaving Orca'
-      )
-    }
+    fallback: 'Browse GitHub issues and pull requests in the Tasks view without leaving Orca'
   },
   {
     key: 'components.onboarding.integrations.capabilities.reviewStatus',
-    get value() {
-      return translate(
-        'components.onboarding.integrations.capabilities.reviewStatus',
-        'See issue state, review status, and CI checks on every worktree'
-      )
-    }
+    fallback: 'See issue state, review status, and CI checks on every worktree'
   },
   {
     key: 'components.onboarding.integrations.capabilities.managePullRequests',
-    get value() {
-      return translate(
-        'components.onboarding.integrations.capabilities.managePullRequests',
-        'Read, comment on, and merge pull requests without leaving Orca'
-      )
-    }
+    fallback: 'Read, comment on, and merge pull requests without leaving Orca'
   }
 ] as const
 
@@ -269,10 +250,10 @@ export function IntegrationsStep(): React.JSX.Element {
   return (
     <div className="space-y-6">
       <ul className="-mt-6 space-y-1.5 text-[14px] leading-relaxed text-muted-foreground">
-        {CAPABILITIES.map(({ key, value }) => (
+        {CAPABILITIES.map(({ key, fallback }) => (
           <li key={key} className="flex gap-2.5">
             <span className="mt-2 size-1 shrink-0 rounded-full bg-muted-foreground" aria-hidden />
-            <span>{value}</span>
+            <span>{translate(key, fallback)}</span>
           </li>
         ))}
       </ul>
