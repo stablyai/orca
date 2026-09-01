@@ -19,6 +19,14 @@ export const TERMINAL_IME_CHORD_REPLAY_WINDOW_MS = 1_000
  * `timeStamp` when it re-dispatches an event, so a replay is the press it repeats rather than a
  * new one. Measured on stock macOS with 2-Set Korean — both `ArrowLeft` keydowns of a single
  * `Option+←` over a preedit report the same `timeStamp`.
+ *
+ * That measurement is the premise this whole file rests on, and nothing here proves it. The tests
+ * below hand the absorb a matching `timeStamp` outright, so they pin what the credit does given
+ * the premise, not the premise itself; a recorded trace could not close that either, because a
+ * frozen fixture asserts the value written into it and would keep passing if Chromium stopped
+ * preserving the field. Only a keystroke on real hardware can fail on it, and the macOS IME specs
+ * that could carry such an assertion do not run in CI. Recorded here so the observation is not
+ * load-bearing and undocumented.
  */
 export type TerminalImeChordIdentity = Pick<KeyboardEvent, 'code' | 'timeStamp'>
 
