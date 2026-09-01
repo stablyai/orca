@@ -1,9 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from 'electron'
 
 const electron = vi.hoisted(() => {
   const windows: BrowserWindow[] = []
-  const getAllWebContents = vi.fn(() => [])
 
   class BrowserWindow {
     destroy = vi.fn()
@@ -30,14 +29,13 @@ const electron = vi.hoisted(() => {
     }
   }
 
-  return { BrowserWindow, getAllWebContents, windows }
+  return { BrowserWindow, windows }
 })
 
 const lease = vi.hoisted(() => ({ release: vi.fn() }))
 
 vi.mock('electron', () => ({
-  BrowserWindow: electron.BrowserWindow,
-  webContents: { getAllWebContents: electron.getAllWebContents }
+  BrowserWindow: electron.BrowserWindow
 }))
 vi.mock('./electron-debugger-lease', () => ({
   acquireElectronDebugger: vi.fn(() => lease)
@@ -52,8 +50,11 @@ function targetSession(): Session {
 describe('cookie clear debugger lifecycle', () => {
   beforeEach(() => {
     electron.windows.length = 0
-    electron.getAllWebContents.mockReturnValue([])
     lease.release.mockClear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('memoizes a pending hidden-window attachment across concurrent callers', async () => {
@@ -97,5 +98,37 @@ describe('cookie clear debugger lifecycle', () => {
 
     await expect(restore).rejects.toThrow(/restore/i)
     expect(sendCommand.mock.calls.map(([, params]) => params?.name)).toEqual(['first', 'second'])
+  })
+
+  it('classifies a retired command after a bounded settlement grace', async () => {
+    vi.useFakeTimers()
+    let resolveCommand!: (value: unknown) => void
+    const pendingCommand = new Promise<unknown>((resolve) => {
+      resolveCommand = resolve
+    })
+    const store = openCookieClearStore(targetSession())
+    const write = store.writeCookieIdentity({
+      url: 'https://late.example/',
+      name: 'late',
+      value: 'value',
+      sameSite: 'unspecified'
+    })
+    const window = electron.windows[0]
+    window.webContents.debugger.sendCommand.mockReturnValueOnce(pendingCommand)
+    window.resolveLoad()
+    const timeoutExpectation = expect(write).rejects.toMatchObject({
+      name: 'CookieDebuggerCommandTimeoutError',
+      message: 'Cookie debugger command Network.setCookie timed out after 10000ms'
+    })
+    await vi.advanceTimersByTimeAsync(11_000)
+
+    expect(lease.release).toHaveBeenCalledOnce()
+    expect(window.destroy).toHaveBeenCalledOnce()
+    await timeoutExpectation
+
+    resolveCommand({ success: true })
+    await Promise.resolve()
+    store.dispose()
+    expect(lease.release).toHaveBeenCalledOnce()
   })
 })

@@ -1,5 +1,13 @@
-import { BrowserWindow, webContents, type Cookie, type Session } from 'electron'
-import { acquireElectronDebugger } from './electron-debugger-lease'
+import type { Cookie, Session } from 'electron'
+import { sendCookieDebuggerCommand } from './browser-cookie-debugger-command'
+import {
+  leaseCookieDebuggerSession,
+  type CookieDebuggerSession
+} from './browser-cookie-debugger-session'
+import {
+  assertCookieMutationsAvailable,
+  quarantineCookieMutations
+} from './browser-cookie-mutation-quarantine'
 import { normalizeCookieDomain } from './browser-cookie-import-policy'
 import type {
   CookieClearIdentity,
@@ -27,21 +35,6 @@ type CdpCookie = {
   sameSite?: string
   partitionKey?: CdpCookiePartitionKey | null
   partitionKeyOpaque?: boolean
-}
-
-type CookieClearDebugger = {
-  sendCommand: (method: string, params?: Record<string, unknown>) => Promise<unknown>
-}
-
-type CookieClearSession = {
-  debugger: CookieClearDebugger
-  dispose: () => void
-}
-
-function findPartitionWebContents(targetSession: Session) {
-  return webContents
-    .getAllWebContents()
-    .find((contents) => !contents.isDestroyed() && contents.session === targetSession)
 }
 
 function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | undefined {
@@ -127,55 +120,6 @@ function identityFromCdpCookie(url: string, cdpCookie: CdpCookie): CookieClearId
   }
 }
 
-function openHiddenCookieWindow(targetSession: Session): BrowserWindow {
-  return new BrowserWindow({
-    show: false,
-    webPreferences: {
-      session: targetSession,
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  })
-}
-
-async function leaseHiddenCookieDebugger(targetSession: Session): Promise<CookieClearSession> {
-  const window = openHiddenCookieWindow(targetSession)
-  try {
-    await window.loadURL('data:text/html,<!doctype html><title>cookie-clear</title>')
-    const contents = window.webContents
-    if (contents.isDestroyed()) {
-      throw new Error('Could not attach to the cookie session for an atomic clear')
-    }
-    const lease = acquireElectronDebugger(contents)
-    return {
-      debugger: contents.debugger,
-      dispose: () => {
-        lease.release()
-        window.destroy()
-      }
-    }
-  } catch (error) {
-    window.destroy()
-    throw error
-  }
-}
-
-async function attachCookieClearSession(targetSession: Session): Promise<CookieClearSession> {
-  const existing = findPartitionWebContents(targetSession)
-  if (!existing) {
-    return leaseHiddenCookieDebugger(targetSession)
-  }
-  try {
-    const lease = acquireElectronDebugger(existing)
-    return { debugger: existing.debugger, dispose: () => lease.release() }
-  } catch {
-    // Why (STA-4300): every cookie write now needs this channel, and attaching to a live tab fails
-    // outright when DevTools already owns its debugger. A hidden window of our own always can.
-    return leaseHiddenCookieDebugger(targetSession)
-  }
-}
-
 export function cookieClearIdentitiesFromCdp(
   cookies: readonly { cookie: Cookie; url: string }[],
   cdpCookies: readonly CdpCookie[]
@@ -246,22 +190,19 @@ function cdpSetCookieSucceeded(value: unknown): boolean {
 }
 
 async function snapshotClearIdentitiesFromCdp(
-  cookieDebugger: CookieClearDebugger,
+  sendCommand: (method: string, params?: Record<string, unknown>) => Promise<unknown>,
   cookies: readonly { cookie: Cookie; url: string }[]
 ): Promise<CookieClearIdentity[]> {
-  const result = await cookieDebugger.sendCommand('Network.getAllCookies')
+  const result = await sendCommand('Network.getAllCookies')
   return cookieClearIdentitiesFromCdp(cookies, cdpCookiesFromCommand(result))
 }
 
 async function writeIdentityWithCdp(
-  cookieDebugger: CookieClearDebugger,
+  sendCommand: (method: string, params?: Record<string, unknown>) => Promise<unknown>,
   identity: CookieClearIdentity,
   failureLabel: string
 ): Promise<void> {
-  const result = await cookieDebugger.sendCommand(
-    'Network.setCookie',
-    cdpSetCookieParamsFromIdentity(identity)
-  )
+  const result = await sendCommand('Network.setCookie', cdpSetCookieParamsFromIdentity(identity))
   // Why: Network.setCookie reports rejection in the reply rather than throwing, so an unchecked
   // call reads as a successful write of a cookie that was never stored.
   if (!cdpSetCookieSucceeded(result)) {
@@ -272,9 +213,16 @@ async function writeIdentityWithCdp(
 export function openCookieClearStore(
   targetSession: Session
 ): CookieClearStore & CookieImportWriteStore & { dispose: () => void } {
-  let attached: CookieClearSession | null = null
-  let pendingAttach: Promise<CookieClearSession> | null = null
+  let attached: CookieDebuggerSession | null = null
+  let pendingAttach: Promise<CookieDebuggerSession> | null = null
   let disposed = false
+  const retire = (session: CookieDebuggerSession) => {
+    quarantineCookieMutations(targetSession)
+    if (attached === session) {
+      attached = null
+    }
+    session.dispose()
+  }
   const attach = async () => {
     if (disposed) {
       throw new Error('Cookie clear store was disposed')
@@ -285,7 +233,7 @@ export function openCookieClearStore(
     if (pendingAttach) {
       return pendingAttach
     }
-    const pending = attachCookieClearSession(targetSession).then((session) => {
+    const pending = leaseCookieDebuggerSession(targetSession).then((session) => {
       if (disposed) {
         session.dispose()
         throw new Error('Cookie clear store was disposed during debugger attachment')
@@ -302,19 +250,27 @@ export function openCookieClearStore(
       }
     }
   }
+  const sendCommand = async (method: string, params?: Record<string, unknown>) => {
+    assertCookieMutationsAvailable(targetSession)
+    const session = await attach()
+    return sendCookieDebuggerCommand(session, method, params, () => retire(session))
+  }
   return {
     get: (filter) => targetSession.cookies.get(filter),
-    remove: (url, name) => targetSession.cookies.remove(url, name),
+    remove: (url, name) => {
+      assertCookieMutationsAvailable(targetSession)
+      return targetSession.cookies.remove(url, name)
+    },
     snapshotClearIdentities: async (cookies) =>
-      snapshotClearIdentitiesFromCdp((await attach()).debugger, cookies),
+      snapshotClearIdentitiesFromCdp(sendCommand, cookies),
     restoreClearIdentities: async (identities) => {
-      const cookieDebugger = (await attach()).debugger
+      assertCookieMutationsAvailable(targetSession)
+      await attach()
       await restoreEveryCookieIdentity(identities, (identity) =>
-        writeIdentityWithCdp(cookieDebugger, identity, 'restore')
+        writeIdentityWithCdp(sendCommand, identity, 'restore')
       )
     },
-    writeCookieIdentity: async (identity) =>
-      writeIdentityWithCdp((await attach()).debugger, identity, 'import'),
+    writeCookieIdentity: async (identity) => writeIdentityWithCdp(sendCommand, identity, 'import'),
     dispose: () => {
       disposed = true
       pendingAttach = null

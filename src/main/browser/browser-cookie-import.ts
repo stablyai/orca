@@ -96,6 +96,11 @@ import {
 } from './browser-cookie-import-clear'
 import { openCookieClearStore } from './browser-cookie-clear-store'
 import {
+  areCookieMutationsQuarantined,
+  COOKIE_MUTATION_QUARANTINED_REASON,
+  isCookieMutationQuarantinedError
+} from './browser-cookie-mutation-quarantine'
+import {
   readChromiumRowPartition,
   readFirefoxRowPartition,
   readJsonCookiePartition,
@@ -680,9 +685,10 @@ async function importValidatedCookies(
     // remove cookies the newer import already wrote and reported as imported. Taken AFTER the
     // store is opened on purpose — openWriteStore only builds the adapter, it attaches no
     // debugger, so holding it while queued cannot deadlock against the holder.
-    const releaseMutationLock = await acquireCookieMutationLock(target.mutationLockOwner)
+    let releaseMutationLock: (() => void) | null = null
     let replaced: ReplacedImportedDomainCookies | null = null
     try {
+      releaseMutationLock = await acquireCookieMutationLock(target.mutationLockOwner)
       if (mode === 'replace-imported-domains') {
         try {
           // Why (STA-4300 I2 / §2b): the removal scope is the write set. Filtering per exact
@@ -740,11 +746,16 @@ async function importValidatedCookies(
           reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
         }
       }
+    } catch (error) {
+      if (isCookieMutationQuarantinedError(error)) {
+        return { ok: false, reason: COOKIE_MUTATION_QUARANTINED_REASON }
+      }
+      throw error
     } finally {
       try {
         cookieClearStore.dispose()
       } finally {
-        releaseMutationLock()
+        releaseMutationLock?.()
       }
     }
   }
@@ -1607,7 +1618,7 @@ export async function importCookiesFromBrowser(
   // clear/write lock was reached. Hold the per-partition lock from the first flush through staging,
   // live replacement, pending-image bookkeeping, and cleanup so an older image cannot race a newer
   // import on the same partition.
-  return withCookieMutationLock(targetSession, async () => {
+  return withCookieMutationLock<BrowserCookieImportResult>(targetSession, async () => {
     await targetSession.cookies.flushStore()
 
     // Why (STA-4300): ask the Session where its own storage lives instead of rebuilding the path from
@@ -2128,6 +2139,12 @@ export async function importCookiesFromBrowser(
         cookieClearStore.dispose()
       }
 
+      if (areCookieMutationsQuarantined(targetSession)) {
+        browserSessionRegistry.clearPendingCookieImport(targetPartition)
+        discardStagingFile()
+        return { ok: false, reason: COOKIE_MUTATION_QUARANTINED_REASON }
+      }
+
       diag(
         `  memory load: ${memoryLoaded} OK, ${memoryFailed} failed, ${partitionSkipped} partition-unreadable`
       )
@@ -2187,18 +2204,14 @@ export async function importCookiesFromBrowser(
       } catch {
         /* may already be closed */
       }
-      try {
-        stagingDb?.close()
-      } catch {
-        /* may already be closed */
-      }
+      closeStagingDb()
       // Why: drop the staging DB so a stale staged import isn't applied on the next cold start.
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* may not exist yet */
-      }
+      discardStagingFile()
       diag(`  SQLite import failed: ${String(err)}`)
+      if (areCookieMutationsQuarantined(targetSession)) {
+        browserSessionRegistry.clearPendingCookieImport(targetPartition)
+        return { ok: false, reason: COOKIE_MUTATION_QUARANTINED_REASON }
+      }
       return {
         ok: false,
         reason: reasonWithDiagLog(
@@ -2212,5 +2225,10 @@ export async function importCookiesFromBrowser(
         diag(`  Chromium snapshot cleanup failed: ${String(err)}`)
       }
     }
+  }).catch((error: unknown) => {
+    if (isCookieMutationQuarantinedError(error)) {
+      return { ok: false as const, reason: COOKIE_MUTATION_QUARANTINED_REASON }
+    }
+    throw error
   })
 }

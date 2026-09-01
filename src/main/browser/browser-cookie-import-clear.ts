@@ -1,5 +1,6 @@
 import type { Cookie, Cookies } from 'electron'
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
+import { assertCookieMutationsAvailable } from './browser-cookie-mutation-quarantine'
 import type { ImportedDomainScope } from './browser-cookie-import-policy'
 import {
   cookieRemovalUrl,
@@ -86,6 +87,7 @@ export function identitiesFromClearCookies(
  * try/finally take it directly; callers with a single callback use the wrapper below.
  */
 export async function acquireCookieMutationLock(owner: object): Promise<() => void> {
+  assertCookieMutationsAvailable(owner)
   const previous = mutationLocks.get(owner) ?? Promise.resolve()
   let release!: () => void
   const current = new Promise<void>((resolve) => {
@@ -96,6 +98,12 @@ export async function acquireCookieMutationLock(owner: object): Promise<() => vo
     previous.then(() => current)
   )
   await previous
+  try {
+    assertCookieMutationsAvailable(owner)
+  } catch (error) {
+    release()
+    throw error
+  }
   return release
 }
 
