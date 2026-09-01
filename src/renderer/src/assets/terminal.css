@@ -26,7 +26,6 @@
 }
 
 .pane-manager-root .xterm {
-  height: 100%;
   width: 100%;
 }
 
@@ -502,6 +501,14 @@
    so Ghostty-imported window-padding-x/y can be applied without inline styles.
    The fallback 4px preserves the legacy default. */
 .xterm-container {
+  /* Why: FitAddon floors rows to whole cells, so up to one cell of the container
+     stays unused. xterm anchors the grid at the top and that slack lands under
+     the last row (the prompt); flex-end puts it above row one instead. `.xterm`
+     sizes to `.xterm-screen` (rows x cellHeight) while FitAddon measures this
+     container, so the row count is unaffected. */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   box-sizing: border-box;
   position: relative;
   width: calc(100% - var(--pane-padding-x, 4px));

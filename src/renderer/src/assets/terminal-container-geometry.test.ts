@@ -15,4 +15,10 @@ describe('terminal container geometry', () => {
       /\.pane-link-tooltip\s*{[^}]*height:\s*var\(--orca-terminal-link-tooltip-height\);/s
     )
   })
+
+  it('pins the terminal grid to the container bottom so fit slack sits above row one', () => {
+    // Unprefixed: floating-workspace terminals mount outside .pane-manager-root.
+    expect(terminalCss).toMatch(/^\.xterm-container\s*{[^}]*justify-content:\s*flex-end;/ms)
+    expect(terminalCss).not.toMatch(/\.pane-manager-root \.xterm\s*{[^}]*height:\s*100%;/s)
+  })
 })
