@@ -14810,6 +14810,19 @@
           "44dc5e60a6": "Send notes",
           "433928cd9f": "Send {{value0}} to an agent"
         },
+        "PackageJsonDependencyHoverMarkdown": {
+          "d3f501d912": "Installed",
+          "5107bd60a9": "Not installed",
+          "20c64d5223": "Latest",
+          "029b0fdf8a": "Homepage",
+          "45cf3d1be0": "Repository",
+          "c3f3a43d24": "Major update available",
+          "fe70f0740d": "Minor update available",
+          "7776f659ae": "Patch update available",
+          "5b15fa0805": "Package metadata lookups are disabled in Settings.",
+          "45dba0fe67": "Package not found on the npm registry.",
+          "b9c4f13783": "Could not complete the lookup. Check your connection and try again."
+        },
         "PdfFind": {
           "cd65b1d6b0": "Close",
           "eeba2547a1": "Next match",

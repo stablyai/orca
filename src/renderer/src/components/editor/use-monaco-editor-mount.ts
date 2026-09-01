@@ -9,6 +9,7 @@ import {
 } from './monaco-programmatic-sync'
 import { createMarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
 import { ensureMarkdownDocCompletionProvider } from './monaco-markdown-doc-completions'
+import { ensurePackageJsonDependencyHoverProvider } from './monaco-package-json-dependency-hover'
 import { clampMonacoAutoHeight } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
@@ -96,6 +97,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       )
       ensureMarkdownDocCompletionProvider(monaco)
       updateMarkdownCompletionDocuments()
+      ensurePackageJsonDependencyHoverProvider(monaco)
 
       // Why: see contentRef — reconcile the retained model to the current prop before user interaction (surfaces edits made while unmounted).
       beginProgrammaticContentSync(filePath)

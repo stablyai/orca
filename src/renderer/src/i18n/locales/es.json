@@ -13007,6 +13007,19 @@
           "44dc5e60a6": "Enviar notas",
           "433928cd9f": "Enviar {{value0}} a un agente"
         },
+        "PackageJsonDependencyHoverMarkdown": {
+          "d3f501d912": "Instalado",
+          "5107bd60a9": "No instalado",
+          "20c64d5223": "Última",
+          "029b0fdf8a": "Sitio web",
+          "45cf3d1be0": "Repositorio",
+          "c3f3a43d24": "Actualización mayor disponible",
+          "fe70f0740d": "Actualización menor disponible",
+          "7776f659ae": "Actualización de parche disponible",
+          "5b15fa0805": "Las búsquedas de metadatos de paquetes están deshabilitadas en Configuración.",
+          "45dba0fe67": "Paquete no encontrado en el registro de npm.",
+          "b9c4f13783": "No se pudo completar la búsqueda. Comprueba tu conexión e inténtalo de nuevo."
+        },
         "PdfFind": {
           "cd65b1d6b0": "Cerrar",
           "eeba2547a1": "Coincidencia siguiente",
