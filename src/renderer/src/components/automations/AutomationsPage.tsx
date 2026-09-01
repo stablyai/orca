@@ -2580,7 +2580,9 @@ export default function AutomationsPage(): React.JSX.Element {
         className="flex shrink-0 items-center px-3 pb-3 md:px-5"
         style={
           {
-            paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))'
+            paddingRight:
+              'max(0.75rem, var(--window-controls-right, var(--window-controls-width, 0px)))',
+            paddingLeft: 'max(0.75rem, var(--window-controls-left, 0px))'
           } as React.CSSProperties
         }
       >

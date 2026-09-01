@@ -858,17 +858,25 @@ html.native-shell .app-layout {
 }
 
 /* Why: desktop custom title bar buttons replace hidden native OS chrome.
-   Anchored to the top-right corner of the viewport so they overlay any layout
-   mode (full titlebar, workspace split, etc.) and stay accessible at all times. */
+   Anchored to the top corner of the viewport so they overlay any layout
+   mode (full titlebar, workspace split, etc.) and stay accessible at all times.
+   Default is the right edge (Windows/Linux convention); `.window-controls-side-left`
+   flips to the left for the Linux preference. */
 .window-controls {
   position: fixed;
   top: 0;
   right: 0;
+  left: auto;
   z-index: 9999;
   display: flex;
   flex-direction: row;
   height: 36px;
   -webkit-app-region: no-drag;
+}
+
+.window-controls-side-left {
+  left: 0;
+  right: auto;
 }
 
 .window-controls-btn {
@@ -898,10 +906,15 @@ html.native-shell .app-layout {
 
 /* Why: flex spacer that reserves the width occupied by the three window-control
    buttons (3 × 46px) so that the preceding titlebar content is not obscured by
-   the fixed-position overlay when custom desktop chrome is active. */
+   the fixed-position overlay when custom desktop chrome is active on that edge. */
 .window-controls-titlebar-spacer {
   flex-shrink: 0;
-  width: var(--window-controls-width, 0px);
+  width: var(--window-controls-right, var(--window-controls-width, 0px));
+}
+
+.window-controls-titlebar-spacer-left {
+  flex-shrink: 0;
+  width: var(--window-controls-left, 0px);
 }
 
 .right-sidebar-header-drag {
@@ -919,6 +932,7 @@ html.native-shell .app-layout {
 :root[data-regular-terminal-input-focused] .titlebar,
 :root[data-regular-terminal-input-focused] .titlebar-left,
 :root[data-regular-terminal-input-focused] .window-controls-titlebar-spacer,
+:root[data-regular-terminal-input-focused] .window-controls-titlebar-spacer-left,
 :root[data-regular-terminal-input-focused] .right-sidebar-header-drag,
 :root[data-regular-terminal-input-focused] [data-terminal-focus-release-surface='true'] {
   -webkit-app-region: no-drag;
@@ -929,29 +943,34 @@ html.native-shell .app-layout {
 }
 
 /* Why: the right sidebar header extends to the window's right edge. When custom
-   desktop chrome is active, the fixed-position window-controls overlay sits on
-   top of that edge, so we add matching padding-right so the header's close
+   desktop chrome is active on the right, the fixed-position window-controls overlay
+   sits on top of that edge, so we add matching padding-right so the header's close
    button (pr-1) isn't hidden behind the overlay. */
 .right-sidebar-header-inset {
-  padding-right: var(--window-controls-width, 0px);
+  padding-right: var(--window-controls-right, var(--window-controls-width, 0px));
 }
 
 /* Why: in side-bar activity-bar mode the icon strip sits flush against the
    right window edge. The fixed-position window-controls overlay (height 36px,
-   width 138px) covers the top-right corner when custom desktop chrome is
-   active, so the topmost sidebar icons are unreachable without this offset. */
+   width 138px) covers the top-right corner when custom chrome is on the right,
+   so the topmost sidebar icons are unreachable without this offset. Left-side
+   controls leave the right edge clear, so the var is 0px then. */
 .side-activity-bar-windows-inset {
-  padding-top: var(--window-controls-height, 0px);
+  padding-top: var(--window-controls-right-edge-height, var(--window-controls-height, 0px));
 }
 
 /* Why: in side activity-bar mode the panel header does NOT extend to the window
    edge — the 40px icon strip sits to its right. But the window-controls overlay
-   is 138px wide when custom desktop chrome is active, so it still overlaps the
-   panel by (138 - 40) = 98px. Apply exactly that remainder as padding-right so
-   the close button clears the minimize button. max(0px, ...) keeps this a no-op
-   when the var is 0px and the subtraction would otherwise go negative. */
+   is 138px wide when custom desktop chrome is active on the right, so it still
+   overlaps the panel by (138 - 40) = 98px. Apply exactly that remainder as
+   padding-right so the close button clears the minimize button. max(0px, ...)
+   keeps this a no-op when the var is 0px and the subtraction would otherwise go
+   negative. */
 .right-sidebar-header-side-inset {
-  padding-right: max(0px, calc(var(--window-controls-width, 0px) - 40px));
+  padding-right: max(
+    0px,
+    calc(var(--window-controls-right, var(--window-controls-width, 0px)) - 40px)
+  );
 }
 
 .sidebar-toggle {

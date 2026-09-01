@@ -15,6 +15,7 @@ import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeWindowControlsPosition } from '../../../shared/window-controls-position'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -67,6 +68,11 @@ export function updateSettings(
   }
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
+  }
+  if ('windowControlsPosition' in updates) {
+    sanitizedUpdates.windowControlsPosition = normalizeWindowControlsPosition(
+      updates.windowControlsPosition
+    )
   }
   // Why: the artifact publish capability must be an exact boolean on disk; no truthy value grants it.
   if ('artifactSharingEnabled' in updates) {

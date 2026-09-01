@@ -184,6 +184,15 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch('status item', macEntries)).toBe(true)
   })
 
+  it('includes the Linux window-controls position entry only when that control is shown', () => {
+    const linuxEntries = getAppearancePaneSearchEntries({ showWindowControlsPosition: true })
+    const otherEntries = getAppearancePaneSearchEntries({ showWindowControlsPosition: false })
+
+    expect(linuxEntries.some((entry) => entry.title === 'Window Controls Position')).toBe(true)
+    expect(otherEntries.some((entry) => entry.title === 'Window Controls Position')).toBe(false)
+    expect(matchesSettingsSearch('linux', linuxEntries)).toBe(true)
+  })
+
   it('keeps sidebar shortcut restore settings in the Appearance search index', () => {
     const automationsEntry = getSidebarEntries().find(
       (entry) => entry.title === 'Show Automations Button'

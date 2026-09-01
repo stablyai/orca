@@ -36,6 +36,7 @@ import type {
   TaskViewPresetId
 } from './ui-chrome-types'
 import type { SetupScriptLaunchMode } from './worktree/launch-types'
+import type { WindowControlsPosition } from './window-controls-position'
 import type {
   CustomWorktreeVisibilitySource,
   ExternalWorktreeVisibility,
@@ -222,6 +223,11 @@ export type GlobalSettings = {
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
+  /**
+   * Where custom min/max/close buttons sit on Linux. Windows stays right; macOS
+   * keeps native traffic lights. Default right preserves the historical layout.
+   */
+  windowControlsPosition: WindowControlsPosition
   /** Hides the Tasks sidebar button (also removes it from keyboard navigation). */
   showTasksButton: boolean
   /** Only toggles the sidebar shortcut; Automations stay reachable from Settings/View menu. */

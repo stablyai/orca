@@ -23,6 +23,7 @@ import {
   getThemeEntries,
   getTitlebarEntries,
   getTypographyEntries,
+  getWindowControlsPositionEntries,
   getZoomEntries
 } from './appearance-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
@@ -84,6 +85,7 @@ export function AppearancePane({
   // browser web client has no local tray to control.
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
+  const isDesktopLinux = getRendererAppPlatform() === 'linux' && !isWebClient
 
   // Why: Terminal / Window settings were too easy to miss when only Interface
   // started open; keep sections independently collapsible but expanded by default.
@@ -142,6 +144,7 @@ export function AppearancePane({
     ...getTypographyEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTitlebarEntries(),
+    ...(isDesktopLinux ? getWindowControlsPositionEntries() : []),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
@@ -224,6 +227,7 @@ export function AppearancePane({
             onRequestFontSuggestions={onRequestFontSuggestions}
             isDesktopMac={isDesktopMac}
             isDesktopWindows={isDesktopWindows}
+            isDesktopLinux={isDesktopLinux}
             forceVisiblePrimary={interfaceLabelMatches}
           />
         </AppearanceSection>

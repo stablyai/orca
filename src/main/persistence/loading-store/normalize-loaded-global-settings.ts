@@ -7,6 +7,7 @@ import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeWindowControlsPosition } from '../../../shared/window-controls-position'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -109,6 +110,9 @@ export function normalizeLoadedGlobalSettings(
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
     // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
+    windowControlsPosition: normalizeWindowControlsPosition(
+      parsed.settings?.windowControlsPosition
+    ),
     uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
     defaultTaskSource: taskProviderSettings.defaultTaskSource,
     visibleTaskProviders: taskProviderSettings.visibleTaskProviders,

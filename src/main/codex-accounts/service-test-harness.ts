@@ -90,6 +90,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     sourceControlGroupOrder: 'changes-first',
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
+    windowControlsPosition: 'right',
     showTasksButton: true,
     floatingTerminalEnabled: false,
     floatingTerminalCwd: '~',

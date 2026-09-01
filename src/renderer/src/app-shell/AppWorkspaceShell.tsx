@@ -168,8 +168,8 @@ export function AppWorkspaceShell(props: {
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
                       {
-                        // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
-                        right: 'var(--window-controls-width)',
+                        // Why: --window-controls-right keeps the toggle clear of the fixed right-edge window-controls overlay (138px on custom chrome, 0px when controls are left or absent); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
+                        right: 'var(--window-controls-right, var(--window-controls-width))',
                         WebkitAppRegion: 'no-drag'
                       } as React.CSSProperties
                     }

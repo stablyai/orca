@@ -5,7 +5,7 @@ import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { ActivityTitlebarControls } from '../components/activity/ActivityTitlebarControls'
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
-import { hasCustomTitleBar } from './app-window-chrome'
+import { hasCustomTitleBar, resolveCustomWindowControlsSide } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 
 export function RightSidebarToggle(): React.JSX.Element {
@@ -33,6 +33,9 @@ export function RightSidebarToggle(): React.JSX.Element {
 
 /** The titlebar's center/right strip: the tab-strip portal slot and the trailing chrome buttons. */
 export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
+  const windowControlsSide = resolveCustomWindowControlsSide(
+    useAppStore((s) => s.settings?.windowControlsPosition)
+  )
   const handleToggleExpand = (): void => {
     if (!layout.effectiveActiveTabId) {
       return
@@ -73,8 +76,10 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
       )}
       {/* Why: the open right sidebar's header renders its own close button, so hide this duplicate. */}
       {layout.showRightSidebarControls && !layout.rightSidebarOpen ? <RightSidebarToggle /> : null}
-      {/* Why: reserve space so the Windows/Linux window-controls overlay doesn't obscure content. */}
-      {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
+      {/* Why: reserve space so the right-edge window-controls overlay doesn't obscure content. */}
+      {hasCustomTitleBar && windowControlsSide === 'right' ? (
+        <div className="window-controls-titlebar-spacer" />
+      ) : null}
     </>
   )
 }

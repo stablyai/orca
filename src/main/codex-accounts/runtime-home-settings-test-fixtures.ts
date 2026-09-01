@@ -69,6 +69,7 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
     sourceControlGroupOrder: 'changes-first',
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
+    windowControlsPosition: 'right',
     showTasksButton: true,
     floatingTerminalEnabled: false,
     floatingTerminalCwd: '~',
