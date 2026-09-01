@@ -2518,6 +2518,30 @@
                 "7c302f8174": "Untitled"
               }
             }
+          },
+          "ProjectRoadmap": {
+            "be52f7b6db": "This roadmap view has no date or iteration field to place items on, so Orca is listing them instead.",
+            "6405e036e0": "Month",
+            "f2b1cabef7": "Quarter",
+            "b6afc6fe45": "Year",
+            "343888b143": "Placed by {{value0}}",
+            "6a088a5da1": "{{value0}} without dates",
+            "86eebd6020": "Today",
+            "0bb1c1bc07": "Timeline zoom",
+            "e304235879": "Item",
+            "e077c79083": "No dates"
+          },
+          "ProjectRoadmapBar": {
+            "cd68ccc17a": "{{value0}} — {{value1}}",
+            "7d1220d979": "Restricted item"
+          },
+          "ProjectPickerPanels": {
+            "04ec212ccb": "Roadmap",
+            "9fe1ac868c": "Unsupported"
+          },
+          "ProjectViewStates": {
+            "ac83c45672": "Switch to a Table or Roadmap view to work with this project in Orca.",
+            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet."
           }
         },
         "GitHubMarkdownComposer": {
