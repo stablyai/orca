@@ -13,7 +13,7 @@ export async function forceStopRelayForTarget(
     `sock_name=${escapedSockName}`,
     'base="${HOME}/.orca-remote"',
     'if [ -d "$base" ]; then',
-    '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name"; do',
+    '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name" "$base"/*-"$sock_name" /tmp/orca-*-"$sock_name"; do',
     '    [ -S "$sock" ] || continue',
     '    pid=""',
     // Why: lsof ORs selectors by default; -a prevents reset from targeting
