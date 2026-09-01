@@ -30,6 +30,7 @@ import type {
   BranchPrefixStrategy,
   FloatingTerminalTriggerLocation,
   LeftSidebarAppearanceMode,
+  WorkspaceChromeAppearanceMode,
   OpenInApplication,
   SourceControlGroupOrder,
   SourceControlViewMode,
@@ -78,6 +79,8 @@ export type GlobalSettings = {
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
+  /** Lets the tab strip and status bar follow the terminal theme instead of the app theme. */
+  workspaceChromeAppearanceMode?: WorkspaceChromeAppearanceMode
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string

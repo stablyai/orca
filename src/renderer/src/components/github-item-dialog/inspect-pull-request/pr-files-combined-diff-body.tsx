@@ -12,6 +12,7 @@ import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compar
 import type { DiffSectionItemProps } from '@/components/editor/diff-section-item-props'
 import { PRFilesCombinedDiffToolbar } from './pr-files-combined-diff-toolbar'
 
+/** Toolbar plus combined diff sections for a pull request’s files inside the inspect dialog. */
 export function PRFilesCombinedDiffBody({
   files,
   repoPath,
@@ -31,7 +32,7 @@ export function PRFilesCombinedDiffBody({
   scrollContainerRef,
   virtualizer,
   sections,
-  isDark,
+  monacoTheme,
   settings,
   sectionHeights,
   inlineReviewComments,
@@ -65,7 +66,7 @@ export function PRFilesCombinedDiffBody({
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
   sections: DiffSection[]
-  isDark: boolean
+  monacoTheme: string
   settings: DiffSectionItemProps['settings']
   sectionHeights: Record<number, number>
   inlineReviewComments: DecoratedDiffComment[]
@@ -127,7 +128,7 @@ export function PRFilesCombinedDiffBody({
                     index={virtualItem.index}
                     isBranchMode={false}
                     sideBySide={sideBySide}
-                    isDark={isDark}
+                    monacoTheme={monacoTheme}
                     settings={settings}
                     sectionHeight={sectionHeights[virtualItem.index]}
                     worktreeId={`github-pr:${repoId}:${prNumber}`}

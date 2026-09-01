@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react'
-import { useAppStore } from '@/store'
+import { useEditorSurfaceAppearance } from './use-editor-surface-appearance'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import MermaidBlock from './MermaidBlock'
 
@@ -8,19 +8,16 @@ type MermaidViewerProps = {
   filePath: string
 }
 
-// Why: MermaidViewer is the full-file counterpart to MermaidBlock (which
-// renders fenced mermaid blocks inside markdown). When a user opens a .mmd
-// or .mermaid file in diagram mode, the entire file content is the diagram
-// source — no markdown wrapper, no frontmatter, just mermaid syntax.
+/**
+ * Full-file Mermaid diagram view, the counterpart to MermaidBlock (fenced blocks inside markdown).
+ * Why: a .mmd / .mermaid file in diagram mode is pure diagram source — no markdown wrapper, no frontmatter.
+ */
 export default function MermaidViewer({
   content,
   filePath
 }: MermaidViewerProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
-  const settings = useAppStore((s) => s.settings)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const { isDark } = useEditorSurfaceAppearance()
 
   // Why: Each viewing mode (source vs diagram) produces different DOM heights.
   // Mode-scoped keys prevent restoring a source-mode scroll position in diagram

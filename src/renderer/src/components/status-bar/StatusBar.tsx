@@ -65,6 +65,8 @@ import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { resolveStatusBarUsageTemplate } from '../../../../shared/status-bar-usage-format'
+import { buildUsageFormatValues, renderUsageFormatTemplate } from './usage-format-template'
 import {
   markLiveCodexSessionsForRestart,
   resolveCodexRestartPromptAccountLabel
@@ -1172,6 +1174,7 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
+/** Full per-window usage text for one provider; a user template, when set, replaces the built-in layout. */
 function VerboseProviderUsage({
   p,
   display
@@ -1179,6 +1182,22 @@ function VerboseProviderUsage({
   p: ProviderRateLimits
   display: UsagePercentageDisplay
 }): React.JSX.Element {
+  const usageFormat = useAppStore((s) => s.statusBarUsageFormat)
+  const template = resolveStatusBarUsageTemplate(usageFormat, p.provider)
+  // Why: the template can show reset countdowns, so tick with them like the account switcher does.
+  const now = useResetCountdownClock([
+    p.session?.resetsAt,
+    p.weekly?.resetsAt,
+    p.fableWeekly?.resetsAt,
+    p.monthly?.resetsAt
+  ])
+  if (template !== null) {
+    return (
+      <span className="whitespace-pre tabular-nums">
+        {renderUsageFormatTemplate(template, buildUsageFormatValues(p, { display, now }))}
+      </span>
+    )
+  }
   if (p.buckets && p.buckets.length > 0) {
     const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
     return (
@@ -1248,6 +1267,7 @@ function VerboseProviderUsage({
   )
 }
 
+/** Status-bar usage readout for one provider; a user template overrides the built-in text in both usage modes. */
 export function ProviderSegment({
   p,
   compact,
@@ -1261,6 +1281,9 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
+  const usageFormat = useAppStore((s) => s.statusBarUsageFormat)
+  // Why: a user template replaces the built-in text in both usage modes, so compact mode can't silently drop it.
+  const hasTemplate = resolveStatusBarUsageTemplate(usageFormat, provider) !== null
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -1310,9 +1333,9 @@ export function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {mode === 'verbose' ? (
+      {mode === 'verbose' || hasTemplate ? (
         <>
-          {tightest && !compact ? (
+          {mode === 'verbose' && tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
           <VerboseProviderUsage p={p} display={display} />

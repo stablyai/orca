@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
     toggleStatusBarItem: vi.fn(),
     usagePercentageDisplay: 'used' as 'used' | 'remaining',
     setUsagePercentageDisplay: vi.fn(),
+    statusBarUsageFormat: { template: '' },
+    setStatusBarUsageFormat: vi.fn(),
     recordFeatureInteraction: vi.fn(),
     setWorktreeCardMode: vi.fn(),
     appearanceAccordionDeepLink: null as 'interface' | 'terminal' | 'window' | null,

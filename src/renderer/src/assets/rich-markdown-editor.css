@@ -1016,121 +1016,121 @@
    inside the <pre> contentDOM — there is no <code> wrapper when using a
    React NodeView, so selectors must target pre > .hljs-* directly. */
 .rich-markdown-code-block-wrapper .hljs-keyword {
-  color: #cf222e;
+  color: var(--syntax-keyword, #cf222e);
 }
 .rich-markdown-code-block-wrapper .hljs-string {
-  color: #0a3069;
+  color: var(--syntax-string, #0a3069);
 }
 .rich-markdown-code-block-wrapper .hljs-number {
-  color: #0550ae;
+  color: var(--syntax-number, #0550ae);
 }
 .rich-markdown-code-block-wrapper .hljs-comment {
-  color: #6e7781;
+  color: var(--syntax-comment, #6e7781);
   font-style: italic;
 }
 .rich-markdown-code-block-wrapper .hljs-function {
-  color: #8250df;
+  color: var(--syntax-function, #8250df);
 }
 .rich-markdown-code-block-wrapper .hljs-title {
-  color: #8250df;
+  color: var(--syntax-function, #8250df);
 }
 .rich-markdown-code-block-wrapper .hljs-built_in {
-  color: #0550ae;
+  color: var(--syntax-type, #0550ae);
 }
 .rich-markdown-code-block-wrapper .hljs-type {
-  color: #0550ae;
+  color: var(--syntax-type, #0550ae);
 }
 .rich-markdown-code-block-wrapper .hljs-attr {
-  color: #0550ae;
+  color: var(--syntax-type, #0550ae);
 }
 .rich-markdown-code-block-wrapper .hljs-selector-class {
-  color: #0550ae;
+  color: var(--syntax-type, #0550ae);
 }
 .rich-markdown-code-block-wrapper .hljs-variable {
-  color: #953800;
+  color: var(--syntax-variable, #953800);
 }
 .rich-markdown-code-block-wrapper .hljs-meta {
-  color: #6e7781;
+  color: var(--syntax-meta, #6e7781);
 }
 .rich-markdown-code-block-wrapper .hljs-tag {
-  color: #116329;
+  color: var(--syntax-tag, #116329);
 }
 .rich-markdown-code-block-wrapper .hljs-name {
-  color: #116329;
+  color: var(--syntax-tag, #116329);
 }
 .rich-markdown-code-block-wrapper .hljs-params {
-  color: #953800;
+  color: var(--syntax-variable, #953800);
 }
 .rich-markdown-code-block-wrapper .hljs-literal {
-  color: #0550ae;
+  color: var(--syntax-number, #0550ae);
 }
 .rich-markdown-code-block-wrapper .hljs-regexp {
-  color: #0a3069;
+  color: var(--syntax-number, #0a3069);
 }
 .rich-markdown-code-block-wrapper .hljs-operator {
-  color: #cf222e;
+  color: var(--syntax-keyword, #cf222e);
 }
 .rich-markdown-code-block-wrapper .hljs-property {
-  color: #0550ae;
+  color: var(--syntax-type, #0550ae);
 }
 
 .dark .rich-markdown-code-block-wrapper .hljs-keyword {
-  color: #ff7b72;
+  color: var(--syntax-keyword, #ff7b72);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-string {
-  color: #a5d6ff;
+  color: var(--syntax-string, #a5d6ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-number {
-  color: #79c0ff;
+  color: var(--syntax-number, #79c0ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-comment {
-  color: #8b949e;
+  color: var(--syntax-comment, #8b949e);
   font-style: italic;
 }
 .dark .rich-markdown-code-block-wrapper .hljs-function {
-  color: #d2a8ff;
+  color: var(--syntax-function, #d2a8ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-title {
-  color: #d2a8ff;
+  color: var(--syntax-function, #d2a8ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-built_in {
-  color: #79c0ff;
+  color: var(--syntax-type, #79c0ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-type {
-  color: #79c0ff;
+  color: var(--syntax-type, #79c0ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-attr {
-  color: #79c0ff;
+  color: var(--syntax-type, #79c0ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-selector-class {
-  color: #79c0ff;
+  color: var(--syntax-type, #79c0ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-variable {
-  color: #ffa657;
+  color: var(--syntax-variable, #ffa657);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-meta {
-  color: #8b949e;
+  color: var(--syntax-meta, #8b949e);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-tag {
-  color: #7ee787;
+  color: var(--syntax-tag, #7ee787);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-name {
-  color: #7ee787;
+  color: var(--syntax-tag, #7ee787);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-params {
-  color: #ffa657;
+  color: var(--syntax-variable, #ffa657);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-literal {
-  color: #79c0ff;
+  color: var(--syntax-number, #79c0ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-regexp {
-  color: #a5d6ff;
+  color: var(--syntax-number, #a5d6ff);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-operator {
-  color: #ff7b72;
+  color: var(--syntax-keyword, #ff7b72);
 }
 .dark .rich-markdown-code-block-wrapper .hljs-property {
-  color: #79c0ff;
+  color: var(--syntax-type, #79c0ff);
 }
 
 .rich-markdown-editor hr {

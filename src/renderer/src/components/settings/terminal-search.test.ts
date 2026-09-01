@@ -3,7 +3,8 @@ import { getTerminalPaneSearchEntries } from './terminal-search'
 import { getAppearancePaneSearchEntries, getSidebarEntries } from './appearance-search'
 import {
   getShowPinnedWorktreesInGroupsEntry,
-  getWorkspaceCardLayoutEntry
+  getWorkspaceCardLayoutEntry,
+  getWorkspaceChromeAppearanceEntry
 } from './appearance-sidebar-search'
 import { matchesSettingsSearch } from './settings-search'
 
@@ -239,5 +240,15 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(getSidebarEntries()).toContainEqual(entry)
     expect(getAppearancePaneSearchEntries()).toContainEqual(entry)
     expect(matchesSettingsSearch('duplicate', entry)).toBe(true)
+  })
+
+  it('indexes the app chrome appearance setting for Appearance search', () => {
+    const entry = getWorkspaceChromeAppearanceEntry()
+
+    expect(getSidebarEntries()).toContainEqual(entry)
+    expect(getAppearancePaneSearchEntries()).toContainEqual(entry)
+    for (const query of ['tab bar', 'status bar', 'terminal', 'theme', 'chrome', 'sidebar']) {
+      expect(matchesSettingsSearch(query, entry)).toBe(true)
+    }
   })
 })

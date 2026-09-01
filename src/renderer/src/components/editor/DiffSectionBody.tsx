@@ -33,7 +33,7 @@ type DiffSectionBodyProps = {
   addLineCommentLabel?: string
   isBranchMode: boolean
   sideBySide: boolean
-  isDark: boolean
+  monacoTheme: string
   language: string
   modelPathBase: string
   isEditable: boolean
@@ -48,6 +48,7 @@ type DiffSectionBodyProps = {
   onMount: DiffOnMount
 }
 
+/** Body of one combined-diff section: Monaco diff, image compare, or placeholder for unloaded content. */
 export function DiffSectionBody({
   section,
   index,
@@ -59,7 +60,7 @@ export function DiffSectionBody({
   addLineCommentLabel,
   isBranchMode,
   sideBySide,
-  isDark,
+  monacoTheme,
   language,
   modelPathBase,
   isEditable,
@@ -186,7 +187,7 @@ export function DiffSectionBody({
           language={language}
           original={section.originalContent}
           modified={section.modifiedContent}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={monacoTheme}
           onMount={onMount}
           // Why: @monaco-editor/react can dispose models before widget teardown.
           // Keep them through unmount and dispose unattached models next tick.

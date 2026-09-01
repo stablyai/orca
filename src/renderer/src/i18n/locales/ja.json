@@ -5587,6 +5587,12 @@
             "tintOpacity": "色合いの強さ",
             "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
           },
+          "workspaceChromeAppearance": {
+            "title": "アプリ UI の外観",
+            "rowDescription": "タブバー、ステータスバー、サイドパネル、全画面ビュー、ポップオーバー、ファイルエディタをターミナルのテーマに合わせるか、アプリのテーマのままにします。",
+            "default": "デフォルト",
+            "matchTerminal": "ターミナルに合わせる"
+          },
           "workspaceCardLayoutGuidance": "ワークスペースサイドバーで管理されます。",
           "872af9556e": "システムトレイ",
           "2edf606c46": "閉じるときにトレイへ最小化",

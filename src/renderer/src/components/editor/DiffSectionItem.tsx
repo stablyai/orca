@@ -24,12 +24,13 @@ import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
 import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
 
+/** One file entry in the combined diff: header, Monaco model lifecycle and the section body. */
 export function DiffSectionItem({
   section,
   index,
   isBranchMode,
   sideBySide,
-  isDark,
+  monacoTheme,
   settings,
   sectionHeight,
   worktreeId,
@@ -367,7 +368,7 @@ export function DiffSectionItem({
           addLineCommentLabel={addLineCommentLabel}
           isBranchMode={isBranchMode}
           sideBySide={sideBySide}
-          isDark={isDark}
+          monacoTheme={monacoTheme}
           language={language}
           modelPathBase={modelPathBase}
           isEditable={isEditable}

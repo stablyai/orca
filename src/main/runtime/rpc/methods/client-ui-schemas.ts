@@ -159,6 +159,23 @@ const UiUpdateFields = z
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
+    statusBarUsageFormat: z
+      .object({
+        template: z.string(),
+        byProvider: z
+          .object({
+            claude: z.string().optional(),
+            codex: z.string().optional(),
+            gemini: z.string().optional(),
+            'opencode-go': z.string().optional(),
+            kimi: z.string().optional(),
+            minimax: z.string().optional(),
+            grok: z.string().optional(),
+            antigravity: z.string().optional()
+          })
+          .optional()
+      })
+      .optional(),
     dismissedUpdateVersion: NullableString.optional(),
     lastUpdateCheckAt: z.number().finite().nullable().optional(),
     pendingUpdateNudgeId: NullableString.optional(),

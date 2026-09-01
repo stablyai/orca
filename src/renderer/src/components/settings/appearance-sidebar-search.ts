@@ -3,77 +3,122 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 
-export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
-  title: translate(
-    'auto.components.settings.appearance.search.leftSidebarAppearance.title',
-    'Left Sidebar Appearance'
-  ),
-  description: translate(
-    'auto.components.settings.appearance.search.leftSidebarAppearance.description',
-    'Make the left sidebar match your terminal, stay default, or use a tint.'
-  ),
-  keywords: [
-    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.leftSidebarAppearance.project',
-      'project'
+export const getLeftSidebarAppearanceEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.leftSidebarAppearance.title',
+      'Left Sidebar Appearance'
     ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.leftSidebarAppearance.terminal',
-      'terminal'
+    description: translate(
+      'auto.components.settings.appearance.search.leftSidebarAppearance.description',
+      'Make the left sidebar match your terminal, stay default, or use a tint.'
     ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.leftSidebarAppearance.background',
-      'background'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.leftSidebarAppearance.tint',
-      'tint'
-    )
-  ]
-}))
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.project',
+        'project'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.terminal',
+        'terminal'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.background',
+        'background'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.tint',
+        'tint'
+      )
+    ]
+  })
+)
 
-export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
-  title: translate(
-    'auto.components.settings.appearance.search.workspaceCardLayout.title',
-    'Workspace Card Layout'
-  ),
-  description: translate(
-    'auto.components.settings.appearance.search.workspaceCardLayout.description',
-    'Workspace cards can use compact or detailed layouts.'
-  ),
-  keywords: [
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.workspaceCardLayout.compact',
-      'compact'
+/** Settings-search entry for the App Chrome Appearance row. */
+export const getWorkspaceChromeAppearanceEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.workspaceChromeAppearance.title',
+      'App Chrome Appearance'
     ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.workspaceCardLayout.compactDisplay',
-      'compact display'
+    description: translate(
+      'auto.components.settings.appearance.search.workspaceChromeAppearance.description',
+      'Make the tab bar, status bar, side panels, full-page views, and popovers match your terminal theme, or keep the app theme.'
     ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.workspaceCardLayout.workspaceCards',
-      'workspace cards'
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceChromeAppearance.tabBar',
+        'tab bar'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceChromeAppearance.statusBar',
+        'status bar'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.terminal',
+        'terminal'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceChromeAppearance.theme',
+        'theme'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceChromeAppearance.chrome',
+        'chrome'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.background',
+        'background'
+      )
+    ]
+  })
+)
+
+export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.workspaceCardLayout.title',
+      'Workspace Card Layout'
     ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.workspaceCardLayout.worktreeCards',
-      'worktree cards'
+    description: translate(
+      'auto.components.settings.appearance.search.workspaceCardLayout.description',
+      'Workspace cards can use compact or detailed layouts.'
     ),
-    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.workspaceCardLayout.cardLayout',
-      'card layout'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.workspaceCardLayout.workspaceOptions',
-      'workspace options'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.workspaceCardLayout.detailed',
-      'detailed'
-    )
-  ]
-}))
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.compact',
+        'compact'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.compactDisplay',
+        'compact display'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.workspaceCards',
+        'workspace cards'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.worktreeCards',
+        'worktree cards'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.cardLayout',
+        'card layout'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.workspaceOptions',
+        'workspace options'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.workspaceCardLayout.detailed',
+        'detailed'
+      )
+    ]
+  })
+)
 
 export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
@@ -123,6 +168,7 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+/** Search entries for the sidebar-related appearance controls. */
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -189,5 +235,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
+  getWorkspaceChromeAppearanceEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

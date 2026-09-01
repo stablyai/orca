@@ -14,6 +14,9 @@ export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untrac
 
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
+/** Surface for the workspace tab strip and status bar: app theme, or the active terminal theme. */
+export type WorkspaceChromeAppearanceMode = 'default' | 'match-terminal'
+
 /** Strategy for the prefix prepended to worktree branch names. */
 export type BranchPrefixStrategy = 'git-username' | 'custom' | 'none'
 

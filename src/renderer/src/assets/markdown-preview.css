@@ -607,11 +607,11 @@
 }
 
 .markdown-light .markdown-body a {
-  color: #0969da;
+  color: var(--syntax-link, #0969da);
 }
 
 .markdown-dark .markdown-body a {
-  color: #58a6ff;
+  color: var(--syntax-link, #58a6ff);
 }
 
 .markdown-light .markdown-body .markdown-doc-link-broken,
@@ -648,7 +648,7 @@
 }
 
 .markdown-light .markdown-body pre {
-  background: #f6f8fa;
+  background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
@@ -873,74 +873,74 @@
 /* ── Syntax Highlighting (GitHub-inspired) ────────── */
 
 .markdown-light .hljs {
-  color: #24292f;
+  color: var(--foreground, #24292f);
 }
 
 .markdown-light .hljs-comment,
 .markdown-light .hljs-quote {
-  color: #6e7781;
+  color: var(--syntax-comment, #6e7781);
   font-style: italic;
 }
 
 .markdown-light .hljs-keyword,
 .markdown-light .hljs-selector-tag,
 .markdown-light .hljs-template-tag {
-  color: #cf222e;
+  color: var(--syntax-keyword, #cf222e);
 }
 
 .markdown-light .hljs-string,
 .markdown-light .hljs-doctag,
 .markdown-light .hljs-regexp {
-  color: #0a3069;
+  color: var(--syntax-string, #0a3069);
 }
 
 .markdown-light .hljs-number,
 .markdown-light .hljs-literal {
-  color: #0550ae;
+  color: var(--syntax-number, #0550ae);
 }
 
 .markdown-light .hljs-title,
 .markdown-light .hljs-section {
-  color: #8250df;
+  color: var(--syntax-function, #8250df);
 }
 
 .markdown-light .hljs-type,
 .markdown-light .hljs-built_in {
-  color: #0550ae;
+  color: var(--syntax-type, #0550ae);
 }
 
 .markdown-light .hljs-attr,
 .markdown-light .hljs-attribute {
-  color: #0550ae;
+  color: var(--syntax-type, #0550ae);
 }
 
 .markdown-light .hljs-variable,
 .markdown-light .hljs-template-variable {
-  color: #953800;
+  color: var(--syntax-variable, #953800);
 }
 
 .markdown-light .hljs-tag,
 .markdown-light .hljs-name {
-  color: #116329;
+  color: var(--syntax-tag, #116329);
 }
 
 .markdown-light .hljs-symbol,
 .markdown-light .hljs-bullet,
 .markdown-light .hljs-selector-class,
 .markdown-light .hljs-selector-id {
-  color: #0550ae;
+  color: var(--syntax-function, #0550ae);
 }
 
 .markdown-light .hljs-meta {
-  color: #1f7f34;
+  color: var(--syntax-meta, #1f7f34);
 }
 
 .markdown-light .hljs-addition {
-  color: #116329;
+  color: var(--syntax-addition, #116329);
   background: rgba(46, 160, 67, 0.1);
 }
 .markdown-light .hljs-deletion {
-  color: #82071e;
+  color: var(--syntax-deletion, #82071e);
   background: rgba(248, 81, 73, 0.1);
 }
 
@@ -952,74 +952,74 @@
 }
 
 .markdown-dark .hljs {
-  color: #e6edf3;
+  color: var(--foreground, #e6edf3);
 }
 
 .markdown-dark .hljs-comment,
 .markdown-dark .hljs-quote {
-  color: #8b949e;
+  color: var(--syntax-comment, #8b949e);
   font-style: italic;
 }
 
 .markdown-dark .hljs-keyword,
 .markdown-dark .hljs-selector-tag,
 .markdown-dark .hljs-template-tag {
-  color: #ff7b72;
+  color: var(--syntax-keyword, #ff7b72);
 }
 
 .markdown-dark .hljs-string,
 .markdown-dark .hljs-doctag,
 .markdown-dark .hljs-regexp {
-  color: #a5d6ff;
+  color: var(--syntax-string, #a5d6ff);
 }
 
 .markdown-dark .hljs-number,
 .markdown-dark .hljs-literal {
-  color: #79c0ff;
+  color: var(--syntax-number, #79c0ff);
 }
 
 .markdown-dark .hljs-title,
 .markdown-dark .hljs-section {
-  color: #d2a8ff;
+  color: var(--syntax-function, #d2a8ff);
 }
 
 .markdown-dark .hljs-type,
 .markdown-dark .hljs-built_in {
-  color: #ffa657;
+  color: var(--syntax-type, #ffa657);
 }
 
 .markdown-dark .hljs-attr,
 .markdown-dark .hljs-attribute {
-  color: #79c0ff;
+  color: var(--syntax-type, #79c0ff);
 }
 
 .markdown-dark .hljs-variable,
 .markdown-dark .hljs-template-variable {
-  color: #ffa657;
+  color: var(--syntax-variable, #ffa657);
 }
 
 .markdown-dark .hljs-tag,
 .markdown-dark .hljs-name {
-  color: #7ee787;
+  color: var(--syntax-tag, #7ee787);
 }
 
 .markdown-dark .hljs-symbol,
 .markdown-dark .hljs-bullet,
 .markdown-dark .hljs-selector-class,
 .markdown-dark .hljs-selector-id {
-  color: #d2a8ff;
+  color: var(--syntax-function, #d2a8ff);
 }
 
 .markdown-dark .hljs-meta {
-  color: #79c0ff;
+  color: var(--syntax-meta, #79c0ff);
 }
 
 .markdown-dark .hljs-addition {
-  color: #aff5b4;
+  color: var(--syntax-addition, #aff5b4);
   background: rgba(46, 160, 67, 0.15);
 }
 .markdown-dark .hljs-deletion {
-  color: #ffdcd7;
+  color: var(--syntax-deletion, #ffdcd7);
   background: rgba(248, 81, 73, 0.15);
 }
 

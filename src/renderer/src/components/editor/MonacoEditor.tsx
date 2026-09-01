@@ -4,6 +4,7 @@ import Editor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
+import { useMonacoEditorTheme } from './use-monaco-editor-theme'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 
@@ -45,6 +46,7 @@ type MonacoEditorProps = {
   autoHeight?: boolean
 }
 
+/** Main Monaco file editor: wires models, view state, find, autosave and the surface theme. */
 export default function MonacoEditor({
   fileId,
   filePath,
@@ -114,9 +116,7 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const { theme: monacoTheme } = useMonacoEditorTheme()
 
   const { queueReveal, cancelScheduledReveal, clearTransientRevealHighlight } =
     useMonacoRevealScheduler()
@@ -231,7 +231,7 @@ export default function MonacoEditor({
         language={language}
         // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
         defaultValue={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={monacoTheme}
         onChange={contentSync.handleChange}
         onMount={handleMount}
         options={{

@@ -5622,6 +5622,12 @@
             "tintOpacity": "色调强度",
             "tintOpacityDescription": "控制色调混入边栏的强度。"
           },
+          "workspaceChromeAppearance": {
+            "title": "应用界面外观",
+            "rowDescription": "让标签栏、状态栏、侧边面板、全页视图、弹出层和文件编辑器匹配终端主题，或保持应用主题。",
+            "default": "默认",
+            "matchTerminal": "匹配终端"
+          },
           "workspaceCardLayoutGuidance": "从工作区侧边栏管理。",
           "872af9556e": "系统托盘",
           "2edf606c46": "关闭时最小化到托盘",

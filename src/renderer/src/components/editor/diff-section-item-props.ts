@@ -8,7 +8,8 @@ export type DiffSectionItemProps = {
   index: number
   isBranchMode: boolean
   sideBySide: boolean
-  isDark: boolean
+  /** Monaco theme name resolved by the owning viewer; Monaco's theme is global. */
+  monacoTheme: string
   settings: {
     terminalFontSize?: number
     terminalFontFamily?: string

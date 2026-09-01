@@ -20,11 +20,15 @@ import {
   getUsagePercentageDisplayEntry
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
+import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
+import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { WorkspaceChromeAppearanceSetting } from './WorkspaceChromeAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
-  getWorkspaceCardLayoutEntry
+  getWorkspaceCardLayoutEntry,
+  getWorkspaceChromeAppearanceEntry
 } from './appearance-sidebar-search'
 import { translate } from '@/i18n/i18n'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
@@ -59,6 +63,7 @@ function recordStatusBarToggleInteraction(
   }
 }
 
+/** Window & Sidebar appearance section: sidebar/chrome appearance, status bar controls, and layout advanced settings. */
 export function AppearanceWindowSidebarSection({
   settings,
   updateSettings,
@@ -74,7 +79,11 @@ export function AppearanceWindowSidebarSection({
   const setWorktreeCardMode = useAppStore((state) => state.setWorktreeCardMode)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
+  const statusBarUsageFormatEntry = getStatusBarUsageFormatEntry()
+  const statusBarUsageFormat = useAppStore((state) => state.statusBarUsageFormat)
+  const setStatusBarUsageFormat = useAppStore((state) => state.setStatusBarUsageFormat)
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const workspaceChromeAppearanceEntry = getWorkspaceChromeAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
@@ -94,6 +103,7 @@ export function AppearanceWindowSidebarSection({
   })
   const statusBarControlMatches =
     matchesSettingsSearch(searchQuery, usagePercentageDisplayEntry) ||
+    matchesSettingsSearch(searchQuery, statusBarUsageFormatEntry) ||
     visibleStatusBarToggles.some((toggle) =>
       matchesSettingsSearch(searchQuery, {
         title: toggle.title,
@@ -122,6 +132,15 @@ export function AppearanceWindowSidebarSection({
           forceVisible={forceVisiblePrimary}
         >
           <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={workspaceChromeAppearanceEntry.title}
+          description={workspaceChromeAppearanceEntry.description}
+          keywords={workspaceChromeAppearanceEntry.keywords}
+          forceVisible={forceVisiblePrimary}
+        >
+          <WorkspaceChromeAppearanceSetting settings={settings} updateSettings={updateSettings} />
         </SearchableSetting>
 
         <SearchableSetting
@@ -164,6 +183,18 @@ export function AppearanceWindowSidebarSection({
                       ]}
                     />
                   }
+                />
+              </SearchableSetting>
+
+              <SearchableSetting
+                title={statusBarUsageFormatEntry.title}
+                description={statusBarUsageFormatEntry.description}
+                keywords={statusBarUsageFormatEntry.keywords}
+                className="space-y-2"
+              >
+                <StatusBarUsageFormatSetting
+                  format={statusBarUsageFormat}
+                  onChange={setStatusBarUsageFormat}
                 />
               </SearchableSetting>
 

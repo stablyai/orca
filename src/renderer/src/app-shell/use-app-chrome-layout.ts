@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { useWorkspaceChromeDocumentStyle } from '@/lib/use-workspace-chrome-document-style'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { useAppStore } from '../store'
@@ -48,6 +49,7 @@ export function useAppChromeLayout() {
   )
 
   const systemPrefersDark = useSystemPrefersDark()
+  useWorkspaceChromeDocumentStyle()
   const leftSidebarStyle = useMemo(
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
