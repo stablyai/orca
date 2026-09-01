@@ -193,6 +193,10 @@ export async function startGitCommonNarrowWatch(
             return
           }
           if (error) {
+            // Why: the native stream is about to be torn down (fallback or
+            // re-arm) — the reconciliation backstop can't trust its tripwire
+            // cadence across that gap, so force its next tick to sweep.
+            reconciliation.notifyLossSignal()
             if (onWatchError) {
               onWatchError(error)
             } else {
@@ -226,6 +230,10 @@ export async function startGitCommonNarrowWatch(
           // resubscribe gap; report a structural change so worktrees re-sync.
           onInterruption: () => {
             if (!disposed && active && generation === nativeSubscriptionGeneration) {
+              // Why: events during the automatic resubscribe gap are lost —
+              // the reconciliation backstop can't trust its tripwire cadence
+              // across that gap either.
+              reconciliation.notifyLossSignal()
               if (onWatchError) {
                 onWatchError(new Error('Git common watcher interrupted'))
               } else {
@@ -242,6 +250,9 @@ export async function startGitCommonNarrowWatch(
             if (disposed || !active || generation !== nativeSubscriptionGeneration) {
               return
             }
+            // Why: a dropped batch is definite proof of loss — force the
+            // backstop's next tick to sweep rather than trust its tripwire.
+            reconciliation.notifyLossSignal()
             if (onOverflow) {
               onOverflow()
             } else if (onWatchError) {

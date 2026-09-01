@@ -220,7 +220,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       expect(narrowCall?.[2]).toEqual(platform === 'win32' ? { backend: 'windows' } : {})
       const entryPath = join(commonDir, 'worktrees', `${platform}-entry`)
       narrowSubscription().callback(null, [{ type: 'create', path: entryPath }])
-      expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+      expect(received.flat()).toContainEqual({
+        type: 'create',
+        path: entryPath
+      })
     }
   )
 
@@ -237,7 +240,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await appendFile(configPath, '[branch "main"]\n\tremote = origin\n')
     primarySubscription().callback(null, [{ type: 'update', path: configPath }])
     await vi.waitFor(() => {
-      expect(received.flat()).toContainEqual({ type: 'update', path: configPath })
+      expect(received.flat()).toContainEqual({
+        type: 'update',
+        path: configPath
+      })
     })
   })
 
@@ -286,7 +292,9 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
   it('drops the ref poller when the binding moves away, leaving no orphan', async () => {
     installSubscribeMock()
     const commonDir = await makeCommonDir(true)
-    await mkdir(join(commonDir, 'refs', 'remotes', 'origin'), { recursive: true })
+    await mkdir(join(commonDir, 'refs', 'remotes', 'origin'), {
+      recursive: true
+    })
     await writeFile(join(commonDir, 'refs', 'remotes', 'origin', 'main'), 'aaa\n')
     const visibility = createVisibilityHarness()
     const target = makeTarget(commonDir)
@@ -344,7 +352,9 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const firstRef = join(commonDir, 'refs', 'remotes', 'origin', 'first')
     const nextRef = join(commonDir, 'refs', 'remotes', 'origin', 'next')
     const unrelatedRef = join(commonDir, 'refs', 'remotes', 'origin', 'unrelated')
-    await mkdir(join(commonDir, 'refs', 'remotes', 'origin'), { recursive: true })
+    await mkdir(join(commonDir, 'refs', 'remotes', 'origin'), {
+      recursive: true
+    })
     await Promise.all([
       writeFile(firstRef, 'aaa\n'),
       writeFile(nextRef, 'bbb\n'),
@@ -357,7 +367,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     statCalls.length = 0
     await appendFile(firstRef, 'updated\n')
     await vi.waitFor(() => {
-      expect(received.flat()).toContainEqual({ type: 'update', path: firstRef })
+      expect(received.flat()).toContainEqual({
+        type: 'update',
+        path: firstRef
+      })
     })
     expect(statCalls).not.toContain(unrelatedRef)
 
@@ -370,7 +383,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await vi.waitFor(() => {
       expect(received.flat()).toContainEqual({ type: 'update', path: nextRef })
     })
-    expect(received.flat()).not.toContainEqual({ type: 'update', path: firstRef })
+    expect(received.flat()).not.toContainEqual({
+      type: 'update',
+      path: firstRef
+    })
   })
 
   it('tears down and re-arms when the watched root is deleted', async () => {
@@ -385,14 +401,20 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await vi.waitFor(() => {
       expect(narrowSubscription().unsubscribe).toHaveBeenCalledTimes(1)
     })
-    expect(received.flat()).toContainEqual({ type: 'delete', path: worktreesDir })
+    expect(received.flat()).toContainEqual({
+      type: 'delete',
+      path: worktreesDir
+    })
 
     // The existence poll re-subscribes once a new first worktree recreates it.
     await mkdir(worktreesDir)
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(3)
     })
-    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
+    expect(received.flat()).toContainEqual({
+      type: 'create',
+      path: worktreesDir
+    })
   })
 
   it('tears down and re-arms on watcher errors', async () => {
@@ -407,7 +429,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       expect(narrowSubscription().unsubscribe).toHaveBeenCalledTimes(1)
     })
     // The error is surfaced as a structural change so worktrees re-sync.
-    expect(received.flat()).toContainEqual({ type: 'update', path: worktreesDir })
+    expect(received.flat()).toContainEqual({
+      type: 'update',
+      path: worktreesDir
+    })
 
     // The dir still exists, so the existence poll re-subscribes.
     await vi.waitFor(() => {
@@ -474,11 +499,17 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const entryPath = join(worktreesDir, 'fallback-entry')
     await mkdir(entryPath)
     await vi.waitFor(() => {
-      expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+      expect(received.flat()).toContainEqual({
+        type: 'create',
+        path: entryPath
+      })
     })
     await rm(entryPath, { recursive: true })
     await vi.waitFor(() => {
-      expect(received.flat()).toContainEqual({ type: 'delete', path: entryPath })
+      expect(received.flat()).toContainEqual({
+        type: 'delete',
+        path: entryPath
+      })
     })
     expect(subscribeMock).toHaveBeenCalledTimes(2)
     await watch.unsubscribe()
@@ -504,7 +535,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const entryPath = join(worktreesDir, 'fallback-entry')
     await mkdir(entryPath)
     await vi.waitFor(() => {
-      expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+      expect(received.flat()).toContainEqual({
+        type: 'create',
+        path: entryPath
+      })
     })
     await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
     expect(subscribeMock).toHaveBeenCalledTimes(2)
@@ -521,7 +555,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await startWatch(commonDir, received)
 
     narrowSubscription().hooks.onInterruption?.()
-    expect(received.flat()).toContainEqual({ type: 'update', path: worktreesDir })
+    expect(received.flat()).toContainEqual({
+      type: 'update',
+      path: worktreesDir
+    })
     // The supervisor resubscribed the same record; no teardown should happen.
     expect(narrowSubscription().unsubscribe).not.toHaveBeenCalled()
   })
@@ -562,7 +599,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
     narrowSubscription().hooks.onOverflow?.()
 
-    expect(received.flat()).toContainEqual({ type: 'update', path: worktreesDir })
+    expect(received.flat()).toContainEqual({
+      type: 'update',
+      path: worktreesDir
+    })
   })
 
   it('arms via existence polling when the worktrees dir appears later', async () => {
@@ -581,7 +621,11 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
   async function startHiddenExistencePoll(visibility: {
     source: WorktreePollerWindowVisibility
     hide: () => void
-  }): Promise<{ commonDir: string; worktreesDir: string; received: WorktreeBasePollEvent[][] }> {
+  }): Promise<{
+    commonDir: string
+    worktreesDir: string
+    received: WorktreeBasePollEvent[][]
+  }> {
     const commonDir = await makeCommonDir(false)
     const received: WorktreeBasePollEvent[][] = []
     const watch = await startGitCommonWatch(
@@ -627,7 +671,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(2)
     })
-    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
+    expect(received.flat()).toContainEqual({
+      type: 'create',
+      path: worktreesDir
+    })
   })
 
   it('resumes polling when the dir is still absent on show', async () => {
@@ -660,7 +707,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await mkdir(worktreesDir)
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(2)
-      expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
+      expect(received.flat()).toContainEqual({
+        type: 'create',
+        path: worktreesDir
+      })
     })
   })
 
@@ -749,7 +799,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
       const immediateEntry = join(worktreesDir, 'after-rearm')
       narrowSubscriptions()[1].callback(null, [{ type: 'create', path: immediateEntry }])
-      expect(received.flat()).toContainEqual({ type: 'create', path: immediateEntry })
+      expect(received.flat()).toContainEqual({
+        type: 'create',
+        path: immediateEntry
+      })
     } finally {
       await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
       restorePerformanceNow.mockRestore()
@@ -825,7 +878,10 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
       const immediateEntry = join(worktreesDir, 'current-generation')
       narrowSubscriptions()[2].callback(null, [{ type: 'create', path: immediateEntry }])
-      expect(received.flat()).toContainEqual({ type: 'create', path: immediateEntry })
+      expect(received.flat()).toContainEqual({
+        type: 'create',
+        path: immediateEntry
+      })
     } finally {
       await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
       restorePerformanceNow.mockRestore()

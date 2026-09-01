@@ -121,6 +121,15 @@ async function snapshotGitCommon(
 export type GitCommonPollingOptions = {
   /** Reconciliation backstop: never trust the per-entry gate, re-stat every tick. */
   forceFullScanEveryTick?: boolean
+  /**
+   * Gate the whole tick behind a caller-owned check (e.g. a cheap root
+   * tripwire) instead of always sweeping. Returning false skips this tick's
+   * readdir + per-entry stat fan-out entirely, including on a forced
+   * (visibility-resume) tick. Omit to sweep every tick — the no-narrow-watch
+   * and crash-fuse fallback callers still do, since polling is their sole
+   * change signal.
+   */
+  shouldSweep?: () => boolean | Promise<boolean>
 }
 
 export async function startGitCommonPolling(
@@ -163,28 +172,30 @@ export async function startGitCommonPolling(
     // land each visible refresh a full scan-duration late every tick).
     const startedAt = Date.now()
     tickCount++
-    const shouldForceFullScan =
-      options.forceFullScanEveryTick === true ||
-      forceFullScan ||
-      tickCount % INDEX_BACKSTOP_TICKS === 0
     try {
-      const next = await snapshotGitCommon(
-        commonDirPath,
-        snapshot,
-        includePrimary,
-        shouldForceFullScan,
-        new Set(getStatusRefPaths())
-      )
-      if (disposed) {
-        return
-      }
-      if (next.didFullScan) {
-        onFullScan?.()
-      }
-      const events = diffGitCommon(commonDirPath, snapshot, next)
-      snapshot = next
-      if (events.length > 0) {
-        onEvents(events)
+      if (!options.shouldSweep || (await options.shouldSweep())) {
+        const shouldForceFullScan =
+          options.forceFullScanEveryTick === true ||
+          forceFullScan ||
+          tickCount % INDEX_BACKSTOP_TICKS === 0
+        const next = await snapshotGitCommon(
+          commonDirPath,
+          snapshot,
+          includePrimary,
+          shouldForceFullScan,
+          new Set(getStatusRefPaths())
+        )
+        if (disposed) {
+          return
+        }
+        if (next.didFullScan) {
+          onFullScan?.()
+        }
+        const events = diffGitCommon(commonDirPath, snapshot, next)
+        snapshot = next
+        if (events.length > 0) {
+          onEvents(events)
+        }
       }
     } catch {
       // Transient fs error: keep the previous snapshot and retry next tick.
