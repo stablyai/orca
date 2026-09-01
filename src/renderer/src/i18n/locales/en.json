@@ -10808,7 +10808,9 @@
           "e6dadc1e2b": "Monthly usage",
           "75e396bf42": "Included monthly usage for Grok unified-billing accounts.",
           "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
-          "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
+          "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed.",
+          "0bb18642b7": "Usage",
+          "a8f4139350": "Grok reported no usage percentage for this account."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
