@@ -47,6 +47,9 @@ type ExecScript = {
   // Simulates #17842's reconciliation sweep concurrently `remote remove`-ing this
   // remote in between this migration's pre-write and post-write existence checks.
   removeUrlAfterFirstCheck?: Set<string>
+  // Remotes `git remote` (bare list) reports on disk -- drives discovery of a `pr-*`
+  // remote with zero worktree-metadata trace at all.
+  remoteNames?: string[]
 }
 
 function makeExec(script: ExecScript = {}): ExecMock {
@@ -55,10 +58,14 @@ function makeExec(script: ExecScript = {}): ExecMock {
     urlByRemote = {},
     branchConfig = '',
     trackingRefsByRemote = {},
-    removeUrlAfterFirstCheck = new Set<string>()
+    removeUrlAfterFirstCheck = new Set<string>(),
+    remoteNames = []
   } = script
   const urlCheckCountByRemote: Record<string, number> = {}
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
+    if (args[0] === 'remote' && args.length === 1) {
+      return { stdout: remoteNames.length ? `${remoteNames.join('\n')}\n` : '', stderr: '' }
+    }
     if (args[0] === 'config' && args[1] === '--get' && args[2]!.endsWith('.url')) {
       const remoteName = args[2]!.slice('remote.'.length, -'.url'.length)
       urlCheckCountByRemote[remoteName] = (urlCheckCountByRemote[remoteName] ?? 0) + 1
@@ -279,6 +286,62 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
     ).toBe(true)
     // No fetch --prune-equivalent local ref deletion ran for a remote that's already gone.
     expect(exec.mock.calls.some(([args]) => args[0] === 'update-ref')).toBe(false)
+  })
+
+  it('clears the fetch refspec of a wide pr-* remote with zero worktree-metadata trace at all', async () => {
+    const ORPHAN_REMOTE = 'pr-ghost-orca'
+    const trackingRefsByRemote = { [ORPHAN_REMOTE]: ['some-branch', 'another-branch'] }
+    const exec = makeExec({
+      remoteNames: [ORPHAN_REMOTE],
+      urlByRemote: { [ORPHAN_REMOTE]: 'git@github.com:ghost/orca.git\n' },
+      fetchByRemote: { [ORPHAN_REMOTE]: ['+refs/heads/*:refs/remotes/pr-ghost-orca/*'] },
+      trackingRefsByRemote
+    })
+
+    // No worktree metadata references this remote at all (worktree removed outside
+    // preserve-on-delete, metadata purged) -- only discoverable via `git remote`.
+    const migrated = await migrateForkRemoteRefspecsWithExec(REPO_PATH, REPO_ID, storeOf({}), exec)
+
+    expect(migrated).toEqual([ORPHAN_REMOTE])
+    expect(exec.mock.calls).toContainEqual([
+      ['config', '--unset-all', `remote.${ORPHAN_REMOTE}.fetch`],
+      REPO_PATH
+    ])
+    // No branch to narrow to, so it never adds a replacement refspec.
+    expect(exec.mock.calls.some(([args]) => args[0] === 'config' && args[1] === '--add')).toBe(
+      false
+    )
+    // Every stray tracking ref is pruned, same as the narrowing path.
+    expect(trackingRefsByRemote[ORPHAN_REMOTE]).toEqual([])
+  })
+
+  it('leaves a zero-provenance pr-* remote alone if its refspec is not the stock wide default', async () => {
+    const CUSTOM_REMOTE = 'pr-custom-orca'
+    const exec = makeExec({
+      remoteNames: [CUSTOM_REMOTE],
+      urlByRemote: { [CUSTOM_REMOTE]: 'git@github.com:custom/orca.git\n' },
+      fetchByRemote: {
+        [CUSTOM_REMOTE]: ['+refs/heads/some-branch:refs/remotes/pr-custom-orca/some-branch']
+      }
+    })
+
+    const migrated = await migrateForkRemoteRefspecsWithExec(REPO_PATH, REPO_ID, storeOf({}), exec)
+
+    expect(migrated).toEqual([])
+    expect(exec.mock.calls.some(([args]) => args[1] === '--unset-all')).toBe(false)
+  })
+
+  it('never discovers a non-pr-prefixed remote through the bare listing, even if wide', async () => {
+    const exec = makeExec({
+      remoteNames: ['some-other-remote'],
+      urlByRemote: { 'some-other-remote': 'git@github.com:someone/else.git\n' },
+      fetchByRemote: { 'some-other-remote': ['+refs/heads/*:refs/remotes/some-other-remote/*'] }
+    })
+
+    const migrated = await migrateForkRemoteRefspecsWithExec(REPO_PATH, REPO_ID, storeOf({}), exec)
+
+    expect(migrated).toEqual([])
+    expect(exec.mock.calls.some(([args]) => args[1] === '--unset-all')).toBe(false)
   })
 
   it('also narrows branches only referenced by surviving branch.*.remote config (no metadata left)', async () => {

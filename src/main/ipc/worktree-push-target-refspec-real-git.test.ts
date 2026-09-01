@@ -218,4 +218,32 @@ describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => 
     const after = await trackedRefsUnder(FORK_REMOTE)
     expect(after.filter((ref) => ref !== headRef)).toEqual([`${FORK_REMOTE}/${TRACKED_BRANCH}`])
   })
+
+  it('clears the refspec of a wide pr-* remote with zero worktree-metadata trace, and prunes its refs', async () => {
+    // Simulates a remote whose worktree was removed outside preserve-on-delete: no live
+    // worktree, and no surviving metadata entry either -- the store knows nothing about it.
+    await git(['remote', 'add', FORK_REMOTE, forkPath], repoPath)
+    await git(['fetch', FORK_REMOTE], repoPath)
+    const before = await trackedRefsUnder(FORK_REMOTE)
+    expect(before.length).toBeGreaterThan(1)
+
+    const migrated = await migrateForkRemoteRefspecsWithExec(
+      repoPath,
+      REPO_ID,
+      storeOf({}),
+      execGit
+    )
+
+    expect(migrated).toEqual([FORK_REMOTE])
+    await expect(
+      git(['config', '--get-all', `remote.${FORK_REMOTE}.fetch`], repoPath)
+    ).rejects.toThrow()
+    // The remote itself survives (only #17842's reconciliation removes remotes outright),
+    // and stays pushable -- just imports nothing on a subsequent plain fetch.
+    await expect(
+      git(['config', '--get', `remote.${FORK_REMOTE}.url`], repoPath)
+    ).resolves.toContain(forkPath)
+    await git(['fetch', FORK_REMOTE], repoPath)
+    await expect(trackedRefsUnder(FORK_REMOTE)).resolves.toEqual([])
+  })
 })

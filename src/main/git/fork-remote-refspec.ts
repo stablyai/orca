@@ -112,6 +112,22 @@ export async function ensureRemoteTracksBranchNarrowly(
 }
 
 /**
+ * Removes every `remote.<name>.fetch` entry, leaving the remote pushable but importing
+ * nothing on a plain fetch. For a fork remote with no branch pinning it at all (no
+ * worktree metadata, no `branch.*.remote`/`.pushRemote` config), there's nothing to
+ * narrow *to* -- but leaving the wide default in place means the next plain fetch still
+ * re-imports the fork's entire branch set. See the migration sweep's caller for the
+ * provenance check gating when this is safe to call.
+ */
+export async function clearForkRemoteFetchRefspec(
+  execGit: GitExecFn,
+  repoPath: string,
+  remoteName: string
+): Promise<void> {
+  await execGit(['config', '--unset-all', `remote.${remoteName}.fetch`], repoPath).catch(() => {})
+}
+
+/**
  * Deletes remote-tracking refs under `refs/remotes/<remoteName>/` that fall outside
  * `keepBranches`. Needed because migrating away from the old wide default leaves behind
  * refs for every branch the earlier wide fetch already pulled in, and a plain fetch under
