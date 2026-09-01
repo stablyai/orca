@@ -117,6 +117,34 @@ describe('resolveLeftSidebarStyleVariables', () => {
     expect(darkVars?.['--foreground']).toBe('#fafafa')
   })
 
+  it('preserves text contrast for mid-tone terminal palettes', () => {
+    const vars = resolveLeftSidebarStyleVariables(
+      settings({
+        leftSidebarAppearanceMode: 'match-terminal',
+        terminalColorOverrides: { background: '#777777', foreground: '#000000' }
+      }),
+      false
+    )
+
+    expect(vars?.['--card']).toBe('#777777')
+    expect(vars?.['--popover']).toBe('#777777')
+    expect(vars?.['--secondary']).toBe('#777777')
+    expect(vars?.['--muted-foreground']).toBe('#000000')
+  })
+
+  it('checks muted text against the derived muted surface', () => {
+    const vars = resolveLeftSidebarStyleVariables(
+      settings({
+        leftSidebarAppearanceMode: 'match-terminal',
+        terminalColorOverrides: { background: '#4a4a4a', foreground: '#fdfdfd' }
+      }),
+      true
+    )
+
+    expect(vars?.['--muted']).toContain('#fdfdfd 7%')
+    expect(vars?.['--muted-foreground']).toBe('#fdfdfd')
+  })
+
   it('normalizes accepted overrides and falls back from incomplete colors', () => {
     const normalized = resolveLeftSidebarStyleVariables(
       settings({

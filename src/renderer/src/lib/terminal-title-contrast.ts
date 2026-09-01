@@ -15,6 +15,8 @@ const LIGHT_SURFACE_CONTRAST_REFERENCE = { r: 0, g: 0, b: 0 }
 const DARK_SURFACE_CONTRAST_REFERENCE = { r: 255, g: 255, b: 255 }
 const LIGHT_SURFACE_FOREGROUND = '#0a0a0a'
 const DARK_SURFACE_FOREGROUND = '#fafafa'
+const MAXIMUM_CONTRAST_LIGHT_FOREGROUND = '#000000'
+const MAXIMUM_CONTRAST_DARK_FOREGROUND = '#ffffff'
 const MINIMUM_TEXT_CONTRAST = 4.5
 
 export function isTerminalBackgroundLight(
@@ -56,9 +58,71 @@ export function resolveReadableTerminalForeground(
       return foreground!
     }
   }
-  return isTerminalBackgroundLight(background, options)
-    ? LIGHT_SURFACE_FOREGROUND
-    : DARK_SURFACE_FOREGROUND
+  const lightBackground = isTerminalBackgroundLight(background, options)
+  const preferredForeground = lightBackground ? LIGHT_SURFACE_FOREGROUND : DARK_SURFACE_FOREGROUND
+  const preferredColor = parseCssRgbColor(preferredForeground)
+  if (
+    compositedBackground &&
+    preferredColor &&
+    contrastRatio(preferredColor, compositedBackground) < MINIMUM_TEXT_CONTRAST
+  ) {
+    return lightBackground ? MAXIMUM_CONTRAST_LIGHT_FOREGROUND : MAXIMUM_CONTRAST_DARK_FOREGROUND
+  }
+  return preferredForeground
+}
+
+export function isTerminalForegroundReadableOnMix(
+  foreground: string,
+  background: string,
+  foregroundPercent: number,
+  options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
+): boolean {
+  return terminalColorMixContrast(foreground, background, 100, foregroundPercent, options)
+}
+
+export function isTerminalForegroundMixReadable(
+  foreground: string,
+  background: string,
+  foregroundPercent: number,
+  surfaceForegroundPercent: number,
+  options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
+): boolean {
+  return terminalColorMixContrast(
+    foreground,
+    background,
+    foregroundPercent,
+    surfaceForegroundPercent,
+    options
+  )
+}
+
+function terminalColorMixContrast(
+  foreground: string,
+  background: string,
+  textForegroundPercent: number,
+  surfaceForegroundPercent: number,
+  options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' }
+): boolean {
+  const compositedBackground = compositeTerminalBackground(background, options)
+  const parsedForeground = parseCssRgbColor(foreground)
+  if (!compositedBackground || !parsedForeground) {
+    return false
+  }
+  const opaqueForeground =
+    parsedForeground.a < 1
+      ? compositeRgb(parsedForeground, compositedBackground, parsedForeground.a)
+      : parsedForeground
+  const text = compositeRgb(
+    opaqueForeground,
+    compositedBackground,
+    clampNumber(textForegroundPercent / 100, 0, 1)
+  )
+  const surface = compositeRgb(
+    opaqueForeground,
+    compositedBackground,
+    clampNumber(surfaceForegroundPercent / 100, 0, 1)
+  )
+  return contrastRatio(text, surface) >= MINIMUM_TEXT_CONTRAST
 }
 
 function compositeTerminalBackground(

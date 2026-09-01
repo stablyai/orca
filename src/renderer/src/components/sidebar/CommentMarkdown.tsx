@@ -5,6 +5,7 @@ import remarkBreaks from 'remark-breaks'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import { cn } from '@/lib/utils'
+import type { CommentMermaidScheme } from './CommentMermaidBlock'
 import {
   compactCommentMarkdownComponents,
   createCompactCommentMarkdownComponents,
@@ -186,6 +187,7 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   expandImages?: boolean
+  mermaidScheme?: CommentMermaidScheme
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -201,22 +203,24 @@ const CommentMarkdown = React.memo(
       onLinkClick,
       allowFileUriLinks = false,
       expandImages = false,
+      mermaidScheme = 'app',
       ...rest
     },
     ref
   ) {
     const components = React.useMemo(() => {
-      if (!onLinkClick) {
-        return variant === 'document'
+      if (variant === 'document') {
+        return !onLinkClick && mermaidScheme === 'app'
           ? documentCommentMarkdownComponents
-          : expandImages
-            ? createCompactCommentMarkdownComponents(undefined, true)
-            : compactCommentMarkdownComponents
+          : createDocumentCommentMarkdownComponents(onLinkClick, mermaidScheme)
       }
-      return variant === 'document'
-        ? createDocumentCommentMarkdownComponents(onLinkClick)
-        : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
-    }, [expandImages, variant, onLinkClick])
+      if (!onLinkClick) {
+        return expandImages
+          ? createCompactCommentMarkdownComponents(undefined, true)
+          : compactCommentMarkdownComponents
+      }
+      return createCompactCommentMarkdownComponents(onLinkClick, expandImages)
+    }, [expandImages, mermaidScheme, variant, onLinkClick])
     const activeRemarkPlugins = React.useMemo(
       () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
       [githubRepo]

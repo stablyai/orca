@@ -66,9 +66,10 @@ export function EntryActionRow({
       id={id}
       role="option"
       aria-selected={selected}
+      data-selected={selected}
       disabled={disabled}
       className={cn(
-        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
+        'jump-palette-item flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
         selected
           ? 'bg-accent text-accent-foreground'
           : // Why: CSS :hover still matches a disabled button, so a pending row would

@@ -7,6 +7,8 @@ import {
 import { normalizeTerminalHexColor } from '../../../shared/terminal-custom-themes'
 import {
   isTerminalBackgroundLight,
+  isTerminalForegroundMixReadable,
+  isTerminalForegroundReadableOnMix,
   resolveEffectiveTerminalAppearance,
   resolveReadableTerminalForeground
 } from './terminal-theme'
@@ -74,15 +76,43 @@ function compositeWithBaseSurface(color: string, alpha: number | undefined): str
   return `color-mix(in srgb, ${color} ${percent}%, var(--app-appearance-base-background))`
 }
 
-function buildSurfaceVariables(background: string, foreground: string): LeftSidebarStyleVariables {
-  const card = `color-mix(in srgb, ${foreground} 4%, ${background})`
-  const popover = `color-mix(in srgb, ${foreground} 6%, ${background})`
-  const secondary = `color-mix(in srgb, ${foreground} 12%, ${background})`
-  const accent = `color-mix(in srgb, ${foreground} 9%, ${background})`
-  const muted = `color-mix(in srgb, ${foreground} 7%, ${background})`
+type TerminalSurfaceContrast = {
+  rawBackground: string
+  options: { backgroundOpacity?: number; appSurface: 'dark' | 'light' }
+}
+
+function buildSurfaceVariables(
+  background: string,
+  foreground: string,
+  contrast?: TerminalSurfaceContrast
+): LeftSidebarStyleVariables {
+  const surface = (foregroundPercent: number): string => {
+    if (
+      contrast &&
+      !isTerminalForegroundReadableOnMix(
+        foreground,
+        contrast.rawBackground,
+        foregroundPercent,
+        contrast.options
+      )
+    ) {
+      return background
+    }
+    return `color-mix(in srgb, ${foreground} ${foregroundPercent}%, ${background})`
+  }
+  const card = surface(4)
+  const popover = surface(6)
+  const secondary = surface(12)
+  const accent = surface(9)
+  const muted = surface(7)
   const border = `color-mix(in srgb, ${foreground} 7%, ${background})`
   const input = `color-mix(in srgb, ${foreground} 15%, ${background})`
   const ring = `color-mix(in srgb, ${foreground} 44%, ${background})`
+  const mutedForeground =
+    contrast &&
+    !isTerminalForegroundMixReadable(foreground, contrast.rawBackground, 62, 7, contrast.options)
+      ? foreground
+      : `color-mix(in srgb, ${foreground} 62%, ${background})`
 
   return {
     '--background': background,
@@ -96,7 +126,7 @@ function buildSurfaceVariables(background: string, foreground: string): LeftSide
     '--secondary': secondary,
     '--secondary-foreground': foreground,
     '--muted': muted,
-    '--muted-foreground': `color-mix(in srgb, ${foreground} 62%, ${background})`,
+    '--muted-foreground': mutedForeground,
     '--accent': accent,
     '--accent-foreground': foreground,
     '--border': border,
@@ -125,7 +155,12 @@ function buildSurfaceVariables(background: string, foreground: string): LeftSide
 function resolveTerminalSurface(
   settings: AppAppearanceSettings,
   systemPrefersDark: boolean
-): { background: string; foreground: string; rawBackground: string } {
+): {
+  background: string
+  foreground: string
+  rawBackground: string
+  contrastOptions: TerminalSurfaceContrast['options']
+} {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const rawBackground =
     normalizeTerminalHexColor(settings.terminalColorOverrides?.background) ??
@@ -144,7 +179,8 @@ function resolveTerminalSurface(
   return {
     background: compositeWithBaseSurface(rawBackground, settings.terminalBackgroundOpacity),
     foreground: resolveReadableTerminalForeground(rawForeground, rawBackground, contrastOptions),
-    rawBackground
+    rawBackground,
+    contrastOptions
   }
 }
 
@@ -152,8 +188,11 @@ function resolveTerminalSurfaceVariables(
   settings: AppAppearanceSettings,
   systemPrefersDark: boolean
 ): LeftSidebarStyleVariables {
-  const { background, foreground } = resolveTerminalSurface(settings, systemPrefersDark)
-  return buildSurfaceVariables(background, foreground)
+  const { background, foreground, rawBackground, contrastOptions } = resolveTerminalSurface(
+    settings,
+    systemPrefersDark
+  )
+  return buildSurfaceVariables(background, foreground, { rawBackground, options: contrastOptions })
 }
 
 function resolveTintedSurfaceVariables(settings: AppAppearanceSettings): LeftSidebarStyleVariables {

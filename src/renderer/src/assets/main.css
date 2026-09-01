@@ -393,11 +393,20 @@
   --input: var(--orca-editor-base-input);
   --ring: var(--orca-editor-base-ring);
   --status-success: var(--orca-editor-base-status-success);
+  --ai-action-accent: var(--orca-editor-base-ai-action-accent);
   --annotation-highlight: var(--orca-editor-base-annotation-highlight);
   --markdown-search-match: var(--orca-editor-base-markdown-search-match);
   --markdown-search-match-active: var(--orca-editor-base-markdown-search-match-active);
+  --git-decoration-modified: var(--orca-editor-base-git-decoration-modified);
+  --git-decoration-renamed: var(--orca-editor-base-git-decoration-renamed);
   --radius: var(--orca-editor-base-radius);
   --editor-surface: var(--orca-editor-base-editor-surface);
+}
+
+:root[data-app-appearance]
+  :is(.editor-content-pane, .markdown-preview-shell, .rich-markdown-editor-layout) {
+  background: var(--editor-surface);
+  color: var(--foreground);
 }
 
 .plugin-security-chrome {
