@@ -68,6 +68,8 @@ export type CreateWorktreeArgs = {
    *  branch/path seed. Used when a workspace is created from a GitHub or
    *  Linear artifact whose title should remain readable in the sidebar. */
   displayName?: string
+  /** Distinguishes user labels from generated artifact titles at creation time. */
+  displayNameKind?: 'generated' | 'user'
   baseBranch?: string
   /** Source Control compare target when it differs from the checkout start point. */
   compareBaseRef?: string

@@ -339,6 +339,8 @@ type OpenTabPaletteItem = BrowserPaletteItem | SimulatorPaletteItem | WorkspaceT
 
 // Why: while the palette is open the workspace digit chord addresses recent rows, so it labels them.
 const DIGIT_INDEX_ACTION_ID = 'workspace.selectByIndex' as const
+// Why: the chord only binds keys 1–9, so expanded rows past the ninth are unaddressable.
+const DIGIT_INDEX_ADDRESSABLE_ROWS = 9
 // Why: this is also the ⌘N ceiling — any deeper and RECENT WORKTREES falls below the first screenful.
 const EMPTY_QUERY_RECENT_TAB_CAP = 6
 // Why: hold total empty-query rows at the pre-existing 10 so the worktree header stays above the fold.
@@ -1637,9 +1639,7 @@ function WorktreeJumpPaletteContent({
     const itemByOccurrenceId = new Map(
       openTabRecentRows.map(({ occurrenceId, item }) => [occurrenceId, item])
     )
-    return recentTabOrder
-      .flatMap((occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? [])
-      .slice(0, EMPTY_QUERY_RECENT_TAB_CAP)
+    return recentTabOrder.flatMap((occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? [])
   }, [openTabRecentRows, recentTabOrder])
 
   const settingsResults = useMemo(
@@ -1892,9 +1892,14 @@ function WorktreeJumpPaletteContent({
 
   const paletteSections = useMemo(() => {
     const openTabsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['open-tabs'] ?? 0)
+    // Why: "See more" drops the above-the-fold trim outright instead of stepping 20 at a time, so one
+    // click reveals the whole recent history the shared render cap allows.
+    const recentTabsCap = expandedSectionCaps['open-tabs']
+      ? openTabsCap
+      : EMPTY_QUERY_RECENT_TAB_CAP
     const openTabs = hasQuery
       ? capPaletteSection(openTabItems, openTabsCap)
-      : { visible: recentTabItems, overflowCount: 0 }
+      : capPaletteSection(recentTabItems, recentTabsCap)
     // Why: the worktree section shrinks against the recent rows to hold the empty-query list at its
     // pre-existing 10, so RECENT WORKTREES stays above the fold. An empty recent section hands the
     // whole budget to worktrees but never uncaps — a filter chip or a tab-less session used to drop
@@ -1959,11 +1964,16 @@ function WorktreeJumpPaletteContent({
     openTabsLeadSections
   ])
 
-  // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query.
+  // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query, and an
+  // expanded section leaves its unaddressable rows unbadged rather than advertising ⌘10.
   const recentTabShortcutIndexByItem = useMemo(
     () =>
       new Map(
-        hasQuery ? [] : paletteSections.visibleOpenTabItems.map((item, index) => [item, index])
+        hasQuery
+          ? []
+          : paletteSections.visibleOpenTabItems
+              .slice(0, DIGIT_INDEX_ADDRESSABLE_ROWS)
+              .map((item, index) => [item, index])
       ),
     [hasQuery, paletteSections]
   )

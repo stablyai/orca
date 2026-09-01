@@ -4,11 +4,10 @@ This file is a discovery stub, not the usage guide. The full, version-matched co
 reference is served by the `orca` binary itself — kept out of this file on purpose so it can
 never drift from the binary that will actually run your commands.
 
-Engage Orca's computer-use surface whenever you must inspect or operate a local desktop app
-window — reading its accessibility tree, taking screenshots, or performing safe UI actions
-(click controls, type, press keys, scroll, drag, set values). It also covers browser
-windows, webviews, and Orca's own UI. Triggers include "computer use", "orca computer",
-"read Spotify", "read Slack", "control/click/read in a desktop app", and "get app state".
+Engage Orca's computer-use surface when a task requires desktop-level access to a visible local
+app or window, including a native app or an external browser window/webview. Do not use for
+Orca's embedded browser or page-only browser automation. Use `orca-cli` for Orca's embedded
+pages and a page-automation tool such as Playwright or CDP for external pages.
 
 ## Resolve the CLI for this session
 

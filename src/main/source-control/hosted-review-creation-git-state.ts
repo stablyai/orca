@@ -1,10 +1,13 @@
 import {
+  isRemoteHeadRef,
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
+import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import { gitExecFileAsync } from '../github/gh-utils'
+import { isShowRefNoMatchError, probeAnyExactRef } from '../git/exact-ref-probe'
 import { gitOptionalLocksDisabledEnv } from '../git/runner'
 import { parsePorcelainV1Records, type PorcelainV1Record } from '../git/porcelain-v1-records'
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
@@ -27,11 +30,99 @@ export function hostedReviewExecutionContext(
   return Object.keys(localGitExecOptions).length > 0 ? { localGitExecOptions } : {}
 }
 
+const MAX_REMOTE_REF_OUTPUT_BYTES = 10 * 1024 * 1024
+
+type HostedReviewGitRunOptions = { maxBuffer?: number; timeoutMs?: number }
+type HostedReviewGitRun = (
+  argv: string[],
+  options?: HostedReviewGitRunOptions
+) => Promise<{ stdout: string }>
+
+function* iterateGitOutputLines(output: string): Generator<string> {
+  let lineStart = 0
+  for (let index = 0; index < output.length; index++) {
+    const code = output.charCodeAt(index)
+    if (code !== 10 && code !== 13) {
+      continue
+    }
+    yield output.slice(lineStart, index)
+    if (code === 13 && output.charCodeAt(index + 1) === 10) {
+      index++
+    }
+    lineStart = index + 1
+  }
+  if (lineStart <= output.length) {
+    yield output.slice(lineStart)
+  }
+}
+
+function parseSuffixRemoteRefs(output: string, base: string, remotes: readonly string[]): string[] {
+  const refs = new Set<string>()
+  for (const line of iterateGitOutputLines(output)) {
+    const separator = line.indexOf(' ')
+    if (separator === -1) {
+      continue
+    }
+    const fullRef = line.slice(separator + 1).trim()
+    if (!fullRef.startsWith('refs/remotes/') || !isSafeGitRefName(fullRef)) {
+      continue
+    }
+    const shortRef = fullRef.slice('refs/remotes/'.length)
+    // A remote-tracking ref has both a remote and branch component. Ignore a
+    // malformed bare `refs/remotes/<name>` entry from the suffix stream.
+    if (!shortRef.includes('/')) {
+      continue
+    }
+    // The replaced query was `refs/remotes/*/<base>`, where `*` cannot cross a
+    // slash. `show-ref -- <base>` matches a suffix at any depth, so require the
+    // remote component to be exactly one segment; otherwise a branch named
+    // `origin/feature/main` would answer a query for `main`.
+    const isSingleRemoteSegmentMatch =
+      shortRef.endsWith(`/${base}`) && shortRef.split('/').length === base.split('/').length + 1
+    if (
+      isRemoteHeadRef(shortRef, remotes) ||
+      // A bare `HEAD` denotes the remote's symbolic slot, not every branch
+      // whose final component happens to be `HEAD` (for example `feature/HEAD`).
+      (base === 'HEAD' && shortRef.endsWith('/HEAD')) ||
+      (shortRef !== base && !isSingleRemoteSegmentMatch)
+    ) {
+      continue
+    }
+    refs.add(shortRef)
+    // Two candidates are enough to establish that a suffix is not unique;
+    // retaining more only spends memory without changing the boolean result.
+    if (refs.size >= 2) {
+      break
+    }
+  }
+  return [...refs]
+}
+
+async function listSuffixRemoteBaseRefs(
+  run: HostedReviewGitRun,
+  base: string,
+  remotes: readonly string[]
+): Promise<{ refs: string[]; unknown: boolean }> {
+  try {
+    // The local runner and SSH relay both cap generic Git stdout at 10 MiB.
+    const { stdout } = await run(['show-ref', '--', base], {
+      maxBuffer: MAX_REMOTE_REF_OUTPUT_BYTES
+    })
+    return { refs: parseSuffixRemoteRefs(stdout, base, remotes), unknown: false }
+  } catch (error) {
+    // Unlike --verify, a pattern query exits 1 when it simply has no matches.
+    // Other failures (overflow, a broken repository, or dropped SSH) remain
+    // inconclusive so callers preserve the submitted candidate (fail-open).
+    return isShowRefNoMatchError(error) ? { refs: [], unknown: false } : { refs: [], unknown: true }
+  }
+}
+
 async function runGitForHostedReview(
   repoPath: string,
   args: string[],
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  commandOptions: HostedReviewGitRunOptions = {}
 ): Promise<{ stdout: string; stderr?: string }> {
   if (connectionId) {
     const provider = getSshGitProvider(connectionId)
@@ -40,9 +131,16 @@ async function runGitForHostedReview(
         'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
       )
     }
-    return provider.exec(args, repoPath)
+    return commandOptions.timeoutMs === undefined
+      ? provider.exec(args, repoPath)
+      : provider.exec(args, repoPath, { timeoutMs: commandOptions.timeoutMs })
   }
-  return gitExecFileAsync(args, { cwd: repoPath, ...getHostedReviewLocalGitOptions(options) })
+  return gitExecFileAsync(args, {
+    cwd: repoPath,
+    ...getHostedReviewLocalGitOptions(options),
+    ...(commandOptions.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
+    ...(commandOptions.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs })
+  })
 }
 
 export async function getDefaultBaseRef(
@@ -71,20 +169,58 @@ export async function baseRefExistsOnRemote(
   if (!base) {
     return false
   }
-  const run = (argv: string[]): Promise<{ stdout: string }> =>
-    runGitForHostedReview(repoPath, argv, connectionId, options)
+  const run: HostedReviewGitRun = (argv, commandOptions) =>
+    runGitForHostedReview(repoPath, argv, connectionId, options, commandOptions)
 
-  const patterns = [`refs/remotes/*/${base}`]
-  // `*` does not cross `/`, so a remote-qualified candidate (e.g. `fork/main`) needs its exact tracking ref too.
-  if (base.includes('/')) {
-    patterns.push(`refs/remotes/${base}`)
+  // Validate the complete tracking ref before interpolating user/repo metadata
+  // into Git arguments. In particular, never let `*`, `?`, or control bytes
+  // turn this check back into a namespace scan.
+  if (!isSafeGitRefName(`refs/remotes/${base}`)) {
+    return false
+  }
+
+  let configuredRemotes: string[] = []
+  try {
+    const { stdout: remoteOutput } = await run(['remote'])
+    configuredRemotes = remoteOutput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  } catch {
+    // Ref probes can still prove presence or absence without configured names.
   }
 
   try {
-    // for-each-ref exits 0 on no match: empty means absent, a thrown error means transport failure (preserve the candidate).
-    const { stdout } = await run(['for-each-ref', '--count=1', '--format=%(refname)', ...patterns])
-    return stdout.trim().length > 0
+    // Keep the conventional names in the probe set even when a stale tracking
+    // ref remains after its remote was removed. This also preserves the old
+    // behavior for the common origin/upstream fork workflow without a wildcard.
+    const remoteNames = new Set(['origin', 'upstream', ...configuredRemotes])
+    const candidateRefs = new Set<string>()
+    if (base.includes('/')) {
+      // A qualified candidate (e.g. `fork/main`) is itself a complete tracking
+      // ref and must remain discoverable even when `fork` is no longer configured.
+      candidateRefs.add(`refs/remotes/${base}`)
+    }
+    for (const remote of remoteNames) {
+      const ref = `refs/remotes/${remote}/${base}`
+      if (isSafeGitRefName(ref)) {
+        candidateRefs.add(ref)
+      }
+    }
+    const exactResult = await probeAnyExactRef(run, [...candidateRefs], {
+      maxBuffer: MAX_REMOTE_REF_OUTPUT_BYTES
+    })
+    if (exactResult.found || exactResult.unknown) {
+      return true
+    }
+    // The previous wildcard query considered every remote-tracking ref,
+    // including stale refs left behind after a remote was removed. Keep that
+    // behavior after the cheap exact probes; the fallback captures at most
+    // 10 MiB, so it cannot recreate the unbounded metadata allocation.
+    const suffixResult = await listSuffixRemoteBaseRefs(run, base, configuredRemotes)
+    return suffixResult.refs.length > 0 || suffixResult.unknown
   } catch {
+    // An unexpected ref-probe failure is inconclusive, so preserve the candidate.
     return true
   }
 }

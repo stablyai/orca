@@ -1709,7 +1709,12 @@ export function registerFilesystemHandlers(
             useTemplate: args.useTemplate
           })
           context = await getPullRequestDraftContext(
-            (argv) => provider.exec(argv, args.worktreePath),
+            (argv, commandOptions) =>
+              commandOptions?.timeoutMs !== undefined
+                ? provider.exec(argv, args.worktreePath, { timeoutMs: commandOptions.timeoutMs })
+                : commandOptions?.timeout !== undefined
+                  ? provider.exec(argv, args.worktreePath, { timeoutMs: commandOptions.timeout })
+                  : provider.exec(argv, args.worktreePath),
             {
               base: args.base,
               currentTitle: args.title,
@@ -1767,7 +1772,14 @@ export function registerFilesystemHandlers(
         })
         context = await getPullRequestDraftContext(
           (argv, options) =>
-            gitExecFileAsync(argv, { cwd: worktreePath, ...gitOptions, ...options }),
+            gitExecFileAsync(argv, {
+              cwd: worktreePath,
+              ...gitOptions,
+              ...(options?.maxBuffer === undefined ? {} : { maxBuffer: options.maxBuffer }),
+              ...(options?.timeoutMs === undefined && options?.timeout === undefined
+                ? {}
+                : { timeout: options?.timeoutMs ?? options?.timeout })
+            }),
           {
             base: args.base,
             currentTitle: args.title,

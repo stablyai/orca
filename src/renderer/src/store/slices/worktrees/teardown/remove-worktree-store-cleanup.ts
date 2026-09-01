@@ -25,6 +25,7 @@ export function applyRemoveWorktreeSuccessState(
     }
     const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
     const nextNativeChatLaunchDraftByTabId = { ...s.nativeChatLaunchDraftByTabId }
+    const nextUnverifiedPtyLossTabIds = { ...s.unverifiedPtyLossTabIds }
     // Why: closeTab deletes these per-tab maps but removeWorktree missed them, leaking a split pane's expand flags.
     const nextExpandedPaneByTabId = { ...s.expandedPaneByTabId }
     const nextCanExpandPaneByTabId = { ...s.canExpandPaneByTabId }
@@ -35,6 +36,7 @@ export function applyRemoveWorktreeSuccessState(
       delete nextAutomaticAgentResumeClaimsByTabId[tabId]
       delete nextNativeChatLaunchPromptByTabId[tabId]
       delete nextNativeChatLaunchDraftByTabId[tabId]
+      delete nextUnverifiedPtyLossTabIds[tabId]
       delete nextExpandedPaneByTabId[tabId]
       delete nextCanExpandPaneByTabId[tabId]
     }
@@ -170,6 +172,7 @@ export function applyRemoveWorktreeSuccessState(
       automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
       nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
       nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
+      unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds,
       terminalLayoutsByTabId: nextLayouts,
       expandedPaneByTabId: nextExpandedPaneByTabId,
       canExpandPaneByTabId: nextCanExpandPaneByTabId,

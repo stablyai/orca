@@ -2511,32 +2511,33 @@ export default function AutomationsPage(): React.JSX.Element {
       }
 
       const target = event.target
-      if (!(target instanceof HTMLElement)) {
-        return
-      }
-
       // Why: popovers and menus live outside the store's modal registry; they own Esc too.
       if (hasVisibleOverlay()) {
         return
       }
 
-      // Why: fields that clear their own value on Escape consume this press;
-      // blurring here would drop focus and let the next Escape close the page.
-      if (target.dataset.escapeClearsValue === 'true') {
-        return
-      }
+      if (target instanceof Element) {
+        // Why: fields that clear their own value on Escape consume this press;
+        // blurring here would drop focus and let the next Escape close the page.
+        if (target.getAttribute('data-escape-clears-value') === 'true') {
+          return
+        }
 
-      // Why: match Tasks page behavior: Esc first exits field focus, then exits
-      // the page once focus is back on page chrome.
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement ||
-        target.isContentEditable
-      ) {
-        event.preventDefault()
-        target.blur()
-        return
+        // Why: match Tasks page behavior: Esc first exits field focus, then exits
+        // the page once focus is back on page chrome.
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement ||
+          (target instanceof HTMLElement && target.isContentEditable) ||
+          target.matches('[contenteditable="true"], [contenteditable=""]')
+        ) {
+          event.preventDefault()
+          if (target instanceof HTMLElement) {
+            target.blur()
+          }
+          return
+        }
       }
 
       // Why: detail is a full-page drill-in; step out of nested run views first,

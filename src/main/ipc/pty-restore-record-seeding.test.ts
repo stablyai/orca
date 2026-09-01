@@ -361,17 +361,13 @@ describe('registerPtyHandlers', () => {
     // resolved-worktree cache so this headless fixture resolves offline.
     const worktreeResolutionInternals = runtime as unknown as {
       buildResolvedWorktreeFromId(id: string): unknown
-      resolvedWorktreeCache: {
-        worktrees: unknown[]
-        platformByRepoId: Map<string, NodeJS.Platform>
-        expiresAt: number
-      } | null
+      resolvedWorktrees: object
     }
-    worktreeResolutionInternals.resolvedWorktreeCache = {
+    Reflect.set(worktreeResolutionInternals.resolvedWorktrees, 'resolved', {
       worktrees: [worktreeResolutionInternals.buildResolvedWorktreeFromId(worktreeId)],
       platformByRepoId: new Map([[repo.id, process.platform]]),
       expiresAt: Date.now() + 60_000
-    }
+    })
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({
         id: ptyId,

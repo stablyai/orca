@@ -13,16 +13,10 @@ import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
 import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
-}
-
-type DebouncedBatch = {
-  events: WatcherEvent[]
-  overflowed: boolean
-  timer: ReturnType<typeof setTimeout> | null
-  firstEventAt: number
 }
 
 export type WatchedRoot = {
@@ -171,7 +165,7 @@ export async function createWslWatcher(
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+    batch: createDebouncedBatch(),
     rootPath: worktreePath
   }
 
@@ -199,6 +193,9 @@ export async function createWslWatcher(
   }
 
   function ingestFrame(frame: string): void {
+    if (root.batch.cancelled) {
+      return
+    }
     const nextSnapshot = parseSnapshotFrame(frame, distro)
     if (!prevSnapshot) {
       prevSnapshot = nextSnapshot

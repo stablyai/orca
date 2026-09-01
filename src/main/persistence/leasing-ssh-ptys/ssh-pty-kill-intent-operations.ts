@@ -10,6 +10,16 @@ import {
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import type { SshPtyLeaseOperations } from './ssh-pty-lease-operations'
 
+function isDisposableKillOnlyLease(lease: SshRemotePtyLease): boolean {
+  return (
+    lease.pendingKill === undefined &&
+    (lease.state === 'terminated' || lease.state === 'expired') &&
+    lease.worktreeId === undefined &&
+    lease.tabId === undefined &&
+    lease.leafId === undefined
+  )
+}
+
 /** Every recorded-but-undelivered stop for a target, newest first, TTL-filtered and capped.
  *  Returned with stored (target-local) relay pty ids, which is what `pty.shutdown` takes. */
 export function getSshRemotePtyKillIntents(
@@ -32,7 +42,8 @@ export function pruneExpiredSshRemotePtyKillIntents(
   now: number
 ): void {
   let changed = false
-  for (const lease of operations.state.sshRemotePtyLeases ?? []) {
+  const leases = operations.state.sshRemotePtyLeases ?? []
+  for (const lease of leases) {
     if (
       lease.targetId === targetId &&
       lease.pendingKill &&
@@ -44,6 +55,9 @@ export function pruneExpiredSshRemotePtyKillIntents(
     }
   }
   if (changed) {
+    operations.state.sshRemotePtyLeases = leases.filter(
+      (lease) => !isDisposableKillOnlyLease(lease)
+    )
     operations.flush()
   }
 }
@@ -62,10 +76,21 @@ function capPendingKillsForTarget(
   const kept = new Set(
     prunePendingSshPtyKills(pendingSshPtyKillEntries(scoped), now).map((entry) => entry.ptyId)
   )
+  const disposable = new Set<SshRemotePtyLease>()
   for (const lease of scoped) {
     if (!kept.has(lease.ptyId)) {
       delete lease.pendingKill
       lease.updatedAt = now
+      if (isDisposableKillOnlyLease(lease)) {
+        disposable.add(lease)
+      }
+    }
+  }
+  if (disposable.size > 0) {
+    for (let index = leases.length - 1; index >= 0; index -= 1) {
+      if (disposable.has(leases[index])) {
+        leases.splice(index, 1)
+      }
     }
   }
 }
@@ -89,13 +114,16 @@ export function recordSshRemotePtyKillIntent(
   const leases = operations.state.sshRemotePtyLeases
   const existing = leases.find((entry) => entry.targetId === targetId && entry.ptyId === relayPtyId)
   if (existing) {
-    // Why keep the earliest requestedAt: the TTL bounds how long the intent may chase the host, and
-    // a repeated close must not extend it. Attempts carry over so replays stay countable.
-    existing.pendingKill = {
-      ...intent,
-      requestedAt: Math.min(existing.pendingKill?.requestedAt ?? now, now),
-      attempts: existing.pendingKill?.attempts ?? intent.attempts
-    }
+    const prior = existing.pendingKill
+    // Same incarnation means a repeated close; a recycled relay id starts a new intent lifetime.
+    existing.pendingKill =
+      prior?.incarnationId === intent.incarnationId
+        ? {
+            ...intent,
+            requestedAt: Math.min(prior.requestedAt, now),
+            attempts: prior.attempts
+          }
+        : intent
     existing.updatedAt = now
   } else {
     leases.push({
@@ -119,14 +147,20 @@ export function clearSshRemotePtyKillIntent(
   ptyId: string
 ): void {
   const relayPtyId = operations.toStoredPtyId(targetId, ptyId)
-  const lease = (operations.state.sshRemotePtyLeases ?? []).find(
+  const leases = operations.state.sshRemotePtyLeases ?? []
+  const leaseIndex = leases.findIndex(
     (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId
   )
+  const lease = leases[leaseIndex]
   if (!lease?.pendingKill) {
     return
   }
   delete lease.pendingKill
-  lease.updatedAt = Date.now()
+  if (isDisposableKillOnlyLease(lease)) {
+    leases.splice(leaseIndex, 1)
+  } else {
+    lease.updatedAt = Date.now()
+  }
   operations.flush()
 }
 

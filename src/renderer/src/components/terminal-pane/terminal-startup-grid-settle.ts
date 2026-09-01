@@ -78,6 +78,8 @@ export function waitForStableStartupGrid(
     }
 
     frame += 1
+    // Measure before the readiness predicate: a measurement may perform the
+    // fit that makes a newly mounted split's grid eligible for the predicate.
     const measured = options.measure()
     const readyToSettle = options.isReadyToSettle?.() ?? true
     if (!readyToSettle) {

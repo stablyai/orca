@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   finalize: vi.fn(),
   discard: vi.fn(),
   unlock: vi.fn(),
-  getWorktreeOptions: vi.fn()
+  getWorktreeOptions: vi.fn(),
+  computeWorkspaceRoot: vi.fn(),
+  computeWorkspaceRootAsync: vi.fn()
 }))
 
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
@@ -22,13 +24,12 @@ vi.mock('./git/worktree-create-preparation', () => ({
   unlockPreparedWorktree: mocks.unlock
 }))
 vi.mock('./project-runtime-git-options', () => ({
-  getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions
+  getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
+  getWorktreeMirrorDistro: () => undefined
 }))
 vi.mock('./ipc/worktree-logic', () => ({
-  computeWorkspaceRoot: (repoPath: string) =>
-    process.platform === 'win32' && /^[A-Za-z]:[\\/]/.test(repoPath)
-      ? 'C:\\workspace'
-      : '/workspace',
+  computeWorkspaceRoot: mocks.computeWorkspaceRoot,
+  computeWorkspaceRootAsync: mocks.computeWorkspaceRootAsync,
   getWorktreePathSettings: () => ({
     workspaceDir: process.platform === 'win32' ? 'C:\\workspace' : '/workspace',
     nestWorkspaces: false
@@ -52,6 +53,16 @@ beforeEach(() => {
   mocks.discard.mockReset().mockResolvedValue(undefined)
   mocks.unlock.mockReset().mockResolvedValue(undefined)
   mocks.getWorktreeOptions.mockReset().mockReturnValue({})
+  mocks.computeWorkspaceRoot.mockReset().mockImplementation(() => {
+    throw new Error('synchronous workspace-root lookup must not run on the main thread')
+  })
+  mocks.computeWorkspaceRootAsync
+    .mockReset()
+    .mockImplementation(async (repoPath: string) =>
+      process.platform === 'win32' && /^[A-Za-z]:[\\/]/.test(repoPath)
+        ? 'C:\\workspace'
+        : '/workspace'
+    )
 })
 
 afterEach(async () => {
@@ -59,6 +70,41 @@ afterEach(async () => {
 })
 
 describe('worktree create preparation registry', () => {
+  it('starts the checkout only once the async workspace root resolves', async () => {
+    let resolveRoot!: (root: string) => void
+    mocks.computeWorkspaceRootAsync.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveRoot = resolve
+      })
+    )
+
+    const preparation = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    await Promise.resolve()
+    expect(mocks.prepareCheckout).not.toHaveBeenCalled()
+
+    resolveRoot('/workspace')
+    await preparation
+
+    expect(mocks.computeWorkspaceRoot).not.toHaveBeenCalled()
+    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
+  })
+
+  it('still deduplicates when both callers await the same pending root lookup', async () => {
+    let resolveRoot!: (root: string) => void
+    mocks.computeWorkspaceRootAsync.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveRoot = resolve
+      })
+    )
+
+    const first = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    const second = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    resolveRoot('/workspace')
+    await Promise.all([first, second])
+
+    expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
+  })
+
   it('namespaces native Windows preparation directories for long paths', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
 import {
@@ -35,6 +36,7 @@ export function BrowserGuestAnnotateOverlays({
   annotationSend,
   grabAnnotations,
   containerRef,
+  markupPortalContainer,
   webviewRef,
   browserOverlayViewport,
   worktreeId
@@ -44,6 +46,7 @@ export function BrowserGuestAnnotateOverlays({
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
   containerRef: RefObject<HTMLDivElement | null>
+  markupPortalContainer?: HTMLDivElement | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
@@ -61,6 +64,7 @@ export function BrowserGuestAnnotateOverlays({
     dismissGrabToast,
     setGrabToast
   } = grabAnnotations
+  const markupTarget = markupPortalContainer ?? containerRef.current
   const {
     browserAnnotations,
     browserAnnotationTrayOpen,
@@ -78,14 +82,17 @@ export function BrowserGuestAnnotateOverlays({
 
   return (
     <>
-      {markup.isActive && markup.baseImage ? (
-        <MarkupOverlay
-          baseImage={markup.baseImage}
-          busy={markup.state === 'composing'}
-          onComplete={(input) => void markup.complete(input)}
-          onCancel={markup.cancel}
-        />
-      ) : null}
+      {markup.isActive && markup.baseImage && markupTarget
+        ? createPortal(
+            <MarkupOverlay
+              baseImage={markup.baseImage}
+              busy={markup.state === 'composing'}
+              onComplete={(input) => void markup.complete(input)}
+              onCancel={markup.cancel}
+            />,
+            markupTarget
+          )
+        : null}
       {pendingAnnotationPayload ? (
         <PendingBrowserAnnotationCard
           payload={pendingAnnotationPayload}

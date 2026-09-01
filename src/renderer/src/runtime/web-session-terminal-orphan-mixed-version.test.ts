@@ -65,9 +65,18 @@ describe('mixed-version web terminal orphan recovery', () => {
         legacyRecoveryState(),
         missingSnapshot,
         'windows-2',
-        call as never
+        { call: call as never }
       )
-    ).resolves.toBeNull()
+    ).resolves.toMatchObject({
+      tabs: [
+        expect.objectContaining({
+          parentTabId: 'host-tab',
+          leafId: 'leaf-1',
+          status: 'ready',
+          terminal: 'term_live'
+        })
+      ]
+    })
     expect(call).toHaveBeenCalledOnce()
   })
 })

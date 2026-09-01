@@ -22,19 +22,23 @@ describe('estimateCostUsd cache-write TTL rates', () => {
     expect(estimateCostUsd('claude-opus-5', 0, 0, 0, 1_000, 5_000)).toBeCloseTo(0.01)
   })
 
-  it('applies the long-context tier to 1-hour writes', () => {
-    expect(estimateCostUsd('claude-sonnet-4-6', 0, 0, 0, 400_000, 400_000)).toBeCloseTo(3.6)
+  it('keeps Sonnet 4.6 one-hour writes flat across its full 1M window', () => {
+    expect(estimateCostUsd('claude-sonnet-4-6', 0, 0, 0, 400_000, 400_000)).toBeCloseTo(2.4)
   })
 
-  it('shares one long-context allowance across both TTL buckets', () => {
+  it('applies the legacy long-context tier to Sonnet 4.5 one-hour writes', () => {
+    expect(estimateCostUsd('claude-sonnet-4-5', 0, 0, 0, 400_000, 400_000)).toBeCloseTo(3.6)
+  })
+
+  it('shares one legacy long-context allowance across both TTL buckets', () => {
     // 400k writes split evenly: 200k @ (3.75/7.5) and 200k @ (6/12), each tier
     // getting half of the 200k allowance.
-    expect(estimateCostUsd('claude-sonnet-4-6', 0, 0, 0, 400_000, 200_000)).toBeCloseTo(2.925)
+    expect(estimateCostUsd('claude-sonnet-4-5', 0, 0, 0, 400_000, 200_000)).toBeCloseTo(2.925)
   })
 
-  it('never lowers a long-context estimate as writes shift from 5-minute to 1-hour', () => {
+  it('never lowers a legacy long-context estimate as writes shift to 1-hour', () => {
     const costs = [0, 50_000, 100_000, 200_000, 300_000, 400_000].map((write1h) =>
-      estimateCostUsd('claude-sonnet-4-6', 0, 0, 0, 400_000, write1h)!
+      estimateCostUsd('claude-sonnet-4-5', 0, 0, 0, 400_000, write1h)!
     )
     for (let index = 1; index < costs.length; index++) {
       expect(costs[index]).toBeGreaterThan(costs[index - 1])

@@ -35,6 +35,16 @@ export function projectJournalBatch(input: {
   const touchedItemIds = new Set<string>()
   const touchedClientMessageIds = new Set<string>()
   for (const row of input.rows) {
+    if (row.kind === 'lifecycle-batch') {
+      for (const mutation of row.mutations) {
+        touchedItemIds.add(
+          input.canonicalItemId?.(mutation.itemId) ??
+            aliases.get(mutation.itemId) ??
+            mutation.itemId
+        )
+      }
+      continue
+    }
     if (row.kind === 'item' || row.kind === 'tombstone') {
       touchedItemIds.add(
         input.canonicalItemId?.(row.itemId) ?? aliases.get(row.itemId) ?? row.itemId

@@ -18,6 +18,8 @@ export type StructuredAgentSessionHostSession = {
    *  restored for reading has none, and neither has a session a TUI owns — so neither may be
    *  evicted to free a child, and neither may have its lease released as an observed exit. */
   hasProviderChild: boolean
+  /** Exact adapter acquisition behind `hasProviderChild`; retained after exit to fence recovery. */
+  acquisitionGeneration: string | null
 }
 
 export type StructuredAgentSessionHostDeps = {

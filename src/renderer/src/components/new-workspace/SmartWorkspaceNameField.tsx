@@ -79,6 +79,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspace-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
@@ -425,6 +426,14 @@ export default function SmartWorkspaceNameField({
   const showJiraSiteContext = mode === 'jira' && jiraConnectionStatus?.selectedSiteId === 'all'
   const jiraStatusId = React.useId()
   const linearStatusId = React.useId()
+  // Read the latest metadata for URL resolution without making the search effect depend on object identity.
+  const linearStatusRef = useRef(linearStatus)
+  linearStatusRef.current = linearStatus
+  // Store action references can change with wiring; reads should only rerun for query/scope changes.
+  const linearReadMethodsRef = useRef({ fetchLinearIssue, listLinearIssues, searchLinearIssues })
+  linearReadMethodsRef.current = { fetchLinearIssue, listLinearIssues, searchLinearIssues }
+  const linearConnected = linearStatus.connected === true
+  const linearScopeSignature = linearWorkspaceScopeSignature(linearStatus)
 
   useEffect(() => {
     onActiveSourceModeChange?.(mode)
@@ -1018,7 +1027,7 @@ export default function SmartWorkspaceNameField({
   }, [branchSearchRequest, selectedRepoOwnerSettings])
 
   useEffect(() => {
-    if (disabled || !shouldQueryLinear || !linearStatus.connected) {
+    if (disabled || !shouldQueryLinear || !linearConnected) {
       setLinearIssues([])
       setLinearLoading(false)
       setSettledLinearUrlQuery(null)
@@ -1035,18 +1044,24 @@ export default function SmartWorkspaceNameField({
     const request = linearUrlIntent
       ? lookupLinearIssueUrl({
           intent: linearUrlIntent,
-          knownStatus: linearStatus,
+          knownStatus: linearStatusRef.current,
           sourceContext: linearSourceContext,
-          fetchLinearIssue
+          fetchLinearIssue: linearReadMethodsRef.current.fetchLinearIssue
         }).then((issue) => (issue ? [issue] : []))
       : trimmed
-        ? searchLinearIssues(getSmartWorkspaceLinearSearchQuery(trimmed), RESULT_LIMIT, {
-            sourceContext: linearSourceContext
-          })
-        : listLinearIssues(
-            { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
-            { sourceContext: linearSourceContext }
-          ).then((result) => result.items)
+        ? linearReadMethodsRef.current.searchLinearIssues(
+            getSmartWorkspaceLinearSearchQuery(trimmed),
+            RESULT_LIMIT,
+            {
+              sourceContext: linearSourceContext
+            }
+          )
+        : linearReadMethodsRef.current
+            .listLinearIssues(
+              { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
+              { sourceContext: linearSourceContext }
+            )
+            .then((result) => result.items)
     void request
       .then((issues) => {
         if (!stale) {
@@ -1068,8 +1083,15 @@ export default function SmartWorkspaceNameField({
       stale = true
     }
     // Why: list/search are stable store methods; depending on them would refetch on unrelated store writes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled, linearQuery, linearSourceContext, linearStatus, linearUrlIntent, shouldQueryLinear])
+  }, [
+    disabled,
+    linearConnected,
+    linearQuery,
+    linearScopeSignature,
+    linearSourceContext,
+    linearUrlIntent,
+    shouldQueryLinear
+  ])
 
   useEffect(() => {
     if (!shouldQueryJira || !jiraSourceContext || !jiraSearchJql) {

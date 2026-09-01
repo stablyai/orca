@@ -106,6 +106,9 @@ export type UiCommandEventApi = {
   onReloadBrowserPage: (callback: () => void) => () => void
   onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
   onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
+  onScrollBrowserPage?: (
+    callback: (event: { browserPageId: string; deltaX: number; deltaY: number }) => void
+  ) => () => void
   onHardReloadBrowserPage: (callback: () => void) => () => void
   onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
@@ -169,6 +172,8 @@ export type UiCommandEventApi = {
       paneRuntimeId: number
       direction: 'horizontal' | 'vertical'
       command?: string
+      worktreeId?: string
+      sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
       newLeafId?: string
     }) => void

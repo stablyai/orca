@@ -15,6 +15,7 @@ import { execFileCapture, execFileCaptureToTermination } from './exec-file-captu
 import {
   pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
+  isQuietGitControlFlowExit,
   disableDirectWslGitAfterSuccessfulFallback,
   invalidateMissingDirectWslGit,
   resolveGitCommand
@@ -109,7 +110,11 @@ async function gitExecFileAsyncUnlocked(
         try {
           result = await capture(resolved)
         } catch (error) {
-          if (directWslGitExitCode(error, resolved) !== null && !options.signal?.aborted) {
+          if (
+            directWslGitExitCode(error, resolved) !== null &&
+            !isQuietGitControlFlowExit(error) &&
+            !options.signal?.aborted
+          ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
             const fallback = resolveGitCommand(

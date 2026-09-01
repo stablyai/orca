@@ -3,6 +3,7 @@ import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { worktreeRowMatchesMetaHost } from './worktrees/listing/worktree-meta-host-match'
+import { branchName } from '@/lib/git-utils'
 
 type RequiredKey<T> = { [K in keyof T]-?: undefined extends T[K] ? never : K }[keyof T]
 
@@ -59,7 +60,17 @@ export function applyWorktreeUpdates(
     }
 
     changed = true
-    return { ...worktree, ...updates }
+    const next = { ...worktree, ...updates }
+    if (updates.displayNameIsPinned !== undefined) {
+      next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
+      if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
+        const automaticName = branchName(next.branch)
+        // A detached worktree has no branch-derived label; keep the old text until the host
+        // projection supplies its repo/path fallback instead of flashing an empty sidebar row.
+        next.displayName = automaticName || worktree.displayName
+      }
+    }
+    return next
   })
   if (!changed) {
     return worktreesByRepo

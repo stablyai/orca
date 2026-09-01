@@ -5,70 +5,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
-  buildGitStatusSourceControlTree,
-  buildSourceControlTree,
-  compactSourceControlTree,
-  flattenSourceControlTree
-} from '@/components/right-sidebar/source-control-tree'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStagingArea, GitStatusEntry } from '../../../../../../shared/git-status-types'
-import {
-  getEntryExtension,
-  getFilteredCombinedDiffFileTreeEntries
+  getCombinedDiffFileTreeEntriesMatchingStaticFilters,
+  getEntryExtension
 } from './combined-diff-file-tree-filter'
-import {
-  isGitStatusEntry,
-  type CombinedDiffBranchTreeArea,
-  type CombinedDiffFileTreeEntry,
-  type CombinedDiffFileTreeMode
+import type {
+  CombinedDiffFileTreeEntry,
+  CombinedDiffFileTreeMode
 } from '../resolve-changes/combined-diff-section-identity'
-import { CombinedDiffFileTreeRow, type CombinedDiffTreeNode } from './combined-diff-file-tree-row'
+import { CombinedDiffFileTreeRow } from './combined-diff-file-tree-row'
 import { useCombinedDiffFileTreeResize } from './use-combined-diff-file-tree-resize'
 import { translate } from '@/i18n/i18n'
-
-const UNCOMMITTED_AREA_ORDER: readonly GitStagingArea[] = ['unstaged', 'staged', 'untracked']
-const UNCOMMITTED_AREA_LABELS: Record<GitStagingArea, string> = {
-  unstaged: 'Changes',
-  staged: 'Staged Changes',
-  untracked: 'Untracked Files'
-}
-
-function buildUncommittedRows(
-  entries: readonly CombinedDiffFileTreeEntry[],
-  collapsedDirectoryKeys: ReadonlySet<string>
-): { area: GitStagingArea; label: string; rows: CombinedDiffTreeNode[] }[] {
-  return UNCOMMITTED_AREA_ORDER.map((area) => {
-    const areaEntries = entries.filter(
-      (entry): entry is GitStatusEntry => isGitStatusEntry(entry) && entry.area === area
-    )
-    if (areaEntries.length === 0) {
-      return null
-    }
-
-    const roots = compactSourceControlTree(buildGitStatusSourceControlTree(area, areaEntries))
-    return {
-      area,
-      label: UNCOMMITTED_AREA_LABELS[area],
-      rows: flattenSourceControlTree(roots, collapsedDirectoryKeys) as CombinedDiffTreeNode[]
-    }
-  }).filter(
-    (group): group is { area: GitStagingArea; label: string; rows: CombinedDiffTreeNode[] } =>
-      Boolean(group)
-  )
-}
-
-function buildBranchRows(
-  mode: Extract<CombinedDiffFileTreeMode, 'all' | 'branch' | 'commit'>,
-  entries: readonly CombinedDiffFileTreeEntry[],
-  collapsedDirectoryKeys: ReadonlySet<string>
-): CombinedDiffTreeNode[] {
-  const branchEntries = entries.filter(
-    (entry): entry is GitBranchChangeEntry => !isGitStatusEntry(entry)
-  )
-  const area: CombinedDiffBranchTreeArea = mode === 'commit' ? 'combined-commit' : 'combined-branch'
-  const roots = compactSourceControlTree(buildSourceControlTree(area, branchEntries))
-  return flattenSourceControlTree(roots, collapsedDirectoryKeys) as CombinedDiffTreeNode[]
-}
+import {
+  buildCombinedDiffBranchTreeRoots,
+  buildCombinedDiffUncommittedTreeGroups,
+  flattenCombinedDiffTreeRoots,
+  getViewedCombinedDiffTreeVisibility,
+  type CombinedDiffTreeNode
+} from './combined-diff-file-tree-model'
 
 export function CombinedDiffFileTree({
   mode,
@@ -115,17 +68,16 @@ export function CombinedDiffFileTree({
     () => Array.from(new Set(entries.map(getEntryExtension))).sort(),
     [entries]
   )
-  const filteredEntries = React.useMemo(
+  // Why: viewed/loading state changes for one section must not invalidate the path filter or tree
+  // construction. It is applied below as a visibility overlay.
+  const structurallyFilteredEntries = React.useMemo(
     () =>
-      getFilteredCombinedDiffFileTreeEntries({
+      getCombinedDiffFileTreeEntriesMatchingStaticFilters({
         entries,
-        mode,
         query,
-        excludedExtensions,
-        includeViewed,
-        viewedSectionKeys
+        excludedExtensions
       }),
-    [entries, excludedExtensions, includeViewed, mode, query, viewedSectionKeys]
+    [entries, excludedExtensions, query]
   )
   const toggleExtension = React.useCallback((extension: string) => {
     setExcludedExtensions((prev) => {
@@ -146,20 +98,74 @@ export function CombinedDiffFileTree({
   const activeFilterCount =
     excludedExtensions.size + (includeViewed ? 0 : 1) + (query.trim().length > 0 ? 1 : 0)
 
-  const uncommittedGroups = React.useMemo(
+  const uncommittedTreeGroups = React.useMemo(
     () =>
       mode === 'all' || mode === 'uncommitted'
-        ? buildUncommittedRows(filteredEntries, collapsedDirectoryKeys)
+        ? buildCombinedDiffUncommittedTreeGroups(structurallyFilteredEntries)
         : [],
-    [collapsedDirectoryKeys, filteredEntries, mode]
+    [mode, structurallyFilteredEntries]
   )
-  const branchRows = React.useMemo(
+  const branchTreeRoots = React.useMemo(
     () =>
       mode === 'all' || mode === 'branch' || mode === 'commit'
-        ? buildBranchRows(mode, filteredEntries, collapsedDirectoryKeys)
+        ? buildCombinedDiffBranchTreeRoots(mode, structurallyFilteredEntries)
         : [],
-    [collapsedDirectoryKeys, filteredEntries, mode]
+    [mode, structurallyFilteredEntries]
   )
+  // Why: the viewed overlay below replaces these rows entirely when viewed files are hidden, so
+  // flattening the unfiltered tree there is pure dead work.
+  const uncommittedRowsByArea = React.useMemo(() => {
+    const rowsByArea = new Map<string, CombinedDiffTreeNode[]>()
+    if (!includeViewed) {
+      return rowsByArea
+    }
+    for (const group of uncommittedTreeGroups) {
+      rowsByArea.set(group.area, flattenCombinedDiffTreeRoots(group.roots, collapsedDirectoryKeys))
+    }
+    return rowsByArea
+  }, [collapsedDirectoryKeys, includeViewed, uncommittedTreeGroups])
+  const branchRows = React.useMemo(
+    () =>
+      includeViewed ? flattenCombinedDiffTreeRoots(branchTreeRoots, collapsedDirectoryKeys) : [],
+    [branchTreeRoots, collapsedDirectoryKeys, includeViewed]
+  )
+  const uncommittedVisibleRowsByArea = React.useMemo(() => {
+    if (includeViewed) {
+      return null
+    }
+    const rowsByArea = new Map<string, ReturnType<typeof getViewedCombinedDiffTreeVisibility>>()
+    for (const group of uncommittedTreeGroups) {
+      rowsByArea.set(
+        group.area,
+        getViewedCombinedDiffTreeVisibility({
+          roots: group.roots,
+          collapsedDirectoryKeys,
+          mode,
+          viewedSectionKeys
+        })
+      )
+    }
+    return rowsByArea
+  }, [collapsedDirectoryKeys, includeViewed, mode, uncommittedTreeGroups, viewedSectionKeys])
+  const branchVisibleRows = React.useMemo(
+    () =>
+      includeViewed
+        ? null
+        : getViewedCombinedDiffTreeVisibility({
+            roots: branchTreeRoots,
+            collapsedDirectoryKeys,
+            mode,
+            viewedSectionKeys
+          }),
+    [branchTreeRoots, collapsedDirectoryKeys, includeViewed, mode, viewedSectionKeys]
+  )
+  const visibleEntryCount = includeViewed
+    ? structurallyFilteredEntries.length
+    : (branchVisibleRows?.visibleFileCount ?? 0) +
+      Array.from(uncommittedVisibleRowsByArea?.values() ?? []).reduce(
+        (count, visibility) => count + visibility.visibleFileCount,
+        0
+      )
 
   if (collapsed) {
     return null
@@ -278,7 +284,7 @@ export function CombinedDiffFileTree({
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
-        {filteredEntries.length === 0 ? (
+        {visibleEntryCount === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             {translate(
               'auto.components.editor.CombinedDiffFileTree.f984289373',
@@ -287,27 +293,40 @@ export function CombinedDiffFileTree({
           </div>
         ) : mode === 'all' || mode === 'uncommitted' ? (
           <>
-            {uncommittedGroups.map((group) => (
-              <div key={group.area} className="py-1">
-                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                  {group.label}
+            {uncommittedTreeGroups.map((group) => {
+              const rows =
+                uncommittedVisibleRowsByArea?.get(group.area)?.rows ??
+                uncommittedRowsByArea.get(group.area) ??
+                []
+              const visibleFileCounts = uncommittedVisibleRowsByArea?.get(
+                group.area
+              )?.visibleFileCounts
+              if (rows.length === 0) {
+                return null
+              }
+              return (
+                <div key={group.area} className="py-1">
+                  <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                    {group.label}
+                  </div>
+                  {rows.map((node) => (
+                    <CombinedDiffFileTreeRow
+                      key={node.key}
+                      node={node}
+                      mode={mode}
+                      worktreePath={worktreePath}
+                      activeSectionKey={activeSectionKey}
+                      sectionIndexByKey={sectionIndexByKey}
+                      isCollapsed={collapsedDirectoryKeys.has(node.key)}
+                      visibleFileCount={visibleFileCounts?.get(node.key)}
+                      onToggleDirectory={toggleDirectory}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
                 </div>
-                {group.rows.map((node) => (
-                  <CombinedDiffFileTreeRow
-                    key={node.key}
-                    node={node}
-                    mode={mode}
-                    worktreePath={worktreePath}
-                    activeSectionKey={activeSectionKey}
-                    sectionIndexByKey={sectionIndexByKey}
-                    isCollapsed={collapsedDirectoryKeys.has(node.key)}
-                    onToggleDirectory={toggleDirectory}
-                    onNavigate={onNavigate}
-                  />
-                ))}
-              </div>
-            ))}
-            {mode === 'all' && branchRows.length > 0 ? (
+              )
+            })}
+            {mode === 'all' && (branchVisibleRows?.rows ?? branchRows).length > 0 ? (
               <div className="py-1">
                 <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                   {translate(
@@ -315,7 +334,7 @@ export function CombinedDiffFileTree({
                     'Committed on Branch'
                   )}
                 </div>
-                {branchRows.map((node) => (
+                {(branchVisibleRows?.rows ?? branchRows).map((node) => (
                   <CombinedDiffFileTreeRow
                     key={node.key}
                     node={node}
@@ -324,6 +343,7 @@ export function CombinedDiffFileTree({
                     activeSectionKey={activeSectionKey}
                     sectionIndexByKey={sectionIndexByKey}
                     isCollapsed={collapsedDirectoryKeys.has(node.key)}
+                    visibleFileCount={branchVisibleRows?.visibleFileCounts.get(node.key)}
                     onToggleDirectory={toggleDirectory}
                     onNavigate={onNavigate}
                   />
@@ -332,7 +352,7 @@ export function CombinedDiffFileTree({
             ) : null}
           </>
         ) : (
-          branchRows.map((node) => (
+          (branchVisibleRows?.rows ?? branchRows).map((node) => (
             <CombinedDiffFileTreeRow
               key={node.key}
               node={node}
@@ -341,6 +361,7 @@ export function CombinedDiffFileTree({
               activeSectionKey={activeSectionKey}
               sectionIndexByKey={sectionIndexByKey}
               isCollapsed={collapsedDirectoryKeys.has(node.key)}
+              visibleFileCount={branchVisibleRows?.visibleFileCounts.get(node.key)}
               onToggleDirectory={toggleDirectory}
               onNavigate={onNavigate}
             />

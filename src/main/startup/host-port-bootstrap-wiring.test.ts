@@ -52,6 +52,33 @@ describe('host port bootstrap wiring', () => {
     }
   })
 
+  it('installs the app environment as part of the userData decision, not after it', () => {
+    // Why (#16761): the accessor throws until installed, and `getCanonicalUserDataPath()` memoizes
+    // whatever it first resolves. Any gap between deciding where userData lives and installing the
+    // port is a window where an early path resolve either kills the process — which is what took
+    // down every macOS `orca serve` — or caches the pre-override directory for the whole session.
+    // Keeping the four statements adjacent is what makes that window zero rather than merely small.
+    const decide = source.indexOf('configureDevUserDataPath(is.dev)')
+    const install = source.indexOf('setAppEnvironment(new ElectronAppEnvironment())')
+    const capture = source.indexOf('initDataPath()')
+
+    expect(decide).toBeGreaterThanOrEqual(0)
+    expect(install).toBeGreaterThan(decide)
+    expect(capture).toBeGreaterThan(install)
+
+    const statements = source
+      .slice(decide, capture)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('//'))
+
+    expect(statements).toEqual([
+      'configureDevUserDataPath(is.dev)',
+      'configureOrcaUserDataPathEnv()',
+      'setAppEnvironment(new ElectronAppEnvironment())'
+    ])
+  })
+
   it('installs the ports at process level, not per window', () => {
     // Why: installing per window registered the PTY surfaces against no-ops on the
     // serve path, where no window ever opens. Caught in CI by the SSH docker E2E.

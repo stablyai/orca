@@ -46,7 +46,9 @@ src/main/browser/browser-cookie-import.ts
 src/main/browser/browser-route-egress-electron-launch.ts
 src/main/browser/browser-route-persisted-worker-electron-process.ts
 src/main/claude-accounts/keychain.ts
-src/main/codex-accounts/runtime-home-service.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-client.ts
 src/main/codex/codex-app-server-posix-supervisor.ts
@@ -128,7 +130,6 @@ src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
 src/main/rate-limits/codex-fetcher.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts
-src/main/runtime/orca-runtime-files.ts
 src/main/runtime/tls-certificate.ts
 src/main/runtime/windows-default-route-interfaces.ts
 src/main/runtime/windows-mobile-firewall.ts

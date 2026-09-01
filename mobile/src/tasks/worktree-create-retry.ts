@@ -82,8 +82,17 @@ export async function createWorktreeWithNameRetry(
       : candidateParams
     const response = await sendWorktreeCreateResilient(client, params, worktreeCreateIdempotency)
     if (response.ok) {
-      const result = (response as RpcSuccess).result as { worktree: { id: string } }
-      return { worktreeId: result.worktree.id, name: candidateName }
+      const result = (response as RpcSuccess).result as {
+        worktree: { id: string; displayName?: string }
+      }
+      const authoritativeName = result.worktree.displayName
+      return {
+        worktreeId: result.worktree.id,
+        name:
+          typeof authoritativeName === 'string' && authoritativeName.trim()
+            ? authoritativeName
+            : candidateName
+      }
     }
     lastError = response.error.message
     if (!isRetryableWorktreeCreateConflict(lastError ?? '')) {

@@ -28,6 +28,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'runtime.onNativeChatLaunchDraftResolved',
   'runtime.onTerminalDriverChanged',
   'runtime.onTerminalFitOverrideChanged',
+  'runtimeEnvironments.onSharedControlDiagnostics',
   'settings.onChanged',
   'ssh.onCredentialRequest',
   'ssh.onCredentialResolved',
@@ -102,6 +103,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
 const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'ui.onMobileMarkdownRequest',
   'automations.onChanged',
+  'runtimeEnvironments.onSharedControlDiagnostics',
   'repos.onChanged',
   'worktrees.onChanged',
   'worktrees.onHeadIdentitiesChanged',
@@ -374,8 +376,9 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     ).toEqual([
       'ui.onMobileMarkdownRequest',
       'automations.onChanged',
+      'runtimeEnvironments.onSharedControlDiagnostics',
       'runtimeEnvironments.subscribe',
-      ...EXPECTED_CALLBACK_REGISTRATION_SEQUENCE.slice(2)
+      ...EXPECTED_CALLBACK_REGISTRATION_SEQUENCE.slice(3)
     ])
     const groupOrder = (names: readonly string[]): string[] =>
       registrationOrder.filter((entry) => names.includes(entry))

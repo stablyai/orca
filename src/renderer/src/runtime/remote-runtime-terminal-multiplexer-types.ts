@@ -1,4 +1,5 @@
 import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal-snapshot-unavailability'
+import type { TerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
 import type { RemoteTerminalStreamWatchdog } from './remote-terminal-stream-watchdog'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -14,7 +15,7 @@ export type TerminalMultiplexEvent =
       streamGeneration?: string
       capabilities?: { ackOutputSourceRanges?: 1; outputPause?: 1 }
     }
-  | { type: 'end'; streamId: number }
+  | { type: 'end'; streamId: number; verdict?: TerminalStreamEndVerdict }
   | { type: 'error'; streamId: number; message?: string }
   | {
       type: 'fit-override-changed'
@@ -44,7 +45,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   ) => void
   onSubscribed?: () => void
   onOutputPauseCapability?: () => void
-  onEnd?: () => void
+  onEnd?: (verdict: TerminalStreamEndVerdict) => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
     mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'

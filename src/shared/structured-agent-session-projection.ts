@@ -18,7 +18,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
     return {
       role: 'assistant',
       blocks: [
-        { type: 'tool-call', name: body.name, input: body.input },
+        { type: 'tool-call', name: body.name, input: body.input, state: body.state },
         ...(body.output
           ? [
               {

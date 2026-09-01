@@ -205,16 +205,16 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux.notify('pty.resize', { id: this.toRelayPtyId(id), cols, rows })
   }
 
-  async shutdown(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
+  async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
     await this.mux.request(
       'pty.shutdown',
       {
         id: this.toRelayPtyId(id),
         immediate: opts.immediate ?? false,
-        keepHistory: opts.keepHistory ?? false
+        keepHistory: opts.keepHistory ?? false,
+        ...(opts.expectedIncarnationId === undefined
+          ? {}
+          : { expectedIncarnationId: opts.expectedIncarnationId })
       },
       relayTimeoutOptions(opts.deadlineMs)
     )

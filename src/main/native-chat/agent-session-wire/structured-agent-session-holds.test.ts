@@ -71,6 +71,18 @@ describe('the holder set', () => {
     expect(holders.isHeld('session-1')).toBe(false)
     expect(holders.isHeld('session-2')).toBe(true)
   })
+
+  it('distinguishes retaining holders from holders that may resume a provider', () => {
+    const holders = new StructuredAgentSessionHolders()
+
+    holders.add('session-1', 'subscriber', false)
+    expect(holders.hasResumeCapableHolder('session-1')).toBe(false)
+
+    holders.add('session-1', 'chat', true)
+    expect(holders.hasResumeCapableHolder('session-1')).toBe(true)
+    holders.remove('session-1', 'chat')
+    expect(holders.hasResumeCapableHolder('session-1')).toBe(false)
+  })
 })
 
 describe('the release clock', () => {

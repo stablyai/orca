@@ -477,7 +477,9 @@
           "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder.",
           "2dcd706774": "Project also exists in another profile",
           "presenceProfileOverflow": "{{names}} +{{count}} more",
-          "removeProjectFailed": "Failed to remove project"
+          "removeProjectFailed": "Failed to remove project",
+          "wslFilesystemBoundaryTitle": "This project is stored on a Windows drive",
+          "wslFilesystemBoundaryDescription": "Git for this project runs in {{distro}}, which reaches Windows drives over the WSL filesystem bridge. Expect git to be roughly 20x slower than it would be on a copy stored inside {{distro}}."
         },
         "settings": {
           "e12dab333b": "Failed to switch servers",
@@ -3576,6 +3578,7 @@
             "remote_server": "Remote Server",
             "runtime_checking": "Checking",
             "runtime_online": "Connected",
+            "runtime_unavailable_transport_up": "Orca unavailable",
             "runtime_unavailable": "Disconnected",
             "runtime_connect_unavailable": "Remote host is not reachable",
             "runtime_disconnect_failed": "Disconnect failed",
@@ -3908,6 +3911,8 @@
             "checking_host": "Orca is checking whether this host is reachable",
             "restoring_connection": "Orca is trying to restore the connection",
             "host_unreachable": "Orca isn’t reachable on this host",
+            "runtime_unavailable": "SSH transport is connected, but the Orca runtime is unavailable",
+            "runtime_unavailable_explanation": "The remote host may still be running; only the Orca runtime connection is unavailable.",
             "contact_note": "The host may still be running; only the Orca connection is unavailable.",
             "last_connected": "Last connected {{value0}}",
             "reconnect_attempt": "Attempt {{value0}}"
@@ -7924,7 +7929,11 @@
           "3f67e8078a": "Use this computer by default. Choose a saved server only when you want supported projects, files, terminals, provider checks, and browser/mobile handoff to run through that server.",
           "2c85efb3e8": "Selecting a saved server makes this browser use that paired Orca runtime as its default Host.",
           "serverConnected": "Connected",
+          "serverWorkspaceWindowClosed": "Workspace window closed",
+          "serverRuntimeUnavailable": "Orca unavailable",
+          "serverRuntimeUnavailableDescription": "SSH transport is connected, but the Orca runtime did not answer. The host may still be running.",
           "serverChecking": "Checking…",
+          "serverReconnecting": "Reconnecting",
           "serverDisconnected": "Disconnected",
           "disconnectedServer": "Disconnected from {{value0}}.",
           "connectToRemoteServers": "Connect to remote servers",
@@ -8256,7 +8265,11 @@
           "8a349e3fac": "Passphrase for {{value0}}",
           "cab3d5f5a5": "Password for {{value0}}",
           "1f3dde805d": "SSH Key Passphrase",
-          "106bd57f4a": "SSH Password"
+          "106bd57f4a": "SSH Password",
+          "a21f9e74c0": "SSH Verification",
+          "981352fb42": "Complete the verification challenge for",
+          "456516603b": "Enter response",
+          "c624f64b86": "Continue"
         },
         "SshTargetCard": {
           "a883f5a00f": "terminal timeout: {{value0}}",
@@ -14885,6 +14898,11 @@
           "directoryAccessRequestMultiple": "This preview wants to read files in {{folders}}.",
           "allowDirectories": "Allow {{count}} folders",
           "editAddressControl": "Edit address"
+        },
+        "LargeDiffLoadPrompt": {
+          "a0af0198aa": "Large diffs are not rendered by default.",
+          "c3d9f4a712": "This diff's size isn't known yet, so it loads on request.",
+          "f7fa7a40d0": "Load diff"
         }
       },
       "diff": {
@@ -16403,7 +16421,7 @@
           "2fc727c831": "Artifact updated",
           "5cb4f5ec36": "Copy link",
           "fbb5018602": "This file is empty.",
-          "6112db5a1c": "Artifacts shared from Orca must be smaller than 800 KB.",
+          "6112db5a1c": "This artifact is too large to share.",
           "e2ed5acd8c": "Orca couldn't read this file. Open it from a workspace and try again.",
           "6d475e9b25": "Only local HTML and Markdown files can be shared as artifacts.",
           "29a406be09": "Artifacts must contain text."
@@ -16609,13 +16627,28 @@
         "running": "Running…",
         "result": "Result",
         "countOne": "1 tool call",
-        "countN": "{{value0}} tool calls"
+        "countN": "{{value0}} tool calls",
+        "runningPreview": "Running {{preview}}",
+        "runningCommand": "Running command",
+        "runningNamedPreview": "Running {{toolName}} {{preview}}",
+        "runningNamed": "Running {{toolName}}",
+        "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
+        "ranCommandManyToolsSummary": "Ran {{commandCount}} command and used {{toolCount}} tools",
+        "ranCommandsOneToolSummary": "Ran {{commandCount}} commands and used {{toolCount}} tool",
+        "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
+        "usedOneSummary": "Used 1 tool",
+        "usedManySummary": "Used {{toolCount}} tools"
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
       },
       "status": {
-        "responding": "Agent is responding"
+        "responding": "Agent is responding",
+        "working": "Working…",
+        "thinking": "Thinking",
+        "workingFor": "Working for {{value0}} seconds",
+        "workedFor": "Worked for {{value0}} seconds",
+        "toggleDetails": "Toggle turn details"
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {

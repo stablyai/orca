@@ -2355,6 +2355,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // card; parseAgentStatusPayload clears it on tool/state change.
           interactivePrompt: payload.interactivePrompt,
           lastAssistantMessage: payload.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: payload.lastAssistantMessageIsToolOutput,
           ...(lastCompletedAssistantMessage ? { lastCompletedAssistantMessage } : {}),
           // Why: reused panes can start non-orchestrated work; only final done rows keep the
           // previous lineage fallback so completed children stay grouped.
@@ -2456,6 +2457,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.toolName !== existing.toolName ||
             entry.toolInput !== existing.toolInput ||
             entry.lastAssistantMessage !== existing.lastAssistantMessage ||
+            entry.lastAssistantMessageIsToolOutput !== existing.lastAssistantMessageIsToolOutput ||
             entry.orchestration !== existing.orchestration ||
             entry.subagents !== existing.subagents ||
             entry.providerSession !== existing.providerSession ||
