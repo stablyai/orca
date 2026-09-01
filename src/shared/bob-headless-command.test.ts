@@ -21,5 +21,11 @@ describe('isBobHeadlessOneShotCommand', () => {
     ).toBe(false)
     // Why: an unrelated script is not an executable token, so `chat` is never read as Bob's subcommand.
     expect(isBobHeadlessOneShotCommand(['node', '/repo/bob.js', 'chat'])).toBe(true)
+    expect(
+      isBobHeadlessOneShotCommand(['node', '/repo/fake-node_modules/bobshell/dist/bob.js', 'chat'])
+    ).toBe(true)
+    expect(isBobHeadlessOneShotCommand(['node', 'node_modules/bobshell/dist/bob.js', 'chat'])).toBe(
+      false
+    )
   })
 })
