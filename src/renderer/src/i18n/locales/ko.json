@@ -14568,6 +14568,44 @@
     }
   },
   "components": {
+    "onboarding": {
+      "flow": {
+        "stepTooltip": {
+          "agent": "기본 Agent",
+          "theme": "테마",
+          "windowsTerminal": "Windows 터미널",
+          "notifications": "알림",
+          "integrations": "연동"
+        },
+        "actions": {
+          "addFirstProject": "첫 프로젝트 추가",
+          "continue": "계속",
+          "openingAddProject": "프로젝트 추가 화면을 여는 중…"
+        }
+      },
+      "skipConfirmation": {
+        "skip": "건너뛰기",
+        "keepGoing": "아니요, 계속하기"
+      },
+      "theme": {
+        "hints": {
+          "system": "OS 설정에 맞춤",
+          "dark": "눈이 편안한 화면",
+          "light": "밝고 선명한 화면"
+        }
+      },
+      "integrations": {
+        "linear": {
+          "submitAccess": "Linear 액세스 추가"
+        },
+        "capabilities": {
+          "startWorkspaceFromIssue": "GitHub 이슈나 PR에서 제목과 컨텍스트가 미리 채워진 워크스페이스를 시작합니다",
+          "browseIssues": "Orca를 떠나지 않고 작업 화면에서 GitHub 이슈와 PR을 탐색합니다",
+          "reviewStatus": "모든 워크트리에서 이슈 상태, 리뷰 상태 및 CI 체크를 확인합니다",
+          "managePullRequests": "Orca를 떠나지 않고 PR을 읽고, 댓글을 달고, 병합합니다"
+        }
+      }
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",

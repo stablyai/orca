@@ -90,11 +90,31 @@ const stepCopy = {
 } as const
 
 const stepTooltipLabels = {
-  agent: 'Default Agent',
-  theme: 'Appearance',
-  windows_terminal: 'Windows Terminal',
-  notifications: 'Notifications',
-  integrations: 'Integrations'
+  agent: {
+    get value() {
+      return translate('components.onboarding.flow.stepTooltip.agent', 'Default Agent')
+    }
+  },
+  theme: {
+    get value() {
+      return translate('components.onboarding.flow.stepTooltip.theme', 'Appearance')
+    }
+  },
+  windows_terminal: {
+    get value() {
+      return translate('components.onboarding.flow.stepTooltip.windowsTerminal', 'Windows Terminal')
+    }
+  },
+  notifications: {
+    get value() {
+      return translate('components.onboarding.flow.stepTooltip.notifications', 'Notifications')
+    }
+  },
+  integrations: {
+    get value() {
+      return translate('components.onboarding.flow.stepTooltip.integrations', 'Integrations')
+    }
+  }
 } as const
 
 type OnboardingFlowProps = {
@@ -113,7 +133,10 @@ export default function OnboardingFlow({
   const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
-    busyLabel ?? (currentStep.id === 'notifications' ? 'Add your first project' : 'Continue')
+    busyLabel ??
+    (currentStep.id === 'notifications'
+      ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
+      : translate('components.onboarding.flow.actions.continue', 'Continue'))
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
@@ -218,6 +241,7 @@ export default function OnboardingFlow({
               {flow.progressSteps.map(({ step, index: realStepIndex }, progressIdx) => {
                 const isActive = realStepIndex === stepIndex
                 const isDone = realStepIndex < stepIndex
+                const stepTooltipLabel = stepTooltipLabels[step.id].value
                 return (
                   <Tooltip key={step.id}>
                     <TooltipTrigger asChild>
@@ -236,14 +260,14 @@ export default function OnboardingFlow({
                         aria-label={translate(
                           'auto.components.onboarding.OnboardingFlow.adaa0aa627',
                           'Go to onboarding step {{value0}}: {{value1}}',
-                          { value0: progressIdx + 1, value1: stepTooltipLabels[step.id] }
+                          { value0: progressIdx + 1, value1: stepTooltipLabel }
                         )}
                         aria-current={isActive ? 'step' : undefined}
                         onClick={() => flow.jumpToStep(realStepIndex)}
                       />
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
-                      {stepTooltipLabels[step.id]}
+                      {stepTooltipLabel}
                     </TooltipContent>
                   </Tooltip>
                 )

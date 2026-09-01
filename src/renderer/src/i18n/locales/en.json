@@ -16555,6 +16555,44 @@
     }
   },
   "components": {
+    "onboarding": {
+      "flow": {
+        "stepTooltip": {
+          "agent": "Default Agent",
+          "theme": "Appearance",
+          "windowsTerminal": "Windows Terminal",
+          "notifications": "Notifications",
+          "integrations": "Integrations"
+        },
+        "actions": {
+          "addFirstProject": "Add your first project",
+          "continue": "Continue",
+          "openingAddProject": "Opening Add Project..."
+        }
+      },
+      "skipConfirmation": {
+        "skip": "Skip",
+        "keepGoing": "No, keep going"
+      },
+      "theme": {
+        "hints": {
+          "system": "Match OS",
+          "dark": "Easy on the eyes",
+          "light": "Bright & crisp"
+        }
+      },
+      "integrations": {
+        "linear": {
+          "submitAccess": "Add Linear access"
+        },
+        "capabilities": {
+          "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context",
+          "browseIssues": "Browse GitHub issues and pull requests in the Tasks view without leaving Orca",
+          "reviewStatus": "See issue state, review status, and CI checks on every worktree",
+          "managePullRequests": "Read, comment on, and merge pull requests without leaving Orca"
+        }
+      }
+    },
     "jiraUserPicker": {
       "select": "Select {{value0}}",
       "search": "Search users",
