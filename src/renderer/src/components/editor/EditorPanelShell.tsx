@@ -134,7 +134,7 @@ export function EditorPanelShell({
           createMarkdownArtifactRequest={createMarkdownArtifactRequest}
         />
       )}
-      <div className="editor-content-pane min-h-0 flex-1">
+      <div className="editor-content-pane flex min-h-0 flex-1 flex-col">
         <Suspense fallback={<EditorLoadingFallback />}>
           <EditorContent
             activeFile={activeFile}
