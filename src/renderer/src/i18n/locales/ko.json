@@ -14595,9 +14595,6 @@
         }
       },
       "integrations": {
-        "linear": {
-          "submitAccess": "Linear 액세스 추가"
-        },
         "capabilities": {
           "startWorkspaceFromIssue": "GitHub 이슈나 PR에서 제목과 컨텍스트가 미리 채워진 워크스페이스를 시작합니다",
           "browseIssues": "Orca를 떠나지 않고 작업 화면에서 GitHub 이슈와 PR을 탐색합니다",

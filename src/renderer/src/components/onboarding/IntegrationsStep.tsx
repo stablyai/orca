@@ -212,7 +212,7 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
         overlayClassName="z-[110]"
         contentClassName="z-[120]"
         connectLabel={translate(
-          'components.onboarding.integrations.linear.submitAccess',
+          'auto.components.onboarding.IntegrationsStep.04ef416712',
           'Add Linear access'
         )}
       />
