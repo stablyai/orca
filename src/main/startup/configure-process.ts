@@ -77,6 +77,17 @@ export function optOutOfHiddenPageWakeUpThrottling(): void {
   appendDisabledChromiumFeatures(['IntensiveWakeUpThrottling'])
 }
 
+// Why: Chromium's native window-occlusion tracking polls DWM to decide whether to throttle
+// rendering, and on Windows this is a well-documented source of app-wide freezes/stutter that
+// scale with window/surface count (electron/electron#40578 and related reports) — every desktop
+// Electron app with heavy per-window surfaces (VS Code included) disables it on win32.
+export function optOutOfWindowsNativeOcclusionTracking(): void {
+  if (process.platform !== 'win32') {
+    return
+  }
+  appendDisabledChromiumFeatures(['CalculateNativeWinOcclusion'])
+}
+
 function appendDisabledChromiumFeatures(features: string[]): void {
   const existingFeatures = app.commandLine
     .getSwitchValue('disable-features')
