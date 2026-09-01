@@ -15,7 +15,7 @@ import {
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
-import { hasLocalWorktreeBaseRef } from './runtime-worktree-create-git'
+import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
 import { isGeneratedWorktreeCreateName } from '../worktree-create-candidates'
 import { consumePreparedWorktreeCreate } from '../worktree-create-preparation'
 import {

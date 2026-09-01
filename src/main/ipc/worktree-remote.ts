@@ -38,7 +38,10 @@ import {
 import { getBranchConflictKindViaExec } from '../git/repo-branch-conflict'
 import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
-import { probeWorktreeBaseRefPresence } from '../git/worktree-base-ref-probe'
+import {
+  hasLocalWorktreeBaseRef,
+  probeWorktreeBaseRefPresence
+} from '../git/worktree-base-ref-probe'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
@@ -716,46 +719,6 @@ async function canCheckoutExistingLocalBranch(
 
 function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
   return Object.keys(gitOptions).length > 0
-}
-
-function hasLocalCommitObjectWithOptions(
-  repoPath: string,
-  ref: string,
-  gitOptions: { wslDistro?: string }
-): Promise<boolean> {
-  return hasCommitObjectViaGitExec(
-    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...gitOptions }),
-    ref
-  )
-}
-
-async function hasLocalWorktreeBaseRefWithOptions(
-  repoPath: string,
-  baseRef: string,
-  gitOptions: { wslDistro?: string }
-): Promise<boolean> {
-  const refExists = async (qualifiedRef: string) => {
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
-        {
-          cwd: repoPath,
-          ...gitOptions
-        }
-      )
-      return stdout.trim().length > 0
-    } catch {
-      return false
-    }
-  }
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
-  if (resolvedBaseRef !== baseRef) {
-    return true
-  }
-  if (baseRef.startsWith('refs/')) {
-    return refExists(baseRef)
-  }
-  return hasLocalCommitObjectWithOptions(repoPath, baseRef, gitOptions)
 }
 
 function getLocalGitHubPrForBranch(
@@ -2066,14 +2029,10 @@ export async function createLocalWorktree(
           ) {
             return true
           }
-          return hasLocalWorktreeBaseRefWithOptions(
-            repo.path,
-            baseBranchCandidate,
-            localGitExecOptions
-          )
+          return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate, localGitExecOptions)
         }
       }
-      return hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranchCandidate, localGitExecOptions)
+      return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate, localGitExecOptions)
     }
   })
   const [username, resolvedBaseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
@@ -2103,15 +2062,11 @@ export async function createLocalWorktree(
     if (remoteTrackingBase) {
       const [hasRemoteTrackingBaseRef, hasNamedLocalBaseRef] = await Promise.all([
         runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase, ...localWorktreeGitOptionArgs),
-        hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localGitExecOptions)
+        hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions)
       ])
       const hasFallbackLocalBaseRef =
         !hasNamedLocalBaseRef &&
-        (await hasLocalWorktreeBaseRefWithOptions(
-          repo.path,
-          remoteTrackingBase.branch,
-          localGitExecOptions
-        ))
+        (await hasLocalWorktreeBaseRef(repo.path, remoteTrackingBase.branch, localGitExecOptions))
       const hasLocalBaseRef =
         hasRemoteTrackingBaseRef || hasNamedLocalBaseRef || hasFallbackLocalBaseRef
       if (!hasRemoteTrackingBaseRef && hasLocalBaseRef) {
@@ -2136,9 +2091,7 @@ export async function createLocalWorktree(
           )
         }
       }
-    } else if (
-      !(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
-    ) {
+    } else if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localWorktreeGitOptions))) {
       // Why: non-remote-prefix bases (plain main/master/local) keep the legacy best-effort fetch; verified PR SHA bases already have the object.
       legacyFetchPromise = runtime
         .fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
@@ -2147,9 +2100,7 @@ export async function createLocalWorktree(
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
-    if (
-      !(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
-    ) {
+    if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localWorktreeGitOptions))) {
       legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], {
         ...localGitExecOptions,
         timeout: CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS

@@ -1,6 +1,8 @@
 import { gitExecFileAsync } from './runner'
 import { isShowRefNoMatchError } from './exact-ref-probe'
+import { hasCommitObjectViaGitExec } from './commit-object-ref'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 
 type GitExecOptions = {
   wslDistro?: string
@@ -38,6 +40,34 @@ export async function hasWorktreeBaseCommitRef(
   options: GitExecOptions = {}
 ): Promise<boolean> {
   return (await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)) !== null
+}
+
+/**
+ * Whether a worktree base — a qualified ref, a short branch or remote name, or a
+ * full commit id — already resolves in this repo's own object/ref store.
+ *
+ * Single copy on purpose: the create path, the speculative create prefetch and
+ * the remote-repo create path must agree on what counts as a local base, or the
+ * warm-up prepares a checkout create then rejects.
+ */
+export async function hasLocalWorktreeBaseRef(
+  repoPath: string,
+  baseRef: string,
+  options: GitExecOptions = {}
+): Promise<boolean> {
+  const refExists = (qualifiedRef: string) =>
+    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
+  if (resolvedBaseRef !== baseRef) {
+    return true
+  }
+  if (baseRef.startsWith('refs/')) {
+    return refExists(baseRef)
+  }
+  return hasCommitObjectViaGitExec(
+    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
+    baseRef
+  )
 }
 
 export type WorktreeBaseRefPresence = 'present' | 'absent' | 'unknown'

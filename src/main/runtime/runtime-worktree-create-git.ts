@@ -1,10 +1,7 @@
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { Repo } from '../../shared/repo-types'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { getPRForBranch } from '../github/client'
-import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { gitExecFileAsync } from '../git/runner'
-import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { listWorktrees } from '../git/worktree'
 import { computeValidatedBranchName } from '../ipc/worktree-logic'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
@@ -113,24 +110,4 @@ export async function getSelectedHostedReviewForBranch(
         number: review.number
       }
     : null
-}
-
-export async function hasLocalWorktreeBaseRef(
-  repoPath: string,
-  baseRef: string,
-  options: { wslDistro?: string } = {}
-): Promise<boolean> {
-  const refExists = (qualifiedRef: string) =>
-    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
-  const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
-  if (resolvedBaseRef !== baseRef) {
-    return true
-  }
-  if (baseRef.startsWith('refs/')) {
-    return refExists(baseRef)
-  }
-  return hasCommitObjectViaGitExec(
-    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
-    baseRef
-  )
 }

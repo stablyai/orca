@@ -14,7 +14,7 @@ import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktre
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { hasLocalGitOptions } from './runtime-worktree-selection'
-import { hasLocalWorktreeBaseRef } from './runtime-worktree-create-git'
+import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
 import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
 import { createRuntimeLocalGitWorktree } from './runtime-local-git-worktree-create'
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'

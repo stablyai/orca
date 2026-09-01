@@ -13,9 +13,11 @@ import {
   createSetupRunnerScriptMock,
   getEffectiveHooksFromConfigMock,
   shouldRunSetupForCreateMock,
+  getBaseRefDefaultMock,
   gitExecFileAsyncMock
 } from './worktrees-test-module-mocks'
-import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import {
   createdWorktreeList,
   mockKnownFeatureWorktree,
@@ -104,9 +106,65 @@ vi.mock('../runtime/worktree-teardown', async () =>
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
+/** Every create-path git call, including the base-ref probe now shared with the
+ *  speculative prefetch, must read the distro's ref store rather than host git's. */
+function expectEveryGitCallRoutedTo(wslDistro: string): void {
+  const callDistros = new Set(
+    gitExecFileAsyncMock.mock.calls.map(
+      ([, options]) => (options as { wslDistro?: string } | undefined)?.wslDistro
+    )
+  )
+  expect(callDistros).toEqual(new Set([wslDistro]))
+}
+
 describe('registerWorktreeHandlers', () => {
+  let runtimeStub: WorktreeRuntimeStub
+
   beforeEach(() => {
-    setupWorktreeHandlers()
+    runtimeStub = setupWorktreeHandlers()
+  })
+
+  it('routes the speculative create-base prefetch through the selected WSL project runtime', async () => {
+    mockSelectedWslProjectRuntime()
+    const remoteTrackingBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteTrackingBase)
+
+    await handlers['worktrees:prefetchCreateBase'](null, { repoId: 'repo-1' })
+
+    expect(getBaseRefDefaultMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+    )
+    expect(runtimeStub.resolveRemoteTrackingBase).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'origin/main',
+      { wslDistro: 'Ubuntu' }
+    )
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
+      '/workspace/repo',
+      remoteTrackingBase,
+      { wslDistro: 'Ubuntu' }
+    )
+  })
+
+  it('routes the prefetch remote-fetch fallback through the selected WSL project runtime', async () => {
+    mockSelectedWslProjectRuntime()
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-1',
+      baseBranch: 'feature/topic'
+    })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin', {
+      wslDistro: 'Ubuntu'
+    })
   })
 
   it('routes local worktree creation through the selected WSL project runtime', async () => {
@@ -153,6 +211,36 @@ describe('registerWorktreeHandlers', () => {
       { wslDistro: 'Ubuntu' }
     )
     expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
+    expectEveryGitCallRoutedTo('Ubuntu')
+  })
+
+  it('routes local worktree creation with a remote tracking base through the selected WSL project runtime', async () => {
+    mockSelectedWslProjectRuntime()
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'abc123\n', stderr: '' })
+    // A persisted base that differs from the detected default also drives the usability probe.
+    store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: 'custom-base' })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expectEveryGitCallRoutedTo('Ubuntu')
   })
 
   it('routes fork push target setup through the selected WSL project runtime', async () => {
