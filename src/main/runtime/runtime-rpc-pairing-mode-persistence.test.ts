@@ -370,7 +370,35 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.start()
+    let runtimeSession: Awaited<ReturnType<typeof authenticateMobileWsSession>> | undefined
     try {
+      const runtimeOffer = server.createPairingOffer({
+        address: '127.0.0.1',
+        scope: 'runtime'
+      })
+      expect(runtimeOffer.available).toBe(true)
+      if (!runtimeOffer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      runtimeSession = await authenticateMobileWsSession(runtimeOffer.pairingUrl)
+      const runtimeResponses = createEncryptedWsResponseReader(runtimeSession)
+      sendEncryptedWsRequest(runtimeSession, {
+        id: 'create-offer-1',
+        method: 'pairing.createOffer',
+        params: { address: '127.0.0.1', name: 'Runtime client test' }
+      })
+      await expect(runtimeResponses.next('create-offer-1')).resolves.toMatchObject({
+        ok: true,
+        result: {
+          available: true,
+          pairingUrl: expect.stringMatching(/^orca:/),
+          endpoint: expect.stringMatching(/^ws:\/\/127\.0\.0\.1:/),
+          deviceId: expect.any(String),
+          webClientUrl: null
+        }
+      })
+      runtimeResponses.dispose()
+
       const offer = server.createPairingOffer({
         address: '127.0.0.1',
         scope: 'mobile'
@@ -411,6 +439,8 @@ describe('OrcaRuntimeRpcServer', () => {
       responses.dispose()
       session.ws.close()
       await waitForWsClose(session.ws)
+      runtimeSession.ws.close()
+      await waitForWsClose(runtimeSession.ws)
     } finally {
       await server.stop()
     }

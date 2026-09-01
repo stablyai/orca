@@ -4,6 +4,7 @@ import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protoc
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
 import type {
   DeviceCredentialInstalled,
+  PairingCreateOfferParams,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
@@ -11,9 +12,25 @@ import type {
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 
+// Why: createOffer is host-local minting; getEndpoints/provisionRelay are post-pair mobile relay helpers.
+export type PairingCreateOfferResult =
+  | {
+      available: false
+      reason: string
+      guidance: string
+    }
+  | {
+      available: true
+      pairingUrl: string
+      endpoint: string
+      deviceId: string
+      webClientUrl: string | null
+    }
+
 export type PairingRpcContext = {
-  getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
-  provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  getEndpoints?(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
+  provisionRelay?(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  createOffer?(params: PairingCreateOfferParams): PairingCreateOfferResult
 }
 
 export type RpcEnvelopeMeta = {

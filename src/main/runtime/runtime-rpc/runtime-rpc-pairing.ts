@@ -1,6 +1,7 @@
 import type { DeviceEntry, DeviceRegistry, DeviceScope } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
+import type { PairingRpcContext } from '../rpc/core'
 import type {
   RelayDeviceBinding,
   RelayRevokeOutbox,
@@ -20,6 +21,11 @@ import {
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
+  protected getPairingContext(): PairingRpcContext {
+    // Why: runtime-scoped callers may mint another grant without reaching the renderer UI.
+    return { createOffer: this.createPairingOffer.bind(this) }
+  }
+
   getDeviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistry
   }

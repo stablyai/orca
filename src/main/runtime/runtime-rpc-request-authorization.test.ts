@@ -263,6 +263,42 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
+  it('serves pairing.createOffer through the authenticated Unix socket', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      const metadata = readRuntimeMetadata(userDataPath)
+      const response = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_pairing_create',
+        authToken: metadata!.authToken,
+        method: 'pairing.createOffer',
+        params: { address: '127.0.0.1', name: 'Unix socket test' }
+      })
+
+      expect(response).toMatchObject({
+        id: 'req_pairing_create',
+        ok: true,
+        result: {
+          available: true,
+          pairingUrl: expect.stringMatching(/^orca:/),
+          endpoint: expect.stringMatching(/^ws:\/\/127\.0\.0\.1:/),
+          deviceId: expect.any(String),
+          webClientUrl: null
+        }
+      })
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('stamps the authenticated device scope onto status.get for WebSocket clients', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

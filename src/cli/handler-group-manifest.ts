@@ -205,6 +205,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
   },
   {
+    name: 'pairing',
+    keys: ['pairing create'],
+    load: async () => (await import('./handlers/pairing.js')).PAIRING_HANDLERS
+  },
+  {
     name: 'linear',
     keys: [
       'linear save-issue',
