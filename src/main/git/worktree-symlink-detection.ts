@@ -1,5 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { resolveWorktreeHostPath } from '../../shared/git-metadata-path'
 
 // Why this is a leaf module rather than part of ipc/worktree-symlinks: status
 // and review-creation need only the read-only "is this a symlink" question, and
@@ -32,10 +33,19 @@ export function getSafeRelativePath(rawPath: string): SafeRelativePathResult {
   return { safe: true, rel }
 }
 
+export type WorktreeSymlinkDetectionOptions = {
+  /** Distro that spelled `worktreePath`, for a Windows host reopening a guest path. */
+  wslDistro?: string
+}
+
 export async function findExistingWorktreeSymlinkPaths(
   worktreePath: string,
-  paths: readonly string[]
+  paths: readonly string[],
+  options: WorktreeSymlinkDetectionOptions = {}
 ): Promise<string[]> {
+  // Why: git in a WSL distro reports the worktree in the guest namespace, but this lstat runs in
+  // the Windows main process, where that spelling names nothing.
+  const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
   const symlinkPaths: string[] = []
   for (const rawPath of paths) {
     const safePath = getSafeRelativePath(rawPath)
@@ -43,7 +53,7 @@ export async function findExistingWorktreeSymlinkPaths(
       continue
     }
     try {
-      if ((await lstat(resolve(worktreePath, safePath.rel))).isSymbolicLink()) {
+      if ((await lstat(resolve(hostWorktreePath, safePath.rel))).isSymbolicLink()) {
         symlinkPaths.push(safePath.rel)
       }
     } catch {

@@ -223,7 +223,12 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         return provider.detectConflictOperation(args.worktreePath)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return detectConflictOperation(worktreePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return detectConflictOperation(worktreePath, gitOptions)
     }
   )
 
