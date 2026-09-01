@@ -294,7 +294,7 @@ export function GHStatusCell({
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           className={cn(
-            'group/status inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
+            'group/status inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-foreground/10',
             localState === 'closed'
               ? 'border-primary/40 bg-primary/10 text-primary'
               : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
