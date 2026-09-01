@@ -7719,6 +7719,16 @@
           "7aa456a460": "在 WSL 内的 ~/.local/bin 中注册 `orca-ide`。",
           "0307677bb9": "正在检查 WSL CLI 注册..."
         },
+        "CursorAccountsSection": {
+          "dd3e96043c": "Cursor",
+          "f81b44c027": "显示这台机器上 Cursor 桌面版或 cursor-agent 登录会话中的 Cursor Models、Other Models 和 Grok Bot 使用情况。Orca 不会刷新该会话。",
+          "cffcf53d2c": "Cursor CLI 文档",
+          "227335c599": "已登录",
+          "032e4ab844": "未登录 — 请在此计算机上运行 Cursor 或 cursor-agent login",
+          "0035d7210b": "刷新使用情况",
+          "6c4baffae9": "此 Cursor 资源池的实时已用百分比。限额未硬编码。",
+          "6e1fa26404": "重置于 {{when}}"
+        },
         "accounts": {
           "search": {
             "86edc96bc9": "状态栏",
@@ -7776,7 +7786,10 @@
             "b2c4e7f1a8": "端点",
             "3a9b6d2c4e": "API 密钥",
             "5d8f1a3b7c": "中国",
-            "7e2a4b8c1d": "海外"
+            "7e2a4b8c1d": "海外",
+            "f0d1b8ed98": "Cursor 使用情况",
+            "5311965b9e": "用于查看 Cursor Models、Other Models 和 Grok Bot 使用情况的只读 Cursor 桌面版和 cursor-agent 登录。",
+            "ae41149765": "cursor"
           }
         },
         "advanced": {
