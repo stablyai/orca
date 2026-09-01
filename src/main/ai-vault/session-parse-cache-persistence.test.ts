@@ -340,7 +340,13 @@ describe('session parse cache persistence', () => {
     vi.clearAllMocks()
 
     await ensureSessionParseCacheLoaded()
-    scheduleSessionParseCachePersist({ reused: 0, incremental: 2, fullParses: 5, bytesRead: 10 })
+    scheduleSessionParseCachePersist({
+      reused: 0,
+      incremental: 2,
+      fullParses: 5,
+      earlyStopped: 0,
+      bytesRead: 10
+    })
     await flushSessionParseCachePersistForTests()
 
     expect(fsPromises.readFile).not.toHaveBeenCalled()

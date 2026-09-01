@@ -64,11 +64,13 @@ export function ensureSessionParseCacheLoaded(): Promise<void> {
 }
 
 /**
- * Schedule a debounced snapshot write after a scan that parsed something.
- * Reused-only scans schedule no write (the file already reflects the cache).
+ * Schedule a debounced snapshot write after a scan that parsed something. An
+ * early-stopped transcript counts: its stat key moved, so the entry must be
+ * re-persisted or the next launch re-reads it. Reused-only scans schedule no
+ * write (the file already reflects the cache).
  */
 export function scheduleSessionParseCachePersist(stats: SessionParseStats): void {
-  if (options === null || stats.incremental + stats.fullParses <= 0) {
+  if (options === null || stats.incremental + stats.fullParses + stats.earlyStopped <= 0) {
     return
   }
   const current = options

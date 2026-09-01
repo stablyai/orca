@@ -262,5 +262,8 @@ describe('Codex resumable parser fast path', () => {
 
     expect(session).toBeNull()
     expect(grown.bytesRead).toBe(0)
+    // Reported apart from `incremental` so the scan span shows a dismissal, not
+    // an incremental parse that happened to read nothing.
+    expect(grown).toMatchObject({ earlyStopped: 1, incremental: 0, fullParses: 0 })
   })
 })

@@ -84,11 +84,15 @@ export type SessionParseStats = {
   reused: number
   incremental: number
   fullParses: number
+  // Transcripts the parser already excluded (Codex workers), re-listed after a
+  // write and dismissed without reading. Counted apart from `incremental` so a
+  // scan span still shows how much work the early stop actually removed.
+  earlyStopped: number
   bytesRead: number
 }
 
 export function createSessionParseStats(): SessionParseStats {
-  return { reused: 0, incremental: 0, fullParses: 0, bytesRead: 0 }
+  return { reused: 0, incremental: 0, fullParses: 0, earlyStopped: 0, bytesRead: 0 }
 }
 
 const cache = new Map<string, SessionParseCacheEntry>()
@@ -260,8 +264,13 @@ async function parseResumableCandidate(args: {
   // or the next resume would double-count the lines applied before the error.
   const state = canResume ? resume.state.clone() : args.stateFactory()
   const startOffset = canResume ? resume.byteOffset : 0
+  // Mirrors the reader's entry guard so a dismissed transcript is not reported
+  // as an incremental parse that read nothing.
+  const stoppedBeforeRead = state.shouldStop?.() === true
   if (args.stats) {
-    if (canResume) {
+    if (stoppedBeforeRead) {
+      args.stats.earlyStopped++
+    } else if (canResume) {
       args.stats.incremental++
     } else {
       args.stats.fullParses++

@@ -147,6 +147,7 @@ export async function scanAiVaultSessions(
     span.setAttribute('reused', parseStats.reused)
     span.setAttribute('incremental', parseStats.incremental)
     span.setAttribute('fullParses', parseStats.fullParses)
+    span.setAttribute('earlyStopped', parseStats.earlyStopped)
     span.setAttribute('bytesRead', parseStats.bytesRead)
     span.setAttribute('issues', issues.length)
 
