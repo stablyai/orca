@@ -20,8 +20,11 @@ import {
   unlockPreparedWorktree,
   prepareWorktreeCreateCheckout
 } from './git/worktree-create-preparation'
-import { getLocalProjectWorktreeGitOptions } from './project-runtime-git-options'
-import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
+import {
+  getLocalProjectWorktreeGitOptions,
+  getWorktreeMirrorDistro
+} from './project-runtime-git-options'
+import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
 import { toHostFilesystemPath } from './host-tree-removal'
 
 export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
@@ -154,18 +157,22 @@ async function cleanupStalePreparations(
   }
 }
 
-export function prepareWorktreeCreateForRepo(
+export async function prepareWorktreeCreateForRepo(
   store: Store,
   repo: Repo,
   baseBranch: string
 ): Promise<void> {
   if (repo.connectionId || isFolderRepo(repo)) {
-    return Promise.resolve()
+    return
   }
   const options = getLocalProjectWorktreeGitOptions(store, repo)
-  const workspaceRoot = computeWorkspaceRoot(
+  // Resolving a WSL repo's root spawns `wsl.exe`, and this runs while the create composer is open,
+  // so it must not block the main thread. Key lookup and insert stay in one sync run after the await.
+  // The mirror distro must be threaded exactly as createLocalWorktree threads it, or the two sides
+  // key on different roots and every prepared checkout is discarded.
+  const workspaceRoot = await computeWorkspaceRootAsync(
     repo.path,
-    getWorktreePathSettings(repo, store.getSettings())
+    getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
   )
   const key = preparationKey(repo.path, workspaceRoot, baseBranch, options)
   const existing = preparations.get(key)
