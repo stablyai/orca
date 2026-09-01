@@ -25,6 +25,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'artifacts',
     keys: [
+      'artifacts read',
       'artifacts list',
       'artifacts share',
       'artifacts update',

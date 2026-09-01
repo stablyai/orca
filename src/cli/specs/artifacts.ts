@@ -5,6 +5,17 @@ const CLOUD_FLAGS = ['api-url']
 
 export const ARTIFACT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['artifacts', 'read'],
+    summary: 'Read an HTML or Markdown artifact by id or share URL',
+    usage: 'orca artifacts read <id-or-share-url> [--api-url <url>] [--output <path>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, ...CLOUD_FLAGS, 'output'],
+    positionalArgs: ['id'],
+    examples: [
+      'orca artifacts read https://share.onorca.dev/a/abc123',
+      'orca artifacts read abc123 --json'
+    ]
+  },
+  {
     path: ['artifacts', 'share'],
     summary: 'Share an HTML or Markdown file with your Orca account',
     usage: 'orca artifacts share <file> [--api-url <url>] [--json]',

@@ -17,6 +17,11 @@ const ListOptions = z.object({
   cursor: z.string().min(1).max(2_048).optional()
 })
 
+const ReadRequest = z.object({
+  input: z.string().min(1).max(2_048),
+  ...CloudOptions
+})
+
 const SourceRequest = z.object({
   sourceKey: z.string().min(1).max(32_768),
   ...CloudOptions
@@ -42,6 +47,11 @@ const WriteRequest = z
   })
 
 export const ARTIFACT_METHODS: readonly RpcAnyMethod[] = [
+  defineMethod({
+    name: 'artifacts.read',
+    params: ReadRequest,
+    handler: (params, { runtime }) => runtime.readArtifact(params)
+  }),
   defineMethod({
     name: 'artifacts.list',
     params: ListOptions,

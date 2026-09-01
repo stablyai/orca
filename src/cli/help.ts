@@ -102,6 +102,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'artifacts list' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
   }
+  if (command === 'artifacts read' && flag === 'output') {
+    return '--output <path>       Write artifact content to a file; human output suppresses stdout'
+  }
   if (command === 'orchestration worker-read' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
   }

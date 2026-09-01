@@ -1,10 +1,11 @@
 import { mkdtemp, open, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ArtifactListItem } from '../../shared/artifacts'
 import { ARTIFACT_HANDLERS } from './artifacts'
 import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts'
+import { sanitizeArtifactTerminalContent } from '../artifact-format'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
   ARTIFACT_SHARING_DISABLED_MESSAGE,
@@ -33,6 +34,82 @@ const item: ArtifactListItem = {
 afterEach(() => vi.restoreAllMocks())
 
 describe('artifact CLI handlers', () => {
+  it('reads an artifact URL and supports explicit output without executing HTML', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const output = join(cwd, 'out.html')
+    const call = vi.fn().mockResolvedValue({
+      id: 'request-1',
+      ok: true,
+      result: {
+        status: 'ok',
+        value: {
+          artifact: item.artifact,
+          shareUrl: item.shareUrl,
+          contentType: 'text/html',
+          content: '<script>globalThis.pwned=true</script><h1>Safe bytes</h1>'
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    await ARTIFACT_HANDLERS['artifacts read']!({
+      client: { call } as never,
+      cwd,
+      flags: new Map([
+        ['id', item.shareUrl],
+        ['output', 'out.html']
+      ]),
+      json: false
+    })
+    expect(call).toHaveBeenCalledWith('artifacts.read', { input: item.shareUrl })
+    expect(
+      await import('node:fs/promises').then(({ readFile }) => readFile(output, 'utf8'))
+    ).toContain('<script>')
+    expect(log).toHaveBeenCalledWith(`Artifact written to ${JSON.stringify(output)}`)
+  })
+
+  it('sanitizes terminal controls in output-path confirmations', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const output = `out-${String.fromCharCode(27)}]52;c:secret${String.fromCharCode(7)}.html`
+    const call = vi.fn().mockResolvedValue({
+      id: 'request-1',
+      ok: true,
+      result: {
+        status: 'ok',
+        value: {
+          artifact: item.artifact,
+          shareUrl: item.shareUrl,
+          contentType: 'text/html',
+          content: '<h1>Safe</h1>'
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await ARTIFACT_HANDLERS['artifacts read']!({
+      client: { call } as never,
+      cwd,
+      flags: new Map([
+        ['id', item.shareUrl],
+        ['output', output]
+      ]),
+      json: false
+    })
+
+    expect(log).toHaveBeenCalledWith(`Artifact written to ${JSON.stringify(resolve(cwd, output))}`)
+    expect(String(log.mock.calls[0]?.[0])).not.toContain('\u001b]52;')
+  })
+
+  it('preserves text between separate OSC terminal sequences', () => {
+    const escape = String.fromCharCode(27)
+    const bell = String.fromCharCode(7)
+    expect(
+      sanitizeArtifactTerminalContent(
+        `${escape}]8;;https://example.com${bell}visible${escape}]0;title${bell}`
+      )
+    ).toBe('visible')
+  })
   it('reads a relative HTML file and sends sanitized content to the runtime', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')

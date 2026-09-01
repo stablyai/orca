@@ -3,6 +3,8 @@ export const ARTIFACT_MAX_CONTENT_BYTES = 5 * 1024 * 1024
 
 /** Legacy CLI/SSH envelope cap; those transports still have ~1 MiB control frames. */
 export const ARTIFACT_CLI_MAX_RPC_BYTES = 800 * 1024
+// Leave room in the RPC envelope for read metadata and JSON framing.
+export const ARTIFACT_CLI_MAX_READ_BYTES = 768 * 1024
 
 /** Allows JSON escaping while staying below the cloud API's 11 MiB body budget. */
 export const ARTIFACT_MAX_REQUEST_BYTES = 11 * 1024 * 1024
@@ -61,6 +63,17 @@ export type ArtifactPublishedLink = {
 export type ArtifactCloudOptions = {
   apiUrl?: string
   authToken?: string
+}
+
+export type ArtifactReadRequest = ArtifactCloudOptions & {
+  input: string
+}
+
+export type ArtifactReadResult = {
+  artifact: ArtifactMetadata
+  shareUrl: string
+  contentType: string
+  content: string
 }
 
 export type ArtifactListOptions = ArtifactCloudOptions & {

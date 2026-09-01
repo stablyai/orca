@@ -1,9 +1,11 @@
 import { basename, extname, resolve } from 'node:path'
+import { writeFile } from 'node:fs/promises'
 import type {
   ArtifactCloudOperation,
   ArtifactCloudOptions,
   ArtifactListPage,
   ArtifactListItem,
+  ArtifactReadResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
 import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts'
@@ -19,7 +21,12 @@ import {
 } from '../../shared/artifact-sharing-gate'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
-import { formatArtifactListPage, formatArtifactShared } from '../artifact-format'
+import {
+  formatArtifactListPage,
+  formatArtifactRead,
+  formatArtifactShared,
+  sanitizeArtifactTerminalContent
+} from '../artifact-format'
 import { printResult } from '../format'
 
 function stringFlag(ctx: HandlerContext, name: string): string | undefined {
@@ -164,6 +171,28 @@ function requireOperation<T>(operation: ArtifactCloudOperation<T>): T {
 }
 
 export const ARTIFACT_HANDLERS: Record<string, CommandHandler> = {
+  'artifacts read': async (ctx) => {
+    rejectRemoteSelectionFlags(ctx)
+    const response = await ctx.client.call<ArtifactCloudOperation<ArtifactReadResult>>(
+      'artifacts.read',
+      { input: requireStringFlag(ctx, 'id'), ...cloudOptions(ctx) }
+    )
+    const value = requireOperation(response.result)
+    const output = stringFlag(ctx, 'output')
+    if (output) {
+      await writeFile(resolve(ctx.cwd, output), value.content, 'utf8')
+    }
+    if (ctx.json) {
+      printResult({ ...response, result: value }, true, formatArtifactRead)
+    } else if (output) {
+      console.log(`Artifact written to ${JSON.stringify(resolve(ctx.cwd, output))}`)
+    } else {
+      const content = formatArtifactRead(value)
+      process.stdout.write(
+        process.stdout.isTTY ? sanitizeArtifactTerminalContent(content) : content
+      )
+    }
+  },
   'artifacts list': async (ctx) => {
     rejectRemoteSelectionFlags(ctx)
     const cursor = stringFlag(ctx, 'cursor')

@@ -21,6 +21,12 @@ function writeSchema(name: string) {
 }
 
 describe('artifact RPC schemas', () => {
+  it('registers bounded artifact reads', () => {
+    const schema = writeSchema('artifacts.read')
+    expect(schema.safeParse({ input: 'abc123' }).success).toBe(true)
+    expect(schema.safeParse({ input: '' }).success).toBe(false)
+    expect(schema.safeParse({ input: 'x'.repeat(2_049) }).success).toBe(false)
+  })
   it('registers the local publish upsert', () => {
     expect(writeSchema('artifacts.publish').safeParse(validRequest).success).toBe(true)
   })

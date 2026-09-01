@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import type {
   ArtifactCloudOperation,
   ArtifactCloudOptions,
+  ArtifactReadRequest,
+  ArtifactReadResult,
   ArtifactListOptions,
   ArtifactListPage,
   ArtifactListItem,
@@ -27,36 +29,14 @@ import {
   removeArtifactShareRecords
 } from './artifact-share-record-store'
 import type { ActiveOrcaProfileState } from '../orca-profiles/profile-index-store'
-import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
+import { artifactRequest, artifactWriteBody, deleteArtifactRequest } from './artifact-cloud-request'
 import { ArtifactPublisher } from './artifact-publisher'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+import { ArtifactReadMetadataError, readArtifactContent } from './artifact-read'
 
 type ArtifactAuthContext = {
   profileId: string
   scope: ArtifactShareScope
   assertCurrent: () => void
-}
-
-async function deleteArtifactRequest(
-  apiUrl: string,
-  token: string,
-  path: string,
-  editToken?: string
-): Promise<void> {
-  try {
-    await artifactRequest<void>(apiUrl, token, path, {
-      method: 'DELETE',
-      ...(editToken ? { editToken } : {})
-    })
-  } catch (error) {
-    if (
-      !(error instanceof OrcaCloudRequestError) ||
-      error.statusCode !== 404 ||
-      error.errorCode !== 'artifact_not_found'
-    ) {
-      throw error
-    }
-  }
 }
 
 function tokenFingerprint(token: string): string {
@@ -140,11 +120,6 @@ function explicitTokenAuthContext(
 export class ArtifactCloudService {
   private readonly publisher: ArtifactPublisher
 
-  /**
-   * `isSharingEnabled` is the publish capability gate. It is read per call, never cached, so
-   * revoking it in Settings takes effect on the next request. List, unshare, and delete stay
-   * ungated: a user who turns publishing off must still be able to audit and revoke old links.
-   */
   constructor(
     private readonly userDataPath: string,
     private readonly isSharingEnabled: () => boolean
@@ -158,7 +133,22 @@ export class ArtifactCloudService {
       return artifactRequest<ArtifactListPage>(apiUrl, token, query)
     })
   }
-
+  async read(request: ArtifactReadRequest): Promise<ArtifactCloudOperation<ArtifactReadResult>> {
+    const apiUrl = resolveArtifactCloudApiUrl(request.apiUrl)
+    try {
+      return {
+        status: 'ok',
+        value: await readArtifactContent(request.input, { apiUrl })
+      }
+    } catch (error) {
+      if (!(error instanceof ArtifactReadMetadataError) || ![401, 403].includes(error.statusCode)) {
+        throw error
+      }
+    }
+    return this.withAuth(request, (token, authenticatedApiUrl) =>
+      readArtifactContent(request.input, { apiUrl: authenticatedApiUrl, token })
+    )
+  }
   getPublishedLink(
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
@@ -172,9 +162,6 @@ export class ArtifactCloudService {
       return record ? { shareUrl: record.shareUrl } : null
     })
   }
-
-  // Why async: the gate must surface as a rejection, not a synchronous throw, so every caller's
-  // promise chain handles it the same way.
   async share(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
     assertArtifactSharingAllowed(this.isSharingEnabled)
     const idempotencyKey = randomUUID()
@@ -182,7 +169,6 @@ export class ArtifactCloudService {
       this.publisher.share(request, token, apiUrl, auth, idempotencyKey)
     )
   }
-
   async publish(
     request: ArtifactWriteRequest
   ): Promise<ArtifactCloudOperation<ArtifactPublishResult>> {
@@ -192,7 +178,6 @@ export class ArtifactCloudService {
       this.publisher.publish(request, token, apiUrl, auth, idempotencyKey)
     )
   }
-
   async update(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
     assertArtifactSharingAllowed(this.isSharingEnabled)
     return this.withAuth(request, (token, apiUrl, auth) =>
@@ -233,7 +218,6 @@ export class ArtifactCloudService {
       })
     )
   }
-
   unshare(
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<void>> {
@@ -261,7 +245,6 @@ export class ArtifactCloudService {
       })
     )
   }
-
   delete(id: string, options: ArtifactCloudOptions): Promise<ArtifactCloudOperation<void>> {
     return this.withAuth(options, (token, apiUrl, auth) =>
       this.publisher.runForSlug(id, auth, async () => {
@@ -272,7 +255,6 @@ export class ArtifactCloudService {
       })
     )
   }
-
   private async withAuth<T>(
     options: ArtifactCloudOptions,
     operation: (token: string, apiUrl: string, auth: ArtifactAuthContext) => Promise<T>
