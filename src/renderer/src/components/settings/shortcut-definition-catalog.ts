@@ -3,6 +3,7 @@ import {
   formatKeybindingList,
   type KeybindingActionId,
   type KeybindingDefinition,
+  type KeybindingFileSnapshot,
   type KeybindingOverrides
 } from '../../../../shared/keybindings'
 import {
@@ -12,6 +13,7 @@ import {
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
+import { buildKeybindingConflictWarnings } from './keybinding-conflict-warnings'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
 
 export type ShortcutDefinitionCatalog = {
@@ -26,6 +28,7 @@ export function buildShortcutDefinitionCatalog(options: {
   disabledTuiAgents: readonly TuiAgent[]
   pluginCommands: readonly ActivePluginCommand[]
   keybindings: KeybindingOverrides
+  keybindingSnapshot?: KeybindingFileSnapshot | null
   platform: NodeJS.Platform
   macCapturedDigitChords?: readonly MacCapturedDigitChord[]
   missionControlConflictMessage: string
@@ -57,6 +60,16 @@ export function buildShortcutDefinitionCatalog(options: {
         `${formatKeybindingList([conflict.binding], options.platform)} conflicts with ${labels}.`
       ])
     }
+  }
+  // Why: the pass above judges the active map, which the loader has already
+  // stripped of conflicting overrides — layer on warnings judged on the file
+  // so a dropped binding is still explained on its row.
+  for (const [actionId, messages] of buildKeybindingConflictWarnings(
+    options.keybindingSnapshot ?? null,
+    options.platform,
+    ignoredConflictActionIds
+  )) {
+    conflictByAction.set(actionId, [...(conflictByAction.get(actionId) ?? []), ...messages])
   }
   const systemConflicts = findMacSystemHotkeyConflicts(
     definitions,

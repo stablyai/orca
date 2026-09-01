@@ -2388,6 +2388,11 @@ export function findKeybindingConflictsForDefinitions(
         // Why: native menu accelerators can consume global chords, so check custom bindings against both the menu bucket and scope.
         groups.add(definition.scope)
       }
+      // Why: these actions fire while a terminal is focused, so they race
+      // terminal-scope bindings for the same chord even though their scopes differ.
+      if (isKeybindingAllowedInTerminal(definition)) {
+        groups.add('terminal')
+      }
       for (const group of groups) {
         for (const identity of keybindingConflictIdentities(definition.id, binding, platform)) {
           const conflictKey = `${group}\u0000${identity}`
