@@ -1,7 +1,7 @@
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
@@ -23,6 +23,12 @@ const {
 } = require('../packaged-runtime-node-modules.cjs')
 
 describe('electron-builder config', () => {
+  it('includes NSIS upgrade-state hooks before the packaged installer is built', () => {
+    expect(electronBuilderConfig.nsis.include).toBe(
+      resolve(REPO_ROOT, 'config/nsis/installer-hooks.nsh')
+    )
+  })
+
   it('keeps the packaged app identity aligned with local-build validation', () => {
     expect(electronBuilderConfig.appId).toBe(
       require('../../src/shared/local-build-compatibility-contract.json').appId
