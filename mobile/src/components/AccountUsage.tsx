@@ -11,11 +11,15 @@ export type {
   CodexAccountSummary,
   AccountsSnapshot,
   ProviderKey,
+  HostUsageProviderKey,
   UsageBarState
 } from './account-usage-state'
 export {
   decodeAccountsSnapshot,
   getActiveProviderRateLimits,
+  getBucketResetLabel,
+  getBucketUsageBarState,
+  getHostProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
   getWindowResetLabel,
@@ -31,13 +35,15 @@ export function UsageBar({
   usedPercent,
   unavailable,
   loading,
-  resetText
+  resetText,
+  labelWidth
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
   resetText?: string | null
+  labelWidth?: number
 }) {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
@@ -53,7 +59,7 @@ export function UsageBar({
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>
-        <Text style={styles.usageLabel}>{label}</Text>
+        <Text style={[styles.usageLabel, labelWidth ? { width: labelWidth } : null]}>{label}</Text>
         <View style={styles.usageTrack}>
           <View
             style={[
