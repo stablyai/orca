@@ -294,6 +294,48 @@ describe('AgentBrowserBridge', () => {
     expect(args).toContain('1700000000')
   })
 
+  // ── Set media arg building ──
+
+  it('maps "reduce" to the reduced-motion token after the color scheme', async () => {
+    succeedWith({ success: true })
+    await bridge.setMedia('dark', 'reduce')
+
+    const args = execFileMock.mock.calls.at(-1)![1] as string[]
+    expect(args.slice(args.indexOf('set'), -1)).toEqual(['set', 'media', 'dark', 'reduced-motion'])
+  })
+
+  it('maps a lone "reduce" without a color scheme', async () => {
+    succeedWith({ success: true })
+    await bridge.setMedia(undefined, 'reduce')
+
+    const args = execFileMock.mock.calls.at(-1)![1] as string[]
+    expect(args.slice(args.indexOf('set'), -1)).toEqual(['set', 'media', 'reduced-motion'])
+  })
+
+  it('omits the reduced-motion token for no-preference', async () => {
+    succeedWith({ success: true })
+    await bridge.setMedia('light', 'no-preference')
+
+    const args = execFileMock.mock.calls.at(-1)![1] as string[]
+    expect(args.slice(args.indexOf('set'), -1)).toEqual(['set', 'media', 'light'])
+  })
+
+  it('rejects unsupported color scheme values', async () => {
+    succeedWith({ success: true })
+    await expect(bridge.setMedia('sepia', 'reduce')).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: 'Unsupported color scheme: sepia'
+    })
+  })
+
+  it('rejects unsupported reduced motion values', async () => {
+    succeedWith({ success: true })
+    await expect(bridge.setMedia(undefined, 'motion-reduce')).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: 'Unsupported reduced motion: motion-reduce'
+    })
+  })
+
   // ── Viewport command arg building ──
 
   it('applies viewport emulation through CDP so mobile mode is preserved', async () => {

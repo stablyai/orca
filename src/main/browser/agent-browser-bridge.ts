@@ -1304,10 +1304,17 @@ export class AgentBrowserBridge {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['set', 'media']
       if (colorScheme) {
+        if (colorScheme !== 'dark' && colorScheme !== 'light') {
+          throw new BrowserError('invalid_argument', `Unsupported color scheme: ${colorScheme}`)
+        }
         args.push(colorScheme)
       }
-      if (reducedMotion) {
-        args.push(reducedMotion)
+      // Why: agent-browser's positional token is the literal "reduced-motion"; "no-preference"
+      // has no token because omitting it leaves CDP at the default.
+      if (reducedMotion === 'reduce') {
+        args.push('reduced-motion')
+      } else if (reducedMotion && reducedMotion !== 'no-preference') {
+        throw new BrowserError('invalid_argument', `Unsupported reduced motion: ${reducedMotion}`)
       }
       return await this.execAgentBrowser(sessionName, args)
     })
