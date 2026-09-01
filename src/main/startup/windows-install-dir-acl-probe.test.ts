@@ -78,16 +78,17 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(data.matchesPoisonSignature).toBe(false)
   })
 
-  // A Program Files install inherits ALL APPLICATION PACKAGES by default, but
-  // S-1-15-2-1 is absent from an LPAC token, so it unblocks nothing.
+  // A Program Files install inherits ALL APPLICATION PACKAGES by default, and an
+  // orphan alongside it launched clean on win32 10.0.26200 / Electron 43.4.1 — so
+  // it is not the reproduced state, however useless -1 is to an LPAC token.
   it.each([
     ['the localized-safe name form', ALL_PACKAGES_ACE],
     ['the raw SID form', 'S-1-15-2-1:(OI)(CI)(RX)']
-  ])('keeps the signature when only ALL APPLICATION PACKAGES grants (%s)', async (_l, ace) => {
+  ])('clears the signature when only ALL APPLICATION PACKAGES grants (%s)', async (_l, ace) => {
     const data = await probeWith(ace, ORPHAN)
     expect(data.hasWellKnownPackageGrant).toBe(true)
     expect(data.hasRestrictedPackageGrant).toBe(false)
-    expect(data.matchesPoisonSignature).toBe(true)
+    expect(data.matchesPoisonSignature).toBe(false)
   })
 
   // The reproduced remedy was an additive *grant*; an ACE that grants nothing on

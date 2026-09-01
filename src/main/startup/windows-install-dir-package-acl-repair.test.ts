@@ -289,7 +289,7 @@ describe('isInstallDirAclPoisonVerdict', () => {
     expect(isInstallDirAclPoisonVerdict({ status: 'failed', reason: 'unreadable' })).toBe(false)
   })
 
-  // A localized icacls hides the restricted grant behind a translated name, so the
+  // A localized icacls hides the well-known grants behind translated names, so the
   // signature there is unproven: repairing and blaming the install would be wrong.
   it('refuses a signature the probe could not name-check', () => {
     expect(

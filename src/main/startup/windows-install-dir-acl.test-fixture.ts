@@ -6,7 +6,7 @@ import type { spawn } from 'node:child_process'
 export const ORPHAN_PACKAGE_ACE = 'S-1-15-2-999-999-999:(OI)(CI)(RX)'
 export const RESTRICTED_PACKAGES_ACE =
   'APPLICATION PACKAGE AUTHORITY\\ALL RESTRICTED APPLICATION PACKAGES:(OI)(CI)(RX)'
-/** The Program Files default: present on healthy installs, useless to an LPAC child. */
+/** The Program Files default: present on healthy installs, which launch clean. */
 export const ALL_PACKAGES_ACE = 'APPLICATION PACKAGE AUTHORITY\\ALL APPLICATION PACKAGES:(RX)'
 
 export const ENGLISH_BASELINE_ACES = [

@@ -13,7 +13,7 @@ import { getIcaclsExePath } from '../win32-utils'
  * `windows-install-dir-acl-probe.ts` detects (electron/electron#51761).
  *
  * When the install tree carries an orphan AppContainer ACE (S-1-15-2-<x>) and no
- * ALL RESTRICTED APPLICATION PACKAGES grant, Chromium's LPAC children are denied
+ * well-known package grant at all, Chromium's LPAC children are denied
  * read on the shipped modules and die at init with 0x80000003. Reproduced on
  * win32 10.0.26200 / Electron 43.4.1: the GPU child dies six times and the
  * browser FATALs, or — once the GPU fallback engages `--in-process-gpu` — the
@@ -85,9 +85,9 @@ type RepairMarker = {
 
 /**
  * The probe's verdict is the only trigger: an orphan package ACE with no
- * S-1-15-2-2 grant. A localized icacls prints the restricted grant under a
- * translated name the probe cannot match, so an unreliable name check is not
- * evidence of poison — acting on it would spawn icacls and tell a user with a
+ * well-known package grant to satisfy it. A localized icacls prints those grants
+ * under translated names the probe cannot match, so an unreliable name check is
+ * not evidence of poison — acting on it would spawn icacls and tell a user with a
  * healthy install that their permissions are broken.
  */
 export function isInstallDirAclPoisonVerdict(data: CrashReportBreadcrumbData): boolean {

@@ -76,7 +76,7 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
     resetWindowsInstallDirAclRecoveryForTest()
   })
 
-  it('repairs when the probe sees an orphan package ACE and no restricted grant', async () => {
+  it('repairs when the probe sees an orphan package ACE and no well-known grant', async () => {
     const specs = await probeThenRecover((target) => icaclsDacl(target, [ORPHAN_PACKAGE_ACE]))
     expect(specs.map((spec) => spec.args?.[2])).toEqual([
       '*S-1-15-2-2:(OI)(CI)(RX)',
@@ -84,13 +84,15 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
     ])
   })
 
-  // The most common poisoned shape: Program Files inherits ALL APPLICATION
-  // PACKAGES, which an LPAC child's token does not carry, so it fixes nothing.
-  it('repairs an install whose only package grant is ALL APPLICATION PACKAGES', async () => {
+  // Orphan + the Program Files ALL APPLICATION PACKAGES default launched clean on
+  // win32 10.0.26200 / Electron 43.4.1, so it earns neither an ACL write nor the
+  // accusing dialog copy.
+  it('leaves an install whose package grant is ALL APPLICATION PACKAGES alone', async () => {
     const specs = await probeThenRecover((target) =>
       icaclsDacl(target, [ORPHAN_PACKAGE_ACE, ALL_PACKAGES_ACE])
     )
-    expect(specs).toHaveLength(2)
+    expect(specs).toHaveLength(0)
+    expect(describeInstallDirAclPoison()).toBeNull()
   })
 
   it('does not touch an install that already carries the restricted grant', async () => {

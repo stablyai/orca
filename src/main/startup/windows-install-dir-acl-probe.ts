@@ -13,10 +13,16 @@ import { getIcaclsExePath } from '../win32-utils'
  *
  * Why: six 1.4.184 reports show the GPU and renderer children both dying at init
  * with 0x80000003 and nothing to distinguish them from any other CHECK. An install
- * tree carrying an orphan S-1-15-2-* package ACE with no S-1-15-2-2 to satisfy it
- * reproduces exactly that signature (10/10 launches), and an additive grant of
+ * tree carrying an orphan S-1-15-2-* package ACE with no S-1-15-2-1/-2 to satisfy
+ * it reproduces exactly that signature (10/10 launches), and an additive grant of
  * S-1-15-2-2 clears it — see electron/electron#51761. This records whether a
  * machine is in that state so the next crash report answers the question itself.
+ *
+ * The verdict deliberately accepts EITHER well-known grant: a tree carrying the
+ * orphan plus S-1-15-2-1 only (the Program Files default) launched clean on
+ * win32 10.0.26200 / Electron 43.4.1, so it is not the reproduced state and must
+ * not be treated as one. `hasRestrictedPackageGrant` is still reported, so a
+ * report can tell the two shapes apart if that ever stops holding.
  *
  * Diagnostic only: it never writes an ACL and never changes behavior.
  */
@@ -32,7 +38,7 @@ const PROBE_BUDGET_MS = 5_000
 
 /** Raw S-1-15-2-* means icacls could not resolve it — locale-independent. */
 const RAW_PACKAGE_SID = /\bS-1-15-2-[0-9-]+\b/i
-/** ALL RESTRICTED APPLICATION PACKAGES: the only one an LPAC child's token carries. */
+/** ALL RESTRICTED APPLICATION PACKAGES: the grant the reproduced remedy added. */
 const RESTRICTED_PACKAGES_SID = 's-1-15-2-2'
 const WELL_KNOWN_PACKAGE_SIDS = new Set(['s-1-15-2-1', RESTRICTED_PACKAGES_SID])
 // icacls localizes these; the raw SID form is never printed for them. Orphan
@@ -126,8 +132,7 @@ function collectAclFacts(daclOutput: string): AclFacts {
       continue
     }
     hasWellKnownPackageGrant = true
-    // S-1-15-2-1 is absent from an LPAC token, so only the restricted grant can
-    // satisfy the orphan for the children that actually died.
+    // Reported, never the verdict: narrows which grant is present for triage.
     if (sid === RESTRICTED_PACKAGES_SID || (!sid && RESTRICTED_PACKAGE_NAME.test(principal))) {
       hasRestrictedPackageGrant = true
     }
@@ -167,7 +172,7 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
     // and the reproduced failure is a per-file content read. Merging would let a
     // grant on one target mask its absence on the other.
     const poisoned = facts.some(
-      (f) => f.orphanPackageSids.length > 0 && !f.hasRestrictedPackageGrant
+      (f) => f.orphanPackageSids.length > 0 && !f.hasWellKnownPackageGrant
     )
     data = outputs.every((out) => out === '')
       ? { status: 'failed', reason: 'all-targets-unreadable' }
@@ -178,9 +183,9 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
           // Capped: correlating the same orphan across reports is what would
           // identify the tool that left it, which is the point of recording it.
           orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
+          // The verdict rides on this one: either well-known grant satisfies the orphan.
           hasWellKnownPackageGrant,
-          // The verdict rides on this one; the -1-only shape (a Program Files
-          // default) still leaves every LPAC child locked out.
+          // Diagnostic only — the -1-only shape launches clean on real hardware.
           hasRestrictedPackageGrant,
           // False positives are possible on a non-English Windows, where the
           // well-known ACE resolves to a localized name this cannot match.
