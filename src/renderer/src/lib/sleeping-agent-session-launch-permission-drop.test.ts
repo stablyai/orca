@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
 const mockCreateTab = vi.fn()
-const mockQueueTabStartupCommand = vi.fn()
 
 const store = {
   settings: {
@@ -30,7 +29,6 @@ const store = {
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
   createTab: mockCreateTab,
-  queueTabStartupCommand: mockQueueTabStartupCommand,
   claimAutomaticAgentResume: vi.fn(),
   clearSleepingAgentSession: vi.fn(),
   setActiveTabType: vi.fn(),
@@ -71,9 +69,10 @@ const record: SleepingAgentSessionRecord = {
 async function launch(): Promise<{ command: string; agentArgsOverride?: string } | undefined> {
   const { launchSleepingAgentSession } = await import('./sleeping-agent-session-launch')
   launchSleepingAgentSession(record)
-  return mockQueueTabStartupCommand.mock.calls.at(-1)?.[1] as
-    | { command: string; agentArgsOverride?: string }
+  const options = mockCreateTab.mock.calls.at(-1)?.[3] as
+    | { pendingStartup?: { command: string; agentArgsOverride?: string } }
     | undefined
+  return options?.pendingStartup
 }
 
 describe('launchSleepingAgentSession permission escalation', () => {
