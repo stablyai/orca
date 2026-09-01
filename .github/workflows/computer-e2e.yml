@@ -10,6 +10,8 @@ on:
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs'
+      - 'config/scripts/macos-computer-helper-build-contract.cjs'
+      - 'config/scripts/macos-computer-helper-build-contract.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-metrics.mjs'
       - 'config/scripts/macos-computer-helper-owner-loss-processes.mjs'
@@ -95,7 +97,9 @@ jobs:
           src/main/computer/computer-provider-unavailable-message.test.ts
           src/main/computer/sidecar-client.test.ts
           src/main/computer/macos-native-provider-client.test.ts
+          src/main/computer/macos-native-provider-availability.test.ts
           src/main/computer/macos-native-provider-socket.test.ts
+          src/main/computer/macos-computer-use-helper-compatibility.test.ts
           src/main/computer/macos-computer-use-permissions.test.ts
           src/main/computer/macos-computer-use-permission-status.test.ts
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
@@ -161,6 +165,19 @@ jobs:
         run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
       - name: Swift tests and signed universal helper verification
         run: pnpm verify:computer-native
+      - name: Verify helper build contract rejection coverage
+        run: >-
+          pnpm vitest run --config config/vitest.config.ts
+          config/scripts/macos-computer-helper-build-contract.test.mjs
+      # Why: afterPack validates the helper inside the real outer app after nested signing.
+      - name: Package and verify the macOS app and helper
+        run: pnpm build:unpack
+      - name: Reproduce LaunchServices helper incompatibility
+        env:
+          ORCA_COMPUTER_HELPER_LAUNCHSERVICES_REPRO: '1'
+        run: >-
+          pnpm vitest run --config config/vitest.config.ts
+          src/main/computer/macos-computer-use-launchservices-repro.test.ts
 
   linux:
     if: github.event_name != 'pull_request'

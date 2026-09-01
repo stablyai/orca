@@ -194,6 +194,28 @@ describe('getComputerUsePermissionStatus', () => {
     })
   })
 
+  it('returns unavailable status without launching an incompatible helper app', async () => {
+    vi.mocked(execFileSync).mockImplementation((command) => {
+      if (command === '/usr/bin/sw_vers') {
+        return '13.6.9\n'
+      }
+      return '14.0\n'
+    })
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+
+    await expect(getComputerUsePermissionStatus()).resolves.toEqual({
+      platform: 'darwin',
+      helperAppPath: '/Applications/Orca Computer Use.app',
+      helperUnavailableReason:
+        'Orca Computer Use requires macOS 14.0 or newer (this Mac is running macOS 13.6.9)',
+      permissions: [
+        { id: 'accessibility', status: 'not-granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    })
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('returns unavailable permission status when the helper app is missing on macOS', async () => {
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
     resolveHelperAppPathMock.mockReturnValue(null)

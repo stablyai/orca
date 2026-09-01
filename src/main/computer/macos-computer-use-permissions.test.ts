@@ -213,7 +213,12 @@ describe('openComputerUsePermissions', () => {
     vi.mocked(readFile)
       .mockResolvedValueOnce('{"accessibility":"granted","screenshots":"granted"}')
       .mockResolvedValueOnce('{"accessibility":"not-granted","screenshots":"not-granted"}')
-    vi.mocked(execFileSync).mockReturnValueOnce('com.example.orca.computer-use\n')
+    vi.mocked(execFileSync).mockImplementation((_command, args) => {
+      if (args?.includes('Print :CFBundleIdentifier')) {
+        return 'com.example.orca.computer-use\n'
+      }
+      throw new Error('compatibility metadata unavailable')
+    })
     vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
 
     await expect(resetComputerUsePermissions()).resolves.toEqual({

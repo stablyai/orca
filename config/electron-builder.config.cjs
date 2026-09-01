@@ -18,6 +18,9 @@ const {
   verifyPackagedNodePtyJobOwnership
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const {
+  verifyMacOSComputerHelperBuild
+} = require('./scripts/macos-computer-helper-build-contract.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -319,7 +322,11 @@ module.exports = {
       chmodSync(join(resourcesDir, filename), 0o755)
     }
     if (context.electronPlatformName === 'darwin') {
-      await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
+      const computerUseHelperPath = join(resourcesDir, 'Orca Computer Use.app')
+      await signMacComputerUseHelper(computerUseHelperPath, context.packager)
+      verifyMacOSComputerHelperBuild(computerUseHelperPath, {
+        productAppPath: join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+      })
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
         'orca-notification-status',

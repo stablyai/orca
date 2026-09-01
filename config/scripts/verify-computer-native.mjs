@@ -4,6 +4,10 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const { verifyMacOSComputerHelperBuild } = require('./macos-computer-helper-build-contract.cjs')
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const checks = [
@@ -156,7 +160,13 @@ function verifyMacOSHelperApp() {
     )
     return false
   }
-  return run('codesign', ['--verify', '--deep', '--strict', appPath])
+  try {
+    verifyMacOSComputerHelperBuild(appPath)
+    return true
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    return false
+  }
 }
 
 function verifyWindowsProviderHandshake() {
@@ -533,18 +543,6 @@ function swiftFunctionBody(source, name) {
     }
   }
   return null
-}
-
-function run(command, args) {
-  if (!hasCommand(command)) {
-    console.log(`[computer-native] skip ${command}: command not found`)
-    return true
-  }
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    stdio: 'inherit'
-  })
-  return result.status === 0 && !result.error
 }
 
 function quoteShell(value) {

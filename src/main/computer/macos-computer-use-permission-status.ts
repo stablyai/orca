@@ -12,6 +12,10 @@ import {
   resolveMacOSComputerUseAppPath,
   resolveMacOSComputerUseExecutablePath
 } from './macos-native-provider-paths'
+import {
+  formatMacOSComputerUseHelperUnavailableReason,
+  getMacOSComputerUseHelperCompatibility
+} from './macos-computer-use-helper-compatibility'
 import { RuntimeClientError } from './runtime-client-error'
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
@@ -42,6 +46,14 @@ async function getComputerUsePermissionStatusAsync(): Promise<ComputerUsePermiss
   if (!executablePath) {
     return createUnavailablePermissionStatus(
       `${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`,
+      helperAppPath
+    )
+  }
+
+  const compatibility = getMacOSComputerUseHelperCompatibility(helperAppPath)
+  if (compatibility && !compatibility.compatible) {
+    return createUnavailablePermissionStatus(
+      formatMacOSComputerUseHelperUnavailableReason(compatibility),
       helperAppPath
     )
   }

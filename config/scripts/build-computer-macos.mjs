@@ -1,6 +1,12 @@
 import { spawnSync } from 'node:child_process'
 import { chmodSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
+
+const require = createRequire(import.meta.url)
+const {
+  MACOS_COMPUTER_HELPER_MINIMUM_VERSION
+} = require('./macos-computer-helper-build-contract.cjs')
 
 const repoRoot = path.resolve(import.meta.dirname, '../..')
 const packagePath = path.join(repoRoot, 'native', 'computer-use-macos')
@@ -119,7 +125,7 @@ function infoPlist() {
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>${MACOS_COMPUTER_HELPER_MINIMUM_VERSION}</string>
   <key>LSUIElement</key>
   <true/>
   <key>NSAccessibilityUsageDescription</key>

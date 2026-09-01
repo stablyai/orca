@@ -99,7 +99,9 @@ describe('computer-use e2e workflow', () => {
       'src/main/computer/computer-provider-unavailable-message.test.ts',
       'src/main/computer/sidecar-client.test.ts',
       'src/main/computer/macos-native-provider-client.test.ts',
+      'src/main/computer/macos-native-provider-availability.test.ts',
       'src/main/computer/macos-native-provider-socket.test.ts',
+      'src/main/computer/macos-computer-use-helper-compatibility.test.ts',
       'src/main/computer/macos-computer-use-permissions.test.ts',
       'src/main/computer/macos-computer-use-permission-status.test.ts',
       'src/main/computer/desktop-script-provider-client.test.ts',
@@ -178,11 +180,22 @@ describe('computer-use e2e workflow', () => {
       'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs'
     )
     expect(runs).toContain('pnpm verify:computer-native')
+    expect(runs).toContain(
+      'pnpm vitest run --config config/vitest.config.ts config/scripts/macos-computer-helper-build-contract.test.mjs'
+    )
+    expect(runs).toContain('pnpm build:unpack')
+    const launchServicesRepro = runs.find((run) =>
+      run.includes('macos-computer-use-launchservices-repro.test.ts')
+    )
+    expect(launchServicesRepro).toBeTruthy()
+    expect(runs.indexOf('pnpm build:unpack')).toBeLessThan(runs.indexOf(launchServicesRepro))
     expect(runs.join('\n')).not.toContain('test:e2e:computer')
     expect(workflow.jobs.mac).toBeUndefined()
     expect(workflow.on.pull_request.paths).toEqual(
       expect.arrayContaining([
         'config/scripts/macos-computer-helper-owner-loss-benchmark.mjs',
+        'config/scripts/macos-computer-helper-build-contract.cjs',
+        'config/scripts/macos-computer-helper-build-contract.test.mjs',
         'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
         'config/scripts/macos-computer-helper-owner-loss-metrics.mjs',
         'config/scripts/macos-computer-helper-owner-loss-processes.mjs',
