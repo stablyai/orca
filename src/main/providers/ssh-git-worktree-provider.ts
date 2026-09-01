@@ -23,6 +23,7 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
 
 export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
   private loggedWorktreeIsCleanFallback = false
+  private loggedMarkRemoteOrcaCreatedFallback = false
   // Why: reconnect replaces this provider, so an upgraded relay is naturally re-probed.
   private readonly worktreeIsCleanCapabilityCache = new CapabilityProbeCache<
     typeof WORKTREE_IS_CLEAN_CAPABILITY
@@ -125,6 +126,25 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
     await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
     })
+  }
+
+  // Why: git.exec blocks config writes outright, so the deferred fork-remote provenance
+  // marker (#17828) needs its own RPC. Non-essential to push/pull, so an older relay
+  // that hasn't shipped it yet degrades to no marker rather than failing materialization.
+  async markRemoteOrcaCreated(repoPath: string, remoteName: string): Promise<void> {
+    try {
+      await this.mux.request('git.markRemoteOrcaCreated', { repoPath, remoteName })
+    } catch (error) {
+      if (!isJsonRpcMethodNotFoundError(error)) {
+        throw error
+      }
+      if (!this.loggedMarkRemoteOrcaCreatedFallback) {
+        this.loggedMarkRemoteOrcaCreatedFallback = true
+        console.warn(
+          '[ssh-git] Relay does not implement git.markRemoteOrcaCreated; fork remote will lack a git-config provenance marker until reconnect.'
+        )
+      }
+    }
   }
 
   async forceDeletePreservedBranch(

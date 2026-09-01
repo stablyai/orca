@@ -1130,7 +1130,8 @@ export async function prepareWorktreePushTargetSsh(
         throw error
       }
       // Why: repo-local provenance mirroring the local path (worktree-push-target-setup.ts).
-      await provider.exec(['config', `remote.${remoteName}.orca-created`, 'true'], repoPath)
+      // A narrow RPC, not provider.exec: the relay's generic git.exec blocks all config writes.
+      await provider.markRemoteOrcaCreated(repoPath, remoteName)
       remoteCreated = true
       remoteAddedHere = true
     }
