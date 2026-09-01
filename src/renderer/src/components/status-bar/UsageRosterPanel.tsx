@@ -41,7 +41,10 @@ function shortLabel(
   section: UsageSection,
   useRemainingDuration = false
 ): string {
-  if (p.buckets?.some((b) => b.name === section.label)) {
+  const isNamedBucket = p.buckets?.some((b) => b.name === section.label)
+  // Why: Antigravity bucket names distinguish Detailed rows, but Compact
+  // should match other providers by showing the selected window's reset time.
+  if (isNamedBucket && !(p.provider === 'antigravity' && useRemainingDuration)) {
     return section.label
   }
   // fableWeekly shares the 7d window with weekly; label it distinctly so the two

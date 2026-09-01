@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
 // Why: CLI-backed usage bars are surface noise when the underlying
@@ -12,14 +13,25 @@ const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
   'codex',
   'gemini',
   'kimi',
-  'antigravity',
   'grok'
 ])
 
 export function isStatusBarItemAvailable(
   id: StatusBarItem,
-  detectedAgentIds: TuiAgent[] | null
+  detectedAgentIds: TuiAgent[] | null,
+  usageSnapshot?: ProviderRateLimits | null
 ): boolean {
+  if (id === 'antigravity') {
+    if (detectedAgentIds === null || detectedAgentIds.includes('antigravity')) {
+      return true
+    }
+    // Why: Antigravity Desktop exposes the same host-local quota service without installing `agy` on PATH.
+    return (
+      usageSnapshot != null &&
+      usageSnapshot.status !== 'unavailable' &&
+      usageSnapshot.usageMetadata?.failureKind !== 'cli-unavailable'
+    )
+  }
   if (!CLI_GATED_ITEMS.has(id)) {
     return true
   }

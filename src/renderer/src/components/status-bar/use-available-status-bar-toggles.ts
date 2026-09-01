@@ -8,5 +8,12 @@ export function useAvailableStatusBarToggles<T extends { id: StatusBarItem }>(
   toggles: readonly T[]
 ): T[] {
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
-  return toggles.filter((t) => isStatusBarItemAvailable(t.id, detectedAgentIds))
+  const antigravity = useAppStore((s) => s.rateLimits.antigravity)
+  return toggles.filter((toggle) =>
+    isStatusBarItemAvailable(
+      toggle.id,
+      detectedAgentIds,
+      toggle.id === 'antigravity' ? antigravity : null
+    )
+  )
 }

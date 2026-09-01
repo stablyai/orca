@@ -40,6 +40,57 @@ const signedOutCodex: ProviderRateLimits = {
   status: 'error'
 }
 
+function antigravityLimits(tightestResetsAt: number | null = null): ProviderRateLimits {
+  return {
+    provider: 'antigravity',
+    session: {
+      usedPercent: 40,
+      windowMinutes: 300,
+      resetsAt: null,
+      resetDescription: null
+    },
+    weekly: {
+      usedPercent: 90,
+      windowMinutes: 10_080,
+      resetsAt: null,
+      resetDescription: null
+    },
+    buckets: [
+      {
+        name: 'Gemini 5h',
+        usedPercent: 20,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
+      {
+        name: 'Gemini wk',
+        usedPercent: 60,
+        windowMinutes: 10_080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      {
+        name: 'Claude/GPT 5h',
+        usedPercent: 40,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
+      {
+        name: 'Claude/GPT wk',
+        usedPercent: 90,
+        windowMinutes: 10_080,
+        resetsAt: tightestResetsAt,
+        resetDescription: null
+      }
+    ],
+    updatedAt: 0,
+    error: null,
+    status: 'ok'
+  }
+}
+
 describe('UsageRow', () => {
   beforeEach(() => {
     mocks.useResetCountdownClock.mockClear()
@@ -246,6 +297,49 @@ describe('UsageRow', () => {
     expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
     expect(markup).toContain('25%')
     expect(markup).toContain('60%')
+  })
+
+  it('renders all four Antigravity buckets in Detailed mode', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={antigravityLimits()}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup.match(/data-usage-window=/g)).toHaveLength(4)
+    expect(markup.match(/data-usage-bar/g)).toHaveLength(4)
+    expect(markup).toContain('Gemini 5h')
+    expect(markup).toContain('Gemini wk')
+    expect(markup).toContain('Claude/GPT 5h')
+    expect(markup).toContain('Claude/GPT wk')
+  })
+
+  it('renders only the tightest Antigravity bucket in Compact mode', () => {
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(mocks.now)
+    try {
+      const markup = renderToStaticMarkup(
+        <UsageRow
+          p={antigravityLimits(mocks.now + 43 * 60_000)}
+          display="used"
+          mode="compact"
+          state={{ kind: 'usage', statusLabel: null }}
+          showSignInAction={false}
+          now={mocks.now}
+        />
+      )
+
+      expect(markup.match(/data-usage-window=/g)).toHaveLength(1)
+      expect(markup).toContain('43m')
+      expect(markup).toContain('90%')
+      expect(markup).not.toContain('>Claude/GPT wk<')
+      expect(markup).not.toContain('>Gemini wk<')
+    } finally {
+      dateNow.mockRestore()
+    }
   })
 })
 

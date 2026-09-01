@@ -1,5 +1,29 @@
 import { describe, expect, it } from 'vitest'
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+
+function antigravitySnapshot(
+  status: ProviderRateLimits['status'],
+  failureKind?: 'usage-unavailable' | 'cli-unavailable'
+): ProviderRateLimits {
+  return {
+    provider: 'antigravity',
+    session: null,
+    weekly: null,
+    updatedAt: 1,
+    error: status === 'error' ? 'Quota unavailable' : null,
+    status,
+    usageMetadata: failureKind
+      ? {
+          source: 'live-session',
+          attemptedSources: ['live-session'],
+          failureKind,
+          credentialSource: 'agy-local-service',
+          authProvenance: 'antigravity'
+        }
+      : undefined
+  }
+}
 
 describe('isStatusBarItemAvailable', () => {
   it('shows non-CLI items regardless of detection', () => {
@@ -26,7 +50,6 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('claude', [])).toBe(false)
     expect(isStatusBarItemAvailable('codex', ['claude'])).toBe(false)
     expect(isStatusBarItemAvailable('gemini', ['claude', 'codex'])).toBe(false)
-    expect(isStatusBarItemAvailable('antigravity', ['claude', 'codex'])).toBe(false)
     expect(isStatusBarItemAvailable('grok', ['claude', 'kimi'])).toBe(false)
   })
 
@@ -34,7 +57,40 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('claude', ['claude'])).toBe(true)
     expect(isStatusBarItemAvailable('codex', ['codex', 'claude'])).toBe(true)
     expect(isStatusBarItemAvailable('gemini', ['gemini'])).toBe(true)
-    expect(isStatusBarItemAvailable('antigravity', ['antigravity'])).toBe(true)
     expect(isStatusBarItemAvailable('grok', ['grok'])).toBe(true)
+  })
+
+  it('shows Antigravity for a desktop-only runtime snapshot', () => {
+    expect(
+      isStatusBarItemAvailable('antigravity', ['claude', 'codex'], antigravitySnapshot('ok'))
+    ).toBe(true)
+    expect(
+      isStatusBarItemAvailable(
+        'antigravity',
+        ['claude', 'codex'],
+        antigravitySnapshot('error', 'usage-unavailable')
+      )
+    ).toBe(true)
+  })
+
+  it('hides Antigravity after runtime discovery confirms it is unavailable', () => {
+    expect(
+      isStatusBarItemAvailable(
+        'antigravity',
+        ['claude', 'codex'],
+        antigravitySnapshot('unavailable', 'cli-unavailable')
+      )
+    ).toBe(false)
+    expect(
+      isStatusBarItemAvailable(
+        'antigravity',
+        ['claude', 'codex'],
+        antigravitySnapshot('fetching', 'cli-unavailable')
+      )
+    ).toBe(false)
+  })
+
+  it('shows Antigravity when its CLI is detected before a runtime snapshot arrives', () => {
+    expect(isStatusBarItemAvailable('antigravity', ['antigravity'])).toBe(true)
   })
 })
