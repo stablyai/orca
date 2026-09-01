@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
-import { applyDocumentAppearance } from '@/lib/app-appearance-document'
 import { track } from '@/lib/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { STEPS } from './use-onboarding-flow-types'
+import { STEPS, type StepId, type StepNumber } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { translate } from '@/i18n/i18n'
@@ -24,17 +23,8 @@ import {
 
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
-export { STEPS } from './use-onboarding-flow-types'
-export type { StepId, StepNumber } from './use-onboarding-flow-types'
-
-function applyOnboardingTheme(
-  settings: GlobalSettings | null,
-  theme: GlobalSettings['theme']
-): void {
-  applyDocumentAppearance(settings, window.matchMedia('(prefers-color-scheme: dark)').matches, {
-    theme
-  })
-}
+import { useOnboardingThemePreview } from './use-onboarding-theme-preview'
+export { STEPS, type StepId, type StepNumber }
 
 export function useOnboardingFlow(
   onboarding: OnboardingState,
@@ -186,11 +176,10 @@ export function useOnboardingFlow(
   const [initialStartTime] = useState(() => Date.now())
   const startTimeRef = useRef<number>(initialStartTime)
 
-  // Why: ref so the unmount-only revert reads the freshest theme without retriggering on each settings change.
-  const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
-  persistedThemeRef.current = settings?.theme ?? 'dark'
-  const persistedSettingsRef = useRef(settings)
-  persistedSettingsRef.current = settings
+  const { applyTheme, persistedSettingsRef, persistedThemeRef } = useOnboardingThemePreview(
+    settings,
+    theme
+  )
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
   const themeStepEntryCapturedRef = useRef(false)
   useEffect(() => {
@@ -205,15 +194,6 @@ export function useOnboardingFlow(
     themeStepEntryCapturedRef.current = true
     themeStepEntryThemeRef.current = settings.theme
   }, [currentStep.id, settings])
-
-  const applyThemePreview = useCallback(
-    (nextTheme: GlobalSettings['theme']) => applyOnboardingTheme(settings, nextTheme),
-    [settings]
-  )
-
-  useEffect(() => {
-    applyThemePreview(theme)
-  }, [applyThemePreview, theme])
 
   useEffect(() => {
     void refreshPreflightStatus()
@@ -320,7 +300,7 @@ export function useOnboardingFlow(
     setStepIndex,
     selectedAgent,
     themeStepEntryThemeRef,
-    applyTheme: applyThemePreview,
+    applyTheme,
     setTheme,
     updateSettings,
     skipOptions

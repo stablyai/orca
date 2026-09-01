@@ -16,9 +16,12 @@ const APP_APPEARANCE_BASE_TOKENS = [
 const EDITOR_BASE_TOKENS = [
   ...PANEL_DESIGN_TOKEN_ALLOWLIST,
   '--status-success',
+  '--ai-action-accent',
   '--annotation-highlight',
   '--markdown-search-match',
   '--markdown-search-match-active',
+  '--git-decoration-modified',
+  '--git-decoration-renamed',
   '--editor-surface'
 ] as const
 

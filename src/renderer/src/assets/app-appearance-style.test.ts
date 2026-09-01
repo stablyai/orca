@@ -12,16 +12,29 @@ const markdownSurfaceSource = readFileSync(
   new URL('../components/editor/EditorMarkdownFileSurface.tsx', import.meta.url),
   'utf8'
 )
+const checkRunDetailsSource = readFileSync(
+  new URL('../components/editor/CheckRunDetailsPanel.tsx', import.meta.url),
+  'utf8'
+)
+const notesSendMenuSource = readFileSync(
+  new URL('../components/editor/NotesSendMenu.tsx', import.meta.url),
+  'utf8'
+)
+const combinedDiffToolbarSource = readFileSync(
+  new URL(
+    '../components/editor/combined-diff/review-controls/combined-diff-toolbar.tsx',
+    import.meta.url
+  ),
+  'utf8'
+)
 const editorSchemeSources = [
   '../components/editor/ConflictComponents.tsx',
   '../components/editor/DiffSectionHeader.tsx',
-  '../components/editor/ExternalFileChangeBanner.tsx',
-  '../components/editor/NotesSendMenu.tsx',
-  '../components/editor/combined-diff/review-controls/combined-diff-toolbar.tsx'
+  '../components/editor/ExternalFileChangeBanner.tsx'
 ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
 const themePreviewSources = [
   '../components/settings/use-settings-navigation-model.ts',
-  '../components/onboarding/use-onboarding-flow.ts'
+  '../components/onboarding/use-onboarding-theme-preview.ts'
 ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
 const editorPortalSources = [
   '../components/editor/RichMarkdownToolbar.tsx',
@@ -69,8 +82,18 @@ describe('custom app appearance styles', () => {
 
   it('isolates hosted editors from an opposite App Appearance scheme', () => {
     expect(mainCss).toMatch(
-      /data-app-appearance[^}]*:is\([^)]*\.editor-content-pane[^)]*\.markdown-preview-shell[^)]*\.rich-markdown-editor-layout[^)]*\.rich-markdown-link-bubble[^)]*\.rich-markdown-editor-portal[^)]*\)[^{]*\{[^}]*--secondary: var\(--orca-editor-base-secondary\);[^}]*--destructive: var\(--orca-editor-base-destructive\);[^}]*--status-success: var\(--orca-editor-base-status-success\);[^}]*--annotation-highlight: var\(--orca-editor-base-annotation-highlight\);[^}]*--markdown-search-match: var\(--orca-editor-base-markdown-search-match\);[^}]*--editor-surface: var\(--orca-editor-base-editor-surface\)/s
+      /data-app-appearance[^}]*:is\([^)]*\.editor-content-pane[^)]*\.markdown-preview-shell[^)]*\.rich-markdown-editor-layout[^)]*\.rich-markdown-link-bubble[^)]*\.rich-markdown-editor-portal[^)]*\)[^{]*\{[^}]*--secondary: var\(--orca-editor-base-secondary\);[^}]*--destructive: var\(--orca-editor-base-destructive\);[^}]*--status-success: var\(--orca-editor-base-status-success\);[^}]*--ai-action-accent: var\(--orca-editor-base-ai-action-accent\);[^}]*--annotation-highlight: var\(--orca-editor-base-annotation-highlight\);[^}]*--markdown-search-match: var\(--orca-editor-base-markdown-search-match\);[^}]*--editor-surface: var\(--orca-editor-base-editor-surface\)/s
     )
+    expect(mainCss).toContain(
+      '--git-decoration-modified: var(--orca-editor-base-git-decoration-modified)'
+    )
+    expect(mainCss).toContain(
+      '--git-decoration-renamed: var(--orca-editor-base-git-decoration-renamed)'
+    )
+    expect(mainCss).toMatch(
+      /data-app-appearance[^}]*:is\([^)]*\.editor-content-pane[^)]*\.markdown-preview-shell[^)]*\.rich-markdown-editor-layout[^)]*\)[^{]*\{[^}]*background: var\(--editor-surface\);[^}]*color: var\(--foreground\);/s
+    )
+    expect(checkRunDetailsSource.match(/mermaidScheme="editor"/g)).toHaveLength(2)
     expect(richMarkdownCss).not.toContain('.dark .rich-markdown')
     expect(richMarkdownCss).toContain('.orca-editor-dark .rich-markdown')
     expect(mainCss).toContain('@custom-variant editor-dark')
@@ -81,6 +104,10 @@ describe('custom app appearance styles', () => {
     for (const source of editorSchemeSources) {
       expect(source).not.toMatch(/(?:^|[\s'"`])dark:/)
       expect(source).toContain('editor-dark:')
+    }
+    for (const source of [notesSendMenuSource, combinedDiffToolbarSource]) {
+      expect(source).toContain('text-ai-action-accent')
+      expect(source).not.toMatch(/text-violet-\d+\s+editor-dark:text-violet-/)
     }
   })
 

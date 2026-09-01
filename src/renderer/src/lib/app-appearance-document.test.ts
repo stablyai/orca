@@ -114,9 +114,12 @@ describe('applyAppAppearanceToDocument', () => {
     root.style.setProperty('--popover', '#202020')
     root.style.setProperty('--popover-foreground', '#fafafa')
     root.style.setProperty('--status-success', '#86efac')
+    root.style.setProperty('--ai-action-accent', '#a78bfa')
     root.style.setProperty('--annotation-highlight', '#fbbf24')
     root.style.setProperty('--markdown-search-match', '#facc15')
     root.style.setProperty('--markdown-search-match-active', '#fb923c')
+    root.style.setProperty('--git-decoration-modified', '#e2c08d')
+    root.style.setProperty('--git-decoration-renamed', '#73c991')
     root.style.setProperty('--editor-surface', '#1e1e1e')
     const style = document.createElement('style')
     style.textContent = `
@@ -133,9 +136,12 @@ describe('applyAppAppearanceToDocument', () => {
         --popover: var(--orca-editor-base-popover);
         --popover-foreground: var(--orca-editor-base-popover-foreground);
         --status-success: var(--orca-editor-base-status-success);
+        --ai-action-accent: var(--orca-editor-base-ai-action-accent);
         --annotation-highlight: var(--orca-editor-base-annotation-highlight);
         --markdown-search-match: var(--orca-editor-base-markdown-search-match);
         --markdown-search-match-active: var(--orca-editor-base-markdown-search-match-active);
+        --git-decoration-modified: var(--orca-editor-base-git-decoration-modified);
+        --git-decoration-renamed: var(--orca-editor-base-git-decoration-renamed);
         --editor-surface: var(--orca-editor-base-editor-surface);
         background: var(--editor-surface);
         color: var(--foreground);
@@ -172,8 +178,13 @@ describe('applyAppAppearanceToDocument', () => {
     expect(root.style.getPropertyValue('--orca-editor-base-secondary')).toBe('#262626')
     expect(root.style.getPropertyValue('--orca-editor-base-destructive')).toBe('#ff6568')
     expect(root.style.getPropertyValue('--orca-editor-base-status-success')).toBe('#86efac')
+    expect(root.style.getPropertyValue('--orca-editor-base-ai-action-accent')).toBe('#a78bfa')
     expect(root.style.getPropertyValue('--orca-editor-base-annotation-highlight')).toBe('#fbbf24')
     expect(root.style.getPropertyValue('--orca-editor-base-markdown-search-match')).toBe('#facc15')
+    expect(root.style.getPropertyValue('--orca-editor-base-git-decoration-modified')).toBe(
+      '#e2c08d'
+    )
+    expect(root.style.getPropertyValue('--orca-editor-base-git-decoration-renamed')).toBe('#73c991')
     expect(root.style.getPropertyValue('--orca-editor-base-popover')).toBe('#202020')
     expect(root.style.getPropertyValue('--orca-editor-base-popover-foreground')).toBe('#fafafa')
     expect(root.style.getPropertyValue('--orca-editor-base-editor-surface')).toBe('#1e1e1e')
@@ -188,8 +199,11 @@ describe('applyAppAppearanceToDocument', () => {
       expect(computed.getPropertyValue('--popover')).toBe('#202020')
       expect(computed.getPropertyValue('--popover-foreground')).toBe('#fafafa')
       expect(computed.getPropertyValue('--status-success')).toBe('#86efac')
+      expect(computed.getPropertyValue('--ai-action-accent')).toBe('#a78bfa')
       expect(computed.getPropertyValue('--annotation-highlight')).toBe('#fbbf24')
       expect(computed.getPropertyValue('--markdown-search-match')).toBe('#facc15')
+      expect(computed.getPropertyValue('--git-decoration-modified')).toBe('#e2c08d')
+      expect(computed.getPropertyValue('--git-decoration-renamed')).toBe('#73c991')
     }
   })
 
