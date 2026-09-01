@@ -3130,7 +3130,8 @@
             "f395c9a685": "No se pudo importar el archivo",
             "e6234bcc17": "Subir una mascota personalizada requiere reiniciar la app por completo (no solo recargarla).",
             "6d0a8cd179": "Mostrar mascota",
-            "1fbc51cc77": "Ocultar mascota"
+            "1fbc51cc77": "Ocultar mascota",
+            "77cc168c70": "Deambular"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "No se detectaron puertos externos",

@@ -989,6 +989,9 @@ export type UISlice = {
   /** Whether the pet overlay is currently visible. Persisted so "Hide pet" survives reload. Independent of the experimentalPet flag (which gates whether it can render at all). */
   petVisible: boolean
   setPetVisible: (v: boolean) => void
+  /** Whether the pet may roam while idle; separate from visibility so users can keep it shown but pinned. */
+  petWanderEnabled: boolean
+  setPetWanderEnabled: (v: boolean) => void
   /** Which pet is active — a bundled id or a custom UUID. Persisted via PersistedUIState. */
   petId: string
   setPetId: (id: string) => void
@@ -2419,6 +2422,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ petVisible: v }).catch(console.error)
     set({ petVisible: v })
   },
+  petWanderEnabled: false,
+  setPetWanderEnabled: (v) => {
+    window.api.ui.set({ petWanderEnabled: v }).catch(console.error)
+    set({ petWanderEnabled: v })
+  },
 
   petId: DEFAULT_PET_ID,
   setPetId: (id) => {
@@ -2670,6 +2678,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
         // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
         petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
+        petWanderEnabled: ui.petWanderEnabled === true,
         petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT),
         customPets,
         // Why: fall back to default when the persisted id is unknown (e.g. custom pet removed elsewhere) so the overlay renders.

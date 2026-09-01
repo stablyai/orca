@@ -3492,7 +3492,8 @@
             "f395c9a685": "Failed to import file",
             "e6234bcc17": "Custom pet upload needs a full app restart (not just reload).",
             "6d0a8cd179": "Show pet",
-            "1fbc51cc77": "Hide pet"
+            "1fbc51cc77": "Hide pet",
+            "77cc168c70": "Wander"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "No external ports detected",

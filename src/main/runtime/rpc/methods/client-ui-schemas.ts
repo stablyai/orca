@@ -205,6 +205,7 @@ const UiUpdateFields = z
     usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
     usageEmptyStateDismissed: z.boolean().optional(),
     petVisible: z.boolean().optional(),
+    petWanderEnabled: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),
     petSize: z.number().finite().optional(),

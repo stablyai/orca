@@ -374,6 +374,16 @@ describe('createUISlice hydratePersistedUI', () => {
     ])
   })
 
+  it('hydrates the pet wander preference', () => {
+    const store = createUIStore()
+
+    expect(store.getState().petWanderEnabled).toBe(false)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ petWanderEnabled: true }))
+
+    expect(store.getState().petWanderEnabled).toBe(true)
+  })
+
   it('sanitizes task resume state field-by-field during hydration', () => {
     const store = createUIStore()
 

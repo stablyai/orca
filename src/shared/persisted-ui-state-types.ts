@@ -182,6 +182,8 @@ export type PersistedUIState = {
   setupScriptPromptDismissedRepoIds?: string[]
   /** Pet overlay visibility, separate from the experimentalPet settings flag so "Hide pet" is a reversible dismiss; absent = true. */
   petVisible?: boolean
+  /** Whether the pet may roam while idle; separate from petVisible so users can keep it shown but pinned. */
+  petWanderEnabled?: boolean
   /** Active pet id (bundled id or custom UUID); unknown ids fall back to the default on read so a removed custom pet doesn't blank the overlay. */
   petId?: string
   /** Metadata index for user-uploaded pet images; bytes live under legacy userData/sidekicks/custom/. */
