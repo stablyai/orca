@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { getWorktreeRemovalErrorCopy } from './worktree-removal-error-copy'
 import {
   isLockedWorktreeRemovalError,
   isProvenLivePtyRemovalError,
@@ -112,7 +113,9 @@ export function getDeleteWorktreeToastCopy(
       'Failed to delete workspace {{value0}}',
       { value0: worktreeName }
     ),
-    description: error,
+    // Why: this branch renders whatever string the failure carried, so an unclassified
+    // failure used to show the user Electron's own IPC envelope instead of a reason.
+    description: getWorktreeRemovalErrorCopy(error),
     isDestructive: true
   }
 }

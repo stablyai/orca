@@ -12,6 +12,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { getWorktreeRemovalErrorCopy } from './worktree-removal-error-copy'
 
 function getCollisionIds(worktrees: readonly Worktree[]): ReadonlySet<string> {
   const seen = new Set<string>()
@@ -94,7 +95,7 @@ export function DeleteWorktreeTargetPreview({
                     />
                     {itemDeleteState?.error ? (
                       <div className="mt-1 whitespace-pre-wrap break-all text-destructive">
-                        {itemDeleteState.error}
+                        {getWorktreeRemovalErrorCopy(itemDeleteState.error)}
                       </div>
                     ) : null}
                   </div>

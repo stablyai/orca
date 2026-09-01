@@ -5827,6 +5827,14 @@
               "6798dc7c94": "In review",
               "5076efc3d2": "Done"
             }
+          },
+          "removal": {
+            "error": {
+              "copy": {
+                "unreadable": "Orca could not delete this workspace, and the failure did not include a readable reason. Retry, and send app diagnostics to support if it keeps failing.",
+                "branchUnreadable": "Orca could not delete this branch, and the failure did not include a readable reason. Retry, and send app diagnostics to support if it keeps failing."
+              }
+            }
           }
         },
         "CacheTimer": {

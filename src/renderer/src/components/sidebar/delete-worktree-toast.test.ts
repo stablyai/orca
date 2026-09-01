@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
+import { getDeleteWorktreeToastCopy, type DeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { classifyWorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 
 // Why: production never hands this function a literal reason — the store derives it from
 // classifyWorktreeForceDeleteReason (store/slices/worktrees.ts). Passing one in would let a
 // message the classifier rejects still render the force copy, testing a UI that never runs.
-function toastCopyForRemovalError(worktreeName: string, error: string): unknown {
+function toastCopyForRemovalError(worktreeName: string, error: string): DeleteWorktreeToastCopy {
   return getDeleteWorktreeToastCopy(worktreeName, classifyWorktreeForceDeleteReason(error), error)
 }
 
@@ -108,6 +108,36 @@ describe('getDeleteWorktreeToastCopy', () => {
       title: 'Failed to delete workspace feature/foo',
       description: 'Git already removed this workspace. Use Force Delete to clear it from Orca.',
       isDestructive: false
+    })
+  })
+
+  // Why: Electron builds every invoke rejection as `Error invoking remote method '<channel>': ${err}`
+  // (renderer/api/ipc-renderer.ts) from the main side's `error.toString()`. A failure the classifier
+  // does not recognise reaches this branch, so without stripping, the delete toast shows the user
+  // Orca's IPC plumbing instead of a reason.
+  it('never shows the Electron IPC envelope when the failure carries a reason', () => {
+    const description = toastCopyForRemovalError(
+      'feature/foo',
+      "Error invoking remote method 'worktrees:remove': Error: EPERM: operation not permitted, unlink '/w/.git'"
+    ).description
+    expect(description).not.toContain('invoking remote method')
+    expect(description).toBe("EPERM: operation not permitted, unlink '/w/.git'")
+  })
+
+  // Why: `error.toString()` on a message-less main-side error is the bare class name, so the
+  // envelope arrives with nothing behind it. Rendering what is left ("Error") is still plumbing,
+  // so this case has to reach human copy rather than a stripped remnant.
+  it('falls back to human copy when the envelope carries no readable reason', () => {
+    expect(
+      toastCopyForRemovalError(
+        'feature/foo',
+        "Error invoking remote method 'worktrees:remove': Error"
+      )
+    ).toEqual({
+      title: 'Failed to delete workspace feature/foo',
+      description:
+        'Orca could not delete this workspace, and the failure did not include a readable reason. Retry, and send app diagnostics to support if it keeps failing.',
+      isDestructive: true
     })
   })
 

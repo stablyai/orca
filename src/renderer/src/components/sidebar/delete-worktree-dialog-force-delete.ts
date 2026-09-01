@@ -9,6 +9,7 @@ import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-opti
 import type { RendererRemoveWorktreeResult } from '@/store/slices/renderer-remove-worktree-result'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
+import { getWorktreeRemovalErrorCopy } from './worktree-removal-error-copy'
 
 /**
  * The dialog's explicit "Force Delete" retry.
@@ -60,7 +61,7 @@ export function runDialogForceDelete(args: {
             'Force delete failed'
           ),
           {
-            description: result.error
+            description: getWorktreeRemovalErrorCopy(result.error)
           }
         )
         return
@@ -75,7 +76,7 @@ export function runDialogForceDelete(args: {
           'Failed to delete workspace'
         ),
         {
-          description: err instanceof Error ? err.message : String(err)
+          description: getWorktreeRemovalErrorCopy(err instanceof Error ? err.message : String(err))
         }
       )
     })

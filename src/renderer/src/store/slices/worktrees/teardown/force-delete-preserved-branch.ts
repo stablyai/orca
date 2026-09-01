@@ -10,6 +10,7 @@ import type { ForceDeleteWorktreeBranchResult } from '../../../../../../shared/w
 import type { PreservedBranchCleanup } from '../../../../../../shared/preserved-branch-cleanup'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
 import { settingsForWorktreeOwner } from '../listing/worktree-owner-settings'
+import { getPreservedBranchDeletionErrorCopy } from '@/components/sidebar/worktree-removal-error-copy'
 
 export function createForceDeletePreservedBranch(
   _set: WorktreeSliceSet,
@@ -105,7 +106,7 @@ export function createForceDeletePreservedBranch(
         toast.error(
           translate('auto.store.slices.worktrees.0216895fb5', 'Failed to delete branch'),
           {
-            description: error
+            description: getPreservedBranchDeletionErrorCopy(error)
           }
         )
       }

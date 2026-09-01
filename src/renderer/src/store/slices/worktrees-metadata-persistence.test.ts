@@ -100,6 +100,26 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
   })
 
+  // Why: this toast runs its own IPC call, so it can surface Electron's invoke envelope from a
+  // different channel than the workspace delete that produced the preserved branch.
+  it('never shows the IPC envelope when preserved-branch deletion fails', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
+    mockApi.worktrees.forceDeletePreservedBranch.mockRejectedValueOnce(
+      new Error("Error invoking remote method 'worktrees:forceDeletePreservedBranch': Error")
+    )
+
+    const result = await store
+      .getState()
+      .forceDeletePreservedBranch(wt.id, 'feature/test', 'abc123')
+
+    expect(result.ok).toBe(false)
+    expect(vi.mocked(toast.error).mock.calls[0]?.[1]?.description).toBe(
+      'Orca could not delete this branch, and the failure did not include a readable reason. Retry, and send app diagnostics to support if it keeps failing.'
+    )
+  })
+
   it('suppresses per-branch feedback for an aggregate delete', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

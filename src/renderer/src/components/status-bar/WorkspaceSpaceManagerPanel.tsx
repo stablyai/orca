@@ -70,6 +70,7 @@ import { toWorktreeDeleteIdentities } from '../sidebar/worktree-delete-request'
 import { showWorkspaceListChangedToast } from '../sidebar/stale-workspace-list-toast'
 import { prepareActiveWorktreeFocusAfterDelete } from '../sidebar/active-worktree-focus-after-delete'
 import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
+import { getWorktreeRemovalErrorCopy } from '../sidebar/worktree-removal-error-copy'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import {
@@ -1141,7 +1142,9 @@ function BreakdownRow({
   )
 }
 
-function WorkspaceRow({
+// Exported for test: the panel above it is store-connected, and this row is the only
+// place a workspace-removal failure is rendered in Space.
+export function WorkspaceRow({
   worktree,
   maxSize,
   selected,
@@ -1169,7 +1172,10 @@ function WorkspaceRow({
   onForceDelete: () => void
 }): React.JSX.Element {
   const isDeleting = deleteState?.isDeleting ?? false
-  const deleteError = deleteState?.error ?? null
+  // Why: this row shows the same removal failure the delete toast does, so it needs the
+  // same guard against rendering Electron's IPC envelope — in the title attribute too.
+  const rawDeleteError = deleteState?.error ?? null
+  const deleteError = rawDeleteError === null ? null : getWorktreeRemovalErrorCopy(rawDeleteError)
   const canForceDelete = deleteState?.canForceDelete ?? false
   const canDelete = isWorkspaceSpaceRowReadyToDelete(worktree, decisionDetails) && !isDeleting
   const handleForceDelete = (event: React.MouseEvent<HTMLButtonElement>): void => {
@@ -1821,7 +1827,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                 'Force delete failed'
               ),
               {
-                description: result.error
+                description: getWorktreeRemovalErrorCopy(result.error)
               }
             )
             return
