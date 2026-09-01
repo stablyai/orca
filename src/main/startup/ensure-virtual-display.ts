@@ -147,6 +147,26 @@ export const MISSING_LINUX_DISPLAY_MESSAGE = [
   `Use \`orca-ide serve\` to run headless. On a bare server, ${XVFB_INSTALL_GUIDANCE}`
 ].join('\n')
 
+// Why: an X server may bind only the abstract namespace (`@/tmp/.X11-unix/X0`), which leaves no
+// filesystem socket to stat. Abstract addresses are kernel-owned and vanish the moment the owner
+// exits, so an entry here is proof of a live server — no lock file needed, and no stale entry is
+// possible. Refusing these was a hard startup failure with no workaround.
+function hasAbstractXSocket(displayNumber: number): boolean {
+  let table: unknown
+  try {
+    table = readFileSync('/proc/net/unix', 'utf8')
+  } catch {
+    return false
+  }
+  if (typeof table !== 'string') {
+    return false
+  }
+  const address = `@${xvfbSocketPath(displayNumber)}`
+  return table
+    .split('\n')
+    .some((line) => line.slice(line.lastIndexOf(' ') + 1).trimEnd() === address)
+}
+
 function isUnixSocket(path: string): boolean {
   try {
     return statSync(path).isSocket()
@@ -167,10 +187,19 @@ function hasUsableXDisplay(value: string | undefined): boolean {
     return /^\S+:\d+(?:\.\d+)?$/.test(display)
   }
   const displayNumber = Number(localDisplay[1])
-  return isUnixSocket(xvfbSocketPath(displayNumber)) && isForeignDisplayServerAlive(displayNumber)
+  if (isUnixSocket(xvfbSocketPath(displayNumber))) {
+    return isForeignDisplayServerAlive(displayNumber)
+  }
+  return hasAbstractXSocket(displayNumber)
 }
 
 function hasUsableWaylandDisplay(env: NodeJS.ProcessEnv): boolean {
+  // Why: WAYLAND_SOCKET is an already-connected fd handed over by the compositor, so there is no
+  // path to stat and WAYLAND_DISPLAY may be unset entirely. Its presence IS the display.
+  const inheritedFd = env.WAYLAND_SOCKET?.trim()
+  if (inheritedFd && /^\d+$/.test(inheritedFd)) {
+    return true
+  }
   const display = env.WAYLAND_DISPLAY?.trim()
   if (!display) {
     return false

@@ -283,6 +283,58 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       expect(statSyncMock).toHaveBeenCalledWith('/run/user/1000/wayland-0')
     })
 
+    // An X server may bind only the abstract namespace, leaving nothing to stat. Abstract addresses
+    // are kernel-owned and vanish when the owner exits, so an entry is proof of a live server.
+    it('accepts an abstract-namespace X socket with no filesystem socket', async () => {
+      setPlatform('linux')
+      statSyncMock.mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      readFileSyncMock.mockImplementation((path: string) => {
+        if (path === '/proc/net/unix') {
+          return [
+            'Num       RefCount Protocol Flags    Type St Inode Path',
+            '0000000000000000: 00000003 00000000 00000000 0001 03 12014 @/tmp/.X11-unix/X0',
+            ''
+          ].join('\n')
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
+
+      expect(hasUsableLinuxDisplay({ DISPLAY: ':0' })).toBe(true)
+    })
+
+    it('does not confuse a different display number in the abstract table', async () => {
+      setPlatform('linux')
+      statSyncMock.mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      readFileSyncMock.mockImplementation((path: string) => {
+        if (path === '/proc/net/unix') {
+          return '0000000000000000: 00000003 00000000 00000000 0001 03 12014 @/tmp/.X11-unix/X10\n'
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
+
+      expect(hasUsableLinuxDisplay({ DISPLAY: ':1' })).toBe(false)
+    })
+
+    it('accepts an inherited WAYLAND_SOCKET fd with no WAYLAND_DISPLAY', async () => {
+      setPlatform('linux')
+      statSyncMock.mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      readFileSyncMock.mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
+
+      expect(hasUsableLinuxDisplay({ WAYLAND_SOCKET: '7' })).toBe(true)
+      expect(hasUsableLinuxDisplay({ WAYLAND_SOCKET: 'not-an-fd' })).toBe(false)
+    })
+
     it('rejects an orphaned local X11 socket whose server PID is gone', async () => {
       setPlatform('linux')
       statSyncMock.mockReturnValue({ isSocket: () => true })
