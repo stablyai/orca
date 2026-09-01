@@ -21,3 +21,18 @@
     RMDir /r "$LOCALAPPDATA\Orca\daemon-host"
   ${endIf}
 !macroend
+
+; Why: ensure the install directory carries an explicit read/execute grant for
+; ALL RESTRICTED APPLICATION PACKAGES. When missing (e.g. from custom unpacking
+; or protected DACL inheritance), Chromium renderer and GPU processes fail to
+; start with STATUS_BREAKPOINT since their AppContainer cannot read the binaries.
+!macro customInstall
+  nsExec::Exec '"$SYSDIR\icacls.exe" "$INSTDIR" /grant *S-1-15-2-2:(OI)(CI)(RX)'
+  Pop $0
+  ${If} $0 != "0"
+    DetailPrint "Failed to grant restricted AppContainer read access: $0"
+    ${IfNot} ${Silent}
+      MessageBox MB_OK|MB_ICONEXCLAMATION "Orca was installed, but Windows could not finish configuring access to its files (error $0). Orca may not start; retry the installer or contact support."
+    ${EndIf}
+  ${EndIf}
+!macroend
