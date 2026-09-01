@@ -1,5 +1,7 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { sessionSortTime } from './session-scanner-accumulator'
 
 // Why: the session bridge and the real-home backfill hardlink one physical
@@ -129,11 +131,16 @@ export async function dedupeCodexRolloutAliases<T>(
     getCodexHome: (candidate: T) => string | null
     getHardlinkIdentity: (candidate: T) => string | null
   },
-  readSessionMetaId: (filePath: string) => Promise<string | null>
+  readSessionMetaId: (filePath: string) => Promise<string | null>,
+  signal?: AbortSignal
 ): Promise<T[]> {
   const hardlinkDeduped = dedupeCodexRolloutFileAliases(candidates, accessors)
-  return dedupeCodexRolloutCopyAliases(hardlinkDeduped, accessors, readSessionMetaId)
+  return dedupeCodexRolloutCopyAliases(hardlinkDeduped, accessors, readSessionMetaId, signal)
 }
+
+// Matches the scan's own parse batch width. UNC candidates are additionally
+// serialized by the WSL transcript gate, so this only widens native reads.
+const COPY_PROOF_READ_CONCURRENCY = 8
 
 /**
  * Drops cross-volume rollout copies only when bounded session metadata proves
@@ -147,7 +154,8 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     getFilePath: (candidate: T) => string
     getCodexHome: (candidate: T) => string | null
   },
-  readSessionMetaId: (filePath: string) => Promise<string | null>
+  readSessionMetaId: (filePath: string) => Promise<string | null>,
+  signal?: AbortSignal
 ): Promise<T[]> {
   const groups = new Map<string, T[]>()
   for (const candidate of candidates) {
@@ -168,19 +176,33 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     }
   }
 
+  // Only same-name groups can alias, so the read fans out across every
+  // contested candidate at once rather than one group at a time — a corpus
+  // with a full second history copy has thousands of two-file groups.
+  const contested = [...groups.values()].filter((group) => group.length > 1).flat()
+  if (contested.length === 0) {
+    return [...candidates]
+  }
+  const identifiedIds = await mapWithConcurrency(
+    contested,
+    COPY_PROOF_READ_CONCURRENCY,
+    async (candidate) => {
+      throwIfAiVaultScanCancelled(signal)
+      return readSessionMetaId(accessors.getFilePath(candidate))
+    }
+  )
+  const idByCandidate = new Map<T, string | null>(
+    contested.map((candidate, index) => [candidate, identifiedIds[index]])
+  )
+
   const aliasesToDrop = new Set<T>()
   for (const group of groups.values()) {
     if (group.length < 2) {
       continue
     }
-    const identified = await Promise.all(
-      group.map(async (candidate) => ({
-        candidate,
-        id: await readSessionMetaId(accessors.getFilePath(candidate))
-      }))
-    )
     const bestById = new Map<string, { candidate: T; rank: number; filePath: string }>()
-    for (const { candidate, id } of identified) {
+    for (const candidate of group) {
+      const id = idByCandidate.get(candidate)
       if (!id) {
         continue
       }
@@ -191,7 +213,8 @@ export async function dedupeCodexRolloutCopyAliases<T>(
         bestById.set(id, { candidate, rank, filePath })
       }
     }
-    for (const { candidate, id } of identified) {
+    for (const candidate of group) {
+      const id = idByCandidate.get(candidate)
       if (id && bestById.get(id)?.candidate !== candidate) {
         aliasesToDrop.add(candidate)
       }

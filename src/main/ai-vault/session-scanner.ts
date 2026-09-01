@@ -109,7 +109,8 @@ export async function scanAiVaultSessions(
         getCodexHome: (candidate) => candidate.codexHome,
         getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
       },
-      readCodexRolloutSessionMetaId
+      (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal),
+      options.signal
     )
 
     const parsedSessions = await parseSessionCandidates({

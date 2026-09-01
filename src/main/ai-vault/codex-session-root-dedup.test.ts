@@ -269,6 +269,40 @@ describe('dedupeCodexRolloutCopyAliases', () => {
     ).resolves.toEqual([native, wsl])
     expect(readSessionMetaId).not.toHaveBeenCalled()
   })
+
+  it('proves only contested same-name candidates', async () => {
+    const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+    const managed = { agent: 'codex', path: MANAGED_HOME_ROLLOUT, codexHome: MANAGED_HOME }
+    const lone = {
+      agent: 'codex',
+      path: '/Users/ada/.codex/sessions/rollout-2026-08-20T09-00-00-lone.jsonl',
+      codexHome: null
+    }
+    const readSessionMetaId = vi.fn(async () => 'shared-session-id')
+
+    await expect(
+      dedupeCodexRolloutCopyAliases([real, managed, lone], accessors, readSessionMetaId)
+    ).resolves.toEqual([real, lone])
+    expect(readSessionMetaId).toHaveBeenCalledTimes(2)
+  })
+
+  // Why: the proof reads run inside the scan's 130s deadline, so a superseded
+  // scan must stop rather than drain a whole second history copy (#17888).
+  it('stops proving copies once the scan is cancelled', async () => {
+    const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+    const managed = { agent: 'codex', path: MANAGED_HOME_ROLLOUT, codexHome: MANAGED_HOME }
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      dedupeCodexRolloutCopyAliases(
+        [real, managed],
+        accessors,
+        async () => 'shared-session-id',
+        controller.signal
+      )
+    ).rejects.toThrow()
+  })
 })
 
 describe('dedupeCodexSessionsBySessionId', () => {

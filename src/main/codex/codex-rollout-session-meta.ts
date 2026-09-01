@@ -1,24 +1,28 @@
-import { open } from 'node:fs/promises'
+import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
 
 const ROLLOUT_READ_LIMIT = 64 * 1024
 
 /** Read the Codex session id without streaming the full rollout transcript. */
-export async function readCodexRolloutSessionMetaId(filePath: string): Promise<string | null> {
-  // A listed rollout may vanish before it is read — Codex prunes and rewrites
-  // these files. One missing file must not abort the whole scan.
-  let file: Awaited<ReturnType<typeof open>>
+export async function readCodexRolloutSessionMetaId(
+  filePath: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  let head: Buffer
   try {
-    file = await open(filePath, 'r')
+    // Gated, not raw fs: AI Vault hands this every scan candidate, including
+    // `\\wsl.localhost\...` rollouts, so a stalled distro must fail on the
+    // transcript gate's deadline instead of blocking the scan (#15453). A
+    // listed rollout may also vanish before it is read — Codex prunes and
+    // rewrites these files — and one missing file must not abort the scan.
+    head = await readTranscriptSlice(filePath, 0, ROLLOUT_READ_LIMIT, 'scan', signal)
   } catch {
     return null
   }
+  const firstLine = head.toString('utf8').split(/\r?\n/, 1)[0]?.trim()
+  if (!firstLine) {
+    return null
+  }
   try {
-    const buffer = Buffer.alloc(ROLLOUT_READ_LIMIT)
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-    const firstLine = buffer.subarray(0, bytesRead).toString('utf8').split(/\r?\n/, 1)[0]?.trim()
-    if (!firstLine) {
-      return null
-    }
     const record = JSON.parse(firstLine) as {
       type?: unknown
       id?: unknown
@@ -39,7 +43,5 @@ export async function readCodexRolloutSessionMetaId(filePath: string): Promise<s
     return typeof id === 'string' && id.length > 0 ? id : null
   } catch {
     return null
-  } finally {
-    await file.close()
   }
 }
