@@ -4,13 +4,27 @@
 // a large fork can carry 1000+ branches. Every mint/reuse/migration path funnels
 // through `ensureRemoteTracksBranchNarrowly` so a fork remote never tracks more than
 // the branches Orca actually knows about (see #17828).
+//
+// The tracked-branch refspec source carries a trailing `*` (`refs/heads/<branch>*`)
+// rather than being a literal exact match. This is deliberate: Orca is terminal-centric
+// (agents run raw git in worktrees), and a *bare* `git fetch` inside a fork-PR worktree
+// resolves to this remote via `branch.<name>.remote` -- it is the single most common
+// fetch shape here, more common than `git fetch <explicit-remote>`. A literal refspec
+// makes that fetch (and `git fetch <remote>`) hard-fail with `couldn't find remote ref`
+// the moment the tracked branch is deleted/renamed upstream, where the old wide default
+// silently no-op'd. A trailing `*` keeps git's wildcard zero-match tolerance (verified
+// against real git: exit 0, and `--prune` correctly reclaims the ref once it can't be
+// found) while still bounding the import to branches sharing that literal prefix --
+// not the fork's entire branch set. The residual widening (an unrelated sibling branch
+// that happens to share the prefix, e.g. `fix` also matching `fix-v2`) is accepted as
+// far narrower than the bug this fixes.
 export type GitExecFn = (
   args: string[],
   cwd: string
 ) => Promise<{ stdout: string; stderr?: string }>
 
 export function buildNarrowForkFetchRefspec(remoteName: string, branchName: string): string {
-  return `+refs/heads/${branchName}:refs/remotes/${remoteName}/${branchName}`
+  return `+refs/heads/${branchName}*:refs/remotes/${remoteName}/${branchName}*`
 }
 
 export function wildcardForkFetchRefspec(remoteName: string): string {
@@ -42,6 +56,27 @@ function refspecSource(refspec: string): string {
 }
 
 /**
+ * True only if `remote.<name>.url` is actually set. Deliberately plumbing (`config --get`),
+ * not porcelain `git remote get-url` -- the latter falls back to echoing the remote *name*
+ * as a bogus "URL" when the section exists but has no url key (verified against real git),
+ * which would hide exactly the config-only ghost state this guards against (see
+ * `worktree-push-target-refspec-migration.ts`'s concurrent-removal race with #17842's
+ * reconciliation sweep).
+ */
+export async function remoteHasUrl(
+  execGit: GitExecFn,
+  repoPath: string,
+  remoteName: string
+): Promise<boolean> {
+  try {
+    await execGit(['config', '--get', `remote.${remoteName}.url`], repoPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Adds `branchName` to `remoteName`'s tracked set without dropping any other branch
  * already tracked (a sibling worktree on the same fork may track a different branch --
  * see #17828 reuse-path discussion on why this widens rather than replaces). Replaces
@@ -57,8 +92,19 @@ export async function ensureRemoteTracksBranchNarrowly(
   const desired = buildNarrowForkFetchRefspec(remoteName, branchName)
   const existing = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
   if (!existing.includes(desired)) {
-    if (existing.includes(wildcardForkFetchRefspec(remoteName))) {
+    // Strip the wide default outright, and any stray literal (non-suffixed) entry for
+    // this exact branch -- e.g. a hand-edited config -- since it would shadow the same
+    // source prefix and defeats the point of the trailing `*`.
+    const literalForBranch = `refs/heads/${branchName}`
+    const toDrop = existing.includes(wildcardForkFetchRefspec(remoteName))
+      ? existing
+      : existing.filter((refspec) => refspecSource(refspec) === literalForBranch)
+    if (toDrop.length > 0) {
+      const surviving = existing.filter((refspec) => !toDrop.includes(refspec))
       await execGit(['config', '--unset-all', `remote.${remoteName}.fetch`], repoPath)
+      for (const refspec of surviving) {
+        await execGit(['config', '--add', `remote.${remoteName}.fetch`, refspec], repoPath)
+      }
     }
     await execGit(['config', '--add', `remote.${remoteName}.fetch`, desired], repoPath)
   }
@@ -67,11 +113,13 @@ export async function ensureRemoteTracksBranchNarrowly(
 
 /**
  * Deletes remote-tracking refs under `refs/remotes/<remoteName>/` that fall outside
- * `keepBranches`. Needed because `git fetch --prune` only reclaims refs a *wildcard*
- * refspec could reproduce -- once a remote is narrowed to literal branch refspecs, git
- * has no way to know a `refs/remotes/<name>/<other-branch>` ref "belongs" to it, so
- * `--prune` silently leaves every stray from the old wide fetch in place (verified against
- * real git; see #17828). Returns the deleted ref names. Never touches `HEAD`.
+ * `keepBranches`. Needed because migrating away from the old wide default leaves behind
+ * refs for every branch the earlier wide fetch already pulled in, and a plain fetch under
+ * the new narrow refspec never revisits (or reclaims) a branch outside its own prefix.
+ * A tracking ref is kept if its branch name equals, or starts with, an entry in
+ * `keepBranches` -- matching what `buildNarrowForkFetchRefspec`'s trailing `*` would also
+ * match, so this never deletes a ref the configured refspec will just re-fetch anyway.
+ * Returns the deleted ref names. Never touches `HEAD`.
  */
 export async function pruneUntrackedForkRemoteRefs(
   execGit: GitExecFn,
@@ -89,7 +137,8 @@ export async function pruneUntrackedForkRemoteRefs(
     .map((line) => line.trim())
     .filter(Boolean)) {
     const branch = refname.slice(prefix.length)
-    if (branch === 'HEAD' || keepBranches.has(branch)) {
+    const kept = branch === 'HEAD' || [...keepBranches].some((keep) => branch.startsWith(keep))
+    if (kept) {
       continue
     }
     await execGit(['update-ref', '-d', refname], repoPath)

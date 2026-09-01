@@ -103,7 +103,7 @@ describe('minting a fork remote against the real Git binary (#17828)', () => {
       .split(/\r?\n/)
       .filter(Boolean)
     expect(refspecs).toEqual([
-      `+refs/heads/${TRACKED_BRANCH}:refs/remotes/${FORK_REMOTE}/${TRACKED_BRANCH}`
+      `+refs/heads/${TRACKED_BRANCH}*:refs/remotes/${FORK_REMOTE}/${TRACKED_BRANCH}*`
     ])
     await expect(
       git(['config', '--get', `remote.${FORK_REMOTE}.tagOpt`], repoPath)
@@ -116,6 +116,35 @@ describe('minting a fork remote against the real Git binary (#17828)', () => {
     await expect(trackedRefsUnder(FORK_REMOTE)).resolves.toEqual([
       `${FORK_REMOTE}/${TRACKED_BRANCH}`
     ])
+  })
+
+  it('a bare `git fetch` (branch-scoped upstream, no remote arg) survives the tracked branch being deleted upstream', async () => {
+    const target: GitPushTarget = {
+      remoteName: FORK_REMOTE,
+      branchName: TRACKED_BRANCH,
+      remoteUrl: forkPath
+    }
+    await prepareWorktreePushTargetWithExec(execGit, repoPath, target, () => false)
+    // Mirrors `configureCreatedWorktreePushTargetWithExec`: local branch tracks the fork
+    // remote, so a *bare* `git fetch` (the shape an agent running raw git actually types)
+    // resolves to this remote via `branch.<name>.remote` -- not `origin`.
+    await git(['checkout', '-qb', 'local-branch', `${FORK_REMOTE}/${TRACKED_BRANCH}`], repoPath)
+    await git(
+      ['branch', '--set-upstream-to', `${FORK_REMOTE}/${TRACKED_BRANCH}`, 'local-branch'],
+      repoPath
+    )
+
+    // Contributor deletes the branch after the PR merges/closes (checkout any other
+    // branch first -- the fork's actual default-branch name isn't relevant here).
+    await git(['checkout', '-q', OTHER_FORK_BRANCHES[0]!], forkPath)
+    await git(['branch', '-D', TRACKED_BRANCH], forkPath)
+
+    // Before this fix's trailing-`*` refspec, this exact command hard-failed with
+    // "couldn't find remote ref" -- degrading a common agent/user action into a fatal error.
+    await expect(git(['fetch'], repoPath)).resolves.toBeDefined()
+    // And `--prune` (Orca's own Fetch action) correctly reclaims the now-dead ref.
+    await git(['fetch', '--prune'], repoPath)
+    await expect(trackedRefsUnder(FORK_REMOTE)).resolves.toEqual([])
   })
 
   it('widens rather than replaces when a second worktree reuses the remote for another branch', async () => {
@@ -175,7 +204,7 @@ describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => 
       .split(/\r?\n/)
       .filter(Boolean)
     expect(refspecs).toEqual([
-      `+refs/heads/${TRACKED_BRANCH}:refs/remotes/${FORK_REMOTE}/${TRACKED_BRANCH}`
+      `+refs/heads/${TRACKED_BRANCH}*:refs/remotes/${FORK_REMOTE}/${TRACKED_BRANCH}*`
     ])
     await expect(trackedRefsUnder(FORK_REMOTE)).resolves.toEqual([
       `${FORK_REMOTE}/${TRACKED_BRANCH}`

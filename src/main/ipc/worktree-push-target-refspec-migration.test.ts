@@ -44,6 +44,9 @@ type ExecScript = {
   urlByRemote?: Record<string, string>
   branchConfig?: string
   trackingRefsByRemote?: Record<string, string[]>
+  // Simulates #17842's reconciliation sweep concurrently `remote remove`-ing this
+  // remote in between this migration's pre-write and post-write existence checks.
+  removeUrlAfterFirstCheck?: Set<string>
 }
 
 function makeExec(script: ExecScript = {}): ExecMock {
@@ -51,15 +54,27 @@ function makeExec(script: ExecScript = {}): ExecMock {
     fetchByRemote = {},
     urlByRemote = {},
     branchConfig = '',
-    trackingRefsByRemote = {}
+    trackingRefsByRemote = {},
+    removeUrlAfterFirstCheck = new Set<string>()
   } = script
+  const urlCheckCountByRemote: Record<string, number> = {}
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
-    if (args[0] === 'remote' && args[1] === 'get-url') {
-      const url = urlByRemote[args[2]!]
+    if (args[0] === 'config' && args[1] === '--get' && args[2]!.endsWith('.url')) {
+      const remoteName = args[2]!.slice('remote.'.length, -'.url'.length)
+      urlCheckCountByRemote[remoteName] = (urlCheckCountByRemote[remoteName] ?? 0) + 1
+      const concurrentlyRemoved =
+        removeUrlAfterFirstCheck.has(remoteName) && urlCheckCountByRemote[remoteName]! > 1
+      const url = concurrentlyRemoved ? undefined : urlByRemote[remoteName]
       if (!url) {
-        throw new Error(`no such remote ${args[2]}`)
+        throw new Error(`no such remote ${remoteName}`)
       }
       return { stdout: url, stderr: '' }
+    }
+    if (args[0] === 'config' && args[1] === '--remove-section' && args[2]!.startsWith('remote.')) {
+      const remoteName = args[2]!.slice('remote.'.length)
+      delete fetchByRemote[remoteName]
+      delete urlByRemote[remoteName]
+      return { stdout: '', stderr: '' }
     }
     if (args[0] === 'config' && args[1] === '--get-regexp') {
       return { stdout: branchConfig, stderr: '' }
@@ -132,7 +147,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
         'config',
         '--add',
         `remote.${FORK_REMOTE}.fetch`,
-        '+refs/heads/contributor/fix:refs/remotes/pr-contributor-orca/contributor/fix'
+        '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
       ],
       REPO_PATH
     ])
@@ -165,8 +180,8 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
       .map(([args]) => args[3])
     expect(addedRefspecs).toEqual(
       expect.arrayContaining([
-        '+refs/heads/branch-a:refs/remotes/pr-contributor-orca/branch-a',
-        '+refs/heads/branch-b:refs/remotes/pr-contributor-orca/branch-b'
+        '+refs/heads/branch-a*:refs/remotes/pr-contributor-orca/branch-a*',
+        '+refs/heads/branch-b*:refs/remotes/pr-contributor-orca/branch-b*'
       ])
     )
   })
@@ -222,7 +237,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
       urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
       fetchByRemote: {
         [FORK_REMOTE]: [
-          '+refs/heads/contributor/fix:refs/remotes/pr-contributor-orca/contributor/fix'
+          '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
         ]
       }
     })
@@ -236,6 +251,34 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
 
     expect(migrated).toEqual([])
     expect(exec.mock.calls.some(([args]) => args[0] === 'fetch')).toBe(false)
+  })
+
+  it('abandons and cleans up a remote reclaimed concurrently by #17842 reconciliation mid-migration', async () => {
+    const exec = makeExec({
+      urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
+      fetchByRemote: { [FORK_REMOTE]: ['+refs/heads/*:refs/remotes/pr-contributor-orca/*'] },
+      removeUrlAfterFirstCheck: new Set([FORK_REMOTE])
+    })
+
+    const migrated = await migrateForkRemoteRefspecsWithExec(
+      REPO_PATH,
+      REPO_ID,
+      storeOf({ [worktreeId('/wt/a')]: forkTarget() }),
+      exec
+    )
+
+    // Not reported as migrated -- reconciliation won the race, so this sweep backs off.
+    expect(migrated).toEqual([])
+    expect(
+      exec.mock.calls.some(
+        ([args]) =>
+          args[0] === 'config' &&
+          args[1] === '--remove-section' &&
+          args[2] === `remote.${FORK_REMOTE}`
+      )
+    ).toBe(true)
+    // No fetch --prune-equivalent local ref deletion ran for a remote that's already gone.
+    expect(exec.mock.calls.some(([args]) => args[0] === 'update-ref')).toBe(false)
   })
 
   it('also narrows branches only referenced by surviving branch.*.remote config (no metadata left)', async () => {
@@ -259,7 +302,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
       .map(([args]) => args[3])
     expect(addedRefspecs).toEqual(
       expect.arrayContaining([
-        '+refs/heads/contributor/preserved:refs/remotes/pr-contributor-orca/contributor/preserved'
+        '+refs/heads/contributor/preserved*:refs/remotes/pr-contributor-orca/contributor/preserved*'
       ])
     )
   })

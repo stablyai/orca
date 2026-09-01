@@ -69,7 +69,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
       [
         'fetch',
         'pr-contributor-orca',
-        '+refs/heads/contributor/fix:refs/remotes/pr-contributor-orca/contributor/fix'
+        '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
       ]
     ])
     expect(result).toEqual({
@@ -93,7 +93,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
       [
         'fetch',
         'pr-contributor-orca',
-        '+refs/heads/contributor/fix:refs/remotes/pr-contributor-orca/contributor/fix'
+        '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
       ]
     ])
     // remoteCreated omitted because the predicate says no known worktree owns it.
@@ -137,7 +137,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
 
     expect(callsMatching(exec, ['remote', 'add'])).toEqual([])
     expect(callsMatching(exec, ['fetch'])).toEqual([
-      ['fetch', 'origin', '+refs/heads/feature:refs/remotes/origin/feature']
+      ['fetch', 'origin', '+refs/heads/feature*:refs/remotes/origin/feature*']
     ])
     expect(result).toEqual({ remoteName: 'origin', branchName: 'feature' })
   })

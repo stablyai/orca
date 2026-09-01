@@ -50,9 +50,9 @@ function makeConfigExec(fetchByRemote: Record<string, string[]> = {}): {
 }
 
 describe('buildNarrowForkFetchRefspec / wildcardForkFetchRefspec', () => {
-  it('builds the exact narrow and wide refspec shapes', () => {
+  it('builds the narrow (trailing-* suffixed) and wide refspec shapes', () => {
     expect(buildNarrowForkFetchRefspec('fork', 'feature/fix')).toBe(
-      '+refs/heads/feature/fix:refs/remotes/fork/feature/fix'
+      '+refs/heads/feature/fix*:refs/remotes/fork/feature/fix*'
     )
     expect(wildcardForkFetchRefspec('fork')).toBe('+refs/heads/*:refs/remotes/fork/*')
   })
@@ -76,35 +76,61 @@ describe('getRemoteFetchRefspecs', () => {
 })
 
 describe('ensureRemoteTracksBranchNarrowly', () => {
-  it('replaces the wide default refspec with a single narrow one', async () => {
+  it('replaces the wide default refspec with a single trailing-* narrow one', async () => {
     const { exec, tagOptByRemote } = makeConfigExec({ fork: [wildcardForkFetchRefspec('fork')] })
 
     await ensureRemoteTracksBranchNarrowly(exec, REPO, 'fork', 'main')
 
     await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
-      '+refs/heads/main:refs/remotes/fork/main'
+      '+refs/heads/main*:refs/remotes/fork/main*'
     ])
     expect(tagOptByRemote.fork).toBe('--no-tags')
   })
 
   it('adds a second branch alongside an already-narrow one instead of replacing it', async () => {
-    const { exec } = makeConfigExec({ fork: ['+refs/heads/main:refs/remotes/fork/main'] })
+    const { exec } = makeConfigExec({ fork: ['+refs/heads/main*:refs/remotes/fork/main*'] })
 
     await ensureRemoteTracksBranchNarrowly(exec, REPO, 'fork', 'feature')
 
     await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
-      '+refs/heads/main:refs/remotes/fork/main',
-      '+refs/heads/feature:refs/remotes/fork/feature'
+      '+refs/heads/main*:refs/remotes/fork/main*',
+      '+refs/heads/feature*:refs/remotes/fork/feature*'
     ])
   })
 
   it('is a no-op for a branch already narrowly tracked (idempotent)', async () => {
-    const { exec } = makeConfigExec({ fork: ['+refs/heads/main:refs/remotes/fork/main'] })
+    const { exec } = makeConfigExec({ fork: ['+refs/heads/main*:refs/remotes/fork/main*'] })
 
     await ensureRemoteTracksBranchNarrowly(exec, REPO, 'fork', 'main')
 
     const addCalls = exec.mock.calls.filter(([args]) => args[1] === '--add')
     expect(addCalls).toEqual([])
+  })
+
+  it('replaces a stray literal (non-suffixed) entry for the same branch with the suffixed form', async () => {
+    const { exec } = makeConfigExec({ fork: ['+refs/heads/main:refs/remotes/fork/main'] })
+
+    await ensureRemoteTracksBranchNarrowly(exec, REPO, 'fork', 'main')
+
+    await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
+      '+refs/heads/main*:refs/remotes/fork/main*'
+    ])
+  })
+
+  it('leaves a different branch entry untouched when replacing a stray literal', async () => {
+    const { exec } = makeConfigExec({
+      fork: [
+        '+refs/heads/main:refs/remotes/fork/main',
+        '+refs/heads/other*:refs/remotes/fork/other*'
+      ]
+    })
+
+    await ensureRemoteTracksBranchNarrowly(exec, REPO, 'fork', 'main')
+
+    await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
+      '+refs/heads/other*:refs/remotes/fork/other*',
+      '+refs/heads/main*:refs/remotes/fork/main*'
+    ])
   })
 })
 
@@ -180,5 +206,14 @@ describe('pruneUntrackedForkRemoteRefs', () => {
 
     expect(deleted).toEqual([])
     expect(refs).toEqual(['main'])
+  })
+
+  it("keeps a ref that shares a branch prefix, matching the refspec's own trailing-* match", async () => {
+    const { exec, refs } = makeRefsExec(['fix', 'fix-extra', 'unrelated'])
+
+    const deleted = await pruneUntrackedForkRemoteRefs(exec, REPO, 'fork', new Set(['fix']))
+
+    expect(deleted).toEqual(['refs/remotes/fork/unrelated'])
+    expect(refs.sort()).toEqual(['fix', 'fix-extra'])
   })
 })

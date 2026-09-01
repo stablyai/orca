@@ -6,11 +6,26 @@
 // branch (`git fetch --prune` cannot reclaim these once the refspec is narrow -- verified
 // against real git, see #17828 PR). It never deletes a remote (that is
 // `worktree-push-target-cleanup.ts`'s job) -- only narrows what a future fetch pulls.
+//
+// Interaction with `worktree-push-target-reconciliation.ts` (#17842, orphaned `pr-*`
+// remote reclamation): the two sweeps fire from different lifecycle events (this one
+// from worktree creation, that one from worktree removal), rate-limit via separate
+// `Map<repoId, timestamp>` cooldowns, and so never share state or starve each other.
+// They *can* still race on the same remote if creation and removal happen close
+// together for the same repo, because both derive their candidate remotes from the
+// same worktree-metadata store: a remote reconciliation is about to reclaim (no live
+// worktree still claims it) can be one this sweep is concurrently narrowing (its stale
+// metadata entry hasn't been pruned from the store yet). `remoteHasUrl` re-checked both
+// before and after the narrowing writes closes the practical impact of that race down
+// to "reconciliation wins and this sweep's writes get cleaned back up" rather than a
+// stray url-less `remote.<name>.*` config section -- see the guard below.
+
 import { gitExecFileAsync } from '../git/runner'
 import {
   ensureRemoteTracksBranchNarrowly,
   getRemoteFetchRefspecs,
   pruneUntrackedForkRemoteRefs,
+  remoteHasUrl,
   wildcardForkFetchRefspec
 } from '../git/fork-remote-refspec'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
@@ -95,15 +110,27 @@ export async function migrateForkRemoteRefspecsWithExec(
     if (branches.size === 0) {
       continue
     }
-    try {
-      await execGit(['remote', 'get-url', remoteName], repoPath)
-    } catch {
+    if (!(await remoteHasUrl(execGit, repoPath, remoteName))) {
       continue // config references a remote that no longer exists
     }
     const before = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
     const wasWide = before.includes(wildcardForkFetchRefspec(remoteName))
     for (const branch of branches) {
       await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, branch)
+    }
+    // #17842's reconciliation sweep can concurrently `remote remove` this same
+    // remote (both sweeps derive their candidate list from the same, possibly-stale,
+    // worktree metadata). `remote remove` deletes the whole `remote.<name>.*` section,
+    // but `ensureRemoteTracksBranchNarrowly` above would have just resurrected a
+    // url-less `fetch`/`tagOpt` section via plain `config --add`, which doesn't care
+    // whether the remote "exists". Detect that and clean up instead of leaving ghost
+    // config behind -- narrows but does not close the race (no cross-process lock
+    // exists), so this is a best-effort self-heal, not a guarantee.
+    if (!(await remoteHasUrl(execGit, repoPath, remoteName))) {
+      await execGit(['config', '--remove-section', `remote.${remoteName}`], repoPath).catch(
+        () => {}
+      )
+      continue
     }
     if (!wasWide) {
       continue // already narrow (minted post-fix, or a prior sweep already ran); nothing to prune

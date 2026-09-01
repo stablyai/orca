@@ -1,10 +1,11 @@
-// Why: a narrow fork-remote refspec (#17828) pins an exact `refs/heads/<branch>`, so
-// if that branch is later deleted or renamed upstream (e.g. the contributor deletes it
-// after merge), a plain `git fetch <remote>` using the configured refspec exits nonzero
-// with "couldn't find remote ref" -- and fetches NOTHING for that remote, not even other
-// branches it also tracks. A wide refspec never had this failure mode (unmatched
-// wildcards are silently skipped), so this is a new risk the narrow refspec introduces
-// and must self-heal rather than surface as a broken Fetch button.
+// Why: Orca's fork-remote refspecs (#17828) carry a trailing `*` specifically so a
+// deleted/renamed upstream branch degrades to a silent zero-match fetch, not a hard
+// failure -- see `buildNarrowForkFetchRefspec`'s comment. That is now the primary
+// defense. This wrapper is a cheap backstop for the one case the `*` doesn't cover: a
+// truly literal (non-wildcard) `refs/heads/<branch>` refspec somehow ends up configured
+// (hand-edited `.git/config`, a future regression, etc), which -- unlike a wide refspec's
+// silently-skipped wildcards -- exits nonzero with "couldn't find remote ref" and fetches
+// NOTHING for that remote, not even other branches it also tracks.
 import { extractExecError } from './exec-error'
 import { removeStaleForkFetchRefspec, type GitExecFn } from './fork-remote-refspec'
 

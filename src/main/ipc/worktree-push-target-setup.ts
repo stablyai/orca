@@ -101,12 +101,16 @@ export async function prepareWorktreePushTargetWithExec(
       await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
     } else {
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      // Why: `-t <branch> --no-tags` caps this remote at exactly one remote-tracking
-      // ref forever instead of the default wide `refs/heads/*` + tag auto-follow (#17828).
+      // Why: `-t <branch> --no-tags` means this remote is never, even transiently,
+      // written with the wide default `refs/heads/*` refspec + tag auto-follow (#17828).
+      // `-t` itself writes a literal (non-wildcard-suffixed) refspec, so immediately
+      // rewrite it to the trailing-`*` form via `ensureRemoteTracksBranchNarrowly`
+      // (see that function's comment for why the suffix matters).
       await execGit(
         ['remote', 'add', '-t', target.branchName, '--no-tags', remoteName, target.remoteUrl],
         repoPath
       )
+      await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
       remoteCreated = true
       remoteAddedHere = true
     }
