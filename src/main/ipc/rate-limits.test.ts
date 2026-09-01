@@ -27,6 +27,15 @@ function makeCodexAccounts() {
   }
 }
 
+function makeGrokRuntimeConsumer() {
+  return vi.fn(() =>
+    Promise.resolve({
+      outcome: 'noCredit' as const,
+      snapshot: { rateLimits: {} as RateLimitState }
+    })
+  )
+}
+
 function makeService(): {
   service: RateLimitService
   refresh: ReturnType<typeof vi.fn>
@@ -70,7 +79,7 @@ describe('registerRateLimitHandlers', () => {
 
   it('registers a refreshMiniMax channel that delegates to refresh()', async () => {
     const { service, refresh } = makeService()
-    registerRateLimitHandlers(service, makeCodexAccounts().service)
+    registerRateLimitHandlers(service, makeCodexAccounts().service, makeGrokRuntimeConsumer())
     const handler = ipcState.handleHandlers.get('rateLimits:refreshMiniMax')
     expect(handler).toBeDefined()
     await handler!({})
@@ -79,7 +88,7 @@ describe('registerRateLimitHandlers', () => {
 
   it('keeps the existing rate-limit channels registered', () => {
     const { service } = makeService()
-    registerRateLimitHandlers(service, makeCodexAccounts().service)
+    registerRateLimitHandlers(service, makeCodexAccounts().service, makeGrokRuntimeConsumer())
     expect(ipcState.handleHandlers.has('rateLimits:get')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refresh')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refreshMiniMax')).toBe(true)
@@ -88,7 +97,7 @@ describe('registerRateLimitHandlers', () => {
 
   it('registers a refreshGrok channel that delegates to refreshGrok()', async () => {
     const { service, refreshGrok } = makeService()
-    registerRateLimitHandlers(service, makeCodexAccounts().service)
+    registerRateLimitHandlers(service, makeCodexAccounts().service, makeGrokRuntimeConsumer())
     const handler = ipcState.handleHandlers.get('rateLimits:refreshGrok')
     expect(handler).toBeDefined()
     await handler!({})
@@ -98,7 +107,7 @@ describe('registerRateLimitHandlers', () => {
   it('serializes desktop reset consumption through CodexAccountService', async () => {
     const { service, consumeCodexRateLimitResetCredit } = makeService()
     const codexAccounts = makeCodexAccounts()
-    registerRateLimitHandlers(service, codexAccounts.service)
+    registerRateLimitHandlers(service, codexAccounts.service, makeGrokRuntimeConsumer())
     const handler = ipcState.handleHandlers.get('rateLimits:consumeCodexResetCredit')
 
     await handler!({})
@@ -107,13 +116,15 @@ describe('registerRateLimitHandlers', () => {
     expect(consumeCodexRateLimitResetCredit).not.toHaveBeenCalled()
   })
 
-  it('delegates Grok reset consumption to RateLimitService', async () => {
+  it('generates an idempotency key and delegates Grok reset consumption to the runtime', async () => {
     const { service, consumeGrokRateLimitResetCredit } = makeService()
-    registerRateLimitHandlers(service, makeCodexAccounts().service)
+    const consumeGrokThroughRuntime = makeGrokRuntimeConsumer()
+    registerRateLimitHandlers(service, makeCodexAccounts().service, consumeGrokThroughRuntime)
     const handler = ipcState.handleHandlers.get('rateLimits:consumeGrokResetCredit')
 
-    await handler!({})
+    await expect(handler!({})).resolves.toMatchObject({ outcome: 'noCredit', state: {} })
 
-    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledOnce()
+    expect(consumeGrokThroughRuntime).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f-]{36}$/))
+    expect(consumeGrokRateLimitResetCredit).not.toHaveBeenCalled()
   })
 })

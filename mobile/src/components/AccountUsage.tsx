@@ -11,11 +11,13 @@ export type {
   CodexAccountSummary,
   AccountsSnapshot,
   ProviderKey,
+  HostUsageProviderKey,
   UsageBarState
 } from './account-usage-state'
 export {
   decodeAccountsSnapshot,
   getActiveProviderRateLimits,
+  getHostProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
   getWindowResetLabel,

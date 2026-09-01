@@ -6,10 +6,15 @@ import {
   parseCodexResetCreditAttemptLedger,
   type CodexResetCreditAttemptLedger
 } from '../../../shared/codex-reset-credit-attempt-ledger'
+import {
+  parseGrokResetCreditAttemptLedger,
+  type GrokResetCreditAttemptLedger
+} from '../../../shared/grok-reset-credit-attempt-ledger'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 import type { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
+import { replaceResetCreditAttemptLedgerAndFlush } from './reset-credit-attempt-ledger-writes'
 
 type PrimaryStateWriteOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -92,26 +97,27 @@ export class PrimaryStateWriteOperations {
   }
 
   replaceCodexResetCreditAttemptLedgerAndFlush(ledger: CodexResetCreditAttemptLedger): void {
-    if (this[primaryStateWriteOperationsContext].runtime.writesFrozen) {
-      throw new Error('Cannot persist Codex reset-credit attempts while writes are frozen')
-    }
-    const next = parseCodexResetCreditAttemptLedger(ledger)
-    const previous = this[primaryStateWriteOperationsContext].runtime.state
-      .codexResetCreditAttemptLedger
-      ? structuredClone(
-          this[primaryStateWriteOperationsContext].runtime.state.codexResetCreditAttemptLedger
-        )
-      : undefined
-    this[primaryStateWriteOperationsContext].runtime.state.codexResetCreditAttemptLedger = next
-    try {
-      this[primaryStateWriteOperationsContext].runtime.flushOrThrow()
-    } catch (error) {
-      // Why: callers use a successful return as the durability barrier before
-      // handing a scarce-credit mutation to the provider.
-      this[primaryStateWriteOperationsContext].runtime.state.codexResetCreditAttemptLedger =
-        previous
-      throw error
-    }
+    replaceResetCreditAttemptLedgerAndFlush(this[primaryStateWriteOperationsContext].runtime, {
+      key: 'codexResetCreditAttemptLedger',
+      ledger,
+      parse: parseCodexResetCreditAttemptLedger,
+      providerLabel: 'Codex'
+    })
+  }
+
+  getGrokResetCreditAttemptLedger(): GrokResetCreditAttemptLedger {
+    return parseGrokResetCreditAttemptLedger(
+      this[primaryStateWriteOperationsContext].runtime.state.grokResetCreditAttemptLedger
+    )
+  }
+
+  replaceGrokResetCreditAttemptLedgerAndFlush(ledger: GrokResetCreditAttemptLedger): void {
+    replaceResetCreditAttemptLedgerAndFlush(this[primaryStateWriteOperationsContext].runtime, {
+      key: 'grokResetCreditAttemptLedger',
+      ledger,
+      parse: parseGrokResetCreditAttemptLedger,
+      providerLabel: 'Grok'
+    })
   }
 }
 

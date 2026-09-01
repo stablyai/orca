@@ -13,6 +13,8 @@ import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/ra
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+import type { Store } from '../persistence'
+import { GrokResetCreditLedger } from '../rate-limits/grok-reset-credit-ledger'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -38,9 +40,19 @@ export type CodexRateLimitResetRpcResult = {
     }
 )
 
+export type GrokRateLimitResetRpcResult = {
+  outcome: CodexRateLimitResetOutcome
+  snapshot: AccountsSnapshot
+}
+
 export class RuntimeAccountController {
   private services: RuntimeAccountServices | null = null
   private commitMessageAgentEnvironment: CommitMessageAgentEnvironmentResolvers | null = null
+  private grokResetLedger: GrokResetCreditLedger | null = null
+  private grokResetPromiseByKey = new Map<string, Promise<GrokRateLimitResetRpcResult>>()
+  private grokResetInFlight: Promise<GrokRateLimitResetRpcResult> | null = null
+
+  constructor(private readonly getStore: () => Store | null = () => null) {}
 
   setServices(services: RuntimeAccountServices): void {
     this.services = services
@@ -121,6 +133,102 @@ export class RuntimeAccountController {
       }
     }
     return { outcome: result.outcome, scope: result.scope, snapshot }
+  }
+
+  consumeGrokResetCredit(idempotencyKey: string): Promise<GrokRateLimitResetRpcResult> {
+    const ledger = this.requireGrokResetLedger()
+    if (ledger.error) {
+      return Promise.reject(ledger.error)
+    }
+    const existing = ledger.get(idempotencyKey)
+    if (existing?.state === 'settled') {
+      return Promise.resolve(this.grokResetResult(existing.outcome))
+    }
+    const tracked = this.grokResetPromiseByKey.get(idempotencyKey)
+    if (tracked) {
+      return tracked
+    }
+    if (existing?.state === 'providerPending') {
+      return this.reconcilePendingGrokReset(idempotencyKey, ledger)
+    }
+
+    ledger.markProviderPending(idempotencyKey)
+    const operation = this.grokResetInFlight ?? this.startGrokResetOperation()
+    const promise = operation.then((result) => {
+      ledger.markSettled(idempotencyKey, result.outcome)
+      return result
+    })
+    this.grokResetPromiseByKey.set(idempotencyKey, promise)
+    const clearTrackedPromise = (): void => {
+      if (this.grokResetPromiseByKey.get(idempotencyKey) === promise) {
+        this.grokResetPromiseByKey.delete(idempotencyKey)
+      }
+    }
+    void promise.then(clearTrackedPromise, clearTrackedPromise)
+    return promise
+  }
+
+  private startGrokResetOperation(): Promise<GrokRateLimitResetRpcResult> {
+    const operation = this.consumeGrokResetCreditOnce()
+    this.grokResetInFlight = operation
+    const clearInFlight = (): void => {
+      if (this.grokResetInFlight === operation) {
+        this.grokResetInFlight = null
+      }
+    }
+    void operation.then(clearInFlight, clearInFlight)
+    return operation
+  }
+
+  private async consumeGrokResetCreditOnce(): Promise<GrokRateLimitResetRpcResult> {
+    const { rateLimits } = this.requireServices()
+    const { outcome } = await rateLimits.consumeGrokRateLimitResetCredit()
+    return this.grokResetResult(outcome)
+  }
+
+  private async reconcilePendingGrokReset(
+    idempotencyKey: string,
+    ledger: GrokResetCreditLedger
+  ): Promise<GrokRateLimitResetRpcResult> {
+    const { rateLimits } = this.requireServices()
+    await rateLimits.refreshGrok()
+    const grok = rateLimits.getState().grok
+    const outcome =
+      grok?.weekly && grok.weekly.usedPercent <= 0
+        ? 'nothingToReset'
+        : grok?.rateLimitResetCredits?.availableCount === 0
+          ? 'noCredit'
+          : null
+    if (!outcome) {
+      throw new Error(
+        'A previous Grok reset attempt has an unknown outcome; Orca will not spend another token.'
+      )
+    }
+    ledger.markSettled(idempotencyKey, outcome)
+    return this.grokResetResult(outcome)
+  }
+
+  private grokResetResult(outcome: CodexRateLimitResetOutcome): GrokRateLimitResetRpcResult {
+    const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
+    return {
+      outcome,
+      snapshot: {
+        claude: claudeAccounts.listAccounts(),
+        codex: codexAccounts.listAccounts(),
+        rateLimits: rateLimits.getState()
+      }
+    }
+  }
+
+  private requireGrokResetLedger(): GrokResetCreditLedger {
+    if (!this.grokResetLedger) {
+      const store = this.getStore()
+      if (!store) {
+        throw new Error('Grok reset-credit persistence is unavailable')
+      }
+      this.grokResetLedger = new GrokResetCreditLedger(store)
+    }
+    return this.grokResetLedger
   }
 
   removeClaude(accountId: string): Promise<ClaudeRateLimitAccountsState> {
