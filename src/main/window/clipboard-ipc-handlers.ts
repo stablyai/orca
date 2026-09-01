@@ -20,6 +20,7 @@ import {
   saveClipboardImageBufferAsTempFile,
   type SaveClipboardImageAsTempFileArgs
 } from './clipboard-image-temp-file'
+import { encodeClipboardImageWithinLimits } from './clipboard-image-fit'
 import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
@@ -124,8 +125,9 @@ export function registerClipboardHandlers(store: Store): void {
         )
         return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
       }
-      assertClipboardImageDimensionsWithinLimit(image.getSize())
-      return saveClipboardImageBufferForTarget(image.toPNG(), args)
+      // Why: large screenshots (OpenCode paste) often exceed pixel/byte caps as raw PNG;
+      // downscale to fit so paste succeeds instead of hard-failing under the safety limit.
+      return saveClipboardImageBufferForTarget(encodeClipboardImageWithinLimits(image), args)
     }
   )
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer

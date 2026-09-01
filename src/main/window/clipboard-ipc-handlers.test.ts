@@ -828,40 +828,22 @@ describe('registerClipboardHandlers', () => {
     )
   })
 
-  it('rejects oversized clipboard image dimensions before PNG conversion', async () => {
-    const toPNG = vi.fn(() => Buffer.from([0, 1, 2, 3]))
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: CLIPBOARD_IMAGE_MAX_PIXELS + 1 }),
+  it('rejects clipboard PNG bytes that remain over the cap after downscale', async () => {
+    // 2×2 can shrink (1×1 cannot), so resize must run before we still reject.
+    const image = {
+      getSize: () => ({ height: 2, width: 2 }),
       isEmpty: () => false,
-      toPNG
-    })
-
+      toPNG: () => Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1),
+      resize: vi.fn(() => image)
+    }
+    clipboardReadImageMock.mockReturnValue(image)
     registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
     await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
-    ).rejects.toThrow('Clipboard image is too large')
-    expect(toPNG).not.toHaveBeenCalled()
-    expect(fsWriteFileMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized clipboard PNG bytes before SSH provider lookup', async () => {
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)
-    })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
+      getRegisteredHandlers().get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
         connectionId: 'ssh-secret'
       })
     ).rejects.toThrow('Clipboard image is too large')
+    expect(image.resize).toHaveBeenCalled()
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
