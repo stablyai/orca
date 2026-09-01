@@ -1,3 +1,4 @@
+import { isValidNpmPackageName } from '../../../../shared/npm-package-name'
 import { locatePackageJsonDependencyAtOffset } from './package-json-dependency-location'
 import { buildPackageJsonDependencyHoverMarkdown } from './package-json-dependency-hover-markdown'
 import type { InstalledPackageVersionResult } from './package-json-installed-version'
@@ -39,6 +40,13 @@ export async function resolvePackageJsonDependencyHover(
 ): Promise<PackageJsonDependencyHoverResult | null> {
   const location = locatePackageJsonDependencyAtOffset(params.modelText, params.offset)
   if (!location || params.isCancelled()) {
+    return null
+  }
+  // Why here and not only at the IPC boundary: the key comes from a file the
+  // user opened, and it is concatenated into `node_modules/<key>/package.json`
+  // for the installed-version read. A key containing `..` would walk out of
+  // the worktree, and on a remote host the read still goes through the relay.
+  if (!isValidNpmPackageName(location.packageName)) {
     return null
   }
   const context = params.resolveContext()

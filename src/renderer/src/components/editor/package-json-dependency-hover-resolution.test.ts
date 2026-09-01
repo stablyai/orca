@@ -163,3 +163,33 @@ describe('resolvePackageJsonDependencyHover', () => {
     })
   })
 })
+
+describe('rejects dependency keys that are not valid npm package names', () => {
+  // Why: the key comes from a file the user opened, not from us. Without a
+  // gate it is concatenated into `node_modules/<key>/package.json`, so a key
+  // containing `..` walks out of the worktree and the read still goes through
+  // the relay on a remote host. Hovering must never be a filesystem probe.
+  it.each([
+    ['../../../../etc'],
+    ['..'],
+    ['foo/../../bar'],
+    ['A_CAPITALS_NOT_ALLOWED'],
+    ['has space']
+  ])('does not read or look up %s', async (packageName) => {
+    const resolveInstalledVersion = vi.fn()
+    const lookupPackageInfo = vi.fn()
+
+    const result = await resolvePackageJsonDependencyHover({
+      modelText: `{ "dependencies": { ${JSON.stringify(packageName)}: "1.0.0" } }`,
+      offset: `{ "dependencies": { "`.length + 1,
+      isCancelled: () => false,
+      resolveContext: () => ({ worktreeId: 'w1', filePath: '/repo/package.json' }) as never,
+      resolveInstalledVersion,
+      lookupPackageInfo
+    } as never)
+
+    expect(resolveInstalledVersion).not.toHaveBeenCalled()
+    expect(lookupPackageInfo).not.toHaveBeenCalled()
+    expect(result).toBeNull()
+  })
+})
