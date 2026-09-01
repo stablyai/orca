@@ -412,7 +412,7 @@ describe('OrcaRuntimeService', () => {
         [
           'fetch',
           'pr-contributor-orca',
-          '+refs/heads/contributor/runtime-wsl:refs/remotes/pr-contributor-orca/contributor/runtime-wsl'
+          '+refs/heads/contributor/runtime-wsl*:refs/remotes/pr-contributor-orca/contributor/runtime-wsl*'
         ],
         { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
       )

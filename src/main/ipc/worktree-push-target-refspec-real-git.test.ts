@@ -183,7 +183,13 @@ describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => 
     await git(['fetch', FORK_REMOTE], repoPath)
     const before = await trackedRefsUnder(FORK_REMOTE)
     // Every fork branch imported (tracked branch + unrelated ones + the fork's default branch).
-    expect(before.length).toBe(forkBranchCount)
+    // Git >= 2.44's `followRemoteHEAD` auto-creates `refs/remotes/<name>/HEAD` on a fetch
+    // matching the full wildcard refspec (verified: absent on 2.44, present on 2.55) --
+    // excluded here since it isn't a branch this test (or the migration) cares about.
+    // `%(refname:short)` shortens the remote's own HEAD symref to just the remote name
+    // (no `/HEAD` suffix) -- verified against real git.
+    const headRef = FORK_REMOTE
+    expect(before.filter((ref) => ref !== headRef).length).toBe(forkBranchCount)
 
     const migrated = await migrateForkRemoteRefspecsWithExec(
       repoPath,
@@ -206,8 +212,10 @@ describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => 
     expect(refspecs).toEqual([
       `+refs/heads/${TRACKED_BRANCH}*:refs/remotes/${FORK_REMOTE}/${TRACKED_BRANCH}*`
     ])
-    await expect(trackedRefsUnder(FORK_REMOTE)).resolves.toEqual([
-      `${FORK_REMOTE}/${TRACKED_BRANCH}`
-    ])
+    // `pruneUntrackedForkRemoteRefs` deliberately never deletes `HEAD` (see its docstring),
+    // so a `HEAD` symref this git version auto-created above legitimately survives pruning --
+    // assert on the branch refs only, same exclusion as above.
+    const after = await trackedRefsUnder(FORK_REMOTE)
+    expect(after.filter((ref) => ref !== headRef)).toEqual([`${FORK_REMOTE}/${TRACKED_BRANCH}`])
   })
 })

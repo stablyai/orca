@@ -450,14 +450,22 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['remote', 'add', 'pr-prateek-orca', 'git@github.com:prateek/orca.git'],
+      [
+        'remote',
+        'add',
+        '-t',
+        'prateek/fix-sidebar-agents-toggle',
+        '--no-tags',
+        'pr-prateek-orca',
+        'git@github.com:prateek/orca.git'
+      ],
       { cwd: '/workspace/repo' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',
         'pr-prateek-orca',
-        '+refs/heads/prateek/fix-sidebar-agents-toggle:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle'
+        '+refs/heads/prateek/fix-sidebar-agents-toggle*:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle*'
       ],
       { cwd: '/workspace/repo' }
     )
