@@ -272,7 +272,6 @@ describe('buildTitleDerivedAgentRows', () => {
 
     expect(rows).toHaveLength(0)
   })
-
   // #10258: Cursor's native title is deliberately status-less, which used to hide the pane.
   it('adds an idle Cursor row for the bare native cursor-agent title', () => {
     const rows = buildWorktreeAgentRows({
@@ -375,6 +374,105 @@ describe('buildTitleDerivedAgentRows', () => {
       retained: [],
       runtimePaneTitlesByTabId: { 'tab-1': { 1: '⠋ implementing the feature' } },
       ptyIdsByTabId: { 'tab-1': ['pty-a', 'pty-b'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+  it('keeps an Idle row for a launchAgent tab when the title reverts to a neutral cwd (#10130)', () => {
+    const launchAgent: TuiAgent = 'codex'
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        // After the turn finishes, SSH Codex drops the spinner and leaves a bare title.
+        'tab-1': { 1: 'demo-repo' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-codex-remote-idle'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(
+      rows.map((row) => [
+        row.agentType,
+        row.state,
+        row.entry.prompt,
+        row.entry.lastAssistantMessage
+      ])
+    ).toEqual([['codex', 'idle', 'Codex', 'Idle']])
+  })
+
+  it('keeps Idle for a launchAgent tab at a plain shell title while the PTY is live', () => {
+    const launchAgent: TuiAgent = 'codex'
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'zsh' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-codex-shell'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['codex', 'idle']])
+  })
+
+  it('keeps an Idle row when the layout snapshot is temporarily unavailable', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [
+        makeTab('tab-1', {
+          title: 'demo-repo',
+          launchAgent: 'codex',
+          launchAgentLeafId: LEAF_ID_1
+        })
+      ],
+      entries: [],
+      retained: [],
+      ptyIdsByTabId: { 'tab-1': ['pty-codex-remote-idle'] },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'codex', 'idle']
+    ])
+  })
+
+  it('does not invent an Idle row for a neutral title without launch identity', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'demo-repo' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-plain'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not invent Idle launchAgent rows for every split pane with a neutral title', () => {
+    const launchAgent: TuiAgent = 'codex'
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        // Both leaves look idle; launchAgent is tab-scoped and must not mint
+        // a row per neutral sibling (CodeRabbit on #10178).
+        'tab-1': {
+          1: 'demo-repo',
+          2: 'zsh'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
       terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
       now: 2000
     })

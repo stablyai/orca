@@ -202,7 +202,7 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'resolvePaneAgentOwner',
     classification: 'identity-consumer',
     paths: [
-      ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
+      ['src/renderer/src/components/sidebar/worktree-title-derived-agent-owner.ts', 2],
       ['src/renderer/src/components/terminal-pane/pty-connection/shell-command-inference.ts', 2],
       ['src/renderer/src/lib/use-tab-agent.ts', 2]
     ]

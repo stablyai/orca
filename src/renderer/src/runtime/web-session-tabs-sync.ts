@@ -1473,6 +1473,7 @@ function buildMirroredTerminalTabs(
     }
     const launchAgent =
       activeSurface.launchAgent ?? surfaces.find((surface) => surface.launchAgent)?.launchAgent
+    const launchAgentSurface = surfaces.find((surface) => surface.launchAgent)
     const ownerRecord = resolvePaneAgentOwnerRecord({
       launchAgent,
       hookAgent: activeSurface.agentStatus?.agentType,
@@ -1485,6 +1486,12 @@ function buildMirroredTerminalTabs(
       surfaces
         .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
         .find((tab): tab is TerminalTab => Boolean(tab))
+    const launchAgentLeafId =
+      launchAgentSurface && isTerminalLeafId(launchAgentSurface.leafId)
+        ? launchAgentSurface.leafId
+        : launchAgent && existing?.launchAgentLeafId && isTerminalLeafId(existing.launchAgentLeafId)
+          ? existing.launchAgentLeafId
+          : undefined
     // Why: a headless host publishes the literal "Terminal" while an idle pane
     // has no live PTY. Keep the client's known title until a ready surface reports one.
     const hostTitle = activeSurface.title.trim() || surfaces[0]?.title.trim() || ''
@@ -1532,7 +1539,8 @@ function buildMirroredTerminalTabs(
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
         // Why: launchAgent is host-owned lifecycle metadata; once the host omits it, don't resurrect stale startup intent.
-        ...(launchAgent ? { launchAgent } : {})
+        ...(launchAgent ? { launchAgent } : {}),
+        ...(launchAgentLeafId ? { launchAgentLeafId } : {})
       },
       hostTabId: parentTabId,
       ptyIds,

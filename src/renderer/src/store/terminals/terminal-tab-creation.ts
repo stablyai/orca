@@ -84,11 +84,12 @@ export function createTerminalTabCreationActions(
           options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
             ? options.initialLeafId
             : undefined
-        // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
+        // Why: startup delivery and launch identity are pane-owned; pin the first leaf so an aborted/remounted renderer retries against the same owner.
         const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup
+          options?.initialPtyId || options?.pendingStartup || options?.launchAgent
             ? (requestedInitialLeafId ?? createBrowserUuid())
             : undefined
+        const launchAgentLeafId = options?.launchAgent ? initialLeafId : undefined
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`
@@ -129,6 +130,7 @@ export function createTerminalTabCreationActions(
           ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
+          ...(launchAgentLeafId ? { launchAgentLeafId } : {}),
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }

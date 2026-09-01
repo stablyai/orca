@@ -109,7 +109,8 @@ const terminalTabSchema = z.object({
   launchAgent: z
     .custom<TuiAgent>((v) => isTuiAgent(v))
     .optional()
-    .catch(undefined)
+    .catch(undefined),
+  launchAgentLeafId: z.string().optional().catch(undefined)
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

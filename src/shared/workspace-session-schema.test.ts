@@ -157,7 +157,8 @@ describe('parseWorkspaceSession', () => {
             color: null,
             sortOrder: 0,
             createdAt: 1,
-            launchAgent: 'codex'
+            launchAgent: 'codex',
+            launchAgentLeafId: '77777777-7777-4777-8777-777777777777'
           }
         ]
       },
@@ -166,6 +167,9 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].launchAgent).toBe('codex')
+      expect(result.value.tabsByWorktree.wt[0].launchAgentLeafId).toBe(
+        '77777777-7777-4777-8777-777777777777'
+      )
     }
   })
 
