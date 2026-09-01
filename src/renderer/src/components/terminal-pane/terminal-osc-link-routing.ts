@@ -1,5 +1,6 @@
 import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { ORCA_URL_SCHEME } from '../../../../shared/orca-deep-link'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from '../../../../shared/terminal-file-url-target'
 import {
@@ -105,6 +106,17 @@ export function handleOscLink(
     parsed = new URL(rawText)
   } catch {
     return openDetectedPathLink()
+  }
+
+  if (parsed.protocol === `${ORCA_URL_SCHEME}:`) {
+    // Why: no renderer code claims orca: for OSC clicks yet (skill-share links are opened
+    // elsewhere), so forward every orca: URL to the main-process router. It has no
+    // click-for-actions popover, so require direct modifier activation like an immediate open.
+    if (!isTerminalLinkDirectActivation(event)) {
+      return false
+    }
+    window.api.ui.openOrcaDeepLink(parsed.toString())
+    return finish(true)
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
