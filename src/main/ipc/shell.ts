@@ -309,6 +309,9 @@ export function registerShellHandlers(store: Store): void {
       }
 
       const buffer = await readFile(filePath)
+      if (buffer.length > MAX_APP_BACKGROUND_IMAGE_UPLOAD_BYTES) {
+        throw new Error('Background image must be 4MB or smaller.')
+      }
       return {
         dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
         fileName: basename(filePath)
