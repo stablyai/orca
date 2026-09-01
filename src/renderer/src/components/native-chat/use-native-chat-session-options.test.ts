@@ -12,10 +12,17 @@ vi.mock('./native-chat-session-option-discovery', () => ({
   discoverNativeChatCatalogModels: () => discoverModels()
 }))
 
+const storeState = {
+  settings: {},
+  updateSettings: async () => undefined,
+  agentStatusByPaneKey: {} as Record<string, { model?: string }>
+}
+
 vi.mock('../../store', () => ({
-  useAppStore: Object.assign(() => undefined, {
-    getState: () => ({ settings: {}, updateSettings: async () => undefined })
-  })
+  useAppStore: Object.assign(
+    (selector: (state: typeof storeState) => unknown) => selector(storeState),
+    { getState: () => storeState }
+  )
 }))
 
 import { useNativeChatSessionOptions } from './use-native-chat-session-options'
@@ -38,11 +45,117 @@ function modelDescriptor(snapshot: { id: string; kind: unknown }[]): {
   return model?.kind as { currentValue?: string; choices: { value: string }[] }
 }
 
+const OMP_DISCOVERED: CatalogModel[] = [
+  { id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro', options: [] },
+  { id: 'minimax-cn/MiniMax-M3', label: 'MiniMax M3', options: [] }
+]
+
 describe('useNativeChatSessionOptions model reporting', () => {
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
     discoverModels.mockReset()
+    storeState.agentStatusByPaneKey = {}
     Object.defineProperty(window, 'api', { configurable: true, value: undefined })
+  })
+
+  it('names an OMP session by the model its hook reports, before and after discovery', async () => {
+    // Why: OMP seeds no models and has no terminal frame to read; the hook's
+    // `provider/id` stamp is the only way the pill can name the running model.
+    let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+    discoverModels.mockReturnValue(
+      new Promise<readonly CatalogModel[]>((resolve) => {
+        resolveDiscovery = resolve
+      })
+    )
+    const dispatchCommand = vi.fn()
+    storeState.agentStatusByPaneKey['tab-omp:leaf'] = { model: 'deepseek/deepseek-v4-pro' }
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'omp',
+        terminalTabId: 'tab-omp',
+        targetPtyId: 'pty-omp',
+        dispatchCommand,
+        readTerminalScreen: () => null,
+        paneKey: 'tab-omp:leaf'
+      })
+    )
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('deepseek/deepseek-v4-pro')
+    )
+    // Nothing discovered yet: the reported selector is the only row.
+    expect(modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)).toEqual([
+      'deepseek/deepseek-v4-pro'
+    ])
+
+    resolveDiscovery(OMP_DISCOVERED)
+    await waitFor(() =>
+      expect(
+        modelDescriptor(result.current.snapshot).choices.map((choice) => choice.value)
+      ).toEqual(['deepseek/deepseek-v4-pro', 'minimax-cn/MiniMax-M3'])
+    )
+    expect(modelDescriptor(result.current.snapshot).currentValue).toBe('deepseek/deepseek-v4-pro')
+  })
+
+  it('lets a pick stand until the OMP hook reports a different model', async () => {
+    discoverModels.mockResolvedValue(OMP_DISCOVERED)
+    const dispatchCommand = vi.fn(async () => 'accepted' as const)
+    const readTerminalScreen = (): string | null => null
+    const paneKey = 'tab-omp-pick:leaf'
+    storeState.agentStatusByPaneKey[paneKey] = { model: 'deepseek/deepseek-v4-pro' }
+    const { result, rerender } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'omp',
+        terminalTabId: 'tab-omp-pick',
+        targetPtyId: 'pty-omp-pick',
+        dispatchCommand,
+        readTerminalScreen,
+        paneKey
+      })
+    )
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('deepseek/deepseek-v4-pro')
+    )
+
+    await result.current.surface!.setOption('model', 'minimax-cn/MiniMax-M3')
+    expect(dispatchCommand).toHaveBeenCalledWith('/model minimax-cn/MiniMax-M3')
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('minimax-cn/MiniMax-M3')
+    )
+
+    // The same report re-delivered on the next status ping is not new evidence.
+    storeState.agentStatusByPaneKey[paneKey] = { model: 'deepseek/deepseek-v4-pro' }
+    rerender()
+    await Promise.resolve()
+    expect(modelDescriptor(result.current.snapshot).currentValue).toBe('minimax-cn/MiniMax-M3')
+
+    // A changed report is: the hook confirms the switch.
+    storeState.agentStatusByPaneKey[paneKey] = { model: 'minimax-cn/MiniMax-M3' }
+    rerender()
+    await waitFor(() =>
+      expect(
+        result.current.snapshot.find((descriptor) => descriptor.id === 'model')?.valueSource
+      ).toBe('reported')
+    )
+  })
+
+  it('ignores a hook-reported model for Claude, whose frame is authoritative', async () => {
+    discoverModels.mockResolvedValue(DISCOVERED)
+    storeState.agentStatusByPaneKey['tab-claude-hook:leaf'] = { model: 'haiku' }
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'claude',
+        terminalTabId: 'tab-claude-hook',
+        targetPtyId: 'pty-claude-hook',
+        dispatchCommand: vi.fn(),
+        readTerminalScreen: () => null,
+        paneKey: 'tab-claude-hook:leaf'
+      })
+    )
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).choices.length).toBeGreaterThan(0)
+    )
+    expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
   })
 
   it('re-resolves the reported model against models discovered after the read', async () => {

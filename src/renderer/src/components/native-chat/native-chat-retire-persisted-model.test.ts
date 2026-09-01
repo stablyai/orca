@@ -19,7 +19,13 @@ const mocks = vi.hoisted(() => ({
   discoverNativeChatCatalogModels: vi.fn()
 }))
 
-vi.mock('../../store', () => ({ useAppStore: { getState: () => mocks.storeState } }))
+vi.mock('../../store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: { agentStatusByPaneKey: Record<string, never> }) => unknown) =>
+      selector({ agentStatusByPaneKey: {} }),
+    { getState: () => mocks.storeState }
+  )
+}))
 
 vi.mock('./native-chat-pty-session-options', () => ({
   createNativeChatPtySessionOptions: mocks.createNativeChatPtySessionOptions

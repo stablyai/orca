@@ -80,6 +80,26 @@ describe('OMP model reporting', () => {
     ])
   })
 
+  it('drops the model when OMP switches to a session that has not reported one', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const session = (id: string) => ({
+      sessionManager: { getSessionId: () => id, getSessionFile: () => `/tmp/${id}.jsonl` }
+    })
+
+    await harness.callHook('agent_start', undefined, { ...session('omp-a'), model: DEEPSEEK })
+    await settled(harness.fetchMock, 1)
+    await harness.callHook('agent_start', undefined, { ...session('omp-b'), model: null })
+    await settled(harness.fetchMock, 2)
+    await harness.callHook('agent_start', undefined, { ...session('omp-b'), model: MINIMAX })
+    await settled(harness.fetchMock, 3)
+
+    expect(postedPayloads(harness.fetchMock)).toEqual([
+      { hook_event_name: 'agent_start', session_id: 'omp-a', model: 'deepseek/deepseek-v4-pro' },
+      { hook_event_name: 'agent_start', session_id: 'omp-b' },
+      { hook_event_name: 'agent_start', session_id: 'omp-b', model: 'minimax-cn/MiniMax-M3' }
+    ])
+  })
+
   it('posts model_select with the newly selected model', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
 

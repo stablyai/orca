@@ -56,6 +56,7 @@ vi.mock('../../store', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
+    agentStatusByPaneKey: {},
     updateSettings: vi.fn(),
     clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
     markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted

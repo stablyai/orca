@@ -99,6 +99,9 @@ describe('omp session option catalog', () => {
     expect(override(['--model', 'opus'])).toBe(true)
     expect(override(['--model=openai/gpt-5.5'])).toBe(true)
     expect(override(['--no-extensions'])).toBe(false)
+    // `--models` scopes Ctrl+P cycling; it does not pick a model. omp has no `-m`.
+    expect(override(['--models=anthropic/*'])).toBe(false)
+    expect(override(['-m', 'opus'])).toBe(false)
   })
 
   it('switches mid-session with /model <selector>, which omp resolves exactly', () => {
