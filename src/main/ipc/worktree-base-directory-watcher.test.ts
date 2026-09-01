@@ -32,7 +32,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 vi.mock('./worktree-head-identity-reader', () => ({
-  readGitCommonHeadIdentities: vi.fn(async () => []),
+  readGitCommonHeadIdentities: vi.fn(async () => ({ identities: [], listingComplete: true })),
   createWorktreeHeadIdentityCache: () => ({ entries: new Map(), entryNames: null, primary: null })
 }))
 
@@ -43,6 +43,7 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { readGitCommonHeadIdentities } from './worktree-head-identity-reader'
+import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
 import { startWorktreeBaseDirectoryPoller } from './worktree-base-directory-poller'
 import {
   disposeWorktreeBaseDirectoryWatchers,
@@ -91,6 +92,10 @@ function makeWindow(options: { destroyed?: () => boolean } = {}) {
   }
 }
 
+function mockHeadIdentities(identities: WorktreeHeadIdentity[]): void {
+  vi.mocked(readGitCommonHeadIdentities).mockResolvedValue({ identities, listingComplete: true })
+}
+
 function emit(root: string, events: WorktreeBasePollEvent[]): void {
   const callback = watcherCallbacks.get(root)
   if (!callback) {
@@ -106,7 +111,7 @@ describe('worktree base directory watcher', () => {
     unsubscribeMocks.clear()
     pollerOptions.clear()
     vi.mocked(getSshFilesystemProvider).mockReturnValue(undefined)
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([])
+    mockHeadIdentities([])
     vi.mocked(startWorktreeBaseDirectoryPoller).mockImplementation(
       async (target, _getRepos, onEvents, options) => {
         const unsubscribe = vi.fn(async () => {})
@@ -415,7 +420,7 @@ describe('worktree base directory watcher', () => {
 
   it('emits head identities for a linked reflog head move without structural fanout', async () => {
     const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+    mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
         head: 'aaa111',
@@ -426,7 +431,7 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     // External commit --amend: only logs/HEAD moves, no index write.
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+    mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
         head: 'bbb222',
@@ -456,7 +461,7 @@ describe('worktree base directory watcher', () => {
 
   it('makes zero head-identity reads on an index-only burst across linked and primary checkouts', async () => {
     const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+    mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
         head: 'aaa111',
@@ -491,15 +496,11 @@ describe('worktree base directory watcher', () => {
   })
 
   it('emits head identities for a primary-checkout reflog head move', async () => {
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
-      { worktreePath: PROJECT_ROOT, head: 'aaa111', branch: 'refs/heads/main' }
-    ])
+    mockHeadIdentities([{ worktreePath: PROJECT_ROOT, head: 'aaa111', branch: 'refs/heads/main' }])
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
     await vi.advanceTimersByTimeAsync(0)
 
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
-      { worktreePath: PROJECT_ROOT, head: 'bbb222', branch: 'refs/heads/main' }
-    ])
+    mockHeadIdentities([{ worktreePath: PROJECT_ROOT, head: 'bbb222', branch: 'refs/heads/main' }])
     emit(PROJECT_GIT_COMMON_DIR, [
       { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'logs', 'HEAD') }
     ])
@@ -518,7 +519,7 @@ describe('worktree base directory watcher', () => {
 
   it('coalesces an index and reflog burst into one head read and one status refresh', async () => {
     const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+    mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
         head: 'aaa111',
@@ -530,7 +531,7 @@ describe('worktree base directory watcher', () => {
     vi.mocked(readGitCommonHeadIdentities).mockClear()
 
     // reset --soft rewrites the index and appends logs/HEAD in the same burst.
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+    mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
         head: 'bbb222',
@@ -558,7 +559,7 @@ describe('worktree base directory watcher', () => {
 
   it('debounces successive reflog events into a single head read', async () => {
     const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+    mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
         head: 'aaa111',
@@ -586,7 +587,7 @@ describe('worktree base directory watcher', () => {
 
   it('re-baselines head identities silently on structural notifications', async () => {
     const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+    mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
         head: 'aaa111',
@@ -597,7 +598,7 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     // Branch switch: structural path owns the refresh via the full listing.
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+    mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
         head: 'ccc333',

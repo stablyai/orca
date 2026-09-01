@@ -5,6 +5,7 @@ import {
 } from './worktree-base-directory-event-filter'
 import {
   EMPTY_HEAD_IDENTITY_SCOPE,
+  FULL_HEAD_IDENTITY_SCOPE,
   mergeHeadIdentityScopes,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
@@ -44,13 +45,16 @@ function emptyBuckets(): ChangeBuckets {
   }
 }
 
-function emptyChanges(): WorktreeBaseCollectedChanges {
+// Why: overflow means every event in the window was lost, so the scope must be
+// stated as FULL here rather than left to a downstream `?? FULL` on an absent
+// field — a caller that forwards this object must not read it as "nothing moved".
+function overflowChanges(): WorktreeBaseCollectedChanges {
   return {
-    overflow: false,
+    overflow: true,
     structureRepoIds: [],
     gitStatusRepoIds: [],
     headIdentityRepoIds: [],
-    headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
+    headIdentityScope: FULL_HEAD_IDENTITY_SCOPE
   }
 }
 
@@ -103,7 +107,7 @@ export function collectRemoteWorktreeBaseChanges(
   const buckets = emptyBuckets()
   for (const event of events) {
     if (event.kind === 'overflow') {
-      return { ...emptyChanges(), overflow: true }
+      return overflowChanges()
     }
     if (event.kind === 'rename') {
       if (event.oldAbsolutePath) {

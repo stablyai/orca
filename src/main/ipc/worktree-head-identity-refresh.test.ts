@@ -6,7 +6,10 @@ vi.mock('./worktree-remote', () => ({
 }))
 
 vi.mock('./worktree-head-identity-reader', () => ({
-  readGitCommonHeadIdentities: vi.fn(async () => [] as WorktreeHeadIdentity[]),
+  readGitCommonHeadIdentities: vi.fn(async () => ({
+    identities: [] as WorktreeHeadIdentity[],
+    listingComplete: true
+  })),
   createWorktreeHeadIdentityCache: vi.fn(() => ({
     entries: new Map(),
     entryNames: null,
@@ -31,11 +34,13 @@ import {
 const COMMON_DIR = '/repos/project/.git'
 const WT_A = '/repos/wt-a'
 
+const windowState = { destroyed: false }
+
 function makeHost(): Parameters<typeof refreshWorktreeHeadIdentities>[0] {
   return {
     path: COMMON_DIR,
     repos: new Map([['repo-1', {}]]),
-    mainWindow: { isDestroyed: () => false } as never,
+    mainWindow: { isDestroyed: () => windowState.destroyed } as never,
     disposed: false
   }
 }
@@ -44,15 +49,20 @@ function identity(head: string): WorktreeHeadIdentity {
   return { worktreePath: WT_A, head, branch: 'refs/heads/feature' }
 }
 
+function mockRead(identities: WorktreeHeadIdentity[] = [], listingComplete = true): void {
+  vi.mocked(readGitCommonHeadIdentities).mockResolvedValue({ identities, listingComplete })
+}
+
 function lastScope(): unknown {
   return vi.mocked(readGitCommonHeadIdentities).mock.calls.at(-1)?.[2]
 }
 
 describe('refreshWorktreeHeadIdentities', () => {
   beforeEach(() => {
+    windowState.destroyed = false
     vi.useFakeTimers()
     vi.mocked(readGitCommonHeadIdentities).mockReset()
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([])
+    mockRead()
     vi.mocked(notifyWorktreeHeadIdentitiesChanged).mockClear()
   })
 
@@ -62,7 +72,7 @@ describe('refreshWorktreeHeadIdentities', () => {
 
   it('reads everything on cold start and does not emit off a missing baseline', async () => {
     const state = createWorktreeHeadIdentityRefreshState()
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([identity('aaa')])
+    mockRead([identity('aaa')])
 
     await refreshWorktreeHeadIdentities(makeHost(), state, true, headIdentityScopeForEntry('wt-a'))
 
@@ -74,10 +84,10 @@ describe('refreshWorktreeHeadIdentities', () => {
   it('forwards a narrowed scope once a baseline exists', async () => {
     const host = makeHost()
     const state = createWorktreeHeadIdentityRefreshState()
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([identity('aaa')])
+    mockRead([identity('aaa')])
     await refreshWorktreeHeadIdentities(host, state, false)
 
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([identity('bbb')])
+    mockRead([identity('bbb')])
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
 
     expect(lastScope()).toEqual(headIdentityScopeForEntry('wt-a'))
@@ -126,18 +136,42 @@ describe('refreshWorktreeHeadIdentities', () => {
     // scope. They must not be able to starve the re-baseline that bounds the
     // window where a ref moved with no event under any admin dir.
     vi.advanceTimersByTime(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
-    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([identity('bbb')])
-    await refreshWorktreeHeadIdentities(host, state, true, EMPTY_HEAD_IDENTITY_SCOPE)
+    mockRead([identity('bbb')])
+    // An empty scope only ever reaches the refresh from a structural burst, so
+    // the reachable pairing is `emit: false`: the promotion's job here is
+    // baseline/cache hygiene, and the structural catalog notification that runs
+    // in the same flush is what publishes the head.
+    await refreshWorktreeHeadIdentities(host, state, false, EMPTY_HEAD_IDENTITY_SCOPE)
 
     expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
-    expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1', [
-      identity('bbb')
-    ])
+    expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
+
+    // Re-baselined, so the next narrow burst diffs against the fresh head
+    // instead of re-reporting a move the catalog already published.
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
 
     // The promotion also re-arms the interval, so the next empty burst is free.
     vi.mocked(readGitCommonHeadIdentities).mockClear()
-    await refreshWorktreeHeadIdentities(host, state, true, EMPTY_HEAD_IDENTITY_SCOPE)
+    await refreshWorktreeHeadIdentities(host, state, false, EMPTY_HEAD_IDENTITY_SCOPE)
     expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
+  })
+
+  it('does not arm the freshness clock on a full read that could not enumerate', async () => {
+    const host = makeHost()
+    const state = createWorktreeHeadIdentityRefreshState()
+    // A full read whose `worktrees/` listing failed has not seen entries added
+    // since the last good listing, so it is not a freshness checkpoint.
+    mockRead([identity('aaa')], false)
+    await refreshWorktreeHeadIdentities(host, state, false)
+    mockRead([identity('aaa')])
+
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
+
+    // That one enumerated, so the clock arms and the next narrow burst stays narrow.
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(lastScope()).toEqual(headIdentityScopeForEntry('wt-a'))
   })
 
   it('merges the scopes of refreshes queued behind an in-flight read', async () => {
@@ -149,7 +183,7 @@ describe('refreshWorktreeHeadIdentities', () => {
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          release = () => resolve([])
+          release = () => resolve({ identities: [], listingComplete: true })
         })
     )
     const inFlight = refreshWorktreeHeadIdentities(
@@ -185,6 +219,109 @@ describe('refreshWorktreeHeadIdentities', () => {
     expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
   })
 
+  it('keeps the baseline when a notify throws so the move is retried', async () => {
+    const host = makeHost()
+    host.repos = new Map([
+      ['repo-1', {}],
+      ['repo-2', {}]
+    ])
+    const state = createWorktreeHeadIdentityRefreshState()
+    mockRead([identity('aaa')])
+    await refreshWorktreeHeadIdentities(host, state, false)
+
+    // A send into destroyed chrome throws part-way through the repo loop.
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRead([identity('bbb')])
+    vi.mocked(notifyWorktreeHeadIdentitiesChanged).mockImplementationOnce(() => {
+      throw new Error('webContents destroyed')
+    })
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+
+    // The baseline must still hold `aaa`, so the next refresh re-reports `bbb`
+    // rather than diffing it away as already published.
+    vi.mocked(notifyWorktreeHeadIdentitiesChanged).mockClear()
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1', [
+      identity('bbb')
+    ])
+    expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-2', [
+      identity('bbb')
+    ])
+  })
+
+  it('folds a queued scope back in when its re-run met a destroyed window', async () => {
+    const host = makeHost()
+    const state = createWorktreeHeadIdentityRefreshState()
+    await refreshWorktreeHeadIdentities(host, state, false)
+
+    let release: () => void = () => {}
+    vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ identities: [], listingComplete: true })
+        })
+    )
+    const inFlight = refreshWorktreeHeadIdentities(
+      host,
+      state,
+      true,
+      headIdentityScopeForEntry('wt-a')
+    )
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-b'))
+    // macOS recreates the window while the watch lives on: the queued re-run
+    // returns at the teardown guard and must not lose the scope with it.
+    windowState.destroyed = true
+    release()
+    await inFlight
+    await vi.advanceTimersByTimeAsync(0)
+
+    windowState.destroyed = false
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-c'))
+
+    expect(lastScope()).toEqual({
+      listing: false,
+      primary: false,
+      all: false,
+      entryNames: new Set(['wt-b', 'wt-c'])
+    })
+  })
+
+  it('does not treat a read discarded by teardown as a freshness checkpoint', async () => {
+    const host = makeHost()
+    const state = createWorktreeHeadIdentityRefreshState()
+    await refreshWorktreeHeadIdentities(host, state, false)
+    vi.advanceTimersByTime(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
+
+    vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(async () => {
+      windowState.destroyed = true
+      return { identities: [identity('bbb')], listingComplete: true }
+    })
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+
+    windowState.destroyed = false
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
+  })
+
+  it('carries forward baseline rows an incomplete listing could not observe', async () => {
+    const host = makeHost()
+    const state = createWorktreeHeadIdentityRefreshState()
+    const other = { worktreePath: '/repos/wt-b', head: 'ccc', branch: 'refs/heads/other' }
+    mockRead([identity('aaa'), other])
+    await refreshWorktreeHeadIdentities(host, state, false)
+
+    // Enumeration failed, so wt-b is missing from this pass entirely.
+    mockRead([identity('aaa')], false)
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
+
+    // Listing recovers with wt-b unchanged: it must not be reported as moved.
+    mockRead([identity('aaa'), other])
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
+  })
+
   it('never emits for a window torn down mid-read', async () => {
     const host = makeHost()
     const state = createWorktreeHeadIdentityRefreshState()
@@ -192,7 +329,7 @@ describe('refreshWorktreeHeadIdentities', () => {
 
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(async () => {
       host.disposed = true
-      return [identity('bbb')]
+      return { identities: [identity('bbb')], listingComplete: true }
     })
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
 

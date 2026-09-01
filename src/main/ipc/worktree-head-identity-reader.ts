@@ -33,6 +33,14 @@ export function createWorktreeHeadIdentityCache(): WorktreeHeadIdentityCache {
   return { entries: new Map(), entryNames: null, primary: null }
 }
 
+export type GitCommonHeadIdentityRead = {
+  identities: WorktreeHeadIdentity[]
+  /** False when `worktrees/` could not be enumerated this pass, so any entry
+   *  added since the last good listing is missing from `identities`. Callers
+   *  that treat a full read as a freshness checkpoint must not do so on false. */
+  listingComplete: boolean
+}
+
 /** ref → oid resolved during one pass; null means the ref no longer resolves. */
 type ResolvedRefOids = Map<string, string | null>
 
@@ -166,10 +174,25 @@ async function listLinkedEntryNames(commonDirPath: string): Promise<string[] | n
   }
 }
 
+function knowsEveryScopedEntry(
+  entryKeys: readonly string[],
+  scope: WorktreeHeadIdentityScope
+): boolean {
+  if (scope.entryNames.size === 0) {
+    return true
+  }
+  const known = new Set(entryKeys)
+  return [...scope.entryNames].every((key) => known.has(key))
+}
+
 // Why: `git worktree add --force` lets several worktrees share one branch, and
 // only the committing worktree's HEAD reflog is appended. Replaying every ref
 // resolved this pass onto the cached entries that point at it keeps the others
 // current without re-reading their metadata.
+// A ref that stopped resolving evicts every cached row on it, including rows
+// this pass never read: if the ref really is gone their oids are stale, and we
+// cannot tell that from a transient miss. Evicting costs a re-read next pass;
+// keeping would serve a head we can no longer justify.
 function retargetCachedIdentity(
   identity: WorktreeHeadIdentity,
   resolved: ResolvedRefOids
@@ -209,7 +232,7 @@ export async function readGitCommonHeadIdentities(
   commonDirPath: string,
   cache: WorktreeHeadIdentityCache = createWorktreeHeadIdentityCache(),
   scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE
-): Promise<WorktreeHeadIdentity[]> {
+): Promise<GitCommonHeadIdentityRead> {
   let packedRefsPromise: Promise<Map<string, string>> | null = null
   const packedRefs = (): Promise<Map<string, string>> =>
     (packedRefsPromise ??= readPackedRefs(commonDirPath))
@@ -231,32 +254,46 @@ export async function readGitCommonHeadIdentities(
 
   let entryNames = cache.entryNames
   let listingStale = false
-  if (entryNames === null || scope.all || scope.listing) {
+  let relisted = false
+  const relist = async (): Promise<void> => {
+    relisted = true
     const listing = await listLinkedEntryNames(commonDirPath)
     if (listing === null) {
       listingStale = true
-    } else {
-      entryNames = listing
-      const listed = new Set(listing)
-      for (const name of cache.entries.keys()) {
-        if (!listed.has(name)) {
-          cache.entries.delete(name)
-        }
+      return
+    }
+    listingStale = false
+    entryNames = listing
+    const present = new Set(listing)
+    for (const name of cache.entries.keys()) {
+      if (!present.has(name)) {
+        cache.entries.delete(name)
       }
     }
+  }
+  if (entryNames === null || scope.all || scope.listing) {
+    await relist()
   }
   if (entryNames === null) {
     // Unreadable on the very first pass: report only the primary and leave the
     // memo unset so the next refresh re-enumerates.
-    return cache.primary ? [cache.primary] : []
+    return { identities: cache.primary ? [cache.primary] : [], listingComplete: false }
+  }
+
+  let entryKeys = entryNames.map(headIdentityEntryKey)
+  // Why: a scope naming an entry the memoized listing does not know means the
+  // listing is behind, not that the entry may be skipped. Never let a named
+  // entry resolve to zero work.
+  if (!relisted && !knowsEveryScopedEntry(entryKeys, scope)) {
+    await relist()
+    entryKeys = entryNames.map(headIdentityEntryKey)
   }
 
   const staleNames = entryNames.filter(
-    (name) =>
-      scope.all || !cache.entries.has(name) || scope.entryNames.has(headIdentityEntryKey(name))
+    (name, index) => scope.all || !cache.entries.has(name) || scope.entryNames.has(entryKeys[index])
   )
-  // mapWithConcurrency retains input order, so publishing identities stays
-  // deterministic while independent worktree metadata reads overlap.
+  // Bounded fan-out so a burst cannot flood the libuv threadpool; publication
+  // order comes from `entryNames` below, not from completion order.
   const reads = await mapWithConcurrency(staleNames, HEAD_IDENTITY_READ_CONCURRENCY, (name) =>
     readLinkedEntryIdentity(commonDirPath, name, packedRefs, resolved)
   )
@@ -281,5 +318,5 @@ export async function readGitCommonHeadIdentities(
       identities.push(identity)
     }
   }
-  return identities
+  return { identities, listingComplete: !listingStale }
 }
