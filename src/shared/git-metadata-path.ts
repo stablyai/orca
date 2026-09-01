@@ -59,3 +59,19 @@ function translateGuestPointer(
   }
   return wslDistro ? toWindowsWslPath(value, wslDistro) : toWindowsWslDrivePath(value)
 }
+
+/**
+ * The reading host's spelling of a worktree *directory*.
+ *
+ * A directory is not a pointer: `resolveGitMetadataPath` trims because a gitfile payload carries a
+ * trailing newline, but a directory name may legally begin or end with whitespace on POSIX. Keep
+ * the caller's spelling whenever the resolver only trimmed it, so a host that translates nothing
+ * reads exactly the path it was given.
+ */
+export function resolveWorktreeHostPath(
+  worktreePath: string,
+  options: GitMetadataPathOptions = {}
+): string | null {
+  const resolved = resolveGitMetadataPath('', worktreePath, options)
+  return resolved === worktreePath.trim() ? worktreePath : resolved
+}

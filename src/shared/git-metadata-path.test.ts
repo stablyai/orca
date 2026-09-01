@@ -1,6 +1,6 @@
 import { posix, win32 } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveGitMetadataPath } from './git-metadata-path'
+import { resolveGitMetadataPath, resolveWorktreeHostPath } from './git-metadata-path'
 
 const hostIsWindows = process.platform === 'win32'
 
@@ -144,5 +144,28 @@ describe('resolveGitMetadataPath', () => {
     expect(resolveGitMetadataPath('/repo/worktree', '../.git/worktrees/feature')).toBe(
       (hostIsWindows ? win32 : posix).resolve('/repo/worktree', '../.git/worktrees/feature')
     )
+  })
+})
+
+describe('resolveWorktreeHostPath', () => {
+  // A gitfile payload ends in a newline; a directory name can end in a space, and trimming one
+  // away points every read at a directory that does not exist.
+  it.each(['/repo/my feature ', ' /repo/my feature'])(
+    'keeps whitespace that belongs to the directory name (%j)',
+    (worktreePath) => {
+      expect(resolveWorktreeHostPath(worktreePath, { platform: 'linux' })).toBe(worktreePath)
+      expect(resolveWorktreeHostPath(worktreePath, { platform: 'win32' })).toBe(worktreePath)
+    }
+  )
+
+  it('still translates a guest directory for a Windows reader', () => {
+    expect(
+      resolveWorktreeHostPath('/home/me/repo', { platform: 'win32', wslDistro: 'Ubuntu' })
+    ).toBe(String.raw`\\wsl.localhost\Ubuntu\home\me\repo`)
+    expect(resolveWorktreeHostPath('/mnt/c/repo', { platform: 'win32' })).toBe(String.raw`C:\repo`)
+  })
+
+  it.each(['', '   '])('has no spelling for an empty worktree path %j', (worktreePath) => {
+    expect(resolveWorktreeHostPath(worktreePath, { platform: 'win32' })).toBeNull()
   })
 })
