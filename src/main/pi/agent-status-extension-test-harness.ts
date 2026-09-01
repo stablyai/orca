@@ -33,8 +33,10 @@ export type AgentStatusExtensionHarness = {
     statSync: ReturnType<typeof vi.fn>
   }
   handlers: Record<string, HookHandler>
+  eventHandlers: Record<string, (payload?: unknown) => void>
   processEnv: Record<string, string | undefined>
   callHook: (name: string, event?: unknown, context?: HookContext) => Promise<void>
+  emitEvent: (name: string, payload?: unknown) => void
   // Re-invoke the extension factory in the same process (as Pi does on an
   // in-process extension reload), swapping in the freshly registered handlers.
   reload: () => void
@@ -103,7 +105,12 @@ export function createAgentStatusExtensionHarness(args: {
   }
 
   const module = {
-    exports: {} as { default?: (pi: { on: (name: string, handler: HookHandler) => void }) => void }
+    exports: {} as {
+      default?: (pi: {
+        on: (name: string, handler: HookHandler) => void
+        events: { on: (name: string, handler: (payload?: unknown) => void) => () => void }
+      }) => void
+    }
   }
   const requireMock = vi.fn((specifier: string) => {
     if (specifier === 'fs') {
@@ -161,10 +168,21 @@ export function createAgentStatusExtensionHarness(args: {
   }
 
   const handlers: Record<string, HookHandler> = {}
+  const eventHandlers: Record<string, (payload?: unknown) => void> = {}
   const registerInto = (target: Record<string, HookHandler>): void => {
     register({
       on(name: string, handler: HookHandler) {
         target[name] = handler
+      },
+      events: {
+        on(name: string, handler: (payload?: unknown) => void) {
+          eventHandlers[name] = handler
+          return () => {
+            if (eventHandlers[name] === handler) {
+              delete eventHandlers[name]
+            }
+          }
+        }
       }
     })
   }
@@ -176,9 +194,13 @@ export function createAgentStatusExtensionHarness(args: {
     spawnedChildren,
     fsMock,
     handlers,
+    eventHandlers,
     processEnv: processMock.env,
     callHook: async (name, event, hookContext) => {
       await handlers[name]?.(event, hookContext)
+    },
+    emitEvent: (name, payload) => {
+      eventHandlers[name]?.(payload)
     },
     reload: () => {
       for (const key of Object.keys(handlers)) {

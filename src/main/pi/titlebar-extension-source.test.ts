@@ -15,9 +15,12 @@ type HookHandler = (event?: unknown, context?: TitlebarContext) => Promise<void>
 
 type Harness = {
   handlers: Record<string, HookHandler>
+  eventHandlers: Record<string, (payload?: unknown) => void>
   titles: string[]
   lastTitle: () => string | undefined
   callHook: (name: string, event?: unknown) => Promise<void>
+  emitEvent: (name: string, payload?: unknown) => void
+  reload: () => void
 }
 
 const CWD = '/repo/orca-app'
@@ -40,6 +43,7 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
       default?: (pi: {
         on: (name: string, handler: HookHandler) => void
         getSessionName: () => string
+        events: { on: (name: string, handler: (payload?: unknown) => void) => void }
       }) => void
     }
   }
@@ -72,15 +76,25 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
   }
 
   const handlers: Record<string, HookHandler> = {}
-  register({
-    on(name: string, handler: HookHandler) {
-      handlers[name] = handler
-    },
-    getSessionName: () => SESSION
-  })
+  const eventHandlers: Record<string, (payload?: unknown) => void> = {}
+  const registerHandlers = (): void => {
+    register({
+      on(name: string, handler: HookHandler) {
+        handlers[name] = handler
+      },
+      getSessionName: () => SESSION,
+      events: {
+        on(name: string, handler: (payload?: unknown) => void) {
+          eventHandlers[name] = handler
+        }
+      }
+    })
+  }
+  registerHandlers()
 
   return {
     handlers,
+    eventHandlers,
     titles,
     lastTitle: () => titles.at(-1),
     callHook: async (name, event) => {
@@ -89,6 +103,13 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
         throw new Error(`no handler registered for ${name}`)
       }
       await handler(event, ctx)
+    },
+    emitEvent: (name, payload) => eventHandlers[name]?.(payload),
+    reload: () => {
+      for (const key of Object.keys(handlers)) {
+        delete handlers[key]
+      }
+      registerHandlers()
     }
   }
 }
@@ -230,6 +251,50 @@ describe('getPiTitlebarExtensionSource', () => {
 
     idle = true
     await vi.advanceTimersByTimeAsync(200)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+  })
+
+  it('keeps spinning until all background subagents complete', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('agent_start')
+    harness.emitEvent('subagent:async-started', { id: 'run-1' })
+    harness.emitEvent('subagent:async-started', { id: 'run-2' })
+    harness.emitEvent('subagent:async-started', { id: 'run-2' })
+    await harness.callHook('agent_settled')
+    harness.emitEvent('subagent:async-complete', { runId: 'run-1' })
+    harness.emitEvent('subagent:async-complete', { runId: 'missing' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(vi.getTimerCount()).toBe(1)
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+
+    harness.emitEvent('subagent:async-complete', { runId: 'run-2' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+  })
+
+  it('keeps background activity across reload and cancels completion when the parent wakes', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('agent_start')
+    harness.emitEvent('subagent:async-started', { id: 'run-1' })
+    await harness.callHook('agent_settled')
+    await harness.callHook('session_shutdown')
+    harness.reload()
+    await harness.callHook('session_start', { reason: 'reload' })
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+
+    harness.emitEvent('subagent:async-complete', { runId: 'run-1' })
+    await harness.callHook('before_agent_start')
+    await vi.advanceTimersByTimeAsync(0)
+    await harness.callHook('agent_start')
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+
+    await harness.callHook('agent_settled')
     expect(vi.getTimerCount()).toBe(0)
     expect(harness.lastTitle()).toBe(IDLE_TITLE)
   })
