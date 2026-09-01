@@ -196,7 +196,7 @@ export function NotesSendMenu<TNote>({
             >
               {triggerLabel ? (
                 <>
-                  <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
+                  <Sparkles className="size-3 text-violet-500 editor-dark:text-violet-400" />
                   <span className="whitespace-nowrap">{triggerLabel}</span>
                   {triggerCount !== undefined ? (
                     <span className="rounded-full bg-background/80 px-1 text-[10px] tabular-nums text-muted-foreground">

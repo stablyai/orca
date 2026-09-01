@@ -14,21 +14,11 @@ const APP_APPEARANCE_BASE_TOKENS = [
   '--app-appearance-base-foreground'
 ] as const
 const EDITOR_BASE_TOKENS = [
-  '--background',
-  '--foreground',
-  '--card',
-  '--card-foreground',
-  '--muted',
-  '--muted-foreground',
-  '--accent',
-  '--accent-foreground',
-  '--primary',
-  '--primary-foreground',
-  '--popover',
-  '--popover-foreground',
-  '--border',
-  '--input',
-  '--ring',
+  ...PANEL_DESIGN_TOKEN_ALLOWLIST,
+  '--status-success',
+  '--annotation-highlight',
+  '--markdown-search-match',
+  '--markdown-search-match-active',
   '--editor-surface'
 ] as const
 
