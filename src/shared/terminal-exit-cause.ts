@@ -108,7 +108,21 @@ export function isDeliberateTerminalExit(cause: TerminalExitCause): boolean {
  * Negative codes are synthetic stop sentinels; they mean that the host lost
  * contact before it could vouch for the child, so downstream cleanup must use
  * the `unverifiable` path instead of treating the tab as exited.
+ *
+ * `evidence` mirrors what `resolveProcessExitCause` sees, so a caller that
+ * knows its host cannot vouch for the child (macOS `login -flpq` wrapper,
+ * SSH relay, a bare code with no cause) can refuse to mint a proven exit from
+ * an ambiguous `0` — the same evidence the sibling `resolveUnreportedExitCause`
+ * relies on. Callers without that knowledge keep the historical behaviour.
  */
-export function isProvenProcessExit(exitCode: number): boolean {
-  return resolveProcessExitCause({ exitCode }).kind !== 'unknown'
+export function isProvenProcessExit(
+  exitCode: number,
+  evidence?: {
+    signal?: number | null
+    hostReportsChildExitStatus?: boolean
+  }
+): boolean {
+  return (
+    resolveProcessExitCause({ exitCode, ...(evidence ?? {}) }).kind !== 'unknown'
+  )
 }

@@ -109,4 +109,20 @@ describe('isProvenProcessExit', () => {
     // A host shutdown can deliver -1 for every PTY without proving process death.
     expect(isProvenProcessExit(-1)).toBe(false)
   })
+
+  it('refuses to mint a proven exit from a 0 the host cannot vouch for', () => {
+    // #17955: a wrapper that never observed the child (macOS `login -flpq`,
+    // an SSH relay, a bare code) reports 0 for a clean finish, an OOM kill or
+    // an operator close alike. isProvenProcessExit must not treat that 0 as a
+    // proven exit when the caller knows its host cannot vouch for the child.
+    expect(
+      isProvenProcessExit(0, { hostReportsChildExitStatus: false })
+    ).toBe(false)
+    expect(isProvenProcessExit(0, { signal: 0 })).toBe(true)
+  })
+
+  it('keeps historical behaviour when no evidence is supplied', () => {
+    // Existing callers pass only an exit code; they must be unaffected.
+    expect(isProvenProcessExit(42)).toBe(true)
+  })
 })
