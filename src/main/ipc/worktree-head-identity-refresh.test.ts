@@ -21,6 +21,7 @@ import { notifyWorktreeHeadIdentitiesChanged } from './worktree-remote'
 import { readGitCommonHeadIdentities } from './worktree-head-identity-reader'
 import {
   createWorktreeHeadIdentityRefreshState,
+  disposeWorktreeHeadIdentityRefreshState,
   HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS,
   refreshWorktreeHeadIdentities
 } from './worktree-head-identity-refresh'
@@ -51,6 +52,12 @@ function identity(head: string): WorktreeHeadIdentity {
 
 function mockRead(identities: WorktreeHeadIdentity[] = [], listingComplete = true): void {
   vi.mocked(readGitCommonHeadIdentities).mockResolvedValue({ identities, listingComplete })
+}
+
+// Advance only the clock, so promotion-on-the-next-event is exercised without
+// the one-shot catch-up timer firing and muddling the assertion.
+function skipInterval(): void {
+  vi.setSystemTime(Date.now() + HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
 }
 
 function lastScope(): unknown {
@@ -118,7 +125,7 @@ describe('refreshWorktreeHeadIdentities', () => {
 
     // A ref can move with no event under any admin dir (`git update-ref` from a
     // sibling worktree), so the blind window has to be bounded.
-    vi.advanceTimersByTime(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
+    skipInterval()
     await refreshWorktreeHeadIdentities(host, state, true, PRIMARY_HEAD_IDENTITY_SCOPE)
     expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
 
@@ -135,7 +142,7 @@ describe('refreshWorktreeHeadIdentities', () => {
     // `git worktree lock`/`unlock` and sparse toggles classify to the empty
     // scope. They must not be able to starve the re-baseline that bounds the
     // window where a ref moved with no event under any admin dir.
-    vi.advanceTimersByTime(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
+    skipInterval()
     mockRead([identity('bbb')])
     // An empty scope only ever reaches the refresh from a structural burst, so
     // the reachable pairing is `emit: false`: the promotion's job here is
@@ -291,7 +298,7 @@ describe('refreshWorktreeHeadIdentities', () => {
     const host = makeHost()
     const state = createWorktreeHeadIdentityRefreshState()
     await refreshWorktreeHeadIdentities(host, state, false)
-    vi.advanceTimersByTime(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
+    skipInterval()
 
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(async () => {
       windowState.destroyed = true
@@ -320,6 +327,69 @@ describe('refreshWorktreeHeadIdentities', () => {
     mockRead([identity('aaa'), other])
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
+  })
+
+  it('catches up with no further events after a scoped refresh', async () => {
+    const host = makeHost()
+    const state = createWorktreeHeadIdentityRefreshState()
+    mockRead([identity('aaa')])
+    await refreshWorktreeHeadIdentities(host, state, false)
+
+    // A scoped pass leaves any drift it could not see unbounded, so it arms a
+    // one-shot catch-up rather than waiting for an event that may never come.
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(lastScope()).toEqual(headIdentityScopeForEntry('wt-a'))
+
+    // External `git update-ref` moved the head with no watched write, then total
+    // silence: no burst, no debounce flush, nothing.
+    mockRead([identity('bbb')])
+    await vi.advanceTimersByTimeAsync(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
+
+    expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
+    expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1', [
+      identity('bbb')
+    ])
+    disposeWorktreeHeadIdentityRefreshState(state)
+  })
+
+  it('schedules nothing while idle, so a quiet repo costs no background reads', async () => {
+    const host = makeHost()
+    const state = createWorktreeHeadIdentityRefreshState()
+    mockRead([identity('aaa')])
+    // Cold start is a full pass: it disarms rather than arming, because nothing
+    // is outstanding after a full read.
+    await refreshWorktreeHeadIdentities(host, state, false)
+    expect(state.rebaselineTimer).toBeNull()
+
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+    await vi.advanceTimersByTimeAsync(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS * 5)
+    expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
+
+    // Re-baseline so the scoped pass below stays scoped, then check that the
+    // catch-up it arms disarms once it has run: never a recurring poll.
+    await refreshWorktreeHeadIdentities(host, state, false, FULL_HEAD_IDENTITY_SCOPE)
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+    expect(state.rebaselineTimer).not.toBeNull()
+    await vi.advanceTimersByTimeAsync(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
+    expect(state.rebaselineTimer).toBeNull()
+
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+    await vi.advanceTimersByTimeAsync(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS * 5)
+    expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
+  })
+
+  it('stops the catch-up when the watch is disposed', async () => {
+    const host = makeHost()
+    const state = createWorktreeHeadIdentityRefreshState()
+    mockRead([identity('aaa')])
+    await refreshWorktreeHeadIdentities(host, state, false)
+    await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
+
+    disposeWorktreeHeadIdentityRefreshState(state)
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+    await vi.advanceTimersByTimeAsync(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS * 2)
+
+    expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
   })
 
   it('never emits for a window torn down mid-read', async () => {

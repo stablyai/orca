@@ -28,15 +28,16 @@ export type WorktreeHeadIdentityRefreshState = {
   inFlight: boolean
   queuedScope: WorktreeHeadIdentityScope | null
   queuedEmit: boolean
+  /** One-shot catch-up armed only by a scoped pass; see `scheduleRebaseline`. */
+  rebaselineTimer: ReturnType<typeof setTimeout> | null
 }
 
 // Why: a ref can move with no event under any admin dir — `git update-ref
 // refs/heads/x` from a sibling worktree appends no HEAD reflog for the worktree
 // that has `x` checked out (verified on git 2.44). Scoped refreshes cannot see
-// that, so promote back to a full re-read on the first refresh that runs once
-// this interval has elapsed. This is opportunistic, not a timer: it caps the
-// cost of staying correct at one full read per interval of watcher activity,
-// but a fully idle repo still refreshes nothing at all (as it did before).
+// that, so a full re-read is forced this long after the last one, whether or
+// not another event arrives. This is also what bounds the blast radius of any
+// invalidation bug in the scoping itself.
 export const HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS = 60_000
 
 export function createWorktreeHeadIdentityRefreshState(): WorktreeHeadIdentityRefreshState {
@@ -46,8 +47,43 @@ export function createWorktreeHeadIdentityRefreshState(): WorktreeHeadIdentityRe
     lastFullReadAtMs: 0,
     inFlight: false,
     queuedScope: null,
-    queuedEmit: false
+    queuedEmit: false,
+    rebaselineTimer: null
   }
+}
+
+export function disposeWorktreeHeadIdentityRefreshState(
+  state: WorktreeHeadIdentityRefreshState
+): void {
+  clearTimeout(state.rebaselineTimer ?? undefined)
+  state.rebaselineTimer = null
+}
+
+/** Arms the one-shot catch-up that turns "stale until some later event happens
+ *  to arrive" into "stale at most one interval". Only a scoped pass arms it, so
+ *  the timer exists only after an event: an idle repo schedules nothing, and a
+ *  full pass disarms because nothing is outstanding after one. */
+function scheduleRebaseline(
+  host: HeadIdentityWatchHost,
+  state: WorktreeHeadIdentityRefreshState
+): void {
+  disposeWorktreeHeadIdentityRefreshState(state)
+  if (host.disposed || host.mainWindow.isDestroyed()) {
+    return
+  }
+  const dueInMs = Math.max(
+    0,
+    state.lastFullReadAtMs + HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS - Date.now()
+  )
+  const timer = setTimeout(() => {
+    state.rebaselineTimer = null
+    // `emit: true`: unlike a structural burst, nothing else runs alongside this
+    // to correct the drift, so a silent re-baseline would bury it forever.
+    void refreshWorktreeHeadIdentities(host, state, true, FULL_HEAD_IDENTITY_SCOPE)
+  }, dueInMs)
+  // Never hold the process open for a freshness backstop.
+  timer.unref?.()
+  state.rebaselineTimer = timer
 }
 
 function headIdentitySignature(identity: { head: string; branch: string | null }): string {
@@ -170,6 +206,12 @@ export async function refreshWorktreeHeadIdentities(
       // Leave the queue armed: if this call cannot proceed (destroyed window),
       // the next refresh folds it back in at the entry above.
       void refreshWorktreeHeadIdentities(host, state, state.queuedEmit, state.queuedScope)
+    } else if (effectiveScope.all) {
+      // A full pass just ran (or failed while running full — re-arming there
+      // would spin on a persistent fs error). Nothing is outstanding.
+      disposeWorktreeHeadIdentityRefreshState(state)
+    } else {
+      scheduleRebaseline(host, state)
     }
   }
 }

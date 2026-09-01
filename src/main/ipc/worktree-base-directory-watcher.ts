@@ -3,6 +3,7 @@ import type { Store } from '../persistence'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createWorktreeHeadIdentityRefreshState,
+  disposeWorktreeHeadIdentityRefreshState,
   refreshWorktreeHeadIdentities
 } from './worktree-head-identity-refresh'
 import {
@@ -228,6 +229,7 @@ async function removeWatch(key: string): Promise<void> {
   activeWatches.delete(key)
   watch.disposed = true
   clearTimeout(watch.notifyTimer ?? undefined)
+  disposeWorktreeHeadIdentityRefreshState(watch.headIdentityRefresh)
   clearPendingWorktreeBaseNotifications(watch)
   await watch.subscription.unsubscribe().catch((error) => {
     console.warn(`[worktree-base-watcher] failed to unwatch ${watch.path}:`, error)
