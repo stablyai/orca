@@ -3306,6 +3306,9 @@
             "codexSignInSuccess": "Codex에 로그인했습니다",
             "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요."
           },
+          "StatusBarVisibilityMenu": {
+            "5d095e229c": "Cursor 사용량"
+          },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
             "caa0f39811": "지원:",
@@ -3468,6 +3471,13 @@
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+          },
+          "usage": {
+            "error": {
+              "copy": {
+                "10c0b50ae8": "Cursor로 로그인"
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
@@ -7784,6 +7794,23 @@
           }
         },
         "appearance": {
+          "status": {
+            "bar": {
+              "cursor": {
+                "toggle": {
+                  "search": {
+                    "b7d8e5d878": "Cursor 사용량",
+                    "5e2a8cfb86": "로그인한 Cursor 세션의 Cursor Models, Other Models 및 Grok Bot 사용량을 표시합니다.",
+                    "c34d783d64": "상태 표시줄",
+                    "c9cd9fe8d2": "cursor",
+                    "fbb8436949": "사용량",
+                    "6843b85f37": "구독",
+                    "4036697d97": "Cursor 또는 cursor-agent로 로그인했을 때 Cursor 구독 사용량을 표시합니다."
+                  }
+                }
+              }
+            }
+          },
           "search": {
             "468448bba4": "수채화",
             "f586abfa35": "파란색",

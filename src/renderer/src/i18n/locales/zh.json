@@ -3316,6 +3316,9 @@
             "codexSignInSuccess": "已登录 Codex",
             "codexSignInError": "Codex 登录失败，请重试。"
           },
+          "StatusBarVisibilityMenu": {
+            "5d095e229c": "Cursor 使用情况"
+          },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
             "caa0f39811": "支持：",
@@ -3478,6 +3481,13 @@
             "d1b7f509ac": "在运行 Orca 的电脑上的终端中运行 grok，并等待其启动。如有提示，请完成登录，然后重试用量检查。您无需发送聊天消息。",
             "f90b3d7a16": "运行 Kimi 以刷新",
             "a37e8c15d4": "在运行 Orca 的电脑上的终端中运行 kimi，等待其启动，然后重试用量检查。"
+          },
+          "usage": {
+            "error": {
+              "copy": {
+                "10c0b50ae8": "使用 Cursor 登录"
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
@@ -7849,6 +7859,23 @@
           }
         },
         "appearance": {
+          "status": {
+            "bar": {
+              "cursor": {
+                "toggle": {
+                  "search": {
+                    "b7d8e5d878": "Cursor 使用情况",
+                    "5e2a8cfb86": "显示已登录 Cursor 会话中的 Cursor Models、Other Models 和 Grok Bot 使用情况。",
+                    "c34d783d64": "状态栏",
+                    "c9cd9fe8d2": "cursor",
+                    "fbb8436949": "使用情况",
+                    "6843b85f37": "订阅",
+                    "4036697d97": "使用 Cursor 或 cursor-agent 登录时显示 Cursor 订阅使用情况。"
+                  }
+                }
+              }
+            }
+          },
           "search": {
             "468448bba4": "水彩",
             "f586abfa35": "蓝色",

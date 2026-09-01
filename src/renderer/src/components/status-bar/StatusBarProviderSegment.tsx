@@ -104,7 +104,10 @@ function VerboseProviderUsage({
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
-    const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+    const visibleBuckets =
+      p.provider === 'gemini'
+        ? p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+        : p.buckets
     return (
       <>
         {visibleBuckets.map((bucket, index) => (

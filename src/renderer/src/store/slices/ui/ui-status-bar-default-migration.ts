@@ -6,7 +6,8 @@ const DEFAULT_ON_STATUS_BAR_ITEMS = [
   { item: 'kimi', marker: '_kimiStatusBarDefaultAdded' },
   { item: 'minimax', marker: '_minimaxStatusBarDefaultAdded' },
   { item: 'antigravity', marker: '_antigravityStatusBarDefaultAdded' },
-  { item: 'grok', marker: '_grokStatusBarDefaultAdded' }
+  { item: 'grok', marker: '_grokStatusBarDefaultAdded' },
+  { item: 'cursor', marker: '_cursorStatusBarDefaultAdded' }
 ] as const satisfies readonly {
   item: StatusBarItem
   marker: keyof PersistedUIState
@@ -20,7 +21,8 @@ export const STATUS_BAR_DEFAULT_MARKER_UPDATE = {
   _kimiStatusBarDefaultAdded: true,
   _minimaxStatusBarDefaultAdded: true,
   _antigravityStatusBarDefaultAdded: true,
-  _grokStatusBarDefaultAdded: true
+  _grokStatusBarDefaultAdded: true,
+  _cursorStatusBarDefaultAdded: true
 } as const
 
 export function migrateStatusBarDefaultItems(

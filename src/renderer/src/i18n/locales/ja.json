@@ -3301,6 +3301,9 @@
             "codexSignInSuccess": "Codex にサインインしました",
             "codexSignInError": "Codex のサインインに失敗しました。もう一度お試しください。"
           },
+          "StatusBarVisibilityMenu": {
+            "5d095e229c": "Cursor 使用状況"
+          },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
             "caa0f39811": "サポート:",
@@ -3463,6 +3466,13 @@
             "d1b7f509ac": "Orca を実行しているコンピュータのターミナルで grok を実行し、起動するまで待ってください。サインインを求められた場合は完了してから、使用状況を再取得してください。チャットメッセージを送る必要はありません。",
             "f90b3d7a16": "Kimi を実行して更新",
             "a37e8c15d4": "Orca を実行しているコンピュータのターミナルで kimi を実行し、起動するまで待ってから、使用状況を再取得してください。"
+          },
+          "usage": {
+            "error": {
+              "copy": {
+                "10c0b50ae8": "Cursor でサインイン"
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"
@@ -7816,6 +7826,23 @@
           }
         },
         "appearance": {
+          "status": {
+            "bar": {
+              "cursor": {
+                "toggle": {
+                  "search": {
+                    "b7d8e5d878": "Cursor 使用状況",
+                    "5e2a8cfb86": "サインイン済みの Cursor セッションから Cursor Models、Other Models、Grok Bot の使用状況を表示します。",
+                    "c34d783d64": "ステータスバー",
+                    "c9cd9fe8d2": "cursor",
+                    "fbb8436949": "使用状況",
+                    "6843b85f37": "サブスクリプション",
+                    "4036697d97": "Cursor または cursor-agent でサインインしている場合に、Cursor のサブスクリプション使用状況を表示します。"
+                  }
+                }
+              }
+            }
+          },
           "search": {
             "468448bba4": "水彩",
             "f586abfa35": "青",

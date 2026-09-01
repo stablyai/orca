@@ -3726,6 +3726,9 @@
             "codexSignInSuccess": "Signed in to Codex",
             "codexSignInError": "Codex sign-in failed. Please try again."
           },
+          "StatusBarVisibilityMenu": {
+            "5d095e229c": "Cursor Usage"
+          },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
             "caa0f39811": "Supports:",
@@ -3909,6 +3912,13 @@
                 "label": "Sign-in expired",
                 "apiKey": "MiniMax API key expired. Replace it in Settings.",
                 "cookie": "MiniMax session cookie expired. Replace it in Settings."
+              }
+            }
+          },
+          "usage": {
+            "error": {
+              "copy": {
+                "10c0b50ae8": "Sign in with Cursor"
               }
             }
           },
@@ -8959,6 +8969,23 @@
           }
         },
         "appearance": {
+          "status": {
+            "bar": {
+              "cursor": {
+                "toggle": {
+                  "search": {
+                    "b7d8e5d878": "Cursor Usage",
+                    "5e2a8cfb86": "Show Cursor Models, Other Models, and Grok Bot usage from the signed-in Cursor session.",
+                    "c34d783d64": "status bar",
+                    "c9cd9fe8d2": "cursor",
+                    "fbb8436949": "usage",
+                    "6843b85f37": "subscription",
+                    "4036697d97": "Show Cursor subscription usage when signed in with Cursor or cursor-agent."
+                  }
+                }
+              }
+            }
+          },
           "search": {
             "9a115966d3": "Minimize to Tray on Close",
             "4d5b9427b5": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
