@@ -283,7 +283,8 @@ describe('SshRelaySession data delivery', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
       platform: 'linux-x64',
-      serverBuildId: 'test-relay-build'
+      serverBuildId: 'test-relay-build',
+      ptyJobControl: 'unknown'
     })
     const first = new SshRelaySession('recovery-target', getMainWindow, mockStore, mockPortForward)
 
@@ -323,7 +324,8 @@ describe('SshRelaySession data delivery', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
       platform: 'linux-x64',
-      serverBuildId: 'test-relay-build'
+      serverBuildId: 'test-relay-build',
+      ptyJobControl: 'unknown'
     })
 
     const session = new SshRelaySession(targetId, getMainWindow, mockStore, mockPortForward)
@@ -353,7 +355,8 @@ describe('SshRelaySession data delivery', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
       platform: 'linux-x64',
-      serverBuildId: 'test-relay-build'
+      serverBuildId: 'test-relay-build',
+      ptyJobControl: 'unknown'
     })
     vi.mocked(getSshPtyAcceptedSourceCheckpoints).mockReturnValue([
       {

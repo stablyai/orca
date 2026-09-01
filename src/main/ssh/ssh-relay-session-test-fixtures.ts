@@ -56,6 +56,7 @@ export function mockDeploySuccess(): void {
       onData: vi.fn(),
       onClose: vi.fn()
     },
-    platform: 'linux-x64'
+    platform: 'linux-x64',
+    ptyJobControl: 'unknown'
   })
 }

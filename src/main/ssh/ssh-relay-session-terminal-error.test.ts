@@ -133,7 +133,8 @@ function mockDeploySuccess(): void {
   }
   vi.mocked(deployAndLaunchRelay).mockResolvedValue({
     transport: mockTransport,
-    platform: 'linux-x64'
+    platform: 'linux-x64',
+    ptyJobControl: 'unknown'
   })
 }
 

@@ -278,6 +278,7 @@ describe('SshRelaySession', () => {
         onClose: vi.fn()
       },
       platform: 'win32-x64',
+      ptyJobControl: 'unknown',
       hostPlatform: getRemoteHostPlatform('win32-x64'),
       remoteHome: 'C:/Users/me',
       remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
@@ -379,6 +380,7 @@ describe('SshRelaySession', () => {
         onClose: vi.fn()
       },
       platform: 'win32-x64',
+      ptyJobControl: 'unknown',
       hostPlatform: getRemoteHostPlatform('win32-x64'),
       remoteHome: 'C:/Users/me',
       remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
@@ -783,7 +785,8 @@ describe('SshRelaySession', () => {
         resolveFirst = () =>
           resolve({
             transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
-            platform: 'linux-x64' as const
+            platform: 'linux-x64' as const,
+            ptyJobControl: 'unknown'
           })
       })
     )

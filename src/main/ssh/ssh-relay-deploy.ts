@@ -77,6 +77,12 @@ import {
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import {
+  describeRelayPtyJobControlSupport,
+  readRelayPtyJobControlSupport,
+  relayPtyJobControlProbeJs,
+  type RelayPtyJobControlSupport
+} from './relay-pty-job-control-capability'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
   isWindowsRelayPipePath,
@@ -101,6 +107,11 @@ export type RelayDeployResult = {
   nodePath?: string
   sockPath?: string
   credentialFile?: string
+  /**
+   * Whether this remote's node-pty exposes native job control. Reporting only —
+   * nothing branches on it, and `unknown` means the probe never answered.
+   */
+  ptyJobControl: RelayPtyJobControlSupport
 }
 
 class RelayDirectoryGcConflictError extends Error {
@@ -398,6 +409,8 @@ async function deployAndLaunchRelayAttempt(
   let ownsInstallLock = false
   let launchGcClaimToken: string | undefined
   let launchNamespace: RelayInstallNamespace | undefined
+  // Reporting only. Stays 'unknown' on every path that never asked the remote.
+  let ptyJobControl: RelayPtyJobControlSupport = 'unknown'
   if (alreadyInstalled) {
     const launchFence = await repairInstalledNativeDeps(
       conn,
@@ -411,6 +424,7 @@ async function deployAndLaunchRelayAttempt(
     ownsInstallLock = launchFence.ownsInstallLock
     launchGcClaimToken = launchFence.gcClaimToken
     launchNamespace = launchFence.sftpNamespace
+    ptyJobControl = launchFence.ptyJobControl
     deploySignal?.throwIfAborted()
   } else {
     await execHostCommand(
@@ -511,7 +525,7 @@ async function deployAndLaunchRelayAttempt(
 
           onProgress?.('Installing native dependencies...')
           console.log('[ssh-relay] Installing native dependencies...')
-          await installNativeDeps(
+          ptyJobControl = await installNativeDeps(
             conn,
             remoteRelayDir,
             platform,
@@ -574,6 +588,7 @@ async function deployAndLaunchRelayAttempt(
     }
   }
   console.log('[ssh-relay] Relay started successfully')
+  console.log(describeRelayPtyJobControlSupport(ptyJobControl))
 
   void execHostCommand(
     conn,
@@ -596,6 +611,7 @@ async function deployAndLaunchRelayAttempt(
     hostPlatform,
     remoteHome,
     remoteRelayDir,
+    ptyJobControl,
     nodePath: launched.nodePath,
     sockPath: launched.sockPath,
     credentialFile: launched.credentialFile
@@ -714,12 +730,17 @@ const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
   Object.entries(RELAY_NATIVE_DEPS).map(([name, version]) => [`${name}@${version}`, true])
 )
 
+const NODE_PTY_NATIVE_MODULE_EXPR =
+  'process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty"'
+
 function nativeDepsProbeJs(successToken: string): string {
   // Why: node-pty's Windows wrapper defers conpty.node until first spawn, so require("node-pty") alone can't prove the binding is healthy.
   const loadNodePty =
-    'require("node-pty"); require("node-pty/lib/utils").loadNativeModule(process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty");' +
+    `require("node-pty"); require("node-pty/lib/utils").loadNativeModule(${NODE_PTY_NATIVE_MODULE_EXPR});` +
     `if(process.platform==="win32"){require("./${NODE_PTY_CONSOLE_LIST_PATCH_FILENAME}").assertPatchedNodePtyConsoleListAgent(process.cwd())}`
-  return `(()=>{const missing=[];try{${loadNodePty}}catch{missing.push("node-pty")}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{console.log(${JSON.stringify(successToken)})}})()`
+  // Why report only on the healthy branch: without a loadable node-pty there is nothing to look at, and a guess would read as a confirmed absence.
+  const jobControl = relayPtyJobControlProbeJs(NODE_PTY_NATIVE_MODULE_EXPR)
+  return `(()=>{const missing=[];try{${loadNodePty}}catch{missing.push("node-pty")}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{${jobControl}console.log(${JSON.stringify(successToken)})}})()`
 }
 
 function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] {
@@ -739,7 +760,11 @@ async function probeRequiredNativeDeps(
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   signal?: AbortSignal
-): Promise<{ available: boolean; missing: RelayNativeDepName[] }> {
+): Promise<{
+  available: boolean
+  missing: RelayNativeDepName[]
+  ptyJobControl: RelayPtyJobControlSupport
+}> {
   const escapedNode = shellEscape(nodePath)
   const probeJs = nativeDepsProbeJs('ORCA-NATIVE-DEPS-OK')
   try {
@@ -758,10 +783,15 @@ async function probeRequiredNativeDeps(
         )
     const probe = await execHostCommand(conn, hostPlatform, command, { signal })
     const available = probe.includes('ORCA-NATIVE-DEPS-OK')
-    return { available, missing: available ? [] : missingNativeDepsFromProbe(probe) }
+    return {
+      available,
+      missing: available ? [] : missingNativeDepsFromProbe(probe),
+      ptyJobControl: readRelayPtyJobControlSupport(probe)
+    }
   } catch {
     signal?.throwIfAborted()
-    return { available: false, missing: [...RELAY_NATIVE_DEP_NAMES] }
+    // A probe that never ran says nothing about job control; never downgrade that to a confirmed absence.
+    return { available: false, missing: [...RELAY_NATIVE_DEP_NAMES], ptyJobControl: 'unknown' }
   }
 }
 
@@ -777,6 +807,7 @@ async function repairInstalledNativeDeps(
   ownsInstallLock: boolean
   gcClaimToken?: string
   sftpNamespace?: RelayInstallNamespace
+  ptyJobControl: RelayPtyJobControlSupport
 }> {
   const initialProbe = await probeRequiredNativeDeps(
     conn,
@@ -813,10 +844,11 @@ async function repairInstalledNativeDeps(
   if (initialProbe.available) {
     // Why: even a healthy reconnect stays fenced until launch liveness is observable, or cross-version GC can rename after this probe.
     if (lockResult !== 'acquired') {
-      return { ownsInstallLock: false, gcClaimToken }
+      return { ownsInstallLock: false, gcClaimToken, ptyJobControl: initialProbe.ptyJobControl }
     }
     try {
       return {
+        ptyJobControl: initialProbe.ptyJobControl,
         ownsInstallLock: true,
         sftpNamespace: await createRelayLaunchNamespace(
           conn,
@@ -831,7 +863,10 @@ async function repairInstalledNativeDeps(
       console.warn(
         `[ssh-relay] Launch namespace marker is unconfirmed at ${remoteDir}; deferring lock ownership to stale recovery`
       )
-      return { ownsInstallLock: !isUnconfirmedSshCommandTermination(err) }
+      return {
+        ownsInstallLock: !isUnconfirmedSshCommandTermination(err),
+        ptyJobControl: initialProbe.ptyJobControl
+      }
     }
   }
 
@@ -841,12 +876,13 @@ async function repairInstalledNativeDeps(
     console.warn(
       `[ssh-relay] Native-deps repair lock is ${lockResult} at ${remoteDir}; launching degraded`
     )
-    return { ownsInstallLock: false, gcClaimToken }
+    return { ownsInstallLock: false, gcClaimToken, ptyJobControl: initialProbe.ptyJobControl }
   }
   try {
     // Why: older complete relay dirs predate @parcel/watcher; re-probe under the lock so only one reconnect mutates the dir.
     const probe = await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
     let repairNamespace: RelayInstallNamespace | undefined
+    let ptyJobControl = probe.ptyJobControl
     if (!probe.available) {
       // Why: only stamp ownership once the locked recheck proves this connection is the one about to write.
       repairNamespace = await createRelayLaunchNamespace(
@@ -856,7 +892,7 @@ async function repairInstalledNativeDeps(
         homeRelativeRelayDir,
         signal
       )
-      await installNativeDeps(
+      ptyJobControl = await installNativeDeps(
         conn,
         remoteDir,
         platform,
@@ -868,7 +904,7 @@ async function repairInstalledNativeDeps(
       )
       await finalizeInstall(conn, remoteDir, hostPlatform, { signal, releaseLock: false })
     }
-    return { ownsInstallLock: true, sftpNamespace: repairNamespace }
+    return { ownsInstallLock: true, sftpNamespace: repairNamespace, ptyJobControl }
   } catch (err) {
     const terminationUnconfirmed = isUnconfirmedSshCommandTermination(err)
     // Why: hold a confirmed-failure lock through degraded launch so GC can't move the relay before liveness is visible.
@@ -878,7 +914,8 @@ async function repairInstalledNativeDeps(
         err instanceof Error ? err.message : String(err)
       }`
     )
-    return { ownsInstallLock: !terminationUnconfirmed }
+    // The repair aborted mid-flight, so the last verdict is stale: say so rather than publish it.
+    return { ownsInstallLock: !terminationUnconfirmed, ptyJobControl: 'unknown' }
   }
 }
 
@@ -948,6 +985,18 @@ async function acquireRelayLaunchGcFence(
 
 // Why: node-pty and @parcel/watcher are native addons esbuild can't bundle; install them on the remote against its Node/OS.
 // TODO(#1693): ship per-platform tarballs with node-pty prebuilt from CI to skip remote npm install.
+// Scope, measured 2026-08-28 — do not re-derive it:
+//   - The only thing a prebuilt would ADD over the registry package is the three job-object symbols
+//     (assignCurrentProcessToJob / terminateJob / listJobProcessIds) from
+//     config/patches/node-pty@1.1.0.patch. `npm pack` + `strings` on both stock win32 prebuilds find
+//     0 occurrences, against 5 in the locally patched conpty.cc.
+//   - Those symbols live only in src/win/conpty.cc, so the payoff is Windows-only. Linux and macOS
+//     remotes could never gain anything from a prebuilt on this axis.
+//   - Shipping Linux prebuilts is a NET NEGATIVE: the patch's unix hunk is a glibc back-compat shim
+//     that remote node-gyp compilation already makes unnecessary, and a binary built on a newer
+//     runner reintroduces the #9902 glibc hazard (docs/reference/linux-glibc-compatibility.md).
+//   - Decision: do not ship prebuilts. Remotes have no native job control, and the probe below
+//     reports that honestly instead of leaving it indistinguishable from a working one.
 async function installNativeDeps(
   conn: SshConnection,
   remoteDir: string,
@@ -957,7 +1006,7 @@ async function installNativeDeps(
   signal?: AbortSignal,
   resetDeps: RelayNativeDepName[] = [],
   namespace?: RelayInstallNamespace
-): Promise<void> {
+): Promise<RelayPtyJobControlSupport> {
   const writeRelayPackageJson = async (deps: Record<string, string>): Promise<void> => {
     await writeRelayFile(
       conn,
@@ -1068,7 +1117,8 @@ async function installNativeDeps(
           nodePath,
           signal
         )
-        return
+        // No node-pty means nothing to look at, and this path never probed for the symbols.
+        return 'unknown'
       }
     }
     throw err
@@ -1106,6 +1156,7 @@ async function installNativeDeps(
       `[ssh-relay][NPTY-MISSING] native deps installed but require() failed at ${remoteDir} (${platform}). stdout=${probe.output.trim().slice(-200)} stderr=${probe.stderr.trim().slice(-500)}`
     )
   }
+  return probe.ptyJobControl
 }
 
 function resetNativeDepsCommand(
@@ -1283,6 +1334,7 @@ async function probeInstalledNativeDeps(
   missing: RelayNativeDepName[]
   output: string
   stderr: string
+  ptyJobControl: RelayPtyJobControlSupport
 }> {
   // require() catches unloadable installs (wrong arch, missing prebuild, skipped lifecycle script) that require.resolve() and test -d miss.
   const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
@@ -1321,7 +1373,8 @@ async function probeInstalledNativeDeps(
     available: probeOutput.includes(PROBE_OK),
     missing: probeOutput.includes(PROBE_OK) ? [] : missingNativeDepsFromProbe(probeOutput),
     output: probeOutput,
-    stderr: remoteStderr
+    stderr: remoteStderr,
+    ptyJobControl: readRelayPtyJobControlSupport(probeOutput)
   }
 }
 

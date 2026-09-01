@@ -119,7 +119,8 @@ describe('SshRelaySession consumer recovery durability', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
       platform: 'linux-x64',
-      serverBuildId: 'test-relay-build'
+      serverBuildId: 'test-relay-build',
+      ptyJobControl: 'unknown'
     })
   })
 

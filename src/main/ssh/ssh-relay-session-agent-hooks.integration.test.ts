@@ -256,7 +256,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
     const events: CapturedStatus[] = []
     captureAgentStatuses(events)
@@ -310,7 +311,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
     const events: CapturedStatus[] = []
     captureAgentStatuses(events)
@@ -346,7 +348,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
     const events: CapturedStatus[] = []
     captureAgentStatuses(events)
@@ -418,12 +421,14 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
       .mockResolvedValueOnce({
         transport: initialRelay.transport,
         serverBuildId: 'test-relay-build',
-        platform: 'linux-x64'
+        platform: 'linux-x64',
+        ptyJobControl: 'unknown'
       })
       .mockResolvedValueOnce({
         transport: relay.transport,
         serverBuildId: 'test-relay-build',
-        platform: 'linux-x64'
+        platform: 'linux-x64',
+        ptyJobControl: 'unknown'
       })
     const clearListener = vi.fn()
     agentHookServer.setPaneStatusClearListener(clearListener)
@@ -465,7 +470,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
     const events: CapturedStatus[] = []
     captureAgentStatuses(events)
@@ -493,7 +499,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
     const events: CapturedStatus[] = []
     captureAgentStatuses(events)
@@ -524,7 +531,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
 
     session = createSession('conn-explicit-prompt')
@@ -584,7 +592,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
     const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
 
@@ -643,7 +652,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
 
     session = createSession('conn-live-telemetry')
@@ -691,7 +701,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
       transport: relay.transport,
       serverBuildId: 'test-relay-build',
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      ptyJobControl: 'unknown'
     })
 
     session = createSession('conn-replay-marker')
