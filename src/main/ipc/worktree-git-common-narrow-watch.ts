@@ -10,6 +10,7 @@ import type {
 } from './worktree-base-directory-poller'
 import { createSingleFlight } from './single-flight-promise'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
+import { createPollingFallbackRetry } from './worktree-git-common-narrow-watch-fallback-retry'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 
 // The native stream is hosted in the crash-isolated watcher child, never the
@@ -98,8 +99,41 @@ export async function startGitCommonNarrowWatch(
             return
           }
           subscription = fallback
+          pollingFallbackRetry.scheduleNext()
         })
     })
+
+  // Why: usingPollingFallback used to be a one-way latch (issue #17878) — once
+  // the crash fuse tripped, every future session ran the O(n) structural
+  // poller instead of the native stream. Most retries after a genuine fuse
+  // trip still fail (the fuse itself only resets on app relaunch), but a
+  // transient cause — a launch race, an in-flight child termination — can
+  // clear on its own, so it's worth periodically checking rather than never.
+  const tryRecoverNarrowWatch = async (): Promise<boolean> => {
+    if (disposed || subscribing || !usingPollingFallback) {
+      return false
+    }
+    subscribing = true
+    const fallbackSubscription = subscription
+    try {
+      const installed = await trySubscribe(true)
+      if (!installed) {
+        return false
+      }
+      usingPollingFallback = false
+      await fallbackSubscription?.unsubscribe().catch(() => {})
+      if (!disposed) {
+        await reconciliation.ensureStarted()
+        // The fallback already applied every structural change it saw; this
+        // just lets the caller re-sync now that the cheaper stream is back.
+        onEvents([{ type: 'update', path: worktreesDir }])
+      }
+      return true
+    } finally {
+      subscribing = false
+    }
+  }
+  const pollingFallbackRetry = createPollingFallbackRetry(tryRecoverNarrowWatch)
 
   const tryUpgradeToNarrowWatch = async (): Promise<void> => {
     if (disposed || subscribing || subscription) {
@@ -152,7 +186,10 @@ export async function startGitCommonNarrowWatch(
     reconciliation.notifyWindowBecameVisible()
   })
 
-  const trySubscribe = async (): Promise<boolean> => {
+  // Why: isRecoveryAttempt is set only by tryRecoverNarrowWatch, still inside
+  // its own polling-fallback retry cycle — a failure there must not spin up a
+  // second, redundant fallback subscription alongside the one already running.
+  const trySubscribe = async (isRecoveryAttempt = false): Promise<boolean> => {
     try {
       const s = await stat(worktreesDir)
       if (!s.isDirectory()) {
@@ -278,7 +315,7 @@ export async function startGitCommonNarrowWatch(
       if (disposed || generation !== nativeSubscriptionGeneration) {
         return false
       }
-      if (shouldUsePollingFallback(error)) {
+      if (!isRecoveryAttempt && shouldUsePollingFallback(error)) {
         await ensurePollingFallback()
         return subscription !== null
       }
@@ -297,6 +334,7 @@ export async function startGitCommonNarrowWatch(
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()
+      pollingFallbackRetry.cancel()
       unsubscribeVisibility()
       await pollingFallback.pending()?.catch(() => {})
       nativeSubscriptionGeneration++
