@@ -15,6 +15,7 @@
     "../src/main/ipc/worktree-metadata-merge.ts",
     "../src/main/ipc/worktree-path-comparison.ts",
     "../src/main/wsl-availability.ts",
+    "../src/main/wsl-directory-probe-command.ts",
     "../src/main/wsl-distro-list-output.ts",
     "../src/main/wsl-distro-retry.ts",
     "../src/main/wsl-running-distro-cache.ts",
