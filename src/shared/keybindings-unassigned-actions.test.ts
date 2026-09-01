@@ -215,6 +215,39 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps the scoped tab closes unassigned beside the bound close actions (#16614)', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+    const scopedCloses: readonly KeybindingActionId[] = [
+      'tab.closeOthers',
+      'tab.closeToRight',
+      'tab.closeToLeft'
+    ]
+
+    for (const actionId of scopedCloses) {
+      for (const platform of platforms) {
+        expect(getEffectiveKeybindingsForAction(actionId, platform)).toEqual([])
+      }
+      const definition = getKeybindingDefinition(actionId)
+      expect(definition?.group).toBe('Tabs')
+      expect(definition?.scope).toBe('tabs')
+      expect(definition?.searchKeywords).toEqual(expect.arrayContaining(['close', 'tabs']))
+    }
+
+    expect(getKeybindingDefinition('tab.closeOthers')?.title).toBe('Close other tabs')
+    expect(getKeybindingDefinition('tab.closeToRight')?.title).toBe('Close tabs to the right')
+    expect(getKeybindingDefinition('tab.closeToLeft')?.title).toBe('Close tabs to the left')
+
+    // The bound close actions keep their chords; the scoped ones only match once assigned.
+    expect(getEffectiveKeybindingsForAction('tab.close', 'darwin')).toEqual(['Mod+W'])
+    const chord = { key: 'w', code: 'KeyW', control: false, meta: true, alt: true, shift: true }
+    expect(keybindingMatchesAction('tab.closeOthers', chord, 'darwin')).toBe(false)
+    expect(
+      keybindingMatchesAction('tab.closeOthers', chord, 'darwin', {
+        'tab.closeOthers': ['Mod+Alt+Shift+W']
+      })
+    ).toBe(true)
+  })
+
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId

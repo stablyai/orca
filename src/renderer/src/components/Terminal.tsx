@@ -184,6 +184,7 @@ import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-p
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
+import { resolveTabCloseScopeTargets } from './tab-bar/tab-close-scope-targets'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -2317,6 +2318,34 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      // Scoped closes around the focused tab — unbound by default, assignable in Settings (#16614).
+      // Why: mirror the tab context menu by walking the active strip's visible order.
+      const closeScope = matchShortcut('tab.closeOthers')
+        ? ('others' as const)
+        : matchShortcut('tab.closeToRight')
+          ? ('right' as const)
+          : matchShortcut('tab.closeToLeft')
+            ? ('left' as const)
+            : null
+      if (!e.repeat && closeScope !== null) {
+        // Why: the floating panel owns its own strip; a chord fired there must not close main-window tabs.
+        if (isEventTargetInsideFloatingWorkspacePanel(e.target) || floatingWorkspaceFocused) {
+          return
+        }
+        e.preventDefault()
+        notifyTerminalCapture(
+          closeScope === 'others'
+            ? 'tab.closeOthers'
+            : closeScope === 'right'
+              ? 'tab.closeToRight'
+              : 'tab.closeToLeft'
+        )
+        closeTabBarTabs(
+          resolveTabCloseScopeTargets(useAppStore.getState(), activeWorktreeId, closeScope)
+        )
+        return
+      }
+
       // Ctrl+Tab - quick-toggle to the previously focused tab in this group.
       if (
         matchesRecentTabSwitcherChord(e, shortcutPlatform, keybindings, {
@@ -2405,6 +2434,7 @@ function Terminal(): React.JSX.Element | null {
     closeBrowserTab,
     handleCloseFile,
     handleCloseAllFiles,
+    closeTabBarTabs,
     keybindings,
     mobileEmulatorEnabled,
     terminalShortcutPolicy

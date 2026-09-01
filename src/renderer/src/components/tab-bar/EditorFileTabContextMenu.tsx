@@ -105,6 +105,9 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const closeOthersShortcut = useOptionalShortcutLabel('tab.closeOthers')
+  const closeToRightShortcut = useOptionalShortcutLabel('tab.closeToRight')
+  const closeToLeftShortcut = useOptionalShortcutLabel('tab.closeToLeft')
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -161,6 +164,9 @@ export function EditorFileTabContextMenu({
         <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
           <CopyX className="size-3.5" />
           {translate('components.tab.bar.EditorFileTabContextMenu.closeOthers', 'Close Others')}
+          {closeOthersShortcut ? (
+            <DropdownMenuShortcut>{closeOthersShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseAll}>
           <ListX className="size-3.5" />
@@ -178,6 +184,9 @@ export function EditorFileTabContextMenu({
             'auto.components.tab.bar.EditorFileTabContextMenu.e5ff31ccaf',
             'Close Tabs To The Right'
           )}
+          {closeToRightShortcut ? (
+            <DropdownMenuShortcut>{closeToRightShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
           <PanelLeftClose className="size-3.5" />
@@ -185,6 +194,9 @@ export function EditorFileTabContextMenu({
             'components.tab.bar.EditorFileTabContextMenu.closeTabsToLeft',
             'Close Tabs To The Left'
           )}
+          {closeToLeftShortcut ? (
+            <DropdownMenuShortcut>{closeToLeftShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {canShowMarkdownPreview ? (

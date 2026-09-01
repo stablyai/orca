@@ -252,3 +252,24 @@ export function getActiveTabNavOrder(
   }
   return result
 }
+
+/**
+ * The active group's unified tab id, but only when it is present in `order`.
+ *
+ * Split layouts can open the same entity twice, so the unified id is the only way to tell
+ * which copy is focused. Returning null when it isn't in the visible order keeps callers on
+ * backing-id matching during hydration races, instead of colliding the two id domains.
+ */
+export function getActiveGroupTabIdInNavOrder(
+  state: Pick<AppState, 'activeGroupIdByWorktree' | 'groupsByWorktree'>,
+  worktreeId: string,
+  order: readonly VisibleTabRef[]
+): string | null {
+  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  const group = activeGroupId
+    ? (state.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === activeGroupId)
+    : undefined
+  return group?.activeTabId && order.some((entry) => entry.tabId === group.activeTabId)
+    ? group.activeTabId
+    : null
+}

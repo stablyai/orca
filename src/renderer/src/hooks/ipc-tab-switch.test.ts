@@ -11,7 +11,10 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('@/components/tab-bar/group-tab-order', () => ({
+// Only the nav order is stubbed; the active-group resolver keeps its real behaviour so the
+// split-layout disambiguation these tests cover still runs.
+vi.mock(import('@/components/tab-bar/group-tab-order'), async (importOriginal) => ({
+  ...(await importOriginal()),
   getActiveTabNavOrder: getActiveTabNavOrderMock
 }))
 

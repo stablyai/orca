@@ -125,6 +125,9 @@ export function SortableTabContextMenu({
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
+  const closeOthersShortcut = useOptionalShortcutLabel('tab.closeOthers')
+  const closeToRightShortcut = useOptionalShortcutLabel('tab.closeToRight')
+  const closeToLeftShortcut = useOptionalShortcutLabel('tab.closeToLeft')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
 
   return (
@@ -167,6 +170,9 @@ export function SortableTabContextMenu({
         <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
           <ListX className="size-3.5" />
           {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
+          {closeOthersShortcut ? (
+            <DropdownMenuShortcut>{closeOthersShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
           <PanelRightClose className="size-3.5" />
@@ -174,6 +180,9 @@ export function SortableTabContextMenu({
             'auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e',
             'Close Tabs To The Right'
           )}
+          {closeToRightShortcut ? (
+            <DropdownMenuShortcut>{closeToRightShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseToLeft(tab.id)} disabled={!hasTabsToLeft}>
           <PanelLeftClose className="size-3.5" />
@@ -181,6 +190,9 @@ export function SortableTabContextMenu({
             'components.tab.bar.SortableTabContextMenu.closeTabsToLeft',
             'Close Tabs To The Left'
           )}
+          {closeToLeftShortcut ? (
+            <DropdownMenuShortcut>{closeToLeftShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onRenameOpen}>
