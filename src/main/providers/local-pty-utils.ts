@@ -82,9 +82,15 @@ export function resolveUnixShellPath(shellPath: string): string {
  * Why: when Electron packages the app via asar, the native spawn-helper
  * binary may lose its +x permission. This function detects and repairs
  * that so pty.spawn() does not fail with EACCES on first launch.
+ *
+ * macOS only. node-pty builds spawn-helper inside its binding.gyp `OS=="mac"` block and
+ * execs it only under `#if defined(__APPLE__)`; every other platform forks directly, so
+ * there is no such binary to repair. The guard used to read `!== 'win32'`, which was
+ * harmless here — the candidate loop simply found nothing — but it is the same false
+ * premise that made every Linux deployment boot `degraded` from the precondition check.
  */
 export function ensureNodePtySpawnHelperExecutable(): void {
-  if (didEnsureSpawnHelperExecutable || process.platform === 'win32') {
+  if (didEnsureSpawnHelperExecutable || process.platform !== 'darwin') {
     return
   }
   didEnsureSpawnHelperExecutable = true

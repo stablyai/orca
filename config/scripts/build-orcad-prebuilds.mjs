@@ -177,10 +177,14 @@ function build() {
   copyFileSync(builtBinary, join(slotDir, 'pty.node'))
   console.log(`[orcad-prebuilds] stored ${slot}/pty.node`)
 
-  // Why spawn-helper ships too: on Unix node-pty posix_spawns build/Release/spawn-helper,
-  // so a slot without it installs cleanly and then fails ENOENT the first time a user
-  // opens a terminal. Windows has no spawn-helper.
-  if (process.platform !== 'win32') {
+  // Why darwin and not `!== 'win32'`: node-pty builds spawn-helper inside binding.gyp's
+  // `OS=="mac"` block and execs it only under `#if defined(__APPLE__)`, and the Orca patch
+  // adds only ldflags to the linux block. A macOS slot without the helper installs cleanly
+  // and then fails ENOENT the first time a user opens a terminal, so the throw stays for
+  // darwin. On Linux node-gyp never emits one, so the old guard threw on all four `linux-*`
+  // entries of MATRIX_SLOTS. Matches ensure-native-runtime.mjs and rebuild-native-deps.mjs,
+  // which were already darwin-only.
+  if (process.platform === 'darwin') {
     const helperSource = join(dirname(builtBinary), 'spawn-helper')
     if (!existsSync(helperSource)) {
       throw new Error(`[orcad-prebuilds] spawn-helper missing at ${helperSource}`)

@@ -17,6 +17,14 @@ const LINUX_GLIBC: NativeHostAbi = {
   nodeAbi: '127'
 }
 
+const DARWIN_ARM64: NativeHostAbi = {
+  platform: 'darwin',
+  arch: 'arm64',
+  libc: 'none',
+  glibcVersion: null,
+  nodeAbi: '127'
+}
+
 const dirs: string[] = []
 const temp = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'orcad-slot-'))
@@ -48,15 +56,30 @@ describe('resolveOrcadPrebuildsDir', () => {
 })
 
 describe('installPrebuiltSlot', () => {
-  it('installs the slot binary and spawn-helper into build/Release', () => {
+  it('installs the slot binary, and no spawn-helper, on linux', () => {
     const prebuilds = temp()
     const nodePtyDir = temp()
+    // The fixture ships a helper deliberately: a real linux slot never does, and copying
+    // one anyway would recreate the premise that made every Linux host boot `degraded` —
+    // node-pty builds spawn-helper only under binding.gyp's `OS=="mac"` and execs it only
+    // under `#if defined(__APPLE__)`.
     stageSlot(prebuilds, 'linux-x64-glibc')
 
     const outcome = installPrebuiltSlot({ abi: LINUX_GLIBC, nodePtyDir, prebuildsDir: prebuilds })
 
-    expect(outcome).toEqual({ installed: true, slot: 'linux-x64-glibc', spawnHelper: true })
+    expect(outcome).toEqual({ installed: true, slot: 'linux-x64-glibc' })
     expect(existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))).toBe(true)
+    expect(existsSync(join(nodePtyDir, 'build', 'Release', 'spawn-helper'))).toBe(false)
+  })
+
+  it('installs the spawn-helper executable on darwin, which is the one platform that execs it', () => {
+    const prebuilds = temp()
+    const nodePtyDir = temp()
+    stageSlot(prebuilds, 'darwin-arm64')
+
+    const outcome = installPrebuiltSlot({ abi: DARWIN_ARM64, nodePtyDir, prebuildsDir: prebuilds })
+
+    expect(outcome).toEqual({ installed: true, slot: 'darwin-arm64' })
     // Without the executable bit every spawn fails EACCES at the moment a user opens a terminal.
     const helper = statSync(join(nodePtyDir, 'build', 'Release', 'spawn-helper'))
     expect(helper.mode & 0o111).not.toBe(0)

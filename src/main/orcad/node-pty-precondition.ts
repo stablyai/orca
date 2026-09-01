@@ -302,11 +302,14 @@ export function checkNodePtyPrecondition(
     }
   }
 
-  // Loaded. The remaining way terminals fail is spawn-time: node-pty posix_spawns
-  // build/Release/spawn-helper, and a missing one turns every terminal.create into ENOENT
-  // on a host that otherwise looks healthy. That is a degradation, not a boot blocker.
+  // Loaded. The remaining way terminals fail is spawn-time, but only on macOS: node-pty
+  // builds `spawn-helper` inside its binding.gyp `OS=="mac"` block and its native
+  // `pty.cc` reads the helper path only under `#if defined(__APPLE__)`, so a Linux host
+  // forks directly and never execs it. Guarding this on `!== 'win32'` made every Linux
+  // deployment boot `degraded` while its own daemon self-test reported a healthy
+  // pty-spawn round trip in the same output.
   const loadedDir = result.stdout.split(PROBE_OK_TOKEN)[1]?.trim().split('\n')[0]?.trim()
-  if (abi.platform !== 'win32') {
+  if (abi.platform === 'darwin') {
     const helper = join(loadedDir || join(nodePtyDir, 'build', 'Release'), 'spawn-helper')
     if (!isExecutableFile(helper)) {
       return {

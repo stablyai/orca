@@ -26,7 +26,7 @@ export type PrebuiltSlotManifest = {
 }
 
 export type PrebuiltSlotOutcome =
-  | { installed: true; slot: string; spawnHelper: boolean }
+  | { installed: true; slot: string }
   | {
       installed: false
       slot: string
@@ -70,7 +70,8 @@ export function readPrebuiltSlotManifest(prebuildsDir: string): PrebuiltSlotMani
 }
 
 /**
- * Copy `<prebuilds>/<slot>/pty.node` (and `spawn-helper`) into node-pty's `build/Release`.
+ * Copy `<prebuilds>/<slot>/pty.node` (and, on macOS only, `spawn-helper`) into node-pty's
+ * `build/Release`.
  *
  * Refuses on an ABI mismatch instead of copying: a binary built for another
  * `NODE_MODULE_VERSION` cannot load, and installing it would replace a "no prebuilt"
@@ -103,18 +104,22 @@ export function installPrebuiltSlot(options: {
   mkdirSync(releaseDir, { recursive: true })
   copyFileSync(source, join(releaseDir, 'pty.node'))
 
-  // Why this matters as much as pty.node: on Unix node-pty posix_spawns
-  // build/Release/spawn-helper. Without it every spawn fails with ENOENT at the moment
-  // a user opens a terminal, long after the "install succeeded" line.
-  let spawnHelper = false
-  if (options.abi.platform !== 'win32') {
+  // macOS only, and the guard says so rather than saying `!== 'win32'`: node-pty builds
+  // spawn-helper inside its binding.gyp `OS=="mac"` block and its native pty.cc reads the
+  // helper path only under `#if defined(__APPLE__)`. A Linux host forks directly and never
+  // execs it, so no slot ships one and there is nothing to install. Asserting otherwise is
+  // what made every Linux deployment boot `degraded` before it was fixed in
+  // node-pty-precondition.ts, and the claim outliving the fix is how that comes back.
+  if (options.abi.platform === 'darwin') {
     const helperSource = join(prebuildsDir, slot, 'spawn-helper')
     if (existsSync(helperSource)) {
       const helperDest = join(releaseDir, 'spawn-helper')
       copyFileSync(helperSource, helperDest)
       chmodSync(helperDest, 0o755)
-      spawnHelper = true
     }
   }
-  return { installed: true, slot, spawnHelper }
+  // Why no spawnHelper in the outcome: nothing read it, and once the guard above became
+  // darwin-only its `false` meant "normal on Linux" rather than "something is wrong" —
+  // an inverted field nobody consumes is worse than no field.
+  return { installed: true, slot }
 }
