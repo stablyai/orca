@@ -30,6 +30,7 @@ import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus
 import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
 import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
 import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
+import { useBrowserPageViewportShortcut } from './host-guest/use-browser-page-viewport-shortcut'
 import { useClientHostedGuestActivationFocus } from './host-guest/use-client-hosted-guest-activation-focus'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { BrowserLoadFailureOverlay } from './navigate/browser-load-failure-overlay'
@@ -151,6 +152,7 @@ export function ClientHostedBrowserPagePane({
     chromeShortcutScope,
     setFindOpen
   })
+  useBrowserPageViewportShortcut({ browserPage: browserTab, workspaceId, chromeShortcutScope })
   useBrowserPageWebviewShortcuts({
     browserTabId: browserTab.id,
     isActive,

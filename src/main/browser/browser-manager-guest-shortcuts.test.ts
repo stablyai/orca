@@ -336,7 +336,8 @@ describe('browserManager', () => {
     browserManager.setSettingsResolver(() => ({
       keybindings: {
         'tab.newBrowser': ['Mod+Alt+B'],
-        'worktree.quickOpen': ['Mod+Shift+O']
+        'worktree.quickOpen': ['Mod+Shift+O'],
+        'browser.toggleMobileViewport': ['Mod+Alt+V']
       }
     }))
 
@@ -411,8 +412,23 @@ describe('browserManager', () => {
     )
     expect(customQuickOpenPreventDefault).toHaveBeenCalledTimes(1)
 
+    const viewportPreventDefault = vi.fn()
+    beforeInputHandler?.(
+      { preventDefault: viewportPreventDefault },
+      {
+        type: 'keyDown',
+        code: 'KeyV',
+        key: 'v',
+        ...primary,
+        alt: true,
+        shift: false
+      }
+    )
+    expect(viewportPreventDefault).toHaveBeenCalledTimes(1)
+
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:newBrowserTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:openQuickOpen')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:toggleBrowserViewport', 'browser-1')
   })
 
   it('forwards browser guest Ctrl+Tab keydown and Ctrl release', () => {

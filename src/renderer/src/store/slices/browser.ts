@@ -80,6 +80,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
+import { getBrowserViewportPreset } from '../../../../shared/browser-viewport-presets'
 import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -1830,8 +1831,18 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!workspace) {
         return s
       }
+      const currentPreset = getBrowserViewportPreset(page.viewportPresetId)
+      const nextPreset = getBrowserViewportPreset(viewportPresetId)
+      const rememberedPresets = {
+        ...(currentPreset?.mobile
+          ? { lastMobileViewportPresetId: currentPreset.id }
+          : { lastNonMobileViewportPresetId: currentPreset?.id ?? null }),
+        ...(nextPreset?.mobile
+          ? { lastMobileViewportPresetId: nextPreset.id }
+          : { lastNonMobileViewportPresetId: nextPreset?.id ?? null })
+      }
       const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
-        entry.id === pageId ? { ...entry, viewportPresetId } : entry
+        entry.id === pageId ? { ...entry, ...rememberedPresets, viewportPresetId } : entry
       )
       return {
         browserPagesByWorkspace: {

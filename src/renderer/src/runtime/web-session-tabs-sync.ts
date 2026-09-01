@@ -2204,7 +2204,9 @@ function buildMirroredBrowserTabs(
         (tab.placement?.kind === 'client' ? existing?.page.loadError : tab.loadError) ?? null,
       createdAt,
       browserRuntimeEnvironmentId: environmentId,
-      viewportPresetId: existing?.page.viewportPresetId ?? null
+      viewportPresetId: existing?.page.viewportPresetId ?? null,
+      lastMobileViewportPresetId: existing?.page.lastMobileViewportPresetId,
+      lastNonMobileViewportPresetId: existing?.page.lastNonMobileViewportPresetId
     }
     // Why: reuse hinges on browserPageEqual comparing workspaceId — the removed-workspace
     // page-list cleanup gates on page.workspaceId matching this entry's workspace.id.
@@ -2794,7 +2796,9 @@ function browserPageEqual(a: BrowserPage, b: BrowserPage): boolean {
     a.loadError?.validatedUrl === b.loadError?.validatedUrl &&
     a.createdAt === b.createdAt &&
     a.browserRuntimeEnvironmentId === b.browserRuntimeEnvironmentId &&
-    a.viewportPresetId === b.viewportPresetId
+    a.viewportPresetId === b.viewportPresetId &&
+    a.lastMobileViewportPresetId === b.lastMobileViewportPresetId &&
+    a.lastNonMobileViewportPresetId === b.lastNonMobileViewportPresetId
   )
 }
 

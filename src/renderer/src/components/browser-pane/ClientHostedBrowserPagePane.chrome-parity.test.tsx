@@ -80,6 +80,7 @@ beforeEach(() => {
         findRequests.subscribe(callback),
       onBrowserHistoryNavigate: historyNavigate.subscribe,
       onReloadBrowserPage: (callback: () => void) => reloadRequests.subscribe(callback),
+      onToggleBrowserViewport: () => () => {},
       onHardReloadBrowserPage: (callback: () => void) => hardReloadRequests.subscribe(callback),
       onZoomBrowserPage: zoomRequests.subscribe,
       writeClipboardText

@@ -8,6 +8,23 @@ import {
 import type { KeybindingActionId, KeybindingPlatform } from './keybindings'
 
 describe('keybindings', () => {
+  it('keeps browser viewport toggling unassigned on every platform', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('browser.toggleMobileViewport', platform)).toEqual([])
+    }
+
+    const definition = getKeybindingDefinition('browser.toggleMobileViewport')
+    expect(definition).toMatchObject({
+      title: 'Toggle Mobile Viewport',
+      group: 'Browser',
+      scope: 'browser'
+    })
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['viewport', 'mobile', 'desktop', 'responsive', 'toggle'])
+    )
+  })
+
   it('keeps equalize pane sizes unassigned until users customize it', () => {
     expect(getEffectiveKeybindingsForAction('terminal.equalizePaneSizes', 'darwin')).toEqual([])
     expect(

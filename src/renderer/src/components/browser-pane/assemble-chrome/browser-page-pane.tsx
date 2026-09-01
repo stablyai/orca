@@ -34,6 +34,7 @@ import { useWebviewGuestFocus } from './browser-page-guest-focus'
 import { useBrowserPageFindShortcuts } from './use-browser-page-find-shortcuts'
 import { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
 import { useBrowserPageKeyboardShortcuts } from '../host-guest/use-browser-page-keyboard-shortcuts'
+import { useBrowserPageViewportShortcut } from '../host-guest/use-browser-page-viewport-shortcut'
 import { useBrowserPageMarkupCapture } from '../annotate/use-browser-page-markup-capture'
 import { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
 import { useBrowserPageReloadActions } from '../navigate/use-browser-page-reload-actions'
@@ -276,6 +277,7 @@ export function BrowserPagePane({
     chromeShortcutScope,
     setFindOpen
   })
+  useBrowserPageViewportShortcut({ browserPage: browserTab, workspaceId, chromeShortcutScope })
   useBrowserPageKeyboardShortcuts({
     browserTabId: browserTab.id,
     isActive,
