@@ -73,19 +73,18 @@ export async function startGitCommonNarrowWatch(
         .unsubscribe()
         .catch(() => {})
         .then(() =>
+          // Crash fuse tripped: this poller is now the sole change signal until a
+          // future existence-poll upgrade (follow-up: #17878). Its own per-entry
+          // dir-signature gate (worktree-git-common-entry-snapshot.ts) already keeps
+          // an unchanged entry to a single stat, so a fixed `pollIntervalMs` cadence
+          // stays cheap at high worktree counts without needing to stretch itself.
           startGitCommonPolling(
             target.path,
             onEvents,
             pollIntervalMs,
             visibility,
             onFullScan,
-            false,
-            () => [],
-            // Crash fuse tripped: this poller is now the sole change signal until a
-            // future existence-poll upgrade (follow-up: #17878). adaptiveCadence keeps
-            // add/remove and HEAD detection on `pollIntervalMs` while scaling only the
-            // O(n) per-entry sweep, so this fallback degrades gracefully at high counts.
-            { adaptiveCadence: true }
+            false
           )
         )
         .then(async (fallback) => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
@@ -10,15 +10,15 @@ import type {
 } from './worktree-base-directory-poller'
 
 // Why: measure the fan-out this poller issues per scan (peak concurrent `stat`
-// calls, `readdir` call count as a proxy for "a scan started") without
-// depending on real disk timing (#17828). `entryZeroHeadStatCalls` tracks stats
-// on a specific pre-existing entry's HEAD file, which only a per-entry sweep
-// (not the cheap structural tripwire) re-reads.
-const { statDelayMs, readdirCalls, concurrency, entryZeroHeadStatCalls } = vi.hoisted(() => ({
+// calls, `readdir` call count as a proxy for "a tick ran") without depending on
+// real disk timing (#17828). `entryZeroStatCalls` tracks every stat under a
+// specific pre-existing entry (its dir plus every leaf), used to prove the
+// entry-dir signature gate keeps an unchanged entry to one stat per tick.
+const { statDelayMs, readdirCalls, concurrency, entryZeroStatCalls } = vi.hoisted(() => ({
   statDelayMs: { current: 0 },
   readdirCalls: { count: 0 },
   concurrency: { current: 0, peak: 0 },
-  entryZeroHeadStatCalls: { count: 0 }
+  entryZeroStatCalls: { count: 0 }
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -33,8 +33,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       concurrency.current += 1
       concurrency.peak = Math.max(concurrency.peak, concurrency.current)
       const path = args[0]
-      if (typeof path === 'string' && path.endsWith(`wt-0${sep}HEAD`)) {
-        entryZeroHeadStatCalls.count += 1
+      const entryZeroSegment = `${sep}wt-0`
+      if (
+        typeof path === 'string' &&
+        (path.endsWith(entryZeroSegment) || path.includes(`${entryZeroSegment}${sep}`))
+      ) {
+        entryZeroStatCalls.count += 1
       }
       try {
         if (statDelayMs.current > 0) {
@@ -77,7 +81,7 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     readdirCalls.count = 0
     concurrency.current = 0
     concurrency.peak = 0
-    entryZeroHeadStatCalls.count = 0
+    entryZeroStatCalls.count = 0
   })
 
   afterEach(async () => {
@@ -113,57 +117,95 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     expect(readdirCalls.count).toBeLessThan(10)
   })
 
-  it('stretches only the per-entry sweep cadence, keeping the structural tripwire on pollIntervalMs', async () => {
-    const commonDir = await makeCommonDir(2)
+  it('costs exactly one stat per tick for an unchanged entry', async () => {
+    const commonDir = await makeCommonDir(1)
     dirsToRemove.push(commonDir)
-    statDelayMs.current = 60
-    const baseIntervalMs = 20
-    const sub = await startGitCommonPolling(
-      commonDir,
-      () => {},
-      baseIntervalMs,
-      alwaysVisible,
-      undefined,
-      true,
-      () => [],
-      { adaptiveCadence: true }
-    )
-    cleanups.push(() => sub.unsubscribe())
-
-    // Let the bootstrap snapshot's own (unconditional) sweep settle, then measure.
-    await new Promise((resolve) => setTimeout(resolve, baseIntervalMs * 2))
-    readdirCalls.count = 0
-    entryZeroHeadStatCalls.count = 0
-    // A scan several times slower than the 20ms base interval stretches the sweep's
-    // own cadence, but the cheap readdir/dir-signature tripwire must keep firing
-    // every ~baseIntervalMs regardless — worktree add/remove and HEAD must not
-    // inherit the sweep's stretch (#17828 follow-up: staleness trade-off).
-    await vi.waitFor(
-      () => {
-        expect(readdirCalls.count).toBeGreaterThan(3)
-      },
-      { timeout: 2_000 }
-    )
-    // wt-0 already existed at bootstrap, so a tripwire-only tick must carry its
-    // entry over rather than re-stat it; far fewer sweeps than tripwire ticks ran.
-    expect(entryZeroHeadStatCalls.count).toBeLessThan(readdirCalls.count)
-  })
-
-  it('does not stretch cadence for callers that opt out of adaptive cadence', async () => {
-    const commonDir = await makeCommonDir(2)
-    dirsToRemove.push(commonDir)
-    statDelayMs.current = 0
     const pollIntervalMs = 20
     const sub = await startGitCommonPolling(commonDir, () => {}, pollIntervalMs, alwaysVisible)
     cleanups.push(() => sub.unsubscribe())
 
+    // Let the bootstrap snapshot (which always fully reads every entry once) settle.
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     readdirCalls.count = 0
-    // Fixed cadence: several scans should land within a handful of intervals.
+    entryZeroStatCalls.count = 0
     await vi.waitFor(
       () => {
-        expect(readdirCalls.count).toBeGreaterThanOrEqual(2)
+        expect(readdirCalls.count).toBeGreaterThanOrEqual(5)
       },
       { timeout: 2_000 }
+    )
+    // Without the entry-dir signature gate, an unchanged entry still costs ~6
+    // stats every tick (HEAD/gitdir/locked/config.worktree/logs/HEAD/index).
+    // With the gate, only the entry dir itself is stat'd once nothing changed —
+    // one stat per tick, in lockstep with the readdir tripwire.
+    expect(entryZeroStatCalls.count).toBeLessThanOrEqual(readdirCalls.count + 1)
+    expect(entryZeroStatCalls.count).toBeGreaterThanOrEqual(readdirCalls.count - 1)
+  })
+
+  it('detects a HEAD rewrite via lock+rename on the next tick', async () => {
+    const commonDir = await makeCommonDir(1)
+    dirsToRemove.push(commonDir)
+    const events: WorktreeBasePollEvent[][] = []
+    const pollIntervalMs = 20
+    const sub = await startGitCommonPolling(
+      commonDir,
+      (batch) => events.push(batch),
+      pollIntervalMs,
+      alwaysVisible
+    )
+    cleanups.push(() => sub.unsubscribe())
+    // Let the bootstrap snapshot settle before mutating.
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+
+    const entryDir = join(commonDir, 'worktrees', 'wt-0')
+    const headPath = join(entryDir, 'HEAD')
+    const headLockPath = join(entryDir, 'HEAD.lock')
+    // Every real git ref write goes through a lock file + rename inside the entry
+    // dir (never an in-place overwrite), which moves the entry dir's own signature.
+    await writeFile(headLockPath, 'ref: refs/heads/feature\n')
+    await rename(headLockPath, headPath)
+
+    await vi.waitFor(
+      () => {
+        expect(events.flat()).toContainEqual({ type: 'update', path: headPath })
+      },
+      { timeout: pollIntervalMs * 10 }
+    )
+  })
+
+  it('detects an in-place gitdir rewrite only once the periodic backstop rescans it', async () => {
+    const commonDir = await makeCommonDir(1)
+    dirsToRemove.push(commonDir)
+    const events: WorktreeBasePollEvent[][] = []
+    const pollIntervalMs = 10
+    const sub = await startGitCommonPolling(
+      commonDir,
+      (batch) => events.push(batch),
+      pollIntervalMs,
+      alwaysVisible
+    )
+    cleanups.push(() => sub.unsubscribe())
+    // Let the bootstrap snapshot settle before mutating.
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+
+    const entryDir = join(commonDir, 'worktrees', 'wt-0')
+    const gitdirPath = join(entryDir, 'gitdir')
+    // `gitdir` is the one structural leaf git rewrites in place (worktree move/repair),
+    // so the entry dir's own signature never moves — the periodic ungated backstop
+    // (INDEX_BACKSTOP_TICKS = 15) is the only thing that catches it.
+    await writeFile(gitdirPath, `${join(commonDir, 'checkout-moved', '.git')}\n`)
+
+    // Not caught by the next several ticks: the gate stays closed since nothing
+    // moved the entry dir's own signature.
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs * 5))
+    expect(events.flat()).not.toContainEqual({ type: 'update', path: gitdirPath })
+
+    // Eventually caught regardless of the gate, once tick 15 forces the periodic backstop.
+    await vi.waitFor(
+      () => {
+        expect(events.flat()).toContainEqual({ type: 'update', path: gitdirPath })
+      },
+      { timeout: pollIntervalMs * 40 }
     )
   })
 
