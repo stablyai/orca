@@ -230,9 +230,12 @@ export async function readGitCommonHeadIdentities(
   }
 
   let entryNames = cache.entryNames
+  let listingStale = false
   if (entryNames === null || scope.all || scope.listing) {
     const listing = await listLinkedEntryNames(commonDirPath)
-    if (listing !== null) {
+    if (listing === null) {
+      listingStale = true
+    } else {
       entryNames = listing
       const listed = new Set(listing)
       for (const name of cache.entries.keys()) {
@@ -267,7 +270,10 @@ export async function readGitCommonHeadIdentities(
   })
   applyResolvedRefOids(cache, resolved)
 
-  cache.entryNames = entryNames
+  // A failed listing means the add/remove that triggered this burst is not in
+  // the candidate set yet, so forget the listing rather than wait for another
+  // listing event to arrive: the next refresh re-enumerates whatever its scope.
+  cache.entryNames = listingStale ? null : entryNames
   const identities: WorktreeHeadIdentity[] = cache.primary ? [cache.primary] : []
   for (const name of entryNames) {
     const identity = cache.entries.get(name)

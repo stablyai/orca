@@ -116,6 +116,30 @@ describe('refreshWorktreeHeadIdentities', () => {
     expect(lastScope()).toEqual(PRIMARY_HEAD_IDENTITY_SCOPE)
   })
 
+  it('still takes the periodic re-baseline when only empty-scope events arrive', async () => {
+    const host = makeHost()
+    const state = createWorktreeHeadIdentityRefreshState()
+    await refreshWorktreeHeadIdentities(host, state, false)
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+
+    // `git worktree lock`/`unlock` and sparse toggles classify to the empty
+    // scope. They must not be able to starve the re-baseline that bounds the
+    // window where a ref moved with no event under any admin dir.
+    vi.advanceTimersByTime(HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS)
+    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([identity('bbb')])
+    await refreshWorktreeHeadIdentities(host, state, true, EMPTY_HEAD_IDENTITY_SCOPE)
+
+    expect(lastScope()).toEqual(FULL_HEAD_IDENTITY_SCOPE)
+    expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1', [
+      identity('bbb')
+    ])
+
+    // The promotion also re-arms the interval, so the next empty burst is free.
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+    await refreshWorktreeHeadIdentities(host, state, true, EMPTY_HEAD_IDENTITY_SCOPE)
+    expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
+  })
+
   it('merges the scopes of refreshes queued behind an in-flight read', async () => {
     const host = makeHost()
     const state = createWorktreeHeadIdentityRefreshState()

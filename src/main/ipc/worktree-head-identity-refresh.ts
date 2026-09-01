@@ -89,12 +89,15 @@ export async function refreshWorktreeHeadIdentities(
     state.queuedEmit ||= emit
     return
   }
+  // Resolve BEFORE the skip: an empty scope is still an opportunity to take the
+  // periodic re-baseline, and a repo whose only churn is `git worktree
+  // lock`/`unlock` or a sparse toggle must not be able to starve it forever.
+  const effectiveScope = resolveScope(state, scope)
   // Nothing the burst touched can move a head (a `locked` or `config.worktree`
-  // write), and the baseline is already established: read nothing.
-  if (state.baseline !== null && isEmptyHeadIdentityScope(scope)) {
+  // write) and no re-baseline is due: read nothing.
+  if (state.baseline !== null && isEmptyHeadIdentityScope(effectiveScope)) {
     return
   }
-  const effectiveScope = resolveScope(state, scope)
   state.inFlight = true
   try {
     const identities = await readGitCommonHeadIdentities(host.path, state.cache, effectiveScope)

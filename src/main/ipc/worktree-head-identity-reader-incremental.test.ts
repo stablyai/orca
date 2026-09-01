@@ -197,6 +197,19 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
 
     expect(headOf(identities, pathA)).toBe(OID_B)
     expect(headOf(identities, pathB)).toBe(OID_C)
+    // The add/remove that triggered the burst is still unseen, so the next
+    // refresh must re-enumerate whatever scope it is given.
+    expect(cache.entryNames).toBeNull()
+
+    await rm(join(commonDir, 'worktrees'), { force: true })
+    await writeLooseRef(commonDir, 'refs/heads/feature-c', OID_D)
+    const pathC = await addLinkedWorktree(commonDir, 'wt-c', 'ref: refs/heads/feature-c')
+    const recovered = await readGitCommonHeadIdentities(
+      commonDir,
+      cache,
+      headIdentityScopeForEntry('wt-a')
+    )
+    expect(headOf(recovered, pathC)).toBe(OID_D)
   })
 
   it('reports an absent worktrees dir as genuinely empty', async () => {
