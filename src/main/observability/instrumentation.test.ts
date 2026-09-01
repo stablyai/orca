@@ -3,6 +3,7 @@ import { _resetTracerForTests, setActiveSink, type TracerSink } from './tracer'
 import {
   _gitSpanSamplingBucketCountForTests,
   _resetGitSpanSamplingForTests,
+  addWorktreeCreatePhaseAttributes,
   withGitSpan
 } from './instrumentation'
 
@@ -165,5 +166,52 @@ describe('withGitSpan sampling', () => {
     await runGitSpan({ args: ['status'], cwd: '/fresh-repo' }, 5)
 
     expect(_gitSpanSamplingBucketCountForTests()).toBe(1)
+  })
+})
+
+describe('addWorktreeCreatePhaseAttributes', () => {
+  function capture(): {
+    attributes: Record<string, unknown>
+    span: Parameters<typeof addWorktreeCreatePhaseAttributes>[0]
+  } {
+    const attributes: Record<string, unknown> = {}
+    const span = {
+      setAttribute: (key: string, value: unknown) => {
+        attributes[key] = value
+      }
+    } as unknown as Parameters<typeof addWorktreeCreatePhaseAttributes>[0]
+    return { attributes, span }
+  }
+
+  it('counts concurrent phases once when measuring unattributed time', () => {
+    const { attributes, span } = capture()
+    // Create resolves shared directories and .worktreeinclude concurrently; summing their
+    // durations would claim 400ms of coverage for a 200ms window.
+    addWorktreeCreatePhaseAttributes(span, {
+      totalDurationMs: 1000,
+      phases: [
+        { phase: 'resolve_shared_directories', startedAtMs: 100, durationMs: 200 },
+        { phase: 'resolve_worktreeinclude', startedAtMs: 150, durationMs: 150 }
+      ]
+    })
+
+    expect(attributes['worktree.create.phase.resolve_shared_directories_ms']).toBe(200)
+    expect(attributes['worktree.create.phase.resolve_worktreeinclude_ms']).toBe(150)
+    // Covered wall clock is 100..300, so 800ms is genuinely unaccounted for.
+    expect(attributes['worktree.create.unattributed_ms']).toBe(800)
+  })
+
+  it('sums disjoint phases and never reports negative unattributed time', () => {
+    const { attributes, span } = capture()
+    addWorktreeCreatePhaseAttributes(span, {
+      totalDurationMs: 500,
+      phases: [
+        { phase: 'resolve_name', startedAtMs: 0, durationMs: 100 },
+        { phase: 'git_worktree_add', startedAtMs: 300, durationMs: 200 }
+      ]
+    })
+
+    expect(attributes['worktree.create.total_ms']).toBe(500)
+    expect(attributes['worktree.create.unattributed_ms']).toBe(200)
   })
 })

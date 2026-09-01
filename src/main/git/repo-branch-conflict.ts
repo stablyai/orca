@@ -90,12 +90,10 @@ async function probeAnyRemoteConflictRef(
   probeOptions: ExactRefProbeExecOptions
 ): Promise<{ found: boolean }> {
   if (batchedExec) {
+    // A present ref is always decisive, so `found` never survives with `unknown` set.
     const batched = await probeAnyExactRefBatched(batchedExec, candidateRefs, probeOptions)
     if (!batched.unknown) {
       return { found: batched.found }
-    }
-    if (batched.found) {
-      return { found: true }
     }
   }
   return probeAnyExactRef(exec, candidateRefs, probeOptions)

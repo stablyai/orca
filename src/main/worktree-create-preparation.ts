@@ -285,10 +285,10 @@ async function claimPreparedWorktree(
  *  after an isolated create spends that on nobody. Never awaited: create has already returned by
  *  the time the replacement checkout finishes. */
 function rearmPreparation(entry: PreparationEntry, baseBranch: string): void {
-  if (preparations.has(entry.key)) {
-    return
-  }
-  if (!recordPreparationConsume(entry.key)) {
+  // Record first: a prefetch that re-armed this key while we finalized would otherwise swallow the
+  // consume, and the next create would look isolated when it is really the middle of a burst.
+  const continuesBurst = recordPreparationConsume(entry.key)
+  if (preparations.has(entry.key) || !continuesBurst) {
     return
   }
   void startPreparation(
