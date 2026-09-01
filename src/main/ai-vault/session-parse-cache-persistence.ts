@@ -12,8 +12,9 @@ import {
   type SessionParseStats
 } from './session-scanner-parse-cache'
 
-// Bump when the persisted entry layout changes; a mismatched file is discarded whole.
-const SCHEMA_VERSION = 1
+// Bump when the persisted entry layout or cached session semantics change; a
+// mismatched file is discarded whole.
+const SCHEMA_VERSION = 2
 // Debounce so back-to-back scans (desktop IPC + runtime RPC) collapse into one write.
 const SAVE_DEBOUNCE_MS = 1_500
 // The payload contains transcript-derived preview text; keep it user-only
@@ -105,7 +106,7 @@ async function loadPersistedEntries(current: SessionParseCachePersistenceOptions
   await sweepOrphanedTempFiles(current.filePath)
   try {
     const raw = await readFile(current.filePath, 'utf-8')
-    const entries = parsePersistedFile(JSON.parse(raw), current.appVersion)
+    const entries = parsePersistedFile(JSON.parse(raw))
     if (entries) {
       seedSessionParseCache(entries)
     }
@@ -132,17 +133,14 @@ async function sweepOrphanedTempFiles(filePath: string): Promise<void> {
   }
 }
 
-function parsePersistedFile(
-  parsed: unknown,
-  appVersion: string
-): [string, PersistedSessionParseCacheEntry][] | null {
+function parsePersistedFile(parsed: unknown): [string, PersistedSessionParseCacheEntry][] | null {
   if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
   const file = parsed as Record<string, unknown>
-  // Why: parser output shape/semantics may change between app versions, so a
-  // cross-version file is discarded — one cold scan per update is the price.
-  if (file.schemaVersion !== SCHEMA_VERSION || file.appVersion !== appVersion) {
+  // Why: application releases that keep this schema promise compatible cached
+  // session semantics, so an update does not force a multi-gigabyte cold scan.
+  if (file.schemaVersion !== SCHEMA_VERSION || typeof file.appVersion !== 'string') {
     return null
   }
   if (!Array.isArray(file.entries)) {

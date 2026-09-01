@@ -197,17 +197,43 @@ describe('session parse cache persistence', () => {
     expect(stats.reused).toBe(0)
   })
 
-  it('ignores a cache file written by a different app version', async () => {
+  it('rejects the legacy schema 1 cache after parser semantics changed', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
     initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
     const transcript = await writeTranscript(root)
     await parseAndPersist(transcript)
 
-    simulateRestart(cacheFile, '9.9.9-other')
+    const persisted = JSON.parse(await readFile(cacheFile, 'utf-8'))
+    persisted.schemaVersion = 1
+    await writeFile(cacheFile, JSON.stringify(persisted))
+
+    simulateRestart(cacheFile)
     const stats = await coldParseStats(transcript)
     expect(stats.fullParses).toBe(1)
     expect(stats.reused).toBe(0)
+  })
+
+  it('reuses a schema-compatible cache written by a different app version', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    const transcript = await writeTranscript(root)
+    const candidate = await claudeCandidate(transcript)
+    await parseAndPersist(transcript)
+
+    simulateRestart(cacheFile, '9.9.9-other')
+    await ensureSessionParseCacheLoaded()
+
+    // Deleting the transcript proves the cross-version result comes entirely
+    // from the schema-compatible cache and performs no transcript read.
+    await rm(transcript)
+    const stats = createSessionParseStats()
+    const session = await parseAgentSessionFileCached(candidate, process.platform, stats)
+    expect(session).not.toBeNull()
+    expect(stats.reused).toBe(1)
+    expect(stats.fullParses).toBe(0)
+    expect(stats.bytesRead).toBe(0)
   })
 
   it('seeding never clobbers a live in-memory entry', async () => {

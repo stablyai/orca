@@ -120,6 +120,86 @@ export function dedupeCodexRolloutFileAliases<T>(
   })
 }
 
+/** Applies cheap hardlink proof before bounded cross-volume copy proof. */
+export async function dedupeCodexRolloutAliases<T>(
+  candidates: readonly T[],
+  accessors: {
+    isCodex: (candidate: T) => boolean
+    getFilePath: (candidate: T) => string
+    getCodexHome: (candidate: T) => string | null
+    getHardlinkIdentity: (candidate: T) => string | null
+  },
+  readSessionMetaId: (filePath: string) => Promise<string | null>
+): Promise<T[]> {
+  const hardlinkDeduped = dedupeCodexRolloutFileAliases(candidates, accessors)
+  return dedupeCodexRolloutCopyAliases(hardlinkDeduped, accessors, readSessionMetaId)
+}
+
+/**
+ * Drops cross-volume rollout copies only when bounded session metadata proves
+ * the same Codex session id. Unreadable or ambiguous candidates remain for the
+ * full parser and its existing post-parse identity check.
+ */
+export async function dedupeCodexRolloutCopyAliases<T>(
+  candidates: readonly T[],
+  accessors: {
+    isCodex: (candidate: T) => boolean
+    getFilePath: (candidate: T) => string
+    getCodexHome: (candidate: T) => string | null
+  },
+  readSessionMetaId: (filePath: string) => Promise<string | null>
+): Promise<T[]> {
+  const groups = new Map<string, T[]>()
+  for (const candidate of candidates) {
+    if (!accessors.isCodex(candidate)) {
+      continue
+    }
+    const filePath = accessors.getFilePath(candidate)
+    const fileName = lastPathSegment(filePath)
+    if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
+      continue
+    }
+    const key = `${codexPathExecutionNamespace(filePath)}\0${fileName}`
+    const group = groups.get(key)
+    if (group) {
+      group.push(candidate)
+    } else {
+      groups.set(key, [candidate])
+    }
+  }
+
+  const aliasesToDrop = new Set<T>()
+  for (const group of groups.values()) {
+    if (group.length < 2) {
+      continue
+    }
+    const identified = await Promise.all(
+      group.map(async (candidate) => ({
+        candidate,
+        id: await readSessionMetaId(accessors.getFilePath(candidate))
+      }))
+    )
+    const bestById = new Map<string, { candidate: T; rank: number; filePath: string }>()
+    for (const { candidate, id } of identified) {
+      if (!id) {
+        continue
+      }
+      const filePath = accessors.getFilePath(candidate)
+      const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
+      const best = bestById.get(id)
+      if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
+        bestById.set(id, { candidate, rank, filePath })
+      }
+    }
+    for (const { candidate, id } of identified) {
+      if (id && bestById.get(id)?.candidate !== candidate) {
+        aliasesToDrop.add(candidate)
+      }
+    }
+  }
+  return candidates.filter((candidate) => !aliasesToDrop.has(candidate))
+}
+
 /**
  * Collapses parsed Codex sessions that share a rollout name and session id on
  * one execution host, keeping the canonical root's row. Requiring both the

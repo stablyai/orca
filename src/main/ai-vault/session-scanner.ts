@@ -8,9 +8,10 @@ import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
 import {
   codexRolloutHardlinkIdentity,
-  dedupeCodexRolloutFileAliases,
+  dedupeCodexRolloutAliases,
   dedupeCodexSessionsBySessionId
 } from './codex-session-root-dedup'
+import { readCodexRolloutSessionMetaId } from '../codex/codex-rollout-session-meta'
 import {
   createAntigravityWorkspaceResolver,
   readLocalAntigravityHistory,
@@ -82,7 +83,7 @@ export async function scanAiVaultSessions(
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
     throwIfAiVaultScanCancelled(options.signal)
 
-    const candidates = dedupeCodexRolloutFileAliases(
+    const candidates = await dedupeCodexRolloutAliases(
       discoveries
         .flatMap((discovery) =>
           discovery.files.map((file): SessionFileCandidate => ({
@@ -107,7 +108,8 @@ export async function scanAiVaultSessions(
         getFilePath: (candidate) => candidate.file.path,
         getCodexHome: (candidate) => candidate.codexHome,
         getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
-      }
+      },
+      readCodexRolloutSessionMetaId
     )
 
     const parsedSessions = await parseSessionCandidates({
