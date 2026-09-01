@@ -121,6 +121,9 @@ export async function startGitCommonNarrowWatch(
         return false
       }
       usingPollingFallback = false
+      // Why: a later, unrelated fallback episode should restart its own
+      // backoff at the base delay, not resume from this episode's attempt count.
+      pollingFallbackRetry.cancel()
       await fallbackSubscription?.unsubscribe().catch(() => {})
       if (!disposed) {
         await reconciliation.ensureStarted()

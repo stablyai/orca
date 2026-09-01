@@ -165,4 +165,56 @@ describe('git-common narrow watch, recovering from the crash-fuse polling fallba
     // Second retry, on the doubled backoff, finally succeeds.
     expect(subscribeMock).toHaveBeenCalledTimes(3)
   })
+
+  it('resets the backoff after a recovery, so a later fallback episode restarts at the base delay', async () => {
+    vi.useFakeTimers()
+    installSubscribeMock()
+    const { commonDir } = await makeCommonDir()
+    const watch = await startGitCommonNarrowWatch(
+      makeTarget(commonDir),
+      () => {},
+      POLL_MS,
+      'darwin',
+      alwaysVisible
+    )
+    cleanups.push(() => watch.unsubscribe())
+    expect(subscribeMock).toHaveBeenCalledTimes(1)
+
+    // First fallback episode: recovers on the very first (30s) retry.
+    subscriptions[0].callback(
+      new WatcherProcessFailure(
+        'watcher process crashed repeatedly',
+        'supervisor',
+        'supervisor_crash_fuse'
+      ),
+      []
+    )
+    for (
+      let elapsed = 0;
+      elapsed < 5 * 60_000 && subscribeMock.mock.calls.length < 2;
+      elapsed += 1_000
+    ) {
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(subscribeMock).toHaveBeenCalledTimes(2)
+
+    // Second, unrelated fallback episode, off the now-recovered subscription.
+    subscriptions[1].callback(
+      new WatcherProcessFailure(
+        'watcher process crashed repeatedly',
+        'supervisor',
+        'supervisor_crash_fuse'
+      ),
+      []
+    )
+    // A reset backoff retries at ~30s; an un-reset one would wait ~60s here.
+    for (
+      let elapsed = 0;
+      elapsed < 50_000 && subscribeMock.mock.calls.length < 3;
+      elapsed += 1_000
+    ) {
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(subscribeMock).toHaveBeenCalledTimes(3)
+  })
 })
