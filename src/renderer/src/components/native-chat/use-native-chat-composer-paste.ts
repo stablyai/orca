@@ -5,6 +5,8 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolveImagePaste } from './native-chat-image-paste'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-target'
 import {
+  nativeChatAttachmentHostChangedMessage,
+  nativeChatAttachmentOwnersMatch,
   nativeChatWorktreeNotReadyNotice,
   type NativeChatAttachmentOwner
 } from './native-chat-attachment-upload'
@@ -158,6 +160,13 @@ export function useNativeChatComposerPaste({
         if (saved.status !== 'saved' || disabledRef.current) {
           return
         }
+        // The temp path was minted on the owner captured at paste time; if the
+        // pane's host changed during the save, attaching it would hand the new
+        // agent a path from the old host.
+        if (!nativeChatAttachmentOwnersMatch(owner, resolveAttachmentOwner())) {
+          setNotice(nativeChatAttachmentHostChangedMessage)
+          return
+        }
         attachClipboardImageTempFile(saved.tempPath)
         setCaret(caretAtPaste)
       })()
@@ -186,6 +195,10 @@ export function useNativeChatComposerPaste({
       if (saved.status === 'saved') {
         if (owner.kind === 'not-ready') {
           setNotice(nativeChatWorktreeNotReadyNotice())
+          return
+        }
+        if (!nativeChatAttachmentOwnersMatch(owner, resolveAttachmentOwner())) {
+          setNotice(nativeChatAttachmentHostChangedMessage)
           return
         }
         attachClipboardImageTempFile(saved.tempPath)

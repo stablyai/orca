@@ -18,6 +18,8 @@ vi.mock('./native-chat-composer-target', () => ({
 }))
 
 vi.mock('./native-chat-attachment-upload', () => ({
+  nativeChatAttachmentHostChangedMessage: 'Attachment upload host changed; retry the attach.',
+  nativeChatAttachmentOwnersMatch: (a: unknown, b: unknown) => a === b,
   nativeChatWorktreeNotReadyNotice: () => 'Worktree not ready — try again in a moment.'
 }))
 
@@ -159,11 +161,34 @@ describe('useNativeChatComposerPaste', () => {
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/tmp/orca-paste-remote.png'])
   })
 
+  it('drops a paste whose pane moved to a different host mid-save', async () => {
+    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/orca-paste-remote.png')
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    // First resolution captures the owner; the post-save re-resolution returns
+    // a different owner object (reference inequality = host changed).
+    const resolveAttachmentOwner = vi
+      .fn<() => NativeChatAttachmentOwner>()
+      .mockReturnValueOnce(runtimeOwner)
+      .mockReturnValue({ ...runtimeOwner, runtimeEnvironmentId: 'env-2' })
+    const probe = await renderProbe({
+      resolveAttachmentOwner,
+      attachResolvedPaths,
+      setNotice
+    })
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+    expect(setNotice).toHaveBeenCalledWith('Attachment upload host changed; retry the attach.')
+  })
+
   it('passes the server-owned connection for nested runtime worktrees', async () => {
     mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/orca-paste-jetson.png')
     const attachResolvedPaths = vi.fn()
+    const nestedOwner: NativeChatAttachmentOwner = { ...runtimeOwner, connectionId: 'conn-1' }
     const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ ...runtimeOwner, connectionId: 'conn-1' }),
+      resolveAttachmentOwner: () => nestedOwner,
       attachResolvedPaths
     })
     await act(async () => {

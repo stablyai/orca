@@ -38,6 +38,7 @@ import {
   resolveNativeChatAttachmentOwnerForWorktree,
   uploadNativeChatAttachmentPaths,
   uploadNativeChatRuntimeAttachmentPaths,
+  nativeChatAttachmentOwnersMatch,
   type NativeChatRuntimeAttachmentOwner
 } from './native-chat-attachment-upload'
 
@@ -286,6 +287,55 @@ describe('uploadNativeChatAttachmentPaths', () => {
     await expect(uploadNativeChatAttachmentPaths(['/local/a.txt'], owner)).resolves.toBeNull()
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
+  })
+})
+
+describe('nativeChatAttachmentOwnersMatch', () => {
+  const runtimeOwner: NativeChatRuntimeAttachmentOwner = {
+    kind: 'runtime',
+    runtimeEnvironmentId: 'env-1',
+    worktreeId: 'wt-1',
+    worktreePath: '/srv/wt',
+    connectionId: null,
+    expectedExecutionHostId: 'local'
+  }
+  const sshOwner = {
+    kind: 'ssh' as const,
+    connectionId: 'conn-1',
+    worktreePath: '/remote/wt',
+    expectedExecutionHostId: 'ssh:conn-1' as const,
+    expectedSshTargetId: 'conn-1',
+    expectedSshConnectionGeneration: 4
+  }
+
+  it('matches owners with identical host identity', () => {
+    expect(nativeChatAttachmentOwnersMatch({ kind: 'local' }, { kind: 'local' })).toBe(true)
+    expect(nativeChatAttachmentOwnersMatch(runtimeOwner, { ...runtimeOwner })).toBe(true)
+    expect(nativeChatAttachmentOwnersMatch(sshOwner, { ...sshOwner })).toBe(true)
+  })
+
+  it('rejects any host identity drift', () => {
+    expect(nativeChatAttachmentOwnersMatch(runtimeOwner, { kind: 'local' })).toBe(false)
+    expect(
+      nativeChatAttachmentOwnersMatch(runtimeOwner, {
+        ...runtimeOwner,
+        runtimeEnvironmentId: 'env-2'
+      })
+    ).toBe(false)
+    expect(
+      nativeChatAttachmentOwnersMatch(runtimeOwner, { ...runtimeOwner, connectionId: 'conn-1' })
+    ).toBe(false)
+    expect(
+      nativeChatAttachmentOwnersMatch(sshOwner, {
+        ...sshOwner,
+        expectedSshConnectionGeneration: 5
+      })
+    ).toBe(false)
+    // not-ready can never be verified as the same host.
+    expect(nativeChatAttachmentOwnersMatch(runtimeOwner, { kind: 'not-ready' })).toBe(false)
+    expect(nativeChatAttachmentOwnersMatch({ kind: 'not-ready' }, { kind: 'not-ready' })).toBe(
+      false
+    )
   })
 })
 

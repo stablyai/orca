@@ -185,21 +185,53 @@ export async function uploadNativeChatAttachmentPaths(
   }
 }
 
+export const nativeChatAttachmentHostChangedMessage =
+  'Attachment upload host changed; retry the attach.'
+
+/**
+ * True when two owner snapshots name the same execution host. Used to fence
+ * async attach flows (uploads, clipboard saves) against the pane's ownership
+ * changing mid-flight — a path minted on the old host must never be attached
+ * for the new one. `not-ready` never matches: an unverifiable host is a
+ * changed host.
+ */
+export function nativeChatAttachmentOwnersMatch(
+  before: NativeChatAttachmentOwner,
+  after: NativeChatAttachmentOwner
+): boolean {
+  if (before.kind === 'local' && after.kind === 'local') {
+    return true
+  }
+  if (before.kind === 'ssh' && after.kind === 'ssh') {
+    return (
+      before.connectionId === after.connectionId &&
+      before.worktreePath === after.worktreePath &&
+      before.expectedExecutionHostId === after.expectedExecutionHostId &&
+      before.expectedSshTargetId === after.expectedSshTargetId &&
+      before.expectedSshConnectionGeneration === after.expectedSshConnectionGeneration
+    )
+  }
+  if (before.kind === 'runtime' && after.kind === 'runtime') {
+    return (
+      before.runtimeEnvironmentId === after.runtimeEnvironmentId &&
+      before.worktreeId === after.worktreeId &&
+      before.connectionId === after.connectionId &&
+      before.worktreePath === after.worktreePath &&
+      before.expectedExecutionHostId === after.expectedExecutionHostId &&
+      before.expectedSshTargetId === after.expectedSshTargetId &&
+      before.expectedSshConnectionGeneration === after.expectedSshConnectionGeneration
+    )
+  }
+  return false
+}
+
 function assertNativeChatRuntimeOwnerCurrent(owner: NativeChatRuntimeAttachmentOwner): void {
   const current = resolveNativeChatAttachmentOwnerForWorktree(
     useAppStore.getState(),
     owner.worktreeId
   )
-  if (
-    current.kind !== 'runtime' ||
-    current.runtimeEnvironmentId !== owner.runtimeEnvironmentId ||
-    current.connectionId !== owner.connectionId ||
-    current.worktreePath !== owner.worktreePath ||
-    current.expectedExecutionHostId !== owner.expectedExecutionHostId ||
-    current.expectedSshTargetId !== owner.expectedSshTargetId ||
-    current.expectedSshConnectionGeneration !== owner.expectedSshConnectionGeneration
-  ) {
-    throw new Error('Attachment upload host changed; retry the attach.')
+  if (!nativeChatAttachmentOwnersMatch(owner, current)) {
+    throw new Error(nativeChatAttachmentHostChangedMessage)
   }
 }
 
