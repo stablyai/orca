@@ -130,6 +130,40 @@ describe('AppImage CLI redirect', () => {
     ).toEqual(['serve', '--help'])
   })
 
+  it('trusts explicit wrapper launches without a command allow-list match', () => {
+    expect(
+      getAppImageCliArgs(
+        ['AppRun', '--no-sandbox', 'future-command', '--json'],
+        {
+          APPIMAGE: '/opt/orca',
+          ORCA_APPIMAGE_CLI_LAUNCH: '1'
+        },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toEqual(['future-command', '--json'])
+  })
+
+  it('redirects an explicit wrapper launch with no CLI arguments', () => {
+    expect(
+      getAppImageCliArgs(
+        ['AppRun', '--no-sandbox'],
+        {
+          APPIMAGE: '/opt/orca',
+          ORCA_APPIMAGE_CLI_LAUNCH: '1'
+        },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toEqual([])
+  })
+
   it('still redirects serve help even when Chromium switches are present', () => {
     expect(
       getAppImageCliArgs(
@@ -207,5 +241,37 @@ describe('AppImage CLI redirect', () => {
         env: expect.objectContaining({ ORCA_APPIMAGE_NO_SANDBOX: '1' })
       })
     )
+  })
+
+  it('preserves wrapper-sanitized Node options without leaking the launch marker', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-redirect-'))
+    const cliEntryPath = join(root, 'app.asar.unpacked', 'out', 'cli', 'index.js')
+    await mkdir(join(root, 'app.asar.unpacked', 'out', 'cli'), { recursive: true })
+    await writeFile(cliEntryPath, '', 'utf8')
+    const spawn = vi.fn((..._args: unknown[]) => ({ status: 0 }))
+
+    const result = maybeRedirectAppImageCliLaunch({
+      argv: ['AppRun', '--no-sandbox', 'status'],
+      env: {
+        APPIMAGE: '/opt/orca/orca-linux.AppImage',
+        ORCA_APPIMAGE_CLI_LAUNCH: '1',
+        ORCA_NODE_OPTIONS: '--inspect',
+        ORCA_NODE_REPL_EXTERNAL_MODULE: '/tmp/repl.js'
+      },
+      platform: 'linux',
+      isPackaged: true,
+      resourcesPath: root,
+      execPath: '/opt/orca/orca-ide',
+      commandNames,
+      spawn: spawn as never
+    })
+
+    expect(result).toEqual({ redirected: true, status: 0 })
+    const spawnOptions = spawn.mock.calls[0]?.[2] as { env: NodeJS.ProcessEnv } | undefined
+    expect(spawnOptions?.env).toMatchObject({
+      ORCA_NODE_OPTIONS: '--inspect',
+      ORCA_NODE_REPL_EXTERNAL_MODULE: '/tmp/repl.js'
+    })
+    expect(spawnOptions?.env).not.toHaveProperty('ORCA_APPIMAGE_CLI_LAUNCH')
   })
 })

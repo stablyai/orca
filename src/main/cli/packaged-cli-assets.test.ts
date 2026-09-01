@@ -246,36 +246,23 @@ printf 'arg=%s\\n' "$@"
     }
   )
 
-  itRunsUnixShell('runs the AppImage CLI wrapper through APPDIR at runtime', async () => {
+  itRunsUnixShell('starts the AppImage in desktop mode and marks CLI launches', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-'))
     try {
-      const appDir = join(root, 'Orca.AppDir')
-      const cliDir = join(appDir, 'resources', 'app.asar.unpacked', 'out', 'cli')
-      const cliPath = join(cliDir, 'index.js')
       const appImagePath = join(root, "Orca's AppImage.AppImage")
       const commandPath = join(root, 'orca-ide')
-      await mkdir(cliDir, { recursive: true })
-      await writeFile(
-        cliPath,
-        `exports.main = (argv) => {
-  console.log(JSON.stringify({
-    argv,
-    appDir: process.env.APPDIR,
-    runAsNode: process.env.ELECTRON_RUN_AS_NODE,
-    nodeOptions: process.env.NODE_OPTIONS ?? null,
-    orcaNodeOptions: process.env.ORCA_NODE_OPTIONS ?? null,
-    nodeReplExternalModule: process.env.NODE_REPL_EXTERNAL_MODULE ?? null,
-    orcaNodeReplExternalModule: process.env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? null
-  }))
-}
-`,
-        'utf8'
-      )
       await writeFile(
         appImagePath,
         `#!/usr/bin/env bash
-export APPDIR="$FAKE_APPDIR"
-exec node "$@"
+exec node -e 'console.log(JSON.stringify({
+  argv: process.argv.slice(1),
+  cliLaunch: process.env.ORCA_APPIMAGE_CLI_LAUNCH ?? null,
+  runAsNode: process.env.ELECTRON_RUN_AS_NODE ?? null,
+  nodeOptions: process.env.NODE_OPTIONS ?? null,
+  orcaNodeOptions: process.env.ORCA_NODE_OPTIONS ?? null,
+  nodeReplExternalModule: process.env.NODE_REPL_EXTERNAL_MODULE ?? null,
+  orcaNodeReplExternalModule: process.env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? null
+}))' -- --no-sandbox "$@"
 `,
         { encoding: 'utf8', mode: 0o755 }
       )
@@ -287,24 +274,23 @@ exec node "$@"
       const result = await execFileAsync(commandPath, ['--help', 'two words'], {
         env: {
           ...process.env,
-          FAKE_APPDIR: appDir,
           NODE_OPTIONS: '--trace-warnings',
           NODE_REPL_EXTERNAL_MODULE: 'external-loader'
         }
       })
       const payload = JSON.parse(result.stdout) as {
         argv: string[]
-        appDir: string
-        runAsNode: string
+        cliLaunch: string | null
+        runAsNode: string | null
         nodeOptions: string | null
         orcaNodeOptions: string | null
         nodeReplExternalModule: string | null
         orcaNodeReplExternalModule: string | null
       }
 
-      expect(payload.argv).toEqual(['--help', 'two words'])
-      expect(payload.appDir).toBe(appDir)
-      expect(payload.runAsNode).toBe('1')
+      expect(payload.argv).toEqual(['--no-sandbox', '--help', 'two words'])
+      expect(payload.cliLaunch).toBe('1')
+      expect(payload.runAsNode).toBeNull()
       expect(payload.nodeOptions).toBeNull()
       expect(payload.orcaNodeOptions).toBe('--trace-warnings')
       expect(payload.nodeReplExternalModule).toBeNull()
