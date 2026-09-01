@@ -366,6 +366,7 @@ function setAgentLineageState(options: {
     agentActivityDisplayMode: options.agentActivityDisplayMode,
     agentSendPopoverTargetMode: null,
     acknowledgedAgentsByPaneKey: {},
+    unreadAgentCompletionPanes: {},
     dropAgentStatus: vi.fn(),
     dismissRetainedAgent: vi.fn(),
     sendPromptToSidebarAgentTarget: vi.fn(),

@@ -246,6 +246,7 @@ import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
+import { applyAgentPaneRimToManager, subscribeAgentPaneRim } from './agent-pane-rim-subscriptions'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
 import {
   getCachedTerminalGroupIdForWorktree,
@@ -2426,6 +2427,19 @@ function TerminalPane(
     applyTerminalPaneAttention()
     return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)
   }, [tabId, paneCount, applyTerminalPaneAttention])
+
+  const applyAgentPaneRim = useCallback(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    applyAgentPaneRimToManager(manager, tabId)
+  }, [tabId])
+
+  useLayoutEffect(() => {
+    applyAgentPaneRim()
+    return subscribeAgentPaneRim(tabId, applyAgentPaneRim)
+  }, [tabId, paneCount, applyAgentPaneRim])
 
   // Sync title reservation before paint so xterm fits below out-of-DOM banner chrome and never hides the first row.
   useLayoutEffect(() => {

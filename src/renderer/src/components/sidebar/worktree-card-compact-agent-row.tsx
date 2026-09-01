@@ -5,6 +5,8 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
+import { rimForAgentState } from '@/lib/agent-rim'
+import { useAppStore } from '@/store'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
@@ -119,6 +121,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // "?" glyph. Nesting under the parent already conveys identity.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const dotState = getAgentDotState(agent)
+  // Rim mirrors the terminal pane via the shared precedence helper. The store
+  // auto-acks the completion marker once the pane is viewed (useAutoAckViewedAgent),
+  // so old done rows never light up.
+  const completionUnread = useAppStore((s) => Boolean(s.unreadAgentCompletionPanes[agent.paneKey]))
+  const rim = rimForAgentState(
+    agent.entry.state,
+    agent.entry.interrupted === true,
+    completionUnread
+  )
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
@@ -274,6 +285,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         isLineageChild && 'worktree-agent-lineage-child-row',
         'flex h-6 items-center gap-1',
         isFocusedPane && 'bg-worktree-sidebar-accent',
+        rim === 'waiting' && 'ring-1 ring-inset ring-agent-question/60',
+        rim === 'done' && 'ring-1 ring-inset ring-agent-rim-done/60',
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
