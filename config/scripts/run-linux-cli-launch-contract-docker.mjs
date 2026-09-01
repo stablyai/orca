@@ -47,7 +47,8 @@ const CASES = [
   {
     name: 'nofuse-userns-bundled-skills',
     expectStatus: 0,
-    expectOutput: 'skills',
+    // Why: the rendered help header, not a bare 'skills' — the case name contains that word.
+    expectOutput: 'Usage: orca skills',
     why: 'skills is a pure-text command that must never need Chromium (#14229).'
   },
   {
@@ -59,7 +60,7 @@ const CASES = [
   {
     name: 'nofuse-nosandbox-direct-binary-skills',
     expectStatus: 0,
-    expectOutput: 'skills',
+    expectOutput: 'Usage: orca skills',
     why: 'A direct binary launch that reaches JavaScript must run the command, not boot a GUI (#14229).'
   },
   {
@@ -125,10 +126,16 @@ function runContract() {
       continue
     }
     const status = Number(statusMatch[1])
+    // Why: the harness echoes `RESULT status=N case=<name>`, so a case whose name contains the
+    // expected substring would assert against the harness's own line instead of the CLI's output.
+    const commandOutput = output
+      .split('\n')
+      .filter((line) => !/^(?:RESULT|CRASHED|PRECONDITION_FAILED) /.test(line))
+      .join('\n')
     const matchesOutput =
       typeof testCase.expectOutput === 'string'
-        ? output.includes(testCase.expectOutput)
-        : testCase.expectOutput.test(output)
+        ? commandOutput.includes(testCase.expectOutput)
+        : testCase.expectOutput.test(commandOutput)
     if (status !== testCase.expectStatus || !matchesOutput) {
       failures.push(
         `${testCase.name}: expected status ${testCase.expectStatus} and ${testCase.expectOutput}, ` +

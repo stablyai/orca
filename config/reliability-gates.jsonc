@@ -16383,6 +16383,105 @@
       "demotionRule": "Keep experimental or demote if either signal traps, returns nonzero, retains its listener/Xvfb/run-owned process identity, touches the unrelated canary, or the focused gate flakes without an identified product or harness defect."
     },
     {
+      "id": "runtime.linux-cli-launch-contract",
+      "title": "Packaged Linux CLI commands run without FUSE, user namespaces, or a display",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "appimage-cli-entrypoint",
+      "surfaces": [
+        "packaged Linux AppImage",
+        "bundled CLI launcher",
+        "extracted direct binary",
+        "desktop launch diagnosis"
+      ],
+      "platforms": ["linux"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "A restricted Ubuntu container stages the extracted AppImage payload with no /dev/fuse and with unprivileged user namespaces denied, then runs eight CLI cases across the bundled launcher and the extracted direct binary. x64 only, because PR CI builds only --x64.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/13719",
+        "https://github.com/stablyai/orca/issues/14229"
+      ],
+      "invariant": "On a host without FUSE and without unprivileged user namespaces, every packaged CLI entrypoint either completes its command or reports a diagnosis, and never terminates on a signal.",
+      "oracle": "Build the image, stage the AppImage payload, and run each case in the restricted container. Assert the preconditions first: unshare -Ur must fail and /dev/fuse must be absent, so a relaxed runner fails the job rather than silently skipping. For each case require the exact expected exit status and an expected substring of the command's own output, with the harness RESULT/CRASHED/PRECONDITION_FAILED control lines excluded so a case name can never satisfy its own assertion. Any status of 128 or above is a crash and fails immediately. The per-case timeout is a failure deadline, never a success condition.",
+      "commands": [
+        "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+        "shellcheck config/docker/cli-launch-contract/run-cli-case.sh"
+      ],
+      "testFiles": [
+        "config/scripts/run-linux-cli-launch-contract-docker.mjs",
+        "config/docker/cli-launch-contract/run-cli-case.sh"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/run-linux-cli-launch-contract-docker.mjs",
+          "assertions": [
+            "the bundled launcher serves --help, --version, status, skills --help, and worktree list without Chromium",
+            "a direct binary launch reaching JavaScript runs the command instead of booting a GUI",
+            "a desktop launch with no display reports the missing-display diagnosis instead of trapping",
+            "a stale DISPLAY is diagnosed rather than trusted",
+            "expected output is matched against the command's own output, not the harness control lines"
+          ]
+        },
+        {
+          "file": "config/docker/cli-launch-contract/run-cli-case.sh",
+          "assertions": [
+            "the container refuses to run unless unprivileged user namespaces are denied and /dev/fuse is absent",
+            "an exit status of 128 or above is reported as a crash rather than compared to the expected status"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-31",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+          "result": "passed",
+          "durationSeconds": 40,
+          "summary": "PR package job https://github.com/stablyai/orca/actions/runs/33360129768/job/99389831915 ran all eight cases to ok on ubuntu-latest. The unshare and /dev/fuse preconditions held under moby's default seccomp profile rather than tripping."
+        },
+        {
+          "date": "2026-09-01",
+          "runner": "local",
+          "platform": "linux",
+          "command": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
+          "result": "passed",
+          "durationSeconds": 60,
+          "summary": "All eight cases passed on Ubuntu 24.04 amd64 hardware against an AppImage built from the stack tip, invoked against a copy of that artifact outside dist/."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 300,
+        "scope": "eight CLI launch cases in one restricted Ubuntu container"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The harness is new; soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The same harness run against a stock release AppImage failed four of eight cases: nofuse-userns-bundled-version at status 93, and all three direct-binary cases crashed at status 133 (SIGTRAP, the uv_close abort of #13719 and #14229). The stack-tip AppImage passed all eight. Corroborated at artifact level: the stack-tip runtime is a static-pie ELF with no PT_INTERP, the stock runtime is dynamically linked. Caveat: the two skills cases previously asserted a substring that the harness's own RESULT line contained, so they passed independently of command output; both now assert the rendered help header, and the green runs above predate that change."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The gate is CI-only and adds no product code path."
+      },
+      "promotionCriteria": [
+        "Collect 30 consecutive CI passes or 14 days without an unexplained flake.",
+        "Extend the matrix to arm64 once PR CI builds that architecture.",
+        "Re-run red/green against a stock AppImage after any change to the launcher entrypoint."
+      ],
+      "knownGaps": [
+        "The preconditions depend on moby's default seccomp profile denying unshare(CLONE_NEWUSER) and on /dev/fuse being absent. A runner with a relaxed profile or a mounted /dev/fuse trips PRECONDITION_FAILED and fails the job rather than skipping.",
+        "x64 only: PR CI builds only --x64, so the arm64 launcher path is unexercised.",
+        "The harness covers CLI entrypoints only; it does not exercise a full desktop session."
+      ],
+      "demotionRule": "Keep experimental or demote if any case terminates on a signal, the preconditions stop holding on the CI runner, or an assertion can be satisfied by anything other than the command's own output."
+    },
+    {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",
       "title": "SSH managed-hook companions load and install hooks on Node 18",
       "maturity": "experimental",
