@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { FLOATING_WORKSPACE_WORKTREE_ID } from './floating-workspace'
 import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
+import type { AgentCatalogSnapshot } from '../../../src/shared/agent-catalog-snapshot'
 
 function createClient(
   handler: (method: string, params?: unknown) => Promise<unknown>
@@ -40,6 +41,10 @@ describe('mobile new-tab agent loading', () => {
       'preflight.detectAgents',
       'settings.get'
     ])
+    // The 512 KiB agent catalog must not ride this hot read.
+    expect(
+      client.sendRequest.mock.calls.find(([method]) => method === 'settings.get')?.[1]
+    ).toEqual({ includeAgentCatalog: false })
   })
 
   it('detects agents through the worktree repo connection for SSH sessions', async () => {
@@ -67,6 +72,48 @@ describe('mobile new-tab agent loading', () => {
       'repo.list',
       'settings.get',
       'preflight.detectRemoteAgents'
+    ])
+  })
+
+  it('projects custom agents from the already-synced host catalog', async () => {
+    const catalogSnapshot: AgentCatalogSnapshot = {
+      version: 1,
+      revision: 2,
+      defaultAgent: 'auto',
+      disabledAgents: [],
+      customAgents: [
+        {
+          id: 'custom-agent:claude:one',
+          baseAgent: 'claude',
+          label: 'My Claude',
+          args: '',
+          syncEnv: false,
+          status: 'ready',
+          envState: 'none',
+          availabilityCheck: 'baseline-detection'
+        }
+      ],
+      deletedCustomAgents: []
+    }
+    const client = createClient(async (method) => {
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'preflight.detectAgents') {
+        return { ok: true, result: ['claude'] }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({
+        client,
+        worktreeId: FLOATING_WORKSPACE_WORKTREE_ID,
+        catalogSnapshot
+      })
+    ).resolves.toEqual([
+      { agent: 'claude', label: 'Claude' },
+      { agent: 'custom-agent:claude:one', label: 'My Claude' }
     ])
   })
 })

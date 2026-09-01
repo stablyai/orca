@@ -222,13 +222,11 @@ describe('agent session RPC methods', () => {
     )
 
     expect(response.ok).toBe(true)
-    expect(dedupeTerminalCreate).toHaveBeenCalledWith(
-      'local',
-      'id:worktree-1',
-      undefined,
-      false,
-      expect.any(Function)
-    )
+    // No clientMutationId and no reconcileExisting means there is nothing to
+    // dedupe against, so the create runs directly — the same branch
+    // dedupeTerminalCreate itself takes when it has no idempotency key.
+    // terminal-create-idempotency.test.ts covers the keyed path.
+    expect(dedupeTerminalCreate).not.toHaveBeenCalled()
     expect(createTerminal).toHaveBeenCalledWith('id:worktree-1', {
       command: 'codex resume provider-session-1',
       startupCommandDelivery: undefined,

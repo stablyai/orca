@@ -34,13 +34,10 @@ function createInput(
     linkedGitLabMR: null,
     linkedGitLabIssue: null,
     includeGitLabLinks: true,
-    startup: undefined,
+    agentLaunch: undefined,
     issueCommand: undefined,
     pendingFirstAgentMessageRename: false,
     note: '',
-    startupPlan: null,
-    quickPrompt: '',
-    launchDraftPrompt: '',
     quickTelemetry: null,
     suppressTerminalFocusOnCompletion: false,
     ...overrides
@@ -61,13 +58,11 @@ describe('quick composer creation request', () => {
       agent: null,
       pendingFirstAgentMessageRename: false,
       note: '',
-      startupPlan: null,
-      quickPrompt: '',
       quickTelemetry: null
     })
     expect(request).not.toHaveProperty('baseBranch')
     expect(request).not.toHaveProperty('workspaceRunContext')
-    expect(request).not.toHaveProperty('launchDraftPrompt')
+    expect(request).not.toHaveProperty('agentLaunch')
   })
 
   it('keeps provider, branch, sparse, runtime, and startup fields in the quick wire payload', () => {
@@ -92,7 +87,11 @@ describe('quick composer creation request', () => {
         workspaceStatus: 'in-progress',
         linkedGitLabMR: 9,
         linkedGitLabIssue: 8,
-        launchDraftPrompt: 'draft',
+        agentLaunch: {
+          selection: { kind: 'agent', agent: 'claude' },
+          prompt: 'draft',
+          promptDelivery: 'draft'
+        },
         suppressTerminalFocusOnCompletion: true
       })
     )
@@ -109,8 +108,11 @@ describe('quick composer creation request', () => {
       linkedGitLabMR: 9,
       linkedGitLabIssue: 8,
       branchNameOverride: 'feature',
-      parentWorktreeId: 'repo-1::/worktrees/parent',
-      launchDraftPrompt: 'draft',
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'claude' },
+        prompt: 'draft',
+        promptDelivery: 'draft'
+      },
       suppressTerminalFocusOnCompletion: true
     })
   })

@@ -1,6 +1,7 @@
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
+import { getConnectionId } from '@/lib/connection-context'
 import {
   consumeCommittedPtyShutdownExit,
   deferPtyShutdownExit,
@@ -361,7 +362,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       state,
       paneKey: session.cacheKey,
       ptyId,
-      expectedConnectionId: session.worktreeConnectionId,
+      expectedConnectionId: getConnectionId(session.deps.worktreeId),
       runtimeEnvironmentId:
         session.transport.getRuntimeEnvironmentId?.() ?? session.runtimeEnvironmentId
     })

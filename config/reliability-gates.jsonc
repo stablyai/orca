@@ -7160,7 +7160,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "remote-runtime"],
-      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun.",
+      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims, extended in U5 to the host-side private record store authoritative for base+provider-session ownership. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun. Maturity stays experimental.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6800",
         "https://github.com/stablyai/orca/pull/5240",
@@ -7175,6 +7175,8 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty-provider-spawn-session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/ipc/pty-pane-materialization-race.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts src/main/ipc/pty-pane-reservation-settlement.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/renderer/src/lib/resume-sleeping-agent-session-base-ownership.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-launch/agent-session-record-store.test.ts",
         "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -7190,6 +7192,8 @@
         "src/renderer/src/lib/pane-manager/pane-fit.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
+        "src/renderer/src/lib/resume-sleeping-agent-session-base-ownership.test.ts",
+        "src/main/agent-launch/agent-session-record-store.test.ts",
         "tests/e2e/live-background-terminal-mount-authority.spec.ts"
       ],
       "assertionRefs": [
@@ -7254,6 +7258,22 @@
             "runtime inventory, renderer graph, persisted session, runtime epoch, and daemon PID converge without replacement or resume",
             "the unrelated canary remains writable and receives no signal across target projection repair"
           ]
+        },
+        {
+          "file": "src/renderer/src/lib/resume-sleeping-agent-session-base-ownership.test.ts",
+          "assertions": [
+            "a live custom-id pane owns its base provider session so a second custom id on the same base does not re-resume",
+            "a live custom-id pane on a different resumable base cannot claim another base's session id"
+          ]
+        },
+        {
+          "file": "src/main/agent-launch/agent-session-record-store.test.ts",
+          "assertions": [
+            "two custom ids on one base/provider session resolve to one owner record",
+            "preserves the requested custom identity while keying ownership on the base",
+            "never binds a non-resumable base",
+            "a fork binds a NEW provider session into its own record and never mutates the source"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -7265,6 +7285,24 @@
           "result": "passed",
           "durationSeconds": 1.9,
           "summary": "1 test file(s) passed, 30 tests passed on main@1282f5c2d in a clean checkout."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/renderer/src/lib/resume-sleeping-agent-session-base-ownership.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.3,
+          "summary": "2 test file(s), 32 tests passed on branch custom-agents (U5). Adds base-keyed ownership evidence: two custom ids on one base+provider-session collapse to one owner, and a different resumable base cannot claim another base's session id."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-launch/agent-session-record-store.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.2,
+          "summary": "1 test file, 17 tests passed on branch custom-agents (U5). Extends the gate to the HOST-side private record store now authoritative for base+provider-session ownership: two custom ids collapse to one owner record, ownership keys on the base while preserving the requested custom identity, a non-resumable base never binds, and a fork binds a new provider session into its own record without mutating the source. Evidence extended without promoting experimental maturity."
         }
       ],
       "runtimeBudget": {
@@ -8009,6 +8047,121 @@
         "SSH and WSL Add Project ownership is deterministic store/controller coverage, not a live host journey."
       ],
       "demotionRule": "Demote or block release if any non-Advanced path mutates Active Server, if local reveal or Add Project depends on the durable default instead of captured workspace/host ownership, if an Add Project operation reaches a different host after it begins, or if transient host state survives restart."
+    },
+    {
+      "id": "agent-launch.resolution-attribution",
+      "title": "One host resolution yields one immutable snapshot, one launch token, and at most one PTY",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session",
+      "layer": "host-launch-resolution",
+      "surfaces": [
+        "agent launch resolution",
+        "worktree and composer create",
+        "default agent and tab quick launch",
+        "terminal quick commands and floating terminals",
+        "background, automation, and orchestration launches",
+        "source control AI recipe launch",
+        "activation, restore, resume, and fork",
+        "mobile and paired web launch"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS evidence over the host resolution/attribution suites on branch custom-agents (U10): the pure resolver (resolve-agent-launch.performance.test.ts and resolve-agent-launch-assembly.test.ts), the spawn boundary (agent-launch-spawn.test.ts), and the runtime terminal-create path (terminal-agent-launch-resolution.test.ts). The unit/runtime suites carry the full platform/provider risk matrix by construction because the pure resolver takes target platform, shell, and isRemote as inputs; live cells are named representatives elsewhere in U10 and are NOT folded into this gate's covered scope: the local Electron custom-agent e2e (renderer half) and the throwaway-container SSH custom-agent e2e observe the fixture argv/env at the target and the single PTY, and the three-OS platform matrix runs the resolver and tokenizer suites on ubuntu-latest, windows-2022, and macos-15. Maturity stays experimental until soak and saved red/green land. Base-scoped custom identity ownership is registered on the separate agent-session.provider-ownership gate (extended in U5); the two are intentionally not merged because ownership/dedupe and launch resolution have different failure oracles and demotion rules.",
+      "motivatingLinks": [
+        "docs/plans/2026-07-09-001-feat-custom-agents-plan.md",
+        "docs/plans/2026-07-09-001-feat-custom-agents-plan.md#registered-gate-contract"
+      ],
+      "invariant": "One host resolution produces one immutable structured snapshot, one launch token, and at most one PTY; recovery never guesses liveness or identity. The host resolves command, args, env, and base from its own authenticated catalog/settings state, never from a client-supplied command or env.",
+      "oracle": "Host-unit and runtime suites assert the resolved argv/env band order and shell-safe quoting derived from one fetched catalog entry, one deep-frozen snapshot per resolution that excludes prompt/process/env-control data, O(1) lookup whose cost and env size add no catalog scans, catalog indexing once per settings revision, source-record and default/live reference attribution, a client receipt that never carries a custom env key or value, an untrusted client that cannot escalate to an unattended intent, and typed pre-spawn failures that produce no plan. Live Electron and SSH representatives observe the exact fixture argv/env at the target and the single PTY/token; those live cells are the risk scope, not proof that every platform/provider has a live gate.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-launch/resolve-agent-launch.performance.test.ts src/main/agent-launch/resolve-agent-launch-assembly.test.ts src/main/agent-launch/agent-launch-spawn.test.ts src/main/runtime/terminal-agent-launch-resolution.test.ts"
+      ],
+      "testFiles": [
+        "src/main/agent-launch/resolve-agent-launch.performance.test.ts",
+        "src/main/agent-launch/resolve-agent-launch-assembly.test.ts",
+        "src/main/agent-launch/agent-launch-spawn.test.ts",
+        "src/main/runtime/terminal-agent-launch-resolution.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/agent-launch/resolve-agent-launch.performance.test.ts",
+          "assertions": [
+            "resolves a custom launch in O(1): lookup cost does not grow with catalog size",
+            "derives every field from one fetched entry: env size adds no catalog lookups",
+            "indexes the catalog once per revision and reuses it across resolutions",
+            "records resolver throughput as PR evidence (never a CI wall-clock assertion)"
+          ]
+        },
+        {
+          "file": "src/main/agent-launch/resolve-agent-launch-assembly.test.ts",
+          "assertions": [
+            "appends recipe args as a distinct band after the definition argv",
+            "deep-freezes the snapshot and excludes prompt/process/env-control data",
+            "stays identical across worktree paths while the admission fingerprint changes",
+            "fails base_agent_unavailable for stock argv when the base is not detected"
+          ]
+        },
+        {
+          "file": "src/main/agent-launch/agent-launch-spawn.test.ts",
+          "assertions": [
+            "resolves the command from host state, never a client-supplied command/env",
+            "resolves a source-control recipe id to its stored agentArgs as perLaunchArgs (U7)",
+            "rejects an unknown recipe action id with untrusted_reference and never resolves (U7)",
+            "propagates a typed resolution failure without a plan"
+          ]
+        },
+        {
+          "file": "src/main/runtime/terminal-agent-launch-resolution.test.ts",
+          "assertions": [
+            "maps a resolved launch to terminal fields with the settle token + receipt",
+            "never carries a custom env key/value in the client receipt (G7 oracle-12/13)",
+            "never lets an untrusted client escalate to an unattended intent (GP3)",
+            "fails invalid_launch_snapshot for an unknown session key without resolving"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-launch/resolve-agent-launch.performance.test.ts src/main/agent-launch/resolve-agent-launch-assembly.test.ts src/main/agent-launch/agent-launch-spawn.test.ts src/main/runtime/terminal-agent-launch-resolution.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.4,
+          "summary": "4 test files, 77 tests passed on branch custom-agents (U10) in a clean checkout. Covers O(1) size-independent resolution and index-once-per-revision (algorithmic assertions; wall-clock recorded as PR evidence only), argv band order and shell-safe quoting with the deep-frozen snapshot, host-state command resolution with source-control recipe attribution and untrusted_reference rejection, and the runtime terminal-create mapping with the no-custom-env-in-receipt and no-unattended-escalation leak guards."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "host-unit and runtime resolution suites"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Registered at U10 from the resolution/attribution suites; the resolver is a pure function with no timers, sockets, or subprocesses, but the gate needs soak history before it can block promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Suites encode the one-snapshot/one-token/O(1)-lookup invariant, the argv band order and shell-quoting failure sources, source-record attribution and untrusted_reference rejection, and the client-receipt env-leak and unattended-escalation guards. Needs a saved red/green artifact for the class-level 'one resolution yields at most one PTY and recovery never guesses identity' invariant."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "resolve-agent-launch.performance.test.ts asserts algorithmic/count invariants only (O(1) catalog lookups independent of a 2-vs-1000-agent catalog, no lookups added by 64 env entries, index-once-per-revision) per the plan's CI-enforces-count-not-wall-clock rule; p95 resolver throughput (evidence run about 0.06 ms versus the 2 ms budget) is recorded as PR-machine evidence, never a CI threshold. PRs adding new resolution scans must show bounded work before blocking promotion."
+      },
+      "promotionCriteria": [
+        "Run in soak for at least 100 consecutive passes or 14 days across the required CI platforms.",
+        "Attach live Electron and throwaway-container SSH evidence that the fixture argv/env at the target and the single PTY/token match the resolved snapshot.",
+        "Attach a saved red/green artifact proving a missing resolved snapshot fails closed with invalid_launch_snapshot rather than a fallback shell."
+      ],
+      "knownGaps": [
+        "Desktop-launches-remote stock base-agent detection is unavailable (pty.ts passes detectionUnavailable; on-demand remote detection never landed), so a desktop-originated remote launch takes the honest-unknown path and skips the stock-detection gate rather than silently guessing; accepted G10 known-gap (KG-1).",
+        "PTY registration cannot prove the child CLI reached a healthy TUI; this residual is named in the plan and stays a permanent known-gap (KG-2).",
+        "Platform/provider cells without a live representative (for example WSL and non-Ubuntu SSH, which no GitHub runner can host) remain explicit known-gap rows and are not claimed as live coverage; unit and runtime suites carry them by construction.",
+        "Mobile custom-agent behavior is proven at unit; there is no native mobile e2e harness in the repo, and the desktop embedded-simulator spec is a distinct surface, so the live mobile-emulator cell stays an accepted known-gap (KG-4)."
+      ],
+      "demotionRule": "Demote or quarantine if the gate flakes without a product bug, if a spawn is ever admitted without a resolved snapshot, if a client-supplied command or env is ever honored, or if one resolution yields more than one launch token or PTY."
     },
     {
       "id": "terminal-geometry.visible-convergence",

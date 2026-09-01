@@ -34,6 +34,9 @@ export function ConfirmationDialogProvider({
   const nextIdRef = useRef(0)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const [optInChecked, setOptInChecked] = useState(false)
+  // The ref lets the stable settle callback read the latest checkbox state.
+  const optInCheckedRef = useRef(false)
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
   const setContextualToursBlockingSurfaceVisible = useAppStore(
@@ -54,6 +57,17 @@ export function ConfirmationDialogProvider({
     return () => setContextualToursBlockingSurfaceVisible(false)
   }, [activeRequest, setContextualToursBlockingSurfaceVisible])
 
+  useEffect(() => {
+    // Why: reset the opt-in to each new request's default when it becomes active;
+    // skip the close transition so the box does not visibly flip while fading out.
+    if (!activeRequest) {
+      return
+    }
+    const next = activeRequest.options.optIn?.defaultChecked ?? false
+    optInCheckedRef.current = next
+    setOptInChecked(next)
+  }, [activeRequest])
+
   const confirm = useCallback<ConfirmationDialogContextValue>((options) => {
     return new Promise((resolve) => {
       const request: ConfirmationDialogRequest = {
@@ -71,6 +85,9 @@ export function ConfirmationDialogProvider({
       const request = activeRequestRef.current
       if (!request) {
         return
+      }
+      if (confirmed && request.options.optIn) {
+        request.options.optIn.onConfirm(optInCheckedRef.current)
       }
       // Why: cancelling must not persist a preference the user backed out of.
       if (confirmed && dontAskAgain) {
@@ -123,6 +140,20 @@ export function ConfirmationDialogProvider({
                   translate('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
               </Label>
             </div>
+          ) : null}
+          {displayedRequest?.options.optIn ? (
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-foreground">
+              <Checkbox
+                className="mt-0.5"
+                checked={optInChecked}
+                onCheckedChange={(checked) => {
+                  const next = checked === true
+                  optInCheckedRef.current = next
+                  setOptInChecked(next)
+                }}
+              />
+              <span>{displayedRequest.options.optIn.label}</span>
+            </label>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => settleActiveRequest(false)}>

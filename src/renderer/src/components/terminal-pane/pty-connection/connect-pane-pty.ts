@@ -12,6 +12,7 @@ import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/te
 import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import type { AgentType } from '../../../../../shared/agent-status-types'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolvePaneOwnerBaseAgent } from '@/lib/agent-base-identity'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { exposeE2eTerminalPtyOutputDebug } from './e2e-terminal-pty-harness'
@@ -159,7 +160,9 @@ export function connectPanePty(
   ): void => {
     const titleAgentType = resolveCommittedTitleAgentType(title ?? '')
     session.suppressNativeWindowsIdleCodexFocusReports =
-      agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
+      agentType && agentType !== 'unknown'
+        ? resolvePaneOwnerBaseAgent(agentType) === 'codex'
+        : titleAgentType === 'codex'
   }
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {

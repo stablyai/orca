@@ -1,6 +1,7 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type { AgentLaunchFailure, PersistedAgentLaunchFailure } from './agent-launch-contract'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -156,6 +157,14 @@ export type AutomationRun = {
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
   error: string | null
+  /** Why: additive structured launch failure alongside the retained generic
+   *  `error` string. Old readers keep working off `error`; U6 readers render
+   *  the code+hint recovery card. Absent for non-launch dispatch failures. */
+  agentLaunchFailure?: PersistedAgentLaunchFailure | null
+  /** Why: set when an owner forgets a run stranded in `dispatching +
+   *  launch_state_unknown`; the run moves to `dispatch_failed` and is never
+   *  retried. Distinguishes an explicit Forget from an ordinary failure. */
+  agentLaunchForgottenAt?: number | null
   startedAt: number | null
   dispatchedAt: number | null
   createdAt: number
@@ -232,9 +241,28 @@ export type AutomationDispatchResult = {
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
   outputSnapshot?: AutomationRunOutputSnapshot | null
-  precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
+  precheckResult?: AutomationPrecheckResult | null
   error?: string | null
+  /** Additive structured launch failure (U6). Omit to preserve the run's
+   *  current value; present writes/clears it. Carries a PLAIN failure over the
+   *  wire — ledger #12: the host is the single minting authority, so the
+   *  persisted wrapper (version/failureId/intent/occurredAt) is stamped at the
+   *  service persist path, never by the client. The generic `error` string is
+   *  retained independently for old readers. */
+  agentLaunchFailure?: AgentLaunchFailure | null
+  /** Additive: set when an owner forgets a run stranded in
+   *  dispatching + launch_state_unknown. Omit to preserve. */
+  agentLaunchForgottenAt?: number | null
+}
+
+/** The store's persist input for an automation-run update. Identical to the
+ *  wire `AutomationDispatchResult` except the launch failure is the
+ *  host-minted `PersistedAgentLaunchFailure`: the service stamps the plain wire
+ *  failure (or the reconciler supplies an already-minted one) before the store
+ *  assigns it, so the persisted run always carries the comparison-keyed id. */
+export type AutomationRunPersistInput = Omit<AutomationDispatchResult, 'agentLaunchFailure'> & {
+  agentLaunchFailure?: PersistedAgentLaunchFailure | null
 }
 
 export type ExternalAutomationProvider = 'hermes' | 'openclaw'

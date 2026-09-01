@@ -177,15 +177,23 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
             cols: session.cols,
             rows: session.rows,
             sessionId: pendingSessionId,
-            ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
+            ...(coldRestoreStartup?.agentLaunch
+              ? { agentLaunch: coldRestoreStartup.agentLaunch }
+              : {}),
+            ...(coldRestoreStartup?.resumeProviderSession
+              ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
+              : {}),
             ...(coldRestoreStartup?.env
               ? { env: session.mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
               : {}),
             ...(coldRestoreStartup?.launchConfig
               ? { launchConfig: coldRestoreStartup.launchConfig }
               : {}),
-            ...(coldRestoreStartup?.resumeProviderSession
-              ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
+            ...(coldRestoreStartup?.legacyResumeRecordedConnectionId !== undefined
+              ? {
+                  legacyResumeRecordedConnectionId:
+                    coldRestoreStartup.legacyResumeRecordedConnectionId
+                }
               : {}),
             ...(coldRestoreStartup?.launchToken
               ? { launchToken: coldRestoreStartup.launchToken }

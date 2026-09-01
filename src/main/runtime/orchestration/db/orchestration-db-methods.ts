@@ -4,7 +4,7 @@ import type { DispatchCapabilityMethods } from './dispatch-context/dispatch-capa
 import type { DispatchCompletionMethods } from './dispatch-context/dispatch-completion'
 import type { DispatchContextStoreMethods } from './dispatch-context/dispatch-context-store'
 import type { DispatchLookupMethods } from './dispatch-context/dispatch-lookup'
-import type { DispatchDepthMethods } from './dispatch-depth'
+import type { DispatchLaunchIdentityMethods } from './dispatch-context/dispatch-launch-identity'
 import type { WorkerReportSettlementMethods } from './dispatch-context/worker-report-settlement'
 import type { FederatedDispatchStoreMethods } from './federation/federated-dispatch-store'
 import type { FederationRelayAckMethods } from './federation/federation-relay-ack'
@@ -115,7 +115,7 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   DispatchContextStoreMethods &
   DispatchCapabilityMethods &
   DispatchLookupMethods &
-  DispatchDepthMethods &
+  DispatchLaunchIdentityMethods &
   DispatchCompletionMethods &
   WorkerReportSettlementMethods &
   DecisionGateStoreMethods &

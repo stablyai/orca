@@ -2,8 +2,9 @@ import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
 } from './agent-session-option-launch'
+import { requireBuiltInTuiAgentConfig } from './custom-tui-agents'
 import type { SessionOptionValue } from './native-chat-session-options'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentLaunchCommand } from './tui-agent-config'
 import {
   planAgentCliArgsSuffix,
   quoteStartupArg,
@@ -34,7 +35,7 @@ export function resolveAgentLaunchCommand(args: {
   const override = args.cmdOverrides[args.agent]
   const command =
     override ||
-    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
+    getTuiAgentLaunchCommand(requireBuiltInTuiAgentConfig(args.agent), args.platform, {
       isRemote: args.isRemote
     })
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)

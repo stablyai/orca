@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-session'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
+import { isWebSessionBrowserPlacementGroupReserved } from './web-session-browser-placement'
 import {
   ENVIRONMENT_ID,
   WORKTREE_ID,
@@ -428,5 +429,53 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
     expect(consoleWarn).toHaveBeenCalledWith('[web-runtime-session] failed to create browser tab')
     expect(JSON.stringify(consoleWarn.mock.calls)).not.toContain('private')
+  })
+
+  // Restored with the browser-create split. Both cases predate the branch but
+  // asserted the old resolve-false contract; the create path surfaces an
+  // unconfirmed result by throwing, so they now pin the side effects that
+  // matter: no retry, and the client-opened split is released and removed.
+  it('does not retry a failed browser create', async () => {
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'create-lost',
+      ok: false,
+      error: { code: 'remote_runtime_unavailable', message: 'response lost' }
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID, url: 'https://example.com/' })
+    ).rejects.toThrow('did not confirm whether the browser tab was created')
+
+    // The point of the case: an unconfirmed create is surfaced, never re-sent.
+    expect(runtimeCall).toHaveBeenCalledOnce()
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('releases and removes a newly-created split when host creation fails', async () => {
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: vi.fn().mockRejectedValue(new Error('offline'))
+        }
+      }
+    })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
+        clientTargetGroupId: 'client-preview-group',
+        clientTargetGroupCreated: true
+      })
+    ).rejects.toThrow('did not confirm whether the browser tab was created')
+
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
+    expect(
+      isWebSessionBrowserPlacementGroupReserved({
+        worktreeId: WORKTREE_ID,
+        groupId: 'client-preview-group'
+      })
+    ).toBe(false)
   })
 })

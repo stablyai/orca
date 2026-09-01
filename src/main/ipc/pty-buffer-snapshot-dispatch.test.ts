@@ -71,10 +71,12 @@ describe('registerPtyHandlers', () => {
           request_kind: 'new'
         }
       })
+      // Oracle 17: used_custom_agent is host-derived and always emitted — absent means built-in.
       expect(trackMock).toHaveBeenCalledWith('agent_started', {
         agent_kind: 'claude-code',
         launch_source: 'new_workspace_composer',
-        request_kind: 'new'
+        request_kind: 'new',
+        used_custom_agent: false
       })
     })
     it('does not emit agent_started when telemetry is omitted (bare-shell tab)', async () => {

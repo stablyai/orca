@@ -42,9 +42,11 @@ function getLaunchBinary(command: string): string {
     .replace(/\.(?:cmd|exe|sh)$/, '')
 }
 
-const PI_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.pi.launchCmd)
-const OMP_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.omp.launchCmd)
-const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['prime-agent'].launchCmd)
+const PI_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.pi.launchArgv?.[0] ?? TUI_AGENT_CONFIG.pi.launchCmd)
+const OMP_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.omp.launchArgv?.[0] ?? TUI_AGENT_CONFIG.omp.launchCmd)
+const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(
+  TUI_AGENT_CONFIG['prime-agent'].launchArgv?.[0] ?? TUI_AGENT_CONFIG['prime-agent'].launchCmd
+)
 
 export function detectExplicitPiAgentKindFromCommand(
   command: string | undefined

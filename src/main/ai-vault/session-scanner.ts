@@ -6,6 +6,7 @@ import type {
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
+import { canStopParsingSessions, mergeSessions } from './session-scanner-visible-set'
 import {
   codexRolloutHardlinkIdentity,
   dedupeCodexRolloutFileAliases,
@@ -18,6 +19,7 @@ import {
 } from './session-scanner-antigravity-history'
 import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
+import { createAiVaultResumeLocator } from './ai-vault-resume-locator'
 import {
   ensureSessionParseCacheLoaded,
   scheduleSessionParseCachePersist
@@ -157,26 +159,6 @@ export async function scanAiVaultSessions(
   })
 }
 
-// In-scope sessions are guaranteed regardless of the recency cap, so the global
-// (already capped) result and the scope result are unioned and de-duplicated by
-// session id, then re-sorted DESC.
-function mergeSessions(
-  cappedSessions: AiVaultSession[],
-  scopeSessions: AiVaultSession[]
-): AiVaultSession[] {
-  if (scopeSessions.length === 0) {
-    return cappedSessions
-  }
-  const byId = new Map<string, AiVaultSession>()
-  for (const session of cappedSessions) {
-    byId.set(session.id, session)
-  }
-  for (const session of scopeSessions) {
-    byId.set(session.id, session)
-  }
-  return [...byId.values()].sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-}
-
 async function scanInScopeSessions(args: {
   discoveries: SessionFileDiscovery[]
   scopePaths: readonly string[]
@@ -292,7 +274,7 @@ async function parseSessionCandidate(
       session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
     }
     return {
-      session: session ? withSessionExecutionHost(session, executionHostId) : null,
+      session: session ? withSessionExecutionHost(session, executionHostId, platform) : null,
       issue: null
     }
   } catch (err) {
@@ -310,7 +292,8 @@ async function parseSessionCandidate(
 
 function withSessionExecutionHost(
   session: AiVaultSession,
-  executionHostId: ExecutionHostId
+  executionHostId: ExecutionHostId,
+  platform: NodeJS.Platform
 ): AiVaultSession {
   if (session.executionHostId === executionHostId) {
     return session
@@ -318,24 +301,13 @@ function withSessionExecutionHost(
   return {
     ...session,
     executionHostId,
-    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
+    id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`,
+    resumeLocator: createAiVaultResumeLocator({
+      executionHostId,
+      agent: session.agent,
+      sessionId: session.sessionId,
+      transcriptPath: session.filePath,
+      platform
+    })
   }
-}
-
-function canStopParsingSessions(
-  sessions: AiVaultSession[],
-  limit: number,
-  nextCandidateMtimeMs: number | undefined
-): boolean {
-  if (sessions.length < limit || typeof nextCandidateMtimeMs !== 'number') {
-    return false
-  }
-  const visibleCutoff = sessions
-    .map(sessionSortTime)
-    .sort((left, right) => right - left)
-    .at(limit - 1)
-
-  // Transcript mtime is already our discovery bound and fallback sort key; older
-  // files cannot displace the current visible set once the cutoff is newer.
-  return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff
 }

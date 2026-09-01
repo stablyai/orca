@@ -51,6 +51,12 @@ describe('remote sleeping-agent compatibility', () => {
     setRemoteSleepRecord(value)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    // Retained until the queued startup is consumed (the spawn-success signal).
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBe(value)
+    const state = useAppStore.getState()
+    for (const tabId of Object.keys(state.pendingStartupByTabId)) {
+      state.consumeTabStartupCommand(tabId)
+    }
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBeUndefined()
   })
 
@@ -59,6 +65,12 @@ describe('remote sleeping-agent compatibility', () => {
     setRemoteSleepRecord(value)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    // Retained until the queued startup is consumed (the spawn-success signal).
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBe(value)
+    const state = useAppStore.getState()
+    for (const tabId of Object.keys(state.pendingStartupByTabId)) {
+      state.consumeTabStartupCommand(tabId)
+    }
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBeUndefined()
   })
 })

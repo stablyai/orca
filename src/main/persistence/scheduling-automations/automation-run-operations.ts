@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type {
   Automation,
-  AutomationDispatchResult,
   AutomationRun,
+  AutomationRunPersistInput,
   AutomationRunTrigger
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -10,6 +10,7 @@ import {
   nextAutomationRunNumber,
   pruneAutomationRuns
 } from '../../../shared/automation-run-retention'
+import { parsePersistedAgentLaunchFailure } from '../../../shared/agent-launch-failure-schema'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -39,7 +40,12 @@ export function listAutomationRuns(state: PersistedState, automationId?: string)
   return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
     .map((run) => ({
       ...run,
-      precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
+      precheckResult: normalizeAutomationPrecheckResult(run.precheckResult),
+      // Fail-closed on read (U6): a corrupt or forged persisted launch failure
+      // drops instead of surfacing as a recovery card or gating Forget.
+      ...(run.agentLaunchFailure != null
+        ? { agentLaunchFailure: parsePersistedAgentLaunchFailure(run.agentLaunchFailure) }
+        : {})
     }))
     .sort((left, right) => right.createdAt - left.createdAt)
 }
@@ -136,7 +142,7 @@ export function recordRepeatedAutomationSkip(
 
 export function updateAutomationRun(
   operations: AutomationRunOperations,
-  result: AutomationDispatchResult
+  result: AutomationRunPersistInput
 ): AutomationRun {
   const index = (operations.state.automationRuns ?? []).findIndex(
     (entry) => entry.id === result.runId
@@ -174,6 +180,17 @@ export function updateAutomationRun(
       ? normalizeAutomationPrecheckResult(result.precheckResult)
       : normalizeAutomationPrecheckResult(current.precheckResult),
     usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
+    // Additive U6 launch fields: omitted key preserves, present key writes/clears.
+    // The preserved arm re-validates: a malformed persisted entry scrubs to null
+    // on the next write instead of riding through the update's return value.
+    agentLaunchFailure: Object.hasOwn(result, 'agentLaunchFailure')
+      ? (result.agentLaunchFailure ?? null)
+      : current.agentLaunchFailure != null
+        ? parsePersistedAgentLaunchFailure(current.agentLaunchFailure)
+        : null,
+    agentLaunchForgottenAt: Object.hasOwn(result, 'agentLaunchForgottenAt')
+      ? (result.agentLaunchForgottenAt ?? null)
+      : (current.agentLaunchForgottenAt ?? null),
     error: result.error ?? null,
     startedAt: current.startedAt ?? now,
     dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt

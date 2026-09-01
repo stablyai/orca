@@ -120,6 +120,14 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         if (data.title) {
           store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
         }
+        if (data.launchNotices) {
+          store.attachLaunchNotices({
+            worktreeId,
+            tabId: tab.id,
+            launchToken: data.launchNotices.launchToken,
+            notices: data.launchNotices.notices
+          })
+        }
         if (data.command) {
           store.queueTabStartupCommand(tab.id, {
             command: data.command,

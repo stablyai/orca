@@ -61,6 +61,8 @@ export type ComposerStoreActions = {
         executionHostId: ExecutionHostId
         expectedPath: string
       }
+      agentLaunch?: CreateWorktreeArgs['agentLaunch']
+      agentLaunchTelemetry?: CreateWorktreeArgs['agentLaunchTelemetry']
     }
   ) => Promise<CreateWorktreeResult>
   updateRepo: (

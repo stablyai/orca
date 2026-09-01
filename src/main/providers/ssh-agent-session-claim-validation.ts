@@ -6,7 +6,10 @@ import {
 } from '../../shared/agent-session-host-authority'
 import type { PtySpawnResult } from './pty-spawn-result'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS } from './ssh-agent-session-create-operation'
+import {
+  isSshCapabilityMethodUnavailable,
+  SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS
+} from './ssh-agent-session-capability-probe'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type ClaimedSshSpawnValidation =
@@ -17,17 +20,23 @@ export async function proveSshAgentSessionClaimCapability(
   mux: SshChannelMultiplexer,
   options: { signal?: AbortSignal } = {}
 ): Promise<void> {
+  let result: { agentSessionClaimVersion?: unknown }
   try {
-    const result = (await mux.request('pty.getCapabilities', undefined, {
+    result = (await mux.request('pty.getCapabilities', undefined, {
       signal: options.signal,
       timeoutMs: SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS
     })) as {
       agentSessionClaimVersion?: unknown
     }
-    if (result.agentSessionClaimVersion !== AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION) {
-      throw new Error('unsupported')
+  } catch (error) {
+    if (isSshCapabilityMethodUnavailable(error)) {
+      throw new Error('agent_session_claim_unavailable')
     }
-  } catch {
+    throw Object.assign(new Error('agent_session_claim_unavailable'), {
+      capabilityProbeTransportFailure: true
+    })
+  }
+  if (result.agentSessionClaimVersion !== AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION) {
     throw new Error('agent_session_claim_unavailable')
   }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { isAgentLaunchFailureCopy } from '@/lib/agent-launch-failure-copy'
 import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import { hasClientEnvironmentFooter } from '../../../../shared/client-environment-info'
 
@@ -135,8 +136,12 @@ export function TerminalErrorToast({
 }): React.JSX.Element {
   const ssh = isSshError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+  // Typed agent-launch failures carry their own next step; file-an-issue framing
+  // and the diagnostics footer are reserved for unexplained internal errors.
+  const explainedLaunchFailure = error.split('\n').some(isAgentLaunchFailureCopy)
   // Restart cannot recover a session after its owning daemon exits.
-  const showIssueLink = !ssh && !showDaemonRestart && !isExplainedTerminalError(error)
+  const showIssueLink =
+    !ssh && !showDaemonRestart && !explainedLaunchFailure && !isExplainedTerminalError(error)
   const displayError = humanizeTerminalError(error)
   const [environmentFooter, setEnvironmentFooter] = useState<{
     error: string
@@ -145,7 +150,7 @@ export function TerminalErrorToast({
 
   // Why: a select-all copy should carry details loaded asynchronously from preload.
   useEffect(() => {
-    if (ssh || hasClientEnvironmentFooter(displayError)) {
+    if (ssh || explainedLaunchFailure || hasClientEnvironmentFooter(displayError)) {
       return
     }
     let cancelled = false
@@ -157,7 +162,7 @@ export function TerminalErrorToast({
     return () => {
       cancelled = true
     }
-  }, [displayError, ssh])
+  }, [displayError, ssh, explainedLaunchFailure])
 
   const footer = environmentFooter?.error === displayError ? environmentFooter.footer : ''
 

@@ -55,7 +55,7 @@ async function preflightPublishCapability(ctx: HandlerContext): Promise<void> {
   try {
     const response = await ctx.client.call<{
       settings?: { agentSkillSharingEnabled?: boolean }
-    }>('settings.get')
+    }>('settings.get', { includeAgentCatalog: false })
     enabled = response.result?.settings?.agentSkillSharingEnabled
   } catch {
     return

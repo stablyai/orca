@@ -1,6 +1,24 @@
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { PersistedAgentLaunchFailure } from '../../../../shared/agent-launch-contract'
 
 export type AutomationRunViewAvailability = 'terminal' | 'workspace' | 'snapshot' | 'metadata'
+
+/** A run's structured unattended launch failure, surfaced for the recovery card.
+ *  `forgottenAt` is set once an owner forgets a run stranded in
+ *  `dispatching + launch_state_unknown`; the run then never retries. */
+export type AutomationRunLaunchFailure = {
+  failure: PersistedAgentLaunchFailure
+  forgottenAt: number | null
+}
+
+/** Derive the run's launch-failure display data. Absent for non-launch dispatch
+ *  failures (those keep only the generic `error` string). */
+export function getAutomationRunLaunchFailure(run: AutomationRun): AutomationRunLaunchFailure | null {
+  if (!run.agentLaunchFailure) {
+    return null
+  }
+  return { failure: run.agentLaunchFailure, forgottenAt: run.agentLaunchForgottenAt ?? null }
+}
 
 export type AutomationRunViewState = {
   availability: AutomationRunViewAvailability

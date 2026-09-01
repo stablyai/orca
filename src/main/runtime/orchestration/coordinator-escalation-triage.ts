@@ -35,6 +35,16 @@ export function applyEscalationToDispatch(
     onLog(`Rejected escalation from ${msg.from_handle}: Dispatch does not own Task ${taskId}`)
     return null
   }
+  // Why: every guard below only admits pending|dispatched, so a settled row (U6 'forgotten',
+  // or a completed/failed one) would surface as a false ownership rejection or as a retry that
+  // failDispatch already no-opped. Neither state changes here, so ordering this before the
+  // sender check gives up no authority.
+  if (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') {
+    onLog(
+      `Ignoring escalation from ${msg.from_handle}: Dispatch ${dispatch.id} is already settled (${dispatch.status}); Task ${taskId} stays ${task.status} until an explicit retry.`
+    )
+    return null
+  }
   if (
     !db.isDispatchMessageSender({
       dispatchId: dispatch.id,

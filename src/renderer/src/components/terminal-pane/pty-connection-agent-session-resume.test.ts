@@ -2,8 +2,9 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import type { AgentLaunchResumeRequest } from '../../../../shared/agent-launch-spawn-request'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import { flushAsyncTicks } from './pty-connection-test-async'
-import { UUID_RE } from './pty-connection-test-constants'
 import {
   LEAF_1,
   LEAF_2,
@@ -131,6 +132,23 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
 }
 
+/** The cold-restore resume spawn the renderer hands the transport. */
+type ColdRestoreResumeSpawn = {
+  sessionId?: string
+  command?: string
+  agentLaunch?: AgentLaunchResumeRequest
+  launchConfig?: SleepingAgentLaunchConfig
+  legacyResumeRecordedConnectionId?: string | null
+  env?: Record<string, string>
+}
+
+function coldRestoreResumeSpawn(transport: MockTransport): ColdRestoreResumeSpawn {
+  return transport.connect.mock.calls[0]?.[0] as ColdRestoreResumeSpawn
+}
+
+// Resume argv is host-owned now, so the renderer-side guarantee ends at the
+// ownership key + surrendered pre-U5 config. What the host then replays from
+// them is pinned in main/agent-launch/cold-restore-resume-handoff.test.ts.
 describe('connectPanePty', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -210,31 +228,35 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
     await new Promise((resolve) => setTimeout(resolve, 70))
 
-    const reattachArgs = transport.connect.mock.calls.find(
-      ([args]) => args.sessionId === 'lost-pty'
-    )?.[0]
-    const launchToken = (reattachArgs?.env as Record<string, string> | undefined)
-      ?.ORCA_AGENT_LAUNCH_TOKEN
-
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(launchToken).toMatch(new RegExp(`^${UUID_RE}$`))
-    expect(transport.connect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'codex-session-1'",
-        env: expect.objectContaining({
-          CODEX_PROFILE: 'captured',
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: 'tab-1',
-          ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: launchToken
-        })
-      })
-    )
+    const spawn = coldRestoreResumeSpawn(transport)
+    expect(spawn).toMatchObject({
+      sessionId: 'lost-pty',
+      agentLaunch: {
+        resume: {
+          operation: 'resume',
+          sessionKey: {
+            worktreeId: 'wt-1',
+            baseAgent: 'codex',
+            providerSessionId: 'codex-session-1'
+          }
+        }
+      },
+      // The captured config is surrendered verbatim for the host to replay.
+      launchConfig,
+      legacyResumeRecordedConnectionId: null
+    })
+    expect(spawn.command).toBeUndefined()
+    // Pane identity still rides the spawn env; the agent env is host-merged from
+    // the config, so the record's stale attribution can never win.
+    expect(spawn.env).toMatchObject({
+      ORCA_PANE_KEY: paneKey,
+      ORCA_TAB_ID: 'tab-1',
+      ORCA_WORKTREE_ID: 'wt-1',
+      ORCA_WORKSPACE_ID: 'wt-1'
+    })
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(paneKey, launchConfig, {
       agentType: 'codex',
-      launchToken,
       tabId: 'tab-1',
       leafId: LEAF_1
     })
@@ -388,18 +410,26 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 70))
 
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--model' 'gpt-5-mini' 'resume' 'codex-session-1'",
-        env: expect.objectContaining({
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
-        })
-      })
-    )
+    const spawn = coldRestoreResumeSpawn(transport)
+    expect(spawn).toMatchObject({
+      sessionId: 'lost-pty',
+      agentLaunch: {
+        resume: {
+          operation: 'resume',
+          sessionKey: {
+            worktreeId: 'wt-1',
+            baseAgent: 'codex',
+            providerSessionId: 'codex-session-1'
+          }
+        }
+      },
+      // Live entry's config rides the current connection as the legacy handoff.
+      launchConfig,
+      legacyResumeRecordedConnectionId: null
+    })
+    expect(spawn.command).toBeUndefined()
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(paneKey, launchConfig, {
       agentType: 'codex',
-      launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
       tabId: 'tab-1',
       leafId: LEAF_1
     })
@@ -656,23 +686,26 @@ describe('connectPanePty', () => {
     expect(mockStoreState.getAgentLaunchConfigForStatusEntry).toHaveBeenCalledWith(
       expect.objectContaining({ paneKey, agentType: 'codex' })
     )
-    expect(transport.connect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--model' 'current' 'resume' 'codex-session-1'"
-      })
-    )
-    expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
-      paneKey,
-      expect.objectContaining({
-        agentArgs: '--model current'
-      }),
-      expect.objectContaining({
-        agentType: 'codex',
-        tabId: 'tab-1',
-        leafId: LEAF_1
-      })
-    )
+    const spawn = coldRestoreResumeSpawn(transport)
+    expect(spawn).toMatchObject({
+      sessionId: 'lost-pty',
+      agentLaunch: {
+        resume: {
+          operation: 'resume',
+          sessionKey: {
+            worktreeId: 'wt-1',
+            baseAgent: 'codex',
+            providerSessionId: 'codex-session-1'
+          }
+        }
+      }
+    })
+    // A rejected identity lookup leaves nothing to surrender: neither the stale
+    // live config nor the sleeping record's (it names a different session) may
+    // reach the host, and none of it is registered as this pane's config.
+    expect(spawn.launchConfig).toBeUndefined()
+    expect(spawn.command).toBeUndefined()
+    expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
   })
 
   it('shows the restored banner when a sleeping resume falls back to a fresh shell', async () => {

@@ -11,6 +11,9 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'accounts.selectCodexForTarget',
   'terminal.createAgentSession',
   'terminal.ensureAgentSession',
+  // agent-catalog-sync passes the dedicated read and its legacy settings.get
+  // fallback through one sender, so neither is a literal sendRequest argument.
+  'settings.agentCatalog.get',
   'github.updateIssue',
   'github.updatePRState',
   'gitlab.updateIssue',

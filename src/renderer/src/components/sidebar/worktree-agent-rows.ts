@@ -3,6 +3,7 @@ import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  type AgentType,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
@@ -17,15 +18,89 @@ import type {
   TerminalTab
 } from '../../../../shared/terminal-tab-types'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
-import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
+import {
+  buildTitleDerivedAgentRows,
+  resolveAgentTypeFromTerminalTitle
+} from './worktree-title-derived-agent-rows'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
+import { parseCustomTuiAgentId } from '../../../../shared/custom-tui-agents'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
 import {
   effectiveWorktreeAgentRowStartedAt,
   tabFromWorktreeAttributedStatusEntry
 } from './worktree-agent-row-fallback-tab'
-import { resolveRowAgentType } from './worktree-agent-row-type'
-import { entryWithRuntimeOrchestration } from './worktree-agent-row-orchestration'
+
+/**
+ * Resolves the sidebar row agent type, prioritizing launch agent configuration
+ * and normalizing compatible agent kinds.
+ */
+function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
+  const launchAgent = tab?.launchAgent
+  // Hook and title evidence only ever names the base harness, so a custom
+  // launch identity resolves compatibility through its encoded base.
+  const requestedCustomBase = parseCustomTuiAgentId(launchAgent)?.baseAgent ?? null
+  const ownerAgentType = requestedCustomBase ?? launchAgent
+  const entryAgentType = resolveCompatibleAgentTypeForOwner(entry.agentType, ownerAgentType)
+  const resolved =
+    entryAgentType && entryAgentType !== 'unknown'
+      ? entryAgentType
+      : (resolveAgentTypeFromTerminalTitle(entry.terminalTitle ?? tab?.title, ownerAgentType) ??
+        launchAgent ??
+        entryAgentType ??
+        'unknown')
+  // Why: evidence matching the requested custom identity's base re-owns the row
+  // to the requested id, so the sidebar/dashboard show the custom agent's own
+  // identity instead of its base harness.
+  return launchAgent && (resolved === requestedCustomBase || resolved === launchAgent)
+    ? launchAgent
+    : resolved
+}
+
+function orchestrationContextsEqual(
+  a: AgentStatusOrchestrationContext,
+  b: AgentStatusOrchestrationContext
+): boolean {
+  return (
+    a.taskId === b.taskId &&
+    a.dispatchId === b.dispatchId &&
+    a.taskTitle === b.taskTitle &&
+    a.displayName === b.displayName &&
+    a.parentTerminalHandle === b.parentTerminalHandle &&
+    a.parentPaneKey === b.parentPaneKey &&
+    a.coordinatorHandle === b.coordinatorHandle &&
+    a.orchestrationRunId === b.orchestrationRunId
+  )
+}
+
+function entryWithRuntimeOrchestration(
+  entry: AgentStatusEntry,
+  runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext> | undefined
+): AgentStatusEntry {
+  const runtimeOrchestration = runtimeAgentOrchestrationByPaneKey?.[entry.paneKey]
+  const sameDispatch =
+    entry.orchestration &&
+    runtimeOrchestration &&
+    entry.orchestration.taskId === runtimeOrchestration.taskId &&
+    entry.orchestration.dispatchId === runtimeOrchestration.dispatchId
+  if (entry.orchestration && runtimeOrchestration && !sameDispatch) {
+    return entry
+  }
+  const orchestration =
+    sameDispatch && entry.orchestration && runtimeOrchestration
+      ? { ...entry.orchestration, ...runtimeOrchestration }
+      : (runtimeOrchestration ?? entry.orchestration)
+  if (!orchestration || orchestration === entry.orchestration) {
+    return entry
+  }
+  if (entry.orchestration && orchestrationContextsEqual(entry.orchestration, orchestration)) {
+    return entry
+  }
+  // Why: runtime graph metadata can arrive after a hook status ping. Keep old
+  // fields only for the same dispatch; a reused terminal must not inherit a
+  // previous worker's stale parent.
+  return { ...entry, orchestration }
+}
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {

@@ -101,8 +101,8 @@ describe('web settings preload API', () => {
     expect(settings.agentSkillSharingEnabled).toBe(false)
     expect(refreshed.agentSkillSharingEnabled).toBe(false)
     expect(runtimeCalls).toEqual([
-      { method: 'settings.get', params: undefined },
-      { method: 'settings.get', params: undefined }
+      { method: 'settings.get', params: { includeAgentCatalog: false } },
+      { method: 'settings.get', params: { includeAgentCatalog: false } }
     ])
     expect(runtimeCalls).not.toContainEqual(expect.objectContaining({ method: 'settings.update' }))
   })
@@ -293,7 +293,9 @@ describe('web settings preload API', () => {
     expect(settings.activeRuntimeEnvironmentId).toBeNull()
     expect(stored.compactWorktreeCards).toBe(true)
     expect(stored).not.toHaveProperty('activeRuntimeEnvironmentId')
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.get', params: { includeAgentCatalog: false } }
+    ])
   }, 15_000)
 
   it('keeps a completed settings merge when the paired host is removed mid-read', async () => {
@@ -421,7 +423,7 @@ describe('web settings preload API', () => {
       customSources: [{ id: 'local', rootPath: '/srv/local' }]
     })
     expect(runtimeCalls).toEqual([
-      { method: 'settings.get', params: undefined },
+      { method: 'settings.get', params: { includeAgentCatalog: false } },
       {
         method: 'settings.update',
         params: {
@@ -549,7 +551,9 @@ describe('web settings preload API', () => {
     })
 
     expect(settings.worktreeVisibilityDefaults).toBeUndefined()
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.get', params: { includeAgentCatalog: false } }
+    ])
   })
 
   it('hydrates new worktree card style from a paired runtime', async () => {
@@ -582,7 +586,9 @@ describe('web settings preload API', () => {
 
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
     expect(stored.experimentalNewWorktreeCardStyle).toBe(true)
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.get', params: { includeAgentCatalog: false } }
+    ])
   })
 
   it('hydrates MiniMax usage settings from a paired runtime', async () => {
@@ -623,7 +629,9 @@ describe('web settings preload API', () => {
     expect(settings.minimaxUsageModels).toBe('general,abab6.5')
     expect(stored.minimaxGroupId).toBe('group-42')
     expect(stored.minimaxUsageModels).toBe('general,abab6.5')
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.get', params: { includeAgentCatalog: false } }
+    ])
   })
 
   it('hydrates bot-author overrides from paired runtime settings', async () => {
@@ -652,7 +660,9 @@ describe('web settings preload API', () => {
     const settings = await globals.window.api.settings.get()
 
     expect(settings.prBotAuthorOverrides).toEqual(['gretelflux'])
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.get', params: { includeAgentCatalog: false } }
+    ])
   })
 
   it('forwards compact worktree card updates to a paired runtime', async () => {

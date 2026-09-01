@@ -13,16 +13,15 @@ describe('automation RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listAutomations: vi.fn().mockReturnValue([{ id: 'auto-1', name: 'Daily review' }]),
-      listAutomationsForScope: vi.fn().mockReturnValue({
-        automations: [{ id: 'auto-1', name: 'Daily review' }],
-        items: [{ automationId: 'auto-1', selector: { kind: 'self' } }]
-      }),
       showAutomation: vi.fn().mockReturnValue({ id: 'auto-1', name: 'Daily review' }),
       createAutomation: vi.fn().mockResolvedValue({ id: 'auto-2', name: 'New review' }),
       updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', name: 'Paused' }),
       deleteAutomation: vi.fn().mockReturnValue({ removed: true, id: 'auto-1' }),
       runAutomationNow: vi.fn().mockResolvedValue({ id: 'run-1', automationId: 'auto-1' }),
-      listAutomationRuns: vi.fn().mockReturnValue([{ id: 'run-1', automationId: 'auto-1' }])
+      listAutomationRuns: vi.fn().mockReturnValue([{ id: 'run-1', automationId: 'auto-1' }]),
+      forgetAutomationRun: vi
+        .fn()
+        .mockReturnValue({ id: 'run-1', automationId: 'auto-1', status: 'dispatch_failed' })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
 
@@ -73,10 +72,10 @@ describe('automation RPC methods', () => {
     await dispatcher.dispatch(makeRequest('automation.delete', { id: 'auto-1' }))
     await dispatcher.dispatch(makeRequest('automation.runNow', { id: 'auto-1' }))
     await dispatcher.dispatch(makeRequest('automation.runs', { automationId: 'auto-1' }))
+    await dispatcher.dispatch(makeRequest('automation.forgetRun', { runId: 'run-1' }))
 
-    expect(runtime.listAutomationsForScope).toHaveBeenCalledWith({})
-    // A legacy client sends no precondition, so each call forwards an absent expected owner.
-    expect(runtime.showAutomation).toHaveBeenCalledWith('auto-1', undefined)
+    expect(runtime.listAutomations).toHaveBeenCalled()
+    expect(runtime.showAutomation).toHaveBeenCalledWith('auto-1')
     expect(runtime.createAutomation).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'New review',
@@ -97,12 +96,12 @@ describe('automation RPC methods', () => {
         setupDecision: 'run',
         reuseSession: false,
         rrule: '0 9 * * 1-5'
-      }),
-      { expectedOwner: undefined, destination: undefined }
+      })
     )
-    expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1', undefined)
-    expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1', undefined)
-    expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1', undefined)
+    expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1')
+    expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1')
+    expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1')
+    expect(runtime.forgetAutomationRun).toHaveBeenCalledWith('run-1')
   })
 
   it('rejects unknown providers and invalid schedules', async () => {
@@ -153,10 +152,6 @@ describe('automation RPC methods', () => {
       })
     )
 
-    expect(runtime.updateAutomation).toHaveBeenCalledWith(
-      'auto-1',
-      { baseBranch: null },
-      { expectedOwner: undefined, destination: undefined }
-    )
+    expect(runtime.updateAutomation).toHaveBeenCalledWith('auto-1', { baseBranch: null })
   })
 })

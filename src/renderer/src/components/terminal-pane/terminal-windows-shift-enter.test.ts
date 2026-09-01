@@ -189,4 +189,45 @@ describe('resolveWindowsShiftEnterEncoding', () => {
       })
     ).toBe('alt-enter')
   })
+
+  // Registry safety (oracle 16): a custom id must resolve its Shift+Enter encoding
+  // from the base harness, never crash or silently fall back on a raw index.
+  const DROID_CUSTOM_ID = 'custom-agent:droid:11111111-1111-4111-8111-111111111111'
+  const CODEX_CUSTOM_ID = 'custom-agent:codex:22222222-2222-4222-8222-222222222222'
+
+  it('resolves a custom id to its base harness encoding (droid custom → csi-u)', () => {
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: { agent: DROID_CUSTOM_ID, routingTrusted: true, shellForeground: false },
+        customTuiAgents: [
+          { id: DROID_CUSTOM_ID, baseAgent: 'droid', label: 'Mine', args: '', env: {}, syncEnv: false }
+        ]
+      })
+    ).toBe('csi-u')
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: { agent: CODEX_CUSTOM_ID, routingTrusted: true, shellForeground: false },
+        customTuiAgents: [
+          { id: CODEX_CUSTOM_ID, baseAgent: 'codex', label: 'Mine', args: '', env: {}, syncEnv: false }
+        ]
+      })
+    ).toBe('alt-enter')
+  })
+
+  it('resolves a tombstoned custom id through its base and degrades an unknown id', () => {
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: { agent: DROID_CUSTOM_ID, routingTrusted: true, shellForeground: false },
+        deletedCustomTuiAgents: [
+          { id: DROID_CUSTOM_ID, baseAgent: 'droid', label: 'Mine', deletedAt: 1 }
+        ]
+      })
+    ).toBe('csi-u')
+    // Unresolvable custom id (neither live nor tombstoned): degrade to the legacy byte.
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: { agent: DROID_CUSTOM_ID, routingTrusted: true, shellForeground: false }
+      })
+    ).toBe('alt-enter')
+  })
 })

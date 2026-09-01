@@ -73,16 +73,20 @@ describe('tui agent startup plans', () => {
     )
   })
 
-  it('uses cmd escaping when requested explicitly', () => {
+  it('uses cmd quoting that keeps neutral metacharacters as data', () => {
+    // Why: carets inside cmd double quotes are literal characters, so the old
+    // caret-escaping corrupted every &/|/<>/() in the payload. Neutral
+    // metacharacters now pass through; % ! " ^ remain cmd-unencodable and the
+    // launch resolver fails closed on custom-supplied elements containing them.
     const plan = buildAgentStartupPlan({
       agent: 'claude',
-      prompt: 'fix "quoted" & %PATH%',
+      prompt: 'fix the build & tag (v2)',
       cmdOverrides: {},
       platform: 'win32',
       shell: 'cmd'
     })
 
-    expect(plan?.launchCommand).toBe('claude "fix ^"quoted^" ^& ^%PATH^%"')
+    expect(plan?.launchCommand).toBe('claude "fix the build & tag (v2)"')
   })
 
   it('terminates Grok options before a flag-shaped POSIX prompt', () => {

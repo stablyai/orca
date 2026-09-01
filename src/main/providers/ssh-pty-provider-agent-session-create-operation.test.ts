@@ -158,14 +158,14 @@ describe('SSH fresh agent-session create operations', () => {
     )
   })
 
-  it('re-probes a negative capability after an in-place relay upgrade', async () => {
+  it('caches an old-relay negative for the provider connection', async () => {
     request.mockResolvedValueOnce({}).mockResolvedValueOnce({
       agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
     })
 
     await expect(provider.supportsAgentSessionCreateOperations()).resolves.toBe(false)
-    await expect(provider.supportsAgentSessionCreateOperations()).resolves.toBe(true)
-    expect(request).toHaveBeenCalledTimes(2)
+    await expect(provider.supportsAgentSessionCreateOperations()).resolves.toBe(false)
+    expect(request).toHaveBeenCalledOnce()
   })
 
   it('keeps a shared capability probe alive when one waiter disconnects', async () => {

@@ -1,9 +1,9 @@
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import type { AgentType } from './agent-status-types'
-import type { TuiAgent } from './tui-agent'
+import type { BuiltInTuiAgent, TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
-import { getFirstCommandToken } from './command-token-scanner'
+import { getFirstCommandToken, POWERSHELL_CALL_OPERATOR } from './command-token-scanner'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -59,8 +59,8 @@ const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
 const AGENT_TYPE_IDS = new Set<TuiAgent>()
 
 for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
-  TuiAgent,
-  (typeof TUI_AGENT_CONFIG)[TuiAgent]
+  BuiltInTuiAgent,
+  (typeof TUI_AGENT_CONFIG)[BuiltInTuiAgent]
 ][]) {
   AGENT_TYPE_IDS.add(agent)
   for (const candidate of [
@@ -139,6 +139,11 @@ function tokenizeCommandLine(commandLine: string): string[] {
   }
   if (current) {
     tokens.push(current)
+  }
+  // Why: a PowerShell launch line leads with the call operator, which is syntax
+  // rather than the executable every token index here is measured from.
+  if (tokens[0] === POWERSHELL_CALL_OPERATOR) {
+    tokens.shift()
   }
   return tokens
 }

@@ -392,7 +392,8 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     const after = useAppStore.getState()
     const tabs = after.tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(1)
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    // Retained as retry state until the queued startup is consumed by a spawn.
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     const replacement = tabs[0]!
     expect(after.automaticAgentResumeClaimsByTabId[replacement.id]?.providerSession).toEqual({
       key: 'session_id',
@@ -402,5 +403,6 @@ describe('preserved-pane replacement contract on workspace activation', () => {
       key: 'session_id',
       id: 'codex-session-F'
     })
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
   })
 })

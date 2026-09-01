@@ -62,7 +62,9 @@ function productionSources(): { path: string; source: string }[] {
         walk(path)
         continue
       }
-      if (!/\.(ts|tsx)$/.test(entry) || /\.test\.|\.d\.ts$/.test(entry)) {
+      // `-test-fixtures.ts` carries no `.test.` segment, so name it explicitly: mock
+      // return values there are scaffolding, not production settle sites.
+      if (!/\.(ts|tsx)$/.test(entry) || /\.test\.|\.d\.ts$|-test-fixtures?\.tsx?$/.test(entry)) {
         continue
       }
       sources.push({

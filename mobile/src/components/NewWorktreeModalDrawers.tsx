@@ -34,6 +34,7 @@ export function NewWorktreeModalDrawers(props: {
   selectedProjectId: string | null
   runTargetPickerItems: NewWorkspaceRunTargetOption<MobileWorkspaceRepo>[]
   pickerAgentOptions: NewWorktreeAgentOption[]
+  agentPickerSubtitle?: string
   selectedAgent: NewWorktreeAgentOption
   setupTrustPrompt: SetupTrustPrompt | null
   creating: boolean
@@ -94,6 +95,7 @@ export function NewWorktreeModalDrawers(props: {
       <PickerListDrawer
         visible={props.visible && props.drawerView === 'agent'}
         title="Agent"
+        subtitle={props.agentPickerSubtitle}
         items={props.pickerAgentOptions}
         selectedId={props.selectedAgent.id}
         onSelect={props.onAgentChange}

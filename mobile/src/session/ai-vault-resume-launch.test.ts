@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
+  buildMobileAiVaultResumeEntry,
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
-  resumeAiVaultSessionInTerminal
+  resumeAiVaultSessionInTerminal,
+  resumeAiVaultSessionViaHostArm
 } from './ai-vault-resume-launch'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
@@ -399,5 +401,71 @@ describe('resume platform helpers', () => {
     ).toBe('linux')
     expect(resolveMobileAiVaultResumePlatform('local', 'win32', 'C:\\repo', 'linux')).toBe('linux')
     expect(resolveMobileAiVaultResumePlatform('runtime', 'linux')).toBeNull()
+  })
+})
+
+describe('buildMobileAiVaultResumeEntry', () => {
+  it('echoes discovered identity and omits filePath (host re-derives it)', () => {
+    const entry = buildMobileAiVaultResumeEntry(
+      session({
+        executionHostId: 'ssh:box',
+        agent: 'codex',
+        sessionId: 'sid-9',
+        resumeLocator: 'a'.repeat(64)
+      })
+    )
+    expect(entry).toEqual({
+      executionHostId: 'ssh:box',
+      agent: 'codex',
+      sessionId: 'sid-9',
+      resumeLocator: 'a'.repeat(64)
+    })
+    expect(entry).not.toHaveProperty('filePath')
+  })
+})
+
+describe('resumeAiVaultSessionViaHostArm', () => {
+  const entry = { executionHostId: 'local', agent: 'claude', sessionId: 'sid-1' } as const
+
+  it('sends the vaultResume identity (no terminal.send) and returns a launched outcome', async () => {
+    const sendRequest = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
+    })
+    await expect(
+      resumeAiVaultSessionViaHostArm({ sendRequest }, 'worktree-1', {
+        entry,
+        clientMutationId: 'resume-1'
+      })
+    ).resolves.toEqual({ kind: 'launched' })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      {
+        worktree: 'id:worktree-1',
+        agentLaunch: { vaultResume: { operation: 'resume', entry } },
+        clientMutationId: 'resume-1'
+      },
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+  })
+
+  it('maps a pre-spawn agentLaunch failure to a failed outcome', async () => {
+    const sendRequest = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      result: { agentLaunch: { status: 'failed', failure: { code: 'invalid_launch_snapshot' } } }
+    })
+    await expect(
+      resumeAiVaultSessionViaHostArm({ sendRequest }, 'worktree-1', { entry })
+    ).resolves.toEqual({ kind: 'failed', code: 'invalid_launch_snapshot' })
+  })
+
+  it('throws when the createTerminal RPC itself fails', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, error: { message: 'socket dropped' } })
+    await expect(
+      resumeAiVaultSessionViaHostArm({ sendRequest }, 'worktree-1', { entry })
+    ).rejects.toThrow('socket dropped')
   })
 })

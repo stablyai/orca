@@ -2,6 +2,8 @@ import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { AgentLaunchNoticeCode } from '../../../shared/agent-launch-contract'
+import { AGENT_LAUNCH_NOTICE_CODES } from '../../../shared/agent-launch-notice-schema'
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/terminal-startup-cwd'
 import {
@@ -118,6 +120,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:sideEffectSnapshot')
   ipcMain.removeHandler('pty:getRendererDeliveryDebugSnapshot')
   ipcMain.removeHandler('pty:resetRendererDeliveryDebug')
+  ipcMain.removeHandler('pty:dismissLaunchNotice')
   ipcMain.removeHandler('pty:reportRendererDeliveryState')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
@@ -144,6 +147,28 @@ export function registerPtyHandlers(
   bindProviderListeners(session)
   setRebindProviderListeners(() => bindProviderListeners(session))
   installPtySerializeBufferIpc(session)
+
+  ipcMain.handle(
+    'pty:dismissLaunchNotice',
+    async (
+      _event,
+      args: {
+        worktreeId: string
+        tabId: string
+        launchToken: string
+        code: AgentLaunchNoticeCode
+      }
+    ): Promise<{ ok: boolean; changed: boolean }> => {
+      if (!runtime || !AGENT_LAUNCH_NOTICE_CODES.includes(args.code)) {
+        return { ok: false, changed: false }
+      }
+      return runtime.dismissLaunchNotice(`id:${args.worktreeId}`, {
+        tabId: args.tabId,
+        launchToken: args.launchToken,
+        code: args.code
+      })
+    }
+  )
 
   // Why: reload/crash orphans delivery-interest holds and hidden marks; reset so surviving PTYs aren't stuck force-fed or gated — each pane's first sync re-marks.
   clearRendererGateResetHandlers()

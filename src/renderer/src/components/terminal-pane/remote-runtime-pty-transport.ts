@@ -17,9 +17,13 @@ import type {
   RuntimeStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalResolvePane,
+  RuntimeTerminalCreateAgentLaunchFailure,
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
-import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  AGENT_LAUNCH_IDENTITY_RUNTIME_CAPABILITY,
+  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { agentResumeHostAuthorityCapability } from '../../runtime/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
@@ -27,12 +31,19 @@ import {
 } from '../../../../shared/terminal-input'
 import type {
   IpcPtyTransportOptions,
+  PtyConnectAgentLaunchFailure,
   PtyConnectResult,
   PtyTransport,
   PtyTransportRecoveryState
 } from './pty-transport-types'
 import { createPtyOutputProcessor } from './pty-transport'
-import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
+import {
+  RuntimeRpcCallError,
+  runtimeEnvironmentSupportsCapability,
+  unwrapRuntimeRpcResult
+} from '../../runtime/runtime-rpc-client'
+import { isRuntimeCompatBlockError } from '../../runtime/runtime-protocol-compat'
+import { AGENT_LAUNCH_IDENTITY_UNSUPPORTED_MESSAGE } from '../../runtime/agent-launch-identity-negotiation'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
@@ -116,6 +127,7 @@ type RemoteAgentSessionLaunchResult =
   | RuntimeEnsureAgentSessionResult
   | RuntimeCreateAgentSessionResult
   | { terminal: RuntimeTerminalCreate; disposition?: undefined }
+  | RuntimeTerminalCreateAgentLaunchFailure
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 
 function isRemoteTerminalStaleMessage(message: string): boolean {
@@ -150,6 +162,7 @@ export function createRemoteRuntimePtyTransport(
     agentPromptDelivery,
     agentArgsOverride,
     agentLaunchPreferences,
+    agentLaunch,
     worktreeId,
     executionHostId,
     tabId,
@@ -505,6 +518,9 @@ export function createRemoteRuntimePtyTransport(
     result: RemoteAgentSessionLaunchResult,
     environmentId: string
   ): boolean {
+    if (!('terminal' in result)) {
+      return false
+    }
     if (result.disposition !== undefined || result.terminal.isReattach === true) {
       // Why: every structured launch is host-owned; provisional teardown must
       // never close its canonical terminal while snapshot reconciliation catches up.
@@ -2116,6 +2132,7 @@ export function createRemoteRuntimePtyTransport(
         const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
         const launchTokenToSend = options.launchToken ?? launchToken
         const launchAgentToSend = options.launchAgent ?? launchAgent
+        const agentLaunchToSend = options.agentLaunch ?? agentLaunch
         const legacyCreateParams = {
           worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
           clientMutationId: terminalCreateMutationId,
@@ -2205,27 +2222,90 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
+        const agentLaunchCreate = () =>
+          createWithUnknownOutcomeRecovery(
+            'terminal',
+            (timeoutMs, reconcileExisting) =>
+              callRuntimeForEnvironment<
+                { terminal: RuntimeTerminalCreate } | RuntimeTerminalCreateAgentLaunchFailure
+              >(
+                createEnvironmentId,
+                'terminal.create',
+                {
+                  worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
+                  clientMutationId: terminalCreateMutationId,
+                  agentLaunch: agentLaunchToSend!,
+                  ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+                  tabId,
+                  leafId,
+                  presentation: 'background',
+                  ...(activate === true ? { activate: true } : {}),
+                  ...(reconcileExisting ? { reconcileExisting: true } : {})
+                },
+                timeoutMs
+              ),
+            createEnvironmentId,
+            connectLifecycleEpoch
+          )
         const resumeHostAuthorityCapability = resumeProviderSessionToSend
           ? agentResumeHostAuthorityCapability(launchAgentToSend)
           : undefined
-        const created = launchAgentToSend
-          ? agentSessionRequiresHostAuthorityReplay
-            ? await hostAuthorityCreate()
-            : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
-                environmentId: createEnvironmentId,
-                hostAuthority: hostAuthorityCreate,
-                ...(resumeHostAuthorityCapability
-                  ? { hostAuthorityCapability: resumeHostAuthorityCapability }
-                  : {}),
-                legacy: legacyCreate
-              })
-          : await legacyCreate()
+        // Negotiate before sending: a pre-identity host strips agentLaunch and
+        // spawns a bare shell. Vault resume keeps its client-assembled command for
+        // exactly this case; without one there is nothing to degrade to.
+        const negotiatedAgentLaunchCreate = async () => {
+          let supported: boolean
+          try {
+            supported = await runtimeEnvironmentSupportsCapability(
+              createEnvironmentId,
+              AGENT_LAUNCH_IDENTITY_RUNTIME_CAPABILITY
+            )
+          } catch (error) {
+            // A failed read-only probe spawned nothing; only the legacy command is
+            // safe to fall back to, and a version block must stay a version block.
+            if (isRuntimeCompatBlockError(error) || commandToSend === undefined) {
+              throw error
+            }
+            return await legacyCreate()
+          }
+          if (supported) {
+            return await agentLaunchCreate()
+          }
+          if (commandToSend === undefined) {
+            throw new Error(AGENT_LAUNCH_IDENTITY_UNSUPPORTED_MESSAGE)
+          }
+          return await legacyCreate()
+        }
+        const created = agentLaunchToSend
+          ? await negotiatedAgentLaunchCreate()
+          : launchAgentToSend
+            ? agentSessionRequiresHostAuthorityReplay
+              ? await hostAuthorityCreate()
+              : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
+                  environmentId: createEnvironmentId,
+                  hostAuthority: hostAuthorityCreate,
+                  ...(resumeHostAuthorityCapability
+                    ? { hostAuthorityCapability: resumeHostAuthorityCapability }
+                    : {}),
+                  legacy: legacyCreate
+                })
+            : await legacyCreate()
         if (!created) {
           if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
             connecting = false
             recovery.markDisconnected()
           }
           return
+        }
+        // A pre-spawn agentLaunch failure creates no terminal.
+        if (!('terminal' in created)) {
+          if (destroyed || lifecycleEpoch !== connectLifecycleEpoch) {
+            return
+          }
+          connecting = false
+          recovery.cancel()
+          emitRecoveryState()
+          return { agentLaunch: created.agentLaunch } satisfies PtyConnectAgentLaunchFailure
         }
         const createdTerminal = created.terminal
         adoptExecutionMetadata(createdTerminal)
@@ -2289,7 +2369,10 @@ export function createRemoteRuntimePtyTransport(
         return {
           id: remotePtyId,
           replay: '',
-          ...(createdTerminal.isReattach === true ? { isReattach: true } : {})
+          ...(createdTerminal.isReattach === true ? { isReattach: true } : {}),
+          // Receipt-only: pane identity/attribution rides the receipt token and
+          // the status stream; the runtime result never echoes a launch config.
+          ...(createdTerminal.agentLaunch ? { agentLaunch: createdTerminal.agentLaunch } : {})
         } satisfies PtyConnectResult
       } catch (error) {
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {

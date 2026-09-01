@@ -3,6 +3,8 @@ import {
   readMobileReviewCreatedTerminal,
   readMobileReviewTerminalSendAccepted
 } from './mobile-diff-review-rpc'
+import { resolveIdentityCreateTerminalParams } from './identity-create-terminal-params'
+import { readMobileVaultResumeCreateOutcome } from './ai-vault-resume-outcome'
 
 // Pure launch path for the PR triage actions ("Fix checks with AI" / "Resolve
 // conflicts with AI"). Reuses the same two RPCs the diff-review send flow uses —
@@ -15,8 +17,9 @@ export async function createTerminalAndSendPrompt(
   worktreeId: string,
   prompt: string
 ): Promise<void> {
+  const createParams = await resolveIdentityCreateTerminalParams(client, worktreeId)
   const created = await client.sendRequest('session.tabs.createTerminal', {
-    worktree: `id:${worktreeId}`,
+    ...createParams,
     activate: false,
     select: true,
     navigation: 'caller'
@@ -26,7 +29,16 @@ export async function createTerminalAndSendPrompt(
   }
   const terminalTab = readMobileReviewCreatedTerminal(created.result)
   if (!terminalTab) {
-    throw new Error('Created terminal response was invalid')
+    // Why: a success response missing `tab` is the typed pre-spawn agentLaunch
+    // failure arm (tombstoned/disabled agent, capacity, ...), not a malformed
+    // response — read the failure code like the vault-resume family instead of
+    // reporting a generic "invalid response".
+    const outcome = readMobileVaultResumeCreateOutcome(created.result)
+    throw new Error(
+      outcome.kind === 'failed'
+        ? `Couldn't start the agent (${outcome.code}).`
+        : 'Created terminal response was invalid'
+    )
   }
   const sent = await client.sendRequest('terminal.send', {
     terminal: terminalTab.terminal,

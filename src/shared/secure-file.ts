@@ -6,6 +6,7 @@ import {
   fsyncSync,
   mkdirSync,
   openSync,
+  readFileSync,
   renameSync,
   rmSync,
   statSync,
@@ -90,6 +91,44 @@ function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean
 
 export function writeSecureJsonFile(targetPath: string, value: unknown): void {
   writeSecureFile(targetPath, JSON.stringify(value, null, 2))
+}
+
+/** Outcome of loading a persisted store file, split so callers can tell APART
+ *  the two cases a bare try/catch collapses into "no data":
+ *  - `absent`   — no file yet. An empty in-memory set IS the truth.
+ *  - `unreadable` — the file exists but this process could not read it NOW
+ *    (EACCES/EBUSY/EMFILE/EIO, an interrupted read). The persisted bytes are
+ *    intact, so a caller that treats this as empty and then writes back
+ *    destroys them on the next mutation.
+ *  - `corrupt`  — read fine, does not parse. Rewriting IS the recovery.
+ *  - `parsed`   — decoded JSON, still unvalidated. */
+export type SecureJsonFileRead =
+  | { kind: 'absent' }
+  | { kind: 'unreadable' }
+  | { kind: 'corrupt' }
+  | { kind: 'parsed'; value: unknown }
+
+export function readSecureJsonFile(targetPath: string): SecureJsonFileRead {
+  if (!existsSync(targetPath)) {
+    return { kind: 'absent' }
+  }
+  try {
+    hardenExistingSecureFile(targetPath)
+  } catch {
+    // Hardening is best-effort: a chmod/ACL failure must not misreport a file
+    // that still reads perfectly well.
+  }
+  let contents: string
+  try {
+    contents = readFileSync(targetPath, 'utf-8')
+  } catch {
+    return { kind: 'unreadable' }
+  }
+  try {
+    return { kind: 'parsed', value: JSON.parse(contents) as unknown }
+  } catch {
+    return { kind: 'corrupt' }
+  }
 }
 
 export function writeDurableSecureJsonFile(targetPath: string, value: unknown): void {

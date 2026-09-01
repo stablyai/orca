@@ -1,10 +1,5 @@
 import { useAppStore } from '@/store'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 import {
   deliverLaunchPromptToAgentTab,
@@ -12,25 +7,22 @@ import {
 } from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
-import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { repoIsRemote } from '../../../shared/agent-launch-remote'
-import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { LaunchSource } from '../../../shared/telemetry-events'
-import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import { canUseStructuredNativeChat } from '@/lib/structured-native-chat-availability'
-import { startStructuredCodexLaunch } from '@/lib/structured-agent-session-launch'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
+import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveTuiAgentBaseAgent } from '../../../shared/custom-tui-agents'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
+import type { TuiAgent } from '../../../shared/types'
+import type {
+  AgentLaunchSourceRecord,
+  AgentLaunchSpawnRequest
+} from '../../../shared/agent-launch-spawn-request'
+import type { LaunchSource } from '../../../shared/telemetry-events'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -39,16 +31,27 @@ export type LaunchAgentInNewTabArgs = {
   groupId?: string
   /** Optional initial prompt; delivery depends on `promptDelivery` and the agent's prompt mode. */
   prompt?: string
-  /** Optional CLI arguments appended to the selected agent command. */
-  agentArgs?: string | null
+  /** Host-verified saved owner (e.g. a source-control recipe) whose stored
+   *  agentArgs/env the host resolves and applies to this launch. Clients send
+   *  only the locator; the host owns all command/arg assembly. */
+  sourceRecord?: AgentLaunchSourceRecord
+  /** Unsaved edits of the sourceRecord recipe's agentArgs, applied to this launch
+   *  instead of the stored ones. Best-effort: a host predating the field launches
+   *  the stored args, so never report these as applied. */
+  unsavedAgentArgs?: string
+  /** Optional working directory for the new terminal session. */
   initialCwd?: string | null
-  /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
+  /** Force generated prompt text out of the shell launch command. `draft`
+   *  leaves it editable; `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar quick-launch entry point. */
   launchSource?: LaunchSource
   /** User-authored Quick Command label for local tabs created from the tab bar. */
   quickCommandLabel?: string | null
-  /** Shell platform for the startup command; defaults to renderer OS. SSH/WSL worktrees run Linux even from Windows. */
+  /** Vestigial: the host now owns platform-dependent command assembly, so this
+   *  no longer affects the client launch. Still accepted so the source-control
+   *  callers that thread it need not change; retiring that threading is a
+   *  follow-up cleanup. */
   launchPlatform?: NodeJS.Platform
   /** Called after the prompt is actually delivered to the agent input path. */
   onPromptDelivered?: () => void
@@ -56,12 +59,11 @@ export type LaunchAgentInNewTabArgs = {
 
 export type LaunchAgentInNewTabResult = {
   tabId: string | null
-  startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
   /** The host will publish and focus a structured tab asynchronously. */
   focusAfterMenuClose?: 'structured-session'
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
-} | null
+}
 
 export function shouldQueueTerminalFocusAfterMenuClose(
   result: NonNullable<LaunchAgentInNewTabResult>
@@ -73,11 +75,15 @@ export function shouldQueueTerminalFocusAfterMenuClose(
  * Create a new terminal tab and queue the agent's launch command, optionally
  * with an initial prompt.
  *
- * Submission mode follows `promptInjectionMode`: argv/flag agents fold the
- * prompt into the launch command; followup-path agents launch empty and get a
- * post-ready draft paste. Callers can override via `promptDelivery`.
+ * Default submission mode follows `promptInjectionMode`: argv/flag agents
+ * include the prompt directly in the launch command, while followup-path
+ * agents launch empty and receive a post-ready draft paste. Generated contexts
+ * can override this with draft or submit-after-ready delivery.
  *
- * Returns `null` when no startup plan can be built (e.g. a whitespace-only prompt).
+ * The host owns command/arg/token assembly on the `agentLaunch` path, so this
+ * never validates or aborts on the client: an unlaunchable request (e.g.
+ * untokenizable stored args) still creates the tab and surfaces the host's
+ * typed failure downstream rather than silently no-op'ing.
  */
 export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
   const {
@@ -85,45 +91,107 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     worktreeId,
     groupId,
     prompt,
-    agentArgs,
+    sourceRecord,
+    unsavedAgentArgs,
     initialCwd,
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
-    launchPlatform,
     onPromptDelivered
   } = args
   const store = useAppStore.getState()
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
   const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
-  const resolvedLaunchPlatform =
-    launchPlatform ??
-    (repo
-      ? getAgentLaunchPlatformForRepo(
-          repo,
-          repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
-        )
-      : CLIENT_PLATFORM)
-  // Why: SSH remotes deploy the shim as plain `orca`, so skip the Linux-only `orca-ide` rename for remote launches.
+  // Why: on a remote (SSH/relay) target the host delivers a post-ready draft
+  // through its local ptyController, which never reaches the relay-hosted pty
+  // (the W6-remote U10 gap). A folded draft the host defers to post-ready would
+  // be silently lost there, so the draft branch below routes to a client-side
+  // paste on remote instead.
   const isRemote = repo ? repoIsRemote(repo) : false
-  const queuedShell = resolveLocalWindowsAgentStartupShell({
-    platform: resolvedLaunchPlatform,
-    isRemote,
-    terminalWindowsShell: store.settings?.terminalWindowsShell
-  })
-  const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  // Why: key the fold-vs-paste decision on the resolved BASE agent. Under
+  // noImplicitAny:false a custom id would index TUI_AGENT_CONFIG as `any`,
+  // reading promptInjectionMode as undefined and silently folding a
+  // stdin-after-start base into argv instead of pasting after start. A custom
+  // id inherits its base's injection mode; an unresolvable id is unlaunchable
+  // downstream, so treat it as non-followup here.
+  const baseAgent = resolveTuiAgentBaseAgent(
+    agent,
+    store.settings?.customTuiAgents,
+    store.settings?.deletedCustomTuiAgents
+  )
+  const isFollowupPath =
+    baseAgent !== null && TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start'
+  // Why: argv/flag agents fold the prompt into the launch command and
+  // auto-submit — keeping behavior consistent with the composer/tab-bar `+`
+  // mental model, where the prompt is "the first turn the user sent".
+  // Followup-path and generated-context launches can deliver a prompt via
+  // post-launch bracketed paste; callers decide whether that paste remains a
+  // draft or submits after readiness.
+  // The host assembles and validates the launch; the client only decides
+  // whether the prompt folds into that launch or is pasted after readiness.
+  let pasteDraftAfterLaunch: string | null = null
+  let submitPastedPrompt = false
+  let forcePasteAfterLaunch = false
+  let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
+
+  if (hasPrompt && promptDelivery === 'submit-after-ready') {
+    // Why: generated multi-line prompts are too large to echo through a shell
+    // argv/prefill command. Launch cleanly, then paste+submit inside the TUI.
+    pasteDraftAfterLaunch = trimmedPrompt
+    submitPastedPrompt = true
+    forcePasteAfterLaunch = true
+  } else if (hasPrompt && promptDelivery === 'draft') {
+    // Local: fold the draft into the host launch (pasteDraftAfterLaunch stays
+    // null). The host owns whether it lands via an inline flag, an env var, or a
+    // post-ready draftPrompt paste (draftParts/maxInlineDraftChars) — no client
+    // command estimate. Remote: the host's post-ready draftPrompt paste writes
+    // through its local ptyController and never reaches the relay-hosted pty
+    // (W6-remote U10 gap), so a folded draft the host defers to post-ready would
+    // be silently lost. Deliver via a client paste instead — the same text
+    // arrives; forcePaste overrides the native-prefill no-op so a
+    // draftPromptFlag/env base still receives it (nothing was folded to prefill).
+    if (isRemote) {
+      pasteDraftAfterLaunch = trimmedPrompt
+      forcePasteAfterLaunch = true
+    }
+  } else if (hasPrompt && isFollowupPath) {
+    pasteDraftAfterLaunch = trimmedPrompt
+  }
+
+  // Why: the prompt rides `agentLaunch` only when it folds into the launch
+  // itself (argv/flag agents, native draft flag). Every post-ready paste path
+  // (submit-after-ready, oversized draft, stdin-after-start followup) launches
+  // bare and the renderer delivers the prompt below, so the request carries
+  // `allowEmptyPromptLaunch` instead. A native draft fold must stay UNSUBMITTED,
+  // so forward `promptDelivery: 'draft'` — without it the host defaults to
+  // submit and auto-sends the draft.
+  const promptFoldsIntoLaunch = pasteDraftAfterLaunch === null && hasPrompt
+  const agentLaunch: AgentLaunchSpawnRequest = {
+    selection: { kind: 'agent', agent },
+    ...(promptFoldsIntoLaunch
+      ? {
+          prompt: trimmedPrompt,
+          ...(promptDelivery === 'draft' ? { promptDelivery: 'draft' as const } : {})
+        }
+      : { allowEmptyPromptLaunch: true }),
+    // Why: recipe-driven launches name the saved owner so the host resolves and
+    // applies its stored agentArgs (and env) itself. Unsaved arg edits ride along
+    // as text the host substitutes for that stored snapshot — never assembled argv
+    // — and only make sense with the owner locator that scopes them.
+    ...(sourceRecord
+      ? {
+          sourceRecord,
+          ...(unsavedAgentArgs !== undefined ? { unsavedAgentArgs } : {})
+        }
+      : {})
+  }
+
   // Why: the remote host can't infer this client's draft/default view choice, so decide it here for paired tabs too.
   const viewModePromptDelivery =
     hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
-  const initialViewModeOptions = {
+  const initialViewModeArgs = {
     agent,
     promptDelivery: viewModePromptDelivery,
     launchDraftText: trimmedPrompt,
@@ -131,43 +199,35 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       getConnectionIdFromState(store, worktreeId)
     )
   }
-  const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
-  const startupPlanBase = {
-    agent,
-    cmdOverrides,
-    platform: resolvedLaunchPlatform,
-    shell: queuedShell,
-    isRemote,
-    agentArgs: effectiveAgentArgs,
-    agentEnv,
-    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
-  }
-  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
-    base: startupPlanBase,
-    prompt: trimmedPrompt,
-    promptDelivery,
-    isFollowupPath
-  })
-  let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
-
-  if (!startupPlan) {
-    return null
-  }
+  const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeArgs)
+  // Why: session options stay client-owned even though the host assembles the
+  // command — they configure the native-chat pane (model, reasoning effort), not
+  // the startup argv, so the agentLaunch boundary never carries them.
+  const sessionOptions = resolveInitialNativeChatSessionOptions(store.settings, initialViewModeArgs)
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const webHostDelivery = launchAgentInWebHostTab({
+      // Why: route the paired-web launch through the same host `agentLaunch`
+      // boundary as the local path — the host owns command/config/token assembly,
+      // so the client never sends an assembled startup plan here (the last
+      // client-assembled launch on this surface).
       agent,
       worktreeId,
       environmentId: runtimeEnvironmentId,
       groupId,
       cwd: initialCwd,
-      startupPlan,
-      prompt: trimmedPrompt,
-      promptDelivery,
-      pastePromptAfterReady: pasteDraftAfterLaunch,
-      submitPastedPrompt,
-      agentArgs,
+      hasPrompt,
+      agentLaunch,
+      ...(pasteDraftAfterLaunch !== null
+        ? {
+            promptAfterReady: {
+              content: pasteDraftAfterLaunch,
+              submit: submitPastedPrompt,
+              forcePaste: forcePasteAfterLaunch
+            }
+          }
+        : {}),
       // Why: omission means terminal locally, but would let a paired host apply
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
@@ -175,7 +235,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     })
     return {
       tabId: null,
-      startupPlan,
       pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
       ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
         ? { promptDeliveryResult: webHostDelivery }
@@ -205,37 +264,37 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     quickCommandLabel,
     ...initialViewModeProps
   })
-  seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
+  seedNativeChatAppliedSessionOptions(tab.id, agent, sessionOptions)
   if (initialCwd?.trim()) {
     // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
     store.queueTabInitialCwd(tab.id, initialCwd)
   }
   store.queueTabStartupCommand(tab.id, {
-    command: startupPlan.launchCommand,
-    ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
-    launchAgent: agent,
-    ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
-    ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
-    ...(startupPlan.startupCommandDelivery
-      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-      : {}),
-    ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
+    // The host owns command/config/token assembly on the agentLaunch path; the
+    // client only names the requested identity and prompt/launch policy.
+    command: '',
+    agentLaunch,
+    ...(sessionOptions ? { sessionOptions } : {}),
+    // Why: gate on the resolved BASE — a command-code-based custom agent has the
+    // same missing prompt-start hook. The status keeps the REQUESTED id so the
+    // pane stays attributed to the custom agent the user launched.
+    ...(baseAgent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
       ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
       : {}),
+    // Host overwrites agent_kind from the resolved receipt before the emit, so
+    // this host-resolved launch threads only the surface-owned fields.
     telemetry: {
-      agent_kind: tuiAgentToAgentKind(agent),
       launch_source: launchSource ?? 'tab_bar_quick_launch',
       request_kind: 'new'
     }
   })
-  // Why: fire-and-forget the paste-after-ready delivery so callers keep the synchronous { tabId, startupPlan } signature.
-  // Why: safe to call unconditionally — the helper short-circuits (no paste) for native-prefill agents already holding the draft.
   if (hasPrompt && promptDelivery === 'draft' && pasteDraftAfterLaunch === null) {
-    // Why: the draft rode in on argv (Claude --prefill etc.), so no paste runs
-    // and deliverLaunchPromptToAgentTab never seeds. Mirror it into chat here.
+    // Why: the draft rides in through the host launch, so no renderer paste
+    // seeds the mirrored chat composer.
     seedNativeChatLaunchDraftForAgentTab({ tabId: tab.id, agent, text: trimmedPrompt })
   }
+  // Why: schedule the bracketed-paste-after-ready follow-up immediately after
+  // the startup command is queued. Fire-and-forget so callers stay synchronous.
   if (pasteDraftAfterLaunch !== null) {
     const timeoutNotice = createPasteReadinessTimeoutNotice({
       worktreeId,
@@ -248,14 +307,14 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       content: pasteDraftAfterLaunch,
       agent,
       submit: submitPastedPrompt,
-      forcePaste: promptDelivery === 'submit-after-ready',
+      forcePaste: forcePasteAfterLaunch,
       onTimeout: timeoutNotice.onTimeout
     }).then((delivered) => {
       if (delivered) {
-        if (agent === 'command-code' && submitPastedPrompt) {
+        if (baseAgent === 'command-code' && submitPastedPrompt) {
           // Why: Command Code has no prompt-submit hook; when Orca submits a
           // generated prompt after readiness, seed working at delivery time.
-          seedCommandCodeSubmittedPromptStatus(worktreeId, tab.id, trimmedPrompt)
+          seedCommandCodeSubmittedPromptStatus(worktreeId, tab.id, agent, trimmedPrompt)
         }
         onPromptDelivered?.()
       }
@@ -292,7 +351,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
 
   return {
     tabId: tab.id,
-    startupPlan,
     pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
     ...(promptDeliveryResult ? { promptDeliveryResult } : {})
   }

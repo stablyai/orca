@@ -1,4 +1,5 @@
 import { useEffect, useRef, type JSX, type ReactNode } from 'react'
+import { useAppStore } from '../../store'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import {
   resolveNativeChatSession,
@@ -17,7 +18,15 @@ export function NativeChatSessionGate({
   ...input
 }: NativeChatSessionGateProps): JSX.Element {
   const lastResolutionRef = useRef<NativeChatPaneResolution | null>(null)
-  const currentResolution = resolveNativeChatSession(input)
+  // Read here, not in the resolver: the catalog turns a custom agent id into the
+  // base harness the chat view is keyed by, and the resolver stays pure.
+  const customTuiAgents = useAppStore((s) => s.settings?.customTuiAgents)
+  const deletedCustomTuiAgents = useAppStore((s) => s.settings?.deletedCustomTuiAgents)
+  const currentResolution = resolveNativeChatSession({
+    customTuiAgents,
+    deletedCustomTuiAgents,
+    ...input
+  })
   const previousResolution =
     lastResolutionRef.current?.paneKey === input.paneKey ? lastResolutionRef.current : null
   const resolution = (() => {

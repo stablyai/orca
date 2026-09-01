@@ -1,7 +1,12 @@
 import type { OrchestrationDb } from './db'
-import type { MessageRow, CoordinatorStatus } from './types'
+import type { MessageRow, TaskRow, CoordinatorStatus } from './types'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
-import type { CoordinatorRuntime, WorktreeDrift } from './coordinator-runtime-contract'
+import type {
+  CoordinatorRuntime,
+  DispatchAgentIdentity,
+  WorktreeDrift
+} from './coordinator-runtime-contract'
+export type { CoordinatorRuntime, DispatchAgentIdentity, DispatchAgentLaunchValidation } from './coordinator-runtime-contract'
 import { applyEscalationToDispatch } from './coordinator-escalation-triage'
 import { evaluateDagConvergence } from './coordinator-dag-convergence'
 import {
@@ -22,6 +27,7 @@ export type CoordinatorOptions = {
   maxConcurrent?: number
   worktree?: string
   onLog?: (msg: string) => void
+  resolveDispatchIdentity?: (task: TaskRow, targetHandle: string) => DispatchAgentIdentity | null
 }
 
 type CoordinatorState = {
@@ -40,9 +46,12 @@ export class Coordinator {
   private runtime: CoordinatorRuntime
   private state: CoordinatorState
   private stopped = false
-  private opts: Required<Omit<CoordinatorOptions, 'onLog' | 'worktree'>> & {
+  private opts: Required<
+    Omit<CoordinatorOptions, 'onLog' | 'worktree' | 'resolveDispatchIdentity'>
+  > & {
     onLog: (msg: string) => void
     worktree?: string
+    resolveDispatchIdentity?: (task: TaskRow, targetHandle: string) => DispatchAgentIdentity | null
   }
 
   constructor(db: OrchestrationDb, runtime: CoordinatorRuntime, options: CoordinatorOptions) {
@@ -54,7 +63,8 @@ export class Coordinator {
       pollIntervalMs: options.pollIntervalMs ?? DEFAULT_POLL_MS,
       maxConcurrent: options.maxConcurrent ?? MAX_CONCURRENT_DEFAULT,
       worktree: options.worktree,
-      onLog: options.onLog ?? (() => {})
+      onLog: options.onLog ?? (() => {}),
+      resolveDispatchIdentity: options.resolveDispatchIdentity
     }
     this.state = {
       runId: '',
@@ -287,7 +297,8 @@ export class Coordinator {
           nestedWorkerMaxDepth:
             this.runtime.getNestedWorkerMaxDepth?.() ?? NESTED_WORKER_MAX_DEPTH_DEFAULT,
           onLog: this.opts.onLog,
-          onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId)
+          onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId),
+          resolveDispatchIdentity: this.opts.resolveDispatchIdentity
         })
         if (result === 'stale-base-refused') {
           terminals.unshift(targetHandle)

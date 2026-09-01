@@ -2,7 +2,8 @@ import { ipcMain, app } from 'electron'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
-  AdoptProvisionedRootArgs
+  AdoptProvisionedRootArgs,
+  CreatedWorktreeResult
 } from '../../../../shared/worktree/create-types'
 import { withWorktreeSpan } from '../../../observability/instrumentation'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
@@ -27,6 +28,7 @@ import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-sche
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { WorktreeAgentLaunchPreCreateError } from '../../../agent-launch/agent-launch-worktree-resolution'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -45,6 +47,30 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
         const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
 
+        const agentLaunchPrepared = args.agentLaunch
+          ? await runtime.prepareLocalWorktreeCreateAgentLaunch(repo, args.agentLaunch)
+          : null
+        if (agentLaunchPrepared && !agentLaunchPrepared.ok) {
+          releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+          if (agentLaunchPrepared.failure) {
+            return {
+              created: false,
+              agentLaunchResult: { status: 'failed', failure: agentLaunchPrepared.failure }
+            }
+          }
+          if (agentLaunchPrepared.requestError) {
+            return {
+              created: false,
+              agentLaunchResult: {
+                status: 'rejected',
+                requestError: agentLaunchPrepared.requestError
+              }
+            }
+          }
+          throw new WorktreeAgentLaunchPreCreateError({})
+        }
+        const agentLaunchFinish = agentLaunchPrepared?.ok ? agentLaunchPrepared : null
+
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
           repoSelector: args.repoId,
@@ -56,7 +82,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           automationProvenance
         }
 
-        let result: CreateWorktreeResult
+        let result: CreatedWorktreeResult
         try {
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
           result = isFolderRepo(repo)
@@ -65,6 +91,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
               ? await createRemoteWorktree(createArgs, repo, store, mainWindow)
               : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
         } catch (error) {
+          agentLaunchFinish?.release()
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           track('workspace_create_failed', {
             source,
@@ -74,6 +101,25 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           throw error
         }
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+
+        if (agentLaunchFinish) {
+          const finished = await runtime.finishLocalWorktreeCreateAgentLaunch(
+            agentLaunchFinish,
+            result.worktree.id,
+            { repoPath: repo.path, worktreePath: result.worktree.path },
+            result.setup
+          )
+          result = {
+            ...result,
+            ...(finished.agentLaunchResult
+              ? { agentLaunchResult: finished.agentLaunchResult }
+              : {}),
+            ...(finished.startupTerminal ? { startupTerminal: finished.startupTerminal } : {}),
+            ...(result.setup && finished.wrappedSetupCommand
+              ? { setup: { ...result.setup, command: finished.wrappedSetupCommand } }
+              : {})
+          }
+        }
 
         // Why: reaching here means create succeeded (helpers throw); skip a separate workspace_initialized (telemetry-plan.md§Deferred); never send the branch name.
         track('workspace_created', {
@@ -103,7 +149,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
 
   ipcMain.handle(
     'worktrees:adoptProvisionedRoot',
-    async (_event, rawArgs: AdoptProvisionedRootArgs): Promise<CreateWorktreeResult> => {
+    async (_event, rawArgs: AdoptProvisionedRootArgs): Promise<CreatedWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
       return withWorktreeSpan({ stage: 'create' }, async () => {
         const repo = findExactRepoOwner(store, args.repoId, args.executionHostId)
@@ -118,7 +164,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           repo,
           request: args.automationProvenanceRequest
         })
-        let result: CreateWorktreeResult
+        let result: CreatedWorktreeResult
         try {
           result = await adoptProvisionedRootSshCheckout({
             userDataPath: app.getPath('userData'),

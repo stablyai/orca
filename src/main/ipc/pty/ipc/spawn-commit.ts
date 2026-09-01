@@ -6,11 +6,7 @@ import type { PtySpawnResult } from '../../../providers/types'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
 import { track } from '../../../telemetry/client'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
-import {
-  agentKindSchema,
-  launchSourceSchema,
-  requestKindSchema
-} from '../../../../shared/telemetry-events'
+import { buildAgentStartedAttribution } from '../../../telemetry/agent-started-telemetry'
 import {
   shouldSkipCodexHomeEnvForWindowsShell,
   codexReattachedHomeRouteField
@@ -24,6 +20,9 @@ import {
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
+import { registerHostSessionLaunch } from '../../../agent-launch/agent-session-launch-registration'
+import { getHostAgentLaunchBoundary } from '../../../agent-launch/agent-launch-boundary-host'
+import { getHostAgentSessionRecordStore } from '../../../agent-launch/agent-session-record-store-host'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
@@ -80,6 +79,10 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       launchToken: args.launchToken,
       spawnEnv: ctx.spawnEnv,
       launchAgent: args.launchAgent,
+      // args.launchAgent is the receipt's built-in base; preserve the requested identity for display.
+      ...(ctx.agentLaunchOutcome?.status === 'launched'
+        ? { requestedAgent: ctx.agentLaunchOutcome.receipt.requestedAgent }
+        : {}),
       launchConfig: ctx.effectiveLaunchConfig,
       isReattach: ctx.result.isReattach === true,
       hasStablePaneOwner: ctx.stablePaneOwner !== null,
@@ -189,18 +192,29 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     })
   }
   // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
-  if (args.telemetry && !ctx.stablePaneOwner) {
-    const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-    const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-    const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
-    if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
-      track('agent_started', {
-        agent_kind: agentKindParse.data,
-        launch_source: launchSourceParse.data,
-        request_kind: requestKindParse.data,
-        ...getCohortAtEmit()
-      })
-    }
+  const spawnAttribution =
+    args.telemetry && !ctx.stablePaneOwner && !ctx.result.isReattach
+      ? buildAgentStartedAttribution(args.telemetry)
+      : null
+  if (spawnAttribution) {
+    track('agent_started', { ...spawnAttribution, ...getCohortAtEmit() })
+  }
+  ctx.settleAgentLaunch(ctx.result.isReattach ? 'failed' : 'registered')
+  if (
+    ctx.agentLaunchToken &&
+    !ctx.result.isReattach &&
+    ctx.agentLaunchOutcome?.status === 'launched' &&
+    typeof args.worktreeId === 'string'
+  ) {
+    registerHostSessionLaunch({
+      boundary: getHostAgentLaunchBoundary(),
+      store: getHostAgentSessionRecordStore(),
+      launchToken: ctx.agentLaunchToken,
+      worktreeId: args.worktreeId,
+      receipt: ctx.agentLaunchOutcome.receipt,
+      ...(rememberedPaneKey ? { paneKey: rememberedPaneKey } : {}),
+      terminalId: ctx.result.id
+    })
   }
   const response = {
     ...ctx.result,
@@ -222,6 +236,18 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     // renderer can say so, and a reattach never ran this launch command.
     ...(ctx.codexResumeLaunch.notifyResumeUnavailable && !ctx.result.isReattach
       ? { agentResumeUnavailable: true as const }
+      : {}),
+    ...(ctx.agentLaunchOutcome && !ctx.result.isReattach
+      ? { agentLaunch: ctx.agentLaunchOutcome }
+      : {}),
+    ...(ctx.agentLaunchFollowupPrompt && !ctx.result.isReattach
+      ? { followupPrompt: ctx.agentLaunchFollowupPrompt }
+      : {}),
+    ...(ctx.agentLaunchDraftPrompt && !ctx.result.isReattach
+      ? { draftPrompt: ctx.agentLaunchDraftPrompt }
+      : {}),
+    ...(ctx.vaultLaunchNotices && !ctx.result.isReattach
+      ? { launchNotices: ctx.vaultLaunchNotices }
       : {})
   }
   // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.

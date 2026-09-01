@@ -1,4 +1,3 @@
-import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
 import { buildAutomationCronSchedule } from '../../../../shared/automation-schedule-occurrences'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -45,8 +44,4 @@ export function buildHermesCronSchedule(draft: AutomationDraft): string {
     minute,
     dayOfWeek: Number(draft.dayOfWeek)
   })
-}
-
-export function getAgentLabel(agentId: string): string {
-  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
 }

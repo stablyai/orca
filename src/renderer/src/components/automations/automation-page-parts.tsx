@@ -1,7 +1,9 @@
 import React from 'react'
 import type { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import type { AutomationRun } from '../../../../shared/automations-types'
+import { getAutomationRunLaunchFailure } from './automation-run-view-state'
 
 export function formatAutomationDateTime(value: number | null | undefined): string {
   if (!value) {
@@ -91,8 +93,33 @@ export function getAutomationRunStatusLabel(status: AutomationRun['status']): st
   }
 }
 
-export const AUTOMATION_EDITOR_SECTION_LABEL_CLASS =
-  'text-[11px] font-semibold uppercase tracking-[0.05em]'
+export type AutomationRunRowBadge = {
+  label: string
+  variant: React.ComponentProps<typeof Badge>['variant']
+}
+
+/** Badge for a run history row. A run stranded mid-dispatch keeps a non-terminal
+ *  status, so its default label ("Starting"/"Queued") would mask the recorded
+ *  launch failure; surface the structured failed/forgotten state instead. */
+export function getAutomationRunRowBadge(run: AutomationRun): AutomationRunRowBadge {
+  const launchFailure = getAutomationRunLaunchFailure(run)
+  if (launchFailure && (run.status === 'dispatching' || run.status === 'pending')) {
+    if (launchFailure.forgottenAt !== null) {
+      return {
+        label: translate('agentLaunch.unattendedFailure.rowBadge.forgotten', 'Forgotten'),
+        variant: 'outline'
+      }
+    }
+    return {
+      label: translate('agentLaunch.unattendedFailure.rowBadge.didNotStart', "Didn't start"),
+      variant: 'destructive'
+    }
+  }
+  return {
+    label: getAutomationRunStatusLabel(run.status),
+    variant: getAutomationRunStatusVariant(run.status)
+  }
+}
 
 export function Field({
   label,
@@ -112,3 +139,5 @@ export function Field({
     </div>
   )
 }
+
+export const AUTOMATION_EDITOR_SECTION_LABEL_CLASS = 'font-medium text-foreground'

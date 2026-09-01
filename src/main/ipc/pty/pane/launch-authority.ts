@@ -9,11 +9,13 @@ export function admitRendererAgentLaunchAuthority(args: {
   launchToken: unknown
   spawnEnv: Record<string, string> | undefined
   launchAgent: unknown
+  /** Host-receipt requested identity (may be custom); display-only downstream. */
+  requestedAgent?: TuiAgent
   launchConfig: SleepingAgentLaunchConfig | undefined
   isReattach: boolean
   hasStablePaneOwner: boolean
   incarnationId: unknown
-}): { launchToken: string; launchAgent: TuiAgent } | null {
+}): { launchToken: string; launchAgent: TuiAgent; requestedAgent?: TuiAgent } | null {
   if (
     args.isReattach ||
     args.hasStablePaneOwner ||
@@ -27,7 +29,13 @@ export function admitRendererAgentLaunchAuthority(args: {
   ) {
     return null
   }
-  return { launchToken: args.launchToken, launchAgent: args.launchAgent }
+  return {
+    launchToken: args.launchToken,
+    launchAgent: args.launchAgent,
+    ...(isTuiAgent(args.requestedAgent) && args.requestedAgent !== args.launchAgent
+      ? { requestedAgent: args.requestedAgent }
+      : {})
+  }
 }
 
 export function admitProviderReattachLaunchIdentity(args: {

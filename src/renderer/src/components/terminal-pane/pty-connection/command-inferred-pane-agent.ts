@@ -1,4 +1,5 @@
 import { detectAgentStatusFromTitle, isClaudeAgent } from '@/lib/agent-status'
+import { resolvePaneOwnerBaseAgent } from '@/lib/agent-base-identity'
 import { useAppStore } from '@/store'
 import {
   isFreshNonDoneAgentStatus,
@@ -204,7 +205,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
   ): void => {
     const settings = useAppStore.getState().settings
     if (
-      (agentType === 'claude' || isClaudeAgent(title)) &&
+      (resolvePaneOwnerBaseAgent(agentType) === 'claude' || isClaudeAgent(title)) &&
       (settings === null || settings.promptCacheTimerEnabled)
     ) {
       session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())

@@ -3,10 +3,11 @@ import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
 import type { EventProps } from '../../../../shared/telemetry-events'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
+import {
+  applyAgentPermissionModeViaCatalog,
+  setDefaultTuiAgent
+} from '@/lib/agent-catalog-authoring'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
@@ -163,13 +164,10 @@ export function usePersistCurrentStep({
     try {
       if (currentStepId === 'agent') {
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
-        await updateSettings({
-          defaultTuiAgent,
-          ...applyAgentPermissionMode({
-            mode: yoloPermissions ? 'yolo' : 'manual',
-            agentDefaultArgs: settings.agentDefaultArgs,
-            agentDefaultEnv: settings.agentDefaultEnv
-          })
+        await setDefaultTuiAgent(defaultTuiAgent)
+        await applyAgentPermissionModeViaCatalog(yoloPermissions ? 'yolo' : 'manual', {
+          agentDefaultArgs: settings.agentDefaultArgs,
+          agentDefaultEnv: settings.agentDefaultEnv
         })
         const choseAgent = defaultTuiAgent !== 'blank'
         const wasAlreadyChosen = onboardingChecklist.choseAgent

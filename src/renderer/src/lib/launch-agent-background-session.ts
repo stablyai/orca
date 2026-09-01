@@ -1,18 +1,14 @@
 import { useAppStore } from '@/store'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import type {
   LaunchAgentBackgroundSessionArgs,
   LaunchAgentBackgroundSessionResult
 } from '@/lib/agent-background-session-contract'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { scheduleAgentBackgroundDraft } from '@/lib/agent-background-draft-delivery'
+import { AgentLaunchSpawnOutcomeError } from '@/lib/agent-launch-spawn-outcome-error'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import { requireTuiAgentConfig } from '../../../shared/require-tui-agent-config'
-import { resolveAgentBackgroundLaunchHost } from '@/lib/agent-background-session-launch-host'
+import { resolveTuiAgentBaseAgent } from '../../../shared/custom-tui-agents'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveTelemetryAgentKind } from '@/lib/telemetry-agent-kind'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   registerEagerPtyBuffer,
@@ -21,48 +17,57 @@ import {
 } from '@/components/terminal-pane/pty-dispatcher'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { assertRuntimeSupportsAgentLaunchIdentity } from '@/runtime/agent-launch-identity-negotiation'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
-import { retireProvider } from '@/lib/retire-unowned-background-terminal'
-import { createRuntimeAgentBackgroundTerminal } from '@/lib/runtime-agent-background-create'
+import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { retireProvider, retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   subscribeToRuntimeTerminalData,
   toRemoteRuntimePtyId
 } from '@/runtime/runtime-terminal-stream'
-import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
-import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
+import type {
+  RuntimeTerminalCreate,
+  RuntimeTerminalCreateAgentLaunchFailure
+} from '../../../shared/runtime-types'
+import type { AgentLaunchSpawnRequest } from '../../../shared/agent-launch-spawn-request'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
-import type { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
-import {
-  adoptAgentBackgroundSessionTab,
-  reserveAgentBackgroundSessionIdentity
-} from '@/lib/adopt-agent-background-session-tab'
+import { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import { createBackgroundAgentStatusConsumer } from '@/lib/background-agent-status-consumer'
+import { resolveAgentBackgroundLaunchHost } from '@/lib/agent-background-session-launch-host'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
 ): Promise<LaunchAgentBackgroundSessionResult | null> {
   const { agent, worktreeId, prompt, launchSource, title, onData, onExit, onAgentStatus } = args
   const store = useAppStore.getState()
-  // Folder workspaces exist only in getKnownWorktreeById (#2989).
+  // Folder workspaces exist only in getKnownWorktreeById.
   const worktree = store.getKnownWorktreeById(worktreeId)
   const repo = worktree ? store.repos.find((entry) => entry.id === worktree.repoId) : null
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
-  const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
-  // Folder launch ownership cannot be derived from a repo row (#2989).
   const launchHost = resolveAgentBackgroundLaunchHost({
     store,
     worktreeId,
     worktreePath: worktree.path,
     repo
   })
-  const preflight = requireTuiAgentConfig(agent).preflightTrust
+  // Why: a custom id inherits its base harness's trust preset and prompt-hook
+  // gaps; resolve the base from the requested id before reading any built-in-only
+  // registry so a custom-based agent behaves like its base and an unresolvable id
+  // degrades instead of silently reading `undefined`.
+  const baseAgent = resolveTuiAgentBaseAgent(
+    agent,
+    store.settings?.customTuiAgents,
+    store.settings?.deletedCustomTuiAgents
+  )
+  const preflight = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
   if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
     try {
       await window.api.agentTrust.markTrusted({
@@ -71,69 +76,57 @@ export async function launchAgentBackgroundSession(
         ...(launchHost.connectionId ? { connectionId: launchHost.connectionId } : {})
       })
     } catch {
-      // Best-effort: the user can still accept the trust prompt.
+      // Best-effort: continue with launch. The user can still accept the trust menu.
     }
   }
-  const { platform: launchPlatform, isRemote } = launchHost
-  const startupShell = resolveLocalWindowsAgentStartupShell({
-    platform: launchPlatform,
-    isRemote,
-    terminalWindowsShell: store.settings?.terminalWindowsShell
-  })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start'
-
-  const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
-  const startupPlan = buildAgentStartupPlan({
-    agent,
-    prompt: hasPrompt && !isFollowupPath ? trimmedPrompt : '',
-    cmdOverrides,
-    agentArgs,
-    agentEnv,
-    platform: launchPlatform,
-    shell: startupShell,
-    isRemote,
-    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
-  })
-  if (!startupPlan) {
-    return null
+  // Why (U3): the host resolves the requested identity, folds the prompt into the
+  // launch command per the resolved base agent's injection mode, and mints the
+  // launch token. The client sends identity + prompt only — never a command,
+  // launch config, agent env, or the token.
+  const agentLaunch: AgentLaunchSpawnRequest = {
+    selection: { kind: 'agent', agent },
+    prompt: trimmedPrompt,
+    ...(hasPrompt ? {} : { allowEmptyPromptLaunch: true })
   }
 
-  // A hidden run tab must never be store-visible without its PTY (#2989).
-  const { reservedTabId, leafId, launchToken, launchRegistration, paneEnv } =
-    reserveAgentBackgroundSessionIdentity({
-      store,
-      agentType: agent,
-      worktreeId,
-      launchConfig: startupPlan.launchConfig,
-      env: startupPlan.env
-    })
-  let paneKey = makePaneKey(reservedTabId, leafId)
+  // Reserve stable identities without publishing a PTY-less tab.
+  const reservedTabId = createBrowserUuid()
+  // Why: agent hook callbacks are keyed by pane, and background automation
+  // tabs never mount a TerminalPane to inject this env for us. createBrowserUuid
+  // (not crypto.randomUUID) because the latter is undefined in non-secure
+  // browser contexts — the LAN web client served over plain HTTP.
+  const leafId = createBrowserUuid()
+  const paneKey = makePaneKey(reservedTabId, leafId)
+  // Why (contract B): structural pane-identity env is renderer-owned context —
+  // the renderer creates the pane. ORCA_AGENT_LAUNCH_TOKEN is NOT sent; the host
+  // injects it from the admission-minted receipt token.
+  const paneEnv = {
+    ORCA_PANE_KEY: paneKey,
+    ORCA_TAB_ID: reservedTabId,
+    ORCA_WORKTREE_ID: worktreeId
+  }
   const sshConnectionId = launchHost.connectionId
-  const sshStartupDelivery = createSshBackgroundStartupDelivery({
-    command: sshConnectionId ? startupPlan.launchCommand : null,
-    waitForShellReady:
-      Boolean(sshConnectionId) &&
-      shouldUseShellReadyStartupDelivery({
-        command: startupPlan.launchCommand,
-        startupCommandDelivery: startupPlan.startupCommandDelivery
-      }),
-    write: (ptyId, data) => window.api.pty.write(ptyId, data)
-  })
   // Route by the worktree's owner host, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(store, worktreeId)
   )
-  let ptyId = '',
-    runtimeTerminalHandle: string | null = null
-  // What the local spawn answered and later steps still need: which lifetime of `ptyId` this launch
-  // owns, and the config the host actually launched. Both absent for a runtime terminal.
-  let spawned: { incarnationId?: string; launchConfig?: typeof startupPlan.launchConfig } = {}
+  let ptyId = ''
+  let runtimeTerminalHandle: string | null = null
   let tab: ReturnType<typeof store.createTab> | null = null
-  let exitHandled = false,
-    eagerPtyBuffer: EagerPtyHandle | null = null
+  let exitHandled = false
+  let eagerPtyBuffer: EagerPtyHandle | null = null
   let terminalOwnership: ReturnType<typeof bindAutomationTerminal> = null
+  // Why: the launch token is not known until the host returns the receipt, so
+  // capture it (and the resolved launch config) post-spawn for store bookkeeping.
+  let launchToken: string | null = null
+  let resolvedLaunchConfig: SleepingAgentLaunchConfig | undefined
+  // Why: the host returns a followup prompt only when it resolved a stdin-after-
+  // start base agent (the prompt cannot fold into the launch command). Capture
+  // it locally so the readiness-gated paste writer delivers it after mount; the
+  // runtime path delivers its own followup, so this stays local-branch only.
+  let localFollowupPrompt: string | null = null
   let unsubscribeExit = (): void => {},
     unsubscribeData = (): void => {}
   const handleExit = (exitPtyId: string, code: number): void => {
@@ -143,7 +136,6 @@ export async function launchAgentBackgroundSession(
     exitHandled = true
     unsubscribeExit()
     unsubscribeData()
-    sshStartupDelivery.clear()
     if (tab) {
       useAppStore.getState().clearTabPtyId(tab.id, exitPtyId)
     }
@@ -158,7 +150,7 @@ export async function launchAgentBackgroundSession(
   })
   const agentStatusConsumer = createBackgroundAgentStatusConsumer({
     paneKey,
-    launchToken,
+    getLaunchToken: () => launchToken,
     mainOwnsAgentStatusWrites,
     expectedConnectionId: launchHost.expectedConnectionId,
     runtimeEnvironmentId: runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null,
@@ -166,87 +158,128 @@ export async function launchAgentBackgroundSession(
     onAgentStatus
   })
   const handleData = (data: string): void => {
-    data = sshStartupDelivery.handleData(data)
     onData?.(data)
-    sshStartupDelivery.schedule(ptyId)
     agentStatusConsumer.consume(data)
   }
   try {
     if (runtimeTarget.kind === 'environment') {
       // Why: runtime environments execute on the server; using local pty.spawn
       // would silently run automation on the client for a remote workspace.
-      const created = await createRuntimeAgentBackgroundTerminal({
-        environmentId: runtimeTarget.environmentId,
-        worktreeId,
-        tabId: reservedTabId,
-        leafId,
-        agent,
-        ...(hasPrompt && !isFollowupPath ? { prompt: trimmedPrompt } : {}),
-        ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
-        legacy: {
-          command: startupPlan.launchCommand,
+      // The client assembles no command on this path, so a pre-identity host that
+      // strips agentLaunch would spawn a bare shell and be reported as launched.
+      await assertRuntimeSupportsAgentLaunchIdentity(runtimeTarget.environmentId)
+      const created = await callRuntimeRpc<
+        { terminal: RuntimeTerminalCreate } | RuntimeTerminalCreateAgentLaunchFailure
+      >(
+        runtimeTarget,
+        'terminal.create',
+        {
+          worktree: toRuntimeWorktreeSelector(worktreeId),
+          agentLaunch,
           env: paneEnv,
-          ...(startupPlan.startupCommandDelivery
-            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-            : {}),
-          launchConfig: startupPlan.launchConfig,
-          launchToken,
-          ...(title ? { title } : {})
-        }
-      })
-      runtimeTerminalHandle = created.terminal.handle
+          title,
+          tabId: reservedTabId,
+          leafId,
+          // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
+          presentation: 'background'
+        },
+        { timeoutMs: 15_000 }
+      )
+      // Why: a pre-spawn host failure/rejection created no terminal — throw the
+      // typed outcome (structured failure for the owner record + the localized
+      // message) and let the catch retire the hidden tab.
+      if (!('terminal' in created)) {
+        throw new AgentLaunchSpawnOutcomeError(created.agentLaunch)
+      }
+      const terminal = created.terminal
+      // Why: the runtime terminal-create result is receipt-only (never echoes the
+      // resolved launch config); pane identity/attribution rides the receipt token
+      // and the status stream, so there is no client config to register here.
+      launchToken = terminal.agentLaunch?.receipt.launchToken ?? null
+      runtimeTerminalHandle = terminal.handle
       ptyId = toRemoteRuntimePtyId(runtimeTerminalHandle, runtimeTarget.environmentId)
     } else {
+      // A WSL UNC worktree needs the pane opened inside the distro shell.
+      const wslUncShellOverride =
+        !sshConnectionId && isWslUncPath(worktree.path) ? { shellOverride: 'wsl.exe' } : {}
       const result = await window.api.pty.spawn({
         cols: 120,
         rows: 40,
         cwd: worktree.path,
-        command: startupPlan.launchCommand,
-        ...(!sshConnectionId && isWslUncPath(worktree.path) ? { shellOverride: 'wsl.exe' } : {}),
-        ...(!startupPlan.startupCommandDelivery
-          ? {}
-          : { startupCommandDelivery: startupPlan.startupCommandDelivery }),
+        agentLaunch,
+        ...wslUncShellOverride,
         env: paneEnv,
-        launchConfig: startupPlan.launchConfig,
-        launchToken,
-        launchAgent: agent,
         connectionId: sshConnectionId,
         worktreeId,
         tabId: reservedTabId,
         leafId,
+        // Host overwrites agent_kind from the resolved receipt before the emit;
+        // stamp the requested id's resolved base so a pre-receipt emit still
+        // names the harness instead of collapsing a custom agent to 'other'.
         telemetry: {
-          agent_kind: tuiAgentToAgentKind(agent),
+          agent_kind: resolveTelemetryAgentKind(agent),
           launch_source: launchSource ?? 'unknown',
           request_kind: 'new'
         }
       })
+      // Why: a pre-spawn host failure/rejection has no `id` — throw the typed
+      // outcome (structured failure for the owner record + the localized
+      // message) and let the catch retire the hidden tab. The preload types that
+      // arm with the whole outcome union, so a 'launched' status without a pty id
+      // is a broken host contract, never a usable terminal.
+      if (!('id' in result)) {
+        throw result.agentLaunch.status === 'launched'
+          ? new Error('The agent launch reported success without a terminal.')
+          : new AgentLaunchSpawnOutcomeError(result.agentLaunch)
+      }
       ptyId = result.id
-      spawned = result
+      launchToken =
+        result.agentLaunch?.status === 'launched' ? result.agentLaunch.receipt.launchToken : null
+      resolvedLaunchConfig = result.launchConfig
+      localFollowupPrompt = result.followupPrompt ?? null
     }
-    const adopted = await adoptAgentBackgroundSessionTab({
-      store,
-      worktreeId,
-      reservedTabId,
-      ptyId,
-      paneKey,
-      launchConfig: spawned.launchConfig ?? startupPlan.launchConfig,
-      launchRegistration,
-      runtimeTarget,
-      runtimeTerminalHandle,
-      onRetire: () => {
-        exitHandled = true
-        sshStartupDelivery.clear()
-        store.clearAgentLaunchConfig(paneKey)
-      },
-      ...(title ? { title } : {})
-    })
-    if (!adopted) {
+    if (
+      await retireUnownedTerminal({
+        owner: { worktreeId },
+        ptyId,
+        runtimeTarget,
+        runtimeTerminalHandle,
+        onRetire: () => {
+          exitHandled = true
+          store.clearAgentLaunchConfig(paneKey)
+        }
+      })
+    ) {
       return null
     }
-    tab = adopted.tab
-    paneKey = adopted.paneKey
-    terminalOwnership = adopted.terminalOwnership
-    if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
+    // Why: the spawned process already owns reservedTabId in its pane env; a
+    // colliding tab would force createTab to mint a different, invalid identity.
+    if (isTerminalTabPresent(useAppStore.getState(), reservedTabId)) {
+      store.clearAgentLaunchConfig(paneKey)
+      await retireProvider({ ptyId, runtimeTarget, runtimeTerminalHandle })
+      return null
+    }
+    tab = store.createTab(worktreeId, undefined, undefined, {
+      id: reservedTabId,
+      initialPtyId: ptyId,
+      activate: false,
+      recordInteraction: false
+    })
+    // Why: `title` labels the tab/worktree entry. Pane titles render as an
+    // in-terminal title row, so background sessions must not persist it there.
+    store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
+    if (resolvedLaunchConfig && launchToken) {
+      store.registerAgentLaunchConfig(paneKey, resolvedLaunchConfig, {
+        agentType: agent,
+        launchToken,
+        tabId: tab.id,
+        leafId
+      })
+    }
+    terminalOwnership = bindAutomationTerminal(tab, paneKey, ptyId, runtimeTarget.kind, title)
+    // Gate on the resolved BASE: a command-code-based custom agent has the same
+    // missing prompt-start hook. The status keeps the REQUESTED id below.
+    if (baseAgent === 'command-code' && hasPrompt) {
       // Why: Command Code does not expose a prompt-start hook; seed working for
       // hidden prompt launches so sidebar/activity surfaces do not stay idle.
       const routing = agentStatusConsumer.resolveRouting()
@@ -258,7 +291,10 @@ export async function launchAgentBackgroundSession(
           undefined,
           undefined,
           routing,
-          { launchConfig: startupPlan.launchConfig, launchToken }
+          {
+            ...(resolvedLaunchConfig ? { launchConfig: resolvedLaunchConfig } : {}),
+            ...(launchToken ? { launchToken } : {})
+          }
         )
       }
     }
@@ -291,37 +327,39 @@ export async function launchAgentBackgroundSession(
       // alive regardless of whether the tab is hidden or mounted.
       unsubscribeExit = subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
     }
-    sshStartupDelivery.armFallback(ptyId)
 
     // Why: bind the explicit PTY and ownership before mount; an earlier mount
     // can double-spawn, while later tracking can miss user takeover.
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
 
-    if (pasteDraftAfterLaunch !== null) {
-      scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
+    if (localFollowupPrompt) {
+      // Why: stdin-after-start agents (aider) receive the prompt as a post-ready
+      // bracketed paste + submit, since it could not fold into the launch command.
+      scheduleAgentBackgroundDraft(tab.id, localFollowupPrompt, agent)
     }
 
-    return { tabId: tab.id, paneKey, ptyId, startupPlan, terminalOwnership }
+    return { tabId: tab.id, paneKey, ptyId, terminalOwnership }
   } catch (error) {
     // Why: terminal creation and stream subscription are separate remote calls.
     // A failure between them must not strand an invisible runtime terminal.
     exitHandled = true
     terminalOwnership?.release()
-    const createdTab = tab
     runBestEffortAgentBackgroundCleanups(unsubscribeExit, unsubscribeData)
     runBestEffortAgentBackgroundCleanups(() => eagerPtyBuffer?.dispose())
-    runBestEffortAgentBackgroundCleanups(() => sshStartupDelivery.clear())
-    if (createdTab) {
-      runBestEffortAgentBackgroundCleanups(() => store.clearTabPtyId(createdTab.id, ptyId))
+    if (tab) {
+      const tabId = tab.id
+      runBestEffortAgentBackgroundCleanups(() => store.clearTabPtyId(tabId, ptyId))
     }
     runBestEffortAgentBackgroundCleanups(() => store.clearAgentLaunchConfig(paneKey))
     if (ptyId) {
       await retireProvider({ ptyId, runtimeTarget, runtimeTerminalHandle })
     }
-    if (createdTab) {
-      // Cleanup closes must not enter the reopen stack.
+    // Why: a launch-failure cleanup close is not a user close — keep it out of
+    // the Cmd+Shift+T reopen stack.
+    if (tab) {
+      const tabId = tab.id
       runBestEffortAgentBackgroundCleanups(() =>
-        store.closeTab(createdTab.id, { recordInteraction: false, reason: 'cleanup' })
+        store.closeTab(tabId, { recordInteraction: false, reason: 'cleanup' })
       )
     }
     throw error

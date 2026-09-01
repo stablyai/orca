@@ -2,6 +2,7 @@ import { createTerminalZeroDimensionsMessage } from '../../../../../shared/termi
 import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/removal-fence-error'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
+import { resolvePaneOwnerBaseAgent } from '@/lib/agent-base-identity'
 
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
@@ -117,7 +118,8 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)
     }
     session.codexBackfillErrorDetector =
-      session.paneStartup?.launchAgent === 'codex' || session.tab?.launchAgent === 'codex'
+      resolvePaneOwnerBaseAgent(session.paneStartup?.launchAgent) === 'codex' ||
+      resolvePaneOwnerBaseAgent(session.tab?.launchAgent) === 'codex'
         ? createCodexBackfillErrorDetector()
         : null
 

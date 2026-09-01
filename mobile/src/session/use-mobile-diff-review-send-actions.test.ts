@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
+import { MOBILE_AGENT_LAUNCH_IDENTITY_CAPABILITY } from './agent-launch-identity-capability'
+import { MOBILE_AGENT_LAUNCH_IDENTITY_UNSUPPORTED_MESSAGE } from './identity-create-terminal-params'
 import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
@@ -23,6 +25,20 @@ function sendResponse(accepted: boolean) {
     result: { send: { accepted } },
     _meta: { runtimeId: 'runtime' }
   }
+}
+
+// createTerminalAndSend probes the host capability first; answer it, then serve
+// the createTerminal response under test.
+function identityCapableSendRequest(createResult: unknown) {
+  return vi.fn(async (method: string) => ({
+    id: method,
+    ok: true as const,
+    result:
+      method === 'status.get'
+        ? { capabilities: [MOBILE_AGENT_LAUNCH_IDENTITY_CAPABILITY] }
+        : createResult,
+    _meta: { runtimeId: 'runtime' }
+  }))
 }
 
 const COMMENT: DiffComment = {
@@ -206,5 +222,54 @@ describe('useMobileDiffReviewSendActions', () => {
 
     expect((error as Error).message).toBe('pane gone')
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+  })
+
+  it('reports the typed failure code when terminal creation rejects the agent launch', async () => {
+    const sendRequest = identityCapableSendRequest({
+      agentLaunch: { status: 'failed', failure: { code: 'launch_capacity_exceeded' } }
+    })
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    let error: unknown
+    await act(async () => {
+      error = await actions?.createTerminalAndSend([]).catch((err) => err)
+    })
+
+    expect((error as Error).message).toBe("Couldn't start the agent (launch_capacity_exceeded).")
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+  })
+
+  // Security regression: a pre-identity host strips agentLaunch and spawns a bare
+  // shell, so the review notes would be executed as shell commands. Refuse before
+  // creating anything.
+  it('refuses to create a terminal when the host lacks the identity capability', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: { capabilities: ['aiVault.v1'] },
+      _meta: { runtimeId: 'runtime' }
+    })
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    let error: unknown
+    await act(async () => {
+      error = await actions?.createTerminalAndSend([COMMENT]).catch((err) => err)
+    })
+
+    expect((error as Error).message).toBe(MOBILE_AGENT_LAUNCH_IDENTITY_UNSUPPORTED_MESSAGE)
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).toHaveBeenCalledWith('status.get')
+  })
+
+  it('reports a malformed created-terminal response generically', async () => {
+    const sendRequest = identityCapableSendRequest({ tab: { type: 'terminal' } })
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    let error: unknown
+    await act(async () => {
+      error = await actions?.createTerminalAndSend([]).catch((err) => err)
+    })
+
+    expect((error as Error).message).toBe('Created terminal response was invalid')
   })
 })

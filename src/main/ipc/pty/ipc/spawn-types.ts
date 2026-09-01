@@ -20,6 +20,7 @@ import type {
 } from '../host-env/types'
 import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
+import type { AgentLaunchInput } from '../../../../shared/agent-launch-spawn-request'
 
 export type PtySpawnIpcArgs = {
   cols: number
@@ -35,6 +36,8 @@ export type PtySpawnIpcArgs = {
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: unknown
   launchAgent?: TuiAgent
+  agentLaunch?: AgentLaunchInput
+  legacyResumeRecordedConnectionId?: string | null
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string
@@ -55,6 +58,7 @@ export type PtySpawnIpcArgs = {
     agent_kind?: unknown
     launch_source?: unknown
     request_kind?: unknown
+    used_custom_agent?: unknown
   }
 }
 

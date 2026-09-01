@@ -45,7 +45,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
     ptyId: ctx.result.id,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     isReattach: ctx.result.isReattach === true,
-    pinnedByResume: ctx.codexResumeHomeSelected,
+    pinnedByResume: Boolean(ctx.codexResumeLaunch.codexResumeHome),
     launchCodexHomePath: ctx.selectedCodexHomePath,
     launchEnv: ctx.baseEnv,
     target: ctx.codexSelectionTarget,

@@ -1,5 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
+  CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult
 } from '../../../../shared/worktree/create-types'
@@ -20,6 +21,33 @@ import {
   listAllRuntimeWorktrees
 } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
+import type {
+  ForgetUnknownAgentLaunchResult,
+  WorktreeRetryAgentLaunchResult
+} from '../../../../shared/agent-launch-worktree-recovery'
+import type { PendingAgentLaunchSummary } from '../../../../shared/agent-launch-pending-summary'
+import type { AgentLaunchSpawnRequest } from '../../../../shared/agent-launch-spawn-request'
+import { AGENT_LAUNCH_IDENTITY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  resolveRemoteWorktreeCreateLaunchParams,
+  type RemoteWorktreeCreateLaunchParams
+} from '../worktree-create-launch-compat'
+import { getRemoteRuntimeStatus } from './web-runtime-calls'
+
+async function remoteHostSupportsAgentLaunchIdentity(): Promise<boolean> {
+  try {
+    const status = await getRemoteRuntimeStatus()
+    return status.capabilities?.includes(AGENT_LAUNCH_IDENTITY_RUNTIME_CAPABILITY) === true
+  } catch {
+    return false
+  }
+}
+
+function resolveWebWorktreeCreateLaunchParams(
+  agentLaunch: AgentLaunchSpawnRequest | undefined
+): Promise<RemoteWorktreeCreateLaunchParams> {
+  return resolveRemoteWorktreeCreateLaunchParams(agentLaunch, remoteHostSupportsAgentLaunchIdentity)
+}
 
 export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
@@ -48,7 +76,9 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       invalidateRuntimeWorktreeCaches()
-      const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
+      const launchParams = await resolveWebWorktreeCreateLaunchParams(args.agentLaunch)
+      const dropEmptyStartupCommand = 'startupAgent' in launchParams && args.startup?.command === ''
+      const owned = await callRuntimeResultWithOwner<CreateWorktreeResult>('worktree.create', {
         repo: args.repoId,
         name: args.name,
         // Absent means user-typed, which is what the host must assume — so send it only when true.
@@ -75,7 +105,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         ...(args.startup
           ? {
-              startupCommand: args.startup.command,
+              ...(dropEmptyStartupCommand ? {} : { startupCommand: args.startup.command }),
               ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
               ...(args.startup.launchConfig
                 ? { startupLaunchConfig: args.startup.launchConfig }
@@ -91,8 +121,12 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         ...(args.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
-        automationProvenanceRequest: args.automationProvenanceRequest
+        automationProvenanceRequest: args.automationProvenanceRequest,
+        ...launchParams
       })
+      if (!('worktree' in owned.result)) {
+        return owned.result
+      }
       return {
         ...owned.result,
         worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
@@ -180,6 +214,40 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     persistSortOrder: async ({ orderedIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds })
     },
+    retryAgentLaunch: ({ worktreeId, ...args }) =>
+      callRuntimeResult<WorktreeRetryAgentLaunchResult>('worktree.retryAgentLaunch', {
+        worktree: toRuntimeWorktreeSelector(worktreeId),
+        ...args
+      }),
+    forgetAgentLaunch: ({ worktreeId, ...args }) =>
+      callRuntimeResult<ForgetUnknownAgentLaunchResult>('worktree.forgetAgentLaunch', {
+        worktree: toRuntimeWorktreeSelector(worktreeId),
+        ...args
+      }),
+    forgetRevokedRemoteAgentLaunch: () =>
+      Promise.reject(
+        new Error('Forgetting a revoked device’s launch is unavailable in paired web clients.')
+      ),
+    retryBackgroundAgentLaunch: (args) =>
+      callRuntimeResult<WorktreeRetryAgentLaunchResult>(
+        'worktree.retryBackgroundAgentLaunch',
+        args
+      ),
+    forgetBackgroundAgentLaunch: (args) =>
+      callRuntimeResult<ForgetUnknownAgentLaunchResult>(
+        'worktree.forgetBackgroundAgentLaunch',
+        args
+      ),
+    pendingAgentLaunchSummary: () =>
+      callRuntimeResult<PendingAgentLaunchSummary>('worktree.pendingAgentLaunchSummary', {}),
+    unknownAgentLaunchSiblingCount: ({ worktreeId }) =>
+      callRuntimeResult<{ count: number }>('worktree.unknownAgentLaunchSiblingCount', {
+        worktree: toRuntimeWorktreeSelector(worktreeId)
+      }),
+    forgetUnknownAgentLaunchSiblings: ({ worktreeId }) =>
+      callRuntimeResult<{ forgottenCount: number }>('worktree.forgetUnknownAgentLaunchSiblings', {
+        worktree: toRuntimeWorktreeSelector(worktreeId)
+      }),
     // Why: the capture lives in desktop main memory, unexposed over pairing; the dialog falls back to the persisted excerpt.
     getBranchRenameFailureOutput: async () => null,
     onChanged: () => noopUnsubscribe,

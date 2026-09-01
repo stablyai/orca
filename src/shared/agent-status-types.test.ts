@@ -40,6 +40,22 @@ describe('isFreshNonDoneAgentStatus', () => {
   })
 })
 
+describe('AGENT_STATUS_STATES contract (U6 oracle: unchanged, no launch-failure state)', () => {
+  it('is exactly the four hook statuses, in order', () => {
+    // U6 lands NO new agent status: unattended launch failures live in owner
+    // records (automation run / orchestration dispatch / background attempt),
+    // never as a synthesized hook status. This asserts the set never grew.
+    expect(AGENT_STATUS_STATES).toEqual(['working', 'blocked', 'waiting', 'done'])
+  })
+
+  it('carries no launch-failure disposition', () => {
+    const forbidden = ['failed', 'spawn_failed', 'launch_state_unknown', 'forgotten', 'launched']
+    for (const value of forbidden) {
+      expect(AGENT_STATUS_STATES).not.toContain(value)
+    }
+  })
+})
+
 describe('parseAgentStatusPayload', () => {
   it('parses a valid working payload', () => {
     const result = parseAgentStatusPayload(

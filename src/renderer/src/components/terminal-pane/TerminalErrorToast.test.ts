@@ -20,6 +20,7 @@ import {
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
 } from './TerminalErrorToast'
+import { agentLaunchOutcomeErrorMessage } from '@/lib/agent-launch-failure-copy'
 
 beforeEach(() => {
   environmentMocks.resolveFooter.mockReset()
@@ -301,5 +302,34 @@ describe('TerminalErrorToast environment footer', () => {
     )
 
     await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+  })
+})
+
+describe('typed agent-launch failures', () => {
+  it('shows the failure copy without file-an-issue framing or diagnostics', async () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: agentLaunchOutcomeErrorMessage({
+          status: 'failed',
+          failure: { code: 'invalid_launch_snapshot' }
+        }),
+        onDismiss: vi.fn()
+      })
+    )
+
+    expect(view.container.textContent).toContain('Launch the agent again')
+    expect(view.container.textContent).not.toContain('file an issue')
+    await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+  })
+
+  it('keeps file-an-issue framing for an unexplained error', () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'Paste failed.',
+        onDismiss: vi.fn()
+      })
+    )
+
+    expect(view.container.textContent).toContain('file an issue')
   })
 })

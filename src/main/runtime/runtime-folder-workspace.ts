@@ -71,6 +71,13 @@ export function mergeRuntimeFolderWorkspace(
     ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
-    mobileDiffReview: meta.mobileDiffReview
+    mobileDiffReview: meta.mobileDiffReview,
+    // Client-safe recovery mirrors only; private launch snapshots stay host-owned.
+    ...(meta.agentLaunchFailure !== undefined
+      ? { agentLaunchFailure: meta.agentLaunchFailure }
+      : {}),
+    ...(meta.pendingAgentLaunch !== undefined
+      ? { pendingAgentLaunch: meta.pendingAgentLaunch }
+      : {})
   }
 }

@@ -1,9 +1,11 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId, type WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import {
   getRepoExecutionHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
@@ -18,6 +20,25 @@ import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
 import { settingsForKnownRepoOwner } from './worktree-owner-settings'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+
+let lastHydrationPurgeDeferralSignature: string | null = null
+
+function recordHydrationPurgeDeferralBreadcrumb(data: {
+  deferredUnknownOwner: number
+  deferredUncoveredHost: number
+  removed: number
+  repoCount: number
+  localRepoCount: number
+  coveredHosts: string
+}): void {
+  const signature = JSON.stringify(data)
+  if (signature === lastHydrationPurgeDeferralSignature) {
+    return
+  }
+  lastHydrationPurgeDeferralSignature = signature
+  recordRendererCrashBreadcrumb('worktree_purge.hydration_deferred', data)
+}
 
 export function createFetchAllWorktrees(
   set: WorktreeSliceSet,
@@ -180,13 +201,69 @@ export function createFetchAllWorktrees(
         validIds.add(w.id)
       }
     }
-    const stale = Object.keys(get().tabsByWorktree).filter((id) => !validIds.has(id))
+    const repoHostById = new Map<string, ExecutionHostId>(
+      get().repos.map((r) => [r.id, getRepoExecutionHostId(r)])
+    )
+    const coveredHostIds = new Set<ExecutionHostId>()
+    for (const repo of get().repos) {
+      const detected = get().detectedWorktreesByRepo[repo.id]
+      if (detected?.authoritative && detected.worktrees.length > 0) {
+        coveredHostIds.add(getRepoExecutionHostId(repo))
+      }
+    }
+    const deferredUnknownOwner: string[] = []
+    const deferredUncoveredHost: string[] = []
+    const stale: string[] = []
+    let staleLocalOwners = 0
+    for (const id of Object.keys(get().tabsByWorktree)) {
+      if (validIds.has(id)) {
+        continue
+      }
+      const ownerHostId = repoHostById.get(getRepoIdFromWorktreeId(id))
+      if (ownerHostId === undefined) {
+        deferredUnknownOwner.push(id)
+      } else if (!coveredHostIds.has(ownerHostId)) {
+        deferredUncoveredHost.push(id)
+      } else {
+        if (ownerHostId === LOCAL_EXECUTION_HOST_ID) {
+          staleLocalOwners += 1
+        }
+        stale.push(id)
+      }
+    }
+    const localRepoCount = [...repoHostById.values()].filter(
+      (hostId) => hostId === LOCAL_EXECUTION_HOST_ID
+    ).length
     if (stale.length > 0) {
       console.warn(
         `[worktree-purge] hydration-time purge removing stale state for ${stale.length} worktree(s):`,
         stale
       )
+      recordRendererCrashBreadcrumb('worktree_purge.hydration', {
+        removed: stale.length,
+        removedLocalOwners: staleLocalOwners,
+        removedRemoteOwners: stale.length - staleLocalOwners,
+        deferredUnknownOwner: deferredUnknownOwner.length,
+        deferredUncoveredHost: deferredUncoveredHost.length,
+        repoCount: repoHostById.size,
+        localRepoCount,
+        coveredHosts: [...coveredHostIds].join(',')
+      })
       get().purgeWorktreeTerminalState(stale)
+    }
+    if (deferredUnknownOwner.length > 0 || deferredUncoveredHost.length > 0) {
+      console.warn(
+        `[worktree-purge] deferring hydration purge for ${deferredUnknownOwner.length} unknown-owner and ${deferredUncoveredHost.length} uncovered-host worktree(s); repo hydration looks incomplete`
+      )
+      recordHydrationPurgeDeferralBreadcrumb({
+        deferredUnknownOwner: deferredUnknownOwner.length,
+        deferredUncoveredHost: deferredUncoveredHost.length,
+        removed: stale.length,
+        repoCount: repoHostById.size,
+        localRepoCount,
+        coveredHosts: [...coveredHostIds].join(',')
+      })
+      return
     }
     set({ hasHydratedWorktreePurge: true })
   }

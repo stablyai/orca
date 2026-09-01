@@ -115,6 +115,32 @@ describe('resolveMobileNativeChat', () => {
     )
   })
 
+  it('resolves a custom agent id to its base harness (desktop parity)', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        launchAgent: 'custom-agent:claude:5f9f1c3a-1111-4222-8333-444455556666'
+      })
+    ).toEqual({ agent: 'claude', sessionId: null, transcriptPath: null })
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        agentStatus: status({
+          agentType: 'custom-agent:codex:5f9f1c3a-1111-4222-8333-444455556666'
+        })
+      })
+    ).toEqual({ agent: 'codex', sessionId: null, transcriptPath: null })
+  })
+
+  it('still rejects a custom agent on an unsupported base', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        launchAgent: 'custom-agent:gemini:5f9f1c3a-1111-4222-8333-444455556666'
+      })
+    ).toBeNull()
+  })
+
   it('returns null for a plain shell (no agent)', () => {
     expect(resolveMobileNativeChat({ type: 'terminal' })).toBeNull()
   })

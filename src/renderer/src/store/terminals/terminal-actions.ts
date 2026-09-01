@@ -11,7 +11,12 @@ import type {
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
-import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
+import type { AgentLaunchInput } from '../../../../shared/agent-launch-spawn-request'
+import type {
+  AgentLaunchNotice,
+  AgentLaunchNoticeCode
+} from '../../../../shared/agent-launch-contract'
+import type { StartupLaunchTelemetry } from '../../lib/worktree-activation'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import type {
   GeneratedTabTitleUpdate,
@@ -115,6 +120,7 @@ export type TerminalActions = {
   ) => void
   setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
+  backfillTabLaunchAgent: (tabId: string, agent: TuiAgent) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   markTerminalTabUnread: (tabId: string) => void
@@ -130,6 +136,19 @@ export type TerminalActions = {
     }
   ) => void
   setTabColor: (tabId: string, color: string | null) => void
+  attachLaunchNotices: (args: {
+    worktreeId: string
+    tabId: string
+    launchToken: string
+    notices: readonly AgentLaunchNotice[]
+  }) => void
+  /** Requests host removal and clears the matching notice locally without awaiting the acknowledgement. */
+  dismissLaunchNotice: (args: {
+    worktreeId: string
+    tabId: string
+    launchToken: string
+    code: AgentLaunchNoticeCode
+  }) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (
     tabId: string,
@@ -197,12 +216,15 @@ export type TerminalActions = {
     tabId: string,
     startup: {
       command: string
+      agentLaunch?: AgentLaunchInput
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
+      legacyResumeRecordedConnectionId?: string | null
       resumeProviderSession?: AgentProviderSessionMetadata
+      sleepingRecordPaneKey?: string
       launchToken?: string
       launchAgent?: TuiAgent
       agentArgsOverride?: string | null
@@ -213,7 +235,7 @@ export type TerminalActions = {
         prompt: string
       }
       showSessionRestoredBanner?: boolean
-      telemetry?: AgentStartedTelemetry
+      telemetry?: StartupLaunchTelemetry
     }
   ) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
@@ -223,12 +245,15 @@ export type TerminalActions = {
     expected?: TerminalState['pendingStartupByTabId'][string]
   ) => {
     command: string
+    agentLaunch?: AgentLaunchInput
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    legacyResumeRecordedConnectionId?: string | null
     resumeProviderSession?: AgentProviderSessionMetadata
+    sleepingRecordPaneKey?: string
     launchToken?: string
     launchAgent?: TuiAgent
     agentArgsOverride?: string | null
@@ -239,7 +264,7 @@ export type TerminalActions = {
       prompt: string
     }
     showSessionRestoredBanner?: boolean
-    telemetry?: AgentStartedTelemetry
+    telemetry?: StartupLaunchTelemetry
   } | null
   queueTabSetupSplit: (
     tabId: string,

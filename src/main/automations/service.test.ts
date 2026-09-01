@@ -647,4 +647,136 @@ describe('AutomationService', () => {
     expect(updated.usage?.status).toBe('unavailable')
     expect(updated.usage?.unavailableReason).toBe('provider_unsupported')
   })
+
+  it('applies the retired-terminal cleanup to an already-final run', async () => {
+    vi.setSystemTime(new Date('2026-05-13T10:00:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Cleanup check',
+      prompt: 'Check the repo',
+      agentId: 'gemini',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, Date.now(), 'manual')
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    const completed = await service.markDispatchResult({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      terminalPaneKey: 'tab-1:pane-1',
+      terminalPtyId: 'pty-1',
+      error: null
+    })
+    expect(completed.terminalSessionId).toBe('tab-1')
+
+    // The renderer retires the owned terminal only after the run settles, so its
+    // pointer clear always lands on an already-final run.
+    const cleaned = await service.markDispatchResult({
+      runId: run.id,
+      status: 'completed',
+      terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null
+    })
+
+    expect(cleaned.terminalSessionId).toBeNull()
+    expect(cleaned.terminalPaneKey).toBeNull()
+    expect(cleaned.terminalPtyId).toBeNull()
+    expect(cleaned.status).toBe('completed')
+    expect(cleaned.usage?.status).toBe('unavailable')
+    expect(store.listAutomationRuns(automation.id)[0]?.terminalPtyId).toBeNull()
+  })
+
+  it('keeps a forgotten run final while clearing its retired terminal pointers', async () => {
+    vi.setSystemTime(new Date('2026-05-13T10:00:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Forgotten check',
+      prompt: 'Check the repo',
+      agentId: 'gemini',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, Date.now(), 'manual')
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatch_failed',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      terminalPaneKey: 'tab-1:pane-1',
+      terminalPtyId: 'pty-1',
+      error: 'The automation run was forgotten while its launch state was unknown.',
+      agentLaunchForgottenAt: Date.now()
+    })
+    const service = new AutomationService(store, { tickMs: 60_000 })
+
+    const cleaned = await service.markDispatchResult({
+      runId: run.id,
+      status: 'completed',
+      terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null
+    })
+
+    expect(cleaned.status).toBe('dispatch_failed')
+    expect(typeof cleaned.agentLaunchForgottenAt).toBe('number')
+    expect(cleaned.error).toBe(
+      'The automation run was forgotten while its launch state was unknown.'
+    )
+    expect(cleaned.terminalSessionId).toBeNull()
+    expect(cleaned.terminalPaneKey).toBeNull()
+    expect(cleaned.terminalPtyId).toBeNull()
+  })
+
+  it('does not attach a new terminal to an already-final run', async () => {
+    vi.setSystemTime(new Date('2026-05-13T10:00:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Late completion check',
+      prompt: 'Check the repo',
+      agentId: 'gemini',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, Date.now(), 'manual')
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatch_failed',
+      workspaceId: 'wt1',
+      error: 'Launch failed.'
+    })
+    const service = new AutomationService(store, { tickMs: 60_000 })
+
+    const unchanged = await service.markDispatchResult({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-late',
+      terminalPaneKey: 'tab-late:pane-late',
+      terminalPtyId: 'pty-late',
+      error: null
+    })
+
+    expect(unchanged.status).toBe('dispatch_failed')
+    expect(unchanged.error).toBe('Launch failed.')
+    expect(unchanged.terminalSessionId).toBeNull()
+    expect(unchanged.terminalPaneKey).toBeNull()
+  })
 })

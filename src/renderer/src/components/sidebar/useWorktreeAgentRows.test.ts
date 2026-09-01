@@ -191,6 +191,71 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows[0].agentType).toBe('codex')
   })
 
+  it('re-owns hook rows reporting the base harness to the requested custom launch identity', () => {
+    const customClaudeId = 'custom-agent:claude:11111111-1111-4111-8111-111111111111' as const
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: customClaudeId })],
+      entries: [makeEntry(PANE_KEY_1, 1000, { agentType: 'claude', state: 'working' })],
+      retained: [],
+      now: 1500
+    })
+
+    expect(rows[0].agentType).toBe(customClaudeId)
+  })
+
+  it('keeps evidence of a different base harness over the custom launch identity', () => {
+    const customClaudeId = 'custom-agent:claude:11111111-1111-4111-8111-111111111111' as const
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: customClaudeId })],
+      entries: [makeEntry(PANE_KEY_1, 1000, { agentType: 'codex', state: 'working' })],
+      retained: [],
+      now: 1500
+    })
+
+    expect(rows[0].agentType).toBe('codex')
+  })
+
+  it('re-owns Pi-compatible hook rows to a custom OMP launch identity', () => {
+    const customOmpId = 'custom-agent:omp:22222222-2222-4222-8222-222222222222' as const
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: customOmpId })],
+      entries: [makeEntry(PANE_KEY_1, 1000, { agentType: 'pi', terminalTitle: '⠋ Pi' })],
+      retained: [],
+      now: 1500
+    })
+
+    expect(rows[0].agentType).toBe(customOmpId)
+  })
+
+  it('resolves live unknown rows to the custom launch identity', () => {
+    const customClaudeId = 'custom-agent:claude:11111111-1111-4111-8111-111111111111' as const
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: customClaudeId, title: 'test-thing-2' })],
+      entries: [
+        makeEntry(PANE_KEY_1, 1000, { agentType: undefined, terminalTitle: 'test-thing-2' })
+      ],
+      retained: [],
+      now: 1500
+    })
+
+    expect(rows[0].agentType).toBe(customClaudeId)
+  })
+
+  it('re-owns retained rows to the requested custom launch identity', () => {
+    const customClaudeId = 'custom-agent:claude:11111111-1111-4111-8111-111111111111' as const
+    const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000, {
+      tab: makeTab('tab-orphan', { launchAgent: customClaudeId })
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [],
+      retained: [retained],
+      now: 2000
+    })
+
+    expect(rows[0].agentType).toBe(customClaudeId)
+  })
+
   it('prefers a live row over a retained snapshot with the same paneKey', () => {
     const liveEntry = makeEntry(PANE_KEY_1, 2000)
     const rows = buildWorktreeAgentRows({

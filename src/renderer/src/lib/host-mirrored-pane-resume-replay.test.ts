@@ -174,7 +174,10 @@ describe('parked mirrored-pane resume replay', () => {
       key: 'session_id',
       id: 'codex-session-replay-1'
     })
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    // Retained until the queued startup is consumed (the spawn-success signal).
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    after.consumeTabStartupCommand(tabs[0]!.id)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
   })
 
   it('replays without relaunching when the mirror reports the host PTY live', () => {

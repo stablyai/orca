@@ -4,6 +4,7 @@ import type {
   SetupDecision
 } from '../../../src/shared/worktree/create-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
+import { isCustomTuiAgentId } from '../../../src/shared/custom-tui-agent-identity'
 import { getWorkspaceSourceName } from '../../../src/shared/new-workspace/workspace-source'
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
@@ -105,6 +106,15 @@ export function buildTaskWorkspaceCreateParams(args: {
   } = args
   const shouldLaunchAgent = agent !== 'blank'
   const createdWithAgent = shouldLaunchAgent ? (agent as TuiAgent) : undefined
+  const customAgentLaunch =
+    createdWithAgent && isCustomTuiAgentId(createdWithAgent)
+      ? {
+          agentLaunch: {
+            selection: { kind: 'agent' as const, agent: createdWithAgent },
+            prompt: item.source.url
+          }
+        }
+      : null
   const comment = note?.trim()
   const selectedBaseBranch = baseBranch || hostedStartPoint?.baseBranch
   const selectedPushTarget = pushTarget ?? hostedStartPoint?.pushTarget
@@ -128,8 +138,9 @@ export function buildTaskWorkspaceCreateParams(args: {
   const common = {
     setupDecision,
     activate: true,
-    ...(shouldLaunchAgent ? { startupDraft: item.source.url } : {}),
-    ...(createdWithAgent ? { createdWithAgent } : {}),
+    ...(shouldLaunchAgent && !customAgentLaunch ? { startupDraft: item.source.url } : {}),
+    ...(createdWithAgent && !customAgentLaunch ? { createdWithAgent } : {}),
+    ...customAgentLaunch,
     ...(selectedBaseBranch ? { baseBranch: selectedBaseBranch } : {}),
     ...(compareBaseRef ? { compareBaseRef } : {}),
     ...(branchNameOverride ? { branchNameOverride } : {}),

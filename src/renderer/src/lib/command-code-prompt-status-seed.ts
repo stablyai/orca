@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getConnectionIdFromState } from './connection-owner-resolution'
@@ -8,10 +9,16 @@ import { rendererAgentStatusObservations } from './renderer-agent-status-observa
  * Why: Command Code has no prompt-submit hook, so when Orca submits a generated
  * prompt after the TUI is ready, seed `working` at delivery time so sidebar and
  * activity surfaces don't stay idle until the first real hook event arrives.
+ *
+ * `agent` is the REQUESTED id, not the resolved base: callers gate on the base so
+ * command-code-based customs get the seed too, but every identity surface reads
+ * this `agentType` back, so stamping the base here would relabel the user's
+ * custom agent as Command Code with no later hook to correct it.
  */
 export function seedCommandCodeSubmittedPromptStatus(
   worktreeId: string,
   tabId: string,
+  agent: TuiAgent,
   prompt: string
 ): void {
   const state = useAppStore.getState()
@@ -39,7 +46,7 @@ export function seedCommandCodeSubmittedPromptStatus(
       {
         state: 'working',
         prompt,
-        agentType: 'command-code',
+        agentType: agent,
         observation: rendererAgentStatusObservations.observe(paneKey, {
           origin: 'process',
           observedAt: Date.now(),

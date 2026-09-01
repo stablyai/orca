@@ -142,38 +142,13 @@ describe('registerSettingsHandlers', () => {
     expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
   })
 
-  it('does not reconcile hooks when the disabled-agent set is unchanged', async () => {
+  it('leaves disabled-agent hook reconciliation to the atomic catalog mutation', async () => {
     const before = {
       agentStatusHooksEnabled: true,
       disabledTuiAgents: ['codex', 'claude']
     }
     store.getSettings.mockReturnValue(before)
-    store.updateSettings.mockReturnValue({
-      ...before,
-      disabledTuiAgents: ['claude', 'codex']
-    })
-    registerSettingsHandlers(store as never)
-    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
-      event: typeof settingsInvokeEvent,
-      args: { disabledTuiAgents: string[] }
-    ) => Promise<unknown>
-
-    await handler(settingsInvokeEvent, { disabledTuiAgents: ['claude', 'codex'] })
-
-    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
-  })
-
-  it('reconciles hooks when the disabled-agent set changes', async () => {
-    const before = {
-      agentStatusHooksEnabled: true,
-      disabledTuiAgents: ['codex', 'claude']
-    }
-    const updated = {
-      ...before,
-      disabledTuiAgents: ['claude']
-    }
-    store.getSettings.mockReturnValue(before)
-    store.updateSettings.mockReturnValue(updated)
+    store.updateSettings.mockReturnValue({ ...before, disabledTuiAgents: ['claude'] })
     registerSettingsHandlers(store as never)
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,
@@ -182,8 +157,30 @@ describe('registerSettingsHandlers', () => {
 
     await handler(settingsInvokeEvent, { disabledTuiAgents: ['claude'] })
 
+    // The key never reaches the store here, so reconciling off it would fire on a
+    // write that changed nothing (see agent-catalog.test.ts for the live path).
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {},
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+  })
+
+  it('reconciles hooks when the status-hook toggle changes', async () => {
+    const before = { agentStatusHooksEnabled: true, disabledTuiAgents: ['codex'] }
+    const updated = { ...before, agentStatusHooksEnabled: false }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockReturnValue(updated)
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { agentStatusHooksEnabled: boolean }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { agentStatusHooksEnabled: false })
+
     expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
-      true,
+      false,
       updated,
       expect.objectContaining({ shouldContinue: expect.any(Function) })
     )
@@ -476,6 +473,41 @@ describe('registerSettingsHandlers', () => {
 
     expect(store.updateSettings).toHaveBeenCalledWith(
       {},
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('strips catalog- and reference-owned keys from generic renderer settings writes', async () => {
+    store.getSettings.mockReturnValue({})
+    store.updateSettings.mockReturnValue({})
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      defaultTuiAgent: 'codex',
+      disabledTuiAgents: ['codex'],
+      customTuiAgents: [{ id: 'custom-agent:codex:x', env: { LEAK: 'v' } }],
+      deletedCustomTuiAgents: [],
+      agentCatalogSchemaVersion: 99,
+      agentCatalogRevision: 99,
+      agentCmdOverrides: { codex: '/evil' },
+      agentDefaultArgs: { codex: '--evil' },
+      agentDefaultEnv: { codex: { EVIL: '1' } },
+      agentReferenceRevision: 99,
+      terminalQuickCommands: [],
+      commitMessageAi: { enabled: true },
+      sourceControlAi: { enabled: true },
+      tabAutoGenerateTitle: true
+    })
+
+    // Only the non-owned key survives; owned keys go through the atomic
+    // catalog/reference mutation APIs instead.
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { tabAutoGenerateTitle: true },
       { notifyListeners: true, originWebContentsId: 1 }
     )
   })

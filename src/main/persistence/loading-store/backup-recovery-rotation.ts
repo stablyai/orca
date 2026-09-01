@@ -37,10 +37,19 @@ export function hasStateBackup(dataFile: string): boolean {
 
 import type { StoreRuntimeState } from './store-runtime-state'
 
-type BackupRecoveryRotationOperationsRuntime = Pick<StoreRuntimeState, 'backupRotationInFlight'>
+type BackupRecoveryRotationOperationsRuntime = Pick<
+  StoreRuntimeState,
+  'backupRotationInFlight' | 'dataFile'
+>
 
 export class BackupRecoveryRotationOperations {
   constructor(private readonly runtime: BackupRecoveryRotationOperationsRuntime) {}
+
+  getBackupRingFilePaths(): string[] {
+    return Array.from({ length: BACKUP_COUNT }, (_, index) =>
+      backupPath(this.runtime.dataFile, index)
+    )
+  }
 
   shouldRotateBackups(now: number, dataFile: string): boolean {
     try {

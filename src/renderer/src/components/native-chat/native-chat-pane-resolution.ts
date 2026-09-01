@@ -1,13 +1,17 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isNativeChatSupportedAgent } from './native-chat-availability'
+import {
+  resolveNativeChatBaseAgent,
+  type NativeChatAgentCatalogInput
+} from '@/lib/native-chat-base-agent'
 
 /** Inputs that resolve the active pane to the agent/session/pty triple the
  *  native-chat data + input layers need. Kept as a plain shape (not the live
  *  store or pane-manager singleton) so the resolver stays pure and unit-
  *  testable — call sites read the agent-status entry and the runtime ptyId for
  *  the pane's `paneKey` before calling. */
-export type NativeChatPaneResolutionInput = {
+export type NativeChatPaneResolutionInput = NativeChatAgentCatalogInput & {
   /** Composite `${tabId}:${leafId}` key of the active leaf. */
   paneKey: string
   /** The coding-agent Orca launched in this terminal, if any (from TerminalTab).
@@ -26,6 +30,8 @@ export type NativeChatPaneResolutionInput = {
 }
 
 export type NativeChatPaneResolution = {
+  /** Always a built-in id: a custom agent resolves to its base harness, so every
+   *  registry and `agent === 'claude'` branch inside the chat view still matches. */
   agent: AgentType
   /** The agent's own captured session/conversation id, or null before the
    *  agent has reported one (entry exists but no providerSession yet). */
@@ -46,7 +52,10 @@ export type NativeChatPaneResolution = {
 export function resolveNativeChatSession(
   input: NativeChatPaneResolutionInput
 ): NativeChatPaneResolution | null {
-  const agent = input.agentStatusEntry?.agentType ?? input.launchAgent ?? input.resolvedAgent
+  const agent = resolveNativeChatBaseAgent(
+    input.agentStatusEntry?.agentType ?? input.launchAgent ?? input.resolvedAgent,
+    input
+  )
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }

@@ -1,5 +1,6 @@
 import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../../shared/ai-vault-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { AgentLaunchVaultResumeEntry } from '../../../shared/agent-launch-spawn-request'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
@@ -23,7 +24,8 @@ export type AiVaultSessionDragPayload = {
   // cwd. Explicit null means the session genuinely has no cwd (rebuild without a
   // cd prefix); an ABSENT key means an older serializer built the payload.
   sessionCwd?: string | null
-  // Why: drag/drop resume must preserve planned env mutations/default args, not just the command.
+  resumeLocator?: string
+  // Why: drag/drop resume must preserve planned env/default args, not just the shell command.
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
@@ -110,6 +112,7 @@ function isSerializedPayload(value: unknown): value is SerializedAiVaultSessionD
     (payload.sessionCwd === undefined ||
       payload.sessionCwd === null ||
       isNonEmptyString(payload.sessionCwd)) &&
+    (payload.resumeLocator === undefined || /^[a-f0-9]{64}$/.test(payload.resumeLocator)) &&
     (payload.env === undefined || isStringRecord(payload.env)) &&
     (payload.envToDelete === undefined || isEnvDeletionList(payload.envToDelete)) &&
     (payload.launchConfig === undefined || isLaunchConfig(payload.launchConfig)) &&
@@ -184,6 +187,7 @@ export function readAiVaultSessionDragData(
       sessionExecutionHostId,
       codexHome,
       sessionCwd,
+      resumeLocator,
       env,
       envToDelete,
       launchConfig,
@@ -199,6 +203,7 @@ export function readAiVaultSessionDragData(
       ...(sessionExecutionHostId ? { sessionExecutionHostId } : {}),
       ...(codexHome !== undefined ? { codexHome } : {}),
       ...(sessionCwd !== undefined ? { sessionCwd } : {}),
+      ...(resumeLocator ? { resumeLocator } : {}),
       ...(env ? { env } : {}),
       ...(envToDelete ? { envToDelete } : {}),
       ...(launchConfig ? { launchConfig } : {}),
@@ -206,6 +211,26 @@ export function readAiVaultSessionDragData(
     }
   } catch {
     return null
+  }
+}
+
+// Echoes the dragged session's discovered identity for the host-owned resume-via-arm
+// on a desktop drop. Returns null when the payload lacks the executing host id (an
+// old/oversized serialization), so the caller falls back to the client command.
+// filePath rides only the trusted desktop-IPC drop path; the host re-validates the
+// echoed entry against its own fresh scan before it can become a spawn input.
+export function buildAiVaultResumeEntryFromDragPayload(
+  payload: AiVaultSessionDragPayload
+): AgentLaunchVaultResumeEntry | null {
+  if (!payload.sessionExecutionHostId) {
+    return null
+  }
+  return {
+    executionHostId: payload.sessionExecutionHostId,
+    agent: payload.agent,
+    sessionId: payload.sessionId,
+    ...(payload.resumeLocator ? { resumeLocator: payload.resumeLocator } : {}),
+    ...(payload.sessionFilePath ? { filePath: payload.sessionFilePath } : {})
   }
 }
 

@@ -24,7 +24,8 @@ import {
 import { readGithubCacheSnapshot } from './user-data-path'
 import {
   gcStaleWorktreeMeta,
-  normalizeWorktreeLinkedItemMetadata
+  normalizeWorktreeLinkedItemMetadata,
+  normalizeWorktreeMetaAgentLaunchState
 } from '../tracking-repos/worktree-metadata-normalization'
 import { backfillLegacyAutomationContexts } from '../scheduling-automations/automation-context-migration'
 import { migrateAutomationOwners } from '../../automations/automation-owner-migration'
@@ -41,6 +42,8 @@ import { hasStateBackup } from './backup-recovery-rotation'
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedProfileState } from './normalize-loaded-profile-state'
+import { migrateAgentCatalogSchema } from '../../../shared/agent-catalog-schema-migration'
+import { createPinnedPreV1Backup } from '../../agent-launch/agent-catalog-pre-v1-backup'
 
 type PersistenceStartupDetails = Record<string, unknown> | (() => Record<string, unknown>)
 
@@ -64,9 +67,13 @@ type LoadedStateParsingOperationsRuntime = Pick<
   | 'dataFile'
   | 'githubCacheDirty'
   | 'loadNeedsSave'
+  | 'agentCatalogMigrationError'
+  | 'agentCatalogSchemaTooNew'
+  | 'preV1RawContentsAwaitingBackup'
   | 'protectedSecrets'
   | 'storageAuthority'
   | 'terminalScrollbackSnapshotStorage'
+  | 'writesFrozen'
 >
 
 export class LoadedStateParsingOperations {
@@ -96,6 +103,27 @@ export class LoadedStateParsingOperations {
         logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
         logPersistenceStartupMilestone('persistence-json-parse-done')
+
+        const agentCatalogMigration = migrateAgentCatalogSchema({
+          settings: parsed.settings,
+          preV1RawContents: raw,
+          createBackup: () => createPinnedPreV1Backup(dataFile, raw)
+        })
+        if (agentCatalogMigration.schemaNewerThanSupported) {
+          this.runtime.agentCatalogSchemaTooNew = agentCatalogMigration.schemaNewerThanSupported
+          this.runtime.writesFrozen = true
+        } else if (agentCatalogMigration.didMigrate || agentCatalogMigration.backupError) {
+          this.runtime.loadNeedsSave =
+            this.runtime.loadNeedsSave || agentCatalogMigration.didMigrate
+          this.runtime.agentCatalogMigrationError = agentCatalogMigration.backupError ?? null
+          if (agentCatalogMigration.backupError) {
+            this.runtime.preV1RawContentsAwaitingBackup = raw
+          }
+          parsed.settings = {
+            ...parsed.settings,
+            ...agentCatalogMigration.settingsPatch
+          }
+        }
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
@@ -258,6 +286,10 @@ export class LoadedStateParsingOperations {
     result = folderScopeConnectionMigration.state
 
     if (normalizeWorktreeLinkedItemMetadata(result)) {
+      this.runtime.loadNeedsSave = true
+    }
+
+    if (normalizeWorktreeMetaAgentLaunchState(result)) {
       this.runtime.loadNeedsSave = true
     }
 

@@ -1,9 +1,15 @@
-import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
+import type {
+  RuntimeTerminalCreate,
+  RuntimeTerminalCreateAgentLaunchFailure
+} from '../../shared/runtime-types'
 
 const DEFAULT_MAX_IN_FLIGHT_TERMINAL_CREATES = 4_096
 
 export class RemoteRuntimeTerminalCreateIdempotency {
-  private readonly inFlight = new Map<string, Promise<RuntimeTerminalCreate>>()
+  private readonly inFlight = new Map<
+    string,
+    Promise<RuntimeTerminalCreate | RuntimeTerminalCreateAgentLaunchFailure>
+  >()
 
   constructor(private readonly maxInFlight = DEFAULT_MAX_IN_FLIGHT_TERMINAL_CREATES) {}
 
@@ -12,7 +18,19 @@ export class RemoteRuntimeTerminalCreateIdempotency {
     worktreeId: string,
     clientMutationId: string,
     create: () => Promise<RuntimeTerminalCreate>
-  ): Promise<RuntimeTerminalCreate> {
+  ): Promise<RuntimeTerminalCreate>
+  run(
+    clientIdentity: string,
+    worktreeId: string,
+    clientMutationId: string,
+    create: () => Promise<RuntimeTerminalCreate | RuntimeTerminalCreateAgentLaunchFailure>
+  ): Promise<RuntimeTerminalCreate | RuntimeTerminalCreateAgentLaunchFailure>
+  run(
+    clientIdentity: string,
+    worktreeId: string,
+    clientMutationId: string,
+    create: () => Promise<RuntimeTerminalCreate | RuntimeTerminalCreateAgentLaunchFailure>
+  ): Promise<RuntimeTerminalCreate | RuntimeTerminalCreateAgentLaunchFailure> {
     const key = `${clientIdentity}\0${worktreeId}\0${clientMutationId}`
     const existing = this.inFlight.get(key)
     if (existing) {

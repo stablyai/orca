@@ -1,55 +1,52 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
 import {
-  agentLaunchCommandErrorMessage,
+  loadDirectLaunchAgentCatalog,
+  resolveDirectLaunchAgent
+} from '@/lib/launch-work-item-direct-agent-selection'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
+import {
   gitLabIssueNumber,
   resolvePrHeadErrorMessage,
   unavailableAgentErrorMessage,
   workspaceActivationErrorMessage
 } from '@/lib/launch-work-item-direct-messages'
+import {
+  agentLaunchFailureMessage,
+  agentLaunchRequestErrorMessage
+} from '@/lib/agent-launch-failure-copy'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
-import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
-import { getConnectionId } from '@/lib/connection-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { SetupDecision } from '../../../shared/worktree/create-types'
-import type { GitPushTarget } from '../../../shared/worktree/types'
+import type { AgentLaunchSpawnRequest } from '../../../shared/agent-launch-spawn-request'
+import type { GitPushTarget, SetupDecision } from '../../../shared/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
-import {
-  buildDirectWorkItemAgentStartupPlan,
-  buildDirectWorkItemStartupOpts,
-  pasteDirectWorkItemDraftWhenAgentReady
-} from '@/lib/launch-work-item-direct-agent'
 import { getDirectWorkItemDraftContent } from '@/lib/launch-work-item-direct-draft'
+import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import {
   resolveDirectPrStartPoint,
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/launch-work-item-direct-types'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-import {
-  getLocalProjectExecutionRuntimeContext,
-  getLocalRepoProjectExecutionRuntimeContext
-} from '@/lib/local-preflight-context'
 
 /**
- * "Use" flow: create the workspace, activate it, launch the default agent,
- * and paste the work item context into the agent. Most callers leave it as a draft;
- * fix-check launches can opt into submitting the prompt after the TUI is ready.
+ * "Use" flow: create the workspace, activate it, and launch the default agent
+ * with the work item context. Most callers leave the prompt as a draft; fix-check
+ * launches can opt into submitting it after the TUI is ready.
  * Falls back to `openModalFallback()` when:
  *   - the repo's `setupRunPolicy` is `'ask'` (the user must pick per-workspace)
  *   - the repo can't be resolved from `repoId`
- *   - no compatible agent is detected on PATH
+ *   - a PR head cannot be resolved
  *
- * Best-effort: after workspace activation, paste failures only toast a notice — the user still
- * has a usable workspace and can paste the work item context themselves.
+ * Host-resolved: the client names only the requested agent identity, the
+ * interactive prompt, and — for recipe launches — the source-control owner
+ * locator (`sourceControlActionId`). The host resolves command/args/env and the
+ * recipe's stored agentArgs, delivers the prompt, and spawns the primary agent
+ * terminal; a pre-create rejection is `created: false` (no worktree), never a
+ * thrown error. No agent resolves → the workspace opens bare (legacy no-agent
+ * parity), and the agent identity still persists via `createdWithAgent` so an
+ * empty-worktree reopen can recreate it.
  */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
   const {
@@ -60,7 +57,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     telemetrySource,
     launchSource,
     agentOverride,
-    agentArgs
+    sourceControlActionId
   } = args
   const store = useAppStore.getState()
   const repo = store.repos.find((r) => r.id === repoId)
@@ -85,31 +82,18 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       : null
   const itemType = githubIdentity?.type ?? item.type
   const itemNumber = githubIdentity?.number ?? item.number
-  const repoProjectRuntime = repoConnectionId
-    ? undefined
-    : getLocalRepoProjectExecutionRuntimeContext(store, repoId, CLIENT_PLATFORM)
-  const preflightLaunchPlatform =
-    args.launchPlatform ??
-    resolveSourceControlLaunchPlatform({
-      connectionId: repoConnectionId,
-      worktreePath: repo.path,
-      projectRuntime: repoProjectRuntime
-    })
-  const shell = preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
-  const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
-  if (!agentArgsPlan.ok) {
-    // Why: direct launches may create a worktree before the agent startup plan
-    // is built; reject malformed saved args before touching user workspaces.
-    toast.error(agentArgsPlan.error)
-    return false
-  }
+
   // Why: agent detection shells out and can be cold/slow. Start it now, but
-  // don't let it serialize setup-policy resolution or git worktree creation.
-  const detectedAgentsPromise = agentOverride
-    ? null
-    : repoConnectionId
-      ? store.ensureRemoteDetectedAgents(repoConnectionId)
-      : store.ensureDetectedAgents()
+  // don't let it serialize the setup/PR/draft preflights — it only has to
+  // resolve before createWorktree, because the agent identity rides the host
+  // `agentLaunch` request on the create call. Detection uses the repo's owner
+  // connection, which the created worktree inherits.
+  const detectedAgentsPromise = repoConnectionId
+    ? store.ensureRemoteDetectedAgents(repoConnectionId)
+    : store.ensureDetectedAgents()
+  // Why: custom agents live in the local catalog, not in detection or settings,
+  // so the selection below needs both before it can validate the request.
+  const localAgentCatalogPromise = loadDirectLaunchAgentCatalog()
 
   const setupResolution = await resolveDirectSetupDecision(repoId, repo, repoOwnerSettings)
   if (setupResolution.kind === 'needs-modal') {
@@ -156,13 +140,39 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     }
   }
 
-  let worktreeId: string
-  let primaryTabId: string | null
-  let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
-  let effectiveAgent: TuiAgent | null = null
-  let draftLaunchedNatively = false
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
-  let startupPlanFailed = false
+  // Why: resolve the requested agent identity before the create call so it can
+  // ride the host `agentLaunch` request. The host owns command/args/env
+  // resolution and prompt delivery; the client only names the agent — parity
+  // with the new-workspace composer.
+  const [detectedAgents, localAgentCatalog] = await Promise.all([
+    detectedAgentsPromise,
+    localAgentCatalogPromise
+  ])
+  const { requestedAgent, agentOverrideUnavailable } = resolveDirectLaunchAgent({
+    agentOverride,
+    detectedAgents,
+    localAgentCatalog,
+    settings
+  })
+  // Why: the host resolves the launch and spawns the primary agent terminal, so
+  // the request carries only the agent identity, the interactive prompt (host
+  // applies its per-surface max), the draft-vs-submit policy, and — for recipe
+  // launches — the owner locator whose stored agentArgs the host resolves. No
+  // request is sent when no agent resolved; the workspace opens bare.
+  const agentLaunch: AgentLaunchSpawnRequest | undefined = requestedAgent
+    ? {
+        selection: { kind: 'agent', agent: requestedAgent },
+        ...(draftContent.trim() ? { prompt: draftContent } : {}),
+        ...(promptDelivery === 'draft' ? { promptDelivery: 'draft' as const } : {}),
+        allowEmptyPromptLaunch: true,
+        ...(sourceControlActionId
+          ? { sourceRecord: { owner: 'source-control-recipe' as const, id: sourceControlActionId } }
+          : {})
+      }
+    : undefined
+
+  let worktreeId: string
   try {
     const result = await store.createWorktree(
       repoId,
@@ -175,12 +185,15 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       itemType === 'issue' && itemNumber ? itemNumber : undefined,
       itemType === 'pr' && itemNumber ? itemNumber : undefined,
       resolvedPushTarget,
-      undefined,
+      // Why: persist the chosen agent so an empty-worktree reopen can recreate it.
+      requestedAgent ?? undefined,
       item.linearIdentifier,
       resolvedBranchNameOverride,
       undefined,
       itemType === 'mr' && itemNumber ? itemNumber : undefined,
       gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
+      // The host owns startup resolution via `agentLaunch`; the legacy
+      // self-contained startup arg is never used on the create path.
       undefined,
       undefined,
       undefined,
@@ -189,123 +202,53 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       undefined,
       undefined,
       undefined,
-      resolvedCompareBaseRef
+      resolvedCompareBaseRef,
+      // Surface-owned agent_started fields for the host-emitted create; the host
+      // derives agent_kind from the resolved receipt and fires the event itself.
+      agentLaunch
+        ? {
+            agentLaunch,
+            agentLaunchTelemetry: { launch_source: launchSource, request_kind: 'new' }
+          }
+        : undefined
     )
-    worktreeId = result.worktree.id
-    const worktreePath = result.worktree.path
-
-    const createdConnectionId = getConnectionId(worktreeId)
-    // Why: newly-created SSH worktrees can be activated before the store
-    // rehydrates their repo link; preserve the source repo connection.
-    const launchConnectionId = createdConnectionId ?? repoConnectionId
-    const latestStore = useAppStore.getState()
-    const launchPlatform =
-      args.launchPlatform ??
-      resolveSourceControlLaunchPlatform({
-        connectionId: launchConnectionId,
-        worktreePath,
-        projectRuntime:
-          launchConnectionId === null
-            ? (getLocalProjectExecutionRuntimeContext(latestStore, worktreeId, CLIENT_PLATFORM) ??
-              repoProjectRuntime)
-            : undefined
-      })
-    if (agentOverride) {
-      const detectedAgents =
-        typeof launchConnectionId === 'string'
-          ? await latestStore.ensureRemoteDetectedAgents(launchConnectionId)
-          : await latestStore.ensureDetectedAgents()
-      if (
-        !detectedAgents.includes(agentOverride) ||
-        !isTuiAgentEnabled(agentOverride, latestStore.settings?.disabledTuiAgents)
-      ) {
-        activateAndRevealWorktree(worktreeId, {
-          sidebarRevealBehavior: 'auto',
-          setup: result.setup
-        })
-        toast.error(unavailableAgentErrorMessage())
-        return false
-      }
-      effectiveAgent = agentOverride
-    } else {
-      const detectedAgents =
-        launchConnectionId === repoConnectionId
-          ? await detectedAgentsPromise!
-          : typeof launchConnectionId === 'string'
-            ? await latestStore.ensureRemoteDetectedAgents(launchConnectionId)
-            : await latestStore.ensureDetectedAgents()
-      const detectedIds = new Set(detectedAgents)
-      effectiveAgent = pickTuiAgent(
-        settings?.defaultTuiAgent,
-        detectedIds,
-        settings?.disabledTuiAgents
+    if (result.created === false) {
+      // A pre-create agent-launch rejection created no worktree; surface the
+      // client-safe recovery copy and keep the caller's fallback path intact.
+      const rejection = result.agentLaunchResult
+      toast.error(
+        rejection.status === 'failed'
+          ? agentLaunchFailureMessage(rejection.failure)
+          : agentLaunchRequestErrorMessage(rejection.requestError)
       )
+      return false
     }
-    if (effectiveAgent) {
-      // Why: direct task launch creates and starts the workspace in separate
-      // steps so agent detection can overlap git worktree creation. Persist the
-      // chosen agent once known so removal safety and ownership see it — reopen
-      // no longer relaunches from this field.
-      void store.updateWorktreeMeta(worktreeId, { createdWithAgent: effectiveAgent }).catch(() => {
-        // Non-critical: activation still has the explicit startup below.
-      })
-    }
-    // Why: agents that gate first-launch behind a "Do you trust this folder?"
-    // menu (cursor-agent, copilot) consume the bracketed paste as menu input.
-    // Pre-write the same trust artifact those CLIs write after the user
-    // accepts so the menu never fires. Best-effort — main swallows errors,
-    // and we guard the IPC presence so a stale preload bundle (which can
-    // ship a renderer that's ahead of the loaded preload) doesn't crash the
-    // launch with "Cannot read properties of undefined".
-    if (effectiveAgent && worktreePath && window.api.agentTrust?.markTrusted) {
-      const preflight = TUI_AGENT_CONFIG[effectiveAgent].preflightTrust
-      if (preflight) {
-        try {
-          await window.api.agentTrust.markTrusted({
-            preset: preflight,
-            workspacePath: worktreePath,
-            ...(repo.connectionId ? { connectionId: repo.connectionId } : {})
-          })
-        } catch {
-          // Best-effort: continue with launch even if the trust write
-          // throws. The user can dismiss the trust menu manually.
-        }
-      }
-    }
-
-    ;({ startupPlan, draftLaunchedNatively, startupPlanFailed } =
-      buildDirectWorkItemAgentStartupPlan({
-        agent: effectiveAgent,
-        agentArgs,
-        draftContent,
-        promptDelivery,
-        settings,
-        launchPlatform,
-        nativeChatTranscriptIsLocalReadable:
-          isNativeChatTranscriptLocalReadable(launchConnectionId),
-        // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
-        // rename must not be applied for remote launches.
-        isRemote: typeof launchConnectionId === 'string'
-      }))
+    worktreeId = result.worktree.id
 
     const activation = activateAndRevealWorktree(worktreeId, {
       sidebarRevealBehavior: 'auto',
       setup: result.setup,
       defaultTabs: result.defaultTabs,
-      ...buildDirectWorkItemStartupOpts(
-        effectiveAgent,
-        startupPlan,
-        launchSource,
-        promptDelivery === 'draft' ? draftContent : undefined
-      )
+      // The host spawned the primary agent terminal; suppress the client
+      // reopen/auto-create so the renderer never spawns a duplicate.
+      ...(agentLaunch ? { backendStartupTerminalSpawned: true } : {})
     })
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but
-      // worth handling explicitly rather than silently dropping the draft.
+      // worth handling explicitly rather than silently opening nothing.
       toast.error(workspaceActivationErrorMessage())
       return false
     }
-    primaryTabId = activation.primaryTabId
+    if (activation.primaryTabId && requestedAgent && promptDelivery === 'draft') {
+      const draft = draftContent.trim()
+      if (draft) {
+        seedNativeChatLaunchDraftForAgentTab({
+          tabId: activation.primaryTabId,
+          agent: requestedAgent,
+          text: draftContent
+        })
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create workspace.'
     toast.error(message)
@@ -314,42 +257,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
 
   store.setSidebarOpen(true)
 
-  if (startupPlanFailed) {
-    toast.error(agentLaunchCommandErrorMessage())
+  if (agentOverrideUnavailable) {
+    // Why: the workspace is live but the explicitly requested agent isn't
+    // available on this host, so it opened bare — tell the user rather than
+    // silently launching a different agent.
+    toast.error(unavailableAgentErrorMessage())
     return false
   }
-
-  // Why: draft delivery lands only in the TUI input buffer (argv prefill or
-  // startup-owned paste); seed the chat-composer copy so the work-item context
-  // isn't invisible in the GUI view.
-  if (promptDelivery === 'draft' && primaryTabId && effectiveAgent) {
-    seedNativeChatLaunchDraftForAgentTab({
-      tabId: primaryTabId,
-      agent: effectiveAgent,
-      text: draftContent
-    })
-  }
-
-  // Why: at this point the workspace is live and the agent (if any) has
-  // been queued on `primaryTabId`. The post-launch paste step below only
-  // applies to agents that lacked a native prefill flag; for agents that
-  // were launched with the draft already on argv (Claude --prefill today),
-  // the context is in the input box already — pasting again would duplicate it.
-  if (!primaryTabId || !startupPlan || draftLaunchedNatively) {
-    return true
-  }
-  if (promptDelivery === 'draft' && startupPlan.draftPrompt) {
-    // Why: startup-owned draft paste observes the first PTY frames; the older
-    // delayed sidecar path can attach too late and miss Codex's ready marker.
-    return true
-  }
-
-  void pasteDirectWorkItemDraftWhenAgentReady({
-    primaryTabId,
-    startupPlan,
-    content: draftContent,
-    submit: promptDelivery === 'submit-after-ready',
-    forcePaste: promptDelivery === 'submit-after-ready'
-  })
   return true
 }

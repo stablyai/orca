@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { agentLaunchCreateFields, buildTaskWorkspaceCreateParams } from './workspace-create-params'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
+
+const customAgent = 'custom-agent:claude:0f8b7c6a-1d2e-4a3b-9c4d-5e6f7a8b9c0d' as TuiAgent
 
 describe('agentLaunchCreateFields', () => {
   it('sends startupAgent + createdWithAgent so the host resolves launch args', () => {
@@ -15,6 +18,33 @@ describe('agentLaunchCreateFields', () => {
 })
 
 describe('task workspace create params', () => {
+  it('routes a custom choice through the host-atomic launch contract', () => {
+    const params = buildTaskWorkspaceCreateParams({
+      item: {
+        provider: 'github',
+        source: {
+          type: 'issue',
+          repoId: 'repo-1',
+          number: 42,
+          title: 'Custom agent task',
+          url: 'https://github.com/acme/app/issues/42'
+        }
+      },
+      targetRepoId: 'repo-1',
+      setupDecision: 'inherit',
+      agent: customAgent
+    })
+
+    expect(params).toMatchObject({
+      agentLaunch: {
+        selection: { kind: 'agent', agent: customAgent },
+        prompt: 'https://github.com/acme/app/issues/42'
+      }
+    })
+    expect(params).not.toHaveProperty('createdWithAgent')
+    expect(params).not.toHaveProperty('startupDraft')
+  })
+
   it('passes a GitHub PR URL as an agent draft and links the PR', () => {
     expect(
       buildTaskWorkspaceCreateParams({

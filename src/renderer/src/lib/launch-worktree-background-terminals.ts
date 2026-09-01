@@ -113,15 +113,12 @@ function persistExitedPaneOutput(tabId: string, leafId: string, output: string):
   })
 }
 
-// Why the incarnation: a relay-recycled id can hold the previous owner's exit, and draining that
-// into this handler tears the pane down seconds after it launched.
-function registerBackgroundPaneBuffer(tabId: string, leafId: string, pane: SpawnedPane): void {
+function registerBackgroundPaneBuffer(tabId: string, leafId: string, ptyId: string): void {
   let eagerBuffer: EagerPtyHandle | null = null
-  const onExit = (exitPtyId: string): void => {
+  eagerBuffer = registerEagerPtyBuffer(ptyId, (exitPtyId) => {
     persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
     useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
-  }
-  eagerBuffer = registerEagerPtyBuffer(pane.ptyId, onExit, pane.incarnationId)
+  })
 }
 
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {
@@ -133,9 +130,6 @@ function buildSetupCommand(setup: WorktreeSetupLaunch): string {
   )
 }
 
-/** The id a background pane got, plus which lifetime of it this spawn owns. */
-type SpawnedPane = { ptyId: string; incarnationId?: string }
-
 async function spawnPane(args: {
   worktree: Worktree
   connectionId: string | null
@@ -143,7 +137,7 @@ async function spawnPane(args: {
   leafId: string
   command?: string
   env?: Record<string, string>
-}): Promise<SpawnedPane> {
+}): Promise<string> {
   const result = await window.api.pty.spawn({
     cols: 120,
     rows: 40,
@@ -155,10 +149,12 @@ async function spawnPane(args: {
     tabId: args.tabId,
     leafId: args.leafId
   })
-  return {
-    ptyId: result.id,
-    ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+  // The agentLaunch-outcome variant is unreachable here (no agentLaunch sent),
+  // but the union is only discriminated by the presence of `id`.
+  if (!('id' in result)) {
+    throw new Error('pty.spawn returned no terminal id')
   }
+  return result.id
 }
 
 async function createBackgroundTab(args: {
@@ -180,9 +176,9 @@ async function createBackgroundTab(args: {
 
   const leafId = createBrowserUuid()
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
-  let pane: SpawnedPane
+  let ptyId: string
   try {
-    pane = await spawnPane({
+    ptyId = await spawnPane({
       worktree: args.worktree,
       connectionId: args.connectionId,
       tabId: tab.id,
@@ -197,16 +193,16 @@ async function createBackgroundTab(args: {
   if (
     await retireUnownedTerminal({
       owner: { tabId: tab.id },
-      ptyId: pane.ptyId,
+      ptyId,
       runtimeTarget: { kind: 'local' }
     })
   ) {
     throw new Error('The terminal tab was closed before its session finished starting.')
   }
-  store.updateTabPtyId(tab.id, pane.ptyId)
-  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, pane.ptyId))
-  registerBackgroundPaneBuffer(tab.id, leafId, pane)
-  return { tabId: tab.id, primary: { leafId, ptyId: pane.ptyId } }
+  store.updateTabPtyId(tab.id, ptyId)
+  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
+  registerBackgroundPaneBuffer(tab.id, leafId, ptyId)
+  return { tabId: tab.id, primary: { leafId, ptyId } }
 }
 
 async function addSetupSplit(args: {
@@ -218,7 +214,7 @@ async function addSetupSplit(args: {
 }): Promise<void> {
   const store = useAppStore.getState()
   const setupLeafId = createBrowserUuid()
-  const setupPane = await spawnPane({
+  const setupPtyId = await spawnPane({
     worktree: args.worktree,
     connectionId: args.connectionId,
     tabId: args.tab.tabId,
@@ -229,23 +225,23 @@ async function addSetupSplit(args: {
   if (
     await retireUnownedTerminal({
       owner: { tabId: args.tab.tabId },
-      ptyId: setupPane.ptyId,
+      ptyId: setupPtyId,
       runtimeTarget: { kind: 'local' }
     })
   ) {
     return
   }
-  store.updateTabPtyId(args.tab.tabId, setupPane.ptyId)
+  store.updateTabPtyId(args.tab.tabId, setupPtyId)
   store.setTabLayout(
     args.tab.tabId,
     buildSplitLayout(
       args.tab.primary,
-      { leafId: setupLeafId, ptyId: setupPane.ptyId },
+      { leafId: setupLeafId, ptyId: setupPtyId },
       args.direction,
       getSetupTabTitle()
     )
   )
-  registerBackgroundPaneBuffer(args.tab.tabId, setupLeafId, setupPane)
+  registerBackgroundPaneBuffer(args.tab.tabId, setupLeafId, setupPtyId)
 }
 
 function getDefaultTabLaunches(

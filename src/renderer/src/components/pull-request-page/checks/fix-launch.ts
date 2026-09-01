@@ -64,7 +64,6 @@ export async function startFixChecksFromDialog(args: {
     telemetrySource: 'sidebar',
     promptDelivery: 'submit-after-ready',
     agentOverride: args.agent,
-    agentArgs: args.agentArgs,
     openModalFallback: () => {
       toast.error(
         translate(

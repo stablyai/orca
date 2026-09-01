@@ -4,6 +4,8 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
+import { isDetectedAgentAvailable } from './detected-agent-availability'
+import { resolveTuiAgentBaseAgent } from '../../../shared/custom-tui-agents'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -54,7 +56,7 @@ async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promis
     console.error('Agent detection failed for session continuation', error)
     detectedAgents = []
   }
-  if (detectedAgents.includes(agent)) {
+  if (isDetectedAgentAvailable(agent, detectedAgents, state.settings?.disabledTuiAgents)) {
     return true
   }
 
@@ -73,7 +75,15 @@ async function preflightAgentTrust(args: {
   workspacePath: string
   connectionId: string | null | undefined
 }): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[args.agent].preflightTrust
+  // A custom id is absent from the built-in-only trust registry, so resolve its
+  // base harness first — indexing raw would read `undefined` and throw.
+  const settings = useAppStore.getState().settings
+  const baseAgent = resolveTuiAgentBaseAgent(
+    args.agent,
+    settings?.customTuiAgents,
+    settings?.deletedCustomTuiAgents
+  )
+  const preset = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
   if (!preset || !args.workspacePath || !window.api.agentTrust?.markTrusted) {
     return
   }

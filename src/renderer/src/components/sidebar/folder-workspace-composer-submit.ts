@@ -1,31 +1,18 @@
-import {
-  CLIENT_PLATFORM,
-  ensureAgentStartupInTerminal,
-  type LinkedWorkItemSummary
-} from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
-import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
-  buildAgentDraftLaunchPlan,
-  buildAgentStartupPlan,
-  type AgentStartupPlan
-} from '@/lib/tui-agent-startup'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
+  activateAndRevealFolderWorkspace,
+  type WorktreeStartupPayload
+} from '@/lib/worktree-activation'
 import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import { assertRuntimeSupportsAgentLaunchIdentity } from '@/runtime/agent-launch-identity-negotiation'
+import { useAppStore } from '@/store'
+import { resolveTuiAgentConfig } from '../../../../shared/custom-tui-agents'
+import type { AgentLaunchSpawnRequest } from '../../../../shared/agent-launch-spawn-request'
+import type { FolderWorkspace, ProjectGroup, TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getLinkedItemDisplayName,
   toFolderWorkspaceLinkedTask
@@ -50,100 +37,52 @@ type SubmitFolderWorkspaceCreateParams = {
   note: string
   quickAgent: TuiAgent | null
   autoRenameBranchFromWork: boolean | undefined
-  agentCmdOverrides: Record<string, string> | undefined
-  agentArgs?: string | null
-  agentEnv?: Record<string, string>
-  sessionOptions?: Record<string, SessionOptionValue>
-  terminalWindowsShell?: string | null
-  isRemote?: boolean
   launchSource?: LaunchSource
   runtimeEnvironmentId?: string | null
   createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
   onOpenChange: (open: boolean) => void
 }
 
-export function getFolderWorkspaceAgentLaunchPlatform(
-  projectGroup: Pick<ProjectGroup, 'connectionId' | 'parentPath'>
-): NodeJS.Platform {
-  const parentPath = projectGroup.parentPath?.trim() ?? ''
-  if (projectGroup.connectionId) {
-    return isWindowsAbsolutePathLike(parentPath) ? 'win32' : 'linux'
-  }
-  return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
-}
-
 /**
- * The launch context a linked folder-workspace agent starts with in its TUI
- * input but never submits — delivered as argv prefill or a startup paste
- * depending on the agent.
+ * Identity-only host launch for a folder-workspace agent. The host resolves the
+ * command/args/env, folds the prompt or picks native-flag vs post-ready paste
+ * for the draft, and the pty-connection paste writer delivers any host-returned
+ * followup/draft — so the renderer names only the requested agent and the
+ * draft-vs-submit intent. A linked work item seeds a reviewable draft; a plain
+ * note folds into the launch (submitted as the first turn).
  */
-export function resolveFolderWorkspaceLaunchDraft(
-  linkedWorkItem: LinkedWorkItemSummary,
-  note: string
-): string | null {
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note)
-  return (draftPrompt ?? prompt.trim()) || null
-}
-
-export function buildFolderWorkspaceLinkedStartupPlan(args: {
+function buildFolderWorkspaceStartup(args: {
   agent: TuiAgent
-  linkedWorkItem: LinkedWorkItemSummary
+  linkedWorkItem: LinkedWorkItemSummary | null
   note: string
-  agentCmdOverrides: Record<string, string> | undefined
-  agentArgs?: string | null
-  agentEnv?: Record<string, string>
-  sessionOptions?: Record<string, SessionOptionValue>
-  platform: NodeJS.Platform
-  shell?: AgentStartupShell
-  isRemote: boolean
-}): AgentStartupPlan | null {
-  const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(args.linkedWorkItem, args.note)
-  const draftLaunchPlan = linkedDraftPrompt
-    ? buildAgentDraftLaunchPlan({
-        agent: args.agent,
-        draft: linkedDraftPrompt,
-        cmdOverrides: args.agentCmdOverrides ?? {},
-        agentArgs: args.agentArgs,
-        agentEnv: args.agentEnv,
-        sessionOptions: args.sessionOptions,
-        platform: args.platform,
-        shell: args.shell,
-        isRemote: args.isRemote
-      })
-    : null
-  if (draftLaunchPlan) {
-    return {
-      agent: draftLaunchPlan.agent,
-      launchCommand: draftLaunchPlan.launchCommand,
-      expectedProcess: draftLaunchPlan.expectedProcess,
-      followupPrompt: null,
-      launchConfig: draftLaunchPlan.launchConfig,
-      ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {}),
-      ...(draftLaunchPlan.startupCommandDelivery
-        ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
-        : {}),
-      ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
+  launchSource: LaunchSource
+}): WorktreeStartupPayload {
+  const { agent, linkedWorkItem, note, launchSource } = args
+  const { prompt: quickPrompt, draftPrompt } = linkedWorkItem
+    ? resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note)
+    : { prompt: note, draftPrompt: undefined }
+  // Why: a linked work item always launches as a reviewable draft; the resolver
+  // may hand back a formatted draft or, failing that, the plain prompt text.
+  const linkedDraft = linkedWorkItem ? (draftPrompt ?? quickPrompt.trim()) || null : null
+  const agentLaunch: AgentLaunchSpawnRequest = linkedDraft
+    ? { selection: { kind: 'agent', agent }, prompt: linkedDraft, promptDelivery: 'draft' }
+    : {
+        selection: { kind: 'agent', agent },
+        ...(quickPrompt.trim() ? { prompt: quickPrompt } : {}),
+        allowEmptyPromptLaunch: true
+      }
+  return {
+    command: '',
+    launchAgent: agent,
+    agentLaunch,
+    ...(linkedDraft ? { launchDraftText: linkedDraft } : {}),
+    // Host overwrites agent_kind from the resolved receipt before the emit, so
+    // this host-resolved launch threads only the surface-owned fields.
+    telemetry: {
+      launch_source: launchSource,
+      request_kind: 'new'
     }
   }
-
-  const startupPlan = buildAgentStartupPlan({
-    agent: args.agent,
-    // Why: linked context must stay reviewable; launch empty, then paste the
-    // draft after the agent is ready instead of submitting it on argv/stdin.
-    prompt: '',
-    cmdOverrides: args.agentCmdOverrides ?? {},
-    agentArgs: args.agentArgs,
-    agentEnv: args.agentEnv,
-    sessionOptions: args.sessionOptions,
-    platform: args.platform,
-    shell: args.shell,
-    isRemote: args.isRemote,
-    allowEmptyPromptLaunch: true
-  })
-  if (startupPlan && linkedDraftPrompt) {
-    startupPlan.draftPrompt = linkedDraftPrompt
-  }
-  return startupPlan
 }
 
 async function preflightFolderWorkspaceAgentTrust(args: {
@@ -154,7 +93,16 @@ async function preflightFolderWorkspaceAgentTrust(args: {
   if (!args.agent || !window.api.agentTrust?.markTrusted) {
     return
   }
-  const preflight = TUI_AGENT_CONFIG[args.agent].preflightTrust
+  // Why: a custom id inherits its base harness's trust preset, so resolve the
+  // base before reading the built-in-only config — a raw custom id would index
+  // an undefined entry and crash (noImplicitAny hides it); a tombstoned/unknown
+  // id degrades to no preflight.
+  const { settings } = useAppStore.getState()
+  const preflight = resolveTuiAgentConfig(
+    args.agent,
+    settings?.customTuiAgents,
+    settings?.deletedCustomTuiAgents
+  )?.preflightTrust
   if (!preflight || !args.workspacePath) {
     return
   }
@@ -178,63 +126,23 @@ export async function submitFolderWorkspaceCreate({
   note,
   quickAgent,
   autoRenameBranchFromWork,
-  agentCmdOverrides,
-  agentArgs,
-  agentEnv,
-  sessionOptions,
-  terminalWindowsShell,
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
+  // Why: this launch carries no client-assembled command, so a pre-identity host
+  // would strip agentLaunch, open a blank shell and drop the note/linked draft.
+  // Refuse before creating anything — the composer stays open with the note.
+  if (quickAgent && runtimeEnvironmentId) {
+    await assertRuntimeSupportsAgentLaunchIdentity(runtimeEnvironmentId)
+  }
   const linkedName = linkedWorkItem ? getLinkedItemDisplayName(linkedWorkItem) : null
   const nameIsAutoManaged = !name.trim() || name === lastAutoName || isWorkItemLookupText(name)
   const workspaceName =
     nameIsAutoManaged && linkedName
       ? linkedName
       : name.trim() || linkedName || `${projectGroup.name} workspace`
-  const launchPlatform = getFolderWorkspaceAgentLaunchPlatform(projectGroup)
-  // Why: an SSH folder group runs the plain `orca` relay shim, so the Linux-only
-  // `orca-ide` rename must not be applied for remote launches.
-  const launchIsRemote = Boolean(projectGroup.connectionId)
-  const launchShell = resolveLocalWindowsAgentStartupShell({
-    platform: launchPlatform,
-    isRemote: launchIsRemote,
-    terminalWindowsShell
-  })
-  const startupPlan =
-    quickAgent && linkedWorkItem
-      ? buildFolderWorkspaceLinkedStartupPlan({
-          agent: quickAgent,
-          linkedWorkItem,
-          note,
-          agentCmdOverrides,
-          agentArgs,
-          agentEnv,
-          sessionOptions,
-          platform: launchPlatform,
-          shell: launchShell,
-          isRemote: launchIsRemote
-        })
-      : quickAgent
-        ? buildAgentStartupPlan({
-            agent: quickAgent,
-            prompt: note,
-            cmdOverrides: agentCmdOverrides ?? {},
-            agentArgs,
-            agentEnv,
-            sessionOptions,
-            platform: launchPlatform,
-            shell: launchShell,
-            isRemote: launchIsRemote,
-            allowEmptyPromptLaunch: true
-          })
-        : null
-  // Why: the argv-prefill plan carries the draft inside `launchCommand`, so
-  // `startupPlan.draftPrompt` alone can't tell whether this launch has one.
-  const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
   // Why: the pending badge should only appear when the submitted prompt can
   // actually produce the first agent message that names the workspace.
   const pendingFirstAgentMessageRename =
@@ -263,65 +171,21 @@ export async function submitFolderWorkspaceCreate({
     workspacePath: workspace.folderPath,
     connectionId: workspace.connectionId ?? projectGroup.connectionId
   })
-  if (startupPlan && !startupPlan.launchToken) {
-    // Why: delayed delivery must target the exact pane spawned from this queued
-    // startup, so both halves share one renderer-session token.
-    startupPlan.launchToken = createBrowserUuid()
-  }
 
-  const startup =
-    quickAgent && startupPlan
-      ? {
-          command: startupPlan.launchCommand,
-          ...(startupPlan.env ? { env: startupPlan.env } : {}),
-          launchConfig: startupPlan.launchConfig,
-          ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
-          launchAgent: quickAgent,
-          ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
-          ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
-          // Why: view-mode only. The argv-prefill plan sets no draftPrompt, so
-          // without this the tab opens in chat with nothing mirrored into it.
-          ...(launchDraftPrompt ? { launchDraftText: launchDraftPrompt } : {}),
-          ...(startupPlan.startupCommandDelivery
-            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-            : {}),
-          telemetry: {
-            agent_kind: tuiAgentToAgentKind(quickAgent),
-            launch_source: launchSource,
-            request_kind: 'new' as const
-          }
-        }
-      : undefined
+  const startup = quickAgent
+    ? buildFolderWorkspaceStartup({ agent: quickAgent, linkedWorkItem, note, launchSource })
+    : undefined
   onOpenChange(false)
   try {
     const activation = activateAndRevealFolderWorkspace(workspace.id, {
       ...(startup ? { startup } : {}),
       runtimeEnvironmentId
     })
-    if (
-      quickAgent &&
-      startupPlan &&
-      launchDraftPrompt &&
-      activation !== false &&
-      activation.primaryTabId
-    ) {
-      // Why: draft launch context reaches only the TUI input; seed the
-      // chat-composer copy so it isn't invisible in the chat view.
+    if (activation && activation.primaryTabId && startup?.launchDraftText && quickAgent) {
       seedNativeChatLaunchDraftForAgentTab({
         tabId: activation.primaryTabId,
         agent: quickAgent,
-        text: launchDraftPrompt
-      })
-    }
-    if (
-      startupPlan &&
-      (startupPlan.followupPrompt || startupPlan.draftPrompt) &&
-      activation !== false
-    ) {
-      void ensureAgentStartupInTerminal({
-        worktreeId: folderWorkspaceKey(workspace.id),
-        primaryTabId: activation.primaryTabId,
-        startup: startupPlan
+        text: startup.launchDraftText
       })
     }
   } catch (error) {

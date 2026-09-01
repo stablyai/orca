@@ -23,7 +23,11 @@ import {
 } from '@/components/new-workspace/smart-workspace-source-results'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled,
+  toLegacyAutoPreference
+} from '../../../../shared/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 
@@ -143,11 +147,12 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     [disabledTuiAgents]
   )
 
+  const preferredDefaultAgent = toLegacyAutoPreference(settings?.defaultTuiAgent)
   const fallbackDefaultAgent: TuiAgent =
-    settings?.defaultTuiAgent &&
-    settings.defaultTuiAgent !== 'blank' &&
-    isTuiAgentEnabled(settings.defaultTuiAgent, disabledTuiAgents)
-      ? settings.defaultTuiAgent
+    preferredDefaultAgent &&
+    preferredDefaultAgent !== 'blank' &&
+    isTuiAgentEnabled(preferredDefaultAgent, disabledTuiAgents)
+      ? preferredDefaultAgent
       : (enabledCatalogAgents[0] ?? 'claude')
 
   const [tuiAgent, setTuiAgent] = useState<TuiAgent>(

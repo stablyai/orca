@@ -18,6 +18,10 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import { parseAiVaultListResult } from './session-list-result-validation'
 import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
+import type {
+  AgentLaunchVaultResumeDetailsResult,
+  AgentLaunchVaultResumeEntry
+} from '../../shared/agent-launch-spawn-request'
 
 export type RuntimeAiVaultHostInfo = {
   environmentId: string
@@ -34,6 +38,10 @@ const aiVaultPrepareSessionResumeResultSchema = z.object({
   useRealCodexHome: z.boolean(),
   substituteCodexHome: z.string().optional()
 })
+const aiVaultResumeDetailsResultSchema = z.union([
+  z.object({ status: z.literal('ok'), args: z.array(z.string()) }),
+  z.object({ status: z.literal('unavailable') })
+])
 
 export function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string
@@ -149,6 +157,33 @@ export async function prepareRuntimeAiVaultSessionResume(
     )
   }
   return parsed.data
+}
+
+export async function resolveRuntimeAiVaultResumeDetails(
+  userDataPath: string,
+  environmentId: string,
+  entry: AgentLaunchVaultResumeEntry
+): Promise<AgentLaunchVaultResumeDetailsResult> {
+  const response = await callRuntimeEnvironment(
+    userDataPath,
+    environmentId,
+    'aiVault.resumeDetails',
+    {
+      // Why: the runtime must re-derive its transcript path during the fresh
+      // scan; the desktop-only compatibility field is not remote authority.
+      entry: {
+        executionHostId: entry.executionHostId,
+        agent: entry.agent,
+        sessionId: entry.sessionId,
+        ...(entry.resumeLocator ? { resumeLocator: entry.resumeLocator } : {})
+      }
+    }
+  )
+  if (response.ok !== true) {
+    return { status: 'unavailable' }
+  }
+  const parsed = aiVaultResumeDetailsResultSchema.safeParse(response.result)
+  return parsed.success ? parsed.data : { status: 'unavailable' }
 }
 
 function withRuntimeExecutionHost(

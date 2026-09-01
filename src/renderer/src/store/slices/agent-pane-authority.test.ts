@@ -115,6 +115,18 @@ describe('agent pane authority', () => {
     expect(store.getState().agentStatusByPaneKey[TARGET]).toBeUndefined()
   })
 
+  // Main fences the pane on its own; nothing pushes that to the renderer, so
+  // recentlyRetiredAgentStatusPaneKeys is empty here. A renderer reload produces
+  // the same state. Re-attach MUST still send the IPC to lift main's fence.
+  it('still sends restorePaneAuthority to main when the renderer has no local tombstone', () => {
+    const store = createTestStore()
+    expect(store.getState().recentlyRetiredAgentStatusPaneKeys[TARGET]).toBeUndefined()
+
+    store.getState().restoreAgentPaneAuthority(TARGET)
+
+    expect(restorePaneAuthority).toHaveBeenCalledWith(TARGET)
+  })
+
   it('leaves sibling panes untouched when one pane is restored', () => {
     const store = createTestStore()
     store.getState().retireAgentPaneAuthority(TARGET)

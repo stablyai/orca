@@ -16,6 +16,8 @@ export type AgentBackgroundSessionTestState = {
     agentCmdOverrides: Record<string, string>
     activeRuntimeEnvironmentId: string | null
     terminalMainSideEffectAuthority: boolean | undefined
+    customTuiAgents?: { id: string; baseAgent: string; label: string }[]
+    deletedCustomTuiAgents?: { id: string; baseAgent: string; label: string }[]
   }
   projects: {
     id: string

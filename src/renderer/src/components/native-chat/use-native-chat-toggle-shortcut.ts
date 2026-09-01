@@ -89,6 +89,8 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
             getConnectionIdFromState(state, worktreeId)
           ),
+          customTuiAgents: state.settings?.customTuiAgents,
+          deletedCustomTuiAgents: state.settings?.deletedCustomTuiAgents,
           isChatViewMode: tab.viewMode === 'chat'
         })
       ) {

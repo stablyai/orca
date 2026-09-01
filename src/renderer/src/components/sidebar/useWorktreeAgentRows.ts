@@ -77,6 +77,11 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   const agentFreshnessSignature = useAppStore((s) =>
     active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
   )
+  // Why: row labels/icons resolve custom-agent ids through the catalog, which can
+  // hydrate after first paint. Rebuilding on catalog change re-renders the rows
+  // so "Agent"/"?" placeholders resolve instead of sticking.
+  const customTuiAgents = useAppStore((s) => s.settings?.customTuiAgents)
+  const deletedCustomTuiAgents = useAppStore((s) => s.settings?.deletedCustomTuiAgents)
 
   return useMemo<DashboardAgentRow[]>(() => {
     if (!active) {
@@ -118,6 +123,8 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     ptyIdsByTabId,
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
-    agentFreshnessSignature
+    agentFreshnessSignature,
+    customTuiAgents,
+    deletedCustomTuiAgents
   ])
 }

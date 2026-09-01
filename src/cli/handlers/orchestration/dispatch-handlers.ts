@@ -41,6 +41,28 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
 
 export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration dispatch-show': async ({ flags, client, cwd, json }) => {
+    if (flags.has('raw')) {
+      const result = await client.call<{
+        dispatch: {
+          id: string
+          task_id: string
+          status: string
+          agent_launch_failure: string | null
+        } | null
+      }>('orchestration.dispatchShowRaw', {
+        task: getRequiredStringFlag(flags, 'task')
+      })
+      printResult(result, json, (value) => {
+        if (!value.dispatch) {
+          return 'No dispatch context found.'
+        }
+        const failure = value.dispatch.agent_launch_failure
+          ? ` failure=${value.dispatch.agent_launch_failure}`
+          : ''
+        return `${value.dispatch.id} task=${value.dispatch.task_id} [${value.dispatch.status}]${failure}`
+      })
+      return
+    }
     const showPreamble = flags.has('preamble') ? true : undefined
     // Why: a preview must embed the same real coordinator handle as an actual dispatch.
     const from = showPreamble
@@ -63,6 +85,23 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
         return 'No dispatch context found.'
       }
       return `${value.dispatch.id} task=${value.dispatch.task_id} [${value.dispatch.status}]`
+    })
+  },
+
+  'orchestration dispatch-forget': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{
+      dispatch: { id: string; task_id: string; status: string } | null
+    }>('orchestration.dispatchForget', {
+      task: getRequiredStringFlag(flags, 'task'),
+      expectedFailureId: getOptionalStringFlag(flags, 'expected-failure-id'),
+      run: getOptionalStringFlag(flags, 'run'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    })
+    printResult(result, json, (value) => {
+      if (!value.dispatch) {
+        return 'No dispatch context found.'
+      }
+      return `Forgot dispatch ${value.dispatch.id} task=${value.dispatch.task_id} [${value.dispatch.status}]. Task is blocked; retry with: orca orchestration task-update --id ${value.dispatch.task_id} --status ready`
     })
   },
 

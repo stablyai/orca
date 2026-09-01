@@ -101,4 +101,70 @@ describe('ConfirmationDialogProvider', () => {
       'unchecked'
     )
   })
+
+  it('reports the opt-in as checked when the user ticks it and confirms', async () => {
+    const onConfirm = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Forget this launch?',
+      confirmLabel: 'Forget launch',
+      optIn: { label: 'Also forget 3 other stranded launches on devbox.', onConfirm }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await userEvent.click(
+      await screen.findByRole('checkbox', {
+        name: 'Also forget 3 other stranded launches on devbox.'
+      })
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Forget launch' }))
+
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(true))
+    expect(onSettled).toHaveBeenCalledWith(true)
+  })
+
+  it('reports the opt-in as unchecked when confirmed without ticking it', async () => {
+    const onConfirm = vi.fn()
+    renderDialog({
+      title: 't',
+      confirmLabel: 'Forget launch',
+      optIn: { label: 'x', onConfirm }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await screen.findByRole('checkbox')
+    await userEvent.click(screen.getByRole('button', { name: 'Forget launch' }))
+
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(false))
+  })
+
+  it('honors defaultChecked so a pre-ticked opt-in confirms as checked', async () => {
+    const onConfirm = vi.fn()
+    renderDialog({
+      title: 't',
+      confirmLabel: 'Forget launch',
+      optIn: { label: 'x', defaultChecked: true, onConfirm }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await screen.findByRole('checkbox')
+    await userEvent.click(screen.getByRole('button', { name: 'Forget launch' }))
+
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(true))
+  })
+
+  it('does not fire the opt-in callback when the confirmation is cancelled', async () => {
+    const onConfirm = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 't',
+      confirmLabel: 'Forget launch',
+      optIn: { label: 'x', onConfirm }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    await screen.findByRole('checkbox')
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
 })

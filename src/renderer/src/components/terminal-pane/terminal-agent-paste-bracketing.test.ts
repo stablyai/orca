@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { CustomTuiAgent } from '../../../../shared/types'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
+import type { AppState } from '../../store/types'
+import { useAppStore } from '../../store'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import {
@@ -155,6 +158,75 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
         }
       })
     ).toEqual({ forceBracketedPasteForMultiline: true })
+  })
+})
+
+describe('custom-agent-owned panes', () => {
+  // Regression: agent-status rows and pty launch metadata keep the custom id
+  // unresolved, but TUI_AGENT_CONFIG is keyed by built-in ids — indexing raw
+  // read `windowsInputRecordPasteNewline` off undefined BEFORE the win32 guard,
+  // so every multiline paste threw on macOS/Linux too.
+  const CUSTOM_CODEX_ID = 'custom-agent:codex:3f9f1c22-2a1b-4c33-9a44-55d6e7f8a900' as const
+  const codexDerived: CustomTuiAgent = {
+    id: CUSTOM_CODEX_ID,
+    baseAgent: 'codex',
+    label: 'Codex (review)',
+    args: '',
+    env: {},
+    syncEnv: false
+  }
+  let originalSettings: AppState['settings']
+
+  beforeEach(() => {
+    originalSettings = useAppStore.getState().settings
+    useAppStore.setState({
+      settings: {
+        customTuiAgents: [codexDerived],
+        deletedCustomTuiAgents: []
+      } as unknown as AppState['settings']
+    })
+  })
+
+  afterEach(() => {
+    useAppStore.setState({ settings: originalSettings })
+  })
+
+  const customStatusRow = {
+    agentStatusByPaneKey: { [AGENT_PANE_KEY]: agentEntry({ agentType: CUSTOM_CODEX_ID }) }
+  }
+
+  it('does not throw on a non-Windows host and brackets like its base', () => {
+    expect(() => decide(customStatusRow)).not.toThrow()
+    expect(decide(customStatusRow)).toEqual({ forceBracketedPasteForMultiline: true })
+  })
+
+  it('brackets a process-confirmed custom foreground agent with no status row', () => {
+    const args = {
+      agentStatusByPaneKey: {},
+      paneForegroundAgentByPaneKey: {
+        [AGENT_PANE_KEY]: foregroundEntry({ agent: CUSTOM_CODEX_ID })
+      }
+    }
+    expect(() => decide(args)).not.toThrow()
+    expect(decide(args)).toEqual({ forceBracketedPasteForMultiline: true })
+  })
+
+  it('inherits the base agent Windows input-record newline', () => {
+    expect(decide({ hostPlatform: 'win32', ...customStatusRow })).toEqual({
+      windowsInputRecordNewline: 'alt-enter'
+    })
+  })
+
+  it('degrades to plain bracketing when the catalog lost the custom id', () => {
+    useAppStore.setState({
+      settings: {
+        customTuiAgents: [],
+        deletedCustomTuiAgents: []
+      } as unknown as AppState['settings']
+    })
+    expect(decide({ hostPlatform: 'win32', ...customStatusRow })).toEqual({
+      forceBracketedPasteForMultiline: true
+    })
   })
 })
 

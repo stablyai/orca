@@ -56,6 +56,9 @@ describe('Pi session wake', () => {
     expect(state.pendingStartupByTabId[resumedTab!.id]?.resumeProviderSession).toEqual(
       providerSession
     )
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    // Retained until the queued startup is consumed (the spawn-success signal).
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+    state.consumeTabStartupCommand(resumedTab!.id)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 })

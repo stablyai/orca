@@ -128,6 +128,27 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
 }
 
+type ResumeConnectOptions = { agentLaunch?: unknown } | undefined
+
+// Resume is host-owned: the spawn ships the ownership key and the host rebuilds the
+// `--resume` argv from its own record (src/main/agent-launch/agent-launch-resume-ingest.ts).
+function expectResumesProviderSession(
+  connectOptions: ResumeConnectOptions,
+  providerSessionId: string
+): void {
+  expect(connectOptions?.agentLaunch).toEqual({
+    resume: {
+      operation: 'resume',
+      sessionKey: { worktreeId: 'wt-1', baseAgent: 'claude', providerSessionId }
+    }
+  })
+}
+
+// Ownership key: worktree + resumable base agent + provider session id.
+function claimKeyForProviderSession(providerSessionId: string): string {
+  return `wt-1\0claude\0${providerSessionId}`
+}
+
 describe('connectPanePty', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -195,11 +216,8 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
-    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
-      | { command?: string }
-      | undefined
-    expect(resumeConnectOptions?.command).toContain('--resume')
-    expect(resumeConnectOptions?.command).toContain('sess-hibernated-1')
+    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as ResumeConnectOptions
+    expectResumesProviderSession(resumeConnectOptions, 'sess-hibernated-1')
 
     // The wake is one-shot: a second reveal must not spawn again.
     const connectCallsAfterWake = transport.connect.mock.calls.length
@@ -249,7 +267,7 @@ describe('connectPanePty', () => {
     expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
 
     // The wake reports the claim it consumed so the dispatcher's generic resume never launches the same provider session into a second tab.
-    const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-bg'
+    const claimKey = claimKeyForProviderSession('sess-hibernated-bg')
     expect(binding.wakeHibernatedAgentIfArmed(new Set([claimKey]))).toBeNull()
     expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
     const claimedProviderSessions = new Set<string>()
@@ -258,11 +276,8 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
-    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
-      | { command?: string }
-      | undefined
-    expect(resumeConnectOptions?.command).toContain('--resume')
-    expect(resumeConnectOptions?.command).toContain('sess-hibernated-bg')
+    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as ResumeConnectOptions
+    expectResumesProviderSession(resumeConnectOptions, 'sess-hibernated-bg')
 
     // A second navigation-free wake must not spawn again (one-pane/one-PTY).
     const connectCallsAfterWake = transport.connect.mock.calls.length
@@ -305,7 +320,7 @@ describe('connectPanePty', () => {
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
 
     // Wake arrives mid-kill: nothing is armed yet, but the pane must claim the session (suppressing the generic resume) and latch the request.
-    const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-race'
+    const claimKey = claimKeyForProviderSession('sess-hibernated-race')
     expect(binding.wakeHibernatedAgentIfArmed(new Set([claimKey]))).toBeNull()
     const claimedProviderSessions = new Set<string>()
     expect(binding.wakeHibernatedAgentIfArmed(claimedProviderSessions)).toBe(claimKey)
@@ -318,11 +333,8 @@ describe('connectPanePty', () => {
 
     // Arming consumed the latched wake — the --resume spawned with no reveal and no second wake event.
     expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
-    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
-      | { command?: string }
-      | undefined
-    expect(resumeConnectOptions?.command).toContain('--resume')
-    expect(resumeConnectOptions?.command).toContain('sess-hibernated-race')
+    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as ResumeConnectOptions
+    expectResumesProviderSession(resumeConnectOptions, 'sess-hibernated-race')
   })
 
   it('keeps an in-place provider claim until the replacement PTY spawn settles', async () => {
@@ -361,7 +373,7 @@ describe('connectPanePty', () => {
     const deferredSpawn = createDeferred<unknown>()
     transport.connect.mockImplementationOnce(() => deferredSpawn.promise)
 
-    const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-inflight'
+    const claimKey = claimKeyForProviderSession('sess-hibernated-inflight')
     expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
     const connectCallsAfterFirstWake = transport.connect.mock.calls.length
     expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
@@ -404,7 +416,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     transport.connect.mockRejectedValueOnce(new Error('transient spawn failure'))
 
-    const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-retry'
+    const claimKey = claimKeyForProviderSession('sess-hibernated-retry')
     expect(binding.wakeHibernatedAgentIfArmed()).toBe(claimKey)
     await flushAsyncTicks(20)
     const connectCallsAfterFailure = transport.connect.mock.calls.length
@@ -483,11 +495,8 @@ describe('connectPanePty', () => {
 
     // No second reveal was needed: the foreground pane resumed its recorded session directly from the arm-time wake.
     expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
-    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
-      | { command?: string }
-      | undefined
-    expect(resumeConnectOptions?.command).toContain('--resume')
-    expect(resumeConnectOptions?.command).toContain('sess-hibernated-2')
+    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as ResumeConnectOptions
+    expectResumesProviderSession(resumeConnectOptions, 'sess-hibernated-2')
 
     // Still one-shot: a later reveal must not spawn again.
     const connectCallsAfterWake = transport.connect.mock.calls.length

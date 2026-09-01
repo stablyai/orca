@@ -1,5 +1,8 @@
 import type { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  getAgentSessionOwnershipKey,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -10,11 +13,19 @@ import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
+// Key ownership on the resumable base so two custom ids on one base collapse to
+// one owner. Pi additionally resumes by transcript path, so distinguish paths
+// that share a provider id. `agent` is the base on legacy records.
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
-  const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
-  return record.agent === 'pi' || record.agent === 'prime-agent'
-    ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
-    : base
+  const baseAgent = record.baseAgent ?? record.agent
+  const key = getAgentSessionOwnershipKey({
+    worktreeId: record.worktreeId,
+    baseAgent,
+    providerSessionId: record.providerSession.id
+  })
+  return baseAgent === 'pi' || baseAgent === 'prime-agent'
+    ? `${key}\0${record.providerSession.transcriptPath ?? ''}`
+    : key
 }
 
 // Why quit is excluded: it is an explicit request to keep resumable work. A

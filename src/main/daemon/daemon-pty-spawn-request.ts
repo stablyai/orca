@@ -7,7 +7,10 @@ import {
   type SnapshotCheckpointResult
 } from './daemon-pty-runtime-state'
 import { isDaemonGoneError } from './daemon-endpoint-errors'
-import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
+  supportsLaunchTokenEcho
+} from './daemon-protocol-version'
 import type { ColdRestoreInfo } from './history-reader'
 import { NdjsonLineTooLongError } from './ndjson'
 import {
@@ -117,6 +120,9 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,
         launchAgent: context.attachOnly ? undefined : opts.launchAgent,
         ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
+        ...(!context.attachOnly && opts.launchToken && supportsLaunchTokenEcho(this.protocolVersion)
+          ? { launchToken: opts.launchToken }
+          : {}),
         shellOverride: context.attachOnly ? undefined : opts.shellOverride,
         terminalWindowsWslDistro: context.attachOnly ? undefined : opts.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: context.attachOnly

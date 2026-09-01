@@ -1,22 +1,11 @@
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationDispatchResult,
   AutomationRun,
+  AutomationRunPersistInput,
   AutomationRunTrigger,
   AutomationUpdateInput
 } from '../../../shared/automations-types'
-import type {
-  AutomationCapturedHostIssue,
-  AutomationChangeSelector,
-  AutomationListParams,
-  AutomationListResult
-} from '../../../shared/automation-list-scope'
-import type {
-  AutomationDestination,
-  AutomationOwnerFenceOperation,
-  AutomationOwnerPrecondition
-} from '../../../shared/automation-owner-precondition'
 import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
 import { normalizeAutomationRunWorkspaceDisplayName } from '../scheduling-automations/automation-context-migration'
 import {
@@ -29,7 +18,6 @@ import {
 import {
   createAutomationRun as createAutomationRunOperation,
   listAutomationRuns as listAutomationRunsOperation,
-  recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
   updateAutomationRun as updateAutomationRunOperation,
   type AutomationRunOperations
@@ -38,22 +26,12 @@ import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
   getLatestAutomationOccurrence as getLatestAutomationOccurrenceOperation
 } from '../scheduling-automations/automation-schedule-operations'
-import {
-  assertAutomationOwnerFence as assertAutomationOwnerFenceOperation,
-  automationCapturedHostIssue as automationCapturedHostIssueOperation,
-  automationChangeSelector as automationChangeSelectorOperation,
-  automationOwnerPrecondition as automationOwnerPreconditionOperation,
-  listAutomationsForScope as listAutomationsForScopeOperation
-} from '../scheduling-automations/automation-owner-projection'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 import type { ProfilePreferences } from './profile-preferences'
 
-type AutomationPersistenceRuntime = Pick<
-  StoreRuntimeState,
-  'automationListProjectionCache' | 'state' | 'storageAuthority'
->
+type AutomationPersistenceRuntime = Pick<StoreRuntimeState, 'state'>
 
 const automationPersistenceContext = Symbol('AutomationPersistence')
 type AutomationPersistenceContext = {
@@ -77,47 +55,6 @@ export class AutomationPersistence {
     return listAutomationsOperation(this[automationPersistenceContext].runtime.state)
   }
 
-  listAutomationsForScope(params?: AutomationListParams | null): AutomationListResult {
-    const runtime = this[automationPersistenceContext].runtime
-    const projection = listAutomationsForScopeOperation({
-      state: runtime.state,
-      storageAuthority: runtime.storageAuthority,
-      automations: this.listAutomations(),
-      params,
-      cache: runtime.automationListProjectionCache
-    })
-    runtime.automationListProjectionCache = projection.cache
-    return projection.result
-  }
-
-  automationOwnerPrecondition(id: string): AutomationOwnerPrecondition | null {
-    const runtime = this[automationPersistenceContext].runtime
-    return automationOwnerPreconditionOperation(runtime.state, runtime.storageAuthority, id)
-  }
-
-  automationChangeSelector(id: string): AutomationChangeSelector | null {
-    const runtime = this[automationPersistenceContext].runtime
-    return automationChangeSelectorOperation(runtime.state, runtime.storageAuthority, id)
-  }
-
-  automationCapturedHostIssue(automation: Automation): AutomationCapturedHostIssue | null {
-    const runtime = this[automationPersistenceContext].runtime
-    return automationCapturedHostIssueOperation(runtime.state, runtime.storageAuthority, automation)
-  }
-
-  assertAutomationOwnerFence(input: {
-    id: string
-    expectedOwner?: AutomationOwnerPrecondition
-    operation: AutomationOwnerFenceOperation
-  }): Automation {
-    const runtime = this[automationPersistenceContext].runtime
-    return assertAutomationOwnerFenceOperation({
-      state: runtime.state,
-      storageAuthority: runtime.storageAuthority,
-      ...input
-    })
-  }
-
   listAutomationRuns(automationId?: string): AutomationRun[] {
     return listAutomationRunsOperation(
       this[automationPersistenceContext].runtime.state,
@@ -125,23 +62,16 @@ export class AutomationPersistence {
     )
   }
 
-  createAutomation(
-    input: AutomationCreateInput,
-    options?: { destination?: AutomationDestination }
-  ): Automation {
-    return createAutomationOperation(getAutomationDefinitionOperations(this), input, options)
+  createAutomation(input: AutomationCreateInput): Automation {
+    return createAutomationOperation(getAutomationDefinitionOperations(this), input)
   }
 
-  updateAutomation(
-    id: string,
-    updates: AutomationUpdateInput,
-    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
-  ): Automation {
-    return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
+  updateAutomation(id: string, updates: AutomationUpdateInput): Automation {
+    return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates)
   }
 
-  deleteAutomation(id: string, options?: { expectedOwner?: AutomationOwnerPrecondition }): void {
-    deleteAutomationOperation(getAutomationDefinitionOperations(this), id, options)
+  deleteAutomation(id: string): void {
+    deleteAutomationOperation(getAutomationDefinitionOperations(this), id)
   }
 
   createAutomationRun(
@@ -157,20 +87,7 @@ export class AutomationPersistence {
     )
   }
 
-  recordRepeatedAutomationSkip(
-    automationId: string,
-    error: string,
-    scheduledFor: number
-  ): AutomationRun | null {
-    return recordRepeatedAutomationSkipOperation(
-      getAutomationRunOperations(this),
-      automationId,
-      error,
-      scheduledFor
-    )
-  }
-
-  updateAutomationRun(result: AutomationDispatchResult): AutomationRun {
+  updateAutomationRun(result: AutomationRunPersistInput): AutomationRun {
     return updateAutomationRunOperation(getAutomationRunOperations(this), result)
   }
 
@@ -201,7 +118,6 @@ export function getAutomationDefinitionOperations(
 ): AutomationDefinitionOperations {
   return {
     state: owner[automationPersistenceContext].runtime.state,
-    storageAuthority: owner[automationPersistenceContext].runtime.storageAuthority,
     flush: () => owner[automationPersistenceContext].flushBarriers.flush(),
     recordCreated: () =>
       owner[automationPersistenceContext].preferences.recordFeatureInteraction('automation-created')

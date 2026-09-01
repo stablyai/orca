@@ -3,7 +3,7 @@ import {
   recognizeAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { BuiltInTuiAgent } from '../../../shared/tui-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
 function normalizeProcessName(processName: string | null): string | null {
@@ -31,18 +31,25 @@ export function isCodexForegroundProcess(processName: string | null): boolean {
  * Why this is not just a foreground-name match: Windows reports the DEEPEST
  * process in the PTY tree, so an Orca "Codex" pane running a subagent reads as
  * `pwsh -> node -> codex.exe -> claude.exe` => "claude" and was filtered out
- * before the stale-account registry was ever consulted. `launchAgent` is
+ * before the stale-account registry was ever consulted. The launch agent is
  * recorded metadata (Orca started Codex in this tab), not a repaintable label,
- * so it survives that. A restart notice makes the pane drop every keystroke, so
+ * so it survives that.
+ *
+ * A restart notice makes the pane drop every keystroke, so
  * the fallback is deliberately paired with a foreground that can only be a
  * deeper *agent* (or the node/python wrapper that has not resolved to one yet):
  * both the Windows descendant scan and the POSIX `ps` walk only ever surface a
  * recognized agent or the shell/tty foreground, so `less`, `vim` or `ssh` in
  * that pane means the user exited Codex and is typing at their own program.
+ *
+ * Takes the BASE agent, not the requested one: `tab.launchAgent` holds the
+ * requested identity, which for a custom Codex agent is its custom id. The
+ * `BuiltInTuiAgent` parameter is the enforcement — a requested id does not
+ * compile here, so a derived Codex agent cannot silently stop being one.
  */
 export function isCodexRestartEligiblePane(args: {
   inspection: RuntimeTerminalProcessInspection
-  launchAgent: TuiAgent | undefined
+  launchBaseAgent: BuiltInTuiAgent | undefined
 }): boolean {
   const { foregroundProcess, hasChildProcesses, unavailable } = args.inspection
   if (unavailable === true) {
@@ -51,7 +58,7 @@ export function isCodexRestartEligiblePane(args: {
   if (isCodexForegroundProcess(foregroundProcess)) {
     return true
   }
-  if (args.launchAgent !== 'codex' || foregroundProcess === null || !hasChildProcesses) {
+  if (args.launchBaseAgent !== 'codex' || foregroundProcess === null || !hasChildProcesses) {
     return false
   }
   if (isShellProcess(foregroundProcess)) {

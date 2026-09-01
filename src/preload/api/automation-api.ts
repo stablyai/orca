@@ -43,6 +43,7 @@ export type AutomationsApi = {
     automationId: string
     runId: string
   }) => Promise<AutomationPrecheckResult | null>
+  forgetRun: (args: { runId: string }) => Promise<AutomationRun>
   markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
   snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
   rendererReady: () => Promise<void>

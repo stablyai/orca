@@ -163,7 +163,6 @@ export function tabIds(worktreeId: string): string[] {
  *  consumed the record launched nothing. */
 export function expectReplayedResume(paneKey: string, worktreeId: string, sessionId: string): void {
   const state = useAppStore.getState()
-  expect(state.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
   const claimedTabIds = Object.keys(state.automaticAgentResumeClaimsByTabId)
   expect(claimedTabIds).toHaveLength(1)
   const replacementTabId = claimedTabIds[0]!
@@ -173,6 +172,11 @@ export function expectReplayedResume(paneKey: string, worktreeId: string, sessio
     launchAgent: 'codex',
     providerSession: { key: 'session_id', id: sessionId }
   })
+  // The record rides the queued startup as retry state until the replacement
+  // tab's spawn consumes it; a cleared record here would mean no retry on a
+  // launch that fails before spawning.
+  expect(state.pendingStartupByTabId[replacementTabId]?.sleepingRecordPaneKey).toBe(paneKey)
+  expect(state.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
 }
 
 /** Registers the shared harness reset for the receipt-era describe blocks. */

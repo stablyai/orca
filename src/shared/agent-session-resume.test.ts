@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  RESUMABLE_TUI_AGENTS,
   agentProviderSessionsEqual,
   extractAgentProviderSession,
   getAgentResumeArgv,
@@ -8,6 +9,10 @@ import {
 } from './agent-session-resume'
 
 describe('agent session resume metadata', () => {
+  it('lists every resumable agent exactly once', () => {
+    expect(new Set(RESUMABLE_TUI_AGENTS).size).toBe(RESUMABLE_TUI_AGENTS.length)
+  })
+
   it('treats devin as a resumable TUI agent', () => {
     expect(isResumableTuiAgent('devin')).toBe(true)
   })

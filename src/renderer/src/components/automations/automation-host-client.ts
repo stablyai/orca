@@ -167,3 +167,22 @@ export async function runAutomationNowForTarget(
   )
   return result.run
 }
+
+/** Forget a stranded automation run on the host that owns it. A run recorded on a
+ *  remote host lives in that host's automation service, so forget must reach the
+ *  same target its runs are listed from — never the local desktop service. */
+export async function forgetAutomationRunForTarget(
+  target: AutomationHostTarget,
+  runId: string
+): Promise<AutomationRun> {
+  if (target.kind === 'local') {
+    return await window.api.automations.forgetRun({ runId })
+  }
+  const result = await callRuntimeRpc<{ run: AutomationRun }>(
+    target,
+    'automation.forgetRun',
+    { runId },
+    { timeoutMs: 15_000 }
+  )
+  return result.run
+}

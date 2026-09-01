@@ -7,6 +7,7 @@ import {
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { recordAuthenticatedInventory } from './daemon-audit-classifier'
+import { supportsLaunchTokenEcho } from './daemon-protocol-version'
 import { isMissingWindowsNamedPipeError } from './daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
@@ -16,6 +17,10 @@ import { PtyProcessListAdmission } from '../providers/pty-process-list-admission
 import type { PtyProcessInfo } from '../providers/types'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
+  providesLaunchTokenListings(): boolean {
+    return supportsLaunchTokenEcho(this.protocolVersion)
+  }
+
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
     // Why: snapshotted before the request so ids spawned mid-flight can never
     // be reconciled away below.
@@ -62,7 +67,8 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
             ...(worktreeId ? { worktreeId } : {}),
             ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
             ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
-            ...this.validatedAgentSessionOwners(session.agentSessionOwners)
+            ...this.validatedAgentSessionOwners(session.agentSessionOwners),
+            ...(session.launchToken ? { launchToken: session.launchToken } : {})
           })
         )
       }

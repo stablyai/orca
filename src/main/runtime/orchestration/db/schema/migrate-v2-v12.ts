@@ -78,6 +78,16 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
       this.db.exec(`ALTER TABLE messages ADD COLUMN sender_pane_key TEXT`)
     }
   }
+  // A pre-rebase v6 database may already claim the version without having
+  // received main's pane-column ALTERs; keep the later message rebuild valid.
+  if (current < 7) {
+    if (!this.hasColumn('dispatch_contexts', 'assignee_pane_key')) {
+      this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN assignee_pane_key TEXT`)
+    }
+    if (!this.hasColumn('messages', 'sender_pane_key')) {
+      this.db.exec(`ALTER TABLE messages ADD COLUMN sender_pane_key TEXT`)
+    }
+  }
   if (current < 7) {
     this.db
       .prepare(

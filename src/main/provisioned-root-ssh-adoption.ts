@@ -3,7 +3,7 @@ import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
 import type {
   AdoptProvisionedRootArgs,
-  CreateWorktreeResult
+  CreatedWorktreeResult
 } from '../shared/worktree/create-types'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import type { AutomationWorkspaceProvenance } from '../shared/worktree/types'
@@ -40,7 +40,7 @@ export async function adoptProvisionedRootSshCheckout(args: {
   repo: Repo
   store: Store
   isRepoCurrent: () => boolean
-}): Promise<CreateWorktreeResult> {
+}): Promise<CreatedWorktreeResult> {
   const { request, repo, store } = args
   if (request.sparseCheckout) {
     throw new Error('Provisioned-root recipes do not support sparse checkout.')

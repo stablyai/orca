@@ -1,36 +1,25 @@
 import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../../shared/repo-types'
-import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
-import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
+import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-projection'
+import type { CreatedWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-logic'
 
 export function createFolderWorkspace(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store
-): CreateWorktreeResult {
+): CreatedWorktreeResult {
   const now = Date.now()
   const instanceId = randomUUID()
   const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
-  const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
-    args.displayName,
-    args.displayNameKind,
-    args.name,
-    args.cliProvenance?.kind === 'created-by-cli',
-    args.nameWasGenerated === true
-  )
   const meta = store.setWorktreeMeta(worktreeId, {
     instanceId,
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
-    displayName: displayNameRequest.value || args.name,
-    ...(displayNameRequest.kind === 'user' && displayNameRequest.value
-      ? { displayNameIsPinned: true }
-      : {}),
+    displayName: args.displayName || args.name,
     lastActivityAt: now,
     createdAt: now,
     orcaCreatedAt: now,

@@ -1,38 +1,31 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type * as NewWorkspaceModule from '@/lib/new-workspace'
+import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
   activateAndRevealFolderWorkspace: vi.fn(),
-  ensureAgentStartupInTerminal: vi.fn()
+  assertRuntimeSupportsAgentLaunchIdentity: vi.fn()
 }))
 
-// Why: importOriginal keeps the real resolveStartupLaunchDraftText, so the
-// invariant test below exercises the shipped gate instead of a copy of it.
 vi.mock('@/lib/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
 })
 
-vi.mock('@/lib/new-workspace', async (importOriginal) => {
-  const actual = await importOriginal<typeof NewWorkspaceModule>()
+vi.mock('@/runtime/agent-launch-identity-negotiation', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    ensureAgentStartupInTerminal: mocks.ensureAgentStartupInTerminal
+    assertRuntimeSupportsAgentLaunchIdentity: mocks.assertRuntimeSupportsAgentLaunchIdentity
   }
 })
 
-import { useAppStore } from '@/store'
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
 import { resolveStartupLaunchDraftText } from '@/lib/worktree-startup-payload'
-import {
-  getFolderWorkspaceAgentLaunchPlatform,
-  submitFolderWorkspaceCreate
-} from './folder-workspace-composer-submit'
+import { useAppStore } from '@/store'
+import { AGENT_LAUNCH_IDENTITY_UNSUPPORTED_MESSAGE } from '@/runtime/agent-launch-identity-negotiation'
+import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
 
 function makeProjectGroup(): ProjectGroup {
   return {
@@ -70,7 +63,9 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 
 describe('submitFolderWorkspaceCreate', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
+    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
     Object.assign(window, {
       api: {
         agentTrust: {
@@ -81,8 +76,7 @@ describe('submitFolderWorkspaceCreate', () => {
   })
 
   afterEach(() => {
-    mocks.activateAndRevealFolderWorkspace.mockReset()
-    mocks.ensureAgentStartupInTerminal.mockReset()
+    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
     Reflect.deleteProperty(window, 'api')
     vi.restoreAllMocks()
   })
@@ -103,7 +97,6 @@ describe('submitFolderWorkspaceCreate', () => {
       note: '',
       quickAgent: null,
       autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
       createFolderWorkspace,
       onOpenChange
     })
@@ -115,18 +108,14 @@ describe('submitFolderWorkspaceCreate', () => {
       linkedTask: null
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
-      runtimeEnvironmentId: null
-    })
     expect(consoleError).toHaveBeenCalledWith(
       'Failed to activate folder workspace after create:',
       expect.any(Error)
     )
   })
 
-  it('marks a blank folder workspace for first-input rename when launching an agent with a note', async () => {
+  it('uses an identity-only host launch and marks a submitted first prompt for rename', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const onOpenChange = vi.fn()
 
     await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),
@@ -136,13 +125,10 @@ describe('submitFolderWorkspaceCreate', () => {
       note: 'Fix the flaky checkout flow',
       quickAgent: 'codex',
       autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
-      agentArgs: '--model gpt-5.4',
-      agentEnv: { ORCA_AGENT_PROFILE: 'review' },
       launchSource: 'new_workspace_composer',
       runtimeEnvironmentId: 'env-1',
       createFolderWorkspace,
-      onOpenChange
+      onOpenChange: vi.fn()
     })
 
     expect(createFolderWorkspace).toHaveBeenCalledWith({
@@ -153,81 +139,123 @@ describe('submitFolderWorkspaceCreate', () => {
       createdWithAgent: 'codex',
       pendingFirstAgentMessageRename: true
     })
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
-      'folder-workspace-1',
-      expect.objectContaining({
-        runtimeEnvironmentId: 'env-1',
-        startup: expect.objectContaining({
-          command: expect.stringContaining('codex'),
-          env: { ORCA_AGENT_PROFILE: 'review' },
-          telemetry: expect.objectContaining({
-            launch_source: 'new_workspace_composer'
-          })
-        })
-      })
-    )
-    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toContain('--model')
-    expect(startup?.command).toContain('gpt-5.4')
-    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      runtimeEnvironmentId: 'env-1',
+      startup: {
+        command: '',
+        launchAgent: 'codex',
+        agentLaunch: {
+          selection: { kind: 'agent', agent: 'codex' },
+          prompt: 'Fix the flaky checkout flow',
+          allowEmptyPromptLaunch: true
+        },
+        telemetry: {
+          launch_source: 'new_workspace_composer',
+          request_kind: 'new'
+        }
+      }
+    })
   })
 
-  it('does not mark first-input rename when the folder workspace has an explicit name', async () => {
+  // A pre-identity host strips agentLaunch and opens a blank shell, losing the
+  // note. Nothing may be created, and the composer must stay open to keep it.
+  it('refuses before creating anything when the runtime cannot launch agents', async () => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const onOpenChange = vi.fn()
+    mocks.assertRuntimeSupportsAgentLaunchIdentity.mockRejectedValueOnce(
+      new Error(AGENT_LAUNCH_IDENTITY_UNSUPPORTED_MESSAGE)
+    )
+
+    await expect(
+      submitFolderWorkspaceCreate({
+        projectGroup: makeProjectGroup(),
+        name: '',
+        lastAutoName: '',
+        linkedWorkItem: null,
+        note: 'Fix the flaky checkout flow',
+        quickAgent: 'codex',
+        autoRenameBranchFromWork: true,
+        runtimeEnvironmentId: 'env-1',
+        createFolderWorkspace,
+        onOpenChange
+      })
+    ).rejects.toThrow(AGENT_LAUNCH_IDENTITY_UNSUPPORTED_MESSAGE)
+
+    expect(createFolderWorkspace).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('does not probe the runtime for an agent-less folder workspace', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
 
     await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),
-      name: 'Checkout polish',
+      name: 'Docs',
       lastAutoName: '',
       linkedWorkItem: null,
-      note: 'Fix the flaky checkout flow',
-      quickAgent: 'codex',
-      autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
+      note: '',
+      quickAgent: null,
+      autoRenameBranchFromWork: false,
+      runtimeEnvironmentId: 'env-1',
       createFolderWorkspace,
       onOpenChange: vi.fn()
     })
 
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: 'Checkout polish',
-      connectionId: null,
-      linkedTask: null,
-      createdWithAgent: 'codex'
-    })
+    expect(mocks.assertRuntimeSupportsAgentLaunchIdentity).not.toHaveBeenCalled()
+    expect(createFolderWorkspace).toHaveBeenCalled()
   })
 
-  it('does not mark first-input rename when a linked work item owns the folder workspace name', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const linkedWorkItem = {
-      provider: 'github' as const,
-      type: 'issue' as const,
-      number: 42,
-      title: 'Restore checkout polish',
-      url: 'https://github.com/stablyai/orca/issues/42',
-      repoId: 'repo-1'
+  it.each([
+    {
+      label: 'an explicit workspace name',
+      name: 'Checkout polish',
+      linkedWorkItem: null,
+      note: 'Fix the flaky checkout flow',
+      expectedName: 'Checkout polish'
+    },
+    {
+      label: 'linked work-item naming',
+      name: '',
+      linkedWorkItem: {
+        provider: 'github' as const,
+        type: 'issue' as const,
+        number: 42,
+        title: 'Restore checkout polish',
+        url: 'https://github.com/stablyai/orca/issues/42',
+        repoId: 'repo-1'
+      },
+      note: 'Use the issue context',
+      expectedName: 'Restore checkout polish'
+    },
+    {
+      label: 'an empty submitted prompt',
+      name: '',
+      linkedWorkItem: null,
+      note: '   ',
+      expectedName: 'Platform workspace'
     }
+  ])('does not mark first-input rename for $label', async (input) => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
 
     await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),
-      name: '',
+      name: input.name,
       lastAutoName: '',
-      linkedWorkItem,
-      note: 'Use the issue context',
+      linkedWorkItem: input.linkedWorkItem,
+      note: input.note,
       quickAgent: 'codex',
       autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
       createFolderWorkspace,
       onOpenChange: vi.fn()
     })
 
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: 'Restore checkout polish',
-      connectionId: null,
-      linkedTask: linkedWorkItem,
-      createdWithAgent: 'codex'
-    })
+    expect(createFolderWorkspace).toHaveBeenCalledWith(
+      expect.not.objectContaining({ pendingFirstAgentMessageRename: true })
+    )
+    expect(createFolderWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ name: input.expectedName, createdWithAgent: 'codex' })
+    )
   })
 
   it('creates a Jira folder workspace with its bound source context', async () => {
@@ -262,7 +290,6 @@ describe('submitFolderWorkspaceCreate', () => {
       note: '',
       quickAgent: null,
       autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
       createFolderWorkspace,
       onOpenChange: vi.fn()
     })
@@ -276,8 +303,7 @@ describe('submitFolderWorkspaceCreate', () => {
     })
   })
 
-  it('keeps linked Codex context out of submitted startup and pastes it as a draft', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+  it('launches linked context as a host-owned draft and mirrors it into native chat', async () => {
     const linkedWorkItem = {
       provider: 'github' as const,
       type: 'pr' as const,
@@ -286,6 +312,7 @@ describe('submitFolderWorkspaceCreate', () => {
       url: 'https://github.com/stablyai/orca/pull/91',
       repoId: 'repo-1'
     }
+    const draft = `Review this before starting\n\n${linkedWorkItem.url}`
 
     await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),
@@ -295,54 +322,30 @@ describe('submitFolderWorkspaceCreate', () => {
       note: 'Review this before starting',
       quickAgent: 'codex',
       autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
-      launchSource: 'new_workspace_composer',
-      createFolderWorkspace,
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
       onOpenChange: vi.fn()
     })
 
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: 'Restore linked quick-create',
-      connectionId: null,
-      linkedTask: linkedWorkItem,
-      createdWithAgent: 'codex'
-    })
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toBe('codex')
-    expect(startup?.command).not.toContain(linkedWorkItem.url)
-    expect(startup?.command).not.toContain('Review this before starting')
+    expect(startup).toMatchObject({
+      command: '',
+      launchAgent: 'codex',
+      launchDraftText: draft,
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'codex' },
+        prompt: draft,
+        promptDelivery: 'draft'
+      }
+    })
+    expect(startup).not.toHaveProperty('draftPrompt')
     expect(window.api.agentTrust?.markTrusted).toHaveBeenCalledWith({
       preset: 'codex',
       workspacePath: '/repo/platform/hi'
     })
-    expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith({
-      worktreeId: folderWorkspaceKey('folder-workspace-1'),
-      primaryTabId: 'tab-1',
-      startup: expect.objectContaining({
-        agent: 'codex',
-        launchCommand: 'codex',
-        followupPrompt: null,
-        draftPrompt: `Review this before starting\n\n${linkedWorkItem.url}`
-      })
-    })
+    expect(useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1']?.text).toBe(draft)
   })
 
-  it('pre-marks remote linked Codex folder workspaces trusted before draft paste', async () => {
-    const createFolderWorkspace = vi.fn(async () =>
-      makeFolderWorkspace({
-        connectionId: 'ssh-1',
-        folderPath: '/home/alice/platform/Trust remote folder draft'
-      })
-    )
-    const linkedWorkItem = {
-      provider: 'github' as const,
-      type: 'pr' as const,
-      number: 92,
-      title: 'Trust remote folder draft',
-      url: 'https://github.com/stablyai/orca/pull/92',
-      repoId: 'repo-1'
-    }
+  it('pre-marks remote folder agents trusted on the owning SSH host', async () => {
     const projectGroup = {
       ...makeProjectGroup(),
       connectionId: 'ssh-1',
@@ -351,158 +354,57 @@ describe('submitFolderWorkspaceCreate', () => {
 
     await submitFolderWorkspaceCreate({
       projectGroup,
-      name: '',
+      name: 'Remote folder',
       lastAutoName: '',
-      linkedWorkItem,
+      linkedWorkItem: null,
       note: '',
       quickAgent: 'codex',
       autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      isRemote: true,
-      createFolderWorkspace,
+      createFolderWorkspace: vi.fn(async () =>
+        makeFolderWorkspace({
+          connectionId: 'ssh-1',
+          folderPath: '/home/alice/platform/Remote folder'
+        })
+      ),
       onOpenChange: vi.fn()
     })
 
     expect(window.api.agentTrust?.markTrusted).toHaveBeenCalledWith({
       preset: 'codex',
-      workspacePath: '/home/alice/platform/Trust remote folder draft',
+      workspacePath: '/home/alice/platform/Remote folder',
       connectionId: 'ssh-1'
     })
-    expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: folderWorkspaceKey('folder-workspace-1'),
-        startup: expect.objectContaining({
-          agent: 'codex',
-          draftPrompt: linkedWorkItem.url
-        })
-      })
-    )
   })
 
-  it('delivers non-linked follow-up prompts for agents that need stdin after launch', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-
+  it.each([
+    ['a local WSL path', { parentPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform' }],
+    [
+      'a remote Windows path',
+      { connectionId: 'ssh-windows', parentPath: 'C:\\Users\\alice\\platform' }
+    ]
+  ])('leaves command and platform resolution to the host for %s', async (_label, overrides) => {
     await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: 'Aider followup',
+      projectGroup: { ...makeProjectGroup(), ...overrides },
+      name: 'Host-owned launch',
       lastAutoName: '',
       linkedWorkItem: null,
-      note: 'Fix the failing folder prompt flow',
-      quickAgent: 'aider',
+      note: "Use Bob's startup",
+      quickAgent: 'claude',
       autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
       onOpenChange: vi.fn()
     })
 
-    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toBe('aider')
-    expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith({
-      worktreeId: folderWorkspaceKey('folder-workspace-1'),
-      primaryTabId: 'tab-1',
-      startup: expect.objectContaining({
-        agent: 'aider',
-        launchCommand: 'aider',
-        followupPrompt: 'Fix the failing folder prompt flow'
-      })
-    })
-  })
-
-  it('uses native draft launch for linked agents with prefill support', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const linkedWorkItem = {
-      provider: 'gitlab' as const,
-      type: 'mr' as const,
-      number: 17,
-      title: 'Review folder workspace draft',
-      url: 'https://gitlab.example.com/group/project/-/merge_requests/17',
-      repoId: 'repo-1'
-    }
-
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem,
-      note: 'Check the migration path',
-      quickAgent: 'claude',
-      autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
-      onOpenChange: vi.fn()
-    })
-
-    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toContain('claude --prefill')
-    expect(startup?.command).toContain('Check the migration path')
-    expect(startup?.command).toContain(linkedWorkItem.url)
-    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
-  })
-
-  it('uses native prefill for link-only Linear folder workspace drafts', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const linkedWorkItem = {
-      provider: 'linear' as const,
-      type: 'issue' as const,
-      number: 0,
-      title: 'Ship Linear source drafts',
-      url: 'https://linear.app/acme/issue/ENG-77/ship-linear-source-drafts',
-      linearIdentifier: 'ENG-77',
-      linkedContext: {
-        provider: 'linear' as const,
-        version: 1 as const,
-        renderedText: [
-          'Linear issue context snapshot',
-          'Identifier: ENG-77',
-          'Title: Ship Linear source drafts',
-          'Description:',
-          'Distinctive folder Linear body.'
-        ].join('\n')
+    expect(mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup).toMatchObject({
+      command: '',
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'claude' },
+        prompt: "Use Bob's startup"
       }
-    }
-
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem,
-      note: 'User note stays above source',
-      quickAgent: 'claude',
-      autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
-      onOpenChange: vi.fn()
     })
-
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: 'ENG-77 Ship Linear source drafts',
-      connectionId: null,
-      linkedTask: {
-        provider: 'linear',
-        type: 'issue',
-        number: 0,
-        title: 'Ship Linear source drafts',
-        url: 'https://linear.app/acme/issue/ENG-77/ship-linear-source-drafts',
-        linearIdentifier: 'ENG-77'
-      },
-      createdWithAgent: 'claude'
-    })
-    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toContain('claude --prefill')
-    expect(startup?.command).toContain('User note stays above source')
-    expect(startup?.command).toContain('Linked Linear issue: ENG-77')
-    expect(startup?.command).toContain(
-      'https://linear.app/acme/issue/ENG-77/ship-linear-source-drafts'
-    )
-    expect(startup?.command).not.toContain('Distinctive folder Linear body.')
-    expect(startup?.command).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
-    expect(startup?.command).not.toContain('orca linear')
-    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
   })
 
-  it('keeps explicit blank linked folder creates free of agent startup and draft paste', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+  it('keeps explicit blank linked creates free of agent startup', async () => {
     const linkedWorkItem = {
       provider: 'github' as const,
       type: 'issue' as const,
@@ -520,111 +422,13 @@ describe('submitFolderWorkspaceCreate', () => {
       note: 'Keep this as metadata only',
       quickAgent: null,
       autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
       onOpenChange: vi.fn()
     })
 
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: 'Restore checkout polish',
-      connectionId: null,
-      linkedTask: linkedWorkItem
-    })
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
       runtimeEnvironmentId: null
     })
-    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
-  })
-
-  it('does not mark first-input rename without submitted first input', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem: null,
-      note: '   ',
-      quickAgent: 'codex',
-      autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
-      onOpenChange: vi.fn()
-    })
-
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: 'Platform workspace',
-      connectionId: null,
-      linkedTask: null,
-      createdWithAgent: 'codex'
-    })
-  })
-
-  it('quotes quick-agent startup for POSIX when the folder group is a local WSL UNC path', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const projectGroup = {
-      ...makeProjectGroup(),
-      parentPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
-    }
-
-    expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('linux')
-
-    await submitFolderWorkspaceCreate({
-      projectGroup,
-      name: 'WSL folder',
-      lastAutoName: '',
-      linkedWorkItem: null,
-      note: "Use Bob's POSIX startup",
-      quickAgent: 'claude',
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
-      onOpenChange: vi.fn()
-    })
-
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
-      'folder-workspace-1',
-      expect.objectContaining({
-        startup: expect.objectContaining({
-          command: `claude 'Use Bob'"'"'s POSIX startup'`
-        })
-      })
-    )
-  })
-
-  it('quotes quick-agent startup for Windows when the remote folder group uses a Windows path', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const projectGroup = {
-      ...makeProjectGroup(),
-      connectionId: 'ssh-windows',
-      parentPath: 'C:\\Users\\alice\\platform'
-    }
-
-    expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('win32')
-
-    await submitFolderWorkspaceCreate({
-      projectGroup,
-      name: 'Remote Windows folder',
-      lastAutoName: '',
-      linkedWorkItem: null,
-      note: "Use Bob's Windows startup",
-      quickAgent: 'claude',
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
-      onOpenChange: vi.fn()
-    })
-
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
-      'folder-workspace-1',
-      expect.objectContaining({
-        startup: expect.objectContaining({
-          command: "claude 'Use Bob''s Windows startup'"
-        })
-      })
-    )
   })
 
   it('preserves SSH group ownership when creating and activating a folder workspace', async () => {
@@ -634,7 +438,6 @@ describe('submitFolderWorkspaceCreate', () => {
       executionHostId: 'ssh:ssh-1'
     }
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace({ connectionId: 'ssh-1' }))
-    const onOpenChange = vi.fn()
 
     await submitFolderWorkspaceCreate({
       projectGroup,
@@ -644,11 +447,9 @@ describe('submitFolderWorkspaceCreate', () => {
       note: '',
       quickAgent: null,
       autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      isRemote: true,
       runtimeEnvironmentId: null,
       createFolderWorkspace,
-      onOpenChange
+      onOpenChange: vi.fn()
     })
 
     expect(createFolderWorkspace).toHaveBeenCalledWith({
@@ -657,14 +458,12 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: 'ssh-1',
       linkedTask: null
     })
-    expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
       runtimeEnvironmentId: null
     })
   })
 
-  it('returns false when folder workspace creation fails without returning a workspace', async () => {
-    const createFolderWorkspace = vi.fn(async () => null)
+  it('returns false when folder workspace creation fails', async () => {
     const onOpenChange = vi.fn()
 
     await expect(
@@ -676,8 +475,7 @@ describe('submitFolderWorkspaceCreate', () => {
         note: '',
         quickAgent: null,
         autoRenameBranchFromWork: false,
-        agentCmdOverrides: {},
-        createFolderWorkspace,
+        createFolderWorkspace: vi.fn(async () => null),
         onOpenChange
       })
     ).resolves.toBe(false)
@@ -685,185 +483,49 @@ describe('submitFolderWorkspaceCreate', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
   })
-})
 
-describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
-  const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
-  const linkedIssue = {
-    provider: 'github' as const,
-    type: 'issue' as const,
-    number: 42,
-    title: 'Restore linked quick-create',
-    url: ISSUE_URL,
-    repoId: 'repo-1'
-  }
-
-  function seededDraftFor(tabId: string): { text: string } | undefined {
-    return useAppStore.getState().nativeChatLaunchDraftByTabId[tabId]
-  }
-
-  beforeEach(() => {
-    mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
-    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    Object.assign(window, {
-      api: { agentTrust: { markTrusted: vi.fn().mockResolvedValue(undefined) } }
-    })
-  })
-
-  afterEach(() => {
-    mocks.activateAndRevealFolderWorkspace.mockReset()
-    mocks.ensureAgentStartupInTerminal.mockReset()
-    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    Reflect.deleteProperty(window, 'api')
-    vi.restoreAllMocks()
-  })
-
-  it('mirrors a startup-paste draft into the chat composer', async () => {
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem: linkedIssue,
-      note: '',
-      quickAgent: 'codex',
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
-      onOpenChange: vi.fn()
-    })
-
-    expect(seededDraftFor('tab-1')?.text).toBe(ISSUE_URL)
-  })
-
-  it('mirrors an argv-prefill draft, which never lands in startupPlan.draftPrompt', async () => {
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem: linkedIssue,
-      note: '',
-      quickAgent: 'claude',
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
-      onOpenChange: vi.fn()
-    })
-
-    // The draft rides in on `--prefill`, so the plan carries no draftPrompt at
-    // all — keying the mirror off it would silently drop this whole branch.
-    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.draftPrompt).toBeUndefined()
-    expect(startup?.command).toContain(ISSUE_URL)
-    expect(seededDraftFor('tab-1')?.text).toBe(ISSUE_URL)
-  })
-
-  it('mirrors a multi-line draft into chat', async () => {
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem: linkedIssue,
-      note: 'Reproduce on Windows first',
-      quickAgent: 'codex',
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
-      onOpenChange: vi.fn()
-    })
-
-    expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startup: expect.objectContaining({
-          draftPrompt: `Reproduce on Windows first\n\n${ISSUE_URL}`
-        })
-      })
-    )
-    expect(seededDraftFor('tab-1')?.text).toBe(`Reproduce on Windows first\n\n${ISSUE_URL}`)
-  })
-
-  it('does not mirror an unlinked note, which is submitted rather than drafted', async () => {
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem: null,
-      note: 'Fix the flaky checkout flow',
-      quickAgent: 'codex',
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
-      onOpenChange: vi.fn()
-    })
-
-    expect(seededDraftFor('tab-1')).toBeUndefined()
-  })
-})
-
-describe('folder-workspace draft: seeded set == chat-opening set', () => {
-  const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
-  const linkedIssue = {
-    provider: 'github' as const,
-    type: 'issue' as const,
-    number: 42,
-    title: 'Restore linked quick-create',
-    url: ISSUE_URL,
-    repoId: 'repo-1'
-  }
-
-  beforeEach(() => {
-    mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
-    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    Object.assign(window, {
-      api: { agentTrust: { markTrusted: vi.fn().mockResolvedValue(undefined) } }
-    })
-  })
-
-  afterEach(() => {
-    mocks.activateAndRevealFolderWorkspace.mockReset()
-    mocks.ensureAgentStartupInTerminal.mockReset()
-    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    Reflect.deleteProperty(window, 'api')
-    vi.restoreAllMocks()
-  })
-
-  // Why: `claude` takes its draft on argv, so `startupPlan.draftPrompt` stays
-  // undefined; `codex` gets a startup paste and sets it. Both must reach the
-  // view-mode gate, and both must agree with what the composer actually holds.
   it.each([
-    ['argv-prefill', 'claude' as const, '', true],
-    ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', true],
-    ['startup-paste', 'codex' as const, '', true],
-    ['startup-paste multi-line', 'codex' as const, 'Reproduce on Windows first', true]
-  ])('%s', async (_label, quickAgent, note, expectMirrored) => {
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem: linkedIssue,
-      note,
-      quickAgent,
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
-      onOpenChange: vi.fn()
-    })
+    ['claude', ''],
+    ['claude', 'Reproduce on Windows first'],
+    ['codex', ''],
+    ['codex', 'Reproduce on Windows first']
+  ] as const)(
+    'keeps the %s linked draft mirror and initial view decision aligned',
+    async (agent, note) => {
+      const linkedWorkItem = {
+        provider: 'github' as const,
+        type: 'issue' as const,
+        number: 42,
+        title: 'Restore linked quick-create',
+        url: 'https://github.com/stablyai/orca/issues/42',
+        repoId: 'repo-1'
+      }
 
-    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    const seeded = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1'] != null
-    const draftText = resolveStartupLaunchDraftText(startup)
-    const opensInChat =
-      decideInitialAgentTabViewMode({
+      await submitFolderWorkspaceCreate({
+        projectGroup: makeProjectGroup(),
+        name: '',
+        lastAutoName: '',
+        linkedWorkItem,
+        note,
+        quickAgent: agent,
+        autoRenameBranchFromWork: false,
+        createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+        onOpenChange: vi.fn()
+      })
+
+      const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
+      const draftText = resolveStartupLaunchDraftText(startup)
+      const seeded = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1']?.text
+      const viewMode = decideInitialAgentTabViewMode({
         experimentalNativeChat: true,
         openAgentTabsInChatByDefault: true,
-        agent: quickAgent,
-        ...(draftText != null
-          ? { promptDelivery: 'draft' as const, launchDraftText: draftText }
-          : {})
-      }) === 'chat'
+        agent,
+        ...(draftText ? { promptDelivery: 'draft' as const, launchDraftText: draftText } : {})
+      })
 
-    // The draft always reaches the TUI, whichever way it is delivered.
-    expect(`${startup?.command ?? ''}${startup?.draftPrompt ?? ''}`).toContain(ISSUE_URL)
-    expect(seeded).toBe(expectMirrored)
-    expect(opensInChat).toBe(expectMirrored)
-  })
+      expect(draftText).toContain(linkedWorkItem.url)
+      expect(seeded).toBe(draftText)
+      expect(viewMode).toBe('chat')
+    }
+  )
 })

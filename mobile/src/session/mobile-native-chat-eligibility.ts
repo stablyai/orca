@@ -4,6 +4,18 @@ import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript
 } from '../../../src/shared/native-chat-agent-support'
+import { parseCustomTuiAgentId } from '../../../src/shared/custom-tui-agent-identity'
+
+/** Mobile twin of desktop's resolveNativeChatBaseAgent: a custom id carries no
+ *  chat surface of its own, so gate (and read transcripts) on the base harness.
+ *  Mobile holds no catalog mirror; the id's encoded base is classification-only
+ *  and trustworthy here because the host already validated it at launch. */
+function resolveMobileNativeChatBaseAgent(agent: string | null | undefined): string | null {
+  if (!agent) {
+    return null
+  }
+  return parseCustomTuiAgentId(agent)?.baseAgent ?? agent
+}
 
 // Why: native chat renders an agent's own JSONL transcript, and the host
 // resolver knows these transcript layouts. Agents whose hook reports no
@@ -45,12 +57,12 @@ export function resolveMobileNativeChat(
   if (!tab || tab.type !== 'terminal') {
     return null
   }
-  const liveAgent = tab.agentStatus?.agentType ?? null
+  const liveAgent = resolveMobileNativeChatBaseAgent(tab.agentStatus?.agentType)
   const agent = liveAgent
     ? isNativeChatSupportedAgent(liveAgent)
       ? liveAgent
       : null
-    : tab.launchAgent
+    : resolveMobileNativeChatBaseAgent(tab.launchAgent)
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }

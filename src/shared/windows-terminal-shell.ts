@@ -45,6 +45,9 @@ export function resolveWindowsShellStartupFamily(
 export function resolveLocalWindowsAgentStartupShell(args: {
   platform: NodeJS.Platform
   isRemote: boolean
+  /** The pane's per-tab shell, which beats the global setting at spawn time —
+   *  argv typed into a cmd.exe tab must not carry PowerShell quotes (#12320). */
+  shellOverride?: string | null
   terminalWindowsShell?: string | null
 }): AgentStartupShell | undefined {
   // Why: terminalWindowsShell describes the local host shell; SSH/remote
@@ -52,5 +55,5 @@ export function resolveLocalWindowsAgentStartupShell(args: {
   if (args.platform !== 'win32' || args.isRemote) {
     return undefined
   }
-  return resolveWindowsShellStartupFamily(args.terminalWindowsShell)
+  return resolveWindowsShellStartupFamily(args.shellOverride ?? args.terminalWindowsShell)
 }

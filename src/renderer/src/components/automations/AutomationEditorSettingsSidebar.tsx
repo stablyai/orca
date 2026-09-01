@@ -11,6 +11,7 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import { toLegacyAutoPreference } from '../../../../shared/tui-agent-selection'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
 import { AutomationPrecheckFields } from './AutomationPrecheckFields'
@@ -104,7 +105,7 @@ export function AutomationEditorSettingsSidebar({
                   onValueChange={(agentId) =>
                     agentId && onDraftChange((current) => ({ ...current, agentId }))
                   }
-                  defaultAgent={settings?.defaultTuiAgent ?? null}
+                  defaultAgent={toLegacyAutoPreference(settings?.defaultTuiAgent)}
                   triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
                   allowNarrowTrigger
                 />

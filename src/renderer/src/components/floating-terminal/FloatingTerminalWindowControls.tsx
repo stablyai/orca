@@ -1,23 +1,16 @@
 import { useCallback, useMemo } from 'react'
 import { Maximize2, Minimize2, Minus } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentLabel, AgentIcon } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
-  isTuiAgentEnabled
+  isTuiAgentEnabled,
+  toLegacyAutoPreference
 } from '../../../../shared/tui-agent-selection'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 
@@ -43,7 +36,8 @@ export function FloatingTerminalWindowControls({
   onToggleMaximized,
   onMinimize
 }: FloatingTerminalWindowControlsProps): React.JSX.Element {
-  const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
+  // 'auto' is the migrated legacy null default; treat it as Auto (no fixed agent).
+  const defaultTuiAgent = toLegacyAutoPreference(useAppStore((s) => s.settings?.defaultTuiAgent))
   const createTab = useAppStore((s) => s.createTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const activateTab = useAppStore((s) => s.activateTab)
@@ -60,10 +54,7 @@ export function FloatingTerminalWindowControls({
       ? defaultTuiAgent
       : null
   const defaultAgentLabel = useMemo(
-    () =>
-      defaultAgent
-        ? (getAgentCatalog().find((agent) => agent.id === defaultAgent)?.label ?? defaultAgent)
-        : null,
+    () => (defaultAgent ? getAgentLabel(defaultAgent) : null),
     [defaultAgent]
   )
 
@@ -72,36 +63,16 @@ export function FloatingTerminalWindowControls({
       return
     }
     const state = useAppStore.getState()
-    const startupPlan = buildAgentStartupPlan({
-      agent: defaultAgent,
-      prompt: '',
-      cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
-      platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true
-    })
-    if (!startupPlan) {
-      toast.error(
-        translate(
-          'auto.components.floating.terminal.FloatingTerminalWindowControls.82da3701e7',
-          'Could not build launch command for {{value0}}.',
-          { value0: defaultAgentLabel ?? defaultAgent }
-        )
-      )
-      return
-    }
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
+    // Why: send the host-atomic default selection rather than a client-cached
+    // agent id — the host resolves and mints; a pre-spawn failure surfaces in the
+    // pane's error affordance (no client-side command assembly to fail here).
     state.queueTabStartupCommand(tab.id, {
-      command: startupPlan.launchCommand,
-      ...(startupPlan.env ? { env: startupPlan.env } : {}),
-      launchConfig: startupPlan.launchConfig,
-      launchAgent: defaultAgent,
-      ...(startupPlan.startupCommandDelivery
-        ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-        : {}),
+      command: '',
+      agentLaunch: { selection: { kind: 'default' }, allowEmptyPromptLaunch: true },
+      // Host overwrites agent_kind from the resolved receipt before the emit, so
+      // this host-resolved launch threads only the surface-owned fields.
       telemetry: {
-        agent_kind: tuiAgentToAgentKind(defaultAgent),
         launch_source: 'shortcut',
         request_kind: 'new'
       }
@@ -125,7 +96,7 @@ export function FloatingTerminalWindowControls({
     order.push(tab.id)
     fresh.setTabBarOrder(FLOATING_TERMINAL_WORKTREE_ID, order)
     focusTerminalTabSurface(tab.id)
-  }, [activateTab, createTab, defaultAgent, defaultAgentLabel, setActiveTabForWorktree])
+  }, [activateTab, createTab, defaultAgent, setActiveTabForWorktree])
 
   return (
     <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>

@@ -86,13 +86,17 @@ describe('launchAgentInNewTab paired web runtime', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
+    // Identity only: a bare quick launch carries no prompt, so the host is told
+    // an empty prompt is intentional rather than a missing one.
     expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
       activate: true,
-      agentSessionKind: 'fresh',
-      agent: 'claude',
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'claude' },
+        allowEmptyPromptLaunch: true
+      },
       viewMode: 'terminal'
     })
     expect(mocks.createTab).not.toHaveBeenCalled()
@@ -101,7 +105,9 @@ describe('launchAgentInNewTab paired web runtime', () => {
     expect(mocks.closeTab).toHaveBeenCalledWith('stale-agent-tab', { reason: 'cleanup' })
   })
 
-  it('forwards prompt launch env and captured config to the host runtime', async () => {
+  it('sends identity and prompt only, never the client-resolved command or agent env', async () => {
+    // The host owns arg/env/command assembly on the agentLaunch path, so locally
+    // captured defaults must not ride along and override what the host resolves.
     store.settings.agentDefaultArgs = { codex: '--model gpt-5 --reasoning-effort high' }
     store.settings.agentDefaultEnv = { codex: { CODEX_PROFILE: 'captured' } }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -119,18 +125,10 @@ describe('launchAgentInNewTab paired web runtime', () => {
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
       activate: true,
-      agentSessionKind: 'fresh',
-      launchAgent: 'codex',
-      command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
-      env: { CODEX_PROFILE: 'captured' },
-      launchConfig: {
-        agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
-        agentArgs: '--model gpt-5 --reasoning-effort high',
-        agentEnv: { CODEX_PROFILE: 'captured' }
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'codex' },
+        prompt: 'fix the spinner'
       },
-      startupCommandDelivery: 'shell-ready',
-      prompt: 'fix the spinner',
-      promptDelivery: 'auto-submit',
       viewMode: 'terminal'
     })
     expect(mocks.createTab).not.toHaveBeenCalled()

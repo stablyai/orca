@@ -10,8 +10,10 @@ import {
   type PtySourceReceivingActivation
 } from '../../shared/pty-source-receiving-activation'
 import { validateClaimedSshSpawn } from './ssh-agent-session-claim-validation'
-
-export const SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS = 5_000
+import {
+  isSshCapabilityMethodUnavailable,
+  SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS
+} from './ssh-agent-session-capability-probe'
 
 export function assertSshAgentSessionCreateResult(
   result: unknown
@@ -46,9 +48,11 @@ export async function sshSupportsAgentSessionCreateOperations(
     return (
       result.agentSessionCreateOperationVersion === AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
     )
-  } catch {
-    // Why: capability probing does not spawn, so an old relay can safely keep legacy behavior.
-    return false
+  } catch (error) {
+    if (isSshCapabilityMethodUnavailable(error)) {
+      return false
+    }
+    throw error
   }
 }
 

@@ -1,17 +1,57 @@
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
+import {
+  resolveSourceControlAgentAvailability,
+  type SourceControlAgentAvailability
+} from '@/lib/source-control-agent-action-plan'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 
+type SourceControlAgentAvailabilitySettings = Partial<
+  Pick<
+    GlobalSettings,
+    | 'disabledTuiAgents'
+    | 'customTuiAgents'
+    | 'deletedCustomTuiAgents'
+    | 'agentCmdOverrides'
+    | 'agentDefaultEnv'
+  >
+>
+
+/** True when the selected agent's resolved base is disabled or (for a
+ *  detection-gated row) not detected on the workspace host. */
+export function isSourceControlAgentUnavailable(
+  agent: TuiAgent | null,
+  detectedAgents: TuiAgent[],
+  settings: SourceControlAgentAvailabilitySettings | null | undefined
+): boolean {
+  if (!agent) {
+    return false
+  }
+  return !isSourceControlAgentDetectedAndEnabled(
+    agent,
+    detectedAgents,
+    settings?.disabledTuiAgents,
+    resolveSourceControlAgentAvailability(agent, settings)
+  )
+}
+
+/** Gate on the resolved BASE (custom ids never index detection by their own id) and
+ *  skip detection for launch-reported rows, which baseline stock detection can't evaluate. */
 export function isSourceControlAgentDetectedAndEnabled(
   agent: TuiAgent | null,
   detectedAgents: TuiAgent[],
-  disabledAgents: TuiAgent[] | undefined
+  disabledAgents: TuiAgent[] | undefined,
+  availability: SourceControlAgentAvailability
 ): boolean {
-  return Boolean(
-    agent && detectedAgents.includes(agent) && isTuiAgentEnabled(agent, disabledAgents)
+  if (!agent || !isTuiAgentEnabled(agent, disabledAgents) || availability.baseAgent === null) {
+    return false
+  }
+  return (
+    availability.availabilityClass === 'launch-reported' ||
+    detectedAgents.includes(availability.baseAgent)
   )
 }
 
@@ -89,7 +129,7 @@ export function buildSourceControlAgentStatusCopy(args: {
     detecting
   } = args
   if (selectedAgentUnavailable) {
-    return `${getAgentCatalog().find((entry) => entry.id === selectedAgent)?.label ?? selectedAgent} is not enabled or was not detected on this workspace host.`
+    return `${selectedAgent ? getAgentLabel(selectedAgent) : selectedAgent} is not enabled or was not detected on this workspace host.`
   }
   if (connectionUnavailable) {
     return 'Unable to resolve the workspace connection.'

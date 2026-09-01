@@ -35,6 +35,9 @@ const StatusBar = lazy(() =>
 const SetupGuideModal = lazy(() => import('../components/setup-guide/SetupGuideModal'))
 const FeatureWallModal = lazy(() => import('../components/feature-wall/FeatureWallModal'))
 const FeatureTipsModal = lazy(() => import('../components/feature-tips/FeatureTipsModal'))
+const AgentLaunchCapacityRecoverySheet = lazy(
+  () => import('../components/agent/AgentLaunchCapacityRecoverySheet')
+)
 const AddRepoDialog = lazy(() => import('../components/sidebar/AddRepoDialog'))
 const NonGitFolderDialog = lazy(() => import('../components/sidebar/NonGitFolderDialog'))
 const AddProjectFromFolderDialog = lazy(
@@ -252,6 +255,14 @@ export function AppRootSurfaces(props: {
         {mountedLazyModalIds.has('feature-tips') ? (
           <ModalBoundary boundaryId="modal.feature-tips" resetKey={activeModal === 'feature-tips'}>
             <FeatureTipsModal />
+          </ModalBoundary>
+        ) : null}
+        {mountedLazyModalIds.has('agent-launch-capacity-recovery') ? (
+          <ModalBoundary
+            boundaryId="modal.agent-launch-capacity-recovery"
+            resetKey={activeModal === 'agent-launch-capacity-recovery'}
+          >
+            <AgentLaunchCapacityRecoverySheet />
           </ModalBoundary>
         ) : null}
       </Suspense>

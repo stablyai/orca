@@ -1,5 +1,13 @@
 import type React from 'react'
-import { FileJson, FolderGit2, MessageSquare, MessageSquarePlus, Play } from 'lucide-react'
+import {
+  FileJson,
+  FolderGit2,
+  Loader2,
+  MessageSquare,
+  MessageSquarePlus,
+  Play,
+  Terminal
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -11,6 +19,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
 import { sessionDetailConversationTurns, sessionPromptPreview } from './ai-vault-session-display'
+import { useSessionResumeArguments } from './ai-vault-session-resume-arguments'
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import {
@@ -55,6 +64,7 @@ export function SessionInlineDetails({
   const promptPreview = sessionPromptPreview(session)
   const detailTurns = sessionDetailConversationTurns(session, 3)
   const worktreeDisplay = worktreeInfo
+  const resumeArgs = useSessionResumeArguments(session)
 
   return (
     <div
@@ -186,6 +196,30 @@ export function SessionInlineDetails({
         )}
 
         <SessionSubagentsSection session={session} />
+
+        {resumeArgs !== null ? (
+          <SessionReceiptSection
+            icon={<Terminal className="size-3" />}
+            label={translate(
+              'auto.components.right.sidebar.AiVaultSessionDetails.resumeArguments',
+              'Resume arguments'
+            )}
+          >
+            {resumeArgs === undefined ? (
+              <div className="flex items-center gap-1.5 rounded-md border border-sidebar-border/70 bg-sidebar-accent/25 px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" />
+                {translate(
+                  'auto.components.right.sidebar.AiVaultSessionDetails.loadingResumeArguments',
+                  'Loading resume arguments…'
+                )}
+              </div>
+            ) : (
+              <div className="whitespace-pre-wrap break-all rounded-md border border-sidebar-border/70 bg-sidebar-accent/25 px-2.5 py-2 font-mono text-[11px] leading-4 text-foreground/90">
+                {resumeArgs}
+              </div>
+            )}
+          </SessionReceiptSection>
+        ) : null}
 
         {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, {
           vaultScope

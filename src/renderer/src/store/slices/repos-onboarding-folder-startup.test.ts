@@ -58,17 +58,15 @@ describe('repo slice skipped-onboarding folder startup', () => {
       {
         sidebarRevealBehavior: 'auto',
         startup: {
-          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
-          env: {},
+          // Identity-only: the host resolves command/args/env at spawn via the
+          // agentLaunch boundary; the client no longer assembles the launch.
+          command: '',
           launchAgent: 'codex',
-          launchConfig: {
-            agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-            agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-            agentEnv: {}
+          agentLaunch: {
+            selection: { kind: 'default' },
+            allowEmptyPromptLaunch: true
           },
-          sessionOptions: undefined,
           telemetry: {
-            agent_kind: 'codex',
             launch_source: 'onboarding',
             request_kind: 'new'
           }

@@ -1,4 +1,5 @@
 import type { TaskStatus, DispatchContextRow } from '../../types'
+import type { PersistedAgentLaunchFailure } from '../../../../../shared/agent-launch-contract'
 import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -77,10 +78,23 @@ export function failDispatch(
   this: OrchestrationDb,
   ctxId: string,
   error: string,
-  options: { workerProcessExited?: boolean; terminationReason?: string } = {}
+  options:
+    | { workerProcessExited?: boolean; terminationReason?: string }
+    | PersistedAgentLaunchFailure = {}
 ): DispatchContextRow | undefined {
+  const workerProcessExited =
+    'workerProcessExited' in options && options.workerProcessExited === true
+  const terminationReason = 'terminationReason' in options ? options.terminationReason : undefined
+  const launchFailure = 'code' in options ? options : undefined
+  const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+    | DispatchContextRow
+    | undefined
+  if (!ctx || (ctx.status !== 'pending' && ctx.status !== 'dispatched')) {
+    return ctx
+  }
   this.db.exec(`SAVEPOINT ${FAIL_DISPATCH_SAVEPOINT}`)
   try {
+
     const result = this.db
       .prepare(
         `UPDATE dispatch_contexts
@@ -99,20 +113,20 @@ export function failDispatch(
       .run(
         DISPATCH_CIRCUIT_BREAK_FAILURES,
         error,
-        options.terminationReason ?? null,
+        terminationReason ?? null,
         ctxId,
-        options.workerProcessExited ? 1 : 0
+        workerProcessExited ? 1 : 0
       )
-    const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
+    const updatedCtx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined
     const worker = this.getWorkerDispatch(ctxId)
-    if (result.changes !== 1 || !ctx) {
+    if (result.changes !== 1 || !updatedCtx) {
       if (
         ctx &&
         worker &&
         !['failed', 'succeeded', 'stopped', 'abandoned'].includes(worker.state) &&
-        !options.workerProcessExited
+        !workerProcessExited
       ) {
         throw new OrchestrationError(
           'task_not_startable',
@@ -121,9 +135,14 @@ export function failDispatch(
         )
       }
       this.db.exec(`RELEASE ${FAIL_DISPATCH_SAVEPOINT}`)
-      return ctx
+      return updatedCtx ?? ctx
     }
-    if (worker && options.workerProcessExited) {
+    if (launchFailure) {
+      this.db
+        .prepare('UPDATE dispatch_contexts SET agent_launch_failure = ? WHERE id = ?')
+        .run(JSON.stringify(launchFailure), ctxId)
+    }
+    if (worker && workerProcessExited) {
       this.db
         .prepare(
           `UPDATE worker_dispatches
@@ -135,7 +154,7 @@ export function failDispatch(
     }
 
     // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
-    const taskStatus: TaskStatus = ctx.status === 'circuit_broken' ? 'failed' : 'ready'
+    const taskStatus: TaskStatus = updatedCtx.status === 'circuit_broken' ? 'failed' : 'ready'
     // Why: the status guard keeps a late failure from reopening a task that already completed or was retried elsewhere.
     this.db
       .prepare(

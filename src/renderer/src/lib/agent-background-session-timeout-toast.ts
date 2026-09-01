@@ -1,7 +1,8 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { track } from '@/lib/telemetry'
+import { resolveTelemetryAgentKind } from '@/lib/telemetry-agent-kind'
+import type { TuiAgent } from '../../../shared/types'
 
 export function showAutomationPromptNotSentToast(agent: TuiAgent): void {
   toast.message(
@@ -12,6 +13,6 @@ export function showAutomationPromptNotSentToast(agent: TuiAgent): void {
   )
   track('agent_error', {
     error_class: 'paste_readiness_timeout',
-    agent_kind: tuiAgentToAgentKind(agent)
+    agent_kind: resolveTelemetryAgentKind(agent)
   })
 }

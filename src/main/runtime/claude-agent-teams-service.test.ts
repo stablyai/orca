@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ClaudeAgentTeamsService, type AgentTeamsTerminalApi } from './claude-agent-teams-service'
+import {
+  ClaudeAgentTeamsService,
+  stripEphemeralAgentTeamsEnv,
+  type AgentTeamsTerminalApi
+} from './claude-agent-teams-service'
 
 function createServiceWithLeader(): {
   service: ClaudeAgentTeamsService
@@ -316,5 +320,65 @@ describe('ClaudeAgentTeamsService', () => {
         Object.defineProperty(process, 'platform', platform)
       }
     }
+  })
+
+  it('propagates validated custom agent env to teammate panes while replacing pane identity', async () => {
+    const service = new ClaudeAgentTeamsService()
+    const launch = service.createLaunchEnv({
+      leaderHandle: 'leader-handle',
+      baseEnv: { PATH: '/usr/bin' },
+      shimDir: '/tmp/orca-shim',
+      shimBin: '/usr/bin/orca',
+      childEnv: { MY_CUSTOM_TOKEN: 'user-value', PATH: '/custom/bin' }
+    })
+    // The leader env exposed to the caller stays generated-only; custom env
+    // reaches the leader through its own spawn env.
+    expect(launch.env.MY_CUSTOM_TOKEN).toBeUndefined()
+
+    let splitEnv: Record<string, string> | undefined
+    const api: AgentTeamsTerminalApi = {
+      splitTerminal: vi.fn(async (_handle, opts) => {
+        splitEnv = opts.env
+        return { handle: 'teammate-1', tabId: 'tab-1', paneRuntimeId: -1 }
+      }),
+      readTerminal: vi.fn(),
+      sendTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      showTerminal: vi.fn()
+    } as unknown as AgentTeamsTerminalApi
+
+    await service.handleTmuxCompat(
+      {
+        teamId: launch.teamId,
+        token: launch.token,
+        envPane: launch.leaderPane,
+        argv: ['split-window', '-t', launch.leaderPane, '-h', '-P', '-F', '#{pane_id}']
+      },
+      api
+    )
+
+    // Teammate pane inherits custom env, keeps the shared team token, and takes
+    // its own pane identity (generated team keys still override any custom PATH).
+    expect(splitEnv?.MY_CUSTOM_TOKEN).toBe('user-value')
+    expect(splitEnv?.ORCA_AGENT_TEAMS_TOKEN).toBe(launch.token)
+    expect(splitEnv?.TMUX_PANE).toBe('%2')
+    expect(splitEnv?.TMUX_PANE).not.toBe(launch.leaderPane)
+    expect(splitEnv?.PATH).toBe(launch.env.PATH)
+  })
+})
+
+describe('stripEphemeralAgentTeamsEnv', () => {
+  it('drops generated team identity but keeps custom agent env', () => {
+    const cleaned = stripEphemeralAgentTeamsEnv({
+      CLAUDE_PROFILE: 'captured',
+      MY_KEY: 'v',
+      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+      TMUX: '/tmp/x,0,1',
+      TMUX_PANE: '%1',
+      ORCA_AGENT_TEAMS_TEAM_ID: 'team-x',
+      ORCA_AGENT_TEAMS_TOKEN: 'tok'
+    })
+    expect(cleaned).toEqual({ CLAUDE_PROFILE: 'captured', MY_KEY: 'v' })
   })
 })

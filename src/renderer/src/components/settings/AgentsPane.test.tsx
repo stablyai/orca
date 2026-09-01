@@ -1,7 +1,11 @@
+// @vitest-environment happy-dom
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type { LocalAgentCatalogSnapshot } from '../../../../shared/agent-catalog-snapshot'
+import { buildLocalCatalogSnapshot } from './agent-catalog-snapshot.fixture'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
@@ -13,14 +17,11 @@ import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import type * as AgentRuntimeSettingModule from './AgentRuntimeSetting'
 import {
-  AgentAvailabilityControl,
   AgentPermissionsSetting,
   AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
   AgentsPane,
-  getAgentsPaneSearchEntries,
-  buildAgentAvailabilitySettingsUpdate,
-  createAgentAvailabilityUpdateQueue
+  getAgentsPaneSearchEntries
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
@@ -63,19 +64,6 @@ vi.mock('./AgentRuntimeSetting', async (importOriginal) => {
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
-}
-
-type Deferred = {
-  promise: Promise<void>
-  resolve: () => void
-}
-
-function createDeferred(): Deferred {
-  let resolve!: () => void
-  const promise = new Promise<void>((next) => {
-    resolve = next
-  })
-  return { promise, resolve }
 }
 
 async function flushPromiseQueue(): Promise<void> {
@@ -447,76 +435,6 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('cursor-agent', getAgentsPaneSearchEntries())).toBe(true)
   })
 
-  it('renders per-agent availability as labeled status choices without row explanation copy', () => {
-    const markup = renderPane({
-      ...getDefaultSettings('/tmp'),
-      disabledTuiAgents: ['claude']
-    })
-
-    expect(markup).toContain('aria-label="Claude availability"')
-    expect(markup).toContain('Enabled')
-    expect(markup).toContain('Disabled')
-    expect(markup).not.toContain('Shown in launch and default choices.')
-    expect(markup).not.toContain('Install to use in launch and default choices.')
-    expect(markup).not.toContain('Hidden from launch and default choices.')
-    expect(markup).not.toContain('aria-label="Enable Claude"')
-    expect(markup).not.toContain('aria-label="Disable Claude"')
-  })
-
-  it('only toggles agent availability when the segmented value changes', () => {
-    const onSetEnabled = vi.fn()
-    const control = AgentAvailabilityControl({
-      label: 'Claude',
-      isEnabled: true,
-      onSetEnabled
-    })
-    const props = control.props as {
-      value: 'enabled' | 'disabled'
-      onChange: (value: 'enabled' | 'disabled') => void
-      ariaLabel: string
-    }
-
-    expect(props.value).toBe('enabled')
-    expect(props.ariaLabel).toBe('Claude availability')
-
-    props.onChange('enabled')
-    expect(onSetEnabled).not.toHaveBeenCalled()
-
-    props.onChange('disabled')
-    expect(onSetEnabled).toHaveBeenCalledWith(false)
-  })
-
-  it('clears the default agent when disabling that agent', () => {
-    expect(
-      buildAgentAvailabilitySettingsUpdate(
-        {
-          defaultTuiAgent: 'claude',
-          disabledTuiAgents: []
-        },
-        'claude',
-        false
-      )
-    ).toEqual({
-      disabledTuiAgents: ['claude'],
-      defaultTuiAgent: null
-    })
-  })
-
-  it('keeps the default setting untouched when re-enabling an agent', () => {
-    expect(
-      buildAgentAvailabilitySettingsUpdate(
-        {
-          defaultTuiAgent: null,
-          disabledTuiAgents: ['claude']
-        },
-        'claude',
-        true
-      )
-    ).toEqual({
-      disabledTuiAgents: []
-    })
-  })
-
   it('includes agent runtime search metadata', () => {
     expect(matchesSettingsSearch('agent runtime', getAgentsPaneSearchEntries())).toBe(true)
     expect(matchesSettingsSearch('agent location', getAgentsPaneSearchEntries())).toBe(true)
@@ -525,155 +443,131 @@ describe('AgentsPane', () => {
     )
   })
 
-  it('serializes rapid availability writes against the latest settings snapshot', async () => {
-    const queueAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
-    const settings: GlobalSettings = {
-      ...getDefaultSettings('/tmp'),
-      defaultTuiAgent: null,
-      disabledTuiAgents: []
-    }
-    const writes: Deferred[] = []
-    const updates: Partial<GlobalSettings>[] = []
+  it('renders authoring controls without a read-only notice on the desktop host', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
 
-    useAppStore.setState({ settings })
-    const updateSettings = vi.fn((update: Partial<GlobalSettings>) => {
-      updates.push(update)
-      const nextSettings = {
-        ...(useAppStore.getState().settings ?? settings),
-        ...update
-      }
-      const write = createDeferred()
-      writes.push(write)
-      return write.promise.then(() => {
-        useAppStore.setState({ settings: nextSettings })
-      })
-    })
-
-    const firstWrite = queueAvailabilityUpdate({
-      getSettings: () => useAppStore.getState().settings,
-      fallbackSettings: settings,
-      updateSettings,
-      agentId: 'claude',
-      enabled: false
-    })
-    const secondWrite = queueAvailabilityUpdate({
-      getSettings: () => useAppStore.getState().settings,
-      fallbackSettings: settings,
-      updateSettings,
-      agentId: 'codex',
-      enabled: false
-    })
-
-    await flushPromiseQueue()
-    expect(updateSettings).toHaveBeenCalledTimes(1)
-    expect(updates[0]).toMatchObject({ disabledTuiAgents: ['claude'] })
-
-    writes[0].resolve()
-    await firstWrite
-    await flushPromiseQueue()
-
-    expect(updateSettings).toHaveBeenCalledTimes(2)
-    expect(updates[1]).toMatchObject({ disabledTuiAgents: ['claude', 'codex'] })
-
-    writes[1].resolve()
-    await secondWrite
+    expect(markup).not.toContain('Agent settings are managed on the desktop')
+    expect(markup).not.toContain('disabled=""')
   })
 
-  it('keeps repeated queued availability requests idempotent', async () => {
-    const queueAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
-    const settings: GlobalSettings = {
-      ...getDefaultSettings('/tmp'),
-      defaultTuiAgent: null,
-      disabledTuiAgents: []
-    }
-    const writes: Deferred[] = []
-    const updates: Partial<GlobalSettings>[] = []
+  it('renders a read-only notice and disables authoring on paired clients', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'), { readOnly: true })
 
-    useAppStore.setState({ settings })
-    const updateSettings = vi.fn((update: Partial<GlobalSettings>) => {
-      updates.push(update)
-      const nextSettings = {
-        ...(useAppStore.getState().settings ?? settings),
-        ...update
-      }
-      const write = createDeferred()
-      writes.push(write)
-      return write.promise.then(() => {
-        useAppStore.setState({ settings: nextSettings })
-      })
-    })
-
-    const firstWrite = queueAvailabilityUpdate({
-      getSettings: () => useAppStore.getState().settings,
-      fallbackSettings: settings,
-      updateSettings,
-      agentId: 'claude',
-      enabled: false
-    })
-    const secondWrite = queueAvailabilityUpdate({
-      getSettings: () => useAppStore.getState().settings,
-      fallbackSettings: settings,
-      updateSettings,
-      agentId: 'claude',
-      enabled: false
-    })
-
-    await flushPromiseQueue()
-    writes[0].resolve()
-    await firstWrite
-    await flushPromiseQueue()
-
-    expect(updateSettings).toHaveBeenCalledTimes(2)
-    expect(updates[1]).toMatchObject({ disabledTuiAgents: ['claude'] })
-
-    writes[1].resolve()
-    await secondWrite
+    expect(markup).toContain('Agent settings are managed on the desktop')
+    expect(markup).toContain('use the Orca desktop app')
+    // The whole authoring surface is wrapped in a disabled fieldset so no control
+    // is interactive; the host also rejects remote authoring (defense-in-depth).
+    expect(markup).toContain('<fieldset')
+    expect(markup).toContain('disabled=""')
   })
 })
 
 describe('empty agent detection must not cost the saved default (#15256)', () => {
-  const withEmptyDetection = <T,>(run: () => T): T => {
-    const previous = detectedAgentsMock.detectedIds
+  // The default picker moved into the async AgentCatalogSection and the saved
+  // default now lives in the local catalog snapshot, so these tests hydrate the
+  // snapshot the way AgentCatalogSection.test.tsx does, holding detection empty
+  // for the whole render.
+  const isRowElement = (el: HTMLElement): boolean =>
+    typeof el.hasAttribute === 'function' && el.hasAttribute('data-agent-catalog-row')
+
+  let restoreDom: (() => void) | undefined
+  let savedDetectedIds: typeof detectedAgentsMock.detectedIds = null
+
+  beforeEach(() => {
+    savedDetectedIds = detectedAgentsMock.detectedIds
     detectedAgentsMock.detectedIds = []
-    try {
-      return run()
-    } finally {
-      detectedAgentsMock.detectedIds = previous
+    // @tanstack/react-virtual measures via offsetHeight/getBoundingClientRect,
+    // which happy-dom reports as zero; feed the container a viewport and rows
+    // their estimate so catalog rows actually mount.
+    const rect = HTMLElement.prototype.getBoundingClientRect
+    HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
+      const height = isRowElement(this) ? 52 : 500
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 400,
+        bottom: height,
+        width: 400,
+        height,
+        toJSON() {}
+      }
     }
-  }
-
-  /** The rendered `<button>` whose label contains `label`. */
-  const pillMarkup = (markup: string, label: string): string => {
-    const chunk = markup.split('<button').find((part) => part.includes(label))
-    expect(chunk, `no pill labelled ${label}`).toBeDefined()
-    return String(chunk)
-  }
-
-  it('does not present Auto as the active choice while an agent is stored', () => {
-    // The Auto pill's handler writes null. Rendering it pressed while
-    // `defaultTuiAgent: "claude"` is stored made the already-selected pill
-    // destructive: one click erased the setting, and later successful
-    // detection did not bring it back.
-    const markup = withEmptyDetection(() =>
-      renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
-    )
-    expect(pillMarkup(markup, 'Auto')).toContain('aria-pressed="false"')
+    const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
+    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return isRowElement(this) ? 52 : 500
+      }
+    })
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get: () => 400
+    })
+    restoreDom = () => {
+      HTMLElement.prototype.getBoundingClientRect = rect
+      if (offsetHeight) {
+        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', offsetHeight)
+      }
+      if (offsetWidth) {
+        Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth)
+      }
+    }
   })
 
-  it('still offers the stored agent so the choice can be kept', () => {
-    // With zero detected there were no agent pills at all, so the stored value
-    // was invisible and unrecoverable through the UI.
-    const markup = withEmptyDetection(() =>
-      renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
-    )
-    expect(markup).toContain('Saved as your default, but not detected right now')
+  afterEach(() => {
+    cleanup()
+    restoreDom?.()
+    detectedAgentsMock.detectedIds = savedDetectedIds
+    delete (window as { api?: unknown }).api
   })
 
-  it('keeps a Refresh control reachable when nothing is detected', () => {
-    // Refresh lived inside the Installed section, which only renders when at
-    // least one agent was found -- gone in exactly the state needing a retry.
-    const markup = withEmptyDetection(() => renderPane(getDefaultSettings('/tmp')))
-    expect(markup).toContain('No agents detected')
-    expect(markup).toContain('Refresh')
+  const renderHydratedPane = (snapshot: LocalAgentCatalogSnapshot): void => {
+    ;(window as unknown as { api: unknown }).api = {
+      settings: {
+        agentCatalog: { getLocal: vi.fn().mockResolvedValue(snapshot) },
+        onChanged: () => () => {}
+      }
+    }
+    render(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(AgentsPane, {
+          settings: getDefaultSettings('/tmp'),
+          updateSettings: vi.fn()
+        })
+      )
+    )
+  }
+
+  it('does not present Auto as the active choice while an agent is stored', async () => {
+    // The saved default must stay the visible selection: presenting Auto as the
+    // active choice while `defaultAgent: 'claude'` is stored made the
+    // already-selected control destructive — one click erased the setting, and
+    // later successful detection did not bring it back.
+    renderHydratedPane(buildLocalCatalogSnapshot({ defaultAgent: 'claude' }))
+    const trigger = await screen.findByRole('combobox')
+    expect(trigger.textContent).toContain('Claude')
+    expect(trigger.textContent).not.toContain('Auto')
+  })
+
+  it('still offers the stored agent so the choice can be kept', async () => {
+    // With zero detected the stored agent must stay visible (as Not installed),
+    // not vanish and leave the saved value unrecoverable through the UI.
+    renderHydratedPane(buildLocalCatalogSnapshot({ defaultAgent: 'claude' }))
+    const labels = await screen.findAllByText('Claude')
+    const row = labels
+      .map((el) => el.closest('[data-agent-catalog-row]'))
+      .find((el): el is HTMLElement => el instanceof HTMLElement)
+    expect(row, 'no catalog row labelled Claude').toBeTruthy()
+    expect(within(row as HTMLElement).getByText('Not installed')).toBeTruthy()
+  })
+
+  it('keeps a Refresh control reachable when nothing is detected', async () => {
+    renderHydratedPane(buildLocalCatalogSnapshot({}))
+    expect(await screen.findByText('Refresh')).toBeTruthy()
   })
 })

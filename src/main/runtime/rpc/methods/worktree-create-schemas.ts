@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
+import {
+  launchSourceSchema,
+  requestKindSchema,
+  workspaceSourceSchema
+} from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
@@ -17,6 +21,7 @@ import {
   CliWorkspaceProvenanceRequest,
   OptionalTuiAgent
 } from './worktree-schemas'
+import { AgentLaunchSpawnRequestSchema } from './agent-launch-spawn-schema'
 
 export const WorktreeCreate = z
   .object({
@@ -116,6 +121,11 @@ export const WorktreeCreate = z
     createdWithAgent: z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
+      .optional(),
+    // The host owns resolution for this sanctioned launch path.
+    agentLaunch: AgentLaunchSpawnRequestSchema.optional(),
+    agentLaunchTelemetry: z
+      .object({ launch_source: launchSourceSchema, request_kind: requestKindSchema })
       .optional(),
     // Why: mobile retries a create interrupted by a connection migration with the
     // same key so the host dedupes instead of spawning a duplicate worktree.

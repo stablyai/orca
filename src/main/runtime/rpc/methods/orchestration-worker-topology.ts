@@ -1,7 +1,12 @@
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrchestrationDb } from '../../orchestration/db'
+import {
+  describeWorkerAgentLaunchRejection,
+  workerCustomAgentLaunchRequest
+} from './orchestration-worker-agent-launch'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -61,26 +66,43 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   taskId: string
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
-  const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
-    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
-    // configured launcher instead of executing the raw id.
-    startupAgent: args.agent,
-    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+  const customAgentLaunch = workerCustomAgentLaunchRequest(args.agent)
+  const presentation = {
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar
     // to the worker's workspace while the user is reading somewhere else.
-    surfaceOwner: false
-  })
+    surfaceOwner: false as const
+  }
+  const created = customAgentLaunch
+    ? await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+        agentLaunch: customAgentLaunch,
+        ...presentation
+      })
+    : await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+        // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
+        // desktop app while its CLI is `cursor-agent`. Let the runtime build the
+        // configured launcher instead of executing the raw id.
+        startupAgent: args.agent,
+        ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+        ...presentation
+      })
+  if (!('handle' in created)) {
+    // A pre-spawn typed launch failure created no terminal; surface it as the
+    // dispatch failure instead of timing out on a terminal that never existed.
+    throw new OrchestrationError(
+      'agent_unconfigured',
+      `Agent launcher ${args.agent} failed to start: ${describeWorkerAgentLaunchRejection(created.agentLaunch)}.`
+    )
+  }
   args.effects.push({
     kind: 'terminal',
     role: 'agent',
     action: 'created',
-    id: terminal.handle,
-    surface: terminal.surface,
-    warning: terminal.warning
+    id: created.handle,
+    surface: created.surface,
+    warning: created.warning
   })
-  return { handle: terminal.handle, warning: terminal.warning }
+  return { handle: created.handle, warning: created.warning }
 }
 
 export function applyWaitForSetupOutcome(
@@ -130,6 +152,7 @@ export async function createWorkerWorktree(args: {
   const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
   const setupDecision = params.setup ?? 'run'
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
+  const customAgentLaunch = workerCustomAgentLaunchRequest(args.agent)
   const created = await runtime.createManagedWorktree({
     repoSelector: params.repo ?? coordinatorWorktree.repoId,
     name: params.name as string,
@@ -143,8 +166,12 @@ export async function createWorkerWorktree(args: {
     awaitTerminalProvisioning: true,
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
-    startupAgent: args.agent,
-    ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
+    ...(customAgentLaunch
+      ? { agentLaunch: customAgentLaunch }
+      : {
+          startupAgent: args.agent,
+          ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
+        }),
     activate: false,
     lineage: {
       parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
@@ -174,6 +201,12 @@ export async function createWorkerWorktree(args: {
     state: created.setupReceipt?.state ?? 'not_configured'
   }
   if (!terminalHandle) {
+    const launchResult = created.agentLaunchResult
+    if (launchResult && launchResult.status !== 'launched') {
+      throw new Error(
+        `Agent launcher ${args.agent} failed to start: ${describeWorkerAgentLaunchRejection(launchResult)}.`
+      )
+    }
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
   }
   const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {

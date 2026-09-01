@@ -10,9 +10,11 @@ import {
 } from './types'
 import {
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
+  LAUNCH_TOKEN_ECHO_DAEMON_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
-  STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+  STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION,
+  supportsLaunchTokenEcho
 } from './daemon-protocol-version'
 
 type AdapterMock = DaemonPtyAdapter & {
@@ -57,6 +59,7 @@ function createAdapter(
       protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
     providesAgentSessionOwnerListings: () =>
       protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+    providesLaunchTokenListings: () => supportsLaunchTokenEcho(protocolVersion),
     canProvideAuthoritativeBufferSnapshot: () =>
       protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
@@ -264,6 +267,22 @@ describe('DaemonPtyRouter', () => {
     expect(mixed.supportsAgentSessionCreateOperations()).toBe(true)
     expect(old.supportsAgentSessionClaims()).toBe(false)
     expect(old.supportsAgentSessionCreateOperations()).toBe(false)
+  })
+
+  it('loses launch-token listing authority while any pre-echo daemon is still routed', () => {
+    const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+    const legacy = createAdapter(
+      'legacy',
+      [],
+      undefined,
+      LAUNCH_TOKEN_ECHO_DAEMON_PROTOCOL_VERSION - 1
+    )
+
+    expect(new DaemonPtyRouter({ current, legacy: [] }).providesLaunchTokenListings()).toBe(true)
+    // The preserved daemon may be running the very agent a pending launch is hunting for.
+    expect(new DaemonPtyRouter({ current, legacy: [legacy] }).providesLaunchTokenListings()).toBe(
+      false
+    )
   })
 
   it('only treats owner listings as authoritative for a mapped daemon route', async () => {

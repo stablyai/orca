@@ -104,6 +104,13 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       : {}),
     ...(session.launchToken ? { launchToken: session.launchToken } : {}),
     ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
+    ...(session.paneStartup?.agentLaunch ? { agentLaunch: session.paneStartup.agentLaunch } : {}),
+    ...(session.paneStartup?.legacyResumeRecordedConnectionId !== undefined
+      ? {
+          legacyResumeRecordedConnectionId:
+            session.paneStartup.legacyResumeRecordedConnectionId
+        }
+      : {}),
     ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
     onPtyExit: session.onExit,
     onPtySpawn: session.onPtySpawn,
@@ -274,12 +281,23 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   // (issue #8104 class). None of the dead-session reconciles cover it because
   // the PTY is live; recover by remounting the tab over the live PTY.
   session.transportConnectInFlightSince = null
+  const resolveCurrentRecoveryPtyId = (): string | null =>
+    session.transport.getPtyId() ??
+    useAppStore.getState().ptyIdsByTabId?.[session.deps.tabId]?.[0] ??
+    null
+  const isInputStillUndeliverable = (providerRejected = false): boolean => {
+    const connectStillSettling =
+      session.transportConnectInFlightSince !== null &&
+      Date.now() - session.transportConnectInFlightSince < TRANSPORT_CONNECT_SETTLE_GRACE_MS
+    return (
+      !session.disposed &&
+      !connectStillSettling &&
+      (providerRejected ||
+        !(session.transport.isConnected?.() && session.transport.getPtyId() !== null))
+    )
+  }
   session.requestRecoveryForUndeliverableInput = (providerRejected = false): void => {
-    if (
-      !providerRejected &&
-      session.transport.isConnected?.() &&
-      session.transport.getPtyId() !== null
-    ) {
+    if (!isInputStillUndeliverable(providerRejected)) {
       return
     }
     // Why: input rejected while a connect/reattach is still settling is "not
@@ -295,8 +313,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     if (connectStillSettling || session.disposed) {
       return
     }
-    const storePtyId = useAppStore.getState().ptyIdsByTabId?.[session.deps.tabId]?.[0] ?? null
-    const undeliverablePtyId = session.transport.getPtyId() ?? storePtyId
+    const undeliverablePtyId = resolveCurrentRecoveryPtyId()
     // Why the split: for a local (daemon/app-SSH) id main's registry can answer,
     // and a `false` there means the shell really died — the dead-session
     // reconcile owns that teardown and a remount would race it. For a `remote:`
@@ -310,6 +327,8 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       reason: hostRejectedRemoteInput ? 'input-rejected-by-host' : 'input-undeliverable',
       terminalRecoveryGeneration: session.terminalRecoveryGeneration,
       terminalRecoveryInstanceId: session.terminalRecoveryInstance.id,
+      resolveCurrentPtyId: resolveCurrentRecoveryPtyId,
+      isStillUndeliverable: () => isInputStillUndeliverable(providerRejected),
       // Why: pty:hasPty answers null for ids the local registry doesn't own,
       // and a disconnected remote pane would otherwise remount-churn on every
       // cooldown window while typing. Local panes keep the lenient gate.
@@ -331,13 +350,13 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       // Certification can arrive while this terminal still owns queued or
       // detached scheduler work; release its delivery credits immediately.
       discardTerminalOutput(session.pane.terminal)
-      const storePtyId = useAppStore.getState().ptyIdsByTabId?.[session.deps.tabId]?.[0] ?? null
       void requestTerminalPaneRecovery({
         tabId: session.deps.tabId,
-        ptyId: session.transport.getPtyId() ?? storePtyId,
+        ptyId: resolveCurrentRecoveryPtyId(),
         reason,
         terminalRecoveryGeneration: session.terminalRecoveryGeneration,
-        terminalRecoveryInstanceId: session.terminalRecoveryInstance.id
+        terminalRecoveryInstanceId: session.terminalRecoveryInstance.id,
+        resolveCurrentPtyId: resolveCurrentRecoveryPtyId
       })
     }
   )

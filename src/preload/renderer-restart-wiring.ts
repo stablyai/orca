@@ -50,20 +50,38 @@ export async function prepareAndInvokeUpdaterInstall(
   }
 }
 
-export async function prepareAndInvokeAppRestart(
+export async function prepareAndInvokeAppRestart<T>(
   eventTarget: EventTarget,
-  invoke: () => Promise<unknown>,
+  invoke: () => Promise<T>,
   awaitCheckpoint: () => Promise<void>
-): Promise<void> {
+): Promise<T> {
   await prepareRendererForAppRestart(eventTarget, {
     startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
     abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
     awaitCheckpoint
   })
   try {
-    await invoke()
+    return await invoke()
   } catch (error) {
     eventTarget.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
     throw error
   }
+}
+
+/** Prepare-downgrade restore: main replaces the profile, suspends writes, and
+ *  quits. The restart preparation has to run FIRST — it checkpoints the session
+ *  into the file the restore then copies aside, and it stands down the renderer
+ *  close guards so a dirty-editor `beforeunload` cannot veto that quit and strand
+ *  the app running with every later write silently dropped. Main reports refusal
+ *  in the result rather than by throwing, so re-arm the guards on that too. */
+export async function prepareAndInvokeProfileRestore<T extends { ok?: unknown }>(
+  eventTarget: EventTarget,
+  invoke: () => Promise<T>,
+  awaitCheckpoint: () => Promise<void>
+): Promise<T> {
+  const result = await prepareAndInvokeAppRestart(eventTarget, invoke, awaitCheckpoint)
+  if (result?.ok !== true) {
+    eventTarget.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
+  }
+  return result
 }

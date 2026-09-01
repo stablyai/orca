@@ -18,6 +18,11 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironment } from './web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
 import { translate } from '@/i18n/i18n'
+import type {
+  AgentLaunchVaultResumeCopyResult,
+  AgentLaunchVaultResumeDetailsResult,
+  AgentLaunchVaultResumeEntry
+} from '../../../../shared/agent-launch-spawn-request'
 
 export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
   return {
@@ -70,7 +75,25 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
         agent: args.agent,
         reason: 'non-local-host' as const
       }),
+    resumeCommand: (entry: AgentLaunchVaultResumeEntry, targetPlatform?: NodeJS.Platform) =>
+      callRuntimeResult<AgentLaunchVaultResumeCopyResult>('aiVault.resumeCommand', {
+        entry: runtimeVaultResumeEntry(entry),
+        ...(targetPlatform ? { targetPlatform } : {})
+      }),
+    resumeDetails: (entry: AgentLaunchVaultResumeEntry) =>
+      callRuntimeResult<AgentLaunchVaultResumeDetailsResult>('aiVault.resumeDetails', {
+        entry: runtimeVaultResumeEntry(entry)
+      }),
     onWindowFocused: () => noopUnsubscribe
+  }
+}
+
+function runtimeVaultResumeEntry(entry: AgentLaunchVaultResumeEntry) {
+  return {
+    executionHostId: entry.executionHostId,
+    agent: entry.agent,
+    sessionId: entry.sessionId,
+    ...(entry.resumeLocator ? { resumeLocator: entry.resumeLocator } : {})
   }
 }
 

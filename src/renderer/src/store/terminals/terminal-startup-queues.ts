@@ -68,6 +68,10 @@ export function createTerminalStartupQueueActions(
         delete next[tabId]
         return { pendingStartupByTabId: next }
       })
+      // Consumption proves the pane owns the spawn, so its retained retry record is settled.
+      if (pending.sleepingRecordPaneKey) {
+        get().clearSleepingAgentSession(pending.sleepingRecordPaneKey)
+      }
       return pending
     },
     queueTabSetupSplit: (tabId, startup) => {

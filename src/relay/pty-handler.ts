@@ -94,6 +94,7 @@ import {
   isAgentSessionSurfaceBinding,
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
+import { LAUNCH_TOKEN_ECHO_PROTOCOL_VERSION } from '../shared/agent-launch-token-echo-protocol'
 import { readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
 import { chargedPtyRetainedStringBytes } from '../shared/pty-retained-string-memory'
 import {
@@ -197,6 +198,9 @@ type ManagedPty = {
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
   ownerBackend: PtyOwnerBackend
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  /** Host admission launch token from pty.spawn, kept so listProcesses can echo it back
+   *  (pty.getCapabilities advertises that echo; without storing it the claim is false). */
+  launchToken?: string
 }
 
 type RelayAgentSessionCreateResult = {
@@ -353,6 +357,14 @@ function resolvePtyShellOverride(shellOverride: string): string {
  * Real distro names are registry keys, far below this.
  */
 const MAX_REVIVED_WSL_DISTRO_LENGTH = 256
+/** Mirrors main's own launch-token bound (OrcaRuntime.registerPty); the token is client input. */
+const MAX_LAUNCH_TOKEN_LENGTH = 128
+
+function parseLaunchToken(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_LAUNCH_TOKEN_LENGTH
+    ? value
+    : undefined
+}
 
 /**
  * Same bounds as a fresh spawn, but one unusable entry may not fail the whole
@@ -376,6 +388,9 @@ type PtyProcessSummary = {
   terminalHandle?: string
   foregroundProcessEvidence?: ForegroundProcessEvidence
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  /** Host admission launch token echoed on re-list so crash reconciliation can
+   *  rejoin a main-surviving remote PTY to its pending launch by token. */
+  launchToken?: string
 }
 
 type SerializedPtyEntry = {
@@ -979,7 +994,8 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
-      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
+      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      launchTokenEchoVersion: LAUNCH_TOKEN_ECHO_PROTOCOL_VERSION
     }))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
@@ -1847,6 +1863,7 @@ export class PtyHandler {
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
         ? parsePtyStartupIngressIntent(params.startupIngress)
         : undefined
+    const launchToken = parseLaunchToken(params.launchToken)
     const managed: ManagedPty = {
       id,
       incarnationId: randomUUID(),
@@ -1878,6 +1895,7 @@ export class PtyHandler {
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
+      ...(launchToken ? { launchToken } : {}),
       ...(managedStartupCommand && (shouldProviderDeliverCommand || rendererShellReadySupported)
         ? {
             startupCommand: {
@@ -2432,7 +2450,8 @@ export class PtyHandler {
         ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
         ...(this.agentSessionOwners.listForPty(id).length
           ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
-          : {})
+          : {}),
+        ...(managed.launchToken ? { launchToken: managed.launchToken } : {})
       })
     }
     return results
@@ -2465,6 +2484,8 @@ export class PtyHandler {
         // pane came back as the host default shell in another distro's history.
         ...(managed.shellOverride ? { shellOverride: managed.shellOverride } : {}),
         ...(managed.wslDistro ? { terminalWindowsWslDistro: managed.wslDistro } : {}),
+        // Deliberately not carrying launchToken: revive re-spawns a bare shell with no
+        // launch command, so echoing the old token would claim a dead launch is still live.
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }

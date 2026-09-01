@@ -184,6 +184,37 @@ export function planHermesStartupQuery(args: {
   if (!argv) {
     return null
   }
+  return finalizeQueryPlan(argv, args)
+}
+
+/** Query plan for a host-resolved launch whose argv is already structured —
+ *  no shell-text re-tokenization; the resolver's argv is normalized directly. */
+export function planHermesStartupQueryFromArgv(args: {
+  argv: readonly string[]
+  prompt: string
+  agentEnv?: Record<string, string> | null
+  platform: NodeJS.Platform
+  shell: AgentStartupShell
+}): { command: string; env: Record<string, string> } | null {
+  if (args.argv.length === 0) {
+    return null
+  }
+  const argv = normalizeHermesArgv([...args.argv], [], args.shell)
+  if (!argv) {
+    return null
+  }
+  return finalizeQueryPlan(argv, args)
+}
+
+function finalizeQueryPlan(
+  argv: string[],
+  args: {
+    prompt: string
+    agentEnv?: Record<string, string> | null
+    platform: NodeJS.Platform
+    shell: AgentStartupShell
+  }
+): { command: string; env: Record<string, string> } | null {
   const command = buildQueryCommand(argv, args.shell)
   const env = {
     ...args.agentEnv,

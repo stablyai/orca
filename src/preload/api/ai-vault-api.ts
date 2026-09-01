@@ -18,6 +18,11 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import type {
+  AgentLaunchVaultResumeCopyResult,
+  AgentLaunchVaultResumeDetailsResult,
+  AgentLaunchVaultResumeEntry
+} from '../../shared/agent-launch-spawn-request'
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
@@ -32,6 +37,16 @@ export type AiVaultApi = {
   getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) => Promise<AiVaultFirstUserPromptResult>
   /** Moves a deletable session's transcript to the OS trash; local sessions only. */
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
+  /** `targetPlatform` is the platform of the workspace the command will be
+   *  PASTED into (WSL/SSH read as linux) — client state the host cannot see.
+   *  Omitted, the host quotes for its own platform. */
+  resumeCommand: (
+    entry: AgentLaunchVaultResumeEntry,
+    targetPlatform?: NodeJS.Platform
+  ) => Promise<AgentLaunchVaultResumeCopyResult>
+  resumeDetails: (
+    entry: AgentLaunchVaultResumeEntry
+  ) => Promise<AgentLaunchVaultResumeDetailsResult>
   /** Fires when any app window regains OS focus; returns an unsubscribe. */
   onWindowFocused: (callback: () => void) => () => void
 }

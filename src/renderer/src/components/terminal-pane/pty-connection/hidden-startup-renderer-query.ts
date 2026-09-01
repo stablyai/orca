@@ -6,6 +6,7 @@ export function shouldKeepHiddenStartupRendererQueriesLive(
   startup: PtyConnectionDeps['startup']
 ): boolean {
   return (
+    Boolean(startup?.agentLaunch || startup?.launchAgent) ||
     Boolean(startup?.telemetry?.agent_kind && startup.telemetry.agent_kind !== 'other') ||
     isKnownTuiAgentTerminalStartupCommand(startup?.command ?? '')
   )

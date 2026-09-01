@@ -1,4 +1,6 @@
 import type { Automation, AutomationRun, AutomationRunUsage } from '../../shared/automations-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { resolveTuiAgentBaseAgent } from '../../shared/custom-tui-agents'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 
@@ -28,13 +30,37 @@ function createUnavailableAutomationUsage(
   }
 }
 
-function getAutomationUsageProvider(
-  automation: Automation | undefined
-): AutomationRunUsage['provider'] {
-  if (automation?.agentId === 'codex') {
+export type AutomationUsageAgentCatalog = Pick<
+  GlobalSettings,
+  'customTuiAgents' | 'deletedCustomTuiAgents'
+>
+
+/** The built-in harness whose usage logs this automation's runs land in.
+ *
+ *  Why: usage stores are per-built-in, but `agentId` holds the REQUESTED identity,
+ *  so a Codex-based custom agent arrives as its own id. Keyed raw it resolved to no
+ *  provider and every such run reported "no usage" — resolve to the base harness
+ *  first. A custom the catalog cannot name stays null rather than guessing a base
+ *  from the id's syntax. */
+function resolveUsageAgent(
+  automation: Automation | undefined,
+  catalog: AutomationUsageAgentCatalog | undefined
+): string | null {
+  if (!automation) {
+    return null
+  }
+  return resolveTuiAgentBaseAgent(
+    automation.agentId,
+    catalog?.customTuiAgents,
+    catalog?.deletedCustomTuiAgents
+  )
+}
+
+function getAutomationUsageProvider(usageAgent: string | null): AutomationRunUsage['provider'] {
+  if (usageAgent === 'codex') {
     return 'codex'
   }
-  if (automation?.agentId === 'claude') {
+  if (usageAgent === 'claude') {
     return 'claude'
   }
   return null
@@ -44,14 +70,17 @@ export async function collectAutomationRunUsage({
   automation,
   run,
   claudeUsage,
-  codexUsage
+  codexUsage,
+  agentCatalog
 }: {
   automation: Automation | undefined
   run: AutomationRun
   claudeUsage: ClaudeUsageStore | null
   codexUsage: CodexUsageStore | null
+  agentCatalog?: AutomationUsageAgentCatalog
 }): Promise<AutomationRunUsage> {
   const collectedAt = Date.now()
+  const usageAgent = resolveUsageAgent(automation, agentCatalog)
   const unavailable = (
     provider: AutomationRunUsage['provider'],
     unavailableReason: AutomationRunUsage['unavailableReason'],
@@ -61,19 +90,19 @@ export async function collectAutomationRunUsage({
 
   if (!automation || run.status !== 'completed') {
     return unavailable(
-      getAutomationUsageProvider(automation),
+      getAutomationUsageProvider(usageAgent),
       'run_not_finished',
       'Usage is only collected for completed automation runs.'
     )
   }
   if (automation.executionTargetType === 'ssh') {
     return unavailable(
-      getAutomationUsageProvider(automation),
+      getAutomationUsageProvider(usageAgent),
       'remote_usage_unavailable',
       'Remote automation usage is not available from local usage logs.'
     )
   }
-  if (automation.agentId === 'claude') {
+  if (usageAgent === 'claude') {
     if (!claudeUsage) {
       return unavailable('claude', 'scan_failed', 'Claude usage store is unavailable.')
     }
@@ -84,7 +113,7 @@ export async function collectAutomationRunUsage({
       completedAt: collectedAt
     })
   }
-  if (automation.agentId === 'codex') {
+  if (usageAgent === 'codex') {
     if (!codexUsage) {
       return unavailable('codex', 'scan_failed', 'Codex usage store is unavailable.')
     }

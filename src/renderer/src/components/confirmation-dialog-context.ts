@@ -11,6 +11,12 @@ export type ConfirmationDialogOptions = {
   confirmVariant?: 'default' | 'destructive'
   /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
   dontAskAgain?: { label?: string; onConfirmed: () => void }
+  /** Optional opt-in reported on confirmation without changing the boolean result. */
+  optIn?: {
+    label: string
+    defaultChecked?: boolean
+    onConfirm: (checked: boolean) => void
+  }
 }
 
 export type ConfirmationDialogContextValue = (
@@ -25,4 +31,9 @@ export function useConfirmationDialog(): ConfirmationDialogContextValue {
     throw new Error('useConfirmationDialog must be used inside ConfirmationDialogProvider')
   }
   return confirm
+}
+
+/** Lets isolated hosts omit the provider without crashing optional confirmation affordances. */
+export function useOptionalConfirmationDialog(): ConfirmationDialogContextValue | null {
+  return useContext(ConfirmationDialogContext)
 }

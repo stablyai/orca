@@ -118,6 +118,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       ? await provider.writeWithSettlement(id, data)
       : provider.write(id, data) !== false
   }
+  // Why every daemon route (and why an adapter that cannot answer withholds): one
+  // preserved pre-v34 daemon may own the very agent a pending launch is looking for and
+  // will never echo its token, so a missing echo must not settle the launch failed.
+  // Daemon adapters only — the in-process fallback has main's own token registry.
+  providesLaunchTokenListings = (): boolean =>
+    this.allDaemonAdapters().every((adapter) => adapter.providesLaunchTokenListings?.() === true)
 
   resize(id: string, cols: number, rows: number): void {
     this.providerFor(id).resize(id, cols, rows)

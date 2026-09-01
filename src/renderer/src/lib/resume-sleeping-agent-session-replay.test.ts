@@ -89,6 +89,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     expect(state.pendingStartupByTabId[resumedTab.id]?.resumeProviderSession).toEqual(
       record.providerSession
     )
+    expect(state.pendingStartupByTabId[resumedTab.id]?.sleepingRecordPaneKey).toBe(record.paneKey)
     expect(state.automaticAgentResumeClaimsByTabId[resumedTab.id]).toEqual({
       worktreeId: record.worktreeId,
       launchAgent: record.agent,
@@ -104,16 +105,73 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     } as never)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    // The queued launch owns the record: it is retry state until the spawn is
+    // proven, so the re-sweep must skip it rather than clear it.
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
+  it('clears the record only when its queued startup is consumed by a spawn', () => {
+    const record = makeRecord()
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    const resumedTab = useAppStore.getState().tabsByWorktree['wt-1']![0]!
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+
+    expect(useAppStore.getState().consumeTabStartupCommand(resumedTab.id)).not.toBeNull()
+
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('still clears a replayed duplicate record while its own launch is queued', () => {
+    const record = makeRecord()
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    const replayed = makeRecord({ paneKey: 'replayed-tab:leaf-9', tabId: 'replayed-tab' })
     useAppStore.setState((state) => ({
       sleepingAgentSessionsByPaneKey: {
         ...state.sleepingAgentSessionsByPaneKey,
-        [record.paneKey]: record
+        [replayed.paneKey]: replayed
       }
     }))
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[replayed.paneKey]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
+  it('keeps the record for retry when the launch tab closes before spawning', () => {
+    const record = makeRecord()
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    const failedTab = useAppStore.getState().tabsByWorktree['wt-1']![0]!
+    // The launch never spawned (e.g. a definite pre-spawn failure); closing the
+    // tab releases the queued startup and claim but must keep the record.
+    useAppStore.getState().closeTab(failedTab.id)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+    const retriedTab = useAppStore
+      .getState()
+      .tabsByWorktree['wt-1']!.find((tab) => tab.id !== failedTab.id)!
+    expect(useAppStore.getState().pendingStartupByTabId[retriedTab.id]?.sleepingRecordPaneKey).toBe(
+      record.paneKey
+    )
   })
 
   it('does not fork after startup is consumed but before hooks report live status', () => {

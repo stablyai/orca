@@ -451,6 +451,63 @@ describe('Store', () => {
     expect(migratedRun?.sourceContext).toEqual(migratedAutomation?.sourceContext)
   })
 
+  it('drops malformed persisted run launch failures on reload, keeping well-formed ones', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const corruptRun = store.createAutomationRun(
+      automation,
+      new Date('2026-05-13T09:00:00Z').getTime()
+    )
+    const intactRun = store.createAutomationRun(
+      automation,
+      new Date('2026-05-14T09:00:00Z').getTime()
+    )
+    const validFailure = {
+      code: 'spawn_failed',
+      version: 1,
+      failureId: 'failure-1',
+      intent: 'automation',
+      occurredAt: 123
+    }
+    const persisted = readDataFile() as { automationRuns: Record<string, unknown>[] }
+    for (const run of persisted.automationRuns) {
+      run.agentLaunchFailure =
+        run.id === corruptRun.id
+          ? // Extra key: the strict schema must reject it so a forged entry
+            // cannot smuggle argv/env into a recovery card.
+            { ...validFailure, argv: ['rm', '-rf'] }
+          : validFailure
+    }
+    writeDataFile(persisted)
+
+    const reloaded = await createStore()
+    const runs = reloaded.listAutomationRuns(automation.id)
+
+    expect(runs.find((entry) => entry.id === corruptRun.id)?.agentLaunchFailure).toBeNull()
+    expect(runs.find((entry) => entry.id === intactRun.id)?.agentLaunchFailure).toEqual(
+      validFailure
+    )
+
+    // The preserved arm of an unrelated update scrubs the corrupt entry too.
+    const updated = reloaded.updateAutomationRun({
+      runId: corruptRun.id,
+      status: 'dispatched',
+      workspaceId: 'wt1'
+    })
+    expect(updated.agentLaunchFailure).toBeNull()
+  })
+
   it('shrinks an oversized automationRuns file on load without any later mutation', async () => {
     const seed = await createStore()
     seed.addRepo(

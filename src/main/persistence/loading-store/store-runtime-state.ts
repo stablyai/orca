@@ -1,6 +1,7 @@
 import { removeStaleDurableWriteTempFiles } from '../../durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { AgentCatalogSchemaTooNew } from '../../../shared/data-recovery'
 import type { ActiveViewPreference } from '../../active-view-preference'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
@@ -53,6 +54,9 @@ export class StoreRuntimeState {
   readonly gitUsernameCache = new Map<string, string>()
   readonly protectedSecrets = new ProtectedSecretPersistence()
   loadNeedsSave = false
+  agentCatalogMigrationError: string | null = null
+  agentCatalogSchemaTooNew: AgentCatalogSchemaTooNew | null = null
+  preV1RawContentsAwaitingBackup: string | null = null
   flushOrThrow!: () => void
   settingsChangeListeners = new Set<
     (

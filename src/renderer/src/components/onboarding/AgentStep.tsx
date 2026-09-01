@@ -18,6 +18,9 @@ type AgentStepProps = {
   onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
   detectedSet: Set<TuiAgent>
   isDetecting: boolean
+  /** Overrides the offered entries (e.g. the feature wall merges custom agents
+   *  under their base harness); defaults to the built-in catalog. */
+  agentCatalog?: AgentCatalogEntry[]
   yoloPermissions?: boolean
   onYoloPermissionsChange?: (enabled: boolean) => void
 }
@@ -64,10 +67,11 @@ export function AgentStep({
   onSelect,
   detectedSet,
   isDetecting,
+  agentCatalog: agentCatalogOverride,
   yoloPermissions = true,
   onYoloPermissionsChange
 }: AgentStepProps) {
-  const agentCatalog = getAgentCatalog()
+  const agentCatalog = agentCatalogOverride ?? getAgentCatalog()
   const detected = agentCatalog.filter((agent) => detectedSet.has(agent.id))
   const rest = agentCatalog.filter((agent) => !detectedSet.has(agent.id))
   const hasDetected = detected.length > 0

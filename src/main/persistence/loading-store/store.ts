@@ -87,12 +87,27 @@ export class Store {
     return dirname(this.runtime.dataFile)
   }
 
+  getDataFilePath(): string {
+    return this.runtime.dataFile
+  }
+
+  getBackupRingFilePaths(): string[] {
+    return this.domains.backups.getBackupRingFilePaths()
+  }
+
   freezeWrites(): void {
     this.runtime.writesFrozen = true
     if (this.runtime.writeTimer) {
       clearTimeout(this.runtime.writeTimer)
       this.runtime.writeTimer = null
     }
+  }
+
+  unfreezeWrites(): void {
+    if (this.runtime.agentCatalogSchemaTooNew) {
+      return
+    }
+    this.runtime.writesFrozen = false
   }
 }
 

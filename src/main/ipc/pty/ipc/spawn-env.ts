@@ -8,6 +8,8 @@ import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
 import { hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
+import { stripEphemeralAgentTeamsEnv } from '../../../runtime/claude-agent-teams-service'
+import { ORCA_PROTECTED_ENV_KEYS } from '../../../agent-launch/compose-agent-launch-env'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
@@ -69,6 +71,16 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       : null
   ctx.stablePaneKey = verifiedPaneKey ?? ctx.migrationUnsupportedPaneKey ?? ctx.metadataPaneKey
   ctx.baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+  if (ctx.baseEnv && process.platform === 'win32') {
+    for (const protectedKey of ORCA_PROTECTED_ENV_KEYS) {
+      const lower = protectedKey.toLowerCase()
+      for (const existing of Object.keys(ctx.baseEnv)) {
+        if (existing !== protectedKey && existing.toLowerCase() === lower) {
+          delete ctx.baseEnv[existing]
+        }
+      }
+    }
+  }
   const shouldRefreshAgentTeamsEnv =
     !ctx.preAdoptedStablePane &&
     !args.connectionId &&
@@ -94,7 +106,10 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
     const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
       handle: ctx.preAllocatedHandle,
-      baseEnv: ctx.baseEnv ?? {}
+      baseEnv: ctx.baseEnv ?? {},
+      ...(args.launchConfig
+        ? { childEnv: stripEphemeralAgentTeamsEnv(args.launchConfig.agentEnv) }
+        : {})
     })
     ctx.agentTeamsLeaderHandle = ctx.preAllocatedHandle
     ctx.baseEnv = {
@@ -104,10 +119,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     if (args.launchConfig) {
       ctx.effectiveLaunchConfig = {
         ...args.launchConfig,
-        agentEnv: {
-          ...args.launchConfig.agentEnv,
-          ...prepared.env
-        }
+        agentEnv: stripEphemeralAgentTeamsEnv(args.launchConfig.agentEnv)
       }
     }
   }

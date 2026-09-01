@@ -12,6 +12,8 @@ import {
   readMobileReviewTerminalTabs
 } from './mobile-diff-review-rpc'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import { resolveIdentityCreateTerminalParams } from './identity-create-terminal-params'
+import { readMobileVaultResumeCreateOutcome } from './ai-vault-resume-outcome'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
 
 type SendActionsInput = {
@@ -104,8 +106,9 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
+      const createParams = await resolveIdentityCreateTerminalParams(client, worktreeId)
       const response = await client.sendRequest('session.tabs.createTerminal', {
-        worktree: `id:${worktreeId}`,
+        ...createParams,
         activate: false,
         select: true,
         navigation: 'caller'
@@ -115,7 +118,16 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       }
       const created = readMobileReviewCreatedTerminal(response.result)
       if (!created) {
-        throw new Error('Created terminal response was invalid')
+        // Why: a success response missing `tab` is the typed pre-spawn agentLaunch
+        // failure arm (tombstoned/disabled agent, capacity, ...), not a malformed
+        // response — read the failure code like the vault-resume family instead of
+        // reporting a generic "invalid response".
+        const outcome = readMobileVaultResumeCreateOutcome(response.result)
+        throw new Error(
+          outcome.kind === 'failed'
+            ? `Couldn't start the agent (${outcome.code}).`
+            : 'Created terminal response was invalid'
+        )
       }
       await sendPromptToTerminal(created.terminal, comments)
     },

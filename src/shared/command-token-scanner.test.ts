@@ -44,6 +44,21 @@ describe('command token scanner', () => {
     expect(getRegexWhitespaceSplitCalls(split)).toHaveLength(0)
   })
 
+  it('looks past the PowerShell call operator that prefixes built launch lines', () => {
+    expect(getFirstCommandToken("& 'claude' '--flag'")).toBe('claude')
+    expect(getFirstCommandToken('&  "C:\\Program Files\\Orca\\claude.cmd" --flag')).toBe(
+      'C:\\Program Files\\Orca\\claude.cmd'
+    )
+    expect(getFirstCommandToken("claude '--flag'")).toBe('claude')
+  })
+
+  it('keeps ampersands that are not a standalone leading call operator', () => {
+    expect(getFirstCommandToken('&& claude')).toBe('&&')
+    expect(getFirstCommandToken('&claude --flag')).toBe('&claude')
+    expect(getFirstCommandToken('env A=1 claude & wait')).toBe('env')
+    expect(getFirstCommandToken('  &  ')).toBe('')
+  })
+
   it('finds exact command tokens without regex splitting', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const command = '/Applications/serve-sim/bin/serve-sim-bin\tUDID-1 --port 3100'

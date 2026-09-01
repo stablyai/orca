@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveTuiAgentBaseAgent, resolveTuiAgentConfig } from '../../../shared/custom-tui-agents'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { useAppStore } from '@/store'
 import {
@@ -42,15 +42,24 @@ export const POST_PASTE_SUBMIT_DELAY_MS = 50
 // also stops one slow step from spending the other's budget (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
 
+/** Runtime routing plus the agent catalog: a custom agent id can only resolve to
+ *  its base harness against these settings, so both travel together. */
+export type AgentTabRuntimeSettings = Pick<
+  GlobalSettings,
+  'activeRuntimeEnvironmentId' | 'customTuiAgents' | 'deletedCustomTuiAgents'
+>
+
 export function getSettingsForAgentTabRuntimeOwner(
   tabId: string
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
+): AgentTabRuntimeSettings | null | undefined {
   const store = useAppStore.getState()
   for (const [worktreeId, tabs] of Object.entries(store.tabsByWorktree ?? {})) {
     if (tabs?.some((tab) => tab.id === tabId)) {
       // Why: legacy remote PTY ids may not embed their runtime owner. The tab's
       // worktree still identifies which host should receive readiness/send RPCs.
-      return getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+      // The owner view only overrides the runtime id, so keep the rest of the
+      // settings (agent catalog included) around it.
+      return { ...store.settings, ...getSettingsForWorktreeRuntimeOwner(store, worktreeId) }
     }
   }
   return store.settings
@@ -84,20 +93,29 @@ export async function pasteDraftWhenAgentReady(args: {
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
 
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+  const settings = getSettingsForAgentTabRuntimeOwner(tabId)
+  // Why: readiness signals and timeouts are built-in-only registries; a custom id
+  // inherits its base harness's, so resolve before any lookup.
+  const baseAgent =
+    resolveTuiAgentBaseAgent(agent, settings?.customTuiAgents, settings?.deletedCustomTuiAgents) ??
+    undefined
+  const agentConfig = resolveTuiAgentConfig(
+    agent,
+    settings?.customTuiAgents,
+    settings?.deletedCustomTuiAgents
+  )
 
   // Why: agents with a native draft prefill mechanism (flag or env var)
   // launch with the URL already in their input box. Pasting again would
   // duplicate it. Callers should not invoke this helper for those agents;
   // the early return guards against accidental double-injection if a stale
   // call slips through.
-  if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
+  if (agentDeliversDraftViaNativePrefill(agentConfig, forcePaste)) {
     return false
   }
 
   const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-  const settings = getSettingsForAgentTabRuntimeOwner(tabId)
-  const readinessTimeoutMs = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
+  const readinessTimeoutMs = resolveDraftPasteReadyTimeoutMs(baseAgent, timeoutMs)
   const readiness = await waitForAgentDraftInputReadyOnTab({
     tabId,
     spawnTimeoutMs: PTY_SPAWN_TIMEOUT_MS,
@@ -145,15 +163,22 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   onTimeout?: () => void
 }): Promise<boolean> {
   const { tabId, ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+  const settings = getSettingsForAgentTabRuntimeOwner(tabId)
+  const baseAgent =
+    resolveTuiAgentBaseAgent(agent, settings?.customTuiAgents, settings?.deletedCustomTuiAgents) ??
+    undefined
+  const agentConfig = resolveTuiAgentConfig(
+    agent,
+    settings?.customTuiAgents,
+    settings?.deletedCustomTuiAgents
+  )
 
-  if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
+  if (agentDeliversDraftViaNativePrefill(agentConfig, forcePaste)) {
     return false
   }
 
-  const settings = getSettingsForAgentTabRuntimeOwner(tabId)
   const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-  const budget = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
+  const budget = resolveDraftPasteReadyTimeoutMs(baseAgent, timeoutMs)
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
   if (!ready) {
     const fallbackReady = agentConfig

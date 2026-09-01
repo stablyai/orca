@@ -210,6 +210,22 @@ export const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  resumeBannerAction: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised
+  },
+  resumeBannerActionPressed: {
+    opacity: 0.78
+  },
+  resumeBannerActionText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   state: {
     flex: 1,
     alignItems: 'center',

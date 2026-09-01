@@ -578,8 +578,22 @@ describe('connectPanePty', () => {
       paneId: 1,
       exitCode: 1,
       startup: expect.objectContaining({
-        command: expect.stringContaining("'resume' 'codex-session-1'"),
+        // Host-owned resume: the retained startup carries the session ownership
+        // key, never a renderer-assembled resume argv; the legacy launchConfig
+        // and recorded owner ride along for one-release host ingest.
+        command: '',
+        agentLaunch: {
+          resume: {
+            operation: 'resume',
+            sessionKey: {
+              worktreeId: 'wt-1',
+              baseAgent: 'codex',
+              providerSessionId: 'codex-session-1'
+            }
+          }
+        },
         launchConfig,
+        legacyResumeRecordedConnectionId: null,
         resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
         launchAgent: 'codex',
         showSessionRestoredBanner: true

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
+import type { CustomTuiAgentId } from '../../../shared/types'
 import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
 
@@ -201,31 +202,6 @@ describe('launchWorkItemDirect', () => {
     mockApi.agentTrust.markTrusted.mockResolvedValue(undefined)
   })
 
-  it('rejects invalid per-launch CLI arguments before creating a workspace', async () => {
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await expect(
-      launchWorkItemDirect({
-        repoId: 'repo-1',
-        launchSource: 'task_page',
-        openModalFallback: vi.fn(),
-        agentArgs: '--model "unterminated',
-        item: {
-          type: 'issue',
-          number: 42,
-          title: 'Fix invalid saved launch args',
-          url: 'https://github.com/acme/repo/issues/42'
-        }
-      })
-    ).resolves.toBe(false)
-
-    expect(mocks.createWorktree).not.toHaveBeenCalled()
-    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      'CLI arguments are invalid: Unclosed quote in command template.'
-    )
-  })
-
   it('passes a resolved PR branch override while using a short PR identity for workspace names', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue([])
     mocks.store.settings = {}
@@ -279,7 +255,8 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      undefined
     )
   })
 
@@ -335,33 +312,21 @@ describe('launchWorkItemDirect', () => {
       }
     })
 
-    expect(mocks.createWorktree).toHaveBeenCalledWith(
-      'repo-1',
-      'eng-42-ship-linear-parity',
-      undefined,
-      'inherit',
-      undefined,
-      'sidebar',
-      'Ship Linear parity',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'ENG-42',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined
-    )
+    const createArgs = mocks.createWorktree.mock.calls[0]
+    expect(createArgs?.[1]).toBe('eng-42-ship-linear-parity')
+    expect(createArgs?.[6]).toBe('Ship Linear parity')
+    expect(createArgs?.[10]).toBe('codex')
+    expect(createArgs?.[11]).toBe('ENG-42')
+    expect(createArgs?.[25]).toEqual({
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'codex' },
+        prompt:
+          'Linked Linear issue: ENG-42\nhttps://linear.app/acme/issue/ENG-42/ship-linear-parity\n',
+        promptDelivery: 'draft',
+        allowEmptyPromptLaunch: true
+      },
+      agentLaunchTelemetry: { launch_source: 'task_page', request_kind: 'new' }
+    })
   })
 
   it('prefills a link-only Linear reference without source context', async () => {
@@ -399,35 +364,23 @@ describe('launchWorkItemDirect', () => {
       'Linked Linear issue: ENG-42',
       'https://linear.app/acme/issue/ENG-42/ship-linear-parity'
     ].join('\n')
-    expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
-      agent: 'claude',
-      draft: `${expectedDraft}\n`,
-      cmdOverrides: {},
-      agentArgs: '--dangerously-skip-permissions',
-      agentEnv: {},
-      sessionOptions: undefined,
-      platform: 'win32',
-      isRemote: false
-    })
-    expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'claude',
-        prompt: '',
+    expect(mocks.createWorktree.mock.calls[0]?.[25]).toEqual({
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'claude' },
+        prompt: `${expectedDraft}\n`,
+        promptDelivery: 'draft',
         allowEmptyPromptLaunch: true
-      })
-    )
+      },
+      agentLaunchTelemetry: { launch_source: 'task_page', request_kind: 'new' }
+    })
+    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
+    expect(buildAgentStartupPlan).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
       'repo-1::/repo/worktree',
       expect.objectContaining({
-        startup: expect.objectContaining({
-          command: expect.stringContaining('Linked Linear issue: ENG-42')
-        })
+        backendStartupTerminalSpawned: true
       })
     )
-    const startupCommand = mocks.activateAndRevealWorktree.mock.calls[0]?.[1]?.startup?.command
-    expect(startupCommand).toContain('https://linear.app/acme/issue/ENG-42/ship-linear-parity')
-    expect(startupCommand).not.toContain('The distinctive Linear body text is here.')
-    expect(startupCommand).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
     expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
@@ -459,12 +412,14 @@ describe('launchWorkItemDirect', () => {
       createdAt: expect.any(Number)
     })
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
-    // Why: the draft is inside `--prefill`, so the plan sets no draftPrompt.
-    // launchDraftText is the only thing that lets the view-mode gate see a
-    // draft here — without it this tab opens in chat unconditionally.
-    const startup = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]?.startup
-    expect(startup?.draftPrompt).toBeUndefined()
-    expect(startup?.launchDraftText).toBe('https://github.com/acme/repo/issues/12')
+    expect(mocks.createWorktree.mock.calls[0]?.[25]).toMatchObject({
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'claude' },
+        prompt: 'https://github.com/acme/repo/issues/12',
+        promptDelivery: 'draft'
+      }
+    })
+    expect(mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]).not.toHaveProperty('startup')
   })
 
   it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
@@ -524,23 +479,17 @@ describe('launchWorkItemDirect', () => {
       })
     ).resolves.toBe(true)
 
-    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
-    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tabId: 'tab-1',
-        content: 'Use this explicit user prompt.',
-        agent: 'claude',
-        submit: true,
-        forcePaste: true,
-        onTimeout: expect.any(Function)
-      })
-    )
-    expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      agent: 'claude',
-      text: 'Use this explicit user prompt.',
-      createdAt: expect.any(Number)
+    expect(mocks.createWorktree.mock.calls[0]?.[25]).toEqual({
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'claude' },
+        prompt: 'Use this explicit user prompt.',
+        allowEmptyPromptLaunch: true
+      },
+      agentLaunchTelemetry: { launch_source: 'task_page', request_kind: 'new' }
     })
+    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
+    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
@@ -585,38 +534,20 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
     expect(mocks.store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(mockApi.agentTrust.markTrusted).toHaveBeenCalledWith({
-      preset: 'cursor',
-      workspacePath: '/home/orca/repo-worktrees/issue-77',
-      connectionId: 'ssh-1'
-    })
-    expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
-      agent: 'cursor',
-      draft: 'https://github.com/acme/repo/issues/77',
-      cmdOverrides: {},
-      agentArgs: '--yolo',
-      agentEnv: {},
-      sessionOptions: undefined,
-      platform: 'linux',
-      isRemote: true
-    })
-    expect(buildAgentStartupPlan).toHaveBeenCalledWith({
-      agent: 'cursor',
-      prompt: '',
-      cmdOverrides: {},
-      agentArgs: '--yolo',
-      agentEnv: {},
-      sessionOptions: undefined,
-      platform: 'linux',
-      isRemote: true,
-      allowEmptyPromptLaunch: true
+    expect(mockApi.agentTrust.markTrusted).not.toHaveBeenCalled()
+    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
+    expect(buildAgentStartupPlan).not.toHaveBeenCalled()
+    expect(mocks.createWorktree.mock.calls[0]?.[25]).toMatchObject({
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'cursor' },
+        prompt: 'https://github.com/acme/repo/issues/77',
+        promptDelivery: 'draft'
+      }
     })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
       'wt-ssh',
       expect.objectContaining({
-        startup: expect.objectContaining({
-          draftPrompt: 'https://github.com/acme/repo/issues/77'
-        })
+        backendStartupTerminalSpawned: true
       })
     )
     expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
@@ -686,12 +617,13 @@ describe('launchWorkItemDirect', () => {
       })
     ).resolves.toBe(true)
 
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
-    const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain(
-      `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
-    )
-    expect(activationOptions.startup.command).not.toContain('Remove-Item Env:ORCA_PI_PREFILL')
+    expect(mocks.createWorktree.mock.calls[0]?.[25]).toMatchObject({
+      agentLaunch: { selection: { kind: 'agent', agent: 'pi' } }
+    })
+    expect(mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]).toMatchObject({
+      backendStartupTerminalSpawned: true
+    })
+    expect(mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]).not.toHaveProperty('startup')
   })
 
   it('uses the repo SSH connection when the created worktree is not hydrated yet', async () => {
@@ -730,10 +662,80 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
-    const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain(
-      `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
-    )
+    expect(mocks.createWorktree.mock.calls[0]?.[25]).toMatchObject({
+      agentLaunch: { selection: { kind: 'agent', agent: 'pi' } }
+    })
+    expect(mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]).not.toHaveProperty('startup')
+  })
+
+  it('launches a custom default and a custom override that base detection never reports', async () => {
+    const customCodex =
+      'custom-agent:codex:11111111-1111-4111-8111-111111111111' as CustomTuiAgentId
+    globalThis.window = {
+      api: {
+        ...mockApi,
+        settings: {
+          agentCatalog: {
+            getLocal: vi.fn().mockResolvedValue({
+              customAgents: [
+                {
+                  status: 'ready',
+                  definition: {
+                    id: customCodex,
+                    baseAgent: 'codex',
+                    label: 'Model-specific Codex',
+                    args: '--model custom-model',
+                    syncEnv: false,
+                    commandOverride: '/opt/bin/codex'
+                  },
+                  envSummary: { entryCount: 0, bytes: 0 },
+                  availabilityReason: 'configured-executable'
+                }
+              ]
+            })
+          }
+        }
+      }
+    } as unknown as Window & typeof globalThis
+    mocks.store.settings = {
+      defaultTuiAgent: customCodex,
+      disabledTuiAgents: [],
+      agentCmdOverrides: {}
+    } as unknown as AppState['settings']
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+    const item = {
+      title: 'Fix failing checks',
+      url: 'https://github.com/acme/repo/pull/1',
+      type: 'issue' as const,
+      number: 1,
+      pasteContent: 'Fix the failing checks.'
+    }
+
+    await expect(
+      launchWorkItemDirect({
+        item,
+        repoId: 'repo-1',
+        openModalFallback: mocks.openModalFallback,
+        launchSource: 'task_page'
+      })
+    ).resolves.toBe(true)
+    expect(mocks.createWorktree.mock.calls[0]?.[25]).toMatchObject({
+      agentLaunch: { selection: { kind: 'agent', agent: customCodex } }
+    })
+
+    await expect(
+      launchWorkItemDirect({
+        item,
+        repoId: 'repo-1',
+        openModalFallback: mocks.openModalFallback,
+        launchSource: 'task_page',
+        agentOverride: customCodex
+      })
+    ).resolves.toBe(true)
+    expect(mocks.createWorktree.mock.calls[1]?.[25]).toMatchObject({
+      agentLaunch: { selection: { kind: 'agent', agent: customCodex } }
+    })
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {
@@ -781,11 +783,10 @@ describe('launchWorkItemDirect', () => {
       })
     ).resolves.toBe(true)
 
-    expect(buildAgentStartupPlan).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'codex',
-        platform: 'linux'
-      })
-    )
+    expect(buildAgentStartupPlan).not.toHaveBeenCalled()
+    expect(mocks.createWorktree.mock.calls[0]?.[25]).toMatchObject({
+      agentLaunch: { selection: { kind: 'agent', agent: 'codex' } }
+    })
+    expect(mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]).not.toHaveProperty('startup')
   })
 })

@@ -56,6 +56,32 @@ describe('isCommandCodeNewTurnWhileWorking', () => {
     ).toBe(false)
   })
 
+  it('fires for a command-code-based custom agent id', () => {
+    expect(
+      isCommandCodeNewTurnWhileWorking({
+        agentType: 'custom-agent:command-code:5f9f1c3a-1111-4222-8333-444455556666',
+        previousState: 'working',
+        incomingState: 'working',
+        previousPrompt: 'first task',
+        incomingPrompt: 'second task',
+        hasExplicitPrompt: true
+      })
+    ).toBe(true)
+  })
+
+  it('returns false for a custom agent on another base', () => {
+    expect(
+      isCommandCodeNewTurnWhileWorking({
+        agentType: 'custom-agent:codex:5f9f1c3a-1111-4222-8333-444455556666',
+        previousState: 'working',
+        incomingState: 'working',
+        previousPrompt: 'first task',
+        incomingPrompt: 'second task',
+        hasExplicitPrompt: true
+      })
+    ).toBe(false)
+  })
+
   it('returns false for non-Command Code agents', () => {
     expect(
       isCommandCodeNewTurnWhileWorking({

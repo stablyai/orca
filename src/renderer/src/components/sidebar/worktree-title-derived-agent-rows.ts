@@ -17,10 +17,10 @@ import type {
 } from '../../../../shared/terminal-tab-types'
 import {
   normalizeCompatibleAgentTitleForOwner,
-  resolveCompatibleAgentTypeForOwner,
-  type CompatibleAgentOwnerOptions
+  resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
+import { parseCustomTuiAgentId } from '../../../../shared/custom-tui-agents'
 import { isClaudeIdentityFrameTitle } from '../../../../shared/terminal-title-agent-type'
 
 /** Fixed, not per-process: title rows are a pure projection of the current title, so they are
@@ -139,12 +139,17 @@ function buildTitleDerivedAgentRow(args: {
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
+  // Custom launch identities carry their base harness in the id; title matching
+  // and owner-compatibility checks run in base space, display re-owns below.
+  const ownerCustomBase = parseCustomTuiAgentId(args.ownerAgentType)?.baseAgent ?? null
+  const ownerForTitle = ownerCustomBase ?? args.ownerAgentType
   // Why launchAgent, not ownerAgentType: this only rewrites a title within its own identity
   // group (OMP wraps Pi and emits Pi frames), which stays correct in a split. Pane ownership
   // is a separate, stricter question — it decides identity, so it uses ownerAgentType below.
-  const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent, {
-    ownerIsLaunch: Boolean(args.tab.launchAgent)
-  })
+  const title = normalizeCompatibleAgentTitleForOwner(
+    args.title,
+    parseCustomTuiAgentId(args.tab.launchAgent)?.baseAgent ?? args.tab.launchAgent
+  )
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
   // shared detector keeps it neutral so runtime liveness probes do not treat
@@ -166,17 +171,24 @@ function buildTitleDerivedAgentRow(args: {
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
   const titleAgentType = isClaudeAgentsTitle
     ? 'claude'
-    : resolveTitleDerivedAgentType(title, label, args.ownerAgentType)
+    : resolveTitleDerivedAgentType(title, label, ownerForTitle)
   // Why: a status frame proves activity, not identity, so the resolver drops it.
   // Hook-less agents over SSH (Codex, #8711; OpenCode's '. '/'* ' frames, #8940)
   // surface only decorated task titles; fall back to the pane's known owner instead
   // of hiding the pane. Safe because the `!status || !label` gate above already
   // rejects plain shell titles — this path must never manufacture a row from one.
-  const agentType = titleAgentType ?? args.ownerAgentType
-  if (!agentType) {
+  const resolvedAgentType = titleAgentType ?? args.ownerAgentType
+  if (!resolvedAgentType) {
     return null
   }
-  const rowLabel = titleAgentType ? label : formatAgentTypeLabel(agentType)
+  // Why: a title that names the custom owner's base harness re-owns the row to
+  // the requested custom identity, so it displays the custom agent's own name.
+  const agentType =
+    args.ownerAgentType && resolvedAgentType === ownerCustomBase
+      ? args.ownerAgentType
+      : resolvedAgentType
+  const rowLabel =
+    titleAgentType && agentType === titleAgentType ? label : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
@@ -262,19 +274,17 @@ function resolveTitleDerivedPaneOwner(
  */
 export function resolveAgentTypeFromTerminalTitle(
   title: string | null | undefined,
-  ownerAgentType?: AgentType | null,
-  options?: CompatibleAgentOwnerOptions
+  ownerAgentType?: AgentType | null
 ): AgentType | null {
   if (!title) {
     return null
   }
-  const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType, options)
+  const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType)
   const label = resolveTitleActivityLabel(normalizedTitle)
   return label
     ? (resolveCompatibleAgentTypeForOwner(
         resolveTitleDerivedAgentType(normalizedTitle, label, ownerAgentType),
-        ownerAgentType,
-        options
+        ownerAgentType
       ) ?? null)
     : null
 }

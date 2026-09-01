@@ -36,4 +36,11 @@ export type CoordinatorRuntime = {
   } | null
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
+  validateDispatchAgentLaunch?(identity: DispatchAgentIdentity): Promise<DispatchAgentLaunchValidation>
 }
+import type { PersistedAgentLaunchFailure } from '../../../shared/agent-launch-contract'
+
+export type DispatchAgentIdentity = { requestedAgent: string; baseAgent: string | null }
+export type DispatchAgentLaunchValidation =
+  | { ok: true }
+  | { ok: false; error: string; launchFailure: PersistedAgentLaunchFailure }

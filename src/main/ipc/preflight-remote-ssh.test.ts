@@ -87,6 +87,7 @@ vi.mock('../gitea/client', () => ({
 }))
 
 import { registerPreflightHandlers } from './preflight'
+import { detectRemoteAgentsIfReachable } from '../preflight/agent-detection'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
 describe('preflight', () => {
@@ -139,6 +140,34 @@ describe('preflight', () => {
         { id: 'mistral-vibe', cmd: 'mistral-vibe' }
       ])
     })
+  })
+
+  it('restricts launch eligibility detection to the requested stock base', async () => {
+    const request = vi.fn().mockResolvedValue({ agents: ['codex'] })
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => false,
+      request
+    })
+
+    await expect(
+      detectRemoteAgentsIfReachable({ connectionId: 'ssh-1', baseAgents: ['codex'] })
+    ).resolves.toEqual(['codex'])
+    const commands = request.mock.calls[0]?.[1]?.commands as { id: string }[]
+    expect(commands.length).toBeGreaterThan(0)
+    expect(commands.every((command) => command.id === 'codex')).toBe(true)
+  })
+
+  it('skips the relay when launch eligibility has no resolvable base', async () => {
+    const request = vi.fn()
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => false,
+      request
+    })
+
+    await expect(
+      detectRemoteAgentsIfReachable({ connectionId: 'ssh-1', baseAgents: [] })
+    ).resolves.toEqual([])
+    expect(request).not.toHaveBeenCalled()
   })
 
   it('returns no remote agents when the SSH connection is unavailable', async () => {

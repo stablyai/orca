@@ -102,6 +102,20 @@ describe('PR E2E gate contract', () => {
     expect(verifyStep.run).not.toContain('$E2E')
   })
 
+  it('blocks merges on the SSH custom-agent E2E lane', () => {
+    // Why unfiltered and required: it is the only live evidence that the host
+    // resolves and spawns a custom agent on a remote, and a launch-code change
+    // can break it without touching tests/e2e/**. Leaving it advisory let a
+    // broken suite reach a release, where full E2E only runs after publication.
+    const sshJob = prWorkflow.jobs.ssh_custom_agent_e2e
+    expect(sshJob.if).toBeUndefined()
+    expect(sshJob['continue-on-error']).toBeUndefined()
+    expect(sshJob.steps.find((step) => step.name === 'Run SSH custom-agent e2e').run).toContain(
+      'pnpm run test:e2e:ssh-custom-agent'
+    )
+    expect(prWorkflow.jobs.verify.needs).toContain('ssh_custom_agent_e2e')
+  })
+
   it('passes only changed specs to the reusable E2E workflow', () => {
     // Why: without this the job could lose its filter and run on every PR — the
     // cost the path filter exists to avoid — while the gate assertions above

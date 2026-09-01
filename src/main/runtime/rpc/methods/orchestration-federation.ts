@@ -17,6 +17,10 @@ import {
 } from './orchestration-federation-setup'
 import { FederationAttachStartParams } from './orchestration-federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './orchestration-federation-start-receipt'
+import {
+  describeWorkerAgentLaunchRejection,
+  workerCustomAgentLaunchRequest
+} from './orchestration-worker-agent-launch'
 import { prepareFederationAttachmentWorkerStart } from './orchestration-worker-start-validation'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -93,6 +97,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             stage: 'worktree_creating'
           })
           const setupDecision = params.setup ?? 'run'
+          const customAgentLaunch = workerCustomAgentLaunchRequest(agent as TuiAgent)
           const created = await runtime.createManagedWorktree({
             repoSelector: params.repo as string,
             name: params.name as string,
@@ -106,8 +111,12 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             awaitTerminalProvisioning: true,
             observeSetupCompletion: true,
             createdWithAgent: agent as TuiAgent,
-            startupAgent: agent as TuiAgent,
-            ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {}),
+            ...(customAgentLaunch
+              ? { agentLaunch: customAgentLaunch }
+              : {
+                  startupAgent: agent as TuiAgent,
+                  ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {})
+                }),
             activate: false,
             lineage: { noParent: true }
           })
@@ -127,6 +136,12 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             state: created.setupReceipt?.state ?? 'not_configured'
           }
           if (!terminalHandle) {
+            const launchResult = created.agentLaunchResult
+            if (launchResult && launchResult.status !== 'launched') {
+              throw new Error(
+                `Agent launcher ${agent} failed to start: ${describeWorkerAgentLaunchRejection(launchResult)}.`
+              )
+            }
             throw new Error(
               created.warning ?? 'Agent-first worktree creation returned no terminal.'
             )
@@ -174,20 +189,33 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             })
           } else {
             failedStage = 'terminal_create'
-            const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
-              // Why: agent ids are not shell commands (`cursor` is the desktop app,
-              // its CLI is `cursor-agent`); resolve through the TUI agent config.
-              startupAgent: agent as TuiAgent,
-              ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
-              title: `worker-${params.taskId}`,
-              presentation: 'background'
-            })
-            terminalHandle = terminal.handle
+            const customAgentLaunch = workerCustomAgentLaunchRequest(agent as TuiAgent)
+            const created = customAgentLaunch
+              ? await runtime.createTerminal(`id:${worktree.id}`, {
+                  agentLaunch: customAgentLaunch,
+                  title: `worker-${params.taskId}`,
+                  presentation: 'background'
+                })
+              : await runtime.createTerminal(`id:${worktree.id}`, {
+                  // Why: agent ids are not shell commands (`cursor` is the desktop app,
+                  // its CLI is `cursor-agent`); resolve through the TUI agent config.
+                  startupAgent: agent as TuiAgent,
+                  ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
+                  title: `worker-${params.taskId}`,
+                  presentation: 'background'
+                })
+            if (!('handle' in created)) {
+              throw new OrchestrationError(
+                'agent_unconfigured',
+                `Agent launcher ${agent} failed to start: ${describeWorkerAgentLaunchRejection(created.agentLaunch)}.`
+              )
+            }
+            terminalHandle = created.handle
             effects.push({
               kind: 'terminal',
               role: 'agent',
               action: 'created',
-              id: terminal.handle
+              id: created.handle
             })
           }
         }

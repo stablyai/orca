@@ -6,12 +6,9 @@ import {
   createWebRuntimeSessionTerminal,
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { Tab } from '../../../shared/tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
+import type { Tab, TuiAgent } from '../../../shared/types'
+import type { AgentLaunchSpawnRequest } from '../../../shared/agent-launch-spawn-request'
 import { translate } from '@/i18n/i18n'
-import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()
@@ -38,12 +35,13 @@ export function launchAgentInWebHostTab(args: {
   environmentId: string | null
   groupId?: string
   cwd?: string | null
-  startupPlan: AgentStartupPlan
-  prompt: string
-  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
-  pastePromptAfterReady: string | null
-  submitPastedPrompt: boolean
-  agentArgs?: string | null
+  hasPrompt: boolean
+  agentLaunch: AgentLaunchSpawnRequest
+  promptAfterReady?: {
+    content: string
+    submit: boolean
+    forcePaste: boolean
+  }
   viewMode?: Tab['viewMode']
   onPromptDelivered?: () => void
 }): Promise<{ delivered: boolean; failureNotified: boolean }> {
@@ -53,20 +51,15 @@ export function launchAgentInWebHostTab(args: {
     environmentId,
     groupId,
     cwd,
-    startupPlan,
-    prompt,
-    promptDelivery,
-    pastePromptAfterReady,
-    submitPastedPrompt,
-    agentArgs,
+    hasPrompt,
+    agentLaunch,
+    promptAfterReady,
     viewMode,
     onPromptDelivered
   } = args
-  const hasPrompt = prompt.length > 0
-  const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
-  const structuredPromptDelivery: AgentPromptDelivery =
-    promptDelivery === 'draft' ? 'draft' : 'auto-submit'
   removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+  // Why: the host resolves the launch from `agentLaunch` (identity + prompt
+  // policy only); the client never sends an assembled command/config/token.
   const launch = {
     worktreeId,
     environmentId,
@@ -74,25 +67,23 @@ export function launchAgentInWebHostTab(args: {
     activate: true,
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
-    agentSessionKind: 'fresh',
-    ...(hasPrompt
-      ? {
-          launchAgent: agent,
-          command: startupPlan.launchCommand,
-          ...(startupPlan.env ? { env: startupPlan.env } : {}),
-          launchConfig: startupPlan.launchConfig,
-          ...(startupPlan.startupCommandDelivery
-            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-            : {})
-        }
-      : { agent }),
-    ...(hasPrompt && pastePromptAfterReady === null ? { prompt } : {}),
-    ...(hasPrompt && pastePromptAfterReady === null
-      ? { promptDelivery: structuredPromptDelivery }
-      : {}),
-    ...(agentArgs !== undefined ? { agentArgs } : {}),
-    ...(launchPreferences ? { launchPreferences } : {})
-  } as const
+    agentLaunch
+  }
+  const creation = promptAfterReady
+    ? createWebRuntimeAgentSessionTerminal({
+        ...launch,
+        agent,
+        promptAfterReady: promptAfterReady.content,
+        submitPrompt: promptAfterReady.submit,
+        forcePromptPaste: promptAfterReady.forcePaste
+      })
+    : agentLaunch.promptDelivery === 'draft' && agentLaunch.prompt
+      ? createWebRuntimeAgentSessionTerminalWithLaunchDraft({
+          ...launch,
+          agent,
+          launchDraft: agentLaunch.prompt
+        })
+      : createWebRuntimeSessionTerminal(launch)
 
   const handleCreation = ({
     outcome,
@@ -122,25 +113,12 @@ export function launchAgentInWebHostTab(args: {
     return { delivered: promptDelivered, failureNotified: false }
   }
 
-  if (pastePromptAfterReady !== null) {
-    return createWebRuntimeAgentSessionTerminal({
-      ...launch,
-      agent,
-      promptAfterReady: pastePromptAfterReady,
-      submitPrompt: submitPastedPrompt,
-      forcePromptPaste: promptDelivery === 'submit-after-ready'
-    }).then(handleCreation)
-  }
-  if (hasPrompt && promptDelivery === 'draft') {
-    // Why: the draft rode in on the launch command, so no paste runs and
-    // nothing else seeds the chat-composer copy for this host class.
-    return createWebRuntimeAgentSessionTerminalWithLaunchDraft({
-      ...launch,
-      agent,
-      launchDraft: prompt
-    }).then((outcome) => handleCreation({ outcome, promptDelivered: outcome.status === 'created' }))
-  }
-  return createWebRuntimeSessionTerminal(launch).then((outcome) =>
-    handleCreation({ outcome, promptDelivered: outcome.status === 'created' && hasPrompt })
+  return creation.then((result) =>
+    'outcome' in result
+      ? handleCreation(result)
+      : handleCreation({
+          outcome: result,
+          promptDelivered: result.status === 'created' && hasPrompt
+        })
   )
 }

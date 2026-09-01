@@ -43,7 +43,6 @@ export function useSourceControlPanelFoundation() {
     sourceControlRef,
     sourceControlViewMode,
     updateRepo,
-    updateSettings,
     worktreeMap,
     worktreePath
   } = panelState
@@ -87,7 +86,6 @@ export function useSourceControlPanelFoundation() {
     commitMessage,
     commitError,
     pushRecoveryPrompt: listing.pushRecovery?.prompt ?? null,
-    updateSettings,
     updateRepo,
     openSettingsTarget,
     openSettingsPage

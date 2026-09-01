@@ -1,45 +1,13 @@
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import {
-  isLegacySharedCodexHome,
-  isPerAccountManagedCodexHome
+  aiVaultSessionNeedsResumePreparation,
+  applyAiVaultResumePreparation
 } from '../../../shared/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
-export async function prepareAiVaultSessionForResume(
-  session: AiVaultSession
-): Promise<AiVaultSession> {
-  if (!session.structuredSession && !aiVaultSessionNeedsResumePreparation(session)) {
-    return session
-  }
-  const result = await window.api.aiVault.prepareSessionResume({
-    agent: session.agent,
-    sessionId: session.sessionId,
-    filePath: session.filePath,
-    codexHome: session.codexHome,
-    executionHostId: session.executionHostId
-  })
-  if (result.useRealCodexHome) {
-    return { ...session, codexHome: null }
-  }
-  if (result.substituteCodexHome) {
-    return { ...session, codexHome: result.substituteCodexHome }
-  }
-  return session
+/** Renderer-side repin, kept for the legacy (pre-identity) arm that still builds
+ *  the command client-side. The host-owned arm repins on the host instead. */
+export function prepareAiVaultSessionForResume(session: AiVaultSession): Promise<AiVaultSession> {
+  return applyAiVaultResumePreparation(session, window.api.aiVault.prepareSessionResume)
 }
 
-export function aiVaultSessionNeedsResumePreparation(
-  session: Pick<AiVaultSession, 'agent' | 'codexHome' | 'executionHostId'>
-): boolean {
-  if (session.agent !== 'codex') {
-    return false
-  }
-  if (isLegacySharedCodexHome(session.codexHome)) {
-    return true
-  }
-  // Why: per-account repinning reads the LOCAL account selection, so only
-  // local sessions ask; remote sessions keep their recorded home untouched.
-  return (
-    isPerAccountManagedCodexHome(session.codexHome) &&
-    (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
-  )
-}
+export { aiVaultSessionNeedsResumePreparation }

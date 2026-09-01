@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES,
   AI_VAULT_SESSION_DRAG_TYPE,
+  buildAiVaultResumeEntryFromDragPayload,
   clearAiVaultSessionDragData,
   hasAiVaultSessionDragData,
   readAiVaultSessionDragData,
@@ -246,5 +247,62 @@ describe('Session History session drag data', () => {
 
     clearAiVaultSessionDragData()
     expect(readAiVaultSessionDragData(dropTransfer)).toBeNull()
+  })
+})
+
+describe('buildAiVaultResumeEntryFromDragPayload', () => {
+  it('echoes identity with filePath for the trusted desktop drop', () => {
+    const payload: AiVaultSessionDragPayload = {
+      agent: 'codex',
+      sessionId: 'session-2',
+      title: 'Resume me',
+      command: 'codex resume session-2',
+      sessionFilePath: '/repo/.codex/session-2.jsonl',
+      sessionExecutionHostId: 'ssh:box',
+      resumeLocator: 'a'.repeat(64)
+    }
+    expect(buildAiVaultResumeEntryFromDragPayload(payload)).toEqual({
+      executionHostId: 'ssh:box',
+      agent: 'codex',
+      sessionId: 'session-2',
+      resumeLocator: 'a'.repeat(64),
+      filePath: '/repo/.codex/session-2.jsonl'
+    })
+  })
+
+  it('rejects a malformed resume locator', () => {
+    const transfer = createTransfer()
+    writeAiVaultSessionDragData(transfer, {
+      agent: 'codex',
+      sessionId: 'session-2',
+      title: 'Resume me',
+      command: 'codex resume session-2',
+      sessionExecutionHostId: 'local',
+      resumeLocator: 'not-a-digest'
+    })
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('omits filePath when the payload has none', () => {
+    const entry = buildAiVaultResumeEntryFromDragPayload({
+      agent: 'claude',
+      sessionId: 's1',
+      title: 't',
+      command: 'c',
+      sessionExecutionHostId: 'local'
+    })
+    expect(entry).toEqual({ executionHostId: 'local', agent: 'claude', sessionId: 's1' })
+    expect(entry).not.toHaveProperty('filePath')
+  })
+
+  it('returns null when the executing host id is absent so the caller keeps the command', () => {
+    expect(
+      buildAiVaultResumeEntryFromDragPayload({
+        agent: 'claude',
+        sessionId: 's1',
+        title: 't',
+        command: 'c'
+      })
+    ).toBeNull()
   })
 })

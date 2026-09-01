@@ -8,6 +8,7 @@ import { executePtyIpcSpawn } from './spawn-execute'
 import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
+import { getHostAgentSessionRecordStore } from '../../../agent-launch/agent-session-record-store-host'
 
 function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
   if (!ctx.agentTeamsLeaderHandle) {
@@ -35,8 +36,12 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
   if (early) {
     return early
   }
+  // Any throw after admission must settle its token so failed pre-spawn work cannot consume capacity.
   try {
-    await preparePtyIpcSpawnPreflight(ctx)
+    const agentLaunchEarlyResult = await preparePtyIpcSpawnPreflight(ctx)
+    if (agentLaunchEarlyResult) {
+      return agentLaunchEarlyResult
+    }
     await assemblePtyIpcSpawnEnv(ctx)
     const earlyReserved = await buildPtyIpcSpawnOptions(ctx).catch((error: unknown) => {
       restoreProvisionalPtySize(ctx)
@@ -48,12 +53,17 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       // evict the team env assembly created for it — exit/close cleanup keys
       // off handleByPtyId — so every lost race would leak one team forever.
       releaseAbandonedAgentTeamsLeader(ctx)
+      ctx.settleAgentLaunch('failed')
       return earlyReserved
     }
     await executePtyIpcSpawn(ctx)
     return await commitPtyIpcSpawn(ctx)
   } catch (err) {
     releaseAbandonedAgentTeamsLeader(ctx)
+    ctx.settleAgentLaunch('failed')
+    if (ctx.agentLaunchToken && ctx.agentLaunchSettlement !== 'registered') {
+      getHostAgentSessionRecordStore().rollbackByToken(ctx.agentLaunchToken)
+    }
     if (ctx.preSpawnHiddenMarkId !== null) {
       ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
     }
@@ -75,5 +85,10 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
   } finally {
     ctx.releaseWorktreeSpawn?.()
     ctx.finishTerminalInstall()
+    rejectPaneSpawnReservation(
+      ctx.paneSpawnReservationKey,
+      ctx.paneSpawnReservation,
+      new Error('pane_spawn_abandoned')
+    )
   }
 }

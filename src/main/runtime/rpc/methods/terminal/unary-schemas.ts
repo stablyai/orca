@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../../schemas'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../../shared/feature-education-telemetry'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import { isBuiltInTuiAgent } from '../../../../../shared/tui-agent-config'
+import { AgentLaunchInputSchema } from '../agent-launch-spawn-schema'
 
 export const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
@@ -150,7 +151,8 @@ export const TerminalCreateParams = z.object({
     })
     .optional(),
   launchToken: OptionalString,
-  launchAgent: z.string().refine(isTuiAgent).optional(),
+  launchAgent: z.string().refine(isBuiltInTuiAgent).optional(),
+  agentLaunch: AgentLaunchInputSchema.optional(),
   terminalColorQueryReplies: z
     .object({
       foreground: z.string().max(128).optional(),

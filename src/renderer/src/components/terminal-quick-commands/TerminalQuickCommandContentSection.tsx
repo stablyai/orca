@@ -13,19 +13,20 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
-
-const QUICK_COMMAND_AGENT_OPTIONS = getTerminalQuickCommandAgentOptions()
 
 type TerminalQuickCommandContentSectionProps = {
   draft: TerminalQuickCommand
   isAgentAction: boolean
   selectedAgent: TuiAgent
+  // Why a prop, not a module constant: the list must include the caller's live
+  // catalog read so custom agents are selectable, not just the static built-ins.
+  agentOptions: readonly AgentCatalogEntry[]
   draftMemoryRef: MutableRefObject<TerminalQuickCommandDialogDraftMemory>
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
   toggleAppendEnter: () => void
@@ -35,6 +36,7 @@ export function TerminalQuickCommandContentSection({
   draft,
   isAgentAction,
   selectedAgent,
+  agentOptions,
   draftMemoryRef,
   setDraft,
   toggleAppendEnter
@@ -106,7 +108,7 @@ export function TerminalQuickCommandContentSection({
                 sideOffset={4}
                 className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-[--radix-select-trigger-width]"
               >
-                {QUICK_COMMAND_AGENT_OPTIONS.map((entry) => {
+                {agentOptions.map((entry) => {
                   const supported = supportsTerminalAgentQuickCommand(entry.id)
                   return (
                     <SelectItem key={entry.id} value={entry.id} disabled={!supported}>

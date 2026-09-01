@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentLabel, AgentIcon } from '@/lib/agent-catalog'
 import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,
@@ -75,7 +75,7 @@ export function getDefaultSourceControlTextGenerationSaveTargetKey(
 }
 
 function agentLabel(agentId: TuiAgent): string {
-  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
+  return getAgentLabel(agentId)
 }
 
 export function SourceControlTextGenerationDialogForm({
@@ -184,6 +184,13 @@ export function SourceControlTextGenerationDialogForm({
           toast.success(saveTarget.successMessage)
         }
         return true
+      } catch (error) {
+        // A durable-write rejection carries user-facing copy; without this it
+        // escapes the `void` call site as an unhandled rejection.
+        if (options.showErrors) {
+          setGenerationError(error instanceof Error ? error.message : String(error))
+        }
+        return false
       } finally {
         setSavingTargetKey(null)
       }

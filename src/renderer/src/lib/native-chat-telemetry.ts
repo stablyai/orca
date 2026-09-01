@@ -7,9 +7,10 @@
 // `track(...)`-name pairing here keeps both call sites in lockstep and gives
 // the composer a single import (`emitNativeChatMessageSent`) to call.
 
-import { track, tuiAgentToAgentKind } from './telemetry'
-import type { NativeChatRuntime } from '../../../shared/telemetry-events'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { track } from './telemetry'
+import { resolveTelemetryAgentKind } from './telemetry-agent-kind'
+import type { AgentKind, NativeChatRuntime } from '../../../shared/telemetry-events'
+import type { TuiAgent } from '../../../shared/types'
 
 /** Loose agent type accepted by these emitters: the strict launch `TuiAgent`, or
  *  the broader `AgentType` string carried by the chat view. Narrowing to the
@@ -21,10 +22,11 @@ export type NativeChatTelemetryAgent = TuiAgent | (string & {}) | null | undefin
 // agents) and the chat view's `AgentType` may carry a string outside the
 // `TuiAgent` union. When absent or unknown we fall back to `'other'` so the
 // closed `agent_kind` enum still validates instead of dropping the event.
-function resolveAgentKind(agent: NativeChatTelemetryAgent): ReturnType<typeof tuiAgentToAgentKind> {
-  // tuiAgentToAgentKind does a keyed lookup with an `'other'` fallback, so any
-  // string narrows safely; the cast only satisfies its TuiAgent parameter type.
-  return agent ? tuiAgentToAgentKind(agent as TuiAgent) : 'other'
+function resolveAgentKind(agent: NativeChatTelemetryAgent): AgentKind {
+  // resolveTelemetryAgentKind resolves a custom id's base through the live
+  // catalog and falls back to `'other'`, so any broad string narrows safely;
+  // the cast only satisfies its TuiAgent parameter type.
+  return agent ? resolveTelemetryAgentKind(agent as TuiAgent) : 'other'
 }
 
 /** Fire `native_chat_toggled` when a tab flips between terminal and chat. */

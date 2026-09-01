@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/tui-agent-selection'
+import type { CustomTuiAgentId } from '../../../shared/types'
 import { AGENT_CATALOG } from './agent-catalog'
 import {
   pickQuickWorkspaceAgent,
@@ -30,16 +31,23 @@ describe('pickQuickWorkspaceAgent', () => {
     expect(pickQuickWorkspaceAgent(null, ['codex'], ['claude'])).toBe('codex')
     expect(pickQuickWorkspaceAgent('codex', ['claude', 'codex'], ['codex'])).toBe('claude')
   })
+
+  it('uses a selectable custom agent when it is the saved preference', () => {
+    const customCodex =
+      'custom-agent:codex:11111111-1111-4111-8111-111111111111' as CustomTuiAgentId
+    expect(pickQuickWorkspaceAgent(customCodex, ['claude', customCodex], [])).toBe(customCodex)
+  })
 })
 
 describe('resolveQuickWorkspaceAgentSelection', () => {
+  const customCodex = 'custom-agent:codex:11111111-1111-4111-8111-111111111111' as CustomTuiAgentId
+
   it('uses the preferred quick agent until the user picks an override', () => {
     expect(
       resolveQuickWorkspaceAgentSelection({
         quickAgentOverride: undefined,
         preferredQuickAgent: 'claude',
-        detectedAgentIds: ['claude', 'codex'],
-        disabledTuiAgents: []
+        selectableAgentIds: ['claude', 'codex']
       })
     ).toEqual({ quickAgent: 'claude', quickAgentOverride: undefined })
   })
@@ -49,8 +57,7 @@ describe('resolveQuickWorkspaceAgentSelection', () => {
       resolveQuickWorkspaceAgentSelection({
         quickAgentOverride: null,
         preferredQuickAgent: 'claude',
-        detectedAgentIds: ['claude'],
-        disabledTuiAgents: []
+        selectableAgentIds: ['claude']
       })
     ).toEqual({ quickAgent: null, quickAgentOverride: null })
   })
@@ -60,10 +67,29 @@ describe('resolveQuickWorkspaceAgentSelection', () => {
       resolveQuickWorkspaceAgentSelection({
         quickAgentOverride: 'codex',
         preferredQuickAgent: 'claude',
-        detectedAgentIds: new Set(['claude', 'codex']),
-        disabledTuiAgents: []
+        selectableAgentIds: new Set(['claude', 'codex'])
       })
     ).toEqual({ quickAgent: 'codex', quickAgentOverride: 'codex' })
+  })
+
+  it('keeps a custom override present in the picker option set', () => {
+    expect(
+      resolveQuickWorkspaceAgentSelection({
+        quickAgentOverride: customCodex,
+        preferredQuickAgent: 'claude',
+        selectableAgentIds: new Set(['claude', customCodex])
+      })
+    ).toEqual({ quickAgent: customCodex, quickAgentOverride: customCodex })
+  })
+
+  it('replaces a custom override removed from the picker option set', () => {
+    expect(
+      resolveQuickWorkspaceAgentSelection({
+        quickAgentOverride: customCodex,
+        preferredQuickAgent: 'claude',
+        selectableAgentIds: new Set(['claude', 'codex'])
+      })
+    ).toEqual({ quickAgent: 'claude', quickAgentOverride: 'claude' })
   })
 
   it('replaces an unavailable override with the preferred quick agent', () => {
@@ -71,8 +97,7 @@ describe('resolveQuickWorkspaceAgentSelection', () => {
       resolveQuickWorkspaceAgentSelection({
         quickAgentOverride: 'codex',
         preferredQuickAgent: 'claude',
-        detectedAgentIds: ['claude'],
-        disabledTuiAgents: []
+        selectableAgentIds: ['claude']
       })
     ).toEqual({ quickAgent: 'claude', quickAgentOverride: 'claude' })
   })

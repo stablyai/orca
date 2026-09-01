@@ -11,12 +11,8 @@ type FullSubmitPreparationInput = Pick<
   | 'prepareFullSubmitSource'
   | 'repoId'
   | 'resolvedSetupDecision'
-  | 'selectedRepo'
-  | 'selectedRepoAgentLaunchPlatform'
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoIsGit'
-  | 'selectedRepoIsRemote'
-  | 'selectedRepoStartupShell'
   | 'settings'
   | 'smartNameMode'
   | 'telemetrySource'
@@ -29,15 +25,8 @@ import { ensureHooksConfirmed, confirmRuntimeIssueCommandRead } from '@/lib/ensu
 import { useAppStore } from '@/store'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
-import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import type { AgentLaunchSpawnRequest } from '../../../../shared/agent-launch-spawn-request'
+import type { StartupLaunchTelemetry } from '@/lib/worktree-activation'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
 export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
@@ -51,12 +40,8 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
     prepareFullSubmitSource,
     repoId,
     resolvedSetupDecision,
-    selectedRepo,
-    selectedRepoAgentLaunchPlatform,
     selectedRepoExecutionHostId,
     selectedRepoIsGit,
-    selectedRepoIsRemote,
-    selectedRepoStartupShell,
     settings,
     smartNameMode,
     telemetrySource,
@@ -178,53 +163,15 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
         !effectiveBranchNameOverride &&
         !createDisplayName
 
-      const startupPlan = buildAgentStartupPlan({
-        agent: tuiAgent,
-        prompt: submitStartupPrompt,
-        cmdOverrides: settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
-        sessionOptions: resolveInitialNativeChatSessionOptions(
-          {
-            experimentalNativeChat: settings?.experimentalNativeChat,
-            openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
-            nativeChatSessionOptions: settings?.nativeChatSessionOptions
-          },
-          {
-            agent: tuiAgent,
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              selectedRepo?.connectionId
-            )
-          }
-        ),
-        platform: selectedRepoAgentLaunchPlatform,
-        shell: selectedRepoStartupShell,
-        isRemote: selectedRepoIsRemote
-      })
-
-      const shouldSeedInitialAgentStatus =
-        tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
-
-      // Why: backend startup is safe only for self-contained launch commands; agents needing post-ready paste stay on the renderer path.
-      const composerTelemetry: AgentStartedTelemetry = {
-        agent_kind: tuiAgentToAgentKind(tuiAgent),
-        launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
-        request_kind: 'new'
+      const agentLaunch: AgentLaunchSpawnRequest = {
+        selection: { kind: 'agent', agent: tuiAgent },
+        ...(submitStartupPrompt.trim() ? { prompt: submitStartupPrompt } : {}),
+        allowEmptyPromptLaunch: true
       }
-
-      const backendStartup =
-        startupPlan && !startupPlan.draftPrompt && !startupPlan.followupPrompt
-          ? {
-              command: startupPlan.launchCommand,
-              ...(startupPlan.env ? { env: startupPlan.env } : {}),
-              launchConfig: startupPlan.launchConfig,
-              launchAgent: tuiAgent,
-              ...(startupPlan.startupCommandDelivery
-                ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-                : {}),
-              telemetry: composerTelemetry
-            }
-          : undefined
+      const agentLaunchTelemetry: StartupLaunchTelemetry = {
+        launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
+        request_kind: 'new' as const
+      }
 
       return Object.assign(source, {
         effectiveSetupDecision,
@@ -236,10 +183,8 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
         effectiveBranchNameOverride,
         createDisplayName,
         pendingFirstAgentMessageRename,
-        startupPlan,
-        shouldSeedInitialAgentStatus,
-        composerTelemetry,
-        backendStartup
+        agentLaunch,
+        agentLaunchTelemetry
       })
     },
     [
@@ -251,12 +196,8 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
       prepareFullSubmitSource,
       repoId,
       resolvedSetupDecision,
-      selectedRepo,
-      selectedRepoAgentLaunchPlatform,
       selectedRepoExecutionHostId,
       selectedRepoIsGit,
-      selectedRepoIsRemote,
-      selectedRepoStartupShell,
       settings,
       smartNameMode,
       telemetrySource,

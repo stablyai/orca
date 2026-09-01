@@ -1,5 +1,6 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { isCustomAgentId } from '../../../shared/commit-message-agent-spec'
+import { isDetectedAgentAvailable } from '@/lib/detected-agent-availability'
 import {
   normalizeRepoSourceControlAiOverrides,
   resolveSourceControlActionRecipe
@@ -8,10 +9,8 @@ import type {
   SourceControlActionId,
   SourceControlActionRecipe
 } from '../../../shared/source-control-ai-actions'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { filterEnabledTuiAgents, toLegacyAutoPreference } from '../../../shared/tui-agent-selection'
+import type { GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
 
 export function readSourceControlLaunchRecipeAgentId(
   recipe: Pick<SourceControlActionRecipe, 'agentId'> | null | undefined
@@ -27,13 +26,16 @@ export function pickSourceControlLaunchAgent(args: {
   disabledAgents?: TuiAgent[]
 }): TuiAgent | null {
   const enabledAgents = filterEnabledTuiAgents(args.detectedAgents, args.disabledAgents)
-  if (args.savedAgent && enabledAgents.includes(args.savedAgent)) {
+  if (
+    args.savedAgent &&
+    isDetectedAgentAvailable(args.savedAgent, args.detectedAgents, args.disabledAgents)
+  ) {
     return args.savedAgent
   }
   if (
     args.defaultAgent &&
     args.defaultAgent !== 'blank' &&
-    enabledAgents.includes(args.defaultAgent)
+    isDetectedAgentAvailable(args.defaultAgent, args.detectedAgents, args.disabledAgents)
   ) {
     return args.defaultAgent
   }
@@ -76,7 +78,8 @@ export function resolveSourceControlLaunchAgentScope(input: {
   )
   // Why: the note compares against what would run with no override, so fall back
   // to the global default agent when no global recipe agent is set.
-  const defaultTuiAgent = input.settings?.defaultTuiAgent
+  // 'auto' (migrated legacy null) pins no fixed agent, so it falls through to null.
+  const defaultTuiAgent = toLegacyAutoPreference(input.settings?.defaultTuiAgent)
   const globalAgentId =
     globalRecipeAgentId ?? (defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null)
   const hasRepoAgentOverride =

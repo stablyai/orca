@@ -238,17 +238,33 @@ export async function refreshShellPathAndDetectAgents(
   }
 }
 
-export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
+/** Detection for callers that gate on absence. `null` means the relay was
+ * unavailable and provides no evidence that the host lacks an agent. */
+export async function detectRemoteAgentsIfReachable(args: {
+  connectionId: string
+  /** Omitted for full catalog discovery; present for launch eligibility. */
+  baseAgents?: readonly string[]
+}): Promise<string[] | null> {
   const mux = getActiveMultiplexer(args.connectionId)
   if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
+    return null
+  }
+  const commands = args.baseAgents
+    ? KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) => args.baseAgents?.includes(command.id))
+    : KNOWN_TUI_AGENT_DETECTION_COMMANDS
+  if (commands.length === 0) {
     return []
   }
   const result = (await mux.request('preflight.detectAgents', {
-    commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
+    commands
   })) as { agents: string[] }
   return uniqueAgentIds(result.agents)
+}
+
+export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
+  // Why: remote agent detection is passive UI polling. A disconnected host has
+  // no detectable agents until reconnect, but should not spam IPC errors.
+  return (await detectRemoteAgentsIfReachable(args)) ?? []
 }
 
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {

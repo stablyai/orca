@@ -5,7 +5,9 @@ import type { TuiAgent } from '../tui-agent'
 import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
 import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
-import type { WorktreeIdentity } from './identity'
+import type { PersistedAgentLaunchFailure } from '../agent-launch-contract'
+import type { BackgroundAgentLaunchAttempt } from '../background-agent-launch'
+import type { PendingAgentLaunch } from './meta-types'
 
 export type WorkspaceLinkedItem = {
   provider: 'github' | 'gitlab' | 'linear' | 'jira'
@@ -61,8 +63,6 @@ export type WorkspaceStatusDefinition = {
 export type Worktree = {
   id: string // `${repoId}::${path}`
   instanceId?: string
-  /** Immutable host/instance identity. Optional while legacy rows migrate. */
-  identity?: WorktreeIdentity
   repoId: string
   /** Durable project identity. Optional while legacy repo-only workspaces migrate. */
   projectId?: string
@@ -77,13 +77,9 @@ export type Worktree = {
   /** Checkout ownership for a recipe-provisioned main workspace. */
   ephemeralVmCheckoutMode?: EphemeralVmCheckoutMode
   displayName: string
-  /** Projection of persisted display-name provenance. */
-  displayNameMode?: 'fixed' | 'automatic'
   comment: string
   linkedIssue: number | null
   linkedPR: number | null
-  /** GitHub PR hidden from branch discovery after an explicit unlink. */
-  suppressedGitHubPR?: number | null
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -141,6 +137,9 @@ export type Worktree = {
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
+  pendingAgentLaunch?: PendingAgentLaunch
+  agentLaunchFailure?: PersistedAgentLaunchFailure
+  backgroundAgentLaunches?: BackgroundAgentLaunchAttempt[]
 } & GitWorktreeInfo
 
 /** Provenance for workspaces created through `orca worktree create`. Absent on

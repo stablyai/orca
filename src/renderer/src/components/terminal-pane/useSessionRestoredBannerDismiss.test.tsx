@@ -23,7 +23,10 @@ async function renderProbe(visible: boolean, dismiss = vi.fn()): Promise<HTMLDiv
     root.render(<Probe visible={visible} dismiss={dismiss} />)
   })
 
-  return container.querySelector('[data-testid="pane"]')!
+  // Pin the querySelector element type: contextual inference of the
+  // `querySelector<E extends Element = Element>` overload can bail to the
+  // `Element` default under heavier type-graph load, breaking the HTMLDivElement return.
+  return container.querySelector<HTMLDivElement>('[data-testid="pane"]')!
 }
 
 describe('useSessionRestoredBannerDismiss', () => {

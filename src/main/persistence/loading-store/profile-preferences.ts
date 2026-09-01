@@ -1,6 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { AgentCatalogSchemaTooNew } from '../../../shared/data-recovery'
 import { getDefaultOnboardingState } from '../../../shared/constants'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import {
@@ -17,17 +19,24 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { migrateAgentCatalogSchema } from '../../../shared/agent-catalog-schema-migration'
+import { createPinnedPreV1Backup } from '../../agent-launch/agent-catalog-pre-v1-backup'
 
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
+  | 'agentCatalogMigrationError'
+  | 'agentCatalogSchemaTooNew'
+  | 'dataFile'
+  | 'preV1RawContentsAwaitingBackup'
   | 'githubCacheDirty'
   | 'githubCacheGeneration'
   | 'protectedSecrets'
   | 'settingsChangeListeners'
   | 'state'
   | 'uiChangeListeners'
+  | 'writesFrozen'
+  | 'flushOrThrow'
 >
 
 const profilePreferencesContext = Symbol('ProfilePreferences')
@@ -45,6 +54,54 @@ export class ProfilePreferences {
 
   getSettings(): GlobalSettings {
     return this[profilePreferencesContext].runtime.state.settings
+  }
+
+  getAgentCatalogMigrationError(): string | null {
+    return this[profilePreferencesContext].runtime.agentCatalogMigrationError
+  }
+
+  getAgentCatalogSchemaTooNew(): AgentCatalogSchemaTooNew | null {
+    return this[profilePreferencesContext].runtime.agentCatalogSchemaTooNew
+  }
+
+  retryAgentCatalogMigration(): { ok: true } | { ok: false; error: string } {
+    const runtime = this[profilePreferencesContext].runtime
+    if (runtime.agentCatalogMigrationError === null) {
+      return { ok: true }
+    }
+    let raw: string | null = runtime.preV1RawContentsAwaitingBackup
+    if (raw === null) {
+      try {
+        raw = existsSync(runtime.dataFile) ? readFileSync(runtime.dataFile, 'utf-8') : null
+      } catch (error) {
+        const message = `Could not read the data file: ${error instanceof Error ? error.message : String(error)}`
+        runtime.agentCatalogMigrationError = message
+        return { ok: false, error: message }
+      }
+    }
+    const migration = migrateAgentCatalogSchema({
+      settings: runtime.state.settings,
+      preV1RawContents: raw,
+      createBackup: () => createPinnedPreV1Backup(runtime.dataFile, raw ?? '')
+    })
+    if (migration.schemaNewerThanSupported) {
+      runtime.agentCatalogSchemaTooNew = migration.schemaNewerThanSupported
+      runtime.writesFrozen = true
+      runtime.agentCatalogMigrationError = null
+      runtime.preV1RawContentsAwaitingBackup = null
+      return {
+        ok: false,
+        error: 'Agent catalog schema is newer than this build supports; profile is read-only'
+      }
+    }
+    if (migration.backupError) {
+      runtime.agentCatalogMigrationError = migration.backupError
+      return { ok: false, error: migration.backupError }
+    }
+    runtime.preV1RawContentsAwaitingBackup = null
+    runtime.agentCatalogMigrationError = null
+    this.updateSettings(migration.settingsPatch)
+    return { ok: true }
   }
 
   onSettingsChanged(
@@ -72,6 +129,50 @@ export class ProfilePreferences {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     return updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
+  }
+
+  previewSettingsUpdate(updates: Partial<GlobalSettings>): GlobalSettings {
+    const previewState = {
+      ...this[profilePreferencesContext].runtime.state,
+      settings: { ...this[profilePreferencesContext].runtime.state.settings }
+    }
+    return updateSettingsOperation(
+      {
+        state: previewState,
+        removeRetainedBlob: () => {},
+        scheduleSave: () => {},
+        notifySettingsChanged: () => {}
+      },
+      updates
+    )
+  }
+
+  updateSettingsDurable(
+    updates: Partial<GlobalSettings>,
+    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+  ): GlobalSettings {
+    const runtime = this[profilePreferencesContext].runtime
+    if (runtime.agentCatalogSchemaTooNew) {
+      throw new Error(
+        'Agent catalog schema is newer than this build supports; profile is read-only'
+      )
+    }
+    if (runtime.writesFrozen) {
+      throw new Error('Cannot durably persist settings while writes are frozen')
+    }
+    const previousSettings = runtime.state.settings
+    const settings = this.updateSettings(updates, { notifyListeners: false })
+    try {
+      runtime.flushOrThrow()
+    } catch (error) {
+      runtime.state.settings = previousSettings
+      scheduleSave(this[profilePreferencesContext].scheduling)
+      throw error
+    }
+    if (options.notifyListeners === true) {
+      notifySettingsChanged(this, updates, options.originWebContentsId)
+    }
+    return settings
   }
 
   getUI(): PersistedState['ui'] {
@@ -156,7 +257,6 @@ export function getSettingsMutationOperations(
 ): SettingsMutationOperations {
   return {
     state: owner[profilePreferencesContext].runtime.state,
-    bumpLocalWorktreeScanGeneration,
     removeRetainedBlob: (slot) =>
       owner[profilePreferencesContext].runtime.protectedSecrets.removeRetainedBlob(slot),
     scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),

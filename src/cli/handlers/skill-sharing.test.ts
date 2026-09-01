@@ -78,7 +78,7 @@ describe('skill sharing CLI handlers', () => {
         )
       )
     ).rejects.toMatchObject({ code: 'agent_skill_sharing_disabled' })
-    expect(call).toHaveBeenCalledExactlyOnceWith('settings.get')
+    expect(call).toHaveBeenCalledExactlyOnceWith('settings.get', { includeAgentCatalog: false })
   })
 
   it('publishes multiple explicit skills and prints only public output', async () => {

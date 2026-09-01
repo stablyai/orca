@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, MessageSquarePlus } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,9 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
-import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog'
+import { buildWorkspaceAgentOptions } from '@/lib/workspace-agent-options'
+import { useLocalAgentCatalog } from '@/hooks/useLocalAgentCatalog'
 import {
   buildAgentSessionContinuationPrompt,
   hasFullAgentSessionContext,
@@ -57,12 +59,20 @@ export function AgentSessionContinuationDialog({
   const [showStarting, setShowStarting] = useState(false)
   const disabledAgents = settings?.disabledTuiAgents ?? EMPTY_DISABLED_AGENTS
 
+  // Custom agents are launchable continuations too, and they never appear in base
+  // detection — the shared workspace options own that gate.
+  const { snapshot: localAgentCatalog } = useLocalAgentCatalog({ enabled: open })
+  // Read-through ref: the detection effect must not re-run when the snapshot lands.
+  const localAgentCatalogRef = useRef(localAgentCatalog)
+  localAgentCatalogRef.current = localAgentCatalog
   const agents = useMemo(
     () =>
-      getAgentCatalog().filter(
-        (agent) => detectedAgents.includes(agent.id) && isTuiAgentEnabled(agent.id, disabledAgents)
-      ),
-    [detectedAgents, disabledAgents]
+      buildWorkspaceAgentOptions({
+        detectedAgentIds: new Set(detectedAgents),
+        disabledTuiAgents: disabledAgents,
+        localAgentCatalog
+      }),
+    [detectedAgents, disabledAgents, localAgentCatalog]
   )
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
 
@@ -85,7 +95,20 @@ export function AgentSessionContinuationDialog({
         setDetectedAgents(enabled)
         setSelectedAgent(
           chooseInitialContinuationAgent({
-            availableAgents: enabled,
+            // Detected built-ins keep their detection order and their place at the
+            // head, so the no-match fallback still picks what it always did;
+            // customs only extend the list, letting a custom-agent session
+            // continue as that same custom instead of its base harness.
+            availableAgents: [
+              ...enabled,
+              ...buildWorkspaceAgentOptions({
+                detectedAgentIds: new Set(enabled),
+                disabledTuiAgents: disabledAgents,
+                localAgentCatalog: localAgentCatalogRef.current
+              })
+                .map((entry) => entry.id)
+                .filter((id) => !enabled.includes(id))
+            ],
             sourceAgent: request.source.sourceAgent,
             defaultAgent: settings?.defaultTuiAgent
           })

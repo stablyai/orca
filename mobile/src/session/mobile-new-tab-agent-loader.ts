@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type { AgentCatalogValue } from '../transport/agent-catalog-sync'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 import {
@@ -16,14 +17,16 @@ type RuntimeRepoSummary = {
 export async function loadMobileNewTabAgentOptions(args: {
   client: RpcClient
   worktreeId: string
+  catalogSnapshot?: AgentCatalogValue | null
 }): Promise<MobileNewTabAgentOption[]> {
-  const { client, worktreeId } = args
+  const { client, worktreeId, catalogSnapshot = null } = args
   // Why: the floating workspace runs on the paired host, so it has no repo connection to resolve.
   const detectedAgentsRequest = isFloatingWorkspaceWorktreeId(worktreeId)
     ? client.sendRequest('preflight.detectAgents')
     : loadWorkspaceDetectedAgents(client, worktreeId)
   const [settingsResponse, detectedResponse] = await Promise.all([
-    client.sendRequest('settings.get'),
+    // Only `settings` is read here; opt out of the piggybacked agent catalog (old hosts ignore the param).
+    client.sendRequest('settings.get', { includeAgentCatalog: false }),
     detectedAgentsRequest
   ])
   if (!settingsResponse.ok) {
@@ -39,7 +42,8 @@ export async function loadMobileNewTabAgentOptions(args: {
   ).settings
   return buildMobileNewTabAgentOptions(
     settings,
-    (detectedResponse as RpcSuccess).result as unknown[]
+    (detectedResponse as RpcSuccess).result as unknown[],
+    catalogSnapshot
   )
 }
 

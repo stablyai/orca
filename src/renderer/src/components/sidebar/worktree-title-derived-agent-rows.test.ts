@@ -110,6 +110,40 @@ describe('buildTitleDerivedAgentRows', () => {
     ])
   })
 
+  it('re-owns title-derived rows naming the base harness to the custom launch identity', () => {
+    const customClaudeId = 'custom-agent:claude:11111111-1111-4111-8111-111111111111' as const
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: customClaudeId })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '✳ Claude Code' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-custom'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([[customClaudeId, 'idle']])
+  })
+
+  it('keeps a foreign harness title over the custom launch identity', () => {
+    const customClaudeId = 'custom-agent:claude:11111111-1111-4111-8111-111111111111' as const
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: customClaudeId })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Codex' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-custom'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.agentType)).toEqual(['codex'])
+  })
+
   it('does not add title-derived rows for panes without a live PTY', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],

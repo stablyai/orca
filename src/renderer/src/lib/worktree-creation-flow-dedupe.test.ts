@@ -60,7 +60,6 @@ function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): Worktree
     agent: null,
     pendingFirstAgentMessageRename: false,
     note: '',
-    startupPlan: null,
     quickPrompt: '',
     quickTelemetry: null,
     ...overrides

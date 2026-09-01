@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   haveSameDisabledTuiAgents,
   normalizeDisabledTuiAgents,
-  pickTuiAgent
+  pickTuiAgent,
+  toLegacyAutoPreference
 } from './tui-agent-selection'
 
 describe('pickTuiAgent', () => {
@@ -23,6 +24,27 @@ describe('pickTuiAgent', () => {
   it('ignores disabled preferred and fallback agents', () => {
     expect(pickTuiAgent('codex', ['claude', 'codex'], ['codex'])).toBe('claude')
     expect(pickTuiAgent(null, ['claude', 'codex'], ['claude', 'codex'])).toBeNull()
+  })
+})
+
+describe('toLegacyAutoPreference', () => {
+  it('maps the migrated Auto spellings to the legacy Auto null', () => {
+    expect(toLegacyAutoPreference('auto')).toBeNull()
+    expect(toLegacyAutoPreference(undefined)).toBeNull()
+  })
+
+  it('passes concrete and blank preferences through unchanged', () => {
+    expect(toLegacyAutoPreference('codex')).toBe('codex')
+    expect(toLegacyAutoPreference('blank')).toBe('blank')
+  })
+
+  it('does not let a repaired/cleared null default fall back to Auto', () => {
+    // Deleting the default with `clear`, or disabling a base that the default
+    // derived from, stores null. Auto would launch whatever is installed.
+    expect(toLegacyAutoPreference(null)).toBe('blank')
+    expect(pickTuiAgent(toLegacyAutoPreference(null), ['claude', 'codex'])).toBeNull()
+    // Auto still auto-picks.
+    expect(pickTuiAgent(toLegacyAutoPreference('auto'), ['claude', 'codex'])).toBe('claude')
   })
 })
 

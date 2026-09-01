@@ -89,7 +89,7 @@ function isSafeRecordKey(key: string): boolean {
   return key !== '' && key !== '__proto__' && key !== 'constructor' && key !== 'prototype'
 }
 
-function isSourceControlActionId(value: string): value is SourceControlActionId {
+export function isSourceControlActionId(value: string): value is SourceControlActionId {
   return ACTION_ID_SET.has(value)
 }
 

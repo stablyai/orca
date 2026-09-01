@@ -172,7 +172,9 @@ describe('registerPtyHandlers', () => {
       baseEnv: expect.objectContaining({
         CLAUDE_PROFILE: 'captured',
         ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale'
-      })
+      }),
+      // Teammate panes inherit the custom-agent env with the stale team ids/tokens stripped.
+      childEnv: { CLAUDE_PROFILE: 'captured' }
     })
     expect(spawnOptions.env).toMatchObject({
       CLAUDE_PROFILE: 'captured',
@@ -185,13 +187,9 @@ describe('registerPtyHandlers', () => {
     })
     expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/fresh-agent-teams')
     expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
-    expect(result.launchConfig?.agentEnv).toMatchObject({
-      CLAUDE_PROFILE: 'captured',
-      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-      ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh',
-      ORCA_AGENT_TEAMS_TOKEN: 'fresh-token',
-      TMUX: '/tmp/orca-claude-agent-teams/team-fresh,0,1'
-    })
+    // Team ids/tokens are minted per launch, so the echoed (durable) config keeps only the
+    // custom-agent env; the fresh team env reaches the leader via spawn env and teammates via childEnv.
+    expect(result.launchConfig?.agentEnv).toEqual({ CLAUDE_PROFILE: 'captured' })
     expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
       expect.any(String),
       'term_agent_teams'
@@ -413,7 +411,8 @@ describe('registerPtyHandlers', () => {
 
     expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith({
       handle: 'term_agent_teams',
-      baseEnv: expect.any(Object)
+      baseEnv: expect.any(Object),
+      childEnv: {}
     })
   })
   it('restores daemon launch identity without minting renderer authority on reattach', async () => {

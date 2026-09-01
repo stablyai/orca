@@ -1,4 +1,5 @@
-import { describe, expect, it, test, vi } from 'vitest'
+import { afterEach, describe, expect, it, test, vi } from 'vitest'
+import { registerAgentCatalogSettingsSource } from './agent-catalog-settings-source'
 import {
   detectAgentStatusFromTitle,
   clearWorkingIndicators,
@@ -11,6 +12,7 @@ import {
   isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
   formatAgentTypeLabel,
+  agentKindForAgentType,
   agentTypeToIconAgent
 } from './agent-status'
 import { extractLastOscTitle } from '../components/terminal-pane/pty-transport'
@@ -901,5 +903,56 @@ describe('agentTypeToIconAgent', () => {
   it('returns null for arbitrary non-iconable strings', () => {
     // Why: unknown agentTypes must return null so the caller falls back to a neutral glyph, not a broken icon.
     expect(agentTypeToIconAgent('totally-fake-agent')).toBeNull()
+  })
+})
+
+describe('custom agent ids resolve through the catalog', () => {
+  const customId = 'custom-agent:claude:11111111-1111-4111-8111-111111111111'
+  const deletedId = 'custom-agent:codex:22222222-2222-4222-8222-222222222222'
+
+  afterEach(() => {
+    registerAgentCatalogSettingsSource(() => null)
+  })
+
+  const registerCatalog = (): void => {
+    registerAgentCatalogSettingsSource(() => ({
+      customTuiAgents: [
+        {
+          id: customId,
+          baseAgent: 'claude',
+          label: 'Reviewer',
+          args: '',
+          env: {},
+          syncEnv: false
+        }
+      ],
+      deletedCustomTuiAgents: [
+        { id: deletedId, baseAgent: 'codex', label: 'Retired', deletedAt: 1 }
+      ]
+    }))
+  }
+
+  it('renders the base harness icon for a live custom agent', () => {
+    registerCatalog()
+    expect(agentTypeToIconAgent(customId)).toBe('claude')
+    expect(agentTypeToIconAgent(deletedId)).toBe('codex')
+  })
+
+  it('stamps the base agent_kind instead of collapsing to other', () => {
+    registerCatalog()
+    expect(agentKindForAgentType(customId)).toBe('claude-code')
+    expect(agentKindForAgentType(deletedId)).toBe('codex')
+  })
+
+  it('labels a custom agent with its own name, never the raw id', () => {
+    registerCatalog()
+    expect(formatAgentTypeLabel(customId)).toBe('Reviewer')
+    expect(formatAgentTypeLabel(deletedId)).toBe('Retired')
+  })
+
+  it('treats an uncatalogued custom id as unknown rather than printing it', () => {
+    expect(agentTypeToIconAgent(customId)).toBeNull()
+    expect(agentKindForAgentType(customId)).toBe('other')
+    expect(formatAgentTypeLabel(customId)).toBe('Agent')
   })
 })

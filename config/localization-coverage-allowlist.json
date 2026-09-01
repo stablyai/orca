@@ -82,5 +82,29 @@
     "text": "ghostty",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/resume-sleeping-agent-session-test-fixtures.ts",
+    "kind": "object-property:title",
+    "text": "shell",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Test-only fixture builder for a terminal-tab shape; 'shell' is fixed test data, not a user-facing string."
+  },
+  {
+    "filePath": "src/renderer/src/components/tab-bar/TerminalTabLeadingIcon.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Unread agent completion",
+    "dynamic": false,
+    "count": 1,
+    "reason": "aria-label shipped untranslated on main (#8142, agent status in terminal tabs); mirrors main's coverage posture — localize in a dedicated i18n pass, not this rebase."
+  },
+  {
+    "filePath": "src/renderer/src/components/data-recovery/DataRecoveryPinExitCustomAgentExample.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Codex",
+    "dynamic": false,
+    "count": 1,
+    "reason": "'Codex' is the agent product name in a static aria-hidden picker mock; brand names are never localized."
   }
 ]

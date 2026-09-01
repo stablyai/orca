@@ -1,15 +1,12 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { PersistedLaunchNoticeState } from '../../../src/shared/agent-launch-contract'
 
 export type TerminalRecord = {
   handle: string
   title: string
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
-  /** From `terminal.list`; parked and proven-absent leaves report false. */
-  connected?: boolean
-  /** From `terminal.list`; a live PTY with no leaf, so it never appears as a tab. */
-  orphaned?: boolean
 }
 
 export type MobileTerminalSessionTab = {
@@ -25,6 +22,9 @@ export type MobileTerminalSessionTab = {
   launchDraft?: string
   launchDraftCreatedAt?: number
   terminalTheme?: MobileTerminalTheme
+  // Host-owned launch notices + dismissal token mirrored from the session
+  // snapshot; the mobile banner renders these and dismissal is host-authoritative.
+  launchNotices?: PersistedLaunchNoticeState
   isActive: boolean
 }
 
@@ -63,34 +63,6 @@ type MobileSessionTabLike =
       isActive?: boolean
     }
 
-export function mobileTerminalThemesEqual(
-  left: MobileTerminalTheme | null | undefined,
-  right: MobileTerminalTheme | null | undefined
-): boolean {
-  if (left === right) {
-    return true
-  }
-  if (!left || !right || left.mode !== right.mode) {
-    return false
-  }
-  const leftColors = left.theme as Readonly<Record<string, unknown>>
-  const rightColors = right.theme as Readonly<Record<string, unknown>>
-  for (const color in leftColors) {
-    if (
-      Object.hasOwn(leftColors, color) &&
-      (!Object.hasOwn(rightColors, color) || leftColors[color] !== rightColors[color])
-    ) {
-      return false
-    }
-  }
-  for (const color in rightColors) {
-    if (Object.hasOwn(rightColors, color) && !Object.hasOwn(leftColors, color)) {
-      return false
-    }
-  }
-  return true
-}
-
 export function mobileSessionTabsEqual(
   a: readonly MobileSessionTabLike[],
   b: readonly MobileSessionTabLike[]
@@ -124,7 +96,10 @@ function mobileSessionTabEqual(
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
-        mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)
+        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null) &&
+        // Why: a host-side dismissal changes only launchNotices; without this the
+        // snapshot compares equal and the banner would stay on screen (stale).
+        JSON.stringify(a.launchNotices ?? null) === JSON.stringify(b.launchNotices ?? null)
       )
     case 'markdown':
       return (
@@ -189,26 +164,6 @@ export function mergeTerminalRecordsByCurrentOrder(
   ]
 }
 
-// Why: tab snapshots are partial and can transiently omit a live terminal, so absence
-// here is only a hint to schedule the `terminal.list` sweep -- never a reason to prune.
-// Restricted to connected, non-orphaned handles: parked leaves and orphaned PTYs are
-// legitimately absent from tabs forever and would pin the caller to the fast cadence.
-export function hasConnectedTerminalAbsentFromSessionTabs(
-  currentTerminals: readonly TerminalRecord[],
-  tabs: readonly MobileSessionTabLike[]
-): boolean {
-  const tabbable = currentTerminals.filter(
-    (terminal) => terminal.connected === true && terminal.orphaned !== true
-  )
-  if (tabbable.length === 0) {
-    return false
-  }
-  const tabHandles = new Set(
-    getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
-  )
-  return tabbable.some((terminal) => !tabHandles.has(terminal.handle))
-}
-
 export function getTerminalRecordsFromSessionTabs(
   tabs: readonly MobileSessionTabLike[]
 ): TerminalRecord[] {
@@ -221,8 +176,7 @@ export function getTerminalRecordsFromSessionTabs(
         handle: tab.terminal,
         title: tab.title || 'Terminal',
         terminalTheme: tab.terminalTheme,
-        isActive: tab.isActive === true,
-        connected: true
+        isActive: tab.isActive === true
       }
     ]
   })
@@ -262,7 +216,8 @@ export function terminalRecordsEqual(
       (terminal, index) =>
         terminal.handle === b[index]?.handle &&
         terminal.title === b[index]?.title &&
-        mobileTerminalThemesEqual(terminal.terminalTheme, b[index]?.terminalTheme) &&
+        JSON.stringify(terminal.terminalTheme ?? null) ===
+          JSON.stringify(b[index]?.terminalTheme ?? null) &&
         terminal.isActive === b[index]?.isActive
     )
   )

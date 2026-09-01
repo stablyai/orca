@@ -1,6 +1,6 @@
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentLaunchSpawnRequest } from '../../../../shared/agent-launch-spawn-request'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -39,13 +39,10 @@ export type QuickCreationRequestInput = {
   linkedGitLabMR: number | null
   linkedGitLabIssue: number | null
   includeGitLabLinks: boolean
-  startup: WorktreeCreationRequest['startup']
+  agentLaunch: AgentLaunchSpawnRequest | undefined
   issueCommand: WorktreeCreationRequest['issueCommand']
   pendingFirstAgentMessageRename: boolean
   note: string
-  startupPlan: AgentStartupPlan | null
-  quickPrompt: string
-  launchDraftPrompt: string | null | undefined
   quickTelemetry: AgentStartedTelemetry | null
   suppressTerminalFocusOnCompletion: boolean
 }
@@ -99,13 +96,10 @@ export function buildQuickCreationRequest(
     ...(input.includeGitLabLinks && input.linkedGitLabIssue != null
       ? { linkedGitLabIssue: input.linkedGitLabIssue }
       : {}),
-    ...(input.startup ? { startup: input.startup } : {}),
+    ...(input.agentLaunch ? { agentLaunch: input.agentLaunch } : {}),
     ...(input.issueCommand ? { issueCommand: input.issueCommand } : {}),
     pendingFirstAgentMessageRename: input.pendingFirstAgentMessageRename,
     note: input.note,
-    startupPlan: input.startupPlan,
-    quickPrompt: input.quickPrompt,
-    ...(input.launchDraftPrompt ? { launchDraftPrompt: input.launchDraftPrompt } : {}),
     quickTelemetry: input.quickTelemetry,
     ...(input.suppressTerminalFocusOnCompletion ? { suppressTerminalFocusOnCompletion: true } : {})
   }

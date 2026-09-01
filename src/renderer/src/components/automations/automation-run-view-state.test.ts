@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { PersistedAgentLaunchFailure } from '../../../../shared/agent-launch-contract'
 import {
   AUTOMATION_RERUN_PENDING_MIN_VISIBLE_MS,
   canRerunAutomationRun,
   getAutomationRerunPendingRemainingMs,
+  getAutomationRunLaunchFailure,
   getAutomationRunViewState
 } from './automation-run-view-state'
+
+function makeLaunchFailure(
+  overrides: Partial<PersistedAgentLaunchFailure> = {}
+): PersistedAgentLaunchFailure {
+  return {
+    version: 1,
+    failureId: 'failure-1',
+    intent: 'automation',
+    occurredAt: 1,
+    code: 'launch_state_unknown',
+    ...overrides
+  }
+}
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
@@ -201,6 +216,29 @@ describe('canRerunAutomationRun', () => {
         run: makeRun({ status: 'dispatch_failed' })
       })
     ).toBe(false)
+  })
+})
+
+describe('getAutomationRunLaunchFailure', () => {
+  it('returns null for a run with no structured launch failure', () => {
+    expect(getAutomationRunLaunchFailure(makeRun())).toBeNull()
+  })
+
+  it('surfaces the structured failure and a null forgotten time by default', () => {
+    const failure = makeLaunchFailure()
+    expect(getAutomationRunLaunchFailure(makeRun({ agentLaunchFailure: failure }))).toEqual({
+      failure,
+      forgottenAt: null
+    })
+  })
+
+  it('carries the forgotten timestamp when the run was explicitly forgotten', () => {
+    const failure = makeLaunchFailure()
+    expect(
+      getAutomationRunLaunchFailure(
+        makeRun({ status: 'dispatch_failed', agentLaunchFailure: failure, agentLaunchForgottenAt: 42 })
+      )
+    ).toEqual({ failure, forgottenAt: 42 })
   })
 })
 

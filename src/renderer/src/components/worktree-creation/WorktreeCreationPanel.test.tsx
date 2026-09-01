@@ -79,8 +79,6 @@ describe('WorktreeCreationPanel', () => {
         agent: null,
         pendingFirstAgentMessageRename: false,
         note: '',
-        startupPlan: null,
-        quickPrompt: '',
         quickTelemetry: null
       }
     }

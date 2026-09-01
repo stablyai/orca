@@ -1,18 +1,17 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
-  SetupDecision
-} from '../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
-import type {
   GitPushTarget,
-  WorkspaceLinkedItem,
-  WorkspaceStatus
-} from '../../../shared/worktree/types'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
+  SetupDecision,
+  TuiAgent,
+  WorkspaceCreateTelemetrySource,
+  WorkspaceStatus,
+  WorkspaceLinkedItem
+} from '../../../shared/types'
+import type { AgentLaunchSpawnRequest } from '../../../shared/agent-launch-spawn-request'
+import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
+import type { AgentStartupPlan } from '../../../shared/tui-agent-startup'
+import type { EphemeralVmCheckoutMode } from '../../../shared/orca-yaml-hook-types'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
@@ -47,23 +46,23 @@ export type WorktreeCreationRequest = {
   /** Runtime environment created from the VM's pairing code. Used to refresh
    *  live status immediately after the workspace takes ownership. */
   ephemeralVmRuntimeEnvironmentId?: string
-  /** Checkout ownership selected by the provisioned recipe. */
-  ephemeralVmCheckoutMode?: 'orca-worktree' | 'provisioned-root'
-  /** Source-host commit captured before a provisioned-root recipe starts. */
-  ephemeralVmExpectedRefHead?: string
   /** Recipe to provision before creating the worktree. Kept serializable so
    *  retry can rerun the recipe after a failed create. */
   ephemeralVmRecipe?: {
     sourceRepoId: string
     recipeId: string
     projectId: string
-    checkoutMode?: 'orca-worktree' | 'provisioned-root'
+    checkoutMode?: EphemeralVmCheckoutMode
   }
+  ephemeralVmCheckoutMode?: EphemeralVmCheckoutMode
+  ephemeralVmExpectedRefHead?: string
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
   name: string
-  /** True only when `name` came from the creature-name generator; gates host-side retirement. */
+  /** True only when `name` came from Orca's creature-name generator. Must survive
+   *  into the create call: the host retires generated names so one is never
+   *  reissued, and a name the user typed stays reusable. */
   nameWasGenerated?: boolean
   displayName?: string
   displayNameKind?: 'generated' | 'user'
@@ -88,23 +87,23 @@ export type WorktreeCreationRequest = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
-  /** Backend-spawn startup payload (`createWorktree` arg). Present only when the
-   *  agent launch is self-contained; otherwise the renderer drives startup via
-   *  `startupPlan`. */
-  startup?: WorktreeStartupLaunch
+  /** Host-resolved two-stage agent launch. When present the host owns resolution
+   *  and spawns the primary agent terminal on create; the renderer consumes the
+   *  `launched` receipt (never argv/env) and materializes setup/default tabs
+   *  around it. Absent for blank-shell creates. */
+  agentLaunch?: AgentLaunchSpawnRequest
   /** Repo Custom GitHub Issue Command to run in a side-pane split after the
    *  workspace's first terminal is created. Mirrors the composer's trust-gated issueCommand. */
   issueCommand?: { command: string; env?: Record<string, string> }
   pendingFirstAgentMessageRename: boolean
   /** Post-create note persisted as the worktree comment. */
   note: string
-  /** Renderer-side launch plan used to seed the first terminal when the backend
-   *  did not already spawn it. Null for blank-shell creates. */
-  startupPlan: AgentStartupPlan | null
-  quickPrompt: string
-  /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
-   *  startup paste); completion seeds the chat-composer copy from it. */
-  launchDraftPrompt?: string
+  /** Legacy renderer-owned startup retained for queued pre-host-launch requests. */
+  startupPlan?: AgentStartupPlan | null
+  quickPrompt?: string
+  launchDraftPrompt?: string | null
+  /** Telemetry emitted renderer-side off the host's `launched` receipt (the host
+   *  create-spawn threads no telemetry). Null for blank-shell creates. */
   quickTelemetry: AgentStartedTelemetry | null
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */

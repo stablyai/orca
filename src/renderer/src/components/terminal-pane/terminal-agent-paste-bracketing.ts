@@ -1,6 +1,11 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import {
+  isBuiltInTuiAgent,
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../../../shared/tui-agent-config'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { resolvePaneOwnerBaseAgent } from '../../lib/agent-base-identity'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 import type { TerminalPasteTextOptions } from './terminal-paste-model'
 
@@ -81,8 +86,13 @@ export function resolveProtectedMultilinePasteOptionsForAgentEvidence({
   // measured live. An idle agent also sits at `done` past the 30-minute freshness
   // TTL, so neither state nor TTL can gate this either. A false negative sends the
   // user's parked draft; a false positive only changes encoding within this paste.
-  const windowsInputRecordPasteNewline = agent
-    ? TUI_AGENT_CONFIG[agent].windowsInputRecordPasteNewline
+  // Why base-resolved and guarded: TUI_AGENT_CONFIG is keyed by built-in ids only,
+  // and `agent` can be a custom id (agent-status rows and pty launch metadata keep
+  // it unresolved). Indexing raw threw on every multiline paste into a custom pane;
+  // a catalog-orphaned id keeps `agent` truthy and falls to plain bracketing below.
+  const baseAgent = resolvePaneOwnerBaseAgent(agent ?? undefined)
+  const windowsInputRecordPasteNewline = isBuiltInTuiAgent(baseAgent)
+    ? TUI_AGENT_CONFIG[baseAgent].windowsInputRecordPasteNewline
     : undefined
   if (hostPlatform === 'win32' && windowsInputRecordPasteNewline) {
     return {

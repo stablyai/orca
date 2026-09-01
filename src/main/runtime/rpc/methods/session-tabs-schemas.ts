@@ -1,10 +1,12 @@
 import { z } from 'zod'
 import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal-quick-commands'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isBuiltInTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../../../../shared/tab-activation-intent'
+import { AgentLaunchInputSchema } from './agent-launch-spawn-schema'
+import { agentLaunchNoticeCodeSchema } from '../../../../shared/agent-launch-notice-schema'
 import { OptionalBoolean } from '../schemas'
 
 export const WorktreeTabSelector = z.object({
@@ -131,6 +133,12 @@ export const SetTabProps = WorktreeTabSelector.extend({
   viewMode: z.enum(['terminal', 'chat']).optional()
 })
 
+export const DismissLaunchNotice = WorktreeTabSelector.extend({
+  tabId: z.string().min(1),
+  launchToken: z.string().min(1).max(128),
+  code: agentLaunchNoticeCodeSchema
+})
+
 export const CreateTerminalTab = WorktreeTabSelector.extend({
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
@@ -142,7 +150,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   launchConfig: sleepingAgentLaunchConfigSchema,
   launchToken: z.string().min(1).max(128).optional(),
   agent: z
-    .custom<TuiAgent>(isTuiAgent, {
+    .custom<TuiAgent>(isBuiltInTuiAgent, {
       message: 'Unknown agent preset'
     })
     .optional(),
@@ -156,10 +164,11 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan
   // identity used when preserving resume config across runtime boundaries.
   launchAgent: z
-    .custom<TuiAgent>(isTuiAgent, {
+    .custom<TuiAgent>(isBuiltInTuiAgent, {
       message: 'Unknown launch agent'
     })
     .optional(),
+  agentLaunch: AgentLaunchInputSchema.optional(),
   viewMode: z.enum(['terminal', 'chat']).optional(),
   activate: z.boolean().optional(),
   select: z.boolean().optional(),

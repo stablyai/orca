@@ -73,7 +73,9 @@ export function fetchMobileHomeTaskProviders(
   disposed: () => boolean
 ): void {
   Promise.all([
-    sendSingleFlightRequest(client, hostId, 'settings.get'),
+    sendSingleFlightRequest(client, hostId, 'settings.get', {
+      includeAgentCatalog: false
+    }),
     sendSingleFlightRequest(client, hostId, 'preflight.check'),
     sendSingleFlightRequest(client, hostId, 'linear.status')
   ])

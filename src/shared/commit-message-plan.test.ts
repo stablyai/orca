@@ -2,6 +2,22 @@ import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration, planAgentBinary } from './commit-message-plan'
 
 describe('planCommitMessageGeneration', () => {
+  it('fails closed for a stored custom TUI agent id instead of running its base headlessly', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'custom-agent:claude:11111111-1111-4111-8111-111111111111',
+        model: 'sonnet'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      error:
+        'Agent "custom-agent:claude:11111111-1111-4111-8111-111111111111" does not support AI commit messages.'
+    })
+  })
+
   it('plans Claude non-interactive generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {

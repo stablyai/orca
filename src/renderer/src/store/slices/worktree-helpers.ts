@@ -1,4 +1,3 @@
-import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
@@ -8,6 +7,7 @@ import type {
 } from '../../../../shared/worktree/base-ref-drift-types'
 import type {
   CreateSparseCheckoutRequest,
+  CreateWorktreeArgs,
   CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   SetupDecision
@@ -19,9 +19,11 @@ import type {
   DetectedWorktree,
   DetectedWorktreeListResult,
   GitPushTarget,
+  WorkspaceLinkedItem,
   WorkspaceStatus,
   Worktree
 } from '../../../../shared/worktree/types'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -41,12 +43,17 @@ export type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge
 import type { WorktreePurgeTargets } from './worktree-purge-target'
 export type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
 import type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
+import type {
+  RetryAgentLaunchAction,
+  WorktreeRetryAgentLaunchResult,
+  ForgetUnknownAgentLaunchResult
+} from '../../../../shared/agent-launch-worktree-recovery'
+import type { PendingAgentLaunchSummary } from '../../../../shared/agent-launch-pending-summary'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+export { withoutErasedRequiredWorktreeFields } from './worktree-meta-erasure-guard'
+export { applyWorktreeUpdates, findWorktreeById } from './worktrees-by-repo-map'
 
-export {
-  applyWorktreeUpdates,
-  withoutErasedRequiredWorktreeFields
-} from './worktree-meta-update-application'
 import type { RendererRemoveWorktreeResult } from './renderer-remove-worktree-result'
 
 export type WorktreeFetchOptions = {
@@ -65,16 +72,9 @@ export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {
 export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
 
 export type WorktreeMetaUpdateOptions = {
-  /** Required to mutate one row when the legacy locator exists on multiple hosts. */
-  executionHostId?: ExecutionHostId
   shouldApply?: WorktreeMetaUpdateGuard
   /** Skip the automatic review refetch when the caller owns an equivalent refresh. */
   suppressHostedReviewRefresh?: boolean
-}
-export type WorktreeMetaBatchUpdate = {
-  worktreeId: string
-  updates: Partial<WorktreeMeta>
-  executionHostId?: ExecutionHostId
 }
 
 export type WorktreeRenameRequest = {
@@ -206,8 +206,58 @@ export type WorktreeSlice = {
     linkedAzureDevOpsPR?: number | null,
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
-    options?: CreateWorktreeCallOptions
+    options?: {
+      automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+      linkedWorkItem?: WorkspaceLinkedItem | null
+      linkedTaskSourceContext?: TaskSourceContext | null
+      /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
+      startupDraft?: string
+      /** True only when `name` came from the creature-name generator; gates host-side retirement. */
+      nameWasGenerated?: boolean
+      provisionedRoot?: {
+        runtimeId: string
+        executionHostId: ExecutionHostId
+        expectedPath: string
+      }
+      /** Host-resolved two-stage agent launch for worktree creation. */
+      agentLaunch?: CreateWorktreeArgs['agentLaunch']
+      /** Surface-owned telemetry for a host-emitted interactive launch. */
+      agentLaunchTelemetry?: CreateWorktreeArgs['agentLaunchTelemetry']
+    }
   ) => Promise<CreateWorktreeResult>
+  retryWorktreeAgentLaunch: (args: {
+    worktreeId: string
+    expectedFailureId: string
+    action: RetryAgentLaunchAction
+  }) => Promise<WorktreeRetryAgentLaunchResult>
+  forgetWorktreeAgentLaunch: (args: {
+    worktreeId: string
+    expectedOperationId: string
+  }) => Promise<ForgetUnknownAgentLaunchResult>
+  retryBackgroundAgentLaunch: (args: {
+    attemptId: string
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+    expectedFailureId: string
+    action: RetryAgentLaunchAction
+  }) => Promise<WorktreeRetryAgentLaunchResult>
+  forgetBackgroundAgentLaunch: (args: {
+    attemptId: string
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+    expectedOperationId: string
+  }) => Promise<ForgetUnknownAgentLaunchResult>
+  unknownAgentLaunchSiblingPreflight: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+  }) => Promise<{ count: number; hostName: string }>
+  forgetUnknownAgentLaunchSiblings: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+  }) => Promise<{ forgottenCount: number }>
+  fetchPendingAgentLaunchSummary: (
+    target?: RuntimeClientTarget
+  ) => Promise<PendingAgentLaunchSummary>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
   /** Merge a status patch into an existing pending entry. */
@@ -259,7 +309,9 @@ export type WorktreeSlice = {
     options?: WorktreeMetaUpdateOptions
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
-  updateWorktreesMeta: (updatesByWorktreeId: readonly WorktreeMetaBatchUpdate[]) => Promise<void>
+  updateWorktreesMeta: (
+    updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
+  ) => Promise<void>
   /**
    * Pin/unpin worktrees, then reveal the first changed one. The reveal keeps
    * the shortcut action visible even though pinned worktrees also remain in
@@ -347,18 +399,4 @@ export type WorktreeSlice = {
   ) => void
   updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
   updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void
-}
-
-export function findWorktreeById(
-  worktreesByRepo: Record<string, Worktree[]>,
-  worktreeId: string
-): Worktree | undefined {
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const match = worktrees.find((worktree) => worktree.id === worktreeId)
-    if (match) {
-      return match
-    }
-  }
-
-  return undefined
 }

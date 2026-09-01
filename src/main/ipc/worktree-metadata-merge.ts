@@ -105,6 +105,15 @@ export function mergeWorktree(
     // Why: diff comments are persisted on WorktreeMeta and forwarded verbatim
     // so the renderer store mirrors on-disk state.
     diffComments: meta?.diffComments,
-    mobileDiffReview: meta?.mobileDiffReview
+    mobileDiffReview: meta?.mobileDiffReview,
+    // Client-safe mirrors that light up the post-create recovery card: the
+    // failure is codes+hints only, the pending record is anti-race guards +
+    // display attribution. The private launch snapshot/token never live here.
+    ...(meta?.agentLaunchFailure !== undefined
+      ? { agentLaunchFailure: meta.agentLaunchFailure }
+      : {}),
+    ...(meta?.pendingAgentLaunch !== undefined
+      ? { pendingAgentLaunch: meta.pendingAgentLaunch }
+      : {})
   }
 }

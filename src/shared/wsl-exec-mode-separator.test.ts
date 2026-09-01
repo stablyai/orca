@@ -20,12 +20,10 @@ const STRING_FORM = new RegExp(String.raw`wsl(?:\.exe)?\b[^\n]*?[^-]--\s+${GUEST
 
 const SCANNED_ROOTS = ['src', 'config', 'tests']
 const SCANNED_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js']
-const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
-// Why: the cross-version e2e lane checks whole historical releases out under
-// tests/e2e/.cross-version-checkouts/. Those are shipped code we cannot edit, so
-// scanning them made this guard fail on every machine that had run that lane --
-// 21 "offenders", all of them copies of a past release.
-const IGNORED_DIRECTORY_PREFIX = '.'
+const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build'])
+// Cross-version e2e checkouts contain historical source that cannot affect this guard.
+const isIgnoredDirectory = (entry: string): boolean =>
+  entry.startsWith('.') || IGNORED_DIRECTORIES.has(entry)
 
 function collectSourceFiles(root: string): string[] {
   let found: string[] = []
@@ -36,7 +34,7 @@ function collectSourceFiles(root: string): string[] {
     return found
   }
   for (const entry of entries) {
-    if (IGNORED_DIRECTORIES.has(entry) || entry.startsWith(IGNORED_DIRECTORY_PREFIX)) {
+    if (isIgnoredDirectory(entry)) {
       continue
     }
     const full = join(root, entry)

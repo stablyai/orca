@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest'
+import type { CustomTuiAgent, CustomTuiAgentId } from '../../../../shared/tui-agent'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+
+const CUSTOM_CLAUDE_ID = 'custom-agent:claude:11111111-1111-4111-8111-111111111111'
+const CUSTOM_GEMINI_ID = 'custom-agent:gemini:22222222-2222-4222-8222-222222222222'
+const CUSTOM_GROK_ID = 'custom-agent:grok:33333333-3333-4333-8333-333333333333'
+const UNCATALOGED_CUSTOM_ID = 'custom-agent:claude:44444444-4444-4444-8444-444444444444'
+
+function customAgent(id: CustomTuiAgentId, baseAgent: CustomTuiAgent['baseAgent']): CustomTuiAgent {
+  return { id, baseAgent, label: 'Custom', args: '', env: {}, syncEnv: false }
+}
 
 describe('canToggleNativeChat', () => {
   it('allows a terminal launched with a supported coding agent', () => {
@@ -223,5 +233,75 @@ describe('canToggleNativeChat', () => {
         detectedAgent: 'claude'
       })
     ).toBe(false)
+  })
+
+  it('allows a live custom agent based on Claude', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: CUSTOM_CLAUDE_ID,
+        customTuiAgents: [customAgent(CUSTOM_CLAUDE_ID, 'claude')]
+      })
+    ).toBe(true)
+  })
+
+  it('allows a custom agent detected live, and one still known only as a tombstone', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        detectedAgent: CUSTOM_CLAUDE_ID,
+        customTuiAgents: [customAgent(CUSTOM_CLAUDE_ID, 'claude')]
+      })
+    ).toBe(true)
+    // A deleted definition keeps the base, so a still-running pane keeps its chat.
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: CUSTOM_CLAUDE_ID,
+        deletedCustomTuiAgents: [
+          { id: CUSTOM_CLAUDE_ID, baseAgent: 'claude', label: 'Custom', deletedAt: 1 }
+        ]
+      })
+    ).toBe(true)
+  })
+
+  // Fail closed: the encoded base in the id never grants a harness on its own.
+  it('rejects a custom agent id with no catalog entry at all', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: UNCATALOGED_CUSTOM_ID,
+        customTuiAgents: [customAgent(CUSTOM_CLAUDE_ID, 'claude')],
+        deletedCustomTuiAgents: []
+      })
+    ).toBe(false)
+  })
+
+  it('rejects a live custom agent based on an unsupported agent (Gemini)', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: CUSTOM_GEMINI_ID,
+        customTuiAgents: [customAgent(CUSTOM_GEMINI_ID, 'gemini')]
+      })
+    ).toBe(false)
+  })
+
+  it('applies the base agent transcript-locality rule to a custom Grok agent', () => {
+    const forConnection = (connectionId: string | null): boolean =>
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: CUSTOM_GROK_ID,
+        customTuiAgents: [customAgent(CUSTOM_GROK_ID, 'grok')],
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBe(false)
+    expect(forConnection(null)).toBe(true)
   })
 })

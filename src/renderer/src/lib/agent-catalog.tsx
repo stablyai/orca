@@ -1,7 +1,7 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { BuiltInTuiAgent, TuiAgent } from '../../../shared/types'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   AgentLetterIcon,
@@ -15,6 +15,9 @@ import {
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { AGENT_FAVICON_ASSETS } from './agent-favicon-assets'
+import { isCustomTuiAgentId } from '../../../shared/custom-tui-agents'
+import { getAgentCatalogSettings } from './agent-catalog-settings-source'
+import { customAgentSettingsBase, customAgentSettingsLabel } from './custom-agent-settings-index'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
@@ -27,6 +30,9 @@ export type AgentCatalogEntry = {
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
+  /** Set for custom-agent rows so pickers render the base harness icon instead
+   *  of the letter fallback (the custom id is not a recognized catalog id). */
+  baseAgent?: BuiltInTuiAgent
 }
 
 function getCatalogPlatform(): NodeJS.Platform {
@@ -312,8 +318,21 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
 // Why: tests and a few legacy call sites still import a catalog snapshot.
 export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
 
+/** The custom agent's own name (live or tombstoned) for a custom id — never the
+ *  raw `custom-agent:<base>:<uuid>` string and never its base harness's name. */
+function customAgentLabel(agent: TuiAgent): string | null {
+  if (!isCustomTuiAgentId(agent)) {
+    return null
+  }
+  // Per-row render path: O(1) memoized index, not a catalog scan per row.
+  const label = customAgentSettingsLabel(getAgentCatalogSettings(), agent)
+  return label?.trim() || null
+}
+
 export function getAgentLabel(agent: TuiAgent): string {
-  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
+  return (
+    customAgentLabel(agent) ?? getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
+  )
 }
 
 export function AgentIcon({
@@ -329,6 +348,16 @@ export function AgentIcon({
   // arrived.
   if (!agent) {
     return <AgentLetterIcon letter="?" size={size} />
+  }
+  // Icon assets are built-in-only: a custom agent wears its base harness's icon,
+  // and an unresolvable custom id degrades to its own initial.
+  if (isCustomTuiAgentId(agent)) {
+    const base = customAgentSettingsBase(getAgentCatalogSettings(), agent)
+    return base ? (
+      <AgentIcon agent={base} size={size} />
+    ) : (
+      <AgentLetterIcon letter="?" size={size} />
+    )
   }
   if (agent === 'claude' || agent === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />

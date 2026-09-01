@@ -1,4 +1,5 @@
 import type { AgentType } from './agent-status-types'
+import { parseCustomTuiAgentId } from './custom-tui-agent-identity'
 
 type CommandCodeTurnBoundaryInput = {
   agentType: AgentType | undefined
@@ -22,7 +23,11 @@ export function isCommandCodeNewTurnWhileWorking({
   previousPromptInteractionKey,
   incomingPromptInteractionKey
 }: CommandCodeTurnBoundaryInput): boolean {
-  if (agentType !== 'command-code') {
+  // Command-code-based custom rows carry the requested custom id, not the base.
+  if (
+    agentType !== 'command-code' &&
+    parseCustomTuiAgentId(agentType)?.baseAgent !== 'command-code'
+  ) {
     return false
   }
   if (previousState !== 'working' || incomingState !== 'working') {

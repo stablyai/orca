@@ -50,7 +50,6 @@ export function useSourceControlAi({
   commitMessage,
   commitError,
   pushRecoveryPrompt,
-  updateSettings,
   updateRepo,
   openSettingsTarget,
   openSettingsPage,
@@ -118,7 +117,6 @@ export function useSourceControlAi({
     ): Promise<void> => {
       await saveSourceControlAiActionRecipeForTarget({
         getStoreState,
-        updateSettings,
         updateRepo,
         target,
         actionId,
@@ -126,7 +124,7 @@ export function useSourceControlAi({
         customAgentCommand
       })
     },
-    [getStoreState, updateRepo, updateSettings]
+    [getStoreState, updateRepo]
   )
   const saveLaunchActionDefault = useCallback(
     async (

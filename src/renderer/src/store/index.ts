@@ -58,6 +58,7 @@ import {
   summarizeStateCollectionSizes
 } from '@/lib/renderer-memory-profile'
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
+import { registerTelemetryAgentCatalogSource } from '@/lib/telemetry-agent-kind'
 
 export const useAppStore = create<AppState>()(
   withReactCommitCascadeWriteProbe((...a) => {
@@ -128,6 +129,10 @@ registerRendererMemoryProfileContributor('store', () =>
 registerRendererMemoryProfileContributor('storeKB', () =>
   estimateStateCollectionKB(useAppStore.getState(), 16)
 )
+
+// Why: telemetry-agent-kind cannot import the store (slices reach it through
+// the launch libs, which would form an init cycle); inject the source instead.
+registerTelemetryAgentCatalogSource(() => useAppStore.getState().settings)
 
 export type { AppState } from './types'
 

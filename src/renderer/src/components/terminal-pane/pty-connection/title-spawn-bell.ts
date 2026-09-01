@@ -10,6 +10,7 @@ import {
 import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { resolvePaneOwnerBaseAgent } from '@/lib/agent-base-identity'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -117,10 +118,12 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     const state = useAppStore.getState()
     const foreground = state.paneForegroundAgentByPaneKey[session.cacheKey]
     return canCommandCodeOutputOwnPane({
-      foregroundAgent: foreground?.agent,
+      foregroundAgent: resolvePaneOwnerBaseAgent(foreground?.agent ?? undefined),
       shellForeground: foreground?.shellForeground,
-      paneOwnerAgent: session.getAuthoritativePaneAgent(),
-      retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[session.cacheKey]?.agentType
+      paneOwnerAgent: resolvePaneOwnerBaseAgent(session.getAuthoritativePaneAgent()),
+      retainedPaneOwnerAgent: resolvePaneOwnerBaseAgent(
+        state.retainedAgentsByPaneKey[session.cacheKey]?.agentType
+      )
     })
   }
 
@@ -139,18 +142,22 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const normalizedPrompt = prompt.trim()
     if (
-      currentEntry?.agentType === 'command-code' &&
-      currentEntry.state === 'done' &&
+      resolvePaneOwnerBaseAgent(currentEntry?.agentType) === 'command-code' &&
+      currentEntry?.state === 'done' &&
       (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
     ) {
       return
     }
+    const ownerAgent = session.getAuthoritativePaneAgent()
     currentState.setAgentStatus(
       session.cacheKey,
       {
         state: 'working',
         prompt: normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
-        agentType: 'command-code',
+        agentType:
+          ownerAgent && resolvePaneOwnerBaseAgent(ownerAgent) === 'command-code'
+            ? ownerAgent
+            : 'command-code',
         observation: rendererAgentStatusObservations.observe(session.cacheKey, {
           origin: 'process',
           observedAt: Date.now(),
@@ -177,7 +184,11 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       }
       const currentState = useAppStore.getState()
       const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
-      if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
+      if (
+        !currentEntry ||
+        resolvePaneOwnerBaseAgent(currentEntry.agentType) !== 'command-code' ||
+        currentEntry.state !== 'working'
+      ) {
         return
       }
       const currentPrompt = currentEntry.prompt.trim()
@@ -191,7 +202,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
         {
           state: 'done',
           prompt: currentPrompt || normalizedPrompt,
-          agentType: 'command-code',
+          agentType: currentEntry.agentType ?? 'command-code',
           observation: rendererAgentStatusObservations.observe(session.cacheKey, {
             origin: 'process',
             observedAt: Date.now(),

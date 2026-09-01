@@ -2,15 +2,18 @@
 import type { OrchestrationDb } from './db'
 import type { TaskRow } from './types'
 import { buildDispatchPreamble } from './preamble'
-import type { CoordinatorRuntime, WorktreeDrift } from './coordinator-runtime-contract'
+import type {
+  CoordinatorRuntime,
+  DispatchAgentIdentity,
+  DispatchAgentLaunchValidation,
+  WorktreeDrift
+} from './coordinator-runtime-contract'
 import {
   DISPATCH_STALE_THRESHOLD,
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
-import { isAgentPromptStalledError } from '../agent-prompt-submission-verification'
 
-/** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */
-export type TaskDispatchResult = 'dispatched' | 'dispatched-unobserved' | 'stale-base-refused'
+export type TaskDispatchResult = 'dispatched' | 'stale-base-refused'
 
 // Why: 10 min = documented heartbeat cadence (5 min) × 2, so one missed heartbeat is the earliest a dispatch can look stale.
 const HUNG_THRESHOLD_MS = 10 * 60 * 1000
@@ -70,7 +73,7 @@ export async function dispatchTaskToWorker(params: {
   onLog: (msg: string) => void
   // Why: the coordinator owns the failed-task list, so a circuit break is reported back instead of mutated here.
   onCircuitBroken: (taskId: string) => void
-  nestedWorkerMaxDepth: number
+  resolveDispatchIdentity?: (task: TaskRow, targetHandle: string) => DispatchAgentIdentity | null
 }): Promise<TaskDispatchResult> {
   const { db, runtime, task, targetHandle, baseDrift, onLog } = params
   // Why (§3.1): drift check runs before createDispatchContext so a refusal doesn't bump failure_count (carried forward as MAX in db.ts:301-306) and burn the circuit-breaker budget; the task stays `ready` and retries next tick.
@@ -98,23 +101,44 @@ export async function dispatchTaskToWorker(params: {
     dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
       ? dispatchAuthority.processIncarnation
       : undefined
-  const dispatch = db.createDispatchContext({
-    taskId: task.id,
-    assigneeHandle: targetHandle,
+  const identity = params.resolveDispatchIdentity?.(task, targetHandle) ?? undefined
+  const dispatch = db.createDispatchContext(
+    task.id,
+    targetHandle,
     assigneePaneKey,
-    launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
+    dispatchAuthority?.launchTokenHash ?? undefined,
     processIncarnation,
-    // Why system: the automatic loop is host-local Orca code driven by
-    // coordinator_runs, not a CLI caller, so it is a root by construction.
-    creator: { kind: 'system' },
-    maxDepth: params.nestedWorkerMaxDepth
-  })
+    identity
+  )
+
+  if (identity && runtime.validateDispatchAgentLaunch) {
+    let validation: DispatchAgentLaunchValidation
+    try {
+      validation = await runtime.validateDispatchAgentLaunch(identity)
+    } catch (err) {
+      const updated = db.failDispatch(
+        dispatch.id,
+        err instanceof Error ? err.message : String(err)
+      )
+      if (updated?.status === 'circuit_broken') {
+        params.onCircuitBroken(task.id)
+      }
+      throw err
+    }
+    if (!validation.ok) {
+      const updated = db.failDispatch(dispatch.id, validation.error, validation.launchFailure)
+      if (updated?.status === 'circuit_broken') {
+        params.onCircuitBroken(task.id)
+      }
+      onLog(`Dispatch of ${task.id} failed launch validation (${validation.launchFailure.code})`)
+      return 'dispatched'
+    }
+  }
 
   // Why: dispatched agents use orca-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).
   const preamble = buildDispatchPreamble({
     taskId: task.id,
     dispatchId: dispatch.id,
-    canDispatchSubWorkers: dispatch.depth < params.nestedWorkerMaxDepth,
     // Why (§3.4): strippedSpec drops the allow-stale-base line so the worker doesn't read the infra flag as an instruction.
     taskSpec: strippedSpec,
     coordinatorHandle: params.coordinatorHandle,
@@ -138,17 +162,6 @@ export async function dispatchTaskToWorker(params: {
   try {
     await runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext)
   } catch (err) {
-    // Why (#16095): Enter is written before submission is verified, so a stall is only ever an
-    // unobserved turn start — never proof the preamble is missing. Failing here would reset the
-    // task to 'ready' and paste the whole preamble a second time into a worker already running it,
-    // and would revoke the capability its worker_done needs.
-    if (isAgentPromptStalledError(err)) {
-      onLog(
-        `Dispatched task ${task.id} to ${targetHandle}; turn start was not observed. ` +
-          `The preamble is already in the pane, so the dispatch stays active instead of being resent.`
-      )
-      return 'dispatched-unobserved'
-    }
     const updated = db.failDispatch(dispatch.id, err instanceof Error ? err.message : String(err))
     if (updated?.status === 'circuit_broken') {
       params.onCircuitBroken(task.id)

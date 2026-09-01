@@ -6,13 +6,19 @@ import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useLocalAgentCatalog } from '@/hooks/useLocalAgentCatalog'
+import {
+  deriveTabCustomAgentEntries,
+  orderTabLaunchAgents,
+  type TabCustomAgentLaunchEntry
+} from './tab-agent-launch-options'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
-  filterEnabledTuiAgents
+  toLegacyAutoPreference
 } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
 
@@ -41,20 +47,9 @@ function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | nul
   return getAgentCatalog().find((a) => a.id === agent) ?? null
 }
 
-function orderAgents(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detected: TuiAgent[]
-): TuiAgent[] {
-  const inCatalogOrder = getAgentCatalog()
-    .filter((entry) => detected.includes(entry.id))
-    .map((entry) => entry.id)
-  if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
-    return inCatalogOrder
-  }
-  // Why: surface the user's configured default first — matches the prior
-  // split-button behavior where the default agent was the primary action.
-  return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
-}
+// Ordering (default-first, customs grouped under their base) lives in the
+// shared tab-agent-launch-options module so this menu and the tab-bar
+// quick-open can never drift apart on which agents are launchable.
 
 export function shouldShowLaunchWatchdogTimeout({ hasPty }: { hasPty: boolean }): boolean {
   return !hasPty
@@ -109,10 +104,13 @@ function QuickLaunchAgentMenuItemsInner({
   // resolution as the rest of the tab bar.
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
   const { detectedIds } = useDetectedAgents(agentDetectionTarget)
-  const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  // 'auto' is the migrated legacy null default; treat it as Auto for ordering.
+  const defaultAgent = toLegacyAutoPreference(useAppStore((s) => s.settings?.defaultTuiAgent))
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
+  // Custom agents live in the local catalog snapshot, not GlobalSettings.
+  const { snapshot: localAgentCatalog } = useLocalAgentCatalog()
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
@@ -123,9 +121,9 @@ function QuickLaunchAgentMenuItemsInner({
   }, [openSettingsPage, openSettingsTarget])
 
   const runLaunch = useCallback(
-    (agent: TuiAgent) => {
+    (agent: TuiAgent, customLabel?: string) => {
       const entry = getCatalogEntry(agent)
-      const label = entry?.label ?? agent
+      const label = customLabel ?? entry?.label ?? agent
       const result = launchAgentInNewTab({
         agent,
         worktreeId,
@@ -135,16 +133,6 @@ function QuickLaunchAgentMenuItemsInner({
         ...(launchSource !== undefined ? { launchSource } : {}),
         ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
       })
-      if (!result) {
-        toast.error(
-          translate(
-            'auto.components.tab.bar.QuickLaunchButton.465e432ef1',
-            'Could not build launch command for {{value0}}.',
-            { value0: label }
-          )
-        )
-        return
-      }
       if (!result.tabId) {
         // Why: paired web clients create the tab on the host; focus follows the
         // next session-tabs snapshot instead of a local tab id.
@@ -176,8 +164,13 @@ function QuickLaunchAgentMenuItemsInner({
     [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
   )
 
-  const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
-  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
+  const customEntries = deriveTabCustomAgentEntries(localAgentCatalog, disabledAgents)
+  const customsById = new Map<TuiAgent, TabCustomAgentLaunchEntry>(
+    customEntries.map((entry) => [entry.id, entry])
+  )
+  const agents = detectedIds
+    ? orderTabLaunchAgents(defaultAgent, detectedIds, customEntries, disabledAgents)
+    : []
 
   return (
     <>
@@ -195,14 +188,14 @@ function QuickLaunchAgentMenuItemsInner({
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {
-        const entry = getCatalogEntry(agent)
-        const label = entry?.label ?? agent
+        const custom = customsById.get(agent)
+        const label = custom?.label ?? getCatalogEntry(agent)?.label ?? agent
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
           <DropdownMenuItem
             key={agent}
-            onSelect={() => runLaunch(agent)}
+            onSelect={() => runLaunch(agent, custom?.label)}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             title={translate(
               'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
@@ -210,7 +203,7 @@ function QuickLaunchAgentMenuItemsInner({
               { value0: label }
             )}
           >
-            <AgentIcon agent={agent} size={14} />
+            <AgentIcon agent={custom?.baseAgent ?? agent} size={14} />
             <span className="flex-1">{label}</span>
             {showsDefaultAgentShortcut ? (
               <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>

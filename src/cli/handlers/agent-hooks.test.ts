@@ -47,9 +47,16 @@ vi.mock('../runtime-client', () => {
     }
   }
 
+  class RuntimeRpcFailureError extends RuntimeClientError {
+    constructor(readonly response: unknown) {
+      super('rpc_failure', 'rpc failure')
+    }
+  }
+
   return {
     RuntimeClient,
     RuntimeClientError,
+    RuntimeRpcFailureError,
     getDefaultUserDataPath: getDefaultUserDataPathMock
   }
 })
@@ -81,6 +88,7 @@ describe('agent hooks CLI handler', () => {
 
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-cli-'))
+    applyAgentStatusHooksEnabledMock.mockReset()
     applyAgentStatusHooksEnabledMock.mockReturnValue([])
     callMock.mockReset()
     getCliStatusMock.mockClear()
@@ -224,8 +232,81 @@ describe('agent hooks CLI handler', () => {
       userDataPath,
       hooksEnabled: false
     })
-    expect(callMock).toHaveBeenCalledExactlyOnceWith('settings.get', undefined, {
-      timeoutMs: 1_000
-    })
+    // The CLI preflight opts out of the 512 KiB catalog projection.
+    expect(callMock).toHaveBeenCalledExactlyOnceWith(
+      'settings.get',
+      { includeAgentCatalog: false },
+      { timeoutMs: 1_000 }
+    )
+  })
+
+  const AGENT_CATALOG_KEYS = [
+    'agentCatalogSchemaVersion',
+    'agentCatalogRevision',
+    'agentReferenceRevision',
+    'defaultTuiAgent',
+    'disabledTuiAgents',
+    'customTuiAgents',
+    'deletedCustomTuiAgents'
+  ] as const
+
+  it('never stamps agent-catalog schema fields onto an existing pre-v1 file', async () => {
+    const existing = getDefaultPersistedState(userDataPath)
+    const settings = existing.settings as unknown as Record<string, unknown>
+    for (const key of AGENT_CATALOG_KEYS) {
+      delete settings[key]
+    }
+    // Pre-v1 legacy shape: an explicit null default, no schema stamp.
+    settings.defaultTuiAgent = null
+    writeDataFile(userDataPath, existing)
+
+    await runAgentHooksOff(userDataPath)
+
+    const persisted = readDataFile(userDataPath).settings as unknown as Record<string, unknown>
+    expect(persisted.agentStatusHooksEnabled).toBe(false)
+    expect(persisted.defaultTuiAgent).toBeNull()
+    for (const key of AGENT_CATALOG_KEYS) {
+      if (key === 'defaultTuiAgent') {
+        continue
+      }
+      expect(persisted, key).not.toHaveProperty(key)
+    }
+    // Non-catalog defaults still normalize.
+    expect(persisted.experimentalNewWorktreeCardStyle).toBe(false)
+  })
+
+  it('round-trips an existing v1 catalog byte-for-byte through an offline update', async () => {
+    const existing = getDefaultPersistedState(userDataPath)
+    const settings = existing.settings as unknown as Record<string, unknown>
+    settings.agentCatalogSchemaVersion = 1
+    settings.agentCatalogRevision = 7
+    settings.agentReferenceRevision = 3
+    settings.customTuiAgents = [{ id: 'custom-abc', label: 'My Agent', baseAgent: 'claude' }]
+    settings.deletedCustomTuiAgents = [{ id: 'custom-gone' }]
+    writeDataFile(userDataPath, existing)
+
+    await runAgentHooksOff(userDataPath)
+
+    const persisted = readDataFile(userDataPath).settings as unknown as Record<string, unknown>
+    expect(persisted.agentCatalogSchemaVersion).toBe(1)
+    expect(persisted.agentCatalogRevision).toBe(7)
+    expect(persisted.agentReferenceRevision).toBe(3)
+    expect(persisted.customTuiAgents).toEqual([
+      { id: 'custom-abc', label: 'My Agent', baseAgent: 'claude' }
+    ])
+    expect(persisted.deletedCustomTuiAgents).toEqual([{ id: 'custom-gone' }])
+  })
+
+  it('refuses the offline write when the file carries a newer agent-catalog schema', async () => {
+    const existing = getDefaultPersistedState(userDataPath)
+    ;(existing.settings as unknown as Record<string, unknown>).agentCatalogSchemaVersion = 2
+    writeDataFile(userDataPath, existing)
+    const before = readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')
+
+    await runAgentHooksOff(userDataPath)
+
+    expect(process.exitCode).toBe(1)
+    expect(readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')).toBe(before)
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
   })
 })

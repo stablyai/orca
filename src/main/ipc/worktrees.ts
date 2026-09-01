@@ -15,6 +15,7 @@ import { registerWorktreeCatalogHandlers } from './worktrees/listing/register-wo
 import { registerDetectedWorktreeScanInvalidation } from './worktrees/listing/register-detected-worktree-scan-invalidation'
 import { registerSparseCheckoutCacheInvalidation } from './worktrees/listing/register-sparse-checkout-cache-invalidation'
 import { registerWorktreeMetadataHandlers } from './worktrees/metadata/register-worktree-metadata-handlers'
+import { registerAgentLaunchRecoveryHandlers } from './worktrees/metadata/register-agent-launch-recovery-handlers'
 import { registerWorktreeForgetHandlers } from './worktrees/removal/register-worktree-forget-handlers'
 import { registerWorktreeRemovalHandlers } from './worktrees/removal/register-worktree-removal-handlers'
 import type { WorktreeIpcContext } from './worktrees/worktree-ipc-context'
@@ -47,6 +48,13 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:updateLineage',
   'worktrees:persistSortOrder',
   'worktrees:getBranchRenameFailureOutput',
+  'worktrees:retryAgentLaunch',
+  'worktrees:forgetAgentLaunch',
+  'worktrees:retryBackgroundAgentLaunch',
+  'worktrees:forgetBackgroundAgentLaunch',
+  'worktrees:pendingAgentLaunchSummary',
+  'worktrees:unknownAgentLaunchSiblingCount',
+  'worktrees:forgetUnknownAgentLaunchSiblings',
   'hooks:check',
   'hooks:inspectSetupScriptImports',
   'hooks:createIssueCommandRunner',
@@ -89,6 +97,7 @@ export function registerWorktreeHandlers(
   registerWorktreeRemovalHandlers(context)
   registerWorktreeForgetHandlers(context)
   registerWorktreeMetadataHandlers(context)
+  registerAgentLaunchRecoveryHandlers(context)
   registerWorktreeHookCheckHandler(context)
   registerWorktreeHookRunnerHandler(context)
   registerWorktreeHookInspectionHandler(context)

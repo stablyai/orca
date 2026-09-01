@@ -86,12 +86,14 @@ export type RuntimePtySpawnArgs = {
   cwd?: string
   command?: string
   launchAgent?: TuiAgent
+  launchToken?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: {
     agent_kind?: unknown
     launch_source?: unknown
     request_kind?: unknown
+    used_custom_agent?: unknown
   }
   env?: Record<string, string>
   envToDelete?: string[]

@@ -1,5 +1,6 @@
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { PersistedLaunchNoticeState } from '../../shared/agent-launch-contract'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -145,6 +146,9 @@ export type UiCommandEventApi = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      /** Reveal is how commitSuccessfulLaunchNotices delivers these; without
+       *  the field the renderer's attachLaunchNotices branch is dead code. */
+      launchNotices?: PersistedLaunchNoticeState
       viewMode?: 'terminal' | 'chat'
       title?: string
       ptyId?: string

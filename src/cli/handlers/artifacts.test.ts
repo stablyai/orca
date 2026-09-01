@@ -152,7 +152,7 @@ describe('artifact CLI handlers', () => {
         data: { nextSteps: [...ARTIFACT_SHARING_DISABLED_NEXT_STEPS] }
       })
 
-      expect(call).toHaveBeenCalledExactlyOnceWith('settings.get')
+      expect(call).toHaveBeenCalledExactlyOnceWith('settings.get', { includeAgentCatalog: false })
     }
   )
 

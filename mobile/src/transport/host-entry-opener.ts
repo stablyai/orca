@@ -9,6 +9,7 @@ import type { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import type { RpcClient } from './rpc-client'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
+import type { AgentSyncHandle } from './agent-sync-connection'
 
 export type HostClientStoreEntry = {
   client: RpcClient
@@ -16,6 +17,7 @@ export type HostClientStoreEntry = {
   refCount: number
   unsubState: () => void
   unsubConnectionPath: () => void
+  agentSync?: AgentSyncHandle
 }
 
 type HostEntryOpenerState = {

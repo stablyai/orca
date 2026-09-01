@@ -73,6 +73,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.supportsAgentSessionCreateOperations()
   }
 
+  providesLaunchTokenListings(): boolean {
+    // Why every route: one preserved pre-v34 daemon can be running the very agent a
+    // pending launch is looking for, and it will never echo that launch's token.
+    return this.allAdapters().every((adapter) => adapter.providesLaunchTokenListings())
+  }
+
   async attach(id: string): ReturnType<IPtyProvider['attach']> {
     return await this.adapterFor(id).attach(id)
   }

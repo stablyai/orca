@@ -49,14 +49,14 @@ describe('useFullCreationExecution cancellation', () => {
       effectiveBranchNameOverride: undefined,
       createDisplayName: undefined,
       pendingFirstAgentMessageRename: false,
-      startupPlan: null,
-      shouldSeedInitialAgentStatus: false,
-      composerTelemetry: {
-        agent_kind: 'claude-code',
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'claude' },
+        allowEmptyPromptLaunch: true
+      },
+      agentLaunchTelemetry: {
         launch_source: 'new_workspace_composer',
         request_kind: 'new'
-      },
-      backendStartup: undefined
+      }
     } satisfies PreparedFullSubmit
     const persistSetupAgentStartupPolicy = vi.fn(() => startupPolicy.promise)
     const state = {

@@ -34,6 +34,12 @@ import type {
 import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type {
+  ForgetUnknownAgentLaunchResult,
+  WorktreeRetryAgentLaunchResult,
+  RetryAgentLaunchAction
+} from '../../shared/agent-launch-worktree-recovery'
+import type { PendingAgentLaunchSummary } from '../../shared/agent-launch-pending-summary'
+import type {
   DetectedWorktreeListResult,
   GitHubPrStartPoint,
   GitPushTarget,
@@ -131,6 +137,38 @@ export type WorktreeApi = {
   /** Full CLI output of the last branch auto-rename generation failure, held
    *  in main memory only — null after a restart or once the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
+  retryAgentLaunch: (args: {
+    worktreeId: string
+    expectedFailureId: string
+    clientMutationId: string
+    action: RetryAgentLaunchAction
+  }) => Promise<WorktreeRetryAgentLaunchResult>
+  forgetAgentLaunch: (args: {
+    worktreeId: string
+    expectedOperationId: string
+    clientMutationId: string
+  }) => Promise<ForgetUnknownAgentLaunchResult>
+  forgetRevokedRemoteAgentLaunch: (args: {
+    worktreeId: string
+    expectedOperationId: string
+    clientMutationId: string
+  }) => Promise<ForgetUnknownAgentLaunchResult>
+  retryBackgroundAgentLaunch: (args: {
+    attemptId: string
+    expectedFailureId: string
+    clientMutationId: string
+    action: RetryAgentLaunchAction
+  }) => Promise<WorktreeRetryAgentLaunchResult>
+  forgetBackgroundAgentLaunch: (args: {
+    attemptId: string
+    expectedOperationId: string
+    clientMutationId: string
+  }) => Promise<ForgetUnknownAgentLaunchResult>
+  pendingAgentLaunchSummary: () => Promise<PendingAgentLaunchSummary>
+  unknownAgentLaunchSiblingCount: (args: { worktreeId: string }) => Promise<{ count: number }>
+  forgetUnknownAgentLaunchSiblings: (args: {
+    worktreeId: string
+  }) => Promise<{ forgottenCount: number }>
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
   onGitStatusMetadataChanged: (callback: (data: { repoId: string }) => void) => () => void
   onHeadIdentitiesChanged: (

@@ -20,6 +20,8 @@ export function listLiveTerminalHostSessions(
       isAlive: true,
       ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
       wslDistro: session.wslDistro,
+      // Crash reconciliation rejoins daemon-surviving terminals by launch token.
+      ...(session.launchToken ? { launchToken: session.launchToken } : {}),
       pid: session.pid,
       cwd: session.getCwd(),
       cols: size?.cols ?? 0,

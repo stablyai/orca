@@ -108,6 +108,55 @@ describe('remote workspace session projection', () => {
     })
   })
 
+  it('never projects sleeping-session records or their host-private launch config to a remote client', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'repo-a::/srv/app',
+      tabsByWorktree: {
+        'repo-a::/srv/app': [
+          {
+            id: 'tab-1',
+            ptyId: 'pty-1',
+            worktreeId: 'repo-a::/srv/app',
+            title: 'Remote',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      // The sleeping record carries the opaque legacy launchConfig (agent env may
+      // hold secrets). The remote projection omits sleeping records wholesale, so
+      // neither it nor the host-private launchSnapshot/legacyLaunchConfig can leak.
+      sleepingAgentSessionsByPaneKey: {
+        'pane-1': {
+          paneKey: 'pane-1',
+          worktreeId: 'repo-a::/srv/app',
+          agent: 'claude' as const,
+          providerSession: { key: 'session_id' as const, id: 'sess-1' },
+          prompt: 'resume me',
+          state: 'waiting' as const,
+          capturedAt: 1,
+          updatedAt: 1,
+          launchConfig: { agentArgs: '--resume', agentEnv: { SECRET: 'topsecret' } }
+        }
+      }
+    }
+
+    const projected = exportRemoteWorkspaceSession(session, {
+      isTargetWorktree: (worktreeId) => worktreeId.startsWith('repo-a::')
+    })
+
+    expect('sleepingAgentSessionsByPaneKey' in projected).toBe(false)
+    const serialized = JSON.stringify(projected)
+    expect(serialized).not.toContain('sleepingAgentSessionsByPaneKey')
+    expect(serialized).not.toContain('launchConfig')
+    expect(serialized).not.toContain('launchSnapshot')
+    expect(serialized).not.toContain('legacyLaunchConfig')
+    expect(serialized).not.toContain('topsecret')
+  })
+
   it('imports active worktree metadata even when the worktree has no terminal tabs', () => {
     const session = importRemoteWorkspaceSession(
       {

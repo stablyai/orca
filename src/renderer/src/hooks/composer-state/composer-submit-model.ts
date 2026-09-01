@@ -1,10 +1,9 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
-import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceIntentName } from '../../../../shared/workspace-name'
-import type { AgentStartupPlan } from '../../../../shared/tui-agent-startup'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
+import type { AgentLaunchSpawnRequest } from '../../../../shared/agent-launch-spawn-request'
+import type { StartupLaunchTelemetry } from '@/lib/worktree-activation'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
@@ -42,10 +41,8 @@ export type PreparedFullSubmit = FullSubmitSource & {
   effectiveBranchNameOverride: string | undefined
   createDisplayName: string | undefined
   pendingFirstAgentMessageRename: boolean
-  startupPlan: AgentStartupPlan | null
-  shouldSeedInitialAgentStatus: boolean
-  composerTelemetry: AgentStartedTelemetry
-  backendStartup: WorktreeCreationRequest['startup']
+  agentLaunch: AgentLaunchSpawnRequest
+  agentLaunchTelemetry: StartupLaunchTelemetry
 }
 
 export type QuickSubmitSource = {
@@ -87,8 +84,7 @@ export type ComposerSubmitModel = {
     requestedAgent: TuiAgent | null,
     workspaceNameSeed: string,
     workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'],
-    repoId: string,
-    selectedRepo: Repo
+    repoId: string
   ) => Promise<void>
   prepareFullSubmit: (
     resolution: PendingSmartGitHubSubmitResolution

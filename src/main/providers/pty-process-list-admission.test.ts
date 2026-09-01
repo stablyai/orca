@@ -48,9 +48,10 @@ describe('PtyProcessListAdmission', () => {
         id: 'pty-1',
         cwd: '/repo',
         title: 'shell',
+        launchToken: 'token-1',
         unknownPayload: 'x'.repeat(1024 * 1024)
       } as never)
-    ).toEqual({ id: 'pty-1', cwd: '/repo', title: 'shell' })
+    ).toEqual({ id: 'pty-1', cwd: '/repo', title: 'shell', launchToken: 'token-1' })
   })
 
   it('rejects aggregate entry and byte amplification', () => {

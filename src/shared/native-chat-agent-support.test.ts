@@ -6,6 +6,10 @@ import {
   shouldStepNativeChatAskAnswer
 } from './native-chat-agent-support'
 
+const UUID = '11111111-1111-4111-8111-111111111111'
+const CUSTOM_CLAUDE_ID = `custom-agent:claude:${UUID}`
+const CUSTOM_GEMINI_ID = `custom-agent:gemini:${UUID}`
+
 describe('resolveNativeChatTranscriptAgent', () => {
   it('maps OpenClaude onto the Claude transcript format', () => {
     expect(resolveNativeChatTranscriptAgent('openclaude')).toBe('claude')
@@ -20,6 +24,14 @@ describe('resolveNativeChatTranscriptAgent', () => {
     expect(resolveNativeChatTranscriptAgent(null)).toBeNull()
     expect(resolveNativeChatTranscriptAgent(undefined)).toBeNull()
   })
+
+  // This registry is keyed by BUILT-IN id on purpose: callers resolve a custom
+  // agent to its base first (`resolveNativeChatBaseAgent`), so a raw custom id
+  // reaching here means the catalog could not prove a base — fail closed.
+  it('rejects a raw custom agent id', () => {
+    expect(resolveNativeChatTranscriptAgent(CUSTOM_CLAUDE_ID)).toBeNull()
+    expect(resolveNativeChatTranscriptAgent(CUSTOM_GEMINI_ID)).toBeNull()
+  })
 })
 
 describe('isNativeChatSupportedAgent', () => {
@@ -30,6 +42,11 @@ describe('isNativeChatSupportedAgent', () => {
     expect(isNativeChatSupportedAgent('cursor')).toBe(false)
     expect(isNativeChatSupportedAgent(null)).toBe(false)
     expect(isNativeChatSupportedAgent(undefined)).toBe(false)
+  })
+
+  it('rejects a raw custom agent id, base-supported or not', () => {
+    expect(isNativeChatSupportedAgent(CUSTOM_CLAUDE_ID)).toBe(false)
+    expect(isNativeChatSupportedAgent(CUSTOM_GEMINI_ID)).toBe(false)
   })
 })
 

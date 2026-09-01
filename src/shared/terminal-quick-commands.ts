@@ -1,4 +1,4 @@
-import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { isBuiltInTuiAgent, isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type {
   TerminalAgentQuickCommand,
   TerminalCommandQuickCommand,
@@ -71,7 +71,16 @@ export function isTerminalAgentQuickCommand(
 export function supportsTerminalAgentQuickCommand(
   agent: unknown
 ): agent is TerminalAgentQuickCommand['agent'] {
-  return isTuiAgent(agent) && TUI_AGENT_CONFIG[agent].promptInjectionMode !== 'stdin-after-start'
+  if (!isTuiAgent(agent)) {
+    return false
+  }
+  if (isBuiltInTuiAgent(agent)) {
+    return TUI_AGENT_CONFIG[agent].promptInjectionMode !== 'stdin-after-start'
+  }
+  // Custom ids carry no static config; base capability is validated with the
+  // live catalog at mutation/launch time. Normalization must neither crash on
+  // nor drop a persisted custom reference.
+  return true
 }
 
 export function getTerminalQuickCommandBody(command: TerminalQuickCommand): string {

@@ -65,7 +65,12 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
         coordinatorHandle,
         pollIntervalMs: params.pollIntervalMs,
         maxConcurrent: params.maxConcurrent,
-        worktree: params.worktree
+        worktree: params.worktree,
+        // Why (§U9 W-T1, ledger #9): the dispatch identity is the attribution of
+        // the terminal that actually receives the work; the resolver reads it
+        // from the runtime and returns null for an unattributed target (skip).
+        resolveDispatchIdentity: (_task, targetHandle) =>
+          runtime.resolveDispatchAgentIdentityForHandle(targetHandle)
       })
 
       activeCoordinator = coordinator

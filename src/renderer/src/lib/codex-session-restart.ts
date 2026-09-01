@@ -18,7 +18,8 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { BuiltInTuiAgent } from '../../../shared/tui-agent'
+import { classifyAgentBaseIdentity } from './agent-base-identity'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.
@@ -88,11 +89,11 @@ async function readRecordedCodexPaneLanes(
 async function isConfirmedCodexForegroundDespiteShellReading(
   state: AppState,
   ptyId: string,
-  launchAgent: TuiAgent | undefined,
+  launchBaseAgent: BuiltInTuiAgent | undefined,
   inspection: RuntimeTerminalProcessInspection
 ): Promise<boolean> {
   if (
-    launchAgent !== 'codex' ||
+    launchBaseAgent !== 'codex' ||
     inspection.unavailable === true ||
     inspection.foregroundProcess === null ||
     !isShellProcess(inspection.foregroundProcess)
@@ -158,20 +159,25 @@ async function scanCodexPanes(
         // Why: one stale remote pane must not hide restart notices for other confirmed Codex panes.
         () => null
       )
+      // Why resolved once, here: `tab.launchAgent` is the REQUESTED identity, so a
+      // custom Codex agent arrives as its custom id. All three decisions below are
+      // keyed on the built-in base, and a missed one leaves the pane taking
+      // keystrokes on the account the user switched away from.
+      const launchBaseAgent = classifyAgentBaseIdentity(tab.launchAgent, state.settings)
       const eligible =
         inspection !== null &&
-        (isCodexRestartEligiblePane({ inspection, launchAgent: tab.launchAgent }) ||
+        (isCodexRestartEligiblePane({ inspection, launchBaseAgent }) ||
           (await isConfirmedCodexForegroundDespiteShellReading(
             state,
             ptyId,
-            tab.launchAgent,
+            launchBaseAgent,
             inspection
           )))
       return {
         ptyId,
         eligible,
         inconclusive: inspection === null || inspection.unavailable === true,
-        launchedCodex: tab.launchAgent === 'codex',
+        launchedCodex: launchBaseAgent === 'codex',
         notified: false,
         laneKey: lane.laneKey,
         laneSource: lane.source

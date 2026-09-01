@@ -559,6 +559,98 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('back-fills requestedAgent and baseAgent for legacy records that carry only agent', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(record?.baseAgent).toBe('codex')
+      expect(record?.requestedAgent).toBe('codex')
+    }
+  })
+
+  it('round-trips a custom-id requestedAgent alongside its resumable baseAgent', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          requestedAgent: 'custom-agent:claude:11111111-1111-4111-8111-111111111111',
+          baseAgent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(record?.requestedAgent).toBe(
+        'custom-agent:claude:11111111-1111-4111-8111-111111111111'
+      )
+      expect(record?.baseAgent).toBe('claude')
+    }
+  })
+
+  it('drops an unsafe requestedAgent to the base without dropping the record', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          requestedAgent: 'bad\u0000id',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(record?.agent).toBe('codex')
+      expect(record?.requestedAgent).toBe('codex')
+    }
+  })
+
   it('drops sleeping agent records whose embedded pane key differs from the map key', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

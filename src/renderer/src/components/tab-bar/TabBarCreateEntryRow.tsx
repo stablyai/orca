@@ -199,7 +199,7 @@ function getActionPresentation(option: ActiveOption): {
   if (option.kind === 'agent') {
     return {
       detail: option.option.label,
-      icon: <AgentIcon agent={option.option.agent} size={14} />,
+      icon: <AgentIcon agent={option.option.baseAgent ?? option.option.agent} size={14} />,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),
       showDetail: true
     }

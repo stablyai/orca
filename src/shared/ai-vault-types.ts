@@ -86,6 +86,9 @@ export type AiVaultSession = {
   id: string
   executionHostId: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
+  /** Host-produced fresh-scan selector. Optional only for rolling compatibility
+   *  with older runtime hosts; new scanners always emit it. */
+  resumeLocator?: string
   agent: AiVaultAgent
   sessionId: string
   title: string

@@ -9,7 +9,11 @@ import { resolveNativeChatLaunchSessionOptions } from './native-chat-session-opt
 
 type NativeChatLaunchSettings = Pick<
   GlobalSettings,
-  'experimentalNativeChat' | 'openAgentTabsInChatByDefault' | 'nativeChatSessionOptions'
+  | 'experimentalNativeChat'
+  | 'openAgentTabsInChatByDefault'
+  | 'nativeChatSessionOptions'
+  | 'customTuiAgents'
+  | 'deletedCustomTuiAgents'
 >
 
 export type InitialNativeChatSessionOptionsArgs = {
@@ -26,8 +30,12 @@ export function resolveInitialNativeChatSessionOptions(
   const viewMode = decideInitialAgentTabViewMode({
     experimentalNativeChat: settings?.experimentalNativeChat,
     openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
+    customTuiAgents: settings?.customTuiAgents,
+    deletedCustomTuiAgents: settings?.deletedCustomTuiAgents,
     ...args
   })
+  // Preferences stay keyed on the REQUESTED id: substituting the base would file
+  // a custom agent's model/effort under its base and leak it across agents.
   return viewMode === 'chat'
     ? resolveNativeChatLaunchSessionOptions(settings?.nativeChatSessionOptions, args.agent)
     : undefined

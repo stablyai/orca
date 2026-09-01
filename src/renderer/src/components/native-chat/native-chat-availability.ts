@@ -5,6 +5,10 @@ import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript
 } from '@/lib/native-chat-supported-agent'
+import {
+  resolveNativeChatBaseAgent,
+  type NativeChatAgentCatalogInput
+} from '@/lib/native-chat-base-agent'
 
 export { isNativeChatSupportedAgent }
 
@@ -12,7 +16,7 @@ export { isNativeChatSupportedAgent }
  *  Kept as a plain shape (not the live store) so the decision stays pure and
  *  unit-testable; call sites resolve `launchAgent`/`detectedAgent` from the
  *  terminal tab + agent-status before calling. */
-export type NativeChatAvailabilityInput = {
+export type NativeChatAvailabilityInput = NativeChatAgentCatalogInput & {
   /** Feature flag: hidden unless enabled from Settings > Experimental. */
   experimentalNativeChatEnabled?: boolean
   contentType: Tab['contentType']
@@ -49,7 +53,11 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
   if (input.isChatViewMode === true) {
     return true
   }
-  const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
+  // Custom ids carry no chat surface of their own; gate on the base harness.
+  const agent = resolveNativeChatBaseAgent(
+    input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent,
+    input
+  )
   if (
     nativeChatRequiresLocalTranscript(agent) &&
     input.nativeChatTranscriptIsLocalReadable !== true

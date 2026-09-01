@@ -39,7 +39,7 @@ export function useNewWorkspaceRuntimeContext(
         client.sendRequest('linear.status')
       ])
       const [settingsRes, uiRes] = await Promise.allSettled([
-        client.sendRequest('settings.get'),
+        client.sendRequest('settings.get', { includeAgentCatalog: false }),
         client.sendRequest('ui.get')
       ])
       if (stale) {

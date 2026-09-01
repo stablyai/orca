@@ -81,7 +81,7 @@ describe('renderer-side observation origins', () => {
     const paneKey = 'tab-osc:99999999-9999-4999-8999-999999999999'
     const consumer = createBackgroundAgentStatusConsumer({
       paneKey,
-      launchToken: 'launch-1',
+      getLaunchToken: () => 'launch-1',
       // Why: main parses OSC for local/SSH PTYs; only when it does not is the renderer the authority.
       mainOwnsAgentStatusWrites: false,
       expectedConnectionId: null,

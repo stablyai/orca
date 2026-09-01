@@ -72,7 +72,11 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'remote_update_manual_required',
   'remote_update_not_available',
   'remote_update_not_downloaded',
-  ...AGENT_SESSION_RPC_ERROR_CODES
+  ...AGENT_SESSION_RPC_ERROR_CODES,
+  // Why: settings.update rejects legacy whole-owner agent writes with this stable
+  // code so new clients can detect they must upgrade rather than silently drop
+  // the write. Standard error envelope, no extra payload.
+  'client_upgrade_required'
 ])
 
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))

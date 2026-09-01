@@ -208,7 +208,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     return cols > 0 && rows > 0 ? { cols, rows } : null
   }
   session.shouldSettleStartupGridBeforeConnect = (): boolean =>
-    Boolean(session.paneStartup?.command) &&
+    Boolean(session.paneStartup?.command || session.paneStartup?.agentLaunch) &&
     session.deps.isVisibleRef.current &&
     !session.connectionId &&
     session.runtimeEnvironmentId === null

@@ -201,13 +201,16 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
       expect(state.automaticAgentResumeClaimsByTabId[tabs[0]!.id]?.providerSession).toEqual(
         providerSession
       )
-      expect(state.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
 
       if (reopen === 0) {
+        // The launching sweep retains its record until the spawn consumes the
+        // queued startup; every later re-capture is a stale replay and clears.
+        expect(state.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
         expect(state.consumeTabStartupCommand(tabs[0]!.id)?.resumeProviderSession).toEqual(
           providerSession
         )
       }
+      expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
     }
   })
 })

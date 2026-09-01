@@ -17,32 +17,6 @@ export function isAgentPickerQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-export function getAgentPickerCommandValue({
-  blankValue,
-  blankMatchesQuery,
-  currentValue,
-  filteredAgents,
-  rawQuery
-}: {
-  blankValue: string
-  blankMatchesQuery: boolean
-  currentValue: AgentCatalogEntry['id'] | null
-  filteredAgents: readonly AgentCatalogEntry[]
-  rawQuery: string
-}): string {
-  const query = getAgentPickerSearchQuery(rawQuery)
-  if (query === null) {
-    return ''
-  }
-  if (!query) {
-    return currentValue ?? blankValue
-  }
-  if (blankMatchesQuery) {
-    return blankValue
-  }
-  return filteredAgents[0]?.id ?? ''
-}
-
 export function searchAgentPickerEntries(
   agents: readonly AgentCatalogEntry[],
   rawQuery: string

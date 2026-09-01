@@ -54,6 +54,14 @@ type RecoveryRequest = {
    *  in-flight line, and only it may quarantine input — a recovery that always
    *  keeps the same live shell would have a legitimate command eaten. */
   endpointReplaced?: boolean
+  /** Re-resolves the pane's current PTY id when a window-cap retry replays the
+   *  request: the binding can change across the minutes-long wait, and probing
+   *  a stale id fails liveness and strands the pane as a permanent zombie. */
+  resolveCurrentPtyId?: () => string | null
+  /** Re-checked after async gaps (liveness probe, scheduled retry): a reconnect
+   *  can restore delivery — or the pane can be disposed — meanwhile, and
+   *  remounting then would churn a healthy or successor pane. */
+  isStillUndeliverable?: () => boolean
 }
 
 // Why a cap exists: recovery must never loop. If the remounted pane wedges
@@ -174,7 +182,9 @@ function scheduleRecoveryRetry(request: RecoveryRequest, delayMs: number): void 
     () => {
       pendingRetryByTabId.delete(request.tabId)
       const currentRequests = [...requestsByInstanceId.values()].filter(
-        isCurrentTerminalRecoveryRequest
+        (currentRequest) =>
+          isCurrentTerminalRecoveryRequest(currentRequest) &&
+          (!currentRequest.isStillUndeliverable || currentRequest.isStillUndeliverable())
       )
       if (currentRequests.length === 0) {
         return
@@ -183,7 +193,13 @@ function scheduleRecoveryRetry(request: RecoveryRequest, delayMs: number): void 
       // sibling has a probe-certified dead renderer. Start every current
       // request so the first valid remount wins and invalidates the rest.
       void Promise.all(
-        currentRequests.map((currentRequest) => requestTerminalPaneRecovery(currentRequest))
+        currentRequests.map((currentRequest) =>
+          requestTerminalPaneRecovery(
+            currentRequest.resolveCurrentPtyId
+              ? { ...currentRequest, ptyId: currentRequest.resolveCurrentPtyId() }
+              : currentRequest
+          )
+        )
       )
     },
     Math.max(delayMs, 1_000)
@@ -250,6 +266,12 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
       // Liveness unknown (IPC hiccup) on a local pane: proceed — a remount
       // over a dead PTY degrades to the existing dead-pane rendering, not a
       // broken state.
+    }
+    // Re-check across the await: a reconnect can restore delivery (or the
+    // pane can be disposed) while the probe was in flight — remounting then
+    // would tear down a pane that no longer needs it.
+    if (request.isStillUndeliverable && !request.isStillUndeliverable()) {
+      return false
     }
     // Re-check the budget across the await: a concurrent detector may have
     // already consumed it for this tab.

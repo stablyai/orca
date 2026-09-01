@@ -34,7 +34,7 @@ import { translate } from '@/i18n/i18n'
 
 export type SourceControlAgentActionDeliveryPlanState =
   | { status: 'idle' }
-  | { status: 'success'; summary: string; commandLabel: string; caveat: string }
+  | { status: 'success'; summary: string; deliveryLabel: string; caveat: string }
   | { status: 'error'; error: string }
 
 type SourceControlAgentActionDialogFormProps = {
@@ -376,13 +376,7 @@ export function SourceControlAgentActionDialogForm({
                   <CheckCircle2 className="mt-px size-3.5 shrink-0 text-status-success" />
                   <span>{deliveryPlan.summary}</span>
                 </div>
-                <div className="truncate font-mono text-[11px]">
-                  {translate(
-                    'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bc0bdbb5e',
-                    'Launch:'
-                  )}{' '}
-                  {deliveryPlan.commandLabel}
-                </div>
+                <div className="text-[11px]">{deliveryPlan.deliveryLabel}</div>
                 <div className="text-[11px]">{deliveryPlan.caveat}</div>
               </div>
             )}

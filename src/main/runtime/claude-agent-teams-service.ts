@@ -11,6 +11,23 @@ import type {
   TeamPane
 } from './claude-agent-teams-types'
 
+const EPHEMERAL_AGENT_TEAMS_ENV_PREFIX = 'ORCA_AGENT_TEAMS_'
+const EPHEMERAL_AGENT_TEAMS_ENV_KEYS = new Set([
+  'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS',
+  'TMUX',
+  'TMUX_PANE'
+])
+
+export function stripEphemeralAgentTeamsEnv(env: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([key]) =>
+        !key.startsWith(EPHEMERAL_AGENT_TEAMS_ENV_PREFIX) &&
+        !EPHEMERAL_AGENT_TEAMS_ENV_KEYS.has(key)
+    )
+  )
+}
+
 export type {
   AgentTeamsLaunchEnv,
   AgentTeamsTerminalApi,
@@ -28,6 +45,8 @@ export class ClaudeAgentTeamsService {
     shimDir: string
     /** Absolute path only; null leaves the var unset so the shim refuses to guess a cwd-relative CLI. */
     shimBin: string | null
+    /** Validated custom-agent env inherited by teammate panes. */
+    childEnv?: Record<string, string>
   }): AgentTeamsLaunchEnv {
     const teamId = `team-${randomUUID()}`
     const token = randomBytes(32).toString('base64url')
@@ -69,7 +88,7 @@ export class ClaudeAgentTeamsService {
       sessionName: 'orca',
       windowIndex: '0',
       tmuxValue,
-      baseEnv: env,
+      baseEnv: args.childEnv ? { ...args.childEnv, ...env } : env,
       panes: new Map([[leaderPane, leader]]),
       paneOrder: [leaderPane],
       nextPaneNumber: 2,

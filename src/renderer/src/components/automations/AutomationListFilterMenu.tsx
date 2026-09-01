@@ -16,7 +16,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
+import { AgentIcon, getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
+import { mergeCustomAgentCatalogEntries } from '@/components/agent/custom-agent-catalog-entries'
+import { useLocalAgentCatalog } from '@/hooks/useLocalAgentCatalog'
 import { searchAgentPickerEntries } from '@/lib/agent-picker-search'
 import { translate } from '@/i18n/i18n'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
@@ -96,9 +98,7 @@ export function AutomationListFilterPills({
           ? translate('auto.components.automations.AutomationListFilterMenu.neverRan', 'Never ran')
           : null
   const agentValueLabel = filter.agentIds.length
-    ? filter.agentIds
-        .map((agentId) => getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId)
-        .join(', ')
+    ? filter.agentIds.map((agentId) => getAgentLabel(agentId)).join(', ')
     : null
   const hostPillLabel = onClearHost ? (hostLabel ?? null) : null
   if (!statusValueLabel && !lastRunValueLabel && !agentValueLabel && !hostPillLabel) {
@@ -166,7 +166,12 @@ export function AutomationListFilterMenu({
     'auto.components.automations.AutomationListFilterMenu.agent',
     'Agent'
   )
-  const agents = getAgentCatalog()
+  const { snapshot: localAgentCatalog } = useLocalAgentCatalog()
+  // Automations can be assigned a custom agent, so the filter must offer them too.
+  const agents = React.useMemo(
+    () => mergeCustomAgentCatalogEntries(getAgentCatalog(), localAgentCatalog, [], null),
+    [localAgentCatalog]
+  )
   const selectedAgentIds = filter.agentIds
   const [agentQuery, setAgentQuery] = React.useState('')
   const filteredAgents = searchAgentPickerEntries(agents, agentQuery)

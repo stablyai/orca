@@ -166,10 +166,20 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     if (!startupDraftReadyScanner || startupDraftPasteSettled || startupDraftHardTimer !== null) {
       return
     }
-    startupDraftHardTimer = setTimeout(() => {
-      startupDraftHardTimer = null
-      void deliverStartupDraftIfAgentOwnsPty()
-    }, resolveDraftPasteReadyTimeoutMs(session.startupDraftAgent))
+    // A custom startup-draft agent inherits its base harness's readiness budget.
+    const catalogSettings = useAppStore.getState().settings
+    startupDraftHardTimer = setTimeout(
+      () => {
+        startupDraftHardTimer = null
+        void deliverStartupDraftIfAgentOwnsPty()
+      },
+      resolveDraftPasteReadyTimeoutMs(
+        session.startupDraftAgent,
+        undefined,
+        catalogSettings?.customTuiAgents,
+        catalogSettings?.deletedCustomTuiAgents
+      )
+    )
   }
   const armStartupDraftQuietTimer = (): void => {
     if (!startupDraftReadyScanner || startupDraftPasteSettled) {

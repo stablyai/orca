@@ -17,6 +17,7 @@ import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
+import { useLocalAgentCatalog } from '@/hooks/useLocalAgentCatalog'
 import {
   getActionDescriptions,
   SOURCE_CONTROL_TEXT_ACTION_ID_SET,
@@ -73,6 +74,7 @@ export function RepositorySourceControlAiActionRows({
   onActionDiscard,
   onActionSave
 }: RepositorySourceControlAiActionRowsProps): React.JSX.Element {
+  const { snapshot: localAgentCatalog } = useLocalAgentCatalog()
   return (
     <div className="space-y-3">
       <Label className="text-xs font-medium">
@@ -100,7 +102,7 @@ export function RepositorySourceControlAiActionRows({
               getSourceControlAgentArgsPlaceholder(
                 resolveAgentArgsPlaceholderAgent(effectiveAgent, source, actionId, defaultTuiAgent)
               )
-        const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent)
+        const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent, localAgentCatalog)
         const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
         const agentSupportText = getSourceControlActionAgentSupportText(actionId)
         const actionDirty = actionDirtyById[actionId]

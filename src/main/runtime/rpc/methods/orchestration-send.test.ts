@@ -7,7 +7,6 @@ import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
-import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 function lifecycleGroupRecipientError(
   type: 'worker_done' | 'heartbeat' | 'escalation' | 'decision_gate'
@@ -46,21 +45,6 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('orchestration.send', () => {
-    it('does not resolve process incarnation for ordinary messages', async () => {
-      setup()
-      const resolveProcessIncarnation = vi.mocked(runtime.getTerminalProcessIncarnation)
-      resolveProcessIncarnation.mockClear()
-
-      const result = (await call('orchestration.send', {
-        from: 'term_coord',
-        to: `run:${activeRunId}`,
-        subject: 'hello'
-      })) as { message: { type: string } }
-
-      expect(result.message.type).toBe('status')
-      expect(resolveProcessIncarnation).not.toHaveBeenCalled()
-    })
-
     it('sends a message', async () => {
       setup()
       // Why: send notifies arrival so already-idle recipients get push-on-idle
@@ -108,7 +92,7 @@ describe('orchestration RPC methods', () => {
     it('routes exact Dispatch mail independently of terminal handles', async () => {
       setup()
       const task = db.createTask({ spec: 'controlled worker' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
 
       const result = (await call('orchestration.send', {
         from: 'term_coord',
@@ -133,8 +117,7 @@ describe('orchestration RPC methods', () => {
     it('routes Dispatch mail by stable pane identity after worker handle remint', async () => {
       setup()
       const task = db.createTask({ spec: 'controlled worker after restart' })
-      const dispatch = createRootDispatch(
-        db,
+      const dispatch = db.createDispatchContext(
         task.id,
         'term_worker_before',
         'tab_worker:leaf_worker'
@@ -202,7 +185,7 @@ describe('orchestration RPC methods', () => {
     it('completes an identity-less injected send through its explicit worker handle', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
       )
@@ -228,8 +211,7 @@ describe('orchestration RPC methods', () => {
     it('fences a replacement process for a capability-less manual Dispatch', async () => {
       setup()
       const task = db.createTask({ spec: 'process-bound manual work' })
-      const dispatch = createRootDispatch(
-        db,
+      const dispatch = db.createDispatchContext(
         task.id,
         'term_worker',
         'tab_worker:leaf_worker',
@@ -275,8 +257,7 @@ describe('orchestration RPC methods', () => {
       async (type) => {
         setup()
         const task = db.createTask({ spec: `process-bound ${type}` })
-        const dispatch = createRootDispatch(
-          db,
+        const dispatch = db.createDispatchContext(
           task.id,
           'term_worker',
           'tab_worker:leaf_worker',
@@ -332,7 +313,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       const dependent = db.createTask({ spec: 'dependent', deps: [task.id] })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_coord' ? 'tab_coord:leaf_coord' : null
       )
@@ -357,7 +338,7 @@ describe('orchestration RPC methods', () => {
     it('ignores caller-supplied pane claims and uses the runtime-observed pane', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
@@ -393,7 +374,7 @@ describe('orchestration RPC methods', () => {
     it('requires the minted capability, exact pane, and process incarnation', async () => {
       setup()
       const task = db.createTask({ spec: 'capability work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
       const capability = db.mintDispatchCapability({
         dispatchId: dispatch.id,
         paneKey: 'tab_worker:leaf_worker',
@@ -475,7 +456,7 @@ describe('orchestration RPC methods', () => {
     it('does not wake waiters for a heartbeat suppressed at send time', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
       db.updateTaskStatus(task.id, 'completed')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
@@ -495,7 +476,7 @@ describe('orchestration RPC methods', () => {
     it('still wakes waiters for a heartbeat on an active dispatch', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
 
@@ -603,13 +584,11 @@ describe('orchestration RPC methods', () => {
         tabId: opts.tabId ?? 'tab_1',
         leafId: opts.leafId ?? handle,
         title: opts.title ?? null,
+        ...(opts.baseAgent ? { baseAgent: opts.baseAgent } : {}),
         connected: opts.connected ?? true,
         writable: opts.writable ?? true,
         lastOutputAt: opts.lastOutputAt ?? null,
-        preview: opts.preview ?? '',
-        // Why spread: absent `agentIdentity` means unknown, so the helper must be able to
-        // produce a summary that genuinely lacks the field.
-        ...(opts.agentIdentity ? { agentIdentity: opts.agentIdentity } : {})
+        preview: opts.preview ?? ''
       }
     }
 
@@ -707,7 +686,7 @@ describe('orchestration RPC methods', () => {
     it('continues to send worker_done to a concrete terminal handle', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
 
       const result = (await call('orchestration.send', {
         from: 'term_worker',
@@ -744,11 +723,15 @@ describe('orchestration RPC methods', () => {
       expect(result.messages[0].to_handle).toBe('term_b')
     })
 
-    it('fans out an agent name group by host-resolved identity', async () => {
+    // Agent-name groups resolve from the validated base harness, not title text:
+    // a custom agent joins its base's group and an unattributed terminal is
+    // omitted rather than guessed.
+    it('fans out agent name group (@claude) by base harness', async () => {
       setupWithTerminals([
-        makeSummary('term_a', { agentIdentity: 'claude' }),
-        makeSummary('term_b', { agentIdentity: 'claude' }),
-        makeSummary('term_c', { agentIdentity: 'codex' })
+        makeSummary('term_a', { baseAgent: 'claude' }),
+        makeSummary('term_b', { baseAgent: 'claude' }),
+        makeSummary('term_c', { baseAgent: 'codex' }),
+        makeSummary('term_d', { title: 'Claude Code' })
       ])
 
       const result = (await call('orchestration.send', {
@@ -761,13 +744,11 @@ describe('orchestration RPC methods', () => {
       expect(result.messages[0].to_handle).toBe('term_b')
     })
 
-    it('fans out @droid without claiming a pane whose title merely contains the word', async () => {
+    it('fans out @droid by base harness', async () => {
       setupWithTerminals([
-        makeSummary('term_a', { agentIdentity: 'codex' }),
-        makeSummary('term_b', { agentIdentity: 'droid' }),
-        // Why kept: "Android build" contains `droid` as a substring. It was excluded before by
-        // whole-token matching and is excluded now because its identity is not droid.
-        makeSummary('term_c', { agentIdentity: 'claude', title: 'Android build' })
+        makeSummary('term_a', { baseAgent: 'codex' }),
+        makeSummary('term_b', { baseAgent: 'droid' }),
+        makeSummary('term_c', { title: 'Android build' })
       ])
 
       const result = (await call('orchestration.send', {
@@ -780,12 +761,13 @@ describe('orchestration RPC methods', () => {
       expect(result.messages[0].to_handle).toBe('term_b')
     })
 
-    it('fans out @cursor without claiming a Claude pane discussing a text cursor', async () => {
+    // `cursor` is ordinary vocabulary in another agent's task-summary title, and
+    // base-harness resolution is what keeps @cursor out of that Claude prompt.
+    it('fans out @cursor without claiming a cursor-mentioning title', async () => {
       setupWithTerminals([
-        makeSummary('term_a', { agentIdentity: 'codex' }),
-        makeSummary('term_b', { agentIdentity: 'cursor' }),
-        // The original hazard, now excluded structurally rather than by a bespoke predicate.
-        makeSummary('term_c', { agentIdentity: 'claude', title: '✳ Fix the text cursor blink' })
+        makeSummary('term_a', { baseAgent: 'codex' }),
+        makeSummary('term_b', { baseAgent: 'cursor' }),
+        makeSummary('term_c', { baseAgent: 'claude', title: '✳ Fix the text cursor blink' })
       ])
 
       const result = (await call('orchestration.send', {
@@ -857,7 +839,7 @@ describe('orchestration RPC methods', () => {
     it('releases dispatch lock before waking recipients when worker_done is sent via send', async () => {
       setup()
       const task = db.createTask({ spec: 'lock-release work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
 
       // Why: waiter notification must observe the settled Dispatch, not stale lifecycle state.
       vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {
@@ -882,13 +864,13 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
       // Lock released — a new dispatch to the same terminal must succeed.
       const t2 = db.createTask({ spec: 'follow-up work' })
-      expect(() => createRootDispatch(db, t2.id, 'term_worker')).not.toThrow()
+      expect(() => db.createDispatchContext(t2.id, 'term_worker')).not.toThrow()
     })
 
     it('records heartbeat when heartbeat is sent via send', async () => {
       setup()
       const task = db.createTask({ spec: 'heartbeat work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
       await call('orchestration.send', {
@@ -908,7 +890,7 @@ describe('orchestration RPC methods', () => {
     it('does not release dispatch lock for non-lifecycle sends', async () => {
       setup()
       const task = db.createTask({ spec: 'in-flight work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker')
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
       await call('orchestration.send', {

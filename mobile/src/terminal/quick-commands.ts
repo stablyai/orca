@@ -15,7 +15,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../../../src/shared/terminal-quick-commands'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+import { isMobileTuiAgent, MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
 
 // Reuse the canonical desktop quick-command logic (pure, no heavy deps) so
 // mobile behaves identically to desktop. Only genuinely mobile-specific pieces
@@ -85,7 +85,7 @@ export function buildMobileQuickCommandLaunch(
 }
 
 export function getQuickCommandAgentLabel(agent: TuiAgent): string {
-  return MOBILE_TUI_AGENT_LABELS[agent] ?? agent
+  return isMobileTuiAgent(agent) ? MOBILE_TUI_AGENT_LABELS[agent] : agent
 }
 
 // The subtitle desktop shows under each quick command: agent prompts read

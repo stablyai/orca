@@ -118,14 +118,22 @@ describe('launchAgentInNewTab initial cwd', () => {
       promptDelivery: 'submit-after-ready'
     })
 
+    // A submit-after-ready prompt never folds into the launch, so the request
+    // declares the empty prompt intentional and the text rides promptAfterReady.
     expect(mockLaunchAgentInWebHostTab).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: 'wt-1',
         environmentId: 'web-runtime',
-        prompt: 'continue the unfinished task',
-        promptDelivery: 'submit-after-ready',
-        pastePromptAfterReady: 'continue the unfinished task',
-        submitPastedPrompt: true
+        hasPrompt: true,
+        agentLaunch: {
+          selection: { kind: 'agent', agent: 'claude' },
+          allowEmptyPromptLaunch: true
+        },
+        promptAfterReady: {
+          content: 'continue the unfinished task',
+          submit: true,
+          forcePaste: true
+        }
       })
     )
     expect(store.createTab).not.toHaveBeenCalled()

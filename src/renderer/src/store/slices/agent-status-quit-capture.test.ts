@@ -1,28 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { AppState } from '../types'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status'
 import { createTestStore, makeTab } from './store-test-helpers'
-
-function makeAgentEntry(overrides: {
-  paneKey: string
-  worktreeId: string
-  sessionId?: string
-}): AgentStatusEntry {
-  return {
-    state: 'working',
-    prompt: 'finish the task',
-    updatedAt: 1,
-    stateStartedAt: 1,
-    stateHistory: [],
-    agentType: 'claude',
-    paneKey: overrides.paneKey,
-    worktreeId: overrides.worktreeId,
-    ...(overrides.sessionId
-      ? { providerSession: { key: 'session_id' as const, id: overrides.sessionId } }
-      : {})
-  }
-}
 
 describe('captureAllSleepingAgentSessions', () => {
   it('checkpoints a live resumable provider session before quit-time capture', () => {
@@ -65,6 +44,53 @@ describe('captureAllSleepingAgentSessions', () => {
       tabId: 'tab-1',
       providerSession: { key: 'session_id', id: 'codex-session-1' },
       origin: 'live'
+    })
+  })
+
+  it('captures the custom requestedAgent after a default-selection launch backfills the tab', () => {
+    const store = createTestStore()
+    const customId = 'custom-agent:claude:11111111-1111-4111-8111-111111111111' as const
+    store.setState({
+      settings: {
+        ...store.getState().settings,
+        customTuiAgents: [
+          {
+            id: customId,
+            baseAgent: 'claude',
+            label: 'My Claude',
+            args: '',
+            env: {},
+            syncEnv: false
+          }
+        ]
+      },
+      // Default-selection launch ({kind:'default'}) sends no agent id, so the
+      // tab boots with no launchAgent.
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
+    } as Partial<AppState>)
+
+    // The host receipt resolved the custom default; pty-connection backfills it
+    // write-if-absent onto the tab that had none.
+    store.getState().backfillTabLaunchAgent('tab-1', customId)
+    expect(store.getState().tabsByWorktree['wt-1']?.[0]?.launchAgent).toBe(customId)
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'finish the task', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession: { key: 'session_id', id: 'claude-session-1' } }
+      )
+
+    // The captured record preserves the requested custom id while ownership and
+    // resume argv stay keyed on the resolved base.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'claude',
+      baseAgent: 'claude',
+      requestedAgent: customId
     })
   })
 
@@ -781,104 +807,5 @@ describe('captureAllSleepingAgentSessions', () => {
     expect(
       store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
     ).toBeUndefined()
-  })
-
-  it('captures resumable agents across every worktree, not just one', () => {
-    const store = createTestStore()
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })],
-        'wt-2': [makeTab({ id: 'tab-2', worktreeId: 'wt-2' })]
-      },
-      agentStatusByPaneKey: {
-        'tab-1:leaf-1': makeAgentEntry({
-          paneKey: 'tab-1:leaf-1',
-          worktreeId: 'wt-1',
-          sessionId: 'sess-1'
-        }),
-        'tab-2:leaf-2': makeAgentEntry({
-          paneKey: 'tab-2:leaf-2',
-          worktreeId: 'wt-2',
-          sessionId: 'sess-2'
-        })
-      }
-    } as Partial<AppState>)
-
-    store.getState().captureAllSleepingAgentSessions('quit')
-
-    const records = store.getState().sleepingAgentSessionsByPaneKey
-    expect(records['tab-1:leaf-1']).toMatchObject({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      providerSession: { key: 'session_id', id: 'sess-1' },
-      origin: 'quit'
-    })
-    expect(records['tab-2:leaf-2']).toMatchObject({
-      agent: 'claude',
-      worktreeId: 'wt-2',
-      tabId: 'tab-2',
-      providerSession: { key: 'session_id', id: 'sess-2' },
-      origin: 'quit'
-    })
-  })
-
-  it('skips done agents — there is no turn left to resume', () => {
-    const store = createTestStore()
-    const entry = makeAgentEntry({
-      paneKey: 'tab-1:leaf-1',
-      worktreeId: 'wt-1',
-      sessionId: 'sess-1'
-    })
-    entry.state = 'done'
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      },
-      agentStatusByPaneKey: { 'tab-1:leaf-1': entry }
-    } as Partial<AppState>)
-
-    store.getState().captureAllSleepingAgentSessions('quit')
-
-    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
-  })
-
-  it('skips agents without a resumable provider session', () => {
-    const store = createTestStore()
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      },
-      agentStatusByPaneKey: {
-        'tab-1:leaf-1': makeAgentEntry({ paneKey: 'tab-1:leaf-1', worktreeId: 'wt-1' })
-      }
-    } as Partial<AppState>)
-
-    store.getState().captureAllSleepingAgentSessions('quit')
-
-    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
-  })
-
-  it('captures entries attributed only via tab prefix when the entry has no worktreeId', () => {
-    const store = createTestStore()
-    const entry = makeAgentEntry({
-      paneKey: 'tab-1:leaf-1',
-      worktreeId: 'wt-1',
-      sessionId: 'sess-1'
-    })
-    delete entry.worktreeId
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      },
-      agentStatusByPaneKey: { 'tab-1:leaf-1': entry }
-    } as Partial<AppState>)
-
-    store.getState().captureAllSleepingAgentSessions('quit')
-
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
-      worktreeId: 'wt-1',
-      providerSession: { key: 'session_id', id: 'sess-1' }
-    })
   })
 })

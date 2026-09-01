@@ -1,10 +1,12 @@
 import type { PreloadApi } from '../../../../preload/api-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../../../shared/computer-awake-mode'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
 import { mergeSettings } from './web-preference-normalization'
+import { createWebAgentCatalogSync } from '../web-agent-catalog-sync'
 import {
   getRuntimeBackedStoredSettings,
   getStoredSettings,
@@ -19,7 +21,22 @@ import {
   resolveEnvironment,
   webRuntimeState
 } from './web-runtime-session'
+import { callRuntimeEnvelope } from './web-runtime-calls'
 import { noopUnsubscribe } from './web-storage'
+
+const webSettingsListeners = new Set<(updates: Partial<GlobalSettings>) => void>()
+
+function notifyWebSettingsListeners(updates: Partial<GlobalSettings>): void {
+  for (const listener of Array.from(webSettingsListeners)) {
+    listener(updates)
+  }
+}
+
+export const webAgentCatalogSync = createWebAgentCatalogSync({
+  call: (method, params) => callRuntimeEnvelope(method, params, 15_000),
+  isPaired: () => requireActiveEnvironmentOrNull() !== null,
+  onRevisionApplied: (revision) => notifyWebSettingsListeners({ agentCatalogRevision: revision })
+})
 
 export function createWebSettingsApi(): Partial<PreloadApi> {
   return {
@@ -99,7 +116,23 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
       },
       updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
       listFonts: () => Promise.resolve([]),
-      onChanged: () => noopUnsubscribe
+      onChanged: (callback) => {
+        webSettingsListeners.add(callback)
+        return () => {
+          webSettingsListeners.delete(callback)
+        }
+      },
+      agentCatalog: {
+        getLocal: () => webAgentCatalogSync.getLocal(),
+        mutate: () => Promise.reject(new Error('not_available_on_paired_web')),
+        getLocalDraft: () => Promise.reject(new Error('not_available_on_paired_web')),
+        referenceSummary: () => Promise.reject(new Error('not_available_on_paired_web')),
+        baseDisableImpact: () => Promise.reject(new Error('not_available_on_paired_web'))
+      },
+      agentReferences: {
+        getLocal: () => Promise.reject(new Error('not_available_on_paired_web')),
+        mutate: () => Promise.reject(new Error('not_available_on_paired_web'))
+      }
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
     agentAwake: {
       getStatus: async () => {

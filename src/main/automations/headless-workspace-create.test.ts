@@ -71,8 +71,6 @@ describe('headless automation workspace create args', () => {
       setupDecision: 'skip',
       activate: false,
       createdWithAgent: 'codex',
-      startupAgent: 'codex',
-      startupPrompt: 'Review changes',
       telemetrySource: 'unknown',
       automationProvenance: {
         kind: 'created-by-automation',
@@ -88,6 +86,25 @@ describe('headless automation workspace create args', () => {
         hostId: 'ssh:ssh-target-1'
       }
     })
+  })
+
+  it('requests no create-time startup agent so the dispatcher can launch after create', () => {
+    // The create-time legacy startup arm is built-in-only and resolves before
+    // the worktree path exists; the headless dispatcher launches the agent
+    // terminal after create instead (custom agents resolve there).
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation,
+      run: {
+        id: 'run-1',
+        title: 'Nightly review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
+      },
+      repo
+    })
+
+    expect(args).not.toHaveProperty('startupAgent')
+    expect(args).not.toHaveProperty('startupPrompt')
+    expect(args).not.toHaveProperty('agentLaunch')
   })
 
   it('falls back to skip for legacy automations without a saved setup decision', () => {

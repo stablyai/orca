@@ -9,8 +9,7 @@ import { deleteAiVaultSession, registerAiVaultDeleteHandler } from './ai-vault-d
 import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
 import {
   aiVaultScanIssueResult,
-  cancelledAiVaultListResult,
-  mergeAiVaultListResults
+  cancelledAiVaultListResult
 } from '../ai-vault/session-list-results'
 import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
@@ -32,12 +31,9 @@ import {
   parseExecutionHostId,
   requestedExecutionHostScope,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostScope
 } from '../../shared/execution-host'
-import { getActiveSshAiVaultHostInfos } from './ssh'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
-import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
 import {
   scanRuntimeAiVaultSessions,
   type RuntimeAiVaultHostInfo,
@@ -57,22 +53,26 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
-import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
-
-const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
-// Why: a remote home with many agent roots routinely needs seconds to walk,
-// stat and parse. The old shared 3s bound emptied healthy SSH hosts in the
-// all-hosts view; the relay gets a real scan budget and the whole leg (relay
-// attempt plus any legacy crawl) stays bounded so one host can't hold the
-// merge open.
-const AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS = 15_000
-const AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS = 20_000
+import {
+  registerAiVaultResumeCommandHandler,
+  type ResolveRuntimeAiVaultResumeDetails
+} from './ai-vault-resume-command'
+import type { VaultResumeAssemblySettings } from '../agent-launch/agent-launch-vault-resume'
+import type {
+  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeResult
+} from '../../shared/ai-vault-resume-preparation'
+import { scanAllAiVaultHostLegs } from './ai-vault-all-host-scan'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
     getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
     resolveRuntimeAiVaultSessionTitles?: RuntimeAiVaultSessionTitleResolver
+    resolveRuntimeAiVaultResumeDetails?: ResolveRuntimeAiVaultResumeDetails
+    // Host settings for AI Vault resume-command assembly (cmd overrides, default
+    // args/env, Windows shell). Absent in tests → assembly falls back to defaults.
+    getVaultResumeSettings?: () => VaultResumeAssemblySettings | undefined
   }
 
 let scanCoordinator = new AiVaultScanCoordinator()
@@ -142,49 +142,16 @@ async function scanAiVaultSessionsByHostScope(
     return scanLocalAiVaultSessionsAsIssue(args, signal)
   }
   if (executionHostScope === 'all') {
-    const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
-    const sshHosts = getActiveSshAiVaultHostInfosResult()
-    const runtimeResults = [
-      ...(runtimeHosts.issue ? [runtimeHosts.issue] : []),
-      ...(sshHosts.issue ? [sshHosts.issue] : [])
-    ]
-    const scannedResults = await Promise.all([
-      scanLocalAiVaultSessionsAsIssue(args, signal),
-      ...sshHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${toSshExecutionHostId(hostInfo.targetId)}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanSshAiVaultSessions(hostInfo.targetId, args, {
-              signal,
-              timeoutMs: AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS
-            })
-        })
-      ),
-      ...runtimeHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${hostInfo.executionHostId}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanRuntimeAiVaultSessions({
-              hostInfo,
-              scanner: handlerOptions.scanRuntimeAiVaultSessions,
-              listArgs: args,
-              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS }
-            })
-        })
-      )
-    ])
-    return mergeAiVaultListResults(
-      [...scannedResults, ...runtimeResults],
-      args?.limit,
-      args?.unlimited
-    )
+    return scanAllAiVaultHostLegs({
+      args,
+      signal,
+      cacheKey,
+      depth,
+      scopePaths,
+      getActiveRuntimeHostInfos: () => handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? [],
+      runtimeScanner: handlerOptions.scanRuntimeAiVaultSessions,
+      scanLocalAsIssue: scanLocalAiVaultSessionsAsIssue
+    })
   }
 
   const parsed = parseExecutionHostId(executionHostScope)
@@ -207,20 +174,6 @@ async function scanAiVaultSessionsByHostScope(
     executionHostId: executionHostScope,
     path: executionHostScope,
     message: 'Agent Session History is not available for this execution host.'
-  })
-}
-
-function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
-  return discoverAiVaultHosts(() => handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? [], {
-    path: 'runtime environments',
-    fallbackMessage: 'Runtime hosts are unavailable.'
-  })
-}
-
-function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targetId: string }> {
-  return discoverAiVaultHosts(getActiveSshAiVaultHostInfos, {
-    path: 'SSH hosts',
-    fallbackMessage: 'SSH hosts are unavailable.'
   })
 }
 
@@ -269,6 +222,18 @@ async function scanLocalAiVaultSessions(
   )
 }
 
+// The desktop's OWN multi-host discovery (local + ssh + runtime), exported so the
+// resume surfaces re-validate against exactly what the picker showed.
+export { listAiVaultSessions as discoverAiVaultSessionsAcrossHosts }
+
+/** The registered owning-host Codex repin, for host spawn paths that revalidate
+ *  a resume entry outside this module. Undefined until handlers register. */
+export function getAiVaultSessionResumePreparation():
+  | ((args: AiVaultPrepareSessionResumeArgs) => Promise<AiVaultPrepareSessionResumeResult>)
+  | undefined {
+  return handlerOptions.prepareSessionResume
+}
+
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
   handlerOptions = options
   // Why: configure the SAME shared cache module the runtime RPC method uses so
@@ -283,9 +248,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
         : undefined
     const controller = listCancellations.begin(event, requestToken)
     try {
-      await handlerOptions.ensureStructuredSessionOwnership?.()
-      const result = await listAiVaultSessions(args, { signal: controller?.signal })
-      return projectStructuredAiVaultSessions(result, true)
+      return await listAiVaultSessions(args, { signal: controller?.signal })
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
       // rejected handler — report it as a result so the log stays truthful.
@@ -320,7 +283,9 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     handleAiVaultGetFirstUserPrompt(args)
   )
   registerAiVaultDeleteHandler(aiVaultDeleteDeps)
-  // macOS app activation skips DOM focus events, so emit the refresh signal here.
+  registerAiVaultResumeCommandHandler(listAiVaultSessions, options)
+  // DOM focus/visibility events don't fire in the renderer on macOS app
+  // activation, so refresh-on-refocus needs this main-process signal.
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {
       window.webContents.send('aiVault:windowFocused')

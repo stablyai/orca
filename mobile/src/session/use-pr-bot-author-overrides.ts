@@ -33,7 +33,8 @@ export function usePRBotAuthorOverrides(
     }
     let stale = false
     void client
-      .sendRequest('settings.get')
+      // Only prBotAuthorOverrides is read; opt out of the piggybacked agent catalog.
+      .sendRequest('settings.get', { includeAgentCatalog: false })
       .then((response) => {
         if (stale || !response.ok) {
           return

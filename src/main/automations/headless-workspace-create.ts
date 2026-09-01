@@ -39,8 +39,11 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     setupDecision: automation.setupDecision ?? 'skip',
     activate: false,
     createdWithAgent: automation.agentId,
-    startupAgent: automation.agentId,
-    startupPrompt: automation.prompt,
+    // No startupAgent/startupPrompt: the create-time legacy startup arm is
+    // built-in-only and resolves before the worktree path exists, so custom
+    // agents (and their {worktreePath} variables) cannot resolve there. The
+    // dispatcher launches the agent terminal after create instead — the same
+    // create-blank-then-launch order the renderer dispatch path uses.
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)
   }

@@ -127,6 +127,18 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(resolveCommitMessageAgentChoice('codex', null, ['codex'])).toBe('codex')
   })
 
+  it('yields no implicit choice for a custom default agent instead of running its base headlessly', () => {
+    // Headless text generation runs the per-built-in spec registry; silently
+    // substituting the base would run something other than what the id claims.
+    expect(
+      resolveCommitMessageAgentChoice(
+        null,
+        'custom-agent:claude:11111111-1111-4111-8111-111111111111',
+        []
+      )
+    ).toBeNull()
+  })
+
   it('gives every model with thinking levels a valid default', () => {
     for (const spec of Object.values(COMMIT_MESSAGE_AGENT_SPECS)) {
       if (!spec) {

@@ -18,4 +18,6 @@ export type PtyProcessInfo = {
   /** Optional host-side process evidence attached to an inventory seed. */
   foregroundProcessEvidence?: ForegroundProcessEvidence
   agentSessionOwners?: AgentSessionOwnerBinding[]
+  /** Host admission token surfaced on re-list for crash reconciliation. */
+  launchToken?: string
 }

@@ -20,7 +20,8 @@ const mockState = {
   tabsByWorktree: {} as Record<string, { id: string }[]>,
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
-  tabBarOrderByWorktree: {} as Record<string, string[]>
+  tabBarOrderByWorktree: {} as Record<string, string[]>,
+  runtimeStatusByEnvironmentId: new Map<string, { status: { capabilities?: string[] } | null }>()
 }
 
 vi.mock('@/store', () => ({
@@ -63,6 +64,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     mockState.openFiles = []
     mockState.browserTabsByWorktree = {}
     mockState.tabBarOrderByWorktree = {}
+    mockState.runtimeStatusByEnvironmentId = new Map()
     mockCreateTab.mockImplementation((worktreeId: string) => {
       const tab = { id: `tab-${(mockState.tabsByWorktree[worktreeId] ?? []).length + 1}` }
       mockState.tabsByWorktree[worktreeId] = [...(mockState.tabsByWorktree[worktreeId] ?? []), tab]
@@ -91,6 +93,54 @@ describe('launchAiVaultSessionInNewTab', () => {
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mockSetTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(result).toEqual({ tabId: 'tab-1', groupId: 'group-1' })
+  })
+
+  it('queues the host-owned vault-resume arm with an empty command on desktop', () => {
+    launchAiVaultSessionInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      targetGroupId: 'group-1',
+      command: '',
+      agentLaunch: {
+        vaultResume: {
+          operation: 'resume',
+          entry: {
+            executionHostId: 'local',
+            agent: 'claude',
+            sessionId: 'session-1',
+            filePath: '/vault/session-1.jsonl'
+          }
+        }
+      }
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: '',
+      agentLaunch: {
+        vaultResume: {
+          operation: 'resume',
+          entry: {
+            executionHostId: 'local',
+            agent: 'claude',
+            sessionId: 'session-1',
+            filePath: '/vault/session-1.jsonl'
+          }
+        }
+      },
+      launchAgent: 'claude',
+      telemetry: {
+        agent_kind: 'claude',
+        launch_source: 'sidebar',
+        request_kind: 'resume'
+      }
+    })
+    // The host owns argv + env on this path; no client command/env/launchConfig rides.
+    const queued = mockQueueTabStartupCommand.mock.calls[0]?.[1] as {
+      env?: unknown
+      launchConfig?: unknown
+    }
+    expect(queued.env).toBeUndefined()
+    expect(queued.launchConfig).toBeUndefined()
   })
 
   it('queues configured resume startup details for agent history resumes', () => {
@@ -189,5 +239,50 @@ describe('launchAiVaultSessionInNewTab', () => {
       await expect(result.runtimeLaunch).resolves.toEqual({ status: 'created' })
     }
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
+  })
+
+  const vaultResumeArm = {
+    vaultResume: {
+      operation: 'resume' as const,
+      entry: { executionHostId: 'local' as const, agent: 'codex' as const, sessionId: 'session-1' }
+    }
+  }
+
+  it('keeps the command with the arm when the runtime identity capability is unknown', () => {
+    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    // No status entry for env-1 → capability unknown → fail closed to the command so
+    // a pre-identity host that strips the arm still resumes (no silent bare terminal).
+
+    const result = launchAiVaultSessionInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      command: "codex resume 'session-1'",
+      agentLaunch: vaultResumeArm
+    })
+
+    expect(runtimeMocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ command: "codex resume 'session-1'", agentLaunch: vaultResumeArm })
+    )
+    expect(result.tabId).toBeNull()
+  })
+
+  it('drops the client command on a confirmed identity-capable runtime (host owns the resume)', () => {
+    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    mockState.runtimeStatusByEnvironmentId.set('env-1', {
+      status: { capabilities: ['aiVault.v1', 'agent-launch.identity.v1'] }
+    })
+
+    launchAiVaultSessionInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      command: "codex resume 'session-1'",
+      agentLaunch: vaultResumeArm
+    })
+
+    const call = runtimeMocks.createWebRuntimeSessionTerminal.mock.calls[0]?.[0]
+    expect(call.agentLaunch).toEqual(vaultResumeArm)
+    expect(call).not.toHaveProperty('command')
   })
 })

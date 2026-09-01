@@ -19,6 +19,8 @@ import {
 } from '../../../../shared/commit-message-agent-spec'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
 import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
+import { saveSourceControlAiSettings } from '@/lib/agent-catalog-authoring'
+import { notifyAgentAuthoringWriteFailure } from '@/lib/agent-authoring-write-failure-toast'
 import { useAppStore } from '../../store'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -32,7 +34,6 @@ import { HostedReviewCreationDefaults } from './HostedReviewCreationDefaults'
 
 type CommitMessageAiPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
   onCustomPromptDirtyChange?: (dirty: boolean) => void
   customPromptDiscardSignal?: number
@@ -94,7 +95,6 @@ export function getCommitMessageSettingsPaneDiscoveryHostKey(
 
 export function CommitMessageAiPane({
   settings,
-  updateSettings,
   writeSourceControlAiSettings,
   onCustomPromptDirtyChange,
   customPromptDiscardSignal,
@@ -113,12 +113,12 @@ export function CommitMessageAiPane({
         const latestSettings = useAppStore.getState().settings ?? settings
         const current = readSettings(latestSettings)
         const resolvedPatch = typeof patch === 'function' ? patch(current) : patch
-        await updateSettings({
-          sourceControlAi: {
-            ...current,
-            ...resolvedPatch
-          }
-        })
+        // Why: toggles and the custom-command field have no per-control error
+        // slot, so route a durable-write rejection to the same toast the sibling
+        // action-recipe writes already use.
+        notifyAgentAuthoringWriteFailure(
+          await saveSourceControlAiSettings({ ...current, ...resolvedPatch })
+        )
       })
     settingsWriteQueueRef.current = next
     return next

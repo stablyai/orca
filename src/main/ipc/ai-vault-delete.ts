@@ -11,12 +11,19 @@ import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../shared/ai-vault-session-deletion'
+import { isResumableTuiAgent } from '../../shared/agent-session-resume'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { getHostAgentSessionRecordStore } from '../agent-launch/agent-session-record-store-host'
+import { forgetDeletedVaultSessionRecords } from '../agent-launch/agent-session-vault-delete-forget'
+import type { VaultSnapshotScanIdentity } from '../agent-launch/agent-session-vault-target-index'
 
 // Which cache backs the multi-host list is ai-vault.ts's concern, so its
 // invalidation is injected rather than reached into from here.
 type AiVaultDeleteDeps = {
   invalidateMultiHostListCache: () => void
   invalidateBackgroundCache?: (paths: string[]) => Promise<void>
+  // Test seam; production defaults to the host-wide singleton record store.
+  forgetSessionRecords?: (identity: VaultSnapshotScanIdentity) => void
 }
 
 // Binds the delete orchestration to the caller's cache-invalidation seam.
@@ -59,6 +66,21 @@ export async function deleteAiVaultSession(
     ]).catch((error) => {
       console.warn('[ai-vault] background cache invalidation failed:', error)
     })
+    // The host-private resume records must die with the transcript, or the
+    // session stays internally resumable after the UI says it is gone. An old
+    // renderer may omit sessionId; without it no record can be correlated.
+    if (args?.sessionId && isResumableTuiAgent(args.agent)) {
+      const forget =
+        deps.forgetSessionRecords ??
+        ((identity: VaultSnapshotScanIdentity) =>
+          forgetDeletedVaultSessionRecords(getHostAgentSessionRecordStore(), identity))
+      forget({
+        baseAgent: args.agent,
+        scannedProviderSessionId: args.sessionId,
+        scannedTranscriptPath: args.filePath || null,
+        scannedExecutionHostId: args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+      })
+    }
   }
 
   return result

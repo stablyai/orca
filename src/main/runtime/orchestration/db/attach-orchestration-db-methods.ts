@@ -4,7 +4,7 @@ import { attachDispatchCapability } from './dispatch-context/dispatch-capability
 import { attachDispatchCompletion } from './dispatch-context/dispatch-completion'
 import { attachDispatchContextStore } from './dispatch-context/dispatch-context-store'
 import { attachDispatchLookup } from './dispatch-context/dispatch-lookup'
-import { attachDispatchDepth } from './dispatch-depth'
+import { attachDispatchLaunchIdentity } from './dispatch-context/dispatch-launch-identity'
 import { attachWorkerReportSettlement } from './dispatch-context/worker-report-settlement'
 import { attachFederatedDispatchStore } from './federation/federated-dispatch-store'
 import { attachFederationRelayAck } from './federation/federation-relay-ack'
@@ -116,7 +116,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachDispatchContextStore(ctor)
   attachDispatchCapability(ctor)
   attachDispatchLookup(ctor)
-  attachDispatchDepth(ctor)
+  attachDispatchLaunchIdentity(ctor)
   attachDispatchCompletion(ctor)
   attachWorkerReportSettlement(ctor)
   attachDecisionGateStore(ctor)

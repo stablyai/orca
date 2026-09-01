@@ -2,10 +2,6 @@ import { isAgentSessionOwnerBinding } from '../../shared/agent-session-host-auth
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
-import {
-  cloneForegroundProcessEvidence,
-  isForegroundProcessEvidence
-} from '../../shared/foreground-process-evidence'
 import type { PtyProcessInfo } from './types'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
@@ -55,24 +51,17 @@ export class PtyProcessListAdmission {
     const titleBytes = retainedStringBytes(value.title)
     const worktreeIdBytes = retainedOptionalStringBytes(value.worktreeId)
     const terminalHandleBytes = retainedOptionalStringBytes(value.terminalHandle)
+    const launchTokenBytes = retainedOptionalStringBytes(value.launchToken)
     const wslDistroBytes =
       value.wslDistro === null ? 0 : retainedOptionalStringBytes(value.wslDistro)
-    const evidenceBytes =
-      value.foregroundProcessEvidence === undefined
-        ? 0
-        : isForegroundProcessEvidence(value.foregroundProcessEvidence)
-          ? Buffer.byteLength(JSON.stringify(value.foregroundProcessEvidence), 'utf8')
-          : null
     if (
       idBytes === null ||
       cwdBytes === null ||
       titleBytes === null ||
       worktreeIdBytes === null ||
       terminalHandleBytes === null ||
+      launchTokenBytes === null ||
       wslDistroBytes === null ||
-      evidenceBytes === null ||
-      (value.rootProcessId !== undefined &&
-        (!Number.isSafeInteger(value.rootProcessId) || value.rootProcessId <= 0)) ||
       (value.incarnationId !== undefined && !isPtyIncarnationId(value.incarnationId)) ||
       (value.agentSessionOwners !== undefined && !Array.isArray(value.agentSessionOwners))
     ) {
@@ -103,8 +92,8 @@ export class PtyProcessListAdmission {
       titleBytes +
       worktreeIdBytes +
       terminalHandleBytes +
+      launchTokenBytes +
       wslDistroBytes +
-      evidenceBytes +
       ownerBytes
     if (
       nextEntries > MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES ||
@@ -122,17 +111,10 @@ export class PtyProcessListAdmission {
       cwd: value.cwd,
       title: value.title,
       ...(value.incarnationId !== undefined ? { incarnationId: value.incarnationId } : {}),
-      ...(value.rootProcessId !== undefined ? { rootProcessId: value.rootProcessId } : {}),
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
-      ...(value.foregroundProcessEvidence !== undefined
-        ? {
-            foregroundProcessEvidence: cloneForegroundProcessEvidence(
-              value.foregroundProcessEvidence
-            )
-          }
-        : {}),
+      ...(value.launchToken !== undefined ? { launchToken: value.launchToken } : {}),
       ...(normalizedOwners !== undefined ? { agentSessionOwners: normalizedOwners } : {})
     }
   }

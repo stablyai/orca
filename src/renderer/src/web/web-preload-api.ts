@@ -41,6 +41,7 @@ import { createWebRuntimeApi } from './preload-api/web-runtime-api'
 import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environments-api'
 import { webRuntimeState } from './preload-api/web-runtime-session'
 import { createWebSettingsApi } from './preload-api/web-settings-api'
+import { webAgentCatalogSync } from './preload-api/web-settings-api'
 import { createShellApi } from './preload-api/web-shell-api'
 import { createWebStarNagApi } from './preload-api/web-star-nag-api'
 import { createWebTelemetryApi } from './preload-api/web-telemetry-api'
@@ -51,11 +52,13 @@ import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-ap
 import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
+import { subscribeAgentCatalogRevision } from '@/runtime/agent-catalog-revision-event'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
   const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
   webWindow.__ORCA_WEB_CLIENT__ = true
+  subscribeAgentCatalogRevision((revision) => webAgentCatalogSync.announceRevision(revision))
   window.electron = createFallbackProxy(['electron']) as Window['electron']
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }

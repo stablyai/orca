@@ -1,25 +1,21 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
-import {
-  isTuiAgentEnabled,
-  pickTuiAgent,
-  TUI_AGENT_AUTO_PICK_ORDER
-} from '../../../shared/tui-agent-selection'
+import type { TuiAgent } from '../../../shared/types'
+import { pickTuiAgent, TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/tui-agent-selection'
 
 export function pickQuickWorkspaceAgent(
   preferred: TuiAgent | 'blank' | null | undefined,
-  detectedAgentIds: Iterable<TuiAgent> | null,
+  selectableAgentIds: Iterable<TuiAgent> | null,
   disabledTuiAgents?: Iterable<unknown> | null
 ): TuiAgent | null {
-  const candidates = detectedAgentIds ?? TUI_AGENT_AUTO_PICK_ORDER
+  const candidates = selectableAgentIds ?? TUI_AGENT_AUTO_PICK_ORDER
   return pickTuiAgent(preferred, candidates, disabledTuiAgents)
 }
 
-function hasDetectedAgent(detectedAgentIds: Iterable<TuiAgent>, agent: TuiAgent): boolean {
-  if (detectedAgentIds instanceof Set) {
-    return detectedAgentIds.has(agent)
+function hasSelectableAgent(selectableAgentIds: Iterable<TuiAgent>, agent: TuiAgent): boolean {
+  if (selectableAgentIds instanceof Set) {
+    return selectableAgentIds.has(agent)
   }
-  for (const detectedAgentId of detectedAgentIds) {
-    if (detectedAgentId === agent) {
+  for (const selectableAgentId of selectableAgentIds) {
+    if (selectableAgentId === agent) {
       return true
     }
   }
@@ -28,25 +24,19 @@ function hasDetectedAgent(detectedAgentIds: Iterable<TuiAgent>, agent: TuiAgent)
 
 function isQuickWorkspaceAgentAvailable(
   agent: TuiAgent,
-  detectedAgentIds: Iterable<TuiAgent> | null,
-  disabledTuiAgents?: Iterable<unknown> | null
+  selectableAgentIds: Iterable<TuiAgent> | null
 ): boolean {
-  if (!isTuiAgentEnabled(agent, disabledTuiAgents)) {
-    return false
-  }
-  return detectedAgentIds === null || hasDetectedAgent(detectedAgentIds, agent)
+  return selectableAgentIds === null || hasSelectableAgent(selectableAgentIds, agent)
 }
 
 export function resolveQuickWorkspaceAgentSelection({
   quickAgentOverride,
   preferredQuickAgent,
-  detectedAgentIds,
-  disabledTuiAgents
+  selectableAgentIds
 }: {
   quickAgentOverride: TuiAgent | null | undefined
   preferredQuickAgent: TuiAgent | null
-  detectedAgentIds: Iterable<TuiAgent> | null
-  disabledTuiAgents?: Iterable<unknown> | null
+  selectableAgentIds: Iterable<TuiAgent> | null
 }): {
   quickAgent: TuiAgent | null
   quickAgentOverride: TuiAgent | null | undefined
@@ -57,7 +47,7 @@ export function resolveQuickWorkspaceAgentSelection({
       quickAgentOverride
     }
   }
-  if (isQuickWorkspaceAgentAvailable(quickAgentOverride, detectedAgentIds, disabledTuiAgents)) {
+  if (isQuickWorkspaceAgentAvailable(quickAgentOverride, selectableAgentIds)) {
     return { quickAgent: quickAgentOverride, quickAgentOverride }
   }
   return { quickAgent: preferredQuickAgent, quickAgentOverride: preferredQuickAgent }

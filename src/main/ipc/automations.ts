@@ -127,6 +127,13 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     (_event, result: AutomationDispatchResult): Promise<AutomationRun> =>
       service.markDispatchResult(result)
   )
+  // U9 W-T3 (plan :498): owner Forget of a run stranded in launch_state_unknown —
+  // settles it dispatch_failed + agentLaunchForgottenAt, never retried, spawns/
+  // kills nothing, and is a no-op on an already-final run.
+  ipcMain.handle(
+    'automations:forgetRun',
+    (_event, args: { runId: string }): AutomationRun => service.forgetAutomationRun(args.runId)
+  )
   ipcMain.handle(
     'automations:snapshotWorkspaceName',
     (_event, args: { workspaceId: string; displayName: string }): number =>

@@ -1,15 +1,39 @@
 // Why: command strings may include pasted scripts; first-token classification must stay bounded.
 export const COMMAND_TOKEN_SCAN_MAX_CHARS = 4096
 
-export function getFirstCommandToken(command: string): string {
-  const scanLimit = Math.min(command.length, COMMAND_TOKEN_SCAN_MAX_CHARS)
-  let index = 0
+/**
+ * PowerShell's call operator. `buildShellCommandFromArgv` prefixes every
+ * PowerShell launch line with it so a quoted executable path is executed rather
+ * than echoed, so it is syntax and never the executable — first-token
+ * classification has to look past it. Only a standalone `&` followed by
+ * whitespace counts, which leaves `&&`, `&foo` and a posix line's inner `&`
+ * alone.
+ */
+export const POWERSHELL_CALL_OPERATOR = '&'
 
+function skipCommandTokenWhitespace(command: string, from: number, scanLimit: number): number {
+  let index = from
   while (index < scanLimit && isCommandTokenWhitespace(command.charCodeAt(index))) {
     index += 1
   }
+  return index
+}
+
+export function getFirstCommandToken(command: string): string {
+  const scanLimit = Math.min(command.length, COMMAND_TOKEN_SCAN_MAX_CHARS)
+  let index = skipCommandTokenWhitespace(command, 0, scanLimit)
   if (index >= scanLimit) {
     return ''
+  }
+  if (
+    command[index] === POWERSHELL_CALL_OPERATOR &&
+    index + 1 < scanLimit &&
+    isCommandTokenWhitespace(command.charCodeAt(index + 1))
+  ) {
+    index = skipCommandTokenWhitespace(command, index + 1, scanLimit)
+    if (index >= scanLimit) {
+      return ''
+    }
   }
 
   const quote = command[index]

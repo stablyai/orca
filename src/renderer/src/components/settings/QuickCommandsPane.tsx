@@ -10,6 +10,11 @@ import { searchTerminalQuickCommands } from '@/lib/terminal-quick-command-search
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { deleteTerminalQuickCommand, saveTerminalQuickCommand } from '@/lib/agent-catalog-authoring'
+import {
+  AgentAuthoringWriteFailureNotice,
+  asAgentAuthoringWriteFailure
+} from './agent-authoring-write-failure'
 import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { QuickCommandsList } from './QuickCommandsList'
@@ -21,6 +26,12 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import {
+  getAvailableQuickCommandHostId,
+  isQuickCommandEditorHostCurrent,
+  shouldOpenQuickCommandAddIntent,
+  shouldShowQuickCommandsRefreshError
+} from './quick-commands-pane-host-state'
 import {
   getTerminalQuickCommandHostOptions,
   shouldShowTerminalQuickCommandHostOwnership
@@ -45,43 +56,6 @@ type EditorState =
       hostId: ExecutionHostId
     }
   | null
-
-export function shouldOpenQuickCommandAddIntent(
-  addCommandIntentSignal: number | undefined,
-  consumedAddIntentSignal: number
-): boolean {
-  return Boolean(addCommandIntentSignal && consumedAddIntentSignal !== addCommandIntentSignal)
-}
-
-export function getAvailableQuickCommandHostId(
-  selectedHostId: ExecutionHostId,
-  hostOptions: readonly { id: ExecutionHostId }[]
-): ExecutionHostId {
-  return hostOptions.some((host) => host.id === selectedHostId)
-    ? selectedHostId
-    : LOCAL_EXECUTION_HOST_ID
-}
-
-export function isQuickCommandEditorHostCurrent(
-  hostId: ExecutionHostId,
-  connectionGeneration: number,
-  hostOptions: readonly { id: ExecutionHostId }[],
-  runtimeStatuses: ReadonlyMap<string, { connectionGeneration?: number }>
-): boolean {
-  const host = parseExecutionHostId(hostId)
-  return (
-    hostOptions.some((option) => option.id === hostId) &&
-    (host?.kind !== 'runtime' ||
-      (runtimeStatuses.get(host.environmentId)?.connectionGeneration ?? 0) === connectionGeneration)
-  )
-}
-
-export function shouldShowQuickCommandsRefreshError(
-  commandsAreCurrent: boolean,
-  runtimeCommands: { error: string | null; ready: boolean } | undefined
-): boolean {
-  return commandsAreCurrent && runtimeCommands?.ready === true && Boolean(runtimeCommands.error)
-}
 
 export function QuickCommandsPane({
   settings,
@@ -131,6 +105,12 @@ export function QuickCommandsPane({
   const [scopeSelection, setScopeSelection] = useState<ReadonlySet<string> | null>(null)
   const [scopePopoverOpen, setScopePopoverOpen] = useState(false)
   const [query, setQuery] = useState('')
+  // Why: the dialog closes on save, so a durable-write rejection would otherwise
+  // read as saved until the edit vanishes on the next launch.
+  const [writeFailed, setWriteFailed] = useState(false)
+  const surfaceMutationOutcome = (result: { ok: boolean }): void => {
+    setWriteFailed(asAgentAuthoringWriteFailure(result) !== null)
+  }
 
   const availableHostId = getAvailableQuickCommandHostId(selectedHostId, hostOptions)
   const editorHostIsCurrent =
@@ -252,7 +232,11 @@ export function QuickCommandsPane({
       return
     }
     useAppStore.getState().recordFeatureInteraction('quick-commands')
-    void useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next)
+    if (editor.hostId.startsWith('runtime:')) {
+      void useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next)
+      return
+    }
+    void saveTerminalQuickCommand(next).then(surfaceMutationOutcome)
   }
 
   const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
@@ -272,7 +256,11 @@ export function QuickCommandsPane({
     if (!confirmed) {
       return
     }
-    void useAppStore.getState().deleteTerminalQuickCommand(selectedHostId, command.id)
+    if (selectedHostId.startsWith('runtime:')) {
+      void useAppStore.getState().deleteTerminalQuickCommand(selectedHostId, command.id)
+      return
+    }
+    void deleteTerminalQuickCommand(command.id).then(surfaceMutationOutcome)
   }
 
   const openAddDialog = (): void =>
@@ -285,6 +273,7 @@ export function QuickCommandsPane({
 
   return (
     <div className="space-y-4">
+      {writeFailed ? <AgentAuthoringWriteFailureNotice /> : null}
       {shouldShowTerminalQuickCommandHostOwnership(hostOptions) ? (
         <p className="text-xs text-muted-foreground">{ownership.description}</p>
       ) : null}

@@ -53,7 +53,8 @@ function makeFork(): PreparedAgentSessionFork {
     prompt: 'fork prompt',
     agent: null,
     worktreeId: 'wt-1',
-    pane: {} as PreparedAgentSessionFork['pane']
+    pane: {} as PreparedAgentSessionFork['pane'],
+    sourceWasCustomAgent: false
   }
 }
 

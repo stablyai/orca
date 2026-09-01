@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import type { CreatedWorktreeResult } from '../../shared/worktree/create-types'
 import {
   resolveDefaultBaseRefViaExecMock,
   getSshGitProviderMock,
@@ -430,7 +430,7 @@ describe('registerWorktreeHandlers', () => {
     const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-ssh',
       name: 'slash-local-base'
-    })) as CreateWorktreeResult
+    })) as CreatedWorktreeResult
 
     expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalledWith(
       '/remote/repo',

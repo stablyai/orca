@@ -169,6 +169,8 @@ export function resolveStartupShell(
   return shell ?? (platform === 'win32' ? 'powershell' : 'posix')
 }
 
+const CMD_QUOTE_BREAKING_CHAR_RE = /["%!]/
+
 /**
  * Quotes one argument so the SAME text is literal in every Unix shell Orca can
  * be typing into — sh, bash, zsh, dash and fish.
@@ -217,19 +219,60 @@ function quotePortableUnixArg(value: string): string {
 
 export function quoteStartupArg(value: string, shell: AgentStartupShell): string {
   if (shell === 'powershell') {
-    return `'${value.replace(/'/g, "''")}'`
+    // Why: PowerShell treats the Unicode quotation marks U+2018-U+201B as
+    // single-quote string delimiters exactly like ASCII ' — all five must be
+    // doubled or a smart quote in a path/prompt terminates the string early.
+    return `'${value.replace(/(['‘’‚‛])/g, '$1$1')}'`
   }
   if (shell === 'cmd') {
-    return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
+    // Why: inside cmd double quotes a caret is a LITERAL character, so the old
+    // caret-escaping corrupted data ("C:\Foo & Bar" reached the program as
+    // C:\Foo ^& Bar). & | < > ( ) are neutral inside the quotes and must pass
+    // through unchanged. %…%/delayed-! expansion and embedded " still apply
+    // inside cmd quotes and cannot be encoded faithfully — resolver-managed
+    // launches reject custom-supplied elements containing % ! " ^ before any
+    // writer runs (cmd_metachar); this quoter passes them through as-is.
+    return CMD_QUOTE_BREAKING_CHAR_RE.test(value)
+      ? `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
+      : `"${value}"`
   }
   return quotePortableUnixArg(value)
+}
+
+/** Characters cmd cannot faithfully deliver inside a double-quoted argv element:
+ *  %…% / delayed-! expansion still applies and embedded quotes re-split the
+ *  line. Custom-supplied elements containing one of these fail closed when the
+ *  target shell is cmd. */
+export const CMD_UNENCODABLE_CHAR_RE = /[%!^"]/
+
+const POSIX_EXPANDABLE_EXECUTABLE_RE =
+  /^(~|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})((?:\/[A-Za-z0-9._+@%:=-]+)*)$/
+
+export function isShellExpandableExecutable(value: string, shell: AgentStartupShell): boolean {
+  return shell === 'posix' && POSIX_EXPANDABLE_EXECUTABLE_RE.test(value)
+}
+
+export function quoteStartupExecutable(value: string, shell: AgentStartupShell): string {
+  const match = shell === 'posix' ? POSIX_EXPANDABLE_EXECUTABLE_RE.exec(value) : null
+  if (!match) {
+    return quoteStartupArg(value, shell)
+  }
+  const [, head, rest] = match
+  if (head === '~') {
+    return rest ? `~/${quoteStartupArg(rest.slice(1), shell)}` : '~'
+  }
+  return `"${head}"${rest ? quoteStartupArg(rest, shell) : ''}`
 }
 
 export function buildShellCommandFromArgv(
   args: readonly string[],
   shell: AgentStartupShell
 ): string {
-  const command = args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
+  const command = args
+    .map((arg, index) =>
+      index === 0 ? quoteStartupExecutable(arg, shell) : quoteStartupArg(arg, shell)
+    )
+    .join(' ')
   if (shell === 'powershell' && command) {
     return `& ${command}`
   }
@@ -377,6 +420,9 @@ export function planAgentCliArgsSuffix(
   if (!trimmed) {
     return { ok: true, suffix: '' }
   }
+  // Shell-aware tokenization (#7862): posix keeps the shared grammar, Windows
+  // shells keep backslashes literal (same grammar the resolver's built-in
+  // args band uses).
   const tokenized = tokenizeStartupCommand(trimmed, shell)
   if (!tokenized.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }

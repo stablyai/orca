@@ -112,6 +112,30 @@ describe('createBlankWorkspace', () => {
     expect('startupCommand' in params).toBe(false)
   })
 
+  it('uses authoritative identity launch params without legacy launch fields', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-identity' } }), calls)
+
+    await createBlankWorkspace({
+      client,
+      repoId: 'repo-identity',
+      baseName: 'dolphin',
+      createdWithAgentId: 'codex',
+      launchParams: { agentLaunch: { selection: { kind: 'agent', agent: 'codex' } } },
+      comment: undefined,
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
+    })
+
+    const params = calls[0]?.params as Record<string, unknown>
+    expect(params).toMatchObject({
+      agentLaunch: { selection: { kind: 'agent', agent: 'codex' } }
+    })
+    expect(params).not.toHaveProperty('startupCommand')
+    expect(params).not.toHaveProperty('startupAgent')
+    expect(params).not.toHaveProperty('createdWithAgent')
+  })
+
   it('retries with a numeric suffix on a branch-collision error', async () => {
     const calls: Call[] = []
     const client = fakeClient((_method, call) => {

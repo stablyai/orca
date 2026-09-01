@@ -1,41 +1,16 @@
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
-import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
-
-export type OnboardingFolderAgentStartup = {
-  command: string
-  env?: Record<string, string>
-  launchConfig?: SleepingAgentLaunchConfig
-  launchAgent?: TuiAgent
-  startupCommandDelivery?: StartupCommandDelivery
-  sessionOptions?: Record<string, SessionOptionValue>
-  telemetry: AgentStartedTelemetry
-}
-
-function getClientPlatform(): NodeJS.Platform {
-  if (navigator.userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  return navigator.userAgent.includes('Mac') ? 'darwin' : 'linux'
-}
+import { isTuiAgentEnabled, toLegacyAutoPreference } from '../../../shared/tui-agent-selection'
+import type { WorktreeStartupPayload } from '@/lib/worktree-activation'
+import type { GlobalSettings, OnboardingState } from '../../../shared/types'
 
 export function buildOnboardingFolderAgentStartup(
-  settings: GlobalSettings | null,
-  nativeChatTranscriptIsLocalReadable = true
-): OnboardingFolderAgentStartup | undefined {
-  const agent = settings?.defaultTuiAgent
+  settings: GlobalSettings | null
+): WorktreeStartupPayload | undefined {
+  // Why: onboarding/non-git-folder seeds an agent tab ONLY when the user picked a
+  // concrete, enabled default agent. Auto ('auto'/legacy null) and Blank must seed
+  // no agent (a plain terminal), so the gate stays client-side — a `{kind:'default'}`
+  // request would let the host auto-pick a detected agent on Auto, which this
+  // surface must not do.
+  const agent = toLegacyAutoPreference(settings?.defaultTuiAgent)
   if (
     !settings ||
     !agent ||
@@ -45,34 +20,16 @@ export function buildOnboardingFolderAgentStartup(
     return undefined
   }
 
-  const startupPlan = buildAgentStartupPlan({
-    agent,
-    prompt: '',
-    cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    sessionOptions: resolveInitialNativeChatSessionOptions(settings, {
-      agent,
-      nativeChatTranscriptIsLocalReadable
-    }),
-    platform: getClientPlatform(),
-    allowEmptyPromptLaunch: true
-  })
-  if (!startupPlan) {
-    return undefined
-  }
-
+  // Identity-only launch: the host resolves the command, config, and token from
+  // the current default; the client never assembles argv/env. `launchAgent` is
+  // the tab's identity hint until the host resolves.
   return {
-    command: startupPlan.launchCommand,
-    ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
+    command: '',
     launchAgent: agent,
-    ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
-    ...(startupPlan.startupCommandDelivery
-      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-      : {}),
+    agentLaunch: { selection: { kind: 'default' }, allowEmptyPromptLaunch: true },
     telemetry: {
-      agent_kind: tuiAgentToAgentKind(agent),
+      // No agent_kind: a custom default has no client-known kind, and the host
+      // stamps it from the resolved receipt before the emit.
       launch_source: 'onboarding',
       request_kind: 'new'
     }
@@ -94,11 +51,10 @@ export function shouldSeedFolderAgentAfterDismissedOnboarding(
 export function buildDismissedOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
   onboarding: OnboardingState | null,
-  hasExistingProject: boolean,
-  nativeChatTranscriptIsLocalReadable = true
-): OnboardingFolderAgentStartup | undefined {
+  hasExistingProject: boolean
+): WorktreeStartupPayload | undefined {
   if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
     return undefined
   }
-  return buildOnboardingFolderAgentStartup(settings, nativeChatTranscriptIsLocalReadable)
+  return buildOnboardingFolderAgentStartup(settings)
 }

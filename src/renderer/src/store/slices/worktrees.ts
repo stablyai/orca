@@ -56,6 +56,7 @@ import {
 } from './worktrees/session/worktree-slice-lookups'
 import { createPurgeStaleRuntimeHostState } from './worktrees/teardown/purge-stale-runtime-host-state'
 import { createMigrateWorktreeIdentity } from './worktrees/session/migrate-worktree-identity'
+import { createWorktreeAgentLaunchActions } from './worktrees/worktree-agent-launch-actions'
 
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 export { WORKTREE_REFRESH_CONCURRENCY } from './worktrees/listing/worktree-slice-constants'
@@ -86,6 +87,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   updateWorktreeRemoteBranchConflict: createUpdateWorktreeRemoteBranchConflict(set, get),
   prefetchWorktreeCreateBase: createPrefetchWorktreeCreateBase(set, get),
   createWorktree: createCreateWorktree(set, get),
+  ...createWorktreeAgentLaunchActions(set, get),
   beginPendingWorktreeCreation: createBeginPendingWorktreeCreation(set, get),
   updatePendingWorktreeCreation: createUpdatePendingWorktreeCreation(set, get),
   removePendingWorktreeCreation: createRemovePendingWorktreeCreation(set, get),

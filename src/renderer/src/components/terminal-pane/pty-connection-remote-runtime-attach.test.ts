@@ -2,7 +2,6 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
-import { UUID_RE } from './pty-connection-test-constants'
 import {
   LEAF_1,
   createMockTransport,
@@ -345,6 +344,14 @@ describe('connectPanePty', () => {
           providerSession: { key: 'session_id', id: 'codex-session-1' },
           prompt: 'finish the task',
           state: 'working',
+          // Pre-U5 record: its captured config is the only copy of the launch the host
+          // must replay, so the cold spawn has to surrender it with the resume request.
+          launchConfig: {
+            agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
+            agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+            agentEnv: {}
+          },
+          connectionId: null,
           capturedAt: 1,
           updatedAt: 1
         }
@@ -366,23 +373,45 @@ describe('connectPanePty', () => {
 
     expect(transport.attach).not.toHaveBeenCalled()
     expect(transport.connect).toHaveBeenCalledTimes(1)
+    // Resume travels as an ownership key; the host rebuilds the resume command from
+    // the surrendered pre-U5 config plus its recorded execution owner.
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        agentLaunch: {
+          resume: {
+            operation: 'resume',
+            sessionKey: {
+              worktreeId: 'wt-1',
+              baseAgent: 'codex',
+              providerSessionId: 'codex-session-1'
+            }
+          }
+        },
         launchAgent: 'codex',
         launchConfig: {
           agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
           agentArgs: '--dangerously-bypass-approvals-and-sandbox',
           agentEnv: {}
         },
-        launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
+        legacyResumeRecordedConnectionId: null,
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          ORCA_WORKSPACE_ID: 'wt-1'
         })
+      })
+    )
+    // The client neither builds the resume argv nor mints the admission token now.
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ command: expect.anything() })
+    )
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ launchToken: expect.anything() })
+    )
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: expect.not.objectContaining({ ORCA_AGENT_LAUNCH_TOKEN: expect.anything() })
       })
     )
     expect(transport.connect).toHaveBeenCalledWith(

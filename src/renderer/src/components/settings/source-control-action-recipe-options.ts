@@ -11,6 +11,11 @@ import {
   listCommitMessageAgentCapabilities
 } from '../../../../shared/commit-message-agent-spec'
 import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import {
+  customAgentCatalogEntryById,
+  mergeCustomAgentCatalogEntries
+} from '@/components/agent/custom-agent-catalog-entries'
+import type { LocalAgentCatalogSnapshot } from '../../../../shared/agent-catalog-snapshot'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 
@@ -98,11 +103,31 @@ export function getSourceControlAgentArgsPlaceholder(
 // agent even if it is no longer a supported text generator.
 export function getAgentCatalogForAction(
   actionId: SourceControlActionId,
-  selectedAgent: TuiAgent | CustomAgentId | null | undefined
+  selectedAgent: TuiAgent | CustomAgentId | null | undefined,
+  snapshot: LocalAgentCatalogSnapshot | null = null
 ): AgentCatalogEntry[] {
   if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
-    return getAgentCatalog()
+    // Launch actions spawn an interactive agent, so customs are selectable here
+    // exactly as they are in the source-control action dialog. Never
+    // detection-gated: availability is preflighted by the host at launch.
+    const options = mergeCustomAgentCatalogEntries(getAgentCatalog(), snapshot, [], null)
+    if (!selectedAgent || options.some((entry) => entry.id === selectedAgent)) {
+      return options
+    }
+    // Draft-keep: a disabled custom assignment stays visible with its real label.
+    const kept = isCustomAgentId(selectedAgent)
+      ? null
+      : customAgentCatalogEntryById(snapshot, selectedAgent)
+    return kept ? [...options, kept] : options
   }
+  // Why customs are intentionally absent here (not the missing-customs picker
+  // class): text-generation is a headless invocation against the per-built-in
+  // spec registry, not an interactive PTY launch, so a named custom id cannot
+  // resolve to a spawn command on this path — offering one would be a row that
+  // silently resolves to something other than what it claims. The `selectedAgent`
+  // clause is continuity-only (an already-assigned agent stays visible for
+  // explicit reselection); base∈text-gen customs resolving their own config
+  // headlessly would be a separate host-contract feature.
   return getAgentCatalog().filter(
     (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
   )

@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import { toLegacyAutoPreference } from '../../../../shared/tui-agent-selection'
 
 export type OnboardingSettingsHydrationUpdate = {
   settingsHydrated: boolean
@@ -34,10 +34,10 @@ export function resolveOnboardingSettingsHydration({
     update.theme = settings.theme
   }
 
+  // 'auto' (migrated legacy null) selects no fixed agent for onboarding hydration.
+  const normalizedDefaultAgent = toLegacyAutoPreference(settings.defaultTuiAgent)
   const settingsAgent =
-    settings.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-      ? settings.defaultTuiAgent
-      : null
+    normalizedDefaultAgent && normalizedDefaultAgent !== 'blank' ? normalizedDefaultAgent : null
   if (!agentInteracted && settingsAgent !== null && currentAgent !== settingsAgent) {
     update.selectedAgent = settingsAgent
   }

@@ -1,11 +1,20 @@
-// Windows shell-quoting coverage for the sleeping-agent resume launch (#12320):
-// the queued resume line is typed into the new tab's shell, so cmd.exe tabs must
-// not receive PowerShell single quotes.
+// Windows shell coverage for the sleeping-agent resume launch (#12320).
+//
+// Resume is now an identity-only host launch: the renderer queues an empty
+// command plus the session ownership key, and the host resolves the argv and
+// quotes it for the shell IT will spawn (pty.ts routes `agentLaunch.resume`
+// through resolveResumeLaunchIngest, which derives the shell from the host's
+// own terminalWindowsShell via deriveAgentLaunchHostState). The hazard this
+// file guards therefore inverts: instead of asserting the renderer picks the
+// right quoting, it asserts the renderer emits NO shell-shaped text at all, so
+// a cmd.exe tab can never receive PowerShell quoting and the client's local
+// Windows shell setting can never shape an SSH workspace's resume line.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
 const mockCreateTab = vi.fn()
+const mockQueueTabStartupCommand = vi.fn()
 
 const store = {
   settings: {
@@ -46,6 +55,7 @@ const store = {
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
   createTab: mockCreateTab,
+  queueTabStartupCommand: mockQueueTabStartupCommand,
   claimAutomaticAgentResume: vi.fn(),
   clearSleepingAgentSession: vi.fn(),
   setActiveTabType: vi.fn(),
@@ -78,13 +88,25 @@ const record: SleepingAgentSessionRecord = {
   updatedAt: 1
 }
 
-async function launch(): Promise<string | undefined> {
+type QueuedResumeStartup = {
+  command: string
+  agentLaunch?: { resume?: { operation: string; sessionKey: Record<string, unknown> } }
+}
+
+async function launch(): Promise<QueuedResumeStartup | undefined> {
   const { launchSleepingAgentSession } = await import('./sleeping-agent-session-launch')
   launchSleepingAgentSession(record)
-  const options = mockCreateTab.mock.calls.at(-1)?.[3] as
-    | { pendingStartup?: { command: string } }
-    | undefined
-  return options?.pendingStartup?.command
+  return mockQueueTabStartupCommand.mock.calls.at(-1)?.[1] as QueuedResumeStartup | undefined
+}
+
+const IDENTITY_ONLY_RESUME = {
+  command: '',
+  agentLaunch: {
+    resume: {
+      operation: 'resume',
+      sessionKey: { worktreeId: 'wt-1', baseAgent: 'codex', providerSessionId: SESSION_ID }
+    }
+  }
 }
 
 describe('launchSleepingAgentSession Windows shell quoting', () => {
@@ -110,29 +132,19 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
   })
 
-  it('quotes the resume argv for a cmd.exe tab', async () => {
-    store.settings.terminalWindowsShell = 'cmd.exe'
+  it.each(['cmd.exe', 'powershell.exe', 'git-bash'])(
+    'emits no client-quoted argv for a %s tab',
+    async (windowsShell) => {
+      store.settings.terminalWindowsShell = windowsShell
 
-    await expect(launch()).resolves.toBe(
-      `codex "--dangerously-bypass-approvals-and-sandbox" "resume" "${SESSION_ID}"`
-    )
-  })
+      const queued = await launch()
 
-  it('keeps PowerShell quoting for a powershell tab', async () => {
-    store.settings.terminalWindowsShell = 'powershell.exe'
-
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
-    )
-  })
-
-  it('quotes the resume argv for a Git Bash tab', async () => {
-    store.settings.terminalWindowsShell = 'git-bash'
-
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
-    )
-  })
+      expect(queued).toMatchObject(IDENTITY_ONLY_RESUME)
+      // The failure this guards: any shell-shaped resume line reaching a tab
+      // whose shell the renderer only guessed.
+      expect(queued?.command).toBe('')
+    }
+  )
 
   it('ignores the local Windows shell setting for an SSH workspace', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
@@ -148,8 +160,6 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
       ]
     }
 
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
-    )
+    await expect(launch()).resolves.toMatchObject(IDENTITY_ONLY_RESUME)
   })
 })

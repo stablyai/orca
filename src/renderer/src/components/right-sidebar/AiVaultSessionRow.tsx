@@ -93,6 +93,9 @@ export function VaultSessionRow({
         event.preventDefault()
         return
       }
+      // The payload carries the discovered identity for the host-owned resume-via-arm
+      // (desktop drop) AND the client-built command/launchConfig, which the web-runtime
+      // drop still needs because it cannot carry a vaultResume request yet.
       writeAiVaultSessionDragData(event.dataTransfer, {
         agent: session.agent,
         sessionId: session.sessionId,
@@ -105,6 +108,7 @@ export function VaultSessionRow({
         // Why: always sent (null when absent) so drop targets can tell "no cwd"
         // from "payload predates the repin field".
         sessionCwd: session.cwd ?? null,
+        ...(session.resumeLocator ? { resumeLocator: session.resumeLocator } : {}),
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
         ...(resumeStartup.envToDelete ? { envToDelete: resumeStartup.envToDelete } : {}),
         ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {}),

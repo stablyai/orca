@@ -1,3 +1,8 @@
+// Mobile vault resume rides the host-owned resume-via-arm (U7): the client echoes
+// the discovered session identity and the host runs a fresh scan, re-validates it,
+// and assembles the command itself. The client-assembled path below survives only
+// as the explicit "Launch with current settings" fallback when the host reports
+// invalid_launch_snapshot.
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
@@ -16,12 +21,17 @@ import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-res
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
+import type { AgentLaunchVaultResumeEntry } from '../../../src/shared/agent-launch-spawn-request'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   readMobileReviewCreatedTerminal,
   readMobileReviewTerminalSendAccepted,
   type MobileReviewTerminalTab
 } from './mobile-diff-review-rpc'
+import {
+  readMobileVaultResumeCreateOutcome,
+  type MobileResumeOutcome
+} from './ai-vault-resume-outcome'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
 
 export function buildMobileAiVaultResumeCommand(args: {
@@ -193,6 +203,43 @@ export async function resumeAiVaultSessionInTerminal(
     throw new Error('Terminal input is locked')
   }
   return terminalTab
+}
+
+// Echoes the host listing's own discovered identity for the resume-via-arm.
+// filePath is trusted desktop-IPC only; mobile OMITS it and the host re-derives it
+// from its own fresh scan, so it can never become a client-supplied spawn input.
+export function buildMobileAiVaultResumeEntry(
+  session: Pick<AiVaultSession, 'executionHostId' | 'agent' | 'sessionId' | 'resumeLocator'>
+): AgentLaunchVaultResumeEntry {
+  return {
+    executionHostId: session.executionHostId,
+    agent: session.agent,
+    sessionId: session.sessionId,
+    ...(session.resumeLocator ? { resumeLocator: session.resumeLocator } : {})
+  }
+}
+
+// Host-owned vault resume: send the echoed identity through the agentLaunch arm on
+// createTerminal. The host assembles + delivers the resume command as the terminal
+// startup, so there is NO client terminal.send and no launch receipt on success.
+export async function resumeAiVaultSessionViaHostArm(
+  client: Pick<RpcClient, 'sendRequest'>,
+  worktreeId: string,
+  args: { entry: AgentLaunchVaultResumeEntry; clientMutationId?: string }
+): Promise<MobileResumeOutcome> {
+  const created = await client.sendRequest(
+    'session.tabs.createTerminal',
+    {
+      worktree: `id:${worktreeId}`,
+      agentLaunch: { vaultResume: { operation: 'resume', entry: args.entry } },
+      ...(args.clientMutationId ? { clientMutationId: args.clientMutationId } : {})
+    },
+    { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+  )
+  if (!created.ok) {
+    throw new Error(created.error?.message || 'Failed to resume session')
+  }
+  return readMobileVaultResumeCreateOutcome(created.result)
 }
 
 export type MobileAiVaultResumeMutationRegistry = {

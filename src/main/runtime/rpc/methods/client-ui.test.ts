@@ -50,14 +50,25 @@ describe('client UI RPC methods', () => {
     }
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      getClientSettings: vi.fn(() => settings)
+      getClientSettings: vi.fn(() => settings),
+      // settings.get keeps the legacy catalog piggyback when the caller does not
+      // opt out, and always carries the reference-revision descriptor.
+      getAgentCatalogSnapshot: vi.fn(() => ({ version: 1, revision: 7, agents: [] })),
+      getAgentReferenceRevision: vi.fn(() => 4)
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('settings.get'))
 
     expect(runtime.getClientSettings).toHaveBeenCalledTimes(1)
-    expect(response).toMatchObject({ ok: true, result: { settings } })
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        settings,
+        agentCatalog: { version: 1, revision: 7, agents: [] },
+        agentReferences: { version: 1, revision: 4 }
+      }
+    })
   })
 
   it('persists the runtime host task source settings for mobile Tasks', async () => {
@@ -105,8 +116,6 @@ describe('client UI RPC methods', () => {
             custom: { team: 'hide', 'bad id': 'show' }
           }
         },
-        defaultTuiAgent: 'codex',
-        disabledTuiAgents: ['claude', 'not-real', 'claude'],
         defaultTaskSource: 'linear',
         visibleTaskProviders: ['github', 'linear'],
         defaultTaskViewPreset: 'my-prs',
@@ -129,8 +138,6 @@ describe('client UI RPC methods', () => {
           custom: { team: 'hide' }
         }
       },
-      defaultTuiAgent: 'codex',
-      disabledTuiAgents: ['claude'],
       defaultTaskSource: 'linear',
       visibleTaskProviders: ['github', 'linear'],
       defaultTaskViewPreset: 'my-prs',

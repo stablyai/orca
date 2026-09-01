@@ -1,8 +1,6 @@
 import { migrateMutationReceiptCapacity } from '../../mutation-receipt-capacity'
-import {
-  DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
-  REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL
-} from '../pane-key-match'
+import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from '../pane-key-match'
+import { CURRENT_CONTRACT_VERSION, LEGACY_RUN_ID } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
 
 export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: number): void {
@@ -160,28 +158,80 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
   if (current < 29 && !this.hasColumn('dispatch_contexts', 'termination_reason')) {
     this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN termination_reason TEXT')
   }
+  // v30, not v29: every shipped install is already stamped 29, so gating the
+  // launch-identity columns on `current < 29` applied them to fresh installs only.
   if (current < 30) {
-    if (!this.hasColumn('dispatch_contexts', 'depth')) {
-      this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN depth INTEGER NOT NULL DEFAULT 1')
+    // Some pre-rebase v6 databases stamped the U6 identity columns without
+    // running main's pane-identity step. Make the pane columns available
+    // before the dispatch-table rebuild/copy below.
+    if (!this.hasColumn('dispatch_contexts', 'assignee_pane_key')) {
+      this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN assignee_pane_key TEXT')
     }
-    if (!this.hasColumn('remote_dispatch_attachments', 'depth')) {
-      this.db.exec(
-        'ALTER TABLE remote_dispatch_attachments ADD COLUMN depth INTEGER NOT NULL DEFAULT 1'
-      )
+    if (!this.hasColumn('messages', 'sender_pane_key')) {
+      this.db.exec('ALTER TABLE messages ADD COLUMN sender_pane_key TEXT')
     }
-    // Why drop first: CREATE INDEX IF NOT EXISTS cannot widen an existing
-    // partial index predicate, and these two covered only starting/ready.
-    this.db.exec(`
-        DROP INDEX IF EXISTS idx_remote_dispatch_attachments_active_pane;
-        DROP INDEX IF EXISTS idx_remote_dispatch_attachments_active_pane_suffix;
-        CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane
-          ON remote_dispatch_attachments(pane_key)
-          WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown');
-        CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane_suffix
-          ON remote_dispatch_attachments(${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL})
-          WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
-            AND pane_key IS NOT NULL;
+    if (!this.hasColumn('dispatch_contexts', 'requested_agent')) {
+      // SQLite cannot widen the existing status CHECK in place. Rebuild the
+      // dispatch table so v6/v28 databases preserve pane and ownership data
+      // while gaining the forgotten disposition and launch identity columns.
+      this.db.exec(`
+        -- SQLite re-parses every trigger during the RENAME below. This one
+        -- references dispatch_contexts in its WHEN clause, so leaving it in
+        -- place aborts the migration and leaves the DB unopenable. The DB
+        -- constructor recreates it right after migrate() returns.
+        DROP TRIGGER IF EXISTS trg_messages_route_coordinator_mail;
+        CREATE TABLE dispatch_contexts_new (
+          id                    TEXT PRIMARY KEY,
+          run_id                TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',
+          task_id               TEXT NOT NULL,
+          contract_version      INTEGER NOT NULL DEFAULT ${CURRENT_CONTRACT_VERSION},
+          launch_token_hash     TEXT,
+          assignee_handle       TEXT,
+          assignee_pane_key     TEXT,
+          capability_hash       TEXT,
+          process_incarnation   TEXT,
+          capability_revoked_at TEXT,
+          status                TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken', 'forgotten')),
+          failure_count         INTEGER NOT NULL DEFAULT 0,
+          last_failure          TEXT,
+          dispatched_at         TEXT,
+          completed_at          TEXT,
+          termination_reason    TEXT,
+          created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+          last_heartbeat_at     TEXT,
+          requested_agent       TEXT,
+          base_agent            TEXT,
+          agent_launch_failure  TEXT
+        );
+        INSERT INTO dispatch_contexts_new (
+          id, run_id, task_id, contract_version, launch_token_hash,
+          assignee_handle, assignee_pane_key, capability_hash,
+          process_incarnation, capability_revoked_at, status, failure_count,
+          last_failure, termination_reason, dispatched_at, completed_at,
+          created_at, last_heartbeat_at
+        )
+        SELECT
+          id, run_id, task_id, contract_version, launch_token_hash,
+          assignee_handle, assignee_pane_key, capability_hash,
+          process_incarnation, capability_revoked_at, status, failure_count,
+          last_failure, termination_reason, dispatched_at, completed_at,
+          created_at, last_heartbeat_at
+        FROM dispatch_contexts;
+        DROP TABLE dispatch_contexts;
+        ALTER TABLE dispatch_contexts_new RENAME TO dispatch_contexts;
+        CREATE INDEX idx_dispatch_task ON dispatch_contexts(task_id);
+        CREATE INDEX idx_dispatch_status ON dispatch_contexts(status);
+        CREATE INDEX idx_dispatch_assignee_handle ON dispatch_contexts(assignee_handle);
       `)
+    } else {
+      if (!this.hasColumn('dispatch_contexts', 'base_agent')) {
+        this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN base_agent TEXT')
+      }
+      if (!this.hasColumn('dispatch_contexts', 'agent_launch_failure')) {
+        this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN agent_launch_failure TEXT')
+      }
+    }
   }
   this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf

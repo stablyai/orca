@@ -1,10 +1,10 @@
-import type { TuiAgent } from './tui-agent'
+import type { BuiltInTuiAgent } from './types'
 
 // Node CLIs whose shims launch a generic script (cli.js, versioned index.js), so
 // only the exact install path is an authoritative identity signal.
 export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
   pattern: RegExp
-  agent: TuiAgent
+  agent: BuiltInTuiAgent
   processName: string
 }[] = [
   // Why: Cursor's native Windows launcher runs a generic versioned index.js,

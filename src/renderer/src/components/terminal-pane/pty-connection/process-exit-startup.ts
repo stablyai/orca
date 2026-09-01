@@ -5,13 +5,17 @@ import type { ColdRestoreAgentResumeStartup, PendingStartupCommand } from './fre
 export function toProcessExitStartup(
   startup: PendingStartupCommand | ColdRestoreAgentResumeStartup | null
 ): PtyPaneStartup {
-  return startup && 'launchConfig' in startup && 'agent' in startup
+  return startup && 'agentLaunch' in startup && 'agent' in startup
     ? {
         command: startup.command,
         env: startup.env,
         launchConfig: startup.launchConfig,
+        agentLaunch: startup.agentLaunch,
         resumeProviderSession: startup.resumeProviderSession,
-        launchToken: startup.launchToken,
+        ...(startup.legacyResumeRecordedConnectionId !== undefined
+          ? { legacyResumeRecordedConnectionId: startup.legacyResumeRecordedConnectionId }
+          : {}),
+        ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
         launchAgent: startup.agent,
         showSessionRestoredBanner: true
       }

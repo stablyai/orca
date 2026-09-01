@@ -21,7 +21,12 @@ export type WorktreeStartupLaunch = {
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
-  telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
+  telemetry?: {
+    agent_kind: AgentKind
+    launch_source: LaunchSource
+    request_kind: RequestKind
+    used_custom_agent?: boolean
+  }
 }
 
 export type WorktreeDefaultTabsLaunch = {

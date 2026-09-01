@@ -449,6 +449,51 @@ describe('agent_started schema', () => {
     })
     expect(parsed.success).toBe(false)
   })
+
+  // Oracle 17: used_custom_agent is an additive-optional host-derived boolean.
+  it('accepts used_custom_agent true, false, or absent', () => {
+    const base = {
+      agent_kind: 'codex',
+      launch_source: 'sidebar',
+      request_kind: 'new',
+      nth_repo_added: 1
+    } as const
+    expect(eventSchemas.agent_started.safeParse({ ...base, used_custom_agent: true }).success).toBe(
+      true
+    )
+    expect(eventSchemas.agent_started.safeParse({ ...base, used_custom_agent: false }).success).toBe(
+      true
+    )
+    expect(eventSchemas.agent_started.safeParse(base).success).toBe(true)
+  })
+
+  it('rejects a non-boolean used_custom_agent', () => {
+    const parsed = eventSchemas.agent_started.safeParse({
+      agent_kind: 'codex',
+      launch_source: 'sidebar',
+      request_kind: 'new',
+      nth_repo_added: 1,
+      used_custom_agent: 'yes'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  // Oracle 17 privacy half: .strict() rejects any custom-agent identity/config
+  // field by NAME — the boolean marker is the only custom-launch signal allowed.
+  it.each(['agent_id', 'label', 'command', 'argv', 'env', 'path'])(
+    'rejects the forbidden custom-agent field %s via .strict()',
+    (forbiddenKey) => {
+      const parsed = eventSchemas.agent_started.safeParse({
+        agent_kind: 'codex',
+        launch_source: 'sidebar',
+        request_kind: 'new',
+        nth_repo_added: 1,
+        used_custom_agent: true,
+        [forbiddenKey]: 'custom-agent:codex:secret-reviewer'
+      })
+      expect(parsed.success).toBe(false)
+    }
+  )
 })
 
 describe('agent_prompt_sent schema', () => {

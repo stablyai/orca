@@ -4,7 +4,7 @@ import {
   isQuickCommandEditorHostCurrent,
   shouldOpenQuickCommandAddIntent,
   shouldShowQuickCommandsRefreshError
-} from './QuickCommandsPane'
+} from './quick-commands-pane-host-state'
 
 describe('QuickCommandsPane add-command intent', () => {
   it('opens the add flow once for each new intent signal', () => {

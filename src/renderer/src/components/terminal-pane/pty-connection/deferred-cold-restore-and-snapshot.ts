@@ -26,13 +26,14 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     if (!startup) {
       return false
     }
-    const state = useAppStore.getState()
-    state.registerAgentLaunchConfig(session.cacheKey, startup.launchConfig, {
-      agentType: startup.agent,
-      launchToken: startup.launchToken,
-      tabId: session.deps.tabId,
-      leafId: session.pane.leafId
-    })
+    if (startup.launchConfig) {
+      useAppStore.getState().registerAgentLaunchConfig(session.cacheKey, startup.launchConfig, {
+        agentType: startup.agent,
+        ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
+        tabId: session.deps.tabId,
+        leafId: session.pane.leafId
+      })
+    }
     return true
   }
   session.clearSleepingRecordAfterColdRestoreSpawn = (

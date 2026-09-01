@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   process_incarnation TEXT,
   capability_revoked_at TEXT,
   status              TEXT NOT NULL DEFAULT 'pending'
-    CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),
+    CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken', 'forgotten')),
   failure_count       INTEGER NOT NULL DEFAULT 0,
   last_failure        TEXT,
   -- Why the process is gone, when Orca could establish it. See TerminalExitCause.
@@ -140,7 +140,10 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   dispatched_at       TEXT,
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-  last_heartbeat_at   TEXT
+  last_heartbeat_at   TEXT,
+  requested_agent     TEXT,
+  base_agent          TEXT,
+  agent_launch_failure TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);

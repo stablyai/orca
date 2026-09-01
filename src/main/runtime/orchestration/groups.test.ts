@@ -19,9 +19,8 @@ function makeSummary(
     writable: opts.writable ?? true,
     lastOutputAt: opts.lastOutputAt ?? null,
     preview: opts.preview ?? '',
-    // Why spread and not a default: `agentIdentity` absent is meaningful (unknown), so the
-    // helper must be able to produce a summary that genuinely lacks the field.
-    ...(opts.agentIdentity ? { agentIdentity: opts.agentIdentity } : {})
+    ...(opts.requestedAgent !== undefined ? { requestedAgent: opts.requestedAgent } : {}),
+    ...(opts.baseAgent !== undefined ? { baseAgent: opts.baseAgent } : {})
   }
 }
 
@@ -100,108 +99,179 @@ describe('resolveGroupAddress', () => {
   })
 
   describe('agent name groups', () => {
-    // Why identity and not title: these groups used to match `@<name>` against the terminal
-    // title, so any pane whose task text mentioned an agent received that agent's messages.
-    // Routing now reads the identity the host resolved from launch/process evidence it owns.
-
-    it('routes to every pane the host resolved as that agent', () => {
+    it('matches @claude by validated base attribution, not title', () => {
       const terminals = [
-        makeSummary('term_a', { agentIdentity: 'claude' }),
-        makeSummary('term_b', { agentIdentity: 'claude' }),
-        makeSummary('term_c', { agentIdentity: 'codex' })
+        makeSummary('term_a', { baseAgent: 'claude' }),
+        makeSummary('term_b', { baseAgent: 'claude' }),
+        makeSummary('term_c', { baseAgent: 'codex' })
       ]
-      expect(resolveGroupAddress('@claude', 'term_a', terminals, noStatus)).toEqual(['term_b'])
+      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b'])
     })
 
-    it.each([
-      ['@codex', 'codex'],
-      ['@openclaude', 'openclaude'],
-      ['@mimo', 'mimo-code'],
-      ['@gemini', 'gemini'],
-      ['@droid', 'droid'],
-      ['@grok', 'grok'],
-      ['@cursor', 'cursor'],
-      ['@opencode', 'opencode']
-    ])('routes %s to its agent id', (group, agentIdentity) => {
+    it('maps the mimo-code base to the @mimo group', () => {
       const terminals = [
-        makeSummary('sender'),
-        makeSummary('target', { agentIdentity: agentIdentity as never }),
-        makeSummary('other', { agentIdentity: 'claude' })
+        makeSummary('term_a', { baseAgent: 'mimo-code' }),
+        makeSummary('term_b', { baseAgent: 'mimo-code' }),
+        makeSummary('term_c', { baseAgent: 'opencode' })
       ]
-      const expected = agentIdentity === 'claude' ? ['target', 'other'] : ['target']
-      expect(resolveGroupAddress(group, 'sender', terminals, noStatus)).toEqual(expected)
+      const result = resolveGroupAddress('@mimo', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b'])
+    })
+
+    it('a custom agent joins its base harness group', () => {
+      // The summary builder resolves a custom requestedAgent to its base; the
+      // custom terminal is addressable under the base group.
+      const terminals = [
+        makeSummary('term_a', { baseAgent: 'claude' }),
+        makeSummary('term_b', {
+          requestedAgent: 'custom-agent:claude:01234567-89ab-4cde-8f01-23456789abcd',
+          baseAgent: 'claude'
+        })
+      ]
+      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b'])
+    })
+
+    it('keeps openclaude and claude as distinct groups', () => {
+      const terminals = [
+        makeSummary('term_a', { baseAgent: 'claude' }),
+        makeSummary('term_b', { baseAgent: 'openclaude' })
+      ]
+      expect(resolveGroupAddress('@claude', 'term_a', terminals, noStatus)).toEqual([])
+      expect(resolveGroupAddress('@openclaude', 'term_a', terminals, noStatus)).toEqual(['term_b'])
+    })
+
+    it('omits an unattributed terminal rather than guessing from its title', () => {
+      // A title that reads like an agent name must NOT join the group without
+      // validated base attribution (U6 coordinator terminals rely on this).
+      const terminals = [
+        makeSummary('term_a', { baseAgent: 'claude' }),
+        makeSummary('term_b', { title: 'Claude Code' })
+      ]
+      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
+      expect(result).toEqual([])
+    })
+
+    it('matches @droid by base and excludes the sender', () => {
+      const terminals = [
+        makeSummary('term_a', { baseAgent: 'droid' }),
+        makeSummary('term_b', { baseAgent: 'droid' }),
+        makeSummary('term_c', { baseAgent: 'droid' })
+      ]
+      const result = resolveGroupAddress('@droid', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b', 'term_c'])
+    })
+
+    it('does not map bases without an addressable group', () => {
+      // 'autohand' has no agent-name group; it is unreachable via base groups.
+      const terminals = [
+        makeSummary('term_a', { baseAgent: 'claude' }),
+        makeSummary('term_b', { baseAgent: 'autohand' })
+      ]
+      expect(resolveGroupAddress('@claude', 'term_a', terminals, noStatus)).toEqual([])
     })
 
     it('is case-insensitive for the group address', () => {
-      const terminals = [makeSummary('sender'), makeSummary('target', { agentIdentity: 'claude' })]
-      expect(resolveGroupAddress('@CLAUDE', 'sender', terminals, noStatus)).toEqual(['target'])
-    })
-
-    it('excludes the sender even when the sender is that agent', () => {
       const terminals = [
-        makeSummary('sender', { agentIdentity: 'grok' }),
-        makeSummary('target', { agentIdentity: 'grok' })
+        makeSummary('term_a', { baseAgent: 'codex' }),
+        makeSummary('term_b', { baseAgent: 'claude' })
       ]
-      expect(resolveGroupAddress('@grok', 'sender', terminals, noStatus)).toEqual(['target'])
+      const result = resolveGroupAddress('@Claude', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b'])
     })
 
-    describe('a task title can no longer redirect a message', () => {
-      // The bug. Recorded titles of this exact shape exist: a Grok pane named
-      // "Switch Claude and Codex off the load balancer… - grok" received both @claude and @codex.
-      it('does not route @claude to a Codex pane whose task text names Claude', () => {
-        const terminals = [
-          makeSummary('sender'),
-          makeSummary('codex_pane', {
-            agentIdentity: 'codex',
-            title: 'Review the Claude session-history fix'
-          })
-        ]
-        expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
-      })
+    it('matches @grok by validated base, excludes sender, and ignores grok-like titles', () => {
+      const terminals = [
+        makeSummary('term_a', { baseAgent: 'grok' }),
+        makeSummary('term_b', { baseAgent: 'grok' }),
+        makeSummary('term_c', { baseAgent: 'grok', title: '⠋ Grok' }),
+        makeSummary('term_d', { title: 'ngrok' }),
+        makeSummary('term_e', { title: 'GROK CLI' }),
+        makeSummary('term_g', { baseAgent: 'codex' })
+      ]
 
-      it('does not route @codex to a Grok pane whose task text names Codex', () => {
-        const terminals = [
-          makeSummary('sender'),
-          makeSummary('grok_pane', {
-            agentIdentity: 'grok',
-            title: 'Switch Claude and Codex off the load balancer… - grok'
-          })
-        ]
-        expect(resolveGroupAddress('@codex', 'sender', terminals, noStatus)).toEqual([])
-        expect(resolveGroupAddress('@grok', 'sender', terminals, noStatus)).toEqual(['grok_pane'])
-      })
+      const result = resolveGroupAddress('@GrOk', 'term_a', terminals, noStatus)
 
-      it('does not route @cursor to a pane merely discussing a text cursor', () => {
-        const terminals = [
-          makeSummary('sender'),
-          makeSummary('claude_pane', {
-            agentIdentity: 'claude',
-            title: 'fix the text cursor blink'
-          })
-        ]
-        expect(resolveGroupAddress('@cursor', 'sender', terminals, noStatus)).toEqual([])
-      })
+      expect(result).toEqual(['term_b', 'term_c'])
     })
 
-    describe('unknown identity fails closed', () => {
-      // Why: `agentIdentity` is absent when the host predates the field or had no evidence
-      // beyond the title. Delivery is an action, so unknown must not deliver. The sender sees
-      // no recipients, which is visible and recoverable; a message in the wrong agent's prompt
-      // is neither.
-      it('does not route to a pane with no resolved identity, whatever its title says', () => {
-        const terminals = [makeSummary('sender'), makeSummary('unknown', { title: 'Claude Code' })]
-        expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
-      })
+    it('matches @cursor by validated base regardless of title shape', () => {
+      const terminals = [
+        makeSummary('coordinator', { baseAgent: 'claude' }),
+        makeSummary('term_native', { baseAgent: 'cursor', title: 'Cursor Agent' }),
+        makeSummary('term_working', { baseAgent: 'cursor', title: '⠋ Cursor Agent' }),
+        makeSummary('term_renamed', { baseAgent: 'cursor', title: 'reviewer pane' }),
+        makeSummary('term_title_only', { title: 'Cursor - action required' })
+      ]
 
-      it('still routes the identity-free groups, which do not depend on the field', () => {
-        const terminals = [makeSummary('sender'), makeSummary('other', { title: 'Claude Code' })]
-        expect(resolveGroupAddress('@all', 'sender', terminals, noStatus)).toEqual(['other'])
-      })
+      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual(['term_native', 'term_working', 'term_renamed'])
     })
 
-    it('returns no recipients for an unknown group', () => {
-      const terminals = [makeSummary('sender'), makeSummary('target', { agentIdentity: 'claude' })]
-      expect(resolveGroupAddress('@nonsense', 'sender', terminals, noStatus)).toEqual([])
+    it('is case-insensitive for @cursor', () => {
+      const terminals = [
+        makeSummary('coordinator', { baseAgent: 'claude' }),
+        makeSummary('term_b', { baseAgent: 'cursor' })
+      ]
+
+      const result = resolveGroupAddress('@CuRsOr', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual(['term_b'])
+    })
+
+    // Why: "cursor" is ordinary editor vocabulary in other agents' task-summary
+    // titles. Base-only resolution must never route @cursor into a live
+    // non-Cursor agent's prompt no matter what the title says.
+    it('does not match another agent whose task title mentions a text cursor', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_claude_working', {
+          title: '⠋ preserve cursor visibility across replays'
+        }),
+        makeSummary('term_claude_idle', { title: '✳ Fix the text cursor blink' }),
+        makeSummary('term_claude_dot', { title: '. fix cursor position' }),
+        makeSummary('term_claude_star', { title: '* cursor rendering done' }),
+        makeSummary('term_codex', { title: '⠋ Codex: fix cursor offsets' }),
+        makeSummary('term_grok', { title: '⠋ - restoring cursor state - grok' }),
+        makeSummary('term_shell', { title: 'Terminal Cursor and Orca slows down' })
+      ]
+
+      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual([])
+    })
+
+    // Why: pin the deliberate tradeoff. Cursor-looking titles without validated
+    // base attribution resolve to nothing instead of resolving loosely. A silent
+    // miss (address it by handle) is preferred over delivering into another agent's prompt.
+    it('does not match a renamed Cursor terminal or the bare process name', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_renamed', { title: 'Cursor - reviewer' }),
+        makeSummary('term_worker', { title: 'cursor worker 2' }),
+        makeSummary('term_process', { title: 'cursor-agent' })
+      ]
+
+      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual([])
+    })
+
+    it('does not match cursor paths, hyphenated compounds, or dotted tokens', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_rules', { title: '~/cursor-rules' }),
+        makeSummary('term_path', { title: '/tmp/cursor' }),
+        makeSummary('term_worker', { title: 'my-cursor-worker' }),
+        makeSummary('term_file', { title: 'render-cursor-after-bracketed-paste' }),
+        makeSummary('term_dotted', { title: 'cursor.ts' })
+      ]
+
+      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual([])
     })
   })
 

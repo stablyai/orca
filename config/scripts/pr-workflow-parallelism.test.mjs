@@ -102,8 +102,12 @@ describe('PR workflow parallelism', () => {
         .split(/\s+/)
         .filter((token) => !['apt-get', 'install', 'sudo', ''].includes(token))
         .filter((token) => !token.startsWith('-'))
-    const jobsInstallingPackages = Object.entries(workflow.jobs)
-      .filter(([, job]) => (job.steps ?? []).some((step) => aptPackages(step).length > 0))
+    // Scoped to shells: other lanes legitimately apt-install unrelated tooling.
+    const shells = ['zsh', 'fish', 'bash', 'dash', 'ksh']
+    const jobsInstallingShells = Object.entries(workflow.jobs)
+      .filter(([, job]) =>
+        (job.steps ?? []).some((step) => aptPackages(step).some((pkg) => shells.includes(pkg)))
+      )
       .map(([name]) => name)
 
     expect(shellStep).toBeDefined()
@@ -111,7 +115,7 @@ describe('PR workflow parallelism', () => {
     expect(shellStep.run.split(/\s+/)).toContain('--maxWorkers=1')
     // Why the whole workflow, not just the general shards: any other lane installing
     // these shells would silently start running the real-shell tests twice.
-    expect(jobsInstallingPackages).toEqual(['shell_contracts'])
+    expect(jobsInstallingShells).toEqual(['shell_contracts'])
     // Why each shell is asserted: the live tests skip themselves when the binary is
     // missing, so a dropped package silently empties this lane instead of failing it.
     const shellPackages = workflow.jobs.shell_contracts.steps.flatMap(aptPackages)
@@ -462,7 +466,9 @@ describe('PR workflow parallelism', () => {
       'cross-version-wire',
       'managed_hook_node18',
       'package',
-      'package_windows'
+      'package_windows',
+      'custom_agent_platform',
+      'ssh_custom_agent_e2e'
     ])
     const verifyStep = workflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'

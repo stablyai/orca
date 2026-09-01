@@ -3,6 +3,7 @@ import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-ho
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import type { AgentCatalogValue } from '../transport/agent-catalog-sync'
 import { createBlankWorkspace } from '../tasks/blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import {
@@ -12,12 +13,12 @@ import {
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
 import { createWorkspaceFromComposerSource } from '../tasks/source-workspace-create'
-import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import type { WorktreeCreateIdempotencySupport } from '../tasks/worktree-create-idempotency-policy'
 import {
+  hostDefaultMatchesNewWorktreePreview,
   pickPreferredNewWorktreeAgent,
   type NewWorktreeAgentOption,
   type NewWorktreeRuntimeSettings
@@ -26,6 +27,8 @@ import type { MobileWorkspaceRepo, SetupRunPolicy } from './new-worktree-modal-t
 import type { SetupTrustPrompt } from './SetupHookTrustDrawer'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
+import { buildInteractiveLaunchParams } from './interactive-worktree-launch-params'
+import { resolveNewWorktreeAgentIdentitySupport } from './new-worktree-agent-identity-support'
 
 type CreateOptions = {
   setupOverride?: Exclude<WorkspaceCreateSetupDecision, 'inherit'>
@@ -40,9 +43,11 @@ export function useNewWorkspaceCreateSubmit(args: {
   selectedAgent: NewWorktreeAgentOption
   setSelectedAgent: (agent: NewWorktreeAgentOption) => void
   setAgentOverridden: (overridden: boolean) => void
+  agentOverridden: boolean
   runtimeSettings: NewWorktreeRuntimeSettings | null
   setRuntimeSettings: (settings: NewWorktreeRuntimeSettings) => void
   detectedAgentIds: Set<string> | null
+  agentCatalog: AgentCatalogValue | null
   sshGate: WorkspaceSshGate
   composer: Composer
   note: string
@@ -88,7 +93,9 @@ export function useNewWorkspaceCreateSubmit(args: {
       }
       let latestRuntimeSettings = args.runtimeSettings
       try {
-        const settingsResponse = await client.sendRequest('settings.get')
+        const settingsResponse = await client.sendRequest('settings.get', {
+          includeAgentCatalog: false
+        })
         if (settingsResponse.ok) {
           const result = (settingsResponse as RpcSuccess).result as {
             settings: NewWorktreeRuntimeSettings
@@ -99,12 +106,21 @@ export function useNewWorkspaceCreateSubmit(args: {
       } catch {
         // The runtime validates the same setting before spawning.
       }
+      const hasIdentityCapability = await resolveNewWorktreeAgentIdentitySupport({
+        client,
+        selectedAgent: args.selectedAgent,
+        catalogSnapshot: args.agentCatalog
+      })
       if (
         args.selectedAgent.id !== '__blank__' &&
         !isMobileTuiAgentEnabled(args.selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
       ) {
         args.setSelectedAgent(
-          pickPreferredNewWorktreeAgent(latestRuntimeSettings, args.detectedAgentIds)
+          pickPreferredNewWorktreeAgent(
+            latestRuntimeSettings,
+            args.detectedAgentIds,
+            args.agentCatalog
+          )
         )
         args.setAgentOverridden(false)
         args.setError('Selected agent is disabled. Choose an enabled agent before creating.')
@@ -152,6 +168,20 @@ export function useNewWorkspaceCreateSubmit(args: {
 
       const createdWithAgentId =
         args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined
+      const launchParams = hasIdentityCapability
+        ? buildInteractiveLaunchParams({
+            selectedAgentId: args.selectedAgent.id,
+            hasIdentityCapability: true,
+            deferToHostDefault:
+              !args.agentOverridden &&
+              hostDefaultMatchesNewWorktreePreview(
+                latestRuntimeSettings,
+                args.detectedAgentIds,
+                args.agentCatalog
+              ),
+            legacyCommand: undefined
+          })
+        : undefined
       const trimmedNote = args.note.trim() || undefined
       const selection = args.composer.createSelection
       const result = selection
@@ -160,7 +190,10 @@ export function useNewWorkspaceCreateSubmit(args: {
             selection,
             targetRepoId: selectedRepo.id,
             setupDecision,
-            agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
+            agent: {
+              choice: args.selectedAgent.id === '__blank__' ? 'blank' : args.selectedAgent.id,
+              launchParams
+            },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
@@ -172,6 +205,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             baseName,
             nameWasGenerated: !trimmedName,
             createdWithAgentId,
+            launchParams,
             comment: trimmedNote,
             setupDecision,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport()

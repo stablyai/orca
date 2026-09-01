@@ -19,11 +19,7 @@ import {
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
 import { track } from '../../../telemetry/client'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
-import {
-  agentKindSchema,
-  launchSourceSchema,
-  requestKindSchema
-} from '../../../../shared/telemetry-events'
+import { buildAgentStartedAttribution } from '../../../telemetry/agent-started-telemetry'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
 import {
   isNativeWindowsLocalPtySpawn,
@@ -229,18 +225,12 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
     markClaudePtySpawned(ctx.result.id)
   }
-  if (args.telemetry && !ctx.stablePaneOwner) {
-    const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-    const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-    const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
-    if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
-      track('agent_started', {
-        agent_kind: agentKindParse.data,
-        launch_source: launchSourceParse.data,
-        request_kind: requestKindParse.data,
-        ...getCohortAtEmit()
-      })
-    }
+  const runtimeAttribution =
+    args.telemetry && !ctx.stablePaneOwner && !ctx.result.isReattach
+      ? buildAgentStartedAttribution(args.telemetry)
+      : null
+  if (runtimeAttribution) {
+    track('agent_started', { ...runtimeAttribution, ...getCohortAtEmit() })
   }
   // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
   const paneKey = rememberPaneKeyForPty(ctx.result.id, ctx.env?.ORCA_PANE_KEY)

@@ -2,7 +2,6 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
-import { UUID_RE } from './pty-connection-test-constants'
 import {
   LEAF_2,
   createMockTransport,
@@ -146,7 +145,13 @@ describe('connectPanePty', () => {
 
   it('resumes a local sleeping pane in place when the restored PTY hint is missing', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const spawn = createDeferred<string>()
+    // The host returns the launch config it assembled for the resume; the pane registers that.
+    const hostLaunchConfig = {
+      agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
+      agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+      agentEnv: {}
+    }
+    const spawn = createDeferred<{ id: string; launchConfig: typeof hostLaunchConfig }>()
     const transport = createMockTransport()
     transport.connect.mockImplementation(() => spawn.promise)
     transportFactoryQueue.push(transport)
@@ -198,36 +203,47 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(4)
 
     expect(transport.connect).toHaveBeenCalledTimes(1)
+    // Resume now travels as an ownership key: the host loads its own record for this
+    // session and assembles the resume command/env/token itself.
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        agentLaunch: {
+          resume: {
+            operation: 'resume',
+            sessionKey: {
+              worktreeId: 'wt-1',
+              baseAgent: 'codex',
+              providerSessionId: 'codex-session-1'
+            }
+          }
+        },
         launchAgent: 'codex',
+        // Pane identity still ships from the client — hook attribution depends on it.
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          ORCA_WORKSPACE_ID: 'wt-1'
         })
+      })
+    )
+    // No client-built resume argv and no client-minted admission token ride along.
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ command: expect.anything() })
+    )
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ launchToken: expect.anything() })
+    )
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: expect.not.objectContaining({ ORCA_AGENT_LAUNCH_TOKEN: expect.anything() })
       })
     )
     expect(transport.connect).toHaveBeenCalledWith(
       expect.not.objectContaining({ sessionId: expect.any(String) })
     )
-    expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
-      paneKey,
-      {
-        agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-        agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-        agentEnv: {}
-      },
-      {
-        agentType: 'codex',
-        launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
-        tabId: 'tab-1',
-        leafId: LEAF_2
-      }
-    )
+    // A v1-era record has no captured config to pre-register; the host owns it.
+    expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
     expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
     expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
 
@@ -239,9 +255,14 @@ describe('connectPanePty', () => {
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
     expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
 
-    spawn.resolve('fresh-pty')
+    spawn.resolve({ id: 'fresh-pty', launchConfig: hostLaunchConfig })
     await flushAsyncTicks(10)
 
+    expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
+      paneKey,
+      hostLaunchConfig,
+      { agentType: 'codex', tabId: 'tab-1', leafId: LEAF_2 }
+    )
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)

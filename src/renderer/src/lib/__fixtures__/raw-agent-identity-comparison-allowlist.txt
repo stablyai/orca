@@ -1,0 +1,25 @@
+# Files allowed to compare a requested-agent identity against a built-in id.
+# Format: <path>:<allowed count>. Counts only shrink, and must match exactly —
+# slack in a count is where the next regression hides.
+#
+# VERIFIED BASE BY CONTRACT
+# Main normalizes `launchAgent` to the built-in base at all three of its entry
+# points before any consumer reads it (src/main/ipc/pty.ts: the agent-launch
+# receipt's baseAgent, the resume ingest's baseAgent, and the AI Vault session's
+# agent, itself a closed built-in list). `pty.launchAgent` inherits that same
+# normalized value, and the Pi-family kind checks in pty.ts/relay.ts read it.
+src/main/index.ts:1
+src/main/ipc/pty.ts:8
+src/main/runtime/headless-terminal-query-reply-policy.ts:1
+src/main/runtime/orca-runtime.ts:6
+src/relay/relay.ts:3
+#
+# KNOWN GAP — same defect class, not yet fixed, no longer scanner-visible
+# remote-runtime-pty-transport.ts and web-runtime-session.ts gate the OMP/Kimi
+# resume-path capability on a REQUESTED id, so a custom agent derived from those
+# bases does not request the capability and its provider resume can fall back to
+# the legacy create. The comparison now lives in
+# src/renderer/src/runtime/agent-resume-host-authority-capability.ts as a record
+# lookup, which this ratchet cannot see, so the two call sites carry no entry
+# here. Fixing it changes remote capability negotiation, so it must go through
+# docs/reference/remote-wire-compatibility.md rather than a drive-by edit.

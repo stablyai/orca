@@ -2,6 +2,11 @@
 // v36 launches shells from content-addressed wrapper trees; older owners stay attachable.
 export const PROTOCOL_VERSION = 36
 export const CONTENT_ADDRESSED_SHELL_WRAPPER_DAEMON_PROTOCOL_VERSION = 36
+// v36 is the first daemon that actually echoes `launchToken` back from listSessions/listProcesses.
+// Why 36, not the 34 that first accepted the field: v34/v35 daemons stored nothing and
+// echoed nothing, and one of those survives an app update. Claiming echo authority for
+// them makes a missing token read as "the launch died" and duplicate-spawns a live agent.
+export const LAUNCH_TOKEN_ECHO_DAEMON_PROTOCOL_VERSION = 36
 export const ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION = 35
 export const CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION = 34
 export const WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION = 33
@@ -39,4 +44,8 @@ export function supportsPtyStartupIngress(protocolVersion: number): boolean {
 
 export function supportsMode2031UnsubscribeFact(protocolVersion: number): boolean {
   return protocolVersion >= MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION
+}
+
+export function supportsLaunchTokenEcho(protocolVersion: number): boolean {
+  return protocolVersion >= LAUNCH_TOKEN_ECHO_DAEMON_PROTOCOL_VERSION
 }

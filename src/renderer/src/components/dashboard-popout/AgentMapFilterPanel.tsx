@@ -4,6 +4,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status'
 import type { DashboardCard, DashboardFilterOptions } from '../../../../shared/dashboard-snapshot'
@@ -221,14 +222,14 @@ export function AgentMapFilterPanel({
           {agentTypes.length > 1 ? (
             <AgentMapFilterSection
               title={translate('dashboardPopout.map.filters.agents', 'Agents')}
-              summary={summarizeSelection(map.agentTypes, agentTypes.length, (id) => id)}
+              summary={summarizeSelection(map.agentTypes, agentTypes.length, formatAgentTypeLabel)}
               open={open.has('agent')}
               onOpenChange={(next) => toggleSection('agent', next)}
             >
               {agentTypes.map((agentType) => (
                 <AgentMapFilterCheckbox
                   key={agentType}
-                  label={agentType}
+                  label={formatAgentTypeLabel(agentType)}
                   checked={map.agentTypes.has(agentType)}
                   count={agentTypeCounts.get(agentType) ?? 0}
                   onToggle={() => map.toggleAgentType(agentType)}

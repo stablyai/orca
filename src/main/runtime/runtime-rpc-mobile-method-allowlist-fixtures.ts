@@ -1,6 +1,13 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { GlobalSettings } from '../../shared/types'
+import { buildAgentCatalogSnapshot } from '../agent-launch/agent-catalog-projections'
 import type { OrcaRuntimeService } from './orca-runtime'
+
+const clientSettings = {
+  defaultTuiAgent: 'codex',
+  agentCmdOverrides: {}
+} as unknown as GlobalSettings
 
 // Loose on purpose: the allowlist suite asserts call arguments, never RPC signatures.
 export type MobileRpcMock = Mock<(...args: unknown[]) => unknown>
@@ -171,7 +178,10 @@ export function createMobileRpcSurfaceRuntime() {
     linearTeamLabels,
     linearTeamMembers,
     linearAddIssueComment,
-    getClientSettings: vi.fn(() => ({ defaultTuiAgent: 'codex', agentCmdOverrides: {} })),
+    getClientSettings: vi.fn(() => clientSettings),
+    // settings.get piggybacks the catalog projection and the reference revision.
+    getAgentCatalogSnapshot: vi.fn(() => buildAgentCatalogSnapshot(clientSettings)),
+    getAgentReferenceRevision: vi.fn(() => clientSettings.agentReferenceRevision ?? 1),
     updateClientSettings: vi.fn(() => ({ defaultTaskSource: 'linear' }))
   }
   return {

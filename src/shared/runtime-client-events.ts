@@ -1,4 +1,4 @@
-import type { CreateWorktreeResult } from './worktree/create-types'
+import type { CreatedWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -38,6 +38,8 @@ export type RuntimeClientEvent =
       identifier: string
       workspaceId: string
     }
+  | { type: 'agentCatalogChanged'; revision: number }
+  | { type: 'agentReferencesChanged'; revision: number }
   | {
       type: 'activateWorktree'
       repoId: string
@@ -69,9 +71,9 @@ export type PublishAutomationsChanged = (payload: AutomationsChangedPayload) => 
 export function toRuntimeActivateWorktreeEvent(
   repoId: string,
   worktreeId: string,
-  setup?: CreateWorktreeResult['setup'],
+  setup?: CreatedWorktreeResult['setup'],
   startup?: WorktreeStartupLaunch,
-  defaultTabs?: CreateWorktreeResult['defaultTabs']
+  defaultTabs?: CreatedWorktreeResult['defaultTabs']
 ): RuntimeActivateWorktreeEvent {
   return {
     type: 'activateWorktree',

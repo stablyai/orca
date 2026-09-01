@@ -2,6 +2,7 @@ import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
+import { emitAgentCatalogRevision } from '@/runtime/agent-catalog-revision-event'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import {
   applyRuntimeEnvironmentSshStateChanged,
@@ -139,6 +140,13 @@ export function registerRuntimeClientIpcBridge(
         .catch((error) => {
           console.error('Failed to refresh updated Linear issue:', error)
         })
+      return
+    }
+    if (event.type === 'agentCatalogChanged') {
+      emitAgentCatalogRevision(event.revision)
+      return
+    }
+    if (event.type === 'agentReferencesChanged') {
       return
     }
     void ensureRuntimeEventRepoKnown(environmentId, event.repoId)

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import { useLocalAgentCatalog } from '@/hooks/useLocalAgentCatalog'
+import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { isSelectAllShortcut } from '@/lib/editable-target'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
@@ -28,6 +30,7 @@ import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvan
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'
 import { TerminalQuickCommandDialogFooter } from './TerminalQuickCommandDialogFooter'
 import { TerminalQuickCommandLabelField } from './TerminalQuickCommandLabelField'
+import { buildTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import {
   createTerminalQuickCommandDialogDraftMemory,
   switchTerminalQuickCommandDialogAction
@@ -106,6 +109,18 @@ export function TerminalQuickCommandDialog({
 
   const selectedAgent =
     isAgentAction && supportsTerminalAgentQuickCommand(draft.agent) ? draft.agent : fallbackAgent
+
+  // Custom agents live in the local catalog snapshot, not GlobalSettings, so the
+  // picker needs its own read to offer them alongside built-ins.
+  // Selected raw (no `?? []`): a fresh fallback array would re-render on every store write.
+  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents)
+  // Why: this dialog stays mounted per tab bar while closed; gate the catalog read on `open`.
+  const { snapshot: localAgentCatalog } = useLocalAgentCatalog({ enabled: open })
+  const agentOptions = useMemo(
+    () =>
+      buildTerminalQuickCommandAgentOptions(selectedAgent, disabledTuiAgents, localAgentCatalog),
+    [selectedAgent, disabledTuiAgents, localAgentCatalog]
+  )
 
   const setAction = (action: 'terminal-command' | 'agent-prompt'): void => {
     setDraft((current) => {
@@ -233,6 +248,7 @@ export function TerminalQuickCommandDialog({
             draft={draft}
             isAgentAction={isAgentAction}
             selectedAgent={selectedAgent}
+            agentOptions={agentOptions}
             draftMemoryRef={draftMemoryRef}
             setDraft={setDraft}
             toggleAppendEnter={toggleAppendEnter}

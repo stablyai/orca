@@ -27,7 +27,6 @@ import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
@@ -46,6 +45,28 @@ type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
   terminalScrollbackBytes?: unknown
 }
 
+// Why: these keys are owned by the atomic catalog/reference mutation APIs
+// (settings.mutateAgentCatalog and the owner-specific reference mutations).
+// Accepting them through the generic settings write would bypass revision
+// checks, id minting, tombstone bookkeeping, and the reference index.
+const AGENT_CATALOG_OWNED_SETTINGS_KEYS = [
+  'defaultTuiAgent',
+  'disabledTuiAgents',
+  'customTuiAgents',
+  'deletedCustomTuiAgents',
+  'agentCatalogSchemaVersion',
+  'agentCatalogRevision',
+  'agentCmdOverrides',
+  'agentDefaultArgs',
+  'agentDefaultEnv'
+] as const
+const AGENT_REFERENCE_OWNED_SETTINGS_KEYS = [
+  'agentReferenceRevision',
+  'terminalQuickCommands',
+  'commitMessageAi',
+  'sourceControlAi'
+] as const
+
 function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<GlobalSettings> {
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
     args as LegacyTerminalScrollbackSettingsUpdate
@@ -54,6 +75,12 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // writes must pass the dedicated reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  for (const key of AGENT_CATALOG_OWNED_SETTINGS_KEYS) {
+    delete sanitizedArgs[key]
+  }
+  for (const key of AGENT_REFERENCE_OWNED_SETTINGS_KEYS) {
+    delete sanitizedArgs[key]
+  }
   return sanitizedArgs
 }
 
@@ -226,12 +253,12 @@ export function registerSettingsHandlers(
         normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
       )
     }
-    const hookSettingChanged =
-      ('agentStatusHooksEnabled' in sanitizedArgs &&
-        before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
-      ('disabledTuiAgents' in sanitizedArgs &&
-        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
-    if (hookSettingChanged) {
+    // `disabledTuiAgents` is catalog-owned and stripped above, so its half of the
+    // reconcile lives on the settings:mutateAgentCatalog handler instead.
+    if (
+      'agentStatusHooksEnabled' in sanitizedArgs &&
+      before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled
+    ) {
       try {
         await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
           userInitiated: true,

@@ -19,7 +19,25 @@ export type MessageDeliveryContract = 'legacy_direct' | 'current_delivery' | 'au
 
 export type TaskStatus = 'pending' | 'ready' | 'dispatched' | 'completed' | 'failed' | 'blocked'
 
-export type DispatchStatus = 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
+// `forgotten` (U6) is an additive terminal disposition: an owner forgot a
+// dispatch stranded in `launch_state_unknown`. Old readers that predate it must
+// see legacy `failed` (projectDispatchStatusForLegacyReaders) because the remote
+// process may still exist, so the task blocks until an explicit Retry.
+export type DispatchStatus =
+  | 'pending'
+  | 'dispatched'
+  | 'completed'
+  | 'failed'
+  | 'circuit_broken'
+  | 'forgotten'
+
+/** Project a dispatch status for a reader that lacks the additive `forgotten`
+ *  disposition. Every other status is unchanged. */
+export function projectDispatchStatusForLegacyReaders(
+  status: DispatchStatus
+): Exclude<DispatchStatus, 'forgotten'> {
+  return status === 'forgotten' ? 'failed' : status
+}
 
 export type WorkerReportOutcome = 'succeeded' | 'failed'
 
@@ -286,6 +304,13 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  // U6 additive columns (all nullable; old rows read null and old readers ignore
+  // them, keeping `last_failure`). requested/base identity validate launch
+  // ownership; agent_launch_failure is the JSON-encoded structured launch
+  // failure alongside the retained generic `last_failure` string.
+  requested_agent: string | null
+  base_agent: string | null
+  agent_launch_failure: string | null
 }
 
 export type DecisionGateRow = {

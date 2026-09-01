@@ -9,7 +9,7 @@ import {
 } from '../../../../../shared/agent-session-resume'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import { resolveTuiAgentConfig } from '../../../../../shared/custom-tui-agents'
 import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
@@ -92,9 +92,12 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     : undefined
   session.startupDraftAgent =
     session.paneStartup?.launchAgent ?? session.paneStartup?.initialAgentStatus?.agent
-  session.startupDraftAgentConfig = session.startupDraftAgent
-    ? TUI_AGENT_CONFIG[session.startupDraftAgent]
-    : null
+  const startupDraftSettings = useAppStore.getState().settings
+  session.startupDraftAgentConfig = resolveTuiAgentConfig(
+    session.startupDraftAgent,
+    startupDraftSettings?.customTuiAgents,
+    startupDraftSettings?.deletedCustomTuiAgents
+  )
   session.startupDraftPrompt =
     typeof session.paneStartup?.draftPrompt === 'string' && session.paneStartup.draftPrompt.trim()
       ? session.paneStartup.draftPrompt

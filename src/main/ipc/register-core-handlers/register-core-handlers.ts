@@ -1,96 +1,98 @@
 import { app } from 'electron'
-import { registerAppHandlers } from '../app'
-import { registerCliHandlers } from '../cli'
-import { registerPreflightHandlers } from '../preflight'
-import type { Store } from '../../persistence'
-import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { StatsCollector } from '../../stats/collector'
-import { registerFilesystemHandlers } from '../filesystem'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
-import { registerFilesystemWatcherHandlers } from '../filesystem-watcher'
-import { registerUsageProviderHandlers } from '../usage-provider-handlers'
-import { registerGitHubHandlers } from '../github'
-import { registerGitLabHandlers } from '../gitlab'
-import { registerHostedReviewHandlers } from '../hosted-review'
-import { registerLinearHandlers } from '../linear'
-import { registerJiraHandlers } from '../jira'
-import { registerBitbucketHandlers } from '../bitbucket'
-import { registerFeedbackHandlers } from '../feedback'
-import { registerCrashReportingHandlers } from '../crash-reporting'
-import { registerExportHandlers } from '../export'
-import { registerStatsHandlers } from '../stats'
-import { registerMemoryHandlers } from '../memory'
-import { registerRateLimitHandlers } from '../rate-limits'
-import { registerRuntimeHandlers } from '../runtime'
-import { registerRuntimeEnvironmentHandlers } from '../runtime-environments'
-import { registerEphemeralVmHandlers } from '../ephemeral-vm'
-import { registerAiVaultHandlers } from '../ai-vault'
-import { registerNativeChatHandlers } from '../native-chat'
-import { registerNotificationHandlers } from '../notifications'
-import { registerNotebookHandlers } from '../notebook'
-import { registerOnboardingHandlers } from '../onboarding'
-import { registerDashboardPopoutHandlers } from '../dashboard-popout'
-import { registerTerminalPreviewHandlers } from '../terminal-preview'
-import { registerDeveloperPermissionHandlers } from '../developer-permissions'
-import { registerComputerUsePermissionHandlers } from '../computer-use-permissions'
-import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser'
-import { setTrustedBrowserRendererWebContentsId } from '../browser-renderer-trust'
-import { registerSessionHandlers } from '../session'
-import { registerSettingsHandlers } from '../settings'
-import { registerDiagnosticsHandlers } from '../diagnostics'
-import { registerSkillsHandlers } from '../skills'
-import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
-import { registerWorkspaceSpaceHandlers } from '../workspace-space'
-import { registerWorkspacePortHandlers } from '../workspace-ports'
-import { registerLocalhostWorktreeLabelHandlers } from '../localhost-worktree-labels'
-import { registerAutomationHandlers } from '../automations'
-import { registerKeybindingHandlers } from '../keybindings'
-import { registerTelemetryHandlers } from '../telemetry'
-import { registerShellHandlers } from '../shell'
-import { registerPetHandlers } from '../pet'
-import { registerPluginHandlers } from '../plugins'
-import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
-import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
-import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
-import { registerSpeechHandlers } from '../speech'
-import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-render-desync-evidence'
-import { registerOrcaProfileHandlers } from '../orca-profiles'
-import { registerCodexAccountHandlers } from '../codex-accounts'
-import { registerAgentHookHandlers } from '../agent-hooks'
-import { registerCodexConfigSyncHandlers } from '../codex-config-sync'
-import { getPtyIdForPaneKey } from '../pty'
-import { registerAgentTrustHandlers } from '../agent-trust'
-import { registerClaudeAccountHandlers } from '../claude-accounts'
-import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
-import { registerGrokAccountHandlers } from '../grok-accounts'
-import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
+import { registerAppHandlers } from './app'
+import { registerCliHandlers } from './cli'
+import { registerPreflightHandlers } from './preflight'
+import type { Store } from '../persistence'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { StatsCollector } from '../stats/collector'
+import { registerFilesystemHandlers } from './filesystem'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { registerUsageProviderHandlers } from './usage-provider-handlers'
+import { registerGitHubHandlers } from './github'
+import { registerGitLabHandlers } from './gitlab'
+import { registerHostedReviewHandlers } from './hosted-review'
+import { registerLinearHandlers } from './linear'
+import { registerJiraHandlers } from './jira'
+import { registerBitbucketHandlers } from './bitbucket'
+import { registerFeedbackHandlers } from './feedback'
+import { registerCrashReportingHandlers } from './crash-reporting'
+import { registerExportHandlers } from './export'
+import { registerStatsHandlers } from './stats'
+import { registerMemoryHandlers } from './memory'
+import { registerRateLimitHandlers } from './rate-limits'
+import { registerRuntimeHandlers } from './runtime'
+import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { registerEphemeralVmHandlers } from './ephemeral-vm'
+import { registerAiVaultHandlers } from './ai-vault'
+import { registerNativeChatHandlers } from './native-chat'
+import { registerNotificationHandlers } from './notifications'
+import { registerNotebookHandlers } from './notebook'
+import { registerOnboardingHandlers } from './onboarding'
+import { registerDashboardPopoutHandlers } from './dashboard-popout'
+import { registerTerminalPreviewHandlers } from './terminal-preview'
+import { registerDeveloperPermissionHandlers } from './developer-permissions'
+import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
+import { setAgentBrowserBridgeRef, registerBrowserHandlers } from './browser'
+import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
+import { registerSessionHandlers } from './session'
+import { registerSettingsHandlers } from './settings'
+import { registerAgentCatalogHandlers } from './agent-catalog'
+import { registerDataRecoveryHandlers } from './data-recovery'
+import { registerDiagnosticsHandlers } from './diagnostics'
+import { registerSkillsHandlers } from './skills'
+import { registerWorkspaceSpaceHandlers } from './workspace-space'
+import { registerWorkspacePortHandlers } from './workspace-ports'
+import { registerLocalhostWorktreeLabelHandlers } from './localhost-worktree-labels'
+import { registerAutomationHandlers } from './automations'
+import { registerKeybindingHandlers } from './keybindings'
+import { registerTelemetryHandlers } from './telemetry'
+import { registerShellHandlers } from './shell'
+import { registerPetHandlers } from './pet'
+import { registerPluginHandlers } from './plugins'
+import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
+import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
+import { registerEmulatorVideoStreamHandlers } from './emulator-video-stream'
+import { registerSpeechHandlers } from './speech'
+import { registerTerminalRenderDesyncEvidenceHandler } from './terminal-render-desync-evidence'
+import { registerOrcaProfileHandlers } from './orca-profiles'
+import { registerCodexAccountHandlers } from './codex-accounts'
+import { registerAgentHookHandlers } from './agent-hooks'
+import { registerCodexConfigSyncHandlers } from './codex-config-sync'
+import { getPtyIdForPaneKey } from './pty'
+import { registerAgentTrustHandlers } from './agent-trust'
+import { registerClaudeAccountHandlers } from './claude-accounts'
+import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
+import { registerGrokAccountHandlers } from './grok-accounts'
+import { registerUpdaterHandlers } from '../window/attach-main-window-services'
 import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
-} from '../../window/clipboard-ipc-handlers'
-import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
-import type { ClaudeUsageStore } from '../../claude-usage/store'
-import type { CodexUsageStore } from '../../codex-usage/store'
-import type { OpenCodeUsageStore } from '../../opencode-usage/store'
-import type { RateLimitService } from '../../rate-limits/service'
-import type { CodexAccountService } from '../../codex-accounts/service'
-import type { ClaudeAccountService } from '../../claude-accounts/service'
-import type { AutomationService } from '../../automations/service'
-import type { AgentAwakeService } from '../../agent-awake-service'
-import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
-import type { KeybindingService } from '../../keybindings/keybinding-service'
+} from '../window/clipboard-ipc-handlers'
+import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
+import type { ClaudeUsageStore } from '../claude-usage/store'
+import type { CodexUsageStore } from '../codex-usage/store'
+import type { OpenCodeUsageStore } from '../opencode-usage/store'
+import type { RateLimitService } from '../rate-limits/service'
+import type { CodexAccountService } from '../codex-accounts/service'
+import type { ClaudeAccountService } from '../claude-accounts/service'
+import type { AutomationService } from '../automations/service'
+import type { AgentAwakeService } from '../agent-awake-service'
+import type { CrashReportStore } from '../crash-reporting/crash-report-store'
+import type { KeybindingService } from '../keybindings/keybinding-service'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault-resume-preparation'
 import {
   getSavedRuntimeAiVaultHostInfos,
   prepareRuntimeAiVaultSessionResume,
+  resolveRuntimeAiVaultResumeDetails,
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
-} from '../../ai-vault/runtime-session-scanner'
-import type { PluginService } from '../../plugins/plugin-service'
-import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
+} from '../ai-vault/runtime-session-scanner'
+import type { PluginService } from '../plugins/plugin-service'
+import type { PluginMarketplaceHandlerServices } from './plugin-marketplaces'
 
 let registered = false
 
@@ -176,8 +178,9 @@ export function registerCoreHandlers(
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
+  registerAgentCatalogHandlers(store)
   registerSkillsHandlers(store, runtime)
-  registerSkillDeleteIpcHandlers(store, runtime)
+  registerDataRecoveryHandlers(store)
   if (automations) {
     registerAutomationHandlers(store, automations)
   }
@@ -215,7 +218,6 @@ export function registerCoreHandlers(
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store, pluginService)
   registerAiVaultHandlers({
-    ensureStructuredSessionOwnership: () => runtime.ensureStructuredAgentSessionHost(),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
@@ -225,7 +227,21 @@ export function registerCoreHandlers(
     resolveRuntimeAiVaultSessionTitles: async (environmentId, args) =>
       resolveRuntimeAiVaultSessionTitles(app.getPath('userData'), environmentId, args),
     prepareRuntimeSessionResume: async (environmentId, args) =>
-      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
+      prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args),
+    // Without this every runtime-hosted row reports 'unavailable'; the runtime
+    // must re-scan to derive its own transcript path.
+    resolveRuntimeAiVaultResumeDetails: async (environmentId, entry) =>
+      resolveRuntimeAiVaultResumeDetails(app.getPath('userData'), environmentId, entry),
+    // Read per-call: settings change while the handlers stay registered.
+    getVaultResumeSettings: () => {
+      const settings = store.getSettings()
+      return {
+        agentCmdOverrides: settings.agentCmdOverrides,
+        agentDefaultArgs: settings.agentDefaultArgs,
+        agentDefaultEnv: settings.agentDefaultEnv,
+        terminalWindowsShell: settings.terminalWindowsShell
+      }
+    }
   })
   registerNativeChatHandlers()
   registerClipboardHandlers(store)

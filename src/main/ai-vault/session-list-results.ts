@@ -6,6 +6,7 @@ import type {
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { sessionSortTime } from './session-scanner-accumulator'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
+import { createAiVaultResumeLocator } from './ai-vault-resume-locator'
 
 export function aiVaultScanIssueResult(args: {
   executionHostId?: ExecutionHostId
@@ -48,7 +49,15 @@ export function restampAiVaultListResult(
         : {
             ...session,
             executionHostId,
-            id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
+            id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`,
+            resumeLocator: createAiVaultResumeLocator({
+              executionHostId,
+              agent: session.agent,
+              sessionId: session.sessionId,
+              transcriptPath: session.filePath,
+              // This restamp runs on the transcript-owning host.
+              platform: session.executionHostPlatform ?? process.platform
+            })
           }
     ),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),

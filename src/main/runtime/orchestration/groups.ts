@@ -1,5 +1,5 @@
 import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { BuiltInTuiAgent } from '../../../shared/types'
 
 // Why: group addresses enable broadcast messaging to logical groups of agents.
 // Resolution is done at send-time: one message record per recipient, same thread_id,
@@ -19,40 +19,25 @@ const AGENT_NAME_GROUPS = [
 
 type AgentNameGroup = (typeof AGENT_NAME_GROUPS)[number]
 
-export function isGroupAddress(to: string): boolean {
-  return to.startsWith('@')
-}
-
-/** Group name to the agent id the host publishes for a pane. */
-const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
+// Base-to-group map (oracle 16): agent-name groups resolve from a terminal's
+// validated base harness, never its title text. Only bases with an addressable
+// group appear; the `mimo-code` base maps to the existing `@mimo` group name.
+const BASE_AGENT_TO_GROUP: Partial<Record<BuiltInTuiAgent, AgentNameGroup>> = {
   claude: 'claude',
   openclaude: 'openclaude',
   codex: 'codex',
   opencode: 'opencode',
-  mimo: 'mimo-code',
+  'mimo-code': 'mimo',
   gemini: 'gemini',
   droid: 'droid',
   grok: 'grok',
   cursor: 'cursor'
 }
 
-/**
- * Whether this terminal IS the addressed agent.
- *
- * Why the host's resolved identity and not the title: a terminal title is a decoration channel
- * that routinely contains other agents' names, because people describe agent work in their task
- * titles. Matching `@claude` against the title delivered the message to any pane whose task text
- * happened to say "claude" — a Codex pane reviewing a Claude PR received Claude's instructions.
- * Recorded titles like "Switch Claude and Codex off the load balancer… - grok" are the ordinary
- * case, not a contrived one.
- *
- * Why an absent identity means NO: `agentIdentity` is absent when the host predates the field or
- * had no evidence beyond the title. Delivery is an action, so unknown fails closed. Not
- * delivering is visible and recoverable — the sender sees no recipients; delivering to the wrong
- * agent is neither.
- */
-function terminalIsAgent(terminal: RuntimeTerminalSummary, agentName: AgentNameGroup): boolean {
-  return terminal.agentIdentity === GROUP_AGENT_IDS[agentName]
+export type GroupAddress = '@all' | '@idle' | `@${AgentNameGroup}` | `@worktree:${string}`
+
+export function isGroupAddress(to: string): boolean {
+  return to.startsWith('@')
 }
 
 export function resolveGroupAddress(
@@ -88,9 +73,9 @@ export function resolveGroupAddress(
       .map((t) => t.handle)
   }
 
-  // Why: agent-name groups (@claude, @droid, etc.) resolve against the identity the HOST
-  // published for each pane, so the sender can address every instance of an agent without
-  // knowing their handles — and without a task title being able to redirect the message.
+  // Why: agent-name groups (@claude, @droid, etc.) match by the terminal's
+  // validated base harness, not title text — a custom agent joins its base's
+  // group, and an unattributed terminal is omitted rather than guessed.
   const agentName = group.slice(1) // remove @
   if ((AGENT_NAME_GROUPS as readonly string[]).includes(agentName)) {
     return terminals
@@ -98,7 +83,7 @@ export function resolveGroupAddress(
         if (t.handle === senderHandle) {
           return false
         }
-        return terminalIsAgent(t, agentName as AgentNameGroup)
+        return t.baseAgent !== undefined && BASE_AGENT_TO_GROUP[t.baseAgent] === agentName
       })
       .map((t) => t.handle)
   }

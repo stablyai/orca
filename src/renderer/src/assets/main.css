@@ -62,6 +62,8 @@
   --color-ring: var(--ring);
   --color-agent-question: var(--agent-question);
   --color-agent-question-text: var(--agent-question-text);
+  --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -181,6 +183,10 @@
   --agent-question: var(--color-orange-600);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* "Needs attention, not broken" — amber, distinct from agent-question orange
+     and destructive red. Also the Monaco search-highlight hue. */
+  --warning: var(--color-amber-500);
+  --warning-text: var(--color-amber-600);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
@@ -291,6 +297,8 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --warning: var(--color-amber-500);
+  --warning-text: var(--color-amber-500);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);

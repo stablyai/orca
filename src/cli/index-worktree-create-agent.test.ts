@@ -137,8 +137,11 @@ describe('orca cli worktree awareness', () => {
       noParent: false,
       callerTerminalHandle: undefined,
       cliProvenanceRequest: {},
-      startupAgent: 'codex',
-      startupPrompt: 'hi'
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'codex' },
+        allowEmptyPromptLaunch: true,
+        prompt: 'hi'
+      }
     })
   })
 
@@ -186,8 +189,11 @@ describe('orca cli worktree awareness', () => {
       noParent: false,
       callerTerminalHandle: undefined,
       cliProvenanceRequest: {},
-      startupAgent: 'codex',
-      startupPrompt: 'hi'
+      agentLaunch: {
+        selection: { kind: 'agent', agent: 'codex' },
+        allowEmptyPromptLaunch: true,
+        prompt: 'hi'
+      }
     })
   })
 
@@ -237,8 +243,9 @@ describe('orca cli worktree awareness', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
 
+    // Bare `--agent` now selects the stored default, so only `--agent=` is valueless.
     await main(
-      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--agent'],
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--agent='],
       '/tmp/repo'
     )
     expect(callMock.mock.calls.some(([method]) => method === 'worktree.create')).toBe(false)

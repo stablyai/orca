@@ -6,7 +6,7 @@ import type {
   GrokAccountsApi,
   MinimaxCredentialsApi
 } from './api/agent-account-api'
-import type { HooksApi } from './api/agent-hook-api'
+import type { AgentHooksApi, HooksApi } from './api/agent-hook-api'
 import type { SkillsApi } from './api/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
 import type {
@@ -22,7 +22,13 @@ import type { BrowserApi } from './api/browser-api'
 import type { CliApi } from './api/cli-install-api'
 import type { CrashReportsApi, FeedbackApi } from './api/crash-report-api'
 import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
-import type { DocPreviewApi } from './api/doc-preview-api'
+import type {
+  DataRecoveryMigrationStatus,
+  DataRecoveryOperationResult,
+  RecoveryPointDto,
+  RecoveryPointId,
+  RestoreRecoveryPointMode
+} from '../shared/data-recovery'
 import type { EmulatorApi } from './api/emulator-api'
 import type { EphemeralVmApi } from './api/ephemeral-vm-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
@@ -104,6 +110,7 @@ export type PreloadApi = {
   claudeAccounts: ClaudeAccountsApi
   cli: CliApi
   codexConfigSync: CodexConfigSyncApi
+  agentHooks: AgentHooksApi
   agentTrust: AgentTrustApi
   preflight: PreflightApi
   notifications: NotificationsApi
@@ -125,7 +132,6 @@ export type PreloadApi = {
   remoteWorkspace: WorkspaceSessionApi['remoteWorkspace']
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
-  docPreview: DocPreviewApi['docPreview']
   stats: StatsApi
   memory: MemoryApi
   claudeUsage: ClaudeUsageApi
@@ -150,11 +156,20 @@ export type PreloadApi = {
   agentStatus: AgentStatusApi
   mobile: MobileApi
   speech: SpeechApi
+  /** Desktop-only data recovery; paired web clients do not expose this surface. */
+  dataRecovery?: {
+    migrationStatus: () => Promise<DataRecoveryMigrationStatus>
+    retryAgentCatalogMigration: () => Promise<DataRecoveryOperationResult>
+    listPoints: () => Promise<RecoveryPointDto[]>
+    restore: (args: {
+      id: RecoveryPointId
+      mode: RestoreRecoveryPointMode
+    }) => Promise<DataRecoveryOperationResult>
+  }
 }
 
 export type { ClaudeUsageApi, CodexUsageApi, OpenCodeUsageApi } from './api/agent-usage-api'
 export type { AiVaultApi } from './api/ai-vault-api'
-export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'
 export type { AppApi } from './api/app-api'
 export type { BrowserApi, DetectedBrowserInfo, DetectedBrowserProfileInfo } from './api/browser-api'
 export type { EmulatorApi } from './api/emulator-api'

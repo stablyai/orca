@@ -3,9 +3,8 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import { resolveSourceControlAgentAvailability } from '@/lib/source-control-agent-action-plan'
 import { isSourceControlAgentDetectedAndEnabled } from './source-control-agent-action-dialog-support'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 
@@ -22,7 +21,18 @@ type UseSavedSourceControlAgentActionAutoStartArgs = {
   savedAgentId?: TuiAgent | null
   savedCommandInputTemplate?: string | null
   savedAgentArgs?: string | null
-  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'> | null | undefined
+  settings:
+    | Pick<
+        GlobalSettings,
+        | 'sourceControlAi'
+        | 'commitMessageAi'
+        | 'customTuiAgents'
+        | 'deletedCustomTuiAgents'
+        | 'agentCmdOverrides'
+        | 'agentDefaultEnv'
+      >
+    | null
+    | undefined
   repo: Pick<Repo, 'sourceControlAi'> | null
   repoId?: string | null
   worktreeId?: string | null
@@ -244,7 +254,12 @@ export function useSavedSourceControlAgentActionAutoStart({
       selectedAgent !== savedAgentId ||
       !trimmedCommandInput ||
       connectionUnavailable ||
-      !isSourceControlAgentDetectedAndEnabled(savedAgentId, detectedAgents, disabledAgents)
+      !isSourceControlAgentDetectedAndEnabled(
+        savedAgentId,
+        detectedAgents,
+        disabledAgents,
+        resolveSourceControlAgentAvailability(savedAgentId, settings)
+      )
     ) {
       revealDialog()
       return
@@ -280,6 +295,7 @@ export function useSavedSourceControlAgentActionAutoStart({
     receiptState,
     savedAgentId,
     selectedAgent,
+    settings,
     trimmedCommandInput
   ])
 

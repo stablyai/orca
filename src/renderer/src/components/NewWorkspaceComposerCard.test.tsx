@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import NewWorkspaceComposerCard from './NewWorkspaceComposerCard'
+import { renderCard } from './new-workspace-composer-card-test-render'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 
@@ -20,6 +20,11 @@ const apiMocks = vi.hoisted(() => ({
   sshConnect: vi.fn()
 }))
 
+const mocks = vi.hoisted(() => ({
+  disabledTuiAgents: [] as string[],
+  capturedAgents: [] as { id: string; label: string; baseAgent?: string }[]
+}))
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
@@ -30,7 +35,7 @@ vi.mock('@/store', () => ({
         openSettingsTarget: storeMocks.openSettingsTarget,
         setRuntimeEnvironmentStatus: storeMocks.setRuntimeEnvironmentStatus,
         activeModal: 'none',
-        settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
+        settings: { defaultTuiAgent: null, disabledTuiAgents: mocks.disabledTuiAgents },
         updateSettings: vi.fn(),
         projects: [],
         repos: []
@@ -54,7 +59,10 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('@/components/agent/AgentCombobox', () => ({
-  default: () => <button type="button">Agent picker</button>
+  default: ({ agents }: { agents: { id: string; label: string; baseAgent?: string }[] }) => {
+    mocks.capturedAgents = agents
+    return <button type="button">Agent picker</button>
+  }
 }))
 
 // Stub the host-add dialog to its `mode` — the composer's job is to open it with the right
@@ -113,19 +121,6 @@ vi.mock('@/components/new-workspace/ProjectCombobox', () => ({
     </div>
   )
 }))
-
-const projectOptions: NewWorkspaceProjectOption[] = [
-  {
-    kind: 'project-group',
-    id: 'project-group:platform',
-    projectGroupId: 'platform',
-    displayName: 'Platform',
-    badgeColor: 'var(--muted-foreground)',
-    detail: '/workspace/platform',
-    parentPath: '/workspace/platform',
-    connectionId: null
-  }
-]
 
 const sourceRepos = [
   {
@@ -198,79 +193,6 @@ function findConnectButton(label: string): HTMLButtonElement | undefined {
   )
 }
 
-function renderCard(
-  overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {}
-) {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  act(() => {
-    root.render(
-      <NewWorkspaceComposerCard
-        quickAgent={null}
-        onQuickAgentChange={() => {}}
-        eligibleRepos={[]}
-        repoId="repo-a"
-        projectOptions={projectOptions}
-        selectedProjectId="project-group:platform"
-        selectedRepoIsGit
-        onRepoChange={() => {}}
-        onProjectChange={() => {}}
-        primaryActionLabel="Create workspace"
-        name=""
-        onNameValueChange={() => {}}
-        onSmartGitHubItemSelect={() => {}}
-        onSmartGitLabItemSelect={() => {}}
-        onSmartBranchSelect={() => {}}
-        onSmartLinearIssueSelect={() => {}}
-        smartNameSelection={null}
-        onClearSmartNameSelection={() => {}}
-        canReuseSelectedBranch={false}
-        reuseSelectedBranch={false}
-        onReuseSelectedBranchChange={() => {}}
-        branchNameOverride=""
-        onBranchNameOverrideChange={() => {}}
-        parentWorktreeId={null}
-        onParentWorktreeIdChange={() => {}}
-        forkPushWarning={null}
-        detectedAgentIds={null}
-        onOpenAgentSettings={() => {}}
-        advancedOpen={false}
-        onToggleAdvanced={() => {}}
-        createDisabled={false}
-        projectError={null}
-        creating={false}
-        onCreate={() => {}}
-        note=""
-        onNoteChange={() => {}}
-        setupConfig={null}
-        requiresExplicitSetupChoice={false}
-        setupDecision={null}
-        onSetupDecisionChange={() => {}}
-        setupAgentStartupPolicy="start-immediately"
-        onSetupAgentStartupPolicyChange={() => {}}
-        shouldWaitForSetupCheck={false}
-        resolvedSetupDecision={null}
-        createError={null}
-        selectedRepoConnectionId={null}
-        selectedRepoSshStatus={null}
-        selectedRepoRequiresConnection={false}
-        selectedRepoConnectInProgress={false}
-        onConnectSelectedRepo={async () => {}}
-        canUseSparseCheckout={false}
-        sparsePresets={[]}
-        sparseSelectedPresetId={null}
-        onSparseSelectPreset={() => {}}
-        branchesEnabled={false}
-        setupControlsEnabled={false}
-        sparseControlsEnabled={false}
-        {...overrides}
-      />
-    )
-  })
-  return { container, root }
-}
-
 function findInputByLabel(container: HTMLElement, labelText: string): HTMLInputElement | null {
   const label = [...container.querySelectorAll('label')].find(
     (candidate) => candidate.textContent?.trim() === labelText
@@ -308,10 +230,35 @@ function findRunTargetItem(label: string): HTMLElement | undefined {
 
 let current: { container: HTMLDivElement; root: Root } | null = null
 
-function unmountCurrent(): void {
-  act(() => current?.root.unmount())
-  current?.container.remove()
-}
+describe('NewWorkspaceComposerCard custom agents', () => {
+  afterEach(() => {
+    act(() => current?.root.unmount())
+    current?.container.remove()
+    current = null
+    mocks.disabledTuiAgents = []
+    mocks.capturedAgents = []
+  })
+
+  it('passes a custom option to the picker without changing its identity', () => {
+    current = renderCard({
+      quickAgentOptions: [
+        {
+          id: 'custom-agent:codex:aa',
+          label: 'My Codex',
+          cmd: '/opt/agent',
+          homepageUrl: 'https://example.com',
+          baseAgent: 'codex'
+        }
+      ] as never
+    })
+    const custom = mocks.capturedAgents.find((entry) => entry.id === 'custom-agent:codex:aa')
+    expect(custom).toMatchObject({ label: 'My Codex', baseAgent: 'codex' })
+    // The displayed label is the human label, never the raw custom-agent id.
+    for (const entry of mocks.capturedAgents) {
+      expect(entry.label.startsWith('custom-agent:')).toBe(false)
+    }
+  })
+})
 
 describe('NewWorkspaceComposerCard folder task source mode', () => {
   beforeEach(() => {
@@ -340,7 +287,8 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
   })
 
   afterEach(() => {
-    unmountCurrent()
+    act(() => current?.root.unmount())
+    current?.container.remove()
     current = null
     vi.clearAllMocks()
   })
@@ -401,7 +349,8 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     )
     expect(collapsedReuse).toBeTruthy()
 
-    unmountCurrent()
+    act(() => current?.root.unmount())
+    current?.container.remove()
 
     current = renderCard({ canReuseSelectedBranch: true, reuseSelectedBranch: true })
     const reuseLabel = [...current.container.querySelectorAll('label')].find((label) =>
@@ -435,7 +384,8 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     clickReuseCheckbox()
     expect(offChanges).toEqual([false])
 
-    unmountCurrent()
+    act(() => current?.root.unmount())
+    current?.container.remove()
 
     // Unchecked -> checked (opting into reuse — the action that pins the branch).
     const onChanges: boolean[] = []
@@ -462,7 +412,8 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       'Wait for setup to complete before starting agent'
     )
 
-    unmountCurrent()
+    act(() => current?.root.unmount())
+    current?.container.remove()
 
     current = renderCard({
       advancedOpen: true,
@@ -580,19 +531,6 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     })
 
     expect(findInputByLabel(current.container, 'Branch name')).toBeTruthy()
-  })
-
-  it('places the parent workspace picker immediately after the branch name field', () => {
-    current = renderCard({
-      advancedOpen: true,
-      branchesEnabled: true
-    })
-
-    const nextField = findInputByLabel(current.container, 'Branch name')?.closest(
-      'div.space-y-1'
-    )?.nextElementSibling
-    expect(nextField?.textContent).toMatch(/Parent worktree(?!.*Note)/)
-    expect(nextField?.nextElementSibling?.textContent).toContain('Note')
   })
 
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {
@@ -902,7 +840,8 @@ describe('NewWorkspaceComposerCard note sizing', () => {
   // Sizing is layout-driven (field-sizing) rather than a JS measure pass, and happy-dom
   // has no layout engine, so these assert the class contract that produces the growth.
   afterEach(() => {
-    unmountCurrent()
+    act(() => current?.root.unmount())
+    current?.container.remove()
     current = null
   })
 

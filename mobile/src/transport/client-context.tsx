@@ -1,17 +1,21 @@
-// Single shared RpcClient per host, collapsing the old per-screen WebSocket connections.
-// Design: docs/mobile-shared-client-per-host.md.
+// Why: collapses the per-screen WebSocket connection model into a single
+// shared RpcClient per host. Implements the design in
+// docs/mobile-shared-client-per-host.md.
+//
+// Lifecycle rules:
+// - First request for a host opens its client lazily.
+// - Refcount tracks active subscribers; when it drops to zero we schedule
+//   a 30-second idle close timer. If a new subscriber arrives within that
+//   window we cancel and reuse the same client.
+// - removeHost() forces an immediate close so re-pairing gets a fresh
+//   transport.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode
-} from 'react'
+  HostClientContext,
+  useHostClientContext as useRpcClientContext,
+  type HostClientContextValue
+} from './host-client-context-contract'
 import type { RpcClient } from './rpc-client'
-import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import {
@@ -20,8 +24,6 @@ import {
 } from './host-client-acquisition-registry'
 import { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import { openHostClientEntry, type HostClientStoreEntry } from './host-entry-opener'
-import { shouldPreserveActiveRelay } from './relay-reconnect-preservation'
-import { recordConnectionRevival } from './persisted-connection-log-store'
 import {
   createHostClientSelectors,
   listHostClients,
@@ -32,12 +34,12 @@ import {
   subscribeHostStateListener,
   type CloseEntryOptions
 } from './host-client-context-state'
+import { mountAgentSync } from './agent-sync-connection'
 import type { ConnectionState, HostProfile } from './types'
-import type { RpcClientContextValue } from './rpc-client-context-contract'
-
 type StoreEntry = HostClientStoreEntry
-
-const Ctx = createContext<RpcClientContextValue | null>(null)
+export type { HostClientAcquisition } from './host-client-acquisition-registry'
+export { useRpcClientContext }
+export type RpcClientContextValue = HostClientContextValue
 
 export function RpcClientProvider({ children }: { children: ReactNode }) {
   // Why: entries in a ref so state changes don't re-render the whole tree; propagation goes through per-host listener Sets.
@@ -78,6 +80,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     }
     entry?.unsubState()
     entry?.unsubConnectionPath()
+    entry?.agentSync?.dispose()
     storeRef.current.delete(hostId)
     entry?.client.close()
     notifyHostState(hostId, 'disconnected')
@@ -104,6 +107,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
         allowUnowned
       ).then((entry) => {
         if (entry) {
+          entry.agentSync ??= mountAgentSync(entry.client, hostId)
           manualDemandRef.current.delete(hostId)
         }
         return entry
@@ -239,19 +243,13 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   const forceReconnect = useCallback(
     async (hostId: string) => {
       const entry = storeRef.current.get(hostId)
-      const logical = entry?.client as Partial<StableLogicalRpcClient> | undefined
-      if (entry && shouldPreserveActiveRelay(entry, logical)) {
-        // Keep a Relay-active host on its existing recovery state; rebuilding the
-        // facade starts the unreachable direct endpoint before Relay can race it.
-        entry.client.notifyForeground('app-resume')
-        return
-      }
       // Why: ownership survives explicit close/re-pair while observers never become synthetic owners.
       const savedRefCount = acquisitionsRef.current.count(hostId)
       manualDemandRef.current.add(hostId)
       if (entry) {
         entry.unsubState()
         entry.unsubConnectionPath()
+        entry.agentSync?.dispose()
         entry.client.close()
         storeRef.current.delete(hostId)
       }
@@ -310,8 +308,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       for (const hostId of pendingAcquisitionsRef.current.keys()) {
         retrySchedulerRef.current?.expedite(hostId)
       }
-      for (const [hostId, entry] of storeRef.current) {
-        recordConnectionRevival(hostId, reason)
+      for (const entry of storeRef.current.values()) {
         try {
           entry.client.notifyForeground(reason)
         } catch {
@@ -321,7 +318,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const value = useMemo<RpcClientContextValue>(
+  const value = useMemo<HostClientContextValue>(
     () => ({
       acquire,
       release,
@@ -354,15 +351,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     ]
   )
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
-}
-
-export function useRpcClientContext(): RpcClientContextValue {
-  const ctx = useContext(Ctx)
-  if (!ctx) {
-    throw new Error('useHostClient must be used inside <RpcClientProvider>')
-  }
-  return ctx
+  return <HostClientContext.Provider value={value}>{children}</HostClientContext.Provider>
 }
 
 // Primary hook for screens: acquires the shared client on mount, releases on unmount, re-renders on state change.

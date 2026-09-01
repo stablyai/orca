@@ -92,6 +92,8 @@ function isRuntimeClientEvent(
     message.type === 'automationsChanged' ||
     message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||
-    message.type === 'worktreeTerminalSleepState'
+    message.type === 'worktreeTerminalSleepState' ||
+    message.type === 'agentCatalogChanged' ||
+    message.type === 'agentReferencesChanged'
   )
 }

@@ -20,6 +20,20 @@ import {
   getManagedAgentHookStatuses,
   prepareManagedCodexHomeBeforeShellLaunch
 } from '../../main/agent-hooks/managed-agent-hook-controls'
+import { AGENT_CATALOG_SCHEMA_VERSION } from '../../shared/agent-catalog-schema-migration'
+
+// Why: offline writes must be schema-transparent for the agent catalog — merging
+// defaults would stamp agentCatalogSchemaVersion on a pre-v1 file without the
+// pinned pre-v1 backup the app's migration contract requires before any v1 write.
+const AGENT_CATALOG_SETTINGS_KEYS = [
+  'agentCatalogSchemaVersion',
+  'agentCatalogRevision',
+  'agentReferenceRevision',
+  'defaultTuiAgent',
+  'disabledTuiAgents',
+  'customTuiAgents',
+  'deletedCustomTuiAgents'
+] as const
 
 type AgentHookCommandResult = {
   enabled: boolean
@@ -113,7 +127,7 @@ async function readHookSettings(
   try {
     const response = await client.call<{
       settings?: Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
-    }>('settings.get', undefined, { timeoutMs: 1_000 })
+    }>('settings.get', { includeAgentCatalog: false }, { timeoutMs: 1_000 })
     const settings = response.result.settings
     if (settings && typeof settings.agentStatusHooksEnabled === 'boolean') {
       return {
@@ -132,11 +146,28 @@ function updateEnabledOnDisk(enabled: boolean): {
   settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
 } {
   const dataPath = getDataPath()
+  const fileExists = existsSync(dataPath)
   const state = readPersistedState(dataPath)
+  const originalSettings: Record<string, unknown> = { ...state.settings }
+  const rawVersion = originalSettings.agentCatalogSchemaVersion
+  if (typeof rawVersion === 'number' && rawVersion > AGENT_CATALOG_SCHEMA_VERSION) {
+    throw new RuntimeClientError(
+      'runtime_error',
+      `${dataPath} uses agent-catalog schema ${rawVersion}, newer than this CLI supports (${AGENT_CATALOG_SCHEMA_VERSION}). Update the Orca CLI or change this setting from the app.`
+    )
+  }
   state.settings = {
     ...getDefaultPersistedState(homedir()).settings,
     ...state.settings,
     agentStatusHooksEnabled: enabled
+  }
+  if (fileExists) {
+    const merged = state.settings as unknown as Record<string, unknown>
+    for (const key of AGENT_CATALOG_SETTINGS_KEYS) {
+      if (!(key in originalSettings)) {
+        delete merged[key]
+      }
+    }
   }
   writePersistedState(dataPath, state)
   return {

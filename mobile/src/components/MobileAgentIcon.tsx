@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
+import { isMobileCustomAgentId, parseMobileCustomAgentBase } from '../tasks/mobile-tui-agents'
 import { MOBILE_AGENT_ICON_ASSETS } from './mobile-agent-icon-assets'
 import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
 
@@ -86,6 +87,16 @@ function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number 
 }
 
 export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?: number }) {
+  // Why: icon assets are built-in-only, so a custom agent wears its base
+  // harness's icon (desktop AgentIcon contract) — never the raw id's initial.
+  if (isMobileCustomAgentId(agentId)) {
+    const base = parseMobileCustomAgentBase(agentId)
+    return base ? (
+      <MobileAgentIcon agentId={base} size={size} />
+    ) : (
+      <AgentLetterIcon letter="?" size={size} />
+    )
+  }
   if (agentId === 'claude' || agentId === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }

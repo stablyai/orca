@@ -30,11 +30,13 @@ import type { PendingSmartGitHubSubmitResolution } from './source-selection-deci
 import { translate } from '@/i18n/i18n'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/folder-workspace-composer-helpers'
-import { renderIssueCommandTemplate, ensureAgentStartupInTerminal } from '@/lib/new-workspace'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { renderIssueCommandTemplate } from '@/lib/new-workspace'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
+import {
+  agentLaunchFailureMessage,
+  agentLaunchRequestErrorMessage
+} from '@/lib/agent-launch-failure-copy'
 
 export function useFullCreationExecution(input: FullCreationExecutionInput) {
   const {
@@ -82,7 +84,6 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         submitBaseBranch,
         submitCompareBaseRef,
         submitPushTarget,
-        submitStartupPrompt,
         submitShouldRunIssueAutomation,
         effectiveSetupDecision,
         issueCommandTrustDecision,
@@ -93,10 +94,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         effectiveBranchNameOverride,
         createDisplayName,
         pendingFirstAgentMessageRename,
-        startupPlan,
-        shouldSeedInitialAgentStatus,
-        composerTelemetry,
-        backendStartup
+        agentLaunch,
+        agentLaunchTelemetry
       } = prepared
 
       const startupPolicySettlement = await settleComposerSubmit(
@@ -143,7 +142,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         resolvedInitialWorkspaceStatus,
         smartGitHubResolution.kind === 'none' ? (linkedGitLabMR ?? undefined) : undefined,
         smartGitHubResolution.kind === 'none' ? (linkedGitLabIssue ?? undefined) : undefined,
-        backendStartup,
+        undefined,
         pendingFirstAgentMessageRename,
         undefined,
         linkedLinearIssueWorkspaceId,
@@ -156,15 +155,19 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           nameWasGenerated,
-          ...(createDisplayName
-            ? { displayNameKind: nameIsAutoManaged ? ('generated' as const) : ('user' as const) }
-            : {}),
-          ...(!backendStartup && startupPlan?.draftPrompt
-            ? { startupDraft: startupPlan.draftPrompt }
-            : {}),
-          ...(parentWorktreeId ? { parentWorktreeId } : {})
+          agentLaunch,
+          agentLaunchTelemetry
         }
       )
+
+      if (result.created === false) {
+        const rejection = result.agentLaunchResult
+        throw new Error(
+          rejection.status === 'failed'
+            ? agentLaunchFailureMessage(rejection.failure)
+            : agentLaunchRequestErrorMessage(rejection.requestError)
+        )
+      }
 
       const worktree = result.worktree
 
@@ -182,60 +185,13 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
             }
           : undefined
 
-      const backendSpawnedStartup = result.startupTerminal?.spawned === true
-
-      if (startupPlan && !backendSpawnedStartup && !startupPlan.launchToken) {
-        // Why: delayed delivery must target the exact pane from this queued startup, so both halves share one renderer-session token.
-        startupPlan.launchToken = createBrowserUuid()
-      }
-
       const activation = activateAndRevealWorktree(worktree.id, {
         sidebarRevealBehavior: 'auto',
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         issueCommand,
-        ...(backendSpawnedStartup ? { backendStartupTerminalSpawned: true } : {}),
-        ...(startupPlan && !backendSpawnedStartup
-          ? {
-              startup: {
-                command: startupPlan.launchCommand,
-                ...(startupPlan.env ? { env: startupPlan.env } : {}),
-                launchConfig: startupPlan.launchConfig,
-                ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
-                launchAgent: tuiAgent,
-                ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
-                ...(startupPlan.startupCommandDelivery
-                  ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-                  : {}),
-                ...(shouldSeedInitialAgentStatus
-                  ? {
-                      initialAgentStatus: {
-                        agent: tuiAgent,
-                        prompt: submitStartupPrompt.trim()
-                      }
-                    }
-                  : {}),
-                telemetry: composerTelemetry
-              }
-            }
-          : {})
+        backendStartupTerminalSpawned: true
       })
-
-      if (startupPlan) {
-        const optionScopeKey =
-          (activation !== false ? activation.primaryTabId : null) ?? result.startupTerminal?.tabId
-        if (optionScopeKey) {
-          seedNativeChatAppliedSessionOptions(optionScopeKey, tuiAgent, startupPlan.sessionOptions)
-        }
-      }
-
-      if (startupPlan && !backendSpawnedStartup) {
-        void ensureAgentStartupInTerminal({
-          worktreeId: worktree.id,
-          primaryTabId: activation === false ? null : activation.primaryTabId,
-          startup: startupPlan
-        })
-      }
 
       setSidebarOpen(true)
 

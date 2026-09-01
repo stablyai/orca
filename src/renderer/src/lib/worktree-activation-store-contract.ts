@@ -7,7 +7,8 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
+import type { AgentLaunchInput } from '../../../shared/agent-launch-spawn-request'
+import type { StartupLaunchTelemetry } from '@/lib/worktree-startup-payload'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
@@ -37,6 +38,9 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     tabId: string,
     startup: {
       command: string
+      // Host-owned launch request forwarded verbatim to the terminals slice; the
+      // activation path never unpacks it.
+      agentLaunch?: AgentLaunchInput
       env?: Record<string, string>
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
@@ -45,7 +49,9 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       draftPrompt?: string
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean
-      telemetry?: AgentStartedTelemetry
+      // agent_kind is host-authoritative on a resolved launch, so a surface that
+      // only names an identity omits it.
+      telemetry?: StartupLaunchTelemetry
     }
   ) => void
   queueTabSetupSplit: (

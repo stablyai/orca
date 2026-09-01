@@ -12,12 +12,26 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../shared/pty-renderer-delivery-health'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
+import type {
+  AgentLaunchNoticeCode,
+  PersistedLaunchNoticeState
+} from '../../shared/agent-launch-contract'
+import type {
+  AgentLaunchInput,
+  AgentLaunchSpawnOutcome
+} from '../../shared/agent-launch-spawn-request'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
 
 export type PtyApi = {
+  dismissLaunchNotice: (args: {
+    worktreeId: string
+    tabId: string
+    launchToken: string
+    code: AgentLaunchNoticeCode
+  }) => Promise<{ ok: boolean; changed: boolean }>
   spawn: (opts: {
     cols: number
     rows: number
@@ -27,6 +41,10 @@ export type PtyApi = {
     envToDelete?: string[]
     command?: string
     commandDelivery?: 'renderer' | 'provider'
+    // Host-owned launch request (U3): identity/session + prompt policy only. When
+    // set, main resolves the command and mints the token, superseding the
+    // command/launchConfig/launchToken/launchAgent fields.
+    agentLaunch?: AgentLaunchInput
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
@@ -45,30 +63,36 @@ export type PtyApi = {
     tabId?: string
     leafId?: string
     // Why: main fires `agent_started` only on spawn success, so launch metadata rides this field (telemetry-plan.md §Agent launch semantics).
-    telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
-  }) => Promise<{
-    id: string
-    /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
-    incarnationId?: string
-    launchAgent?: TuiAgent
-    launchConfig?: SleepingAgentLaunchConfig
-    snapshot?: string
-    snapshotCols?: number
-    snapshotRows?: number
-    snapshotPrefixAnsi?: string
-    snapshotFrameAnsi?: string
-    snapshotFrameRestoreAnsi?: string
-    snapshotKittyKeyboardFlags?: number
-    snapshotTerminalOwner?: 'shell'
-    snapshotSeq?: number
-    isReattach?: boolean
-    isAlternateScreen?: boolean
-    replay?: string
-    sessionExpired?: boolean
-    coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
-    startupCwdFallback?: { kind: 'worktree'; cwd: string }
-    agentResumeUnavailable?: true
-  }>
+    // agent_kind is optional because the host-resolved agentLaunch path overwrites
+    // it from the validated receipt (a custom id has no client-known kind); the
+    // surface still owns launch_source/request_kind.
+    telemetry?: { agent_kind?: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
+  }) => Promise<
+    | {
+        id: string
+        launchAgent?: TuiAgent
+        launchConfig?: SleepingAgentLaunchConfig
+        snapshot?: string
+        snapshotCols?: number
+        snapshotRows?: number
+        snapshotPrefixAnsi?: string
+        snapshotFrameAnsi?: string
+        snapshotFrameRestoreAnsi?: string
+        snapshotKittyKeyboardFlags?: number
+        snapshotSeq?: number
+        isReattach?: boolean
+        isAlternateScreen?: boolean
+        replay?: string
+        sessionExpired?: boolean
+        coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
+        startupCwdFallback?: { kind: 'worktree'; cwd: string }
+        agentResumeUnavailable?: true
+        agentLaunch?: Extract<AgentLaunchSpawnOutcome, { status: 'launched' }>
+        followupPrompt?: string
+        launchNotices?: PersistedLaunchNoticeState
+      }
+    | { agentLaunch: AgentLaunchSpawnOutcome }
+  >
   write: (id: string, data: string) => void
   writeAccepted: (id: string, data: string) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
@@ -146,7 +170,6 @@ export type PtyApi = {
     /** Effective kitty flags the snapshot owner proved at `seq`. Absent means
      *  unknown; consumers must not turn that into a known `0`. */
     kittyKeyboardFlags?: number
-    terminalOwner?: 'shell'
   } | null>
   getRendererDeliveryDebugSnapshot: () => Promise<{
     pendingPtyCount: number
@@ -198,13 +221,7 @@ export type PtyApi = {
   /** Title-only replay snapshot for (re)attach; attention facts never replay. */
   getSideEffectSnapshot: (id: string) => Promise<TerminalSideEffectBatch | null>
   onExit: (
-    callback: (data: {
-      id: string
-      code: number
-      preserveRendererBinding?: boolean
-      /** Which lifetime of `id` died; absent when the execution host predates the field. */
-      incarnationId?: string
-    }) => void
+    callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
   ) => () => void
   onSpawned: (callback: (data: { id: string }) => void) => () => void
   onSerializeBufferRequest: (

@@ -2,8 +2,9 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal-mode-reset-profiles'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { flushAsyncTicks } from './pty-connection-test-async'
-import { UUID_RE } from './pty-connection-test-constants'
 import {
   LEAF_1,
   createMockTransport,
@@ -37,7 +38,11 @@ const {
 
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
-let createdTransportOptions: Record<string, unknown>[] = []
+/** The pane-level inputs the host later resolves the launch against. */
+type TransportFactoryOptions = Record<string, unknown> & {
+  projectRuntime?: ProjectExecutionRuntimeResolution
+}
+let createdTransportOptions: TransportFactoryOptions[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -94,7 +99,7 @@ vi.mock('react', async (importOriginal) => {
 })
 
 vi.mock('./pty-transport', () => ({
-  createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
+  createIpcPtyTransport: vi.fn((options: TransportFactoryOptions) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {
@@ -106,7 +111,7 @@ vi.mock('./pty-transport', () => ({
 
 vi.mock('./remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
-    (_environmentId: string, options: Record<string, unknown>) => {
+    (_environmentId: string, options: TransportFactoryOptions) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
       if (!nextTransport) {
@@ -126,8 +131,30 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
   }
 })
 
+/** A pre-U5 captured config; `agentCommand` is the COMPLETE base command, so only
+ *  the resume argv is quoted at replay. */
+const WSL_LEGACY_LAUNCH_CONFIG: SleepingAgentLaunchConfig = {
+  agentCommand: 'codex --dangerously-bypass-approvals-and-sandbox',
+  agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+  agentEnv: {}
+}
+
 function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
+}
+
+type ResumeConnectArgs = {
+  command?: string
+  agentLaunch?: unknown
+  env?: Record<string, string>
+  launchConfig?: SleepingAgentLaunchConfig
+  legacyResumeRecordedConnectionId?: string | null
+}
+
+/** The last connect payload — the client-side surface of the resume contract. */
+function readResumeConnectArgs(transport: MockTransport): ResumeConnectArgs {
+  const calls = transport.connect.mock.calls as ResumeConnectArgs[][]
+  return calls.at(-1)?.[0] ?? {}
 }
 
 describe('connectPanePty', () => {
@@ -205,10 +232,24 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(transport.sendInput).not.toHaveBeenCalled()
+    // Host-owned resume: the spawn carries the ownership key (the host loads its own
+    // record and assembles the codex resume argv) plus the session metadata only the
+    // client holds — transcriptPath for a pre-U5 handoff, the session for Codex
+    // resume-account verification.
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        agentLaunch: {
+          resume: {
+            operation: 'resume',
+            sessionKey: {
+              worktreeId: 'wt-1',
+              baseAgent: 'codex',
+              providerSessionId: 'codex-session-1'
+            }
+          }
+        },
+        launchAgent: 'codex',
         resumeProviderSession: {
           key: 'session_id',
           id: 'codex-session-1',
@@ -218,14 +259,18 @@ describe('connectPanePty', () => {
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          ORCA_WORKSPACE_ID: 'wt-1'
         })
       })
     )
+    const resumeConnectArgs = readResumeConnectArgs(transport)
+    // The client no longer builds resume argv, and the admission token is minted by
+    // the host on this path — a client-forged one would break attribution.
+    expect(resumeConnectArgs.command).toBeUndefined()
+    expect(resumeConnectArgs.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
   })
 
-  it('uses WSL quoting for cold-restored agent resume in Windows-path WSL projects', async () => {
+  it('sends the raw provider session id for a Windows-path WSL project so the host quotes it', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -276,6 +321,11 @@ describe('connectPanePty', () => {
           stateHistory: [],
           providerSession: { key: 'session_id', id: "codex-session-1's" }
         }
+      },
+      // A pre-U5 captured config: the one-release handoff the host replays into the
+      // resume command, so the shell it gets quoted for is observable below.
+      agentLaunchConfigByPaneKey: {
+        [paneKey]: { launchConfig: WSL_LEGACY_LAUNCH_CONFIG }
       }
     } as StoreState
 
@@ -295,19 +345,43 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(transport.sendInput).not.toHaveBeenCalled()
+    // Quoting is the host's: it resolves the shell that actually runs the resume
+    // (POSIX under this project's WSL runtime), so the client must hand the session
+    // id over verbatim — pre-quoting it here would double-escape the apostrophe.
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"'"'s'`,
+        agentLaunch: {
+          resume: {
+            operation: 'resume',
+            sessionKey: {
+              worktreeId: 'wt-1',
+              baseAgent: 'codex',
+              providerSessionId: "codex-session-1's"
+            }
+          }
+        },
+        resumeProviderSession: { key: 'session_id', id: "codex-session-1's" },
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          ORCA_WORKSPACE_ID: 'wt-1'
         })
       })
     )
+    const spawn = readResumeConnectArgs(transport)
+    expect(spawn.command).toBeUndefined()
+    expect(spawn.launchConfig).toEqual(WSL_LEGACY_LAUNCH_CONFIG)
+    expect(spawn.legacyResumeRecordedConnectionId ?? null).toBeNull()
+    // The client must forward the project's WSL runtime, or the host describes a
+    // win32 local target and PowerShell-quotes a bash resume line (#12320). What
+    // the host builds from it is pinned in
+    // main/agent-launch/cold-restore-resume-handoff.test.ts.
+    expect(createdTransportOptions[0]?.projectRuntime).toMatchObject({
+      status: 'resolved',
+      runtime: { kind: 'wsl', distro: 'Ubuntu' }
+    })
   })
 
   it('resumes from the quit-captured sleeping record when cold-restoring after an app restart', async () => {
@@ -383,7 +457,19 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        agentLaunch: {
+          resume: {
+            operation: 'resume',
+            sessionKey: {
+              worktreeId: 'wt-1',
+              baseAgent: 'codex',
+              providerSessionId: 'codex-session-1'
+            }
+          }
+        },
+        launchAgent: 'codex',
+        // The ownership key cannot carry a transcript path, and a pre-U5 record's
+        // first resume is the host's only chance to ingest one.
         resumeProviderSession: {
           key: 'session_id',
           id: 'codex-session-1',
@@ -393,11 +479,11 @@ describe('connectPanePty', () => {
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          ORCA_WORKSPACE_ID: 'wt-1'
         })
       })
     )
+    expect(readResumeConnectArgs(transport).command).toBeUndefined()
     // Why: consuming the record prevents a later worktree activation from launching a duplicate resume tab.
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
   })
@@ -530,7 +616,17 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
+        agentLaunch: {
+          resume: {
+            operation: 'resume',
+            sessionKey: {
+              worktreeId: 'wt-1',
+              baseAgent: 'codex',
+              providerSessionId: 'codex-session-1'
+            }
+          }
+        },
+        resumeProviderSession: { key: 'session_id', id: 'codex-session-1' }
       })
     )
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(legacyPaneKey)
@@ -606,9 +702,12 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+    // Ambiguity must produce no resume request at all — the host would happily
+    // replay whichever session key it were handed.
     expect(transport.connect).not.toHaveBeenCalledWith(
-      expect.objectContaining({ command: expect.stringContaining('resume') })
+      expect.objectContaining({ agentLaunch: expect.anything() })
     )
+    expect(readResumeConnectArgs(transport).agentLaunch).toBeUndefined()
     expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
   })
 })

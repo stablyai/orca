@@ -4,6 +4,7 @@ import {
   type AgentStatusState,
   type AgentType
 } from './agent-status-types'
+import { parseCustomTuiAgentId } from './custom-tui-agent-identity'
 
 type ExistingAgentIdentity = {
   agentType?: AgentType
@@ -60,6 +61,23 @@ export function resolveAgentStatusIdentity(args: {
   if (!args.existing || !existingAgentType || existingAgentType === incomingAgentType) {
     return {
       agentType: incomingAgentType,
+      inheritedFromActivePane: false
+    }
+  }
+  // A custom id and its base are the SAME harness: a custom-seeded row's hooks
+  // report the base (hooks never carry the custom id), so treating them as a
+  // nested child would suppress the pane's own `done` forever. Keep the custom
+  // (requested) label so the row is never relabeled to the base. Two distinct
+  // custom ids stay distinct and fall through to the inheritance rule.
+  const existingCustom = parseCustomTuiAgentId(existingAgentType)
+  const incomingCustom = parseCustomTuiAgentId(incomingAgentType)
+  if (
+    (existingCustom === null) !== (incomingCustom === null) &&
+    (existingCustom?.baseAgent ?? existingAgentType) ===
+      (incomingCustom?.baseAgent ?? incomingAgentType)
+  ) {
+    return {
+      agentType: existingCustom ? existingAgentType : incomingAgentType,
       inheritedFromActivePane: false
     }
   }

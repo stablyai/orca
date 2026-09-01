@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { CustomTuiAgent, CustomTuiAgentId, TuiAgent } from '../../../../shared/tui-agent'
 import { resolveNativeChatSession } from './native-chat-pane-resolution'
+
+const CUSTOM_CLAUDE_ID = 'custom-agent:claude:aaaaaaaa-1111-4111-8111-111111111111'
+const CUSTOM_GEMINI_ID = 'custom-agent:gemini:bbbbbbbb-2222-4222-8222-222222222222'
+const UNCATALOGED_CUSTOM_ID = 'custom-agent:claude:cccccccc-3333-4333-8333-333333333333'
+
+function customAgent(id: CustomTuiAgentId, baseAgent: CustomTuiAgent['baseAgent']): CustomTuiAgent {
+  return { id, baseAgent, label: 'Custom', args: '', env: {}, syncEnv: false }
+}
 
 function entry(
   overrides: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'paneKey'>
@@ -306,6 +314,51 @@ describe('resolveNativeChatSession', () => {
         paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
         launchAgent: null,
         ptyId: 'pty-1'
+      })
+    ).toBeNull()
+  })
+
+  // The chat view branches on built-in ids (`agent === 'claude'`), so a custom
+  // agent must arrive as its base harness, never as its own id.
+  it('resolves a live custom agent to its base agent', () => {
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    expect(
+      resolveNativeChatSession({
+        paneKey,
+        launchAgent: CUSTOM_CLAUDE_ID,
+        agentStatusEntry: entry({
+          paneKey,
+          agentType: CUSTOM_CLAUDE_ID,
+          providerSession: { key: 'session_id', id: 'sess-custom' }
+        }),
+        ptyId: 'pty-1',
+        customTuiAgents: [customAgent(CUSTOM_CLAUDE_ID, 'claude')]
+      })
+    ).toEqual({
+      agent: 'claude',
+      sessionId: 'sess-custom',
+      transcriptPath: null,
+      ptyId: 'pty-1',
+      paneKey
+    })
+  })
+
+  it('returns null for a custom agent with no catalog entry, and for an unsupported base', () => {
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+    expect(
+      resolveNativeChatSession({
+        paneKey,
+        launchAgent: UNCATALOGED_CUSTOM_ID,
+        ptyId: 'pty-1',
+        customTuiAgents: [customAgent(CUSTOM_CLAUDE_ID, 'claude')]
+      })
+    ).toBeNull()
+    expect(
+      resolveNativeChatSession({
+        paneKey,
+        launchAgent: CUSTOM_GEMINI_ID,
+        ptyId: 'pty-1',
+        customTuiAgents: [customAgent(CUSTOM_GEMINI_ID, 'gemini')]
       })
     ).toBeNull()
   })

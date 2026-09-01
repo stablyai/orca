@@ -92,7 +92,7 @@ async function preflightPublishCapability(ctx: HandlerContext): Promise<void> {
   try {
     const response = await ctx.client.call<{
       settings?: { artifactSharingEnabled?: boolean }
-    }>('settings.get')
+    }>('settings.get', { includeAgentCatalog: false })
     enabled = response.result?.settings?.artifactSharingEnabled
   } catch {
     return

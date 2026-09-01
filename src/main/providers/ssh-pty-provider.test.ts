@@ -50,6 +50,24 @@ describe('SshPtyProvider', () => {
     expect(mux.request).toHaveBeenCalledOnce()
   })
 
+  it('caches an old-relay claim negative for the provider connection', async () => {
+    mux.request.mockResolvedValue({})
+
+    await expect(provider.supportsAgentSessionClaims()).resolves.toBe(false)
+    await expect(provider.supportsAgentSessionClaims()).resolves.toBe(false)
+    expect(mux.request).toHaveBeenCalledOnce()
+  })
+
+  it('retries an unverifiable claim probe transport failure', async () => {
+    mux.request.mockRejectedValueOnce(new Error('connection stalled')).mockResolvedValueOnce({
+      agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION
+    })
+
+    await expect(provider.supportsAgentSessionClaims()).resolves.toBe(false)
+    await expect(provider.supportsAgentSessionClaims()).resolves.toBe(true)
+    expect(mux.request).toHaveBeenCalledTimes(2)
+  })
+
   it('attach sends pty.attach request', async () => {
     await provider.attach(scopedPty1)
     expectRequest(mux.request, 'pty.attach', { id: 'pty-1' })

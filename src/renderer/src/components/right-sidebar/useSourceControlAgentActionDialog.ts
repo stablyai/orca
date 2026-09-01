@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog'
+import { useLocalAgentCatalog } from '@/hooks/useLocalAgentCatalog'
+import { buildSourceControlAgentActionOptions } from './source-control-agent-action-agent-options'
 import {
   pickSourceControlLaunchAgent,
   resolveSourceControlLaunchAgentScope
@@ -7,15 +9,15 @@ import {
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isTuiAgentEnabled, toLegacyAutoPreference } from '../../../../shared/tui-agent-selection'
+import type { TuiAgent } from '../../../../shared/types'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
 import { useSavedSourceControlAgentActionAutoStart } from './useSavedSourceControlAgentActionAutoStart'
 import {
   buildSourceControlAgentSaveTargets,
   buildSourceControlAgentStatusCopy,
-  isSourceControlAgentDetectedAndEnabled
+  isSourceControlAgentUnavailable
 } from './source-control-agent-action-dialog-support'
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
 
@@ -53,6 +55,11 @@ export function useSourceControlAgentActionDialog({
   // place instead of writing a global default the override would still shadow.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
+  // Why: this dialog stays mounted while closed, and the catalog is desktop-local
+  // preload IPC — keep the inert/preload-less cases off the shared catalog store.
+  const { snapshot: localAgentCatalog } = useLocalAgentCatalog({
+    enabled: open && typeof window.api?.settings?.agentCatalog?.getLocal === 'function'
+  })
   const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
   const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
   const [commandTemplate, setCommandTemplate] = useState(
@@ -119,7 +126,7 @@ export function useSourceControlAgentActionDialog({
           current ??
           pickSourceControlLaunchAgent({
             savedAgent: savedAgentId,
-            defaultAgent: settings?.defaultTuiAgent,
+            defaultAgent: toLegacyAutoPreference(settings?.defaultTuiAgent),
             detectedAgents: nextAgents,
             disabledAgents
           })
@@ -149,14 +156,18 @@ export function useSourceControlAgentActionDialog({
   )
   const agentOptions = useMemo(
     () =>
-      getAgentCatalog().filter(
-        (entry) => enabledDetectedAgents.includes(entry.id) || entry.id === selectedAgent
-      ),
-    [enabledDetectedAgents, selectedAgent]
+      buildSourceControlAgentActionOptions({
+        enabledDetectedAgents,
+        disabledAgents,
+        localAgentCatalog,
+        selectedAgent
+      }),
+    [disabledAgents, enabledDetectedAgents, localAgentCatalog, selectedAgent]
   )
-  const selectedAgentUnavailable = Boolean(
-    selectedAgent &&
-    !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
+  const selectedAgentUnavailable = isSourceControlAgentUnavailable(
+    selectedAgent,
+    detectedAgents,
+    settings
   )
   const hasEnabledAgents = enabledDetectedAgents.length > 0
   const commandInput = renderSourceControlActionCommandTemplate(commandTemplate, {
@@ -181,9 +192,6 @@ export function useSourceControlAgentActionDialog({
       groupId,
       promptDelivery,
       launchPlatform,
-      // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-      // label aligned with the real remote launch (no `orca-ide` rename).
-      isRemote: typeof connectionId === 'string',
       launchSource,
       connectionUnavailable,
       refreshDetectedAgents,
@@ -275,9 +283,7 @@ export function useSourceControlAgentActionDialog({
     if (!launchAgentScope.overridesGlobalAgent) {
       return null
     }
-    const catalog = getAgentCatalog()
-    const labelFor = (agentId: TuiAgent | null): string =>
-      catalog.find((entry) => entry.id === agentId)?.label ?? agentId ?? ''
+    const labelFor = (agentId: TuiAgent | null): string => (agentId ? getAgentLabel(agentId) : '')
     return {
       effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
       globalAgentLabel: labelFor(launchAgentScope.globalAgentId)

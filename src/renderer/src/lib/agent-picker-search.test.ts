@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_PICKER_QUERY_MAX_BYTES,
   agentPickerBlankTerminalMatches,
-  getAgentPickerCommandValue,
   isAgentPickerQueryTooLarge,
   searchAgentPickerEntries
 } from './agent-picker-search'
@@ -88,15 +87,6 @@ describe('agent picker search', () => {
     expect(isAgentPickerQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchAgentPickerEntries(throwingAgents, oversizedQuery)).toEqual([])
     expect(agentPickerBlankTerminalMatches(oversizedQuery)).toBe(false)
-    expect(
-      getAgentPickerCommandValue({
-        blankValue: '__none__',
-        blankMatchesQuery: false,
-        currentValue: 'claude',
-        filteredAgents: throwingAgents,
-        rawQuery: oversizedQuery
-      })
-    ).toBe('')
   })
 
   it('rejects oversized whitespace before trimming', () => {
@@ -113,38 +103,6 @@ describe('agent picker search', () => {
     expect(agentPickerBlankTerminalMatches('shell')).toBe(true)
     expect(agentPickerBlankTerminalMatches('bt')).toBe(true)
     expect(agentPickerBlankTerminalMatches('agent')).toBe(false)
-  })
-
-  it('highlights the current value until a search should choose the first visible result', () => {
-    const filteredAgents = searchAgentPickerEntries(agents, 'gc')
-
-    expect(
-      getAgentPickerCommandValue({
-        blankValue: '__none__',
-        blankMatchesQuery: false,
-        currentValue: 'claude',
-        filteredAgents: agents,
-        rawQuery: ''
-      })
-    ).toBe('claude')
-    expect(
-      getAgentPickerCommandValue({
-        blankValue: '__none__',
-        blankMatchesQuery: false,
-        currentValue: 'claude',
-        filteredAgents,
-        rawQuery: 'gc'
-      })
-    ).toBe('copilot')
-    expect(
-      getAgentPickerCommandValue({
-        blankValue: '__none__',
-        blankMatchesQuery: true,
-        currentValue: 'claude',
-        filteredAgents: [],
-        rawQuery: 'bt'
-      })
-    ).toBe('__none__')
   })
 })
 

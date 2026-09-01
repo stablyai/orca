@@ -19,21 +19,16 @@ type QuickCreationExecutionInput = Pick<
   | 'resetForNextCreate'
   | 'resolvedInitialWorkspaceStatus'
   | 'selectedEphemeralVmRecipeId'
-  | 'selectedRepoAgentLaunchPlatform'
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoIsGit'
-  | 'selectedRepoIsRemote'
   | 'selectedRepoSettings'
-  | 'selectedRepoStartupShell'
   | 'selectedWorkspaceTarget'
-  | 'settings'
   | 'sparseEnabled'
   | 'taskSourceContext'
   | 'telemetrySource'
 >
 
 import { useCallback } from 'react'
-import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '@/store'
@@ -66,14 +61,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
     resetForNextCreate,
     resolvedInitialWorkspaceStatus,
     selectedEphemeralVmRecipeId,
-    selectedRepoAgentLaunchPlatform,
     selectedRepoExecutionHostId,
     selectedRepoIsGit,
-    selectedRepoIsRemote,
     selectedRepoSettings,
-    selectedRepoStartupShell,
     selectedWorkspaceTarget,
-    settings,
     sparseEnabled,
     taskSourceContext,
     telemetrySource
@@ -85,8 +76,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       requestedAgent: TuiAgent | null,
       workspaceNameSeed: string,
       workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'],
-      repoId: string,
-      selectedRepo: Repo
+      repoId: string
     ): Promise<void> => {
       const prepared = await prepareQuickSubmit(
         smartGitHubResolution,
@@ -125,19 +115,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
         resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
 
-      const {
-        startupPlan,
-        backendStartup,
-        telemetry: quickTelemetry
-      } = buildQuickComposerStartup({
+      const { agentLaunch, telemetry: quickTelemetry } = buildQuickComposerStartup({
         agent,
         prompt: quickPrompt,
         draftPrompt: quickDraftPrompt,
-        settings,
-        repoConnectionId: selectedRepo.connectionId,
-        platform: selectedRepoAgentLaunchPlatform,
-        shell: selectedRepoStartupShell,
-        isRemote: selectedRepoIsRemote,
         telemetrySource
       })
 
@@ -226,13 +207,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedGitLabMR,
         linkedGitLabIssue,
         includeGitLabLinks: smartGitHubResolution.kind === 'none',
-        startup: backendStartup,
+        agentLaunch,
         issueCommand,
         pendingFirstAgentMessageRename,
         note: trimmedNote,
-        startupPlan,
-        quickPrompt,
-        launchDraftPrompt: quickDraftPrompt,
         quickTelemetry,
         suppressTerminalFocusOnCompletion: createMultiple
       })
@@ -271,14 +249,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       resetForNextCreate,
       resolvedInitialWorkspaceStatus,
       selectedEphemeralVmRecipeId,
-      selectedRepoAgentLaunchPlatform,
       selectedRepoExecutionHostId,
       selectedRepoIsGit,
-      selectedRepoIsRemote,
       selectedRepoSettings,
-      selectedRepoStartupShell,
       selectedWorkspaceTarget,
-      settings,
       sparseEnabled,
       taskSourceContext,
       telemetrySource

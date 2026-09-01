@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeCreateResult } from '../../shared/runtime-types'
+import type { CreatedRuntimeWorktreeCreateResult } from '../../shared/runtime-types'
 
 function getLineageSourceLabel(source: string): string {
   switch (source) {
@@ -19,7 +19,10 @@ function getLineageSourceLabel(source: string): string {
   }
 }
 
-export function printLineageSummary(result: RuntimeWorktreeCreateResult, json: boolean): void {
+export function printLineageSummary(
+  result: CreatedRuntimeWorktreeCreateResult,
+  json: boolean
+): void {
   if (json) {
     return
   }

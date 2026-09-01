@@ -9,6 +9,8 @@ export type SessionOptions = {
   rows: number
   terminalHandle?: string
   launchAgent?: TuiAgent
+  /** Host admission launch token retained for crash reconciliation. */
+  launchToken?: string
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number

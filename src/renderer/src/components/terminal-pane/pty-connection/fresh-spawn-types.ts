@@ -1,9 +1,10 @@
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
+  SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session-resume'
-import type { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentLaunchResumeRequest } from '../../../../../shared/agent-launch-spawn-request'
 
 export type PendingStartupCommand = {
   command: string
@@ -16,9 +17,11 @@ export type FreshSpawnOptions = {
 
 export type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   agent: ResumableTuiAgent
+  agentLaunch: AgentLaunchResumeRequest
   resumeProviderSession: AgentProviderSessionMetadata
-  launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
-  launchToken: string
+  launchConfig?: SleepingAgentLaunchConfig
+  legacyResumeRecordedConnectionId?: string | null
+  launchToken?: string
   useLiveEntry: boolean
   hasSleepingRecord: boolean
   sleepingRecordEntry: { paneKey: string; record: SleepingAgentSessionRecord } | null

@@ -4,6 +4,19 @@ import type {
   WarpThemeImportSource
 } from '../../shared/terminal-custom-themes'
 import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type {
+  AgentCatalogMutationRequest,
+  AgentCatalogMutationResult,
+  LocalAgentCatalogSnapshot,
+  LocalCustomAgentDraftResult
+} from '../../shared/agent-catalog-snapshot'
+import type {
+  AgentReferenceMutationRequest,
+  AgentReferenceMutationResult,
+  BaseDisableImpact,
+  LocalAgentReferenceSnapshot,
+  AgentReferenceSummary
+} from '../../shared/agent-reference-snapshot'
 
 export type SettingsApi = {
   get: () => Promise<GlobalSettings>
@@ -19,6 +32,22 @@ export type SettingsApi = {
   previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
   /** Subscribe to out-of-band settings updates (e.g. View > Appearance toggles) to stay in sync with main. */
   onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
+  agentCatalog: {
+    getLocal: () => Promise<LocalAgentCatalogSnapshot>
+    mutate: (request: AgentCatalogMutationRequest) => Promise<AgentCatalogMutationResult>
+    getLocalDraft: (args: {
+      locator: { id?: unknown; repairToken?: unknown }
+      expectedRevision?: number
+    }) => Promise<LocalCustomAgentDraftResult | { status: 'stale' }>
+    referenceSummary: (args: { id?: unknown }) => Promise<AgentReferenceSummary[]>
+    baseDisableImpact: (args: { base?: unknown }) => Promise<BaseDisableImpact>
+  }
+  agentReferences: {
+    getLocal: () => Promise<LocalAgentReferenceSnapshot>
+    mutate: (
+      request: AgentReferenceMutationRequest
+    ) => Promise<AgentReferenceMutationResult<LocalAgentReferenceSnapshot>>
+  }
 }
 
 export type KeybindingsApi = {

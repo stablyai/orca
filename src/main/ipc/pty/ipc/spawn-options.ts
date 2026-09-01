@@ -77,6 +77,9 @@ export async function buildPtyIpcSpawnOptions(
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
   }
+  if (typeof args.launchToken === 'string' && args.launchToken.length > 0) {
+    ctx.spawnOptions.launchToken = args.launchToken
+  }
   if (args.worktreeId !== undefined) {
     ctx.spawnOptions.worktreeId = args.worktreeId
   }
@@ -115,7 +118,10 @@ export async function buildPtyIpcSpawnOptions(
   if (startupTerminalColorQueryReplyColors) {
     ctx.spawnOptions.startupIngress = {
       colors: startupTerminalColorQueryReplyColors,
-      deadlineMs: 5_000
+      deadlineMs: 5_000,
+      ...(ctx.nativeWindowsConptySpawn
+        ? { echoProjection: 'windows-conpty-esc-stripped' as const }
+        : {})
     }
   }
   const resolvedPaneSpawnReservationKey = makePaneSpawnReservationKey(

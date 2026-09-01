@@ -22,6 +22,8 @@ export type CreateOrAttachOptions = {
   launchAgent?: TuiAgent
   /** Missing ownership is not permission to create during stable-pane adoption. */
   attachOnly?: boolean
+  /** Host admission launch token persisted on the session record at creation. */
+  launchToken?: string
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
   terminalWindowsWslDistro?: string | null

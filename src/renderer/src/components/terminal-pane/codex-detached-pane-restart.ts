@@ -223,6 +223,13 @@ async function executeDetachedCodexPaneRestart(
     ...(projectRuntime ? { projectRuntime } : {}),
     initiallyHidden: true
   })
+  // Why: the id-less spawn arm is the host's pre-spawn agentLaunch refusal, and
+  // this legacy-command restart sends no agentLaunch — so it means no PTY exists
+  // to rebind. Throw into the sweep's catch, which reopens the restart prompt
+  // instead of leaving the pane muted behind an answered prompt.
+  if (!('id' in spawned)) {
+    throw new Error('detached codex restart spawn returned no pty id')
+  }
 
   const store = useAppStore.getState()
   if (!isLocatedCodexPaneCurrent(store, located, ptyId)) {

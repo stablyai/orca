@@ -1,0 +1,346 @@
+import { describe, expect, it } from 'vitest'
+import type { AgentStartupShell } from './tui-agent-startup-shell'
+import {
+  formatLegacyAgentPrefixArgs,
+  isLegacyAgentPrefixPlatformAmbiguous,
+  tokenizeLegacyAgentPrefix,
+  type LegacyAgentPrefixTokenizeResult
+} from './legacy-agent-prefix-tokenizer'
+
+function tokens(result: LegacyAgentPrefixTokenizeResult): string[] {
+  if (!result.ok) {
+    throw new Error(`expected ok, got ${result.reason}`)
+  }
+  return result.tokens
+}
+
+describe('tokenizeLegacyAgentPrefix — per-shell semantics', () => {
+  it('splits plain multi-token wrappers identically on every shell', () => {
+    for (const shell of ['posix', 'powershell', 'cmd'] as const) {
+      expect(tokens(tokenizeLegacyAgentPrefix('/opt/wrap codex-real --fast', shell))).toEqual([
+        '/opt/wrap',
+        'codex-real',
+        '--fast'
+      ])
+    }
+  })
+
+  it('consumes backslash escapes on posix but keeps them literal on powershell/cmd', () => {
+    expect(tokens(tokenizeLegacyAgentPrefix('C:\\tools\\wrap.exe codex', 'posix'))).toEqual([
+      'C:toolswrap.exe',
+      'codex'
+    ])
+    expect(tokens(tokenizeLegacyAgentPrefix('C:\\tools\\wrap.exe codex', 'powershell'))).toEqual([
+      'C:\\tools\\wrap.exe',
+      'codex'
+    ])
+    expect(tokens(tokenizeLegacyAgentPrefix('C:\\tools\\wrap.exe codex', 'cmd'))).toEqual([
+      'C:\\tools\\wrap.exe',
+      'codex'
+    ])
+  })
+
+  it('groups single quotes on posix and powershell but treats them literally on cmd', () => {
+    expect(tokens(tokenizeLegacyAgentPrefix("'my wrapper' codex", 'posix'))).toEqual([
+      'my wrapper',
+      'codex'
+    ])
+    expect(tokens(tokenizeLegacyAgentPrefix("'my wrapper' codex", 'powershell'))).toEqual([
+      'my wrapper',
+      'codex'
+    ])
+    // cmd: apostrophes are ordinary characters, so the space still splits.
+    expect(tokens(tokenizeLegacyAgentPrefix("'my wrapper' codex", 'cmd'))).toEqual([
+      "'my",
+      "wrapper'",
+      'codex'
+    ])
+  })
+
+  it('groups double-quoted paths with spaces on every shell', () => {
+    for (const shell of ['posix', 'powershell', 'cmd'] as const) {
+      expect(tokens(tokenizeLegacyAgentPrefix('"C:/Program Files/wrap.exe" codex', shell))).toEqual(
+        ['C:/Program Files/wrap.exe', 'codex']
+      )
+    }
+  })
+
+  it('decodes posix double-quote backslash escapes but keeps others literal', () => {
+    // \" and \\ drop the backslash; \n stays as backslash + n inside posix "".
+    expect(tokens(tokenizeLegacyAgentPrefix('"a\\"b\\\\c\\n"', 'posix'))).toEqual(['a"b\\c\\n'])
+    // powershell/cmd never decode backslashes inside double quotes.
+    expect(tokens(tokenizeLegacyAgentPrefix('"a\\\\c"', 'powershell'))).toEqual(['a\\\\c'])
+    expect(tokens(tokenizeLegacyAgentPrefix('"a\\\\c"', 'cmd'))).toEqual(['a\\\\c'])
+  })
+
+  it('treats the smart-quote class as a single-quote delimiter on powershell', () => {
+    // U+2018 ‘ opens; ASCII ' closes — one interchangeable delimiter class.
+    expect(tokens(tokenizeLegacyAgentPrefix('‘my wrapper’ codex', 'powershell'))).toEqual([
+      'my wrapper',
+      'codex'
+    ])
+    // cmd: smart quotes are ordinary characters.
+    expect(tokens(tokenizeLegacyAgentPrefix('‘my wrapper’ codex', 'cmd'))).toEqual([
+      '‘my',
+      'wrapper’',
+      'codex'
+    ])
+  })
+
+  it('rejects unquoted shell operators on every shell', () => {
+    for (const shell of ['posix', 'powershell', 'cmd'] as const) {
+      for (const prefix of ['wrap && codex', 'wrap | codex', 'wrap; codex', 'wrap > out']) {
+        expect(tokenizeLegacyAgentPrefix(prefix, shell)).toEqual({
+          ok: false,
+          reason: 'shell_operator'
+        })
+      }
+    }
+  })
+
+  it('allows operator characters inside quotes', () => {
+    expect(tokens(tokenizeLegacyAgentPrefix('"a && b" codex', 'posix'))).toEqual([
+      'a && b',
+      'codex'
+    ])
+  })
+
+  it('rejects unterminated quotes', () => {
+    expect(tokenizeLegacyAgentPrefix('wrap "codex', 'posix')).toEqual({
+      ok: false,
+      reason: 'unterminated_quote'
+    })
+    expect(tokenizeLegacyAgentPrefix("wrap 'codex", 'powershell')).toEqual({
+      ok: false,
+      reason: 'unterminated_quote'
+    })
+    expect(tokenizeLegacyAgentPrefix('wrap "codex', 'cmd')).toEqual({
+      ok: false,
+      reason: 'unterminated_quote'
+    })
+  })
+
+  it('rejects NUL and control characters', () => {
+    expect(tokenizeLegacyAgentPrefix('wrap\u0000codex', 'posix')).toEqual({
+      ok: false,
+      reason: 'control_char'
+    })
+    expect(tokenizeLegacyAgentPrefix('wrap\u0007codex', 'cmd')).toEqual({
+      ok: false,
+      reason: 'control_char'
+    })
+  })
+})
+
+describe('windows escape characters', () => {
+  type EscapeCase = {
+    name: string
+    prefix: string
+    posix: string[] | { reason: string }
+    powershell: string[] | { reason: string }
+    cmd: string[] | { reason: string }
+  }
+
+  const cases: EscapeCase[] = [
+    {
+      name: 'backtick escapes a space on powershell only',
+      prefix: 'C:/Program` Files/wrap.exe codex',
+      posix: ['C:/Program`', 'Files/wrap.exe', 'codex'],
+      powershell: ['C:/Program Files/wrap.exe', 'codex'],
+      cmd: ['C:/Program`', 'Files/wrap.exe', 'codex']
+    },
+    {
+      name: 'caret escapes a space on cmd only',
+      prefix: 'C:/Program^ Files/wrap.exe codex',
+      posix: ['C:/Program^', 'Files/wrap.exe', 'codex'],
+      powershell: ['C:/Program^', 'Files/wrap.exe', 'codex'],
+      cmd: ['C:/Program Files/wrap.exe', 'codex']
+    },
+    {
+      name: 'an escaped operator is data, not an operator, on its own shell',
+      prefix: 'wrap `& codex',
+      posix: { reason: 'shell_operator' },
+      powershell: ['wrap', '&', 'codex'],
+      cmd: { reason: 'shell_operator' }
+    },
+    {
+      name: 'a caret-escaped operator is data on cmd',
+      prefix: 'wrap ^| codex',
+      posix: { reason: 'shell_operator' },
+      powershell: { reason: 'shell_operator' },
+      cmd: ['wrap', '|', 'codex']
+    },
+    {
+      name: 'backtick escapes a quote inside powershell double quotes',
+      prefix: '"a`"b" codex',
+      // posix/cmd: the backtick is literal, so the middle `"` closes the group
+      // and the trailing `"` opens one that never closes.
+      posix: { reason: 'unterminated_quote' },
+      powershell: ['a"b', 'codex'],
+      cmd: { reason: 'unterminated_quote' }
+    },
+    {
+      name: 'a caret stays literal inside cmd double quotes',
+      prefix: '"a^b" codex',
+      posix: ['a^b', 'codex'],
+      powershell: ['a^b', 'codex'],
+      cmd: ['a^b', 'codex']
+    },
+    {
+      name: 'a backtick stays literal inside powershell single quotes',
+      prefix: "'a`b' codex",
+      posix: ['a`b', 'codex'],
+      powershell: ['a`b', 'codex'],
+      cmd: ["'a`b'", 'codex']
+    },
+    {
+      name: 'an escaped control character is still rejected',
+      prefix: 'wrap ^\u0007 codex',
+      posix: { reason: 'control_char' },
+      powershell: { reason: 'control_char' },
+      cmd: { reason: 'control_char' }
+    }
+  ]
+
+  for (const testCase of cases) {
+    it(testCase.name, () => {
+      for (const shell of ['posix', 'powershell', 'cmd'] as const) {
+        const expected = testCase[shell]
+        const result = tokenizeLegacyAgentPrefix(testCase.prefix, shell)
+        if (Array.isArray(expected)) {
+          expect({ shell, tokens: tokens(result) }).toEqual({ shell, tokens: expected })
+        } else {
+          expect({ shell, result }).toEqual({
+            shell,
+            result: { ok: false, reason: expected.reason }
+          })
+        }
+      }
+    })
+  }
+
+  it('marks escape-character prefixes as platform ambiguous', () => {
+    expect(isLegacyAgentPrefixPlatformAmbiguous('C:/Program` Files/wrap.exe codex')).toBe(true)
+    expect(isLegacyAgentPrefixPlatformAmbiguous('C:/Program^ Files/wrap.exe codex')).toBe(true)
+  })
+})
+
+describe('formatLegacyAgentPrefixArgs', () => {
+  const SHELLS: readonly AgentStartupShell[] = ['posix', 'powershell', 'cmd']
+
+  it('preserves a grouped argument that a bare join would re-split', () => {
+    const argv = ['--prompt', 'hello world', '--fast']
+    const rendered = formatLegacyAgentPrefixArgs(argv)
+    expect(rendered).toBe('--prompt "hello world" --fast')
+    for (const shell of SHELLS) {
+      expect(tokens(tokenizeLegacyAgentPrefix(rendered ?? '', shell))).toEqual(argv)
+    }
+  })
+
+  it('leaves shell-inert tokens unquoted', () => {
+    expect(formatLegacyAgentPrefixArgs(['--fast', '-m=gpt-5', '/opt/wrap'])).toBe(
+      '--fast -m=gpt-5 /opt/wrap'
+    )
+    expect(formatLegacyAgentPrefixArgs([])).toBe('')
+  })
+
+  it('round-trips tokens holding operators, quotes-adjacent chars and empties', () => {
+    for (const argv of [['a && b'], ['a b', 'c d'], [''], ['$HOME/bin'], ['C:\\tools\\wrap']]) {
+      const rendered = formatLegacyAgentPrefixArgs(argv)
+      expect(rendered).not.toBeNull()
+      for (const shell of SHELLS) {
+        expect(tokens(tokenizeLegacyAgentPrefix(rendered ?? '', shell))).toEqual(argv)
+      }
+    }
+  })
+
+  it('returns null instead of a lossy string when a token cannot round-trip', () => {
+    // A double quote has no cross-shell in-quote spelling.
+    expect(formatLegacyAgentPrefixArgs(['a"b'])).toBeNull()
+    expect(formatLegacyAgentPrefixArgs(['a\u0007b'])).toBeNull()
+  })
+})
+
+describe('legacy built-in token parity across shells', () => {
+  for (const prefix of ['/usr/local/bin/codex', 'npx some-wrapper codex --flag']) {
+    it(`tokenizes ${prefix} identically on every shell`, () => {
+      const posix = tokens(tokenizeLegacyAgentPrefix(prefix, 'posix'))
+      const powershell = tokens(tokenizeLegacyAgentPrefix(prefix, 'powershell'))
+      const cmd = tokens(tokenizeLegacyAgentPrefix(prefix, 'cmd'))
+      expect(powershell).toEqual(posix)
+      expect(cmd).toEqual(posix)
+    })
+  }
+})
+
+describe('isLegacyAgentPrefixPlatformAmbiguous', () => {
+  it('is false for plain multi-token wrappers that agree everywhere', () => {
+    expect(isLegacyAgentPrefixPlatformAmbiguous('/opt/wrap codex-real --fast')).toBe(false)
+    expect(isLegacyAgentPrefixPlatformAmbiguous('/usr/local/bin/codex')).toBe(false)
+    expect(isLegacyAgentPrefixPlatformAmbiguous('npx some-wrapper codex --flag')).toBe(false)
+  })
+
+  it('is true when backslashes diverge between posix and windows shells', () => {
+    expect(isLegacyAgentPrefixPlatformAmbiguous('C:\\tools\\wrap.exe codex')).toBe(true)
+  })
+
+  it('is true when single-quote grouping diverges between powershell and cmd', () => {
+    expect(isLegacyAgentPrefixPlatformAmbiguous("'my wrapper' codex")).toBe(true)
+  })
+
+  it('is false when double-quote grouping agrees on every shell', () => {
+    expect(isLegacyAgentPrefixPlatformAmbiguous('"C:/Program Files/wrap.exe" codex')).toBe(false)
+  })
+
+  it('is false for uniform failures — the caller tokenize catches them', () => {
+    expect(isLegacyAgentPrefixPlatformAmbiguous('wrap && codex')).toBe(false)
+    expect(isLegacyAgentPrefixPlatformAmbiguous('wrap "codex')).toBe(false)
+  })
+})
+
+describe('powershell doubled-delimiter escaping', () => {
+  it("keeps a doubled ' as one literal apostrophe instead of deleting it", () => {
+    const result = tokenizeLegacyAgentPrefix("'C:/Jo''s tools/wrap.exe' codex", 'powershell')
+    expect(tokens(result)).toEqual(["C:/Jo's tools/wrap.exe", 'codex'])
+  })
+
+  it('keeps a doubled " as one literal quote inside a double-quoted group', () => {
+    expect(tokens(tokenizeLegacyAgentPrefix('"say ""hi""" codex', 'powershell'))).toEqual([
+      'say "hi"',
+      'codex'
+    ])
+  })
+
+  it('doubles smart quotes from the same interchangeable class', () => {
+    expect(tokens(tokenizeLegacyAgentPrefix('‘Jo’’s wrap’ codex', 'powershell'))).toEqual([
+      'Jo’s wrap',
+      'codex'
+    ])
+  })
+
+  it('round-trips an apostrophe token quoted by quoteStartupArg', () => {
+    // quoteStartupArg('powershell') emits exactly this doubled form.
+    expect(tokens(tokenizeLegacyAgentPrefix("'it''s'", 'powershell'))).toEqual(["it's"])
+  })
+
+  it('still closes on a single delimiter and still reports unterminated groups', () => {
+    expect(tokens(tokenizeLegacyAgentPrefix("'wrap' codex", 'powershell'))).toEqual([
+      'wrap',
+      'codex'
+    ])
+    // A trailing doubled pair closes nothing, so the group stays open.
+    expect(tokenizeLegacyAgentPrefix("'wrap''", 'powershell')).toEqual({
+      ok: false,
+      reason: 'unterminated_quote'
+    })
+  })
+
+  it('does not apply doubling to posix or cmd, where the pair reopens a group', () => {
+    expect(tokens(tokenizeLegacyAgentPrefix("'a''b'", 'posix'))).toEqual(['ab'])
+    expect(tokens(tokenizeLegacyAgentPrefix('"a""b"', 'cmd'))).toEqual(['ab'])
+  })
+
+  it('reports a doubled delimiter as platform-ambiguous', () => {
+    expect(isLegacyAgentPrefixPlatformAmbiguous('"a""b"')).toBe(true)
+  })
+})

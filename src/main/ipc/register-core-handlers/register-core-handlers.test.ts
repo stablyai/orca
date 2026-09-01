@@ -16,6 +16,8 @@ const {
   registerDeveloperPermissionHandlersMock,
   registerComputerUsePermissionHandlersMock,
   registerSettingsHandlersMock,
+  registerAgentCatalogHandlersMock,
+  registerDataRecoveryHandlersMock,
   registerKeybindingHandlersMock,
   registerTelemetryHandlersMock,
   registerDiagnosticsHandlersMock,
@@ -59,7 +61,6 @@ const {
   registerTerminalPreviewHandlersMock,
   registerSpeechHandlersMock,
   registerSkillsHandlersMock,
-  registerSkillDeleteIpcHandlersMock,
   registerWorkspaceSpaceHandlersMock,
   registerWorkspacePortHandlersMock,
   registerLocalhostWorktreeLabelHandlersMock,
@@ -82,6 +83,8 @@ const {
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerComputerUsePermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
+  registerAgentCatalogHandlersMock: vi.fn(),
+  registerDataRecoveryHandlersMock: vi.fn(),
   registerKeybindingHandlersMock: vi.fn(),
   registerTelemetryHandlersMock: vi.fn(),
   registerDiagnosticsHandlersMock: vi.fn(),
@@ -125,7 +128,6 @@ const {
   registerTerminalPreviewHandlersMock: vi.fn(),
   registerSpeechHandlersMock: vi.fn(),
   registerSkillsHandlersMock: vi.fn(),
-  registerSkillDeleteIpcHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn(),
   registerWorkspacePortHandlersMock: vi.fn(),
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
@@ -144,246 +146,250 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: listEnvironmentsMock
 }))
 
-vi.mock('../runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 
-vi.mock('../codex-config-sync', () => ({
+vi.mock('./codex-config-sync', () => ({
   registerCodexConfigSyncHandlers: registerCodexConfigSyncHandlersMock
 }))
 
-vi.mock('../onboarding', () => ({
+vi.mock('./onboarding', () => ({
   registerOnboardingHandlers: registerOnboardingHandlersMock
 }))
 
-vi.mock('../dashboard-popout', () => ({
+vi.mock('./dashboard-popout', () => ({
   registerDashboardPopoutHandlers: registerDashboardPopoutHandlersMock
 }))
 
-vi.mock('../../window/dashboard-popout-window', () => ({
+vi.mock('../window/dashboard-popout-window', () => ({
   isDashboardPopoutRenderer: isDashboardPopoutRendererMock
 }))
 
-vi.mock('../terminal-preview', () => ({
+vi.mock('./terminal-preview', () => ({
   registerTerminalPreviewHandlers: registerTerminalPreviewHandlersMock
 }))
 
-vi.mock('../speech', () => ({
+vi.mock('./speech', () => ({
   registerSpeechHandlers: registerSpeechHandlersMock
 }))
 
-vi.mock('../cli', () => ({
+vi.mock('./cli', () => ({
   registerCliHandlers: registerCliHandlersMock
 }))
 
-vi.mock('../preflight', () => ({
+vi.mock('./preflight', () => ({
   registerPreflightHandlers: registerPreflightHandlersMock
 }))
 
-vi.mock('../usage-provider-handlers', () => ({
+vi.mock('./usage-provider-handlers', () => ({
   registerUsageProviderHandlers: registerUsageProviderHandlersMock
 }))
 
-vi.mock('../github', () => ({
+vi.mock('./github', () => ({
   registerGitHubHandlers: registerGitHubHandlersMock
 }))
 
-vi.mock('../feedback', () => ({
+vi.mock('./feedback', () => ({
   registerFeedbackHandlers: registerFeedbackHandlersMock
 }))
 
-vi.mock('../export', () => ({
+vi.mock('./export', () => ({
   registerExportHandlers: registerExportHandlersMock
 }))
 
-vi.mock('../stats', () => ({
+vi.mock('./stats', () => ({
   registerStatsHandlers: registerStatsHandlersMock
 }))
 
-vi.mock('../memory', () => ({
+vi.mock('./memory', () => ({
   registerMemoryHandlers: registerMemoryHandlersMock
 }))
 
-vi.mock('../notebook', () => ({
+vi.mock('./notebook', () => ({
   registerNotebookHandlers: registerNotebookHandlersMock
 }))
 
-vi.mock('../notifications', () => ({
+vi.mock('./notifications', () => ({
   registerNotificationHandlers: registerNotificationHandlersMock
 }))
 
-vi.mock('../developer-permissions', () => ({
+vi.mock('./developer-permissions', () => ({
   registerDeveloperPermissionHandlers: registerDeveloperPermissionHandlersMock
 }))
 
-vi.mock('../computer-use-permissions', () => ({
+vi.mock('./computer-use-permissions', () => ({
   registerComputerUsePermissionHandlers: registerComputerUsePermissionHandlersMock
 }))
 
-vi.mock('../settings', () => ({
+vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
 }))
 
-vi.mock('../skills', () => ({
+vi.mock('./data-recovery', () => ({
+  registerDataRecoveryHandlers: registerDataRecoveryHandlersMock
+}))
+
+vi.mock('./agent-catalog', () => ({
+  registerAgentCatalogHandlers: registerAgentCatalogHandlersMock
+}))
+
+vi.mock('./skills', () => ({
   registerSkillsHandlers: registerSkillsHandlersMock
 }))
 
-vi.mock('../skill-delete/handlers', () => ({
-  registerSkillDeleteIpcHandlers: registerSkillDeleteIpcHandlersMock
-}))
-
-vi.mock('../workspace-space', () => ({
+vi.mock('./workspace-space', () => ({
   registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock
 }))
 
-vi.mock('../workspace-ports', () => ({
+vi.mock('./workspace-ports', () => ({
   registerWorkspacePortHandlers: registerWorkspacePortHandlersMock
 }))
 
-vi.mock('../localhost-worktree-labels', () => ({
+vi.mock('./localhost-worktree-labels', () => ({
   registerLocalhostWorktreeLabelHandlers: registerLocalhostWorktreeLabelHandlersMock
 }))
 
-vi.mock('../keybindings', () => ({
+vi.mock('./keybindings', () => ({
   registerKeybindingHandlers: registerKeybindingHandlersMock
 }))
 
-vi.mock('../telemetry', () => ({
+vi.mock('./telemetry', () => ({
   registerTelemetryHandlers: registerTelemetryHandlersMock
 }))
 
-vi.mock('../diagnostics', () => ({
+vi.mock('./diagnostics', () => ({
   registerDiagnosticsHandlers: registerDiagnosticsHandlersMock
 }))
 
-vi.mock('../shell', () => ({
+vi.mock('./shell', () => ({
   registerShellHandlers: registerShellHandlersMock
 }))
 
-vi.mock('../pet', () => ({
+vi.mock('./pet', () => ({
   registerPetHandlers: registerPetHandlersMock
 }))
 
-vi.mock('../session', () => ({
+vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
 }))
 
-vi.mock('../ui', () => ({
+vi.mock('./ui', () => ({
   registerUIHandlers: registerUIHandlersMock,
   setTrustedUIRendererWebContentsId: setTrustedUIRendererWebContentsIdMock
 }))
 
-vi.mock('../emulator-frame-stream', () => ({
+vi.mock('./emulator-frame-stream', () => ({
   registerEmulatorFrameStreamHandlers: registerEmulatorFrameStreamHandlersMock
 }))
 
-vi.mock('../emulator-video-stream', () => ({
+vi.mock('./emulator-video-stream', () => ({
   registerEmulatorVideoStreamHandlers: registerEmulatorVideoStreamHandlersMock
 }))
 
-vi.mock('../filesystem', () => ({
+vi.mock('./filesystem', () => ({
   registerFilesystemHandlers: registerFilesystemHandlersMock
 }))
 
-vi.mock('../filesystem-watcher', () => ({
+vi.mock('./filesystem-watcher', () => ({
   registerFilesystemWatcherHandlers: registerFilesystemWatcherHandlersMock
 }))
 
-vi.mock('../rate-limits', () => ({
+vi.mock('./rate-limits', () => ({
   registerRateLimitHandlers: registerRateLimitHandlersMock
 }))
 
-vi.mock('../runtime', () => ({
+vi.mock('./runtime', () => ({
   registerRuntimeHandlers: registerRuntimeHandlersMock
 }))
 
-vi.mock('../runtime-environments', () => ({
+vi.mock('./runtime-environments', () => ({
   registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
 }))
 
-vi.mock('../ephemeral-vm', () => ({
+vi.mock('./ephemeral-vm', () => ({
   registerEphemeralVmHandlers: registerEphemeralVmHandlersMock
 }))
 
-vi.mock('../ai-vault', () => ({
+vi.mock('./ai-vault', () => ({
   registerAiVaultHandlers: registerAiVaultHandlersMock
 }))
 
-vi.mock('../orca-profiles', () => ({
+vi.mock('./orca-profiles', () => ({
   registerOrcaProfileHandlers: registerOrcaProfileHandlersMock
 }))
 
-vi.mock('../codex-accounts', () => ({
+vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
 
-vi.mock('../agent-hooks', () => ({
+vi.mock('./agent-hooks', () => ({
   registerAgentHookHandlers: registerAgentHookHandlersMock
 }))
 
-vi.mock('../agent-trust', () => ({
+vi.mock('./agent-trust', () => ({
   registerAgentTrustHandlers: registerAgentTrustHandlersMock
 }))
 
-vi.mock('../claude-accounts', () => ({
+vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))
 
-vi.mock('../minimax-credentials', () => ({
+vi.mock('./minimax-credentials', () => ({
   registerMiniMaxCredentialsHandlers: registerMiniMaxCredentialsHandlersMock
 }))
 
-vi.mock('../grok-accounts', () => ({
+vi.mock('./grok-accounts', () => ({
   registerGrokAccountHandlers: registerGrokAccountHandlersMock
 }))
 
-vi.mock('../../window/attach-main-window-services', () => ({
+vi.mock('../window/attach-main-window-services', () => ({
   registerUpdaterHandlers: registerUpdaterHandlersMock
 }))
 
-vi.mock('../../window/clipboard-ipc-handlers', () => ({
+vi.mock('../window/clipboard-ipc-handlers', () => ({
   registerClipboardHandlers: registerClipboardHandlersMock,
   setTrustedClipboardRendererWebContentsId: setTrustedClipboardRendererWebContentsIdMock
 }))
 
-vi.mock('../browser', () => ({
+vi.mock('./browser', () => ({
   registerBrowserHandlers: registerBrowserHandlersMock,
   setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock
 }))
 
-vi.mock('../browser-renderer-trust', () => ({
+vi.mock('./browser-renderer-trust', () => ({
   setTrustedBrowserRendererWebContentsId: setTrustedBrowserRendererWebContentsIdMock
 }))
 
-vi.mock('../app', () => ({
+vi.mock('./app', () => ({
   registerAppHandlers: registerAppHandlersMock
 }))
 
-vi.mock('../terminal-render-desync-evidence', () => ({
+vi.mock('./terminal-render-desync-evidence', () => ({
   registerTerminalRenderDesyncEvidenceHandler: registerTerminalRenderDesyncEvidenceHandlerMock
 }))
 
-vi.mock('../linear', () => ({
+vi.mock('./linear', () => ({
   registerLinearHandlers: registerLinearHandlersMock
 }))
 
-vi.mock('../jira', () => ({
+vi.mock('./jira', () => ({
   registerJiraHandlers: registerJiraHandlersMock
 }))
 
-vi.mock('../bitbucket', () => ({
+vi.mock('./bitbucket', () => ({
   registerBitbucketHandlers: registerBitbucketHandlersMock
 }))
 
-vi.mock('../gitlab', () => ({
+vi.mock('./gitlab', () => ({
   registerGitLabHandlers: registerGitLabHandlersMock
 }))
 
-vi.mock('../hosted-review', () => ({
+vi.mock('./hosted-review', () => ({
   registerHostedReviewHandlers: registerHostedReviewHandlersMock
 }))
 
-vi.mock('../native-chat', () => ({
+vi.mock('./native-chat', () => ({
   registerNativeChatHandlers: registerNativeChatHandlersMock
 }))
 
@@ -447,7 +453,7 @@ describe('registerCoreHandlers', () => {
     registerTerminalPreviewHandlersMock.mockReset()
     registerSpeechHandlersMock.mockReset()
     registerSkillsHandlersMock.mockReset()
-    registerSkillDeleteIpcHandlersMock.mockReset()
+    registerAgentCatalogHandlersMock.mockReset()
     registerWorkspaceSpaceHandlersMock.mockReset()
     registerWorkspacePortHandlersMock.mockReset()
     registerLocalhostWorktreeLabelHandlersMock.mockReset()
@@ -534,8 +540,9 @@ describe('registerCoreHandlers', () => {
     expect(registerDashboardPopoutHandlersMock).toHaveBeenCalledWith(store, undefined)
     expect(registerTerminalPreviewHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, agentAwakeService)
-    expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store, runtime)
-    expect(registerSkillDeleteIpcHandlersMock).toHaveBeenCalledWith(store, runtime)
+    expect(registerAgentCatalogHandlersMock).toHaveBeenCalledWith(store)
+  expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store, runtime)
+    expect(registerDataRecoveryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspacePortHandlersMock).toHaveBeenCalledWith(store)
     expect(registerLocalhostWorktreeLabelHandlersMock).toHaveBeenCalledWith(store)

@@ -119,7 +119,7 @@ export function buildDashboardWorktreeLaunchOptions(
     )
     const preferred = state.settings?.defaultTuiAgent
     result[worktreeId] =
-      preferred && preferred !== 'blank' && enabled.includes(preferred)
+      isTuiAgent(preferred) && enabled.some((agent) => agent === preferred)
         ? [preferred, ...enabled.filter((agent) => agent !== preferred)]
         : enabled
   }

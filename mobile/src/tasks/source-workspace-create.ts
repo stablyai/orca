@@ -19,6 +19,37 @@ import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempoten
 // host applies the agent's launch args (permission flags) and shell quoting.
 export type WorkspaceCreateAgentBundle = {
   choice: WorkspaceAgentChoice
+  launchParams?: Record<string, unknown>
+}
+
+function applyAuthoritativeLaunchParams(
+  params: Record<string, unknown>,
+  launchParams: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  if (launchParams === undefined) {
+    return params
+  }
+  // Identity launch and the legacy command path are mutually exclusive; the
+  // modal's capability-aware bundle is authoritative when present.
+  const next = { ...params }
+  const startupDraft = typeof next.startupDraft === 'string' ? next.startupDraft : undefined
+  const agentLaunch =
+    startupDraft &&
+    launchParams.agentLaunch &&
+    typeof launchParams.agentLaunch === 'object' &&
+    !Array.isArray(launchParams.agentLaunch)
+      ? { ...launchParams.agentLaunch, prompt: startupDraft }
+      : launchParams.agentLaunch
+  delete next.agentLaunch
+  delete next.startupCommand
+  delete next.startupEnv
+  delete next.startupAgent
+  delete next.createdWithAgent
+  return {
+    ...next,
+    ...launchParams,
+    ...(agentLaunch ? { agentLaunch } : {})
+  }
 }
 
 export type CreateWorkspaceFromComposerArgs = {
@@ -119,19 +150,22 @@ async function createWorkItemWorkspace(args: {
     }
   }
 
-  const params = buildTaskWorkspaceCreateParams({
-    item: taskItem,
-    targetRepoId,
-    setupDecision,
-    agent: agent.choice,
-    workspaceName,
-    note,
-    baseBranch,
-    compareBaseRef,
-    branchNameOverride,
-    pushTarget,
-    nameIsAutoManaged: args.nameIsAutoManaged
-  })
+  const params = applyAuthoritativeLaunchParams(
+    buildTaskWorkspaceCreateParams({
+      item: taskItem,
+      targetRepoId,
+      setupDecision,
+      agent: agent.choice,
+      workspaceName,
+      note,
+      baseBranch,
+      compareBaseRef,
+      branchNameOverride,
+      pushTarget,
+      nameIsAutoManaged: args.nameIsAutoManaged
+    }),
+    agent.launchParams
+  )
   // buildTaskWorkspaceCreateParams computes the name; reuse it as the retry base
   // so collisions still append -2, -3, ... like the blank path does.
   const baseName = String(params.name)
@@ -172,7 +206,7 @@ async function createBranchWorkspace(args: {
     if (comment) {
       params.comment = comment
     }
-    return params
+    return applyAuthoritativeLaunchParams(params, agent.launchParams)
   }
 
   if (selection.reuse) {
@@ -276,7 +310,7 @@ async function createNewBranchWorkspace(args: {
       if (comment) {
         params.comment = comment
       }
-      return params
+      return applyAuthoritativeLaunchParams(params, agent.launchParams)
     }
   })
 }

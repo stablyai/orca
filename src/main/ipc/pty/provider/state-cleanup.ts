@@ -7,6 +7,7 @@ import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-servi
 import { agentHookServer } from '../../../agent-hooks/server'
 import { clearMigrationUnsupportedPty } from '../../../agent-hooks/migration-unsupported-pty-state'
 import { clearNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
+import { getHostAgentSessionRecordStore } from '../../../agent-launch/agent-session-record-store-host'
 import {
   clearHiddenRendererPtyDeliveryState,
   isHiddenRendererPty
@@ -100,6 +101,7 @@ export function clearProviderPtyState(
     }
     ptyPaneKey.delete(id)
     if (stillOwnsPaneKey) {
+      getHostAgentSessionRecordStore().disposeStagingForPane(paneKey)
       // Why: notify AFTER dropping the paneKey↔ptyId entries so a listener re-reading the map sees post-teardown state; wrap each so one throw can't block the rest.
       for (const listener of paneKeyTeardownListeners) {
         try {

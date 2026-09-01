@@ -7,24 +7,19 @@ import {
 } from '@/lib/onboarding-folder-agent-startup'
 
 describe('buildOnboardingFolderAgentStartup', () => {
-  it('queues the persisted default agent with onboarding telemetry', () => {
+  it('queues the persisted default agent as an identity-only host launch', () => {
     const startup = buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'codex'
     })
 
     expect(startup).toEqual({
-      command: "codex '--dangerously-bypass-approvals-and-sandbox'",
-      env: {},
+      command: '',
       launchAgent: 'codex',
-      launchConfig: {
-        agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-        agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-        agentEnv: {}
-      },
-      sessionOptions: undefined,
+      agentLaunch: { selection: { kind: 'default' }, allowEmptyPromptLaunch: true },
+      // agent_kind is host-authoritative (overwritten from the resolved receipt
+      // before the emit), so the payload threads only surface fields.
       telemetry: {
-        agent_kind: 'codex',
         launch_source: 'onboarding',
         request_kind: 'new'
       }
@@ -40,44 +35,29 @@ describe('buildOnboardingFolderAgentStartup', () => {
     expect(startup).toBeUndefined()
   })
 
-  it('omits native-chat preferences from terminal-default folder launches', () => {
-    const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
-      defaultTuiAgent: 'codex',
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: false,
-      nativeChatSessionOptions: {
-        codex: {
-          model: 'gpt-5.2-codex',
-          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+  it.each([false, true])(
+    'never assembles argv or session options, openAgentTabsInChatByDefault=%s',
+    (openAgentTabsInChatByDefault) => {
+      // The view mode (and with it any native-chat session options) is decided
+      // by the activation path from the created worktree's own connection id —
+      // not here, which is why this builder takes no readability argument.
+      const startup = buildOnboardingFolderAgentStartup({
+        ...getDefaultSettings('/tmp/orca-workspaces'),
+        defaultTuiAgent: 'codex',
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault,
+        nativeChatSessionOptions: {
+          codex: {
+            model: 'gpt-5.2-codex',
+            valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+          }
         }
-      }
-    })
+      })
 
-    expect(startup?.command).not.toContain("'-m'")
-    expect(startup?.sessionOptions).toBeUndefined()
-  })
-
-  it('applies native-chat preferences to chat-default folder launches', () => {
-    const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
-      defaultTuiAgent: 'codex',
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true,
-      nativeChatSessionOptions: {
-        codex: {
-          model: 'gpt-5.2-codex',
-          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
-        }
-      }
-    })
-
-    expect(startup?.command).toContain("'-m' 'gpt-5.2-codex'")
-    expect(startup?.sessionOptions).toEqual({
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
-    })
-  })
+      expect(startup?.command).toBe('')
+      expect(startup?.sessionOptions).toBeUndefined()
+    }
+  )
 
   it('does not infer an agent from auto mode', () => {
     const startup = buildOnboardingFolderAgentStartup({
@@ -125,7 +105,9 @@ describe('buildOnboardingFolderAgentStartup', () => {
     ).toBe(false)
   })
 
-  it('builds the skipped-onboarding folder startup from the persisted default agent', () => {
+  it('builds the skipped-onboarding folder startup as an identity-only host launch', () => {
+    // The command override no longer shapes the client output — the host resolves
+    // the command from the current default; the request only carries identity.
     expect(
       buildDismissedOnboardingFolderAgentStartup(
         {
@@ -137,17 +119,12 @@ describe('buildOnboardingFolderAgentStartup', () => {
         false
       )
     ).toEqual({
-      command: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
-      env: {},
+      command: '',
       launchAgent: 'codex',
-      launchConfig: {
-        agentCommand: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
-        agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-        agentEnv: {}
-      },
-      sessionOptions: undefined,
+      agentLaunch: { selection: { kind: 'default' }, allowEmptyPromptLaunch: true },
+      // agent_kind is host-authoritative (overwritten from the resolved receipt
+      // before the emit), so the payload threads only surface fields.
       telemetry: {
-        agent_kind: 'codex',
         launch_source: 'onboarding',
         request_kind: 'new'
       }

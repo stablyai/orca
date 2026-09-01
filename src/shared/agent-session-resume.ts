@@ -11,12 +11,12 @@ export const RESUMABLE_TUI_AGENTS = [
   'pi',
   'mimo-code',
   'droid',
+  'kimi',
   'grok',
   'devin',
   'omp',
   'prime-agent',
-  'copilot',
-  'kimi'
+  'copilot'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -42,11 +42,39 @@ export type SleepingAgentLaunchConfig = {
   ompResumeFilePath?: string
 }
 
+/** Provider-session ownership/resume key. `baseAgent` collapses every custom id
+ *  sharing a base onto one owner (a custom id never opens a parallel namespace),
+ *  and the provider-session key type ('session_id' vs 'conversation_id') is
+ *  implied by `baseAgent`, so it is not part of the key. Used both to dedupe
+ *  claims across preserved/queued/pending/sleeping/live and as the session key a
+ *  resume/fork request names so the host can load the private record. */
+export type AgentSessionOwnershipKey = {
+  worktreeId: string
+  baseAgent: ResumableTuiAgent
+  providerSessionId: string
+}
+
+/** Stable string form for Map/Set keying. NUL-delimited so no identifier can
+ *  forge a boundary. */
+export function getAgentSessionOwnershipKey(key: AgentSessionOwnershipKey): string {
+  return `${key.worktreeId}\0${key.baseAgent}\0${key.providerSessionId}`
+}
+
 export type SleepingAgentSessionRecord = {
   paneKey: string
   tabId?: string
   worktreeId: string
+  /** Legacy identity field, read-compatible for one release; new records also
+   *  populate `requestedAgent`/`baseAgent`. For a built-in it equals both; for a
+   *  custom id the migration derives base into `baseAgent`. */
   agent: ResumableTuiAgent
+  /** The originally requested identity (custom id or built-in). Optional during
+   *  the additive migration window; the persistence migration derives it from
+   *  `agent` for legacy records. */
+  requestedAgent?: TuiAgent
+  /** The resumable base the requested identity resolves to; the ownership key
+   *  and provider resume argv are keyed on this, never on `requestedAgent`. */
+  baseAgent?: ResumableTuiAgent
   providerSession: AgentProviderSessionMetadata
   prompt: string
   state: AgentStatusState
@@ -56,6 +84,9 @@ export type SleepingAgentSessionRecord = {
   lastAssistantMessage?: string
   interrupted?: boolean
   connectionId?: string | null
+  /** Legacy replay config, read-only. It transits trusted desktop IPC exactly
+   *  once on first resume/registration, after which the host owns it as an
+   *  opaque replay artifact; the runtime/mobile/paired session DTO omits it. */
   launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
@@ -143,6 +174,16 @@ function withTranscriptPath(
 
 export function isResumableTuiAgent(value: unknown): value is ResumableTuiAgent {
   return typeof value === 'string' && RESUMABLE_TUI_AGENT_SET.has(value)
+}
+
+/** The provider-session key type a resumable base uses. The ownership key omits
+ *  this (it is implied by `baseAgent`), so the host reconstructs it here when a
+ *  resume request names only the ownership key. Antigravity keys on a
+ *  conversation id; every other resumable base keys on a session id. */
+export function providerSessionKeyForResumableBase(
+  base: ResumableTuiAgent
+): AgentProviderSessionKey {
+  return base === 'antigravity' ? 'conversation_id' : 'session_id'
 }
 
 export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessionMetadata | null {
@@ -275,6 +316,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null
     case 'droid':
       return providerSession.key === 'session_id' ? ['droid', '--resume', id] : null
+    case 'kimi':
+      return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
     case 'grok':
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
     case 'devin':
@@ -288,8 +331,5 @@ export function getAgentResumeArgv(
     // resume commands, so local and remote resumes agree on one spelling.
     case 'copilot':
       return providerSession.key === 'session_id' ? ['copilot', `--resume=${id}`] : null
-    // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
-    case 'kimi':
-      return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
   }
 }

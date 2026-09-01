@@ -10,6 +10,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
+import { toLegacyAutoPreference } from '../../../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../../../shared/git-history'
 import type {
@@ -255,7 +256,7 @@ export function useGitHistoryCommitActions({
       const state = useAppStore.getState()
       const connectionId = getConnectionId(activeWorktreeId)
       const agent = resolveDefaultAgentForNewTab({
-        defaultTuiAgent: state.settings?.defaultTuiAgent,
+        defaultTuiAgent: toLegacyAutoPreference(state.settings?.defaultTuiAgent),
         detectedAgentIds:
           typeof connectionId === 'string'
             ? state.remoteDetectedAgentIds[connectionId]

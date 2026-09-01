@@ -3,10 +3,17 @@
 // empty-file symptom as issue #1158, from a different cause. The .bak ring recovers it at up to an
 // hour's loss; fsync stops it from happening.
 
-import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
-import { copyFile, open, readdir, rename, rm, stat } from 'node:fs/promises'
+import {
+  chmodSync,
+  closeSync,
+  fsyncSync,
+  openSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
+import { open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { renameFileWithWindowsRetry } from './codex-accounts/fs-utils'
 
 /**
  * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
@@ -52,61 +59,6 @@ export async function renameDurable(tmpPath: string, finalPath: string): Promise
   await syncDirectory(dirname(finalPath))
 }
 
-/**
- * Write `payload` to `tmpPath` and fsync it, WITHOUT publishing it. For callers that must order
- * other work between "the new content is durable" and "the new content is visible" — a backup
- * rotation that has to happen while the old file is still in place, for instance.
- */
-export async function writeTempFileDurable(
-  tmpPath: string,
-  payload: string,
-  mode?: number
-): Promise<void> {
-  const handle = await open(tmpPath, 'w', mode)
-  try {
-    await handle.writeFile(payload, 'utf-8')
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-}
-
-/**
- * Copy `sourcePath` onto `finalPath` durably: a fresh inode, fsynced, then renamed into place. A
- * plain copyFile can be interrupted and leave a torn destination — fatal when the destination is
- * the backup someone will fall back to. Returns false when the source does not exist.
- */
-export async function copyFileDurable(sourcePath: string, finalPath: string): Promise<boolean> {
-  const tmpPath = durableWriteTempPath(finalPath)
-  let renamed = false
-  try {
-    try {
-      // copyFile stays in the kernel — and clones the extents outright on APFS and btrfs — so
-      // this does not pull the whole file through the process on every commit.
-      await copyFile(sourcePath, tmpPath)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return false
-      }
-      throw error
-    }
-    const handle = await open(tmpPath, 'r+')
-    try {
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    await rename(tmpPath, finalPath)
-    renamed = true
-    await syncDirectory(dirname(finalPath))
-    return true
-  } finally {
-    if (!renamed) {
-      await rm(tmpPath, { force: true }).catch(() => {})
-    }
-  }
-}
-
 /** Write `payload` to `tmpPath`, fsync it, then rename onto `finalPath` and fsync the directory. */
 export async function writeFileDurable(
   tmpPath: string,
@@ -130,8 +82,14 @@ export async function writeFileDurableIfCurrent(
 ): Promise<boolean> {
   let renamed = false
   try {
-    // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
-    await writeTempFileDurable(tmpPath, payload)
+    const handle = await open(tmpPath, 'w')
+    try {
+      await handle.writeFile(payload, 'utf-8')
+      // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
     if (!isCurrent()) {
       return false
     }
@@ -186,23 +144,39 @@ export async function removeStaleDurableWriteTempFiles(
   }
 }
 
-/** Synchronous counterpart for quit and crash paths that cannot await. */
-export function writeFileDurableSync(tmpPath: string, finalPath: string, payload: string): void {
+/**
+ * Synchronous counterpart for quit and crash paths that cannot await.
+ * `mode` is applied with chmod rather than an open() mode so a hardened
+ * permission survives the process umask and a reused temp inode.
+ */
+export function writeFileDurableSync(
+  tmpPath: string,
+  finalPath: string,
+  payload: string,
+  options: { mode?: number } = {}
+): void {
   let renamed = false
   try {
     writeFileSync(tmpPath, payload, 'utf-8')
+    if (options.mode !== undefined) {
+      chmodSync(tmpPath, options.mode)
+    }
     const fd = openSync(tmpPath, 'r+')
     try {
       fsyncSync(fd)
     } finally {
       closeSync(fd)
     }
-    renameFileWithWindowsRetry(tmpPath, finalPath)
+    renameSync(tmpPath, finalPath)
     renamed = true
     syncDirectorySync(dirname(finalPath))
   } finally {
     if (!renamed) {
-      rmSync(tmpPath, { force: true })
+      try {
+        unlinkSync(tmpPath)
+      } catch {
+        // Best-effort: the write already failed, don't mask it with a cleanup error.
+      }
     }
   }
 }

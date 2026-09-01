@@ -6,6 +6,7 @@
 // for two weeks before a dashboard read shows the fields are null-only.
 
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { resolveTuiAgentBaseAgent } from '../../../../shared/custom-tui-agents'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type {
   PathSource,
@@ -26,7 +27,9 @@ export function buildAgentPickedPayload(
   snapshot: AgentPickedSnapshot
 ): EventProps<'onboarding_agent_picked'> {
   return {
-    agent_kind: tuiAgentToAgentKind(snapshot.agent),
+    // Pure builder: resolve only the built-in base here; a custom pick has no
+    // static kind without the catalog and maps to 'other'.
+    agent_kind: tuiAgentToAgentKind(resolveTuiAgentBaseAgent(snapshot.agent) ?? snapshot.agent),
     on_path: snapshot.detectedAgentIds.includes(snapshot.agent),
     detected_count: snapshot.detectedAgentIds.length,
     detection_state: snapshot.isDetecting ? 'pending' : 'complete',

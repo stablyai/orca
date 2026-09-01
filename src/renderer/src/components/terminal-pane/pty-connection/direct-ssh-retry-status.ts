@@ -1,4 +1,5 @@
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
+import { resolvePaneOwnerBaseAgent } from '@/lib/agent-base-identity'
 import { useAppStore } from '@/store'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -103,7 +104,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
       !initialAgentStatus &&
       session.paneStartup?.telemetry?.launch_source === 'sidebar' &&
       session.paneStartup.telemetry.request_kind === 'resume' &&
-      (session.paneStartup.launchAgent === 'codex' ||
+      (resolvePaneOwnerBaseAgent(session.paneStartup.launchAgent) === 'codex' ||
         session.paneStartup.telemetry.agent_kind === 'codex')
     ) {
       // Why: history resumes open on a completed Codex composer without a done
@@ -169,7 +170,11 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     }
     const title = currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const authoritativePaneAgent = session.getAuthoritativePaneAgent()
-    const agentType = resolveCompatibleAgentTypeForOwner(payload.agentType, authoritativePaneAgent)
+    const authoritativePaneBaseAgent = resolvePaneOwnerBaseAgent(authoritativePaneAgent)
+    const agentType = resolveCompatibleAgentTypeForOwner(
+      payload.agentType,
+      authoritativePaneBaseAgent
+    )
     const statusPayload = agentType === payload.agentType ? payload : { ...payload, agentType }
     const observedStatusPayload = {
       ...statusPayload,
@@ -183,7 +188,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     const statusTitle = resolvedStatusTitle
       ? normalizeCompatibleAgentTitleForOwner(
           resolvedStatusTitle,
-          agentType ?? authoritativePaneAgent
+          agentType ?? authoritativePaneBaseAgent
         )
       : resolvedStatusTitle
     // Why: proves the claim — only a pane that really produced byte-derived

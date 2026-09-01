@@ -112,7 +112,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
   try {
     const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
       'settings.get',
-      undefined,
+      { includeAgentCatalog: false },
       15_000
     )
     const runtimeSettings: Partial<GlobalSettings> = {}

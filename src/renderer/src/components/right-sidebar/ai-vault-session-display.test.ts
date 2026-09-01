@@ -6,7 +6,8 @@ import {
   sessionDetailConversationTurns,
   sessionModelLabel,
   sessionPromptPreview,
-  sessionPreviewSearchText
+  sessionPreviewSearchText,
+  sessionResumeArgsLabel
 } from './ai-vault-session-display'
 
 const baseSession: AiVaultSession = {
@@ -160,5 +161,13 @@ describe('ai vault session display', () => {
       text: 'Original long first prompt that scrolled out of preview',
       source: 'first-user-prompt'
     })
+  })
+
+  it('shows every correlated snapshot argument and preserves element boundaries', () => {
+    expect(
+      sessionResumeArgsLabel(['--model', 'gpt-5.6-Sol', '-c', 'model_reasoning_effort=medium'])
+    ).toBe('--model gpt-5.6-Sol -c model_reasoning_effort=medium')
+    expect(sessionResumeArgsLabel(['--label', 'two words', ''])).toBe('--label "two words" ""')
+    expect(sessionResumeArgsLabel([])).toBeNull()
   })
 })

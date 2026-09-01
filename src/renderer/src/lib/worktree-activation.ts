@@ -31,11 +31,18 @@ import { toast } from 'sonner'
 import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
-import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
+import type {
+  AgentStartedTelemetry,
+  StartupLaunchTelemetry,
+  WorktreeStartupPayload
+} from '@/lib/worktree-startup-payload'
 import type { IssueCommandLaunch } from '@/lib/worktree-setup-issue-command-queue'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
+
+export type { AgentStartedTelemetry, StartupLaunchTelemetry, WorktreeStartupPayload }
+export { ensureWorktreeHasInitialTerminal }
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.

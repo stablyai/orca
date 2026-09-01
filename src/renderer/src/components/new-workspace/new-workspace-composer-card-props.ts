@@ -1,4 +1,5 @@
 import type RepoCombobox from '@/components/repo/RepoCombobox'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
   NeedsSetupProjectHostOption,
@@ -35,6 +36,7 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
+  quickAgentOptions: AgentCatalogEntry[]
   eligibleRepos: readonly RepoOption[]
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]
@@ -85,7 +87,8 @@ export type NewWorkspaceComposerCardProps = {
   smartNameGitHubSourceContext?: TaskSourceContext | null
   smartNameJiraSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
-  detectedAgentIds: Set<TuiAgent> | null
+  /** Legacy fixture compatibility; selection is resolved by the modal now. */
+  detectedAgentIds?: Set<TuiAgent> | null
   onOpenAgentSettings: () => void
   advancedOpen: boolean
   onToggleAdvanced: () => void

@@ -322,10 +322,10 @@ describe('startFixChecksAgent', () => {
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
-  it('rejects invalid saved CLI arguments before activating the attached workspace', async () => {
+  it('names the fixChecks recipe owner so the host resolves its saved agentArgs', async () => {
     mocks.resolveSourceControlActionRecipe.mockReturnValue({
       commandInputTemplate: '{basePrompt}',
-      agentArgs: '--model "unterminated'
+      agentArgs: '--model gpt-5'
     })
     const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
 
@@ -336,13 +336,16 @@ describe('startFixChecksAgent', () => {
         basePrompt: 'Fix checks',
         launchSource: 'task_page'
       })
-    ).resolves.toBe(false)
+    ).resolves.toBe(true)
 
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      'CLI arguments are invalid: Unclosed quote in command template.'
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceRecord: { owner: 'source-control-recipe', id: 'fixChecks' }
+      })
     )
+    // The client no longer sends assembled args on the launch path; the host
+    // resolves them from the owner locator above.
+    expect(mocks.launchAgentInNewTab.mock.calls[0]?.[0]).not.toHaveProperty('agentArgs')
   })
 
   it('rejects without focusing a terminal when agent launch throws', async () => {

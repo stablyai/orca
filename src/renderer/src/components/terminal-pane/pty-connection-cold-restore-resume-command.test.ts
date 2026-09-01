@@ -1,8 +1,10 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import { quoteStartupArg, resolveStartupShell } from '../../../../shared/tui-agent-startup-shell'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
-import { UUID_RE } from './pty-connection-test-constants'
 import { temporarilySetNavigatorUserAgent } from './pty-connection-test-dom'
 import {
   LEAF_2,
@@ -127,6 +129,53 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
   }
 })
 
+/** The resume ownership key the client is allowed to send: no argv, no token. */
+const RESUME_SESSION_KEY = {
+  worktreeId: 'wt-1',
+  baseAgent: 'codex',
+  providerSessionId: 'codex-session-1'
+} as const
+
+/** A pre-U5 sleeping record's captured config — the one-release handoff the host
+ *  replays into the resume command. `agentCommand` is the COMPLETE base command
+ *  (it already embeds the args), so only the resume argv is quoted at replay. */
+const LEGACY_LAUNCH_CONFIG: SleepingAgentLaunchConfig = {
+  agentCommand: 'codex --dangerously-bypass-approvals-and-sandbox',
+  agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+  agentEnv: {}
+}
+
+/** What a cold-restore respawn hands the host: the resume key, the legacy
+ *  handoff, and the tab's shell — never a command. */
+type ColdRestoreResumeSpawn = {
+  command?: string
+  shellOverride?: string
+  launchConfig?: SleepingAgentLaunchConfig
+  legacyResumeRecordedConnectionId?: string | null
+  agentLaunch?: { resume: { operation: string; sessionKey: Record<string, string> } }
+}
+
+/**
+ * The resume argv exactly as the host will quote it onto the captured base
+ * command: the shell comes from the pane's tab override, falling back to the
+ * global Windows setting. This is where the #12320 quoting guarantee now lives —
+ * the renderer only forwards the inputs, so that forwarding is what we pin.
+ */
+function quotedResumeSuffix(spawn: ColdRestoreResumeSpawn, terminalWindowsShell: string): string {
+  const shell = resolveStartupShell(
+    'win32',
+    resolveLocalWindowsAgentStartupShell({
+      platform: 'win32',
+      isRemote: false,
+      shellOverride: spawn.shellOverride,
+      terminalWindowsShell
+    })
+  )
+  return ['resume', RESUME_SESSION_KEY.providerSessionId]
+    .map((arg) => quoteStartupArg(arg, shell))
+    .join(' ')
+}
+
 function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
 }
@@ -218,21 +267,25 @@ describe('connectPanePty', () => {
       expect(transport.connect).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
-          commandDelivery: 'provider',
-          startupCommandDelivery: 'shell-ready',
+          // The resume is delegated by ownership key: the host loads its own
+          // record and assembles command/delivery/token from it.
+          agentLaunch: { resume: { operation: 'resume', sessionKey: RESUME_SESSION_KEY } },
+          launchAgent: 'codex',
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
             ORCA_TAB_ID: 'tab-1',
             ORCA_WORKTREE_ID: 'wt-1',
-            ORCA_WORKSPACE_ID: 'wt-1',
-            ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+            ORCA_WORKSPACE_ID: 'wt-1'
           })
         })
       )
-      expect(transport.sendInput).not.toHaveBeenCalledWith(
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
-      )
+      const respawn = transport.connect.mock.calls[1]?.[0] as ColdRestoreResumeSpawn & {
+        env?: Record<string, string>
+      }
+      expect(respawn.command).toBeUndefined()
+      expect(respawn.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+      // The resume must ride the respawn, never be typed into the fresh shell.
+      expect(transport.sendInput).not.toHaveBeenCalled()
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
@@ -320,13 +373,16 @@ describe('connectPanePty', () => {
       expect(transport.connect).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
-          env: expect.objectContaining({
-            ORCA_PANE_KEY: paneKey,
-            ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
-          })
+          // Host-owned resume: only the ownership key crosses, never argv or a token.
+          agentLaunch: { resume: { operation: 'resume', sessionKey: RESUME_SESSION_KEY } },
+          env: expect.objectContaining({ ORCA_PANE_KEY: paneKey })
         })
       )
+      const respawn = transport.connect.mock.calls[1]?.[0] as ColdRestoreResumeSpawn & {
+        env?: Record<string, string>
+      }
+      expect(respawn.command).toBeUndefined()
+      expect(respawn.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
       // The dead session is not adopted as the pane's live PTY.
       expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'restored-session')
       expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
@@ -341,10 +397,12 @@ describe('connectPanePty', () => {
 
   // Regression (#12320): a cold restore after reboot typed PowerShell single quotes into
   // cmd.exe tabs, so the agent CLI rejected the resume argv ("unexpected argument").
+  // The renderer no longer quotes anything — it forwards the tab's shell and the
+  // pre-U5 config, and the host builds the command — so each case drives both halves.
   async function runWindowsColdRestoreResume(args: {
     terminalWindowsShell: string
     tabShellOverride?: string
-  }): Promise<string | undefined> {
+  }): Promise<ColdRestoreResumeSpawn> {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -409,6 +467,9 @@ describe('connectPanePty', () => {
             prompt: 'finish the task',
             state: 'done',
             origin: 'worktree-sleep',
+            // A pre-U5 record: its captured config is the one-release handoff the
+            // host replays, so the shell it is quoted for is observable here.
+            launchConfig: LEGACY_LAUNCH_CONFIG,
             capturedAt: 1,
             updatedAt: 1
           }
@@ -429,7 +490,12 @@ describe('connectPanePty', () => {
       }
       await flushAsyncTicks(10)
 
-      return (transport.connect.mock.calls.at(-1)?.[0] as { command?: string } | undefined)?.command
+      const spawn = transport.connect.mock.calls.at(-1)?.[0] as ColdRestoreResumeSpawn
+      return {
+        ...spawn,
+        // The tab's shell rides the transport options, not the per-connect override.
+        shellOverride: createdTransportOptions[0]?.shellOverride as string | undefined
+      }
     } finally {
       globalThis.setTimeout = originalSetTimeout
       restoreNavigator()
@@ -437,24 +503,31 @@ describe('connectPanePty', () => {
   }
 
   it('quotes a cold-restore resume command for a cmd.exe Windows tab', async () => {
-    await expect(runWindowsColdRestoreResume({ terminalWindowsShell: 'cmd.exe' })).resolves.toBe(
-      'codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"'
-    )
+    const spawn = await runWindowsColdRestoreResume({ terminalWindowsShell: 'cmd.exe' })
+    expect(spawn.command).toBeUndefined()
+    expect(spawn.agentLaunch).toEqual({
+      resume: { operation: 'resume', sessionKey: RESUME_SESSION_KEY }
+    })
+    expect(spawn.launchConfig).toEqual(LEGACY_LAUNCH_CONFIG)
+    expect(spawn.shellOverride).toBeUndefined()
+    expect(quotedResumeSuffix(spawn, 'cmd.exe')).toBe('"resume" "codex-session-1"')
   })
 
   it('prefers the tab shell override over the global Windows shell on cold restore', async () => {
-    await expect(
-      runWindowsColdRestoreResume({
-        terminalWindowsShell: 'powershell.exe',
-        tabShellOverride: 'cmd.exe'
-      })
-    ).resolves.toBe('codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"')
+    const spawn = await runWindowsColdRestoreResume({
+      terminalWindowsShell: 'powershell.exe',
+      tabShellOverride: 'cmd.exe'
+    })
+    expect(spawn.command).toBeUndefined()
+    expect(spawn.shellOverride).toBe('cmd.exe')
+    expect(quotedResumeSuffix(spawn, 'powershell.exe')).toBe('"resume" "codex-session-1"')
   })
 
   it('keeps PowerShell quoting for a cold-restore resume on a PowerShell Windows tab', async () => {
-    await expect(
-      runWindowsColdRestoreResume({ terminalWindowsShell: 'powershell.exe' })
-    ).resolves.toBe("codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'")
+    const spawn = await runWindowsColdRestoreResume({ terminalWindowsShell: 'powershell.exe' })
+    expect(spawn.command).toBeUndefined()
+    expect(spawn.shellOverride).toBeUndefined()
+    expect(quotedResumeSuffix(spawn, 'powershell.exe')).toBe("'resume' 'codex-session-1'")
   })
 
   it('keeps a contentless reattach when the sleeping record represents a live session', async () => {

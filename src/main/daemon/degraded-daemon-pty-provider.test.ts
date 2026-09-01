@@ -342,6 +342,38 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(provider.providesAgentSessionOwnerListings('unknown-session')).toBe(false)
   })
 
+  it('withholds launch-token listing authority unless every daemon route echoes tokens', () => {
+    const echoing = (label: string, echoes: boolean): DaemonPtyAdapter & ProviderMock => {
+      const adapter = createDaemonAdapter(label)
+      adapter.providesLaunchTokenListings = vi.fn(() => echoes)
+      return adapter
+    }
+    const fallback = (): ProviderMock => createProvider('fallback')
+
+    expect(
+      new DegradedDaemonPtyProvider({
+        current: echoing('daemon', true),
+        legacy: [echoing('legacy', true)],
+        fallback: fallback()
+      }).providesLaunchTokenListings()
+    ).toBe(true)
+    // A pre-v34 legacy daemon still owning the launched agent poisons the whole host.
+    expect(
+      new DegradedDaemonPtyProvider({
+        current: echoing('daemon', true),
+        legacy: [echoing('legacy', false)],
+        fallback: fallback()
+      }).providesLaunchTokenListings()
+    ).toBe(false)
+    expect(
+      new DegradedDaemonPtyProvider({
+        current: createDaemonAdapter('unanswering'),
+        legacy: [],
+        fallback: fallback()
+      }).providesLaunchTokenListings()
+    ).toBe(false)
+  })
+
   it('routes fresh foreground confirmation to the session owner', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

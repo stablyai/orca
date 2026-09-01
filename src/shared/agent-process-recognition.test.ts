@@ -6,6 +6,7 @@ import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from './agent-process-recognition'
+import { buildShellCommandFromArgv } from './tui-agent-startup-shell'
 
 describe('agent process recognition', () => {
   it('recognizes packaged Codex foreground process names', () => {
@@ -64,6 +65,26 @@ describe('agent process recognition', () => {
       agent: 'claude',
       processName: 'claude'
     })
+  })
+
+  it('recognizes a PowerShell launch line built with the call operator', () => {
+    const command = buildShellCommandFromArgv(['claude', '--flag'], 'powershell')
+
+    expect(command).toBe("& 'claude' '--flag'")
+    expect(recognizeAgentProcessFromCommandLine(command)).toEqual({
+      agent: 'claude',
+      processName: 'claude'
+    })
+    expect(recognizeAgentProcessFromCommandLine("'claude' '--flag'")).toEqual({
+      agent: 'claude',
+      processName: 'claude'
+    })
+    // A posix line's own `&` is not the call operator and must not shift tokens.
+    expect(recognizeAgentProcessFromCommandLine('claude --flag & wait')).toEqual({
+      agent: 'claude',
+      processName: 'claude'
+    })
+    expect(recognizeAgentProcessFromCommandLine('& --flag')).toBeNull()
   })
 
   it('recognizes Command Code without classifying Windows cmd.exe as an agent', () => {

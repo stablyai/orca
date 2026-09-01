@@ -1,11 +1,4 @@
 import { useAppStore } from '@/store'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../../shared/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -46,54 +39,33 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
           agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)))
         ? sleepingRecord.launchConfig
         : undefined
-    const launchConfig =
-      (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
-      matchingSleepingLaunchConfig
-    // Why: the resume line is typed into this pane's live shell, so its quoting must
-    // follow the tab's effective Windows shell, not the win32 PowerShell default.
-    const resumeTarget = resolveAgentResumeLaunchTarget({
-      projectRuntime: session.projectRuntime,
-      connectionId: session.connectionId,
-      executionHostId: session.executionHostId,
-      worktreePath: session.worktree?.path,
-      terminalWindowsShell: state.settings?.terminalWindowsShell,
-      tabShellOverride: session.shellOverride
-    })
-    const startupPlan = buildAgentResumeStartupPlan({
-      agent,
-      providerSession,
-      cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      agentArgs:
-        launchConfig !== undefined
-          ? launchConfig.agentArgs
-          : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-      agentEnv:
-        launchConfig !== undefined
-          ? launchConfig.agentEnv
-          : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-      ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-      ...(launchConfig?.ompResumeFilePath
-        ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-        : {}),
-      platform: resumeTarget.platform,
-      shell: resumeTarget.shell
-    })
-    if (!startupPlan) {
-      return null
-    }
-    const coldRestoreLaunchToken = createBrowserUuid()
-    // Why: cold restore means the PTY process is gone but the agent provider
-    // session is still resumable, so the replacement spawn must launch it.
+    const liveLaunchConfig =
+      useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined
+    const legacyLaunchConfig = liveLaunchConfig ?? matchingSleepingLaunchConfig
+    const legacyRecordedConnectionId = liveLaunchConfig
+      ? (session.connectionId ?? null)
+      : (sleepingRecord?.connectionId ?? null)
     return {
       agent,
-      command: startupPlan.launchCommand,
-      env: {
-        ...startupPlan.env,
-        ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
+      agentLaunch: {
+        resume: {
+          operation: 'resume',
+          sessionKey: {
+            worktreeId: session.deps.worktreeId,
+            baseAgent: agent,
+            providerSessionId: providerSession.id
+          }
+        }
       },
-      launchConfig: startupPlan.launchConfig,
       resumeProviderSession: providerSession,
-      launchToken: coldRestoreLaunchToken,
+      command: '',
+      env: session.paneIdentityEnv,
+      ...(legacyLaunchConfig
+        ? {
+            launchConfig: legacyLaunchConfig,
+            legacyResumeRecordedConnectionId: legacyRecordedConnectionId
+          }
+        : {}),
       useLiveEntry: Boolean(useLiveEntry),
       hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry

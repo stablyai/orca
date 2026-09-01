@@ -73,6 +73,8 @@ export type CreateOrAttachRequest = {
     launchAgent?: TuiAgent
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
     attachOnly?: boolean
+    /** Host admission launch token persisted with the daemon session record. */
+    launchToken?: string
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
      *  the shell picked in the "+" menu or the persisted default-shell setting,
@@ -373,6 +375,10 @@ export type SessionInfo = {
   isAlive: boolean
   terminalHandle?: string
   wslDistro?: string | null
+  /** Host admission launch token the daemon persisted at spawn, echoed back so
+   *  crash reconciliation can rejoin a daemon-surviving terminal to its pending
+   *  launch by token. Absent for tokenless sessions and older daemons. */
+  launchToken?: string
   pid: number | null
   cwd: string | null
   cols: number
