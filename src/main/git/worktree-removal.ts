@@ -13,6 +13,7 @@ import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
 import { listWorktreesStrict } from './worktree-listing'
+import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import type { RemoveWorktreeOptions } from './worktree-operation-options'
 import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
@@ -38,6 +39,7 @@ export async function removeWorktree(
       performRemoveWorktree(repoPath, worktreePath, force, options)
     )
   } finally {
+    invalidateWslLinkedWorktreeGitRouting(worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
 }
