@@ -15,6 +15,7 @@ import {
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { resolveCursorTranscriptCwd } from './session-scanner-cursor-project-cwd'
 import {
   asRecord,
   extractContentText,
@@ -36,7 +37,7 @@ export async function parseCursorSessionFile(
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
-  return parseCursorSessionLines({ file, lines, platform })
+  return parseCursorSessionLines({ file, lines, platform, readTrustFile: true })
 }
 
 export async function parseCursorSessionContent(
@@ -50,7 +51,8 @@ export async function parseCursorSessionContent(
     file,
     lines: remoteSessionContentLines(content, signal),
     platform,
-    options
+    options,
+    readTrustFile: false
   })
 }
 
@@ -75,11 +77,20 @@ function consumeCursorRecordLine(accumulator: SessionAccumulator, line: string):
   }
 }
 
-export function createCursorSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
-  return accumulatorFoldResumeState(
-    createAccumulator({ agent: 'cursor', file, sessionId: sessionIdFromFileName(file.path) }),
-    consumeCursorRecordLine
-  )
+export function createCursorSessionResumeState(
+  file: FileWithMtime,
+  options: { readTrustFile?: boolean } = {}
+): ResumableSessionParseState {
+  const accumulator = createAccumulator({
+    agent: 'cursor',
+    file,
+    sessionId: sessionIdFromFileName(file.path)
+  })
+  // Why: Cursor JSONL has no cwd field. Legacy buckets encode the workspace
+  // only as ~/.cursor/projects/<slug>/…; without this, sessions group under
+  // "Unknown location" and drop out of Workspace scope (#13931).
+  accumulator.cwd = resolveCursorTranscriptCwd(file.path, options)
+  return accumulatorFoldResumeState(accumulator, consumeCursorRecordLine)
 }
 
 async function parseCursorSessionLines(args: {
@@ -87,8 +98,9 @@ async function parseCursorSessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  readTrustFile?: boolean
 }): Promise<AiVaultSession | null> {
-  const state = createCursorSessionResumeState(args.file)
+  const state = createCursorSessionResumeState(args.file, { readTrustFile: args.readTrustFile })
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
