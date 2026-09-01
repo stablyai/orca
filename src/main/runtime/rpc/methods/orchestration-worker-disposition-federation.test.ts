@@ -191,5 +191,49 @@ describe('federated worker disposition barrier', () => {
         ack: deliveryId
       })
     ).resolves.toMatchObject({ ok: true, result: { acknowledged: deliveryId } })
+
+    const retainedResource = homeDb.getWorkerTerminalResourceByOwner(dispatch.id)!
+    homeDb.db
+      .prepare("UPDATE worker_terminal_resources SET release_state = 'released' WHERE id = ?")
+      .run(retainedResource.id)
+    await expect(
+      homeCall('rpc_federated_release_again', 'orchestration.workerRelease', {
+        dispatch: dispatch.id
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { state: 'already_released', processAction: 'none' }
+    })
+
+    const pendingTask = homeDb.createTask({ spec: 'Release before handle', runId: run.id })
+    await homeDispatcher.dispatch({
+      ...createFederationWorkerStartRequest(pendingTask.id),
+      id: 'rpc_pending_worker_start',
+      orchestrationRequestId: 'request_pending_worker'
+    })
+    const pendingDispatch = homeDb.getDispatchContext(pendingTask.id)!
+    homeDb.db
+      .prepare(
+        'UPDATE federated_dispatches SET remote_terminal_handle = NULL WHERE dispatch_id = ?'
+      )
+      .run(pendingDispatch.id)
+    homeDb.db
+      .prepare('UPDATE worker_dispatches SET agent_terminal_handle = NULL WHERE dispatch_id = ?')
+      .run(pendingDispatch.id)
+    await expect(
+      homeCall('rpc_federated_release_without_handle', 'orchestration.workerRelease', {
+        dispatch: pendingDispatch.id
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        state: 'retained',
+        reason: 'federation_unsupported',
+        processAction: 'none',
+        archive: null
+      }
+    })
+    expect(homeDb.getWorkerTerminalResourceByOwner(pendingDispatch.id)).toBeUndefined()
+    expect(closeTerminal).not.toHaveBeenCalled()
   })
 })

@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import { listRequiredWorkerDispositions } from './worker-disposition-barrier'
 
 describe('worker disposition query plan', () => {
   const db = new OrchestrationDb(':memory:')
 
-  afterEach(() => db.close())
+  afterAll(() => db.close())
 
   it('uses indexed Run and accepted-report lookups', () => {
     const prepare = db.db.prepare.bind(db.db)

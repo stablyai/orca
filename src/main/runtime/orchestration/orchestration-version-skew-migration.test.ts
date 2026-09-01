@@ -341,6 +341,48 @@ describe('OrchestrationDb version-skew migration', () => {
     })
   })
 
+  it('preserves an authoritative settlement timestamp in a partial v31 migration', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-worker-report-partial-migration-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const run = db.createRun({
+      objective: 'Partial v31 worker report',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'settle before version repair', runId: run.id })
+    const { dispatch } = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: {},
+      creator: { kind: 'system' },
+      maxDepth: 1
+    })
+    db.markWorkerDispatchReady(dispatch.id)
+    db.settleWorkerReport({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded',
+      result: 'settled'
+    })
+    const authoritativeTimestamp = '2026-08-30 12:34:56'
+    db.db
+      .prepare('UPDATE worker_dispatches SET worker_report_settled_at = ? WHERE dispatch_id = ?')
+      .run(authoritativeTimestamp, dispatch.id)
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    raw.pragma('user_version = 30')
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+    expect(
+      db.db
+        .prepare('SELECT worker_report_settled_at FROM worker_dispatches WHERE dispatch_id = ?')
+        .get(dispatch.id)
+    ).toEqual({ worker_report_settled_at: authoritativeTimestamp })
+  })
+
   it('does not repair an incomplete schema written by a future binary', () => {
     const dbPath = createLegacySchemaClaimingVersion(20)
     const raw = new Database(dbPath)

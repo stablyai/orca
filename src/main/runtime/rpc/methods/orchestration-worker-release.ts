@@ -31,18 +31,45 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
     params: WorkerDispatchParams,
     handler: async (params, { runtime }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
-      if (db.getFederatedDispatch(params.dispatch)) {
+      const federated = db.getFederatedDispatch(params.dispatch)
+      if (federated) {
+        const worker = db.getWorkerDispatch(params.dispatch)
+        const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
         // Fail closed: the worker server owns that terminal; a home-side close would be a guess.
+        if (
+          worker &&
+          !resource &&
+          !federated.remote_terminal_handle &&
+          !worker.agent_terminal_handle
+        ) {
+          return {
+            dispatchId: params.dispatch,
+            state: 'retained',
+            reason: 'federation_unsupported',
+            processAction: 'none',
+            archive: null,
+            recovery:
+              'Connected-server workers do not support release yet; inspect the worker server directly.'
+          }
+        }
         const retained = db.retainFederatedWorkerDisposition(
           params.dispatch,
           'federation_unsupported'
         )
+        if (retained.disposition === 'already_released') {
+          return {
+            dispatchId: params.dispatch,
+            state: 'already_released',
+            processAction: 'none',
+            archive: archiveSummary(retained.resource)
+          }
+        }
         return {
           dispatchId: params.dispatch,
           state: 'retained',
           reason: 'federation_unsupported',
           processAction: 'none',
-          archive: archiveSummary(retained),
+          archive: archiveSummary(retained.resource),
           recovery:
             'Connected-server workers do not support release yet; inspect the worker server directly.'
         }
@@ -104,12 +131,20 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
       const db = runtime.getOrchestrationDb()
       if (db.getFederatedDispatch(params.dispatch)) {
         const retained = db.retainFederatedWorkerDisposition(params.dispatch, 'user_requested')
+        if (retained.disposition === 'already_released') {
+          return {
+            dispatchId: params.dispatch,
+            state: 'already_released' as const,
+            processAction: 'none' as const,
+            archive: archiveSummary(retained.resource)
+          }
+        }
         return {
           dispatchId: params.dispatch,
           state: 'retained' as const,
           reason: 'user_requested' as const,
           processAction: 'none' as const,
-          archive: archiveSummary(retained)
+          archive: archiveSummary(retained.resource)
         }
       }
       const retained = db.retainWorkerTerminalResource(params.dispatch)

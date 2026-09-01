@@ -79,7 +79,9 @@ export function retainFederatedWorkerDisposition(
   this: OrchestrationDb,
   dispatchId: string,
   reason: Extract<WorkerTerminalRetainedReason, 'federation_unsupported' | 'user_requested'>
-): WorkerTerminalResourceRow {
+):
+  | { disposition: 'retained'; resource: WorkerTerminalResourceRow }
+  | { disposition: 'already_released'; resource: WorkerTerminalResourceRow } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const federated = this.getFederatedDispatch(dispatchId)
@@ -113,16 +115,20 @@ export function retainFederatedWorkerDisposition(
         ownership: 'external'
       })
     }
+    if (resource.release_state === 'released') {
+      this.db.exec('COMMIT')
+      return { disposition: 'already_released', resource }
+    }
     this.db
       .prepare(
         `UPDATE worker_terminal_resources
          SET release_state = 'retained', retained_reason = ?, updated_at = datetime('now')
-         WHERE id = ? AND release_state != 'released'`
+         WHERE id = ?`
       )
       .run(reason, resource.id)
     const retained = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
     this.db.exec('COMMIT')
-    return retained
+    return { disposition: 'retained', resource: retained }
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
