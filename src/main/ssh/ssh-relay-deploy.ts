@@ -132,7 +132,8 @@ export async function deployAndLaunchRelay(
   conn: SshConnection,
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
-  relayInstanceId?: string
+  relayInstanceId?: string,
+  preferredServerBuildId?: string
 ): Promise<RelayDeployResult> {
   let timeoutHandle: ReturnType<typeof setTimeout>
   const deployAbortController = new AbortController()
@@ -142,7 +143,8 @@ export async function deployAndLaunchRelay(
     onProgress,
     graceTimeSeconds,
     relayInstanceId,
-    deployAbortController.signal
+    deployAbortController.signal,
+    preferredServerBuildId
   ).then(
     (result) => ({ status: 'fulfilled' as const, result }),
     (error: unknown) => ({ status: 'rejected' as const, error })
@@ -328,7 +330,8 @@ async function deployAndLaunchRelayInner(
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
-  deploySignal?: AbortSignal
+  deploySignal?: AbortSignal,
+  preferredServerBuildId?: string
 ): Promise<RelayDeployResult> {
   while (true) {
     deploySignal?.throwIfAborted()
@@ -338,7 +341,8 @@ async function deployAndLaunchRelayInner(
         onProgress,
         graceTimeSeconds,
         relayInstanceId,
-        deploySignal
+        deploySignal,
+        preferredServerBuildId
       )
     } catch (err) {
       if (!(err instanceof RelayDirectoryGcConflictError)) {
@@ -355,7 +359,8 @@ async function deployAndLaunchRelayAttempt(
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
-  deploySignal?: AbortSignal
+  deploySignal?: AbortSignal,
+  preferredServerBuildId?: string
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
@@ -384,6 +389,34 @@ async function deployAndLaunchRelayAttempt(
     await resolveRelayBootstrapState(conn, hostPlatform, fullVersion, deploySignal)
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
+
+  if (isCompatiblePreferredRelayBuild(preferredServerBuildId, fullVersion)) {
+    const preferredRelayDir = computeRemoteRelayDir(
+      remoteHome,
+      preferredServerBuildId,
+      hostPlatform.pathFlavor
+    )
+    onProgress?.('Reconnecting preserved relay...')
+    const preferred = await tryReconnectExistingRelay(
+      conn,
+      preferredRelayDir,
+      hostPlatform,
+      nodePath,
+      relayInstanceId,
+      deploySignal
+    )
+    if (preferred) {
+      console.log(`[ssh-relay] Reconnected to preserved build ${preferredServerBuildId}`)
+      return {
+        ...preferred,
+        serverBuildId: preferredServerBuildId,
+        platform,
+        hostPlatform,
+        remoteHome,
+        remoteRelayDir: preferredRelayDir
+      }
+    }
+  }
 
   // Why: derive the home-relative suffix once — recomputing it by stripping the shell home breaks on a split namespace.
   const homeRelativeRelayDir = relayHomeRelativeDir(fullVersion)
@@ -599,6 +632,132 @@ async function deployAndLaunchRelayAttempt(
     nodePath: launched.nodePath,
     sockPath: launched.sockPath,
     credentialFile: launched.credentialFile
+  }
+}
+
+function isCompatiblePreferredRelayBuild(
+  preferredServerBuildId: string | undefined,
+  currentServerBuildId: string
+): preferredServerBuildId is string {
+  if (!preferredServerBuildId) {
+    return false
+  }
+  if (preferredServerBuildId.replace(/^v/, '') === currentServerBuildId.replace(/^v/, '')) {
+    return false
+  }
+  const versionPattern = /^v?(\d+\.\d+\.\d+)(?:\+[0-9a-f]+)?$/
+  const preferredVersion = versionPattern.exec(preferredServerBuildId)?.[1]
+  const currentVersion = versionPattern.exec(currentServerBuildId)?.[1]
+  return preferredVersion !== undefined && preferredVersion === currentVersion
+}
+
+/** Probes and connects to an existing POSIX relay without mutating its socket. */
+async function reconnectExistingPosixRelay(
+  conn: SshConnection,
+  remoteDir: string,
+  nodePath: string,
+  sockPath: string,
+  credentialFile: string,
+  signal?: AbortSignal
+): Promise<MultiplexerTransport | null> {
+  const probeOutput = await execCommand(
+    conn,
+    `test -S ${shellEscape(sockPath)} && echo ALIVE || echo DEAD`,
+    { signal }
+  ).catch((error) => {
+    signal?.throwIfAborted()
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    return 'DEAD'
+  })
+  console.warn(`[ssh-relay] Socket probe result: "${probeOutput.trim()}"`)
+  if (probeOutput.trim() !== 'ALIVE') {
+    return null
+  }
+
+  console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
+  const channel = await conn.exec(
+    `cd ${shellEscape(remoteDir)} && ${shellEscape(nodePath)} relay.js --connect --sock-path ${shellEscape(sockPath)} --credential-file ${shellEscape(credentialFile)}`,
+    { signal }
+  )
+  return waitForSentinel(channel, signal)
+}
+
+async function tryReconnectExistingRelay(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  relayInstanceId?: string,
+  signal?: AbortSignal
+): Promise<{
+  transport: MultiplexerTransport
+  nodePath: string
+  sockPath: string
+  credentialFile: string
+} | null> {
+  const sockName = relaySocketNameForInstanceId(relayInstanceId)
+  const credentialFile = joinRemotePath(hostPlatform, remoteDir, `${sockName}.credential`)
+
+  if (isWindowsRemoteHost(hostPlatform)) {
+    const markerPath = windowsActivePipeMarkerPath(hostPlatform, remoteDir, sockName)
+    const discovered = await readWindowsActiveRelayEndpoint(
+      conn,
+      hostPlatform,
+      remoteDir,
+      markerPath,
+      signal
+    )
+    const candidates = [
+      discovered?.sockPath,
+      relayEndpointForHost(hostPlatform, remoteDir, sockName),
+      relayEndpointForHost(hostPlatform, remoteDir, windowsRelayFallbackSocketName(sockName))
+    ].filter((sockPath, index, all): sockPath is string =>
+      Boolean(sockPath && all.indexOf(sockPath) === index)
+    )
+    for (const sockPath of candidates) {
+      const opts = { remoteDir, nodePath, sockPath, credentialFile }
+      try {
+        if ((await probeWindowsRelayPipe(conn, hostPlatform, opts, signal)) !== 'READY') {
+          continue
+        }
+        return {
+          transport: await connectWindowsRelay(conn, hostPlatform, opts, signal),
+          nodePath,
+          sockPath,
+          credentialFile
+        }
+      } catch (error) {
+        signal?.throwIfAborted()
+        console.warn(
+          `[ssh-relay] Preserved Windows relay reconnect failed at ${sockPath}: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    }
+    return null
+  }
+
+  const sockPath = relayEndpointForHost(hostPlatform, remoteDir, sockName)
+  try {
+    const transport = await reconnectExistingPosixRelay(
+      conn,
+      remoteDir,
+      nodePath,
+      sockPath,
+      credentialFile,
+      signal
+    )
+    if (!transport) {
+      return null
+    }
+    return { transport, nodePath, sockPath, credentialFile }
+  } catch (error) {
+    signal?.throwIfAborted()
+    console.warn(
+      `[ssh-relay] Preserved relay reconnect failed at ${sockPath}: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return null
   }
 }
 
@@ -1420,45 +1579,34 @@ async function launchRelay(
 
   // Why: after a restart the relay may still be alive in its grace period; --connect to its socket preserves PTY state and scrollback.
   try {
-    const probeOutput = await execCommand(
+    const transport = await reconnectExistingPosixRelay(
       conn,
-      `test -S ${shellEscape(sockFile)} && echo ALIVE || echo DEAD`,
-      { signal }
+      remoteDir,
+      nodePath,
+      sockFile,
+      credentialFile,
+      signal
     )
-    console.warn(`[ssh-relay] Socket probe result: "${probeOutput.trim()}"`)
-    if (probeOutput.trim() === 'ALIVE') {
-      console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
-      try {
-        const channel = await conn.exec(
-          `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
-          { signal }
-        )
-        const transport = await waitForSentinel(channel, signal)
-        console.log('[ssh-relay] Reconnected to existing relay via socket')
-        return { transport, nodePath, sockPath: sockFile, credentialFile }
-      } catch (err) {
-        signal?.throwIfAborted()
-        console.warn(
-          '[ssh-relay] Socket reconnect failed, launching fresh relay:',
-          err instanceof Error ? err.message : String(err)
-        )
-        // Why: stale socket from a crashed relay — remove it so the fresh launch can bind at the same path.
-        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`, { signal }).catch(
-          (cleanupErr) => {
-            if (isUnconfirmedSshCommandTermination(cleanupErr)) {
-              throw cleanupErr
-            }
-          }
-        )
-        signal?.throwIfAborted()
-      }
+    if (transport) {
+      console.log('[ssh-relay] Reconnected to existing relay via socket')
+      return { transport, nodePath, sockPath: sockFile, credentialFile }
     }
   } catch (err) {
     if (isUnconfirmedSshCommandTermination(err)) {
       throw err
     }
     signal?.throwIfAborted()
-    // Probe failed — fall through to fresh launch
+    console.warn(
+      '[ssh-relay] Socket reconnect failed, launching fresh relay:',
+      err instanceof Error ? err.message : String(err)
+    )
+    // Why: stale socket from a crashed relay — remove it so the fresh launch can bind at the same path.
+    await execCommand(conn, `rm -f ${shellEscape(sockFile)}`, { signal }).catch((cleanupErr) => {
+      if (isUnconfirmedSshCommandTermination(cleanupErr)) {
+        throw cleanupErr
+      }
+    })
+    signal?.throwIfAborted()
   }
 
   // Why: relay must outlive the SSH connection so PTY sessions survive app restarts — nohup + </dev/null + & detach it from the exec channel.

@@ -527,7 +527,7 @@ export class SshRelaySession {
         sockPath,
         credentialFile,
         hostPlatform
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = await this.deployRelay(conn, graceTimeSeconds)
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -673,7 +673,7 @@ export class SshRelaySession {
         sockPath,
         credentialFile,
         hostPlatform
-      } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      } = await this.deployRelay(conn, graceTimeSeconds)
       this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
@@ -1262,6 +1262,25 @@ export class SshRelaySession {
       owner,
       store: this.store
     })
+  }
+
+  private deployRelay(
+    conn: SshConnection,
+    graceTimeSeconds?: number
+  ): ReturnType<typeof deployAndLaunchRelay> {
+    const recovery = getSshPtyConsumerRecovery(this.targetId)
+    const hasRecoverableLease = this.store
+      .getSshRemotePtyLeases(this.targetId)
+      .some((lease) => lease.state === 'attached' || lease.state === 'detached')
+    return recovery?.serverBuildId && hasRecoverableLease
+      ? deployAndLaunchRelay(
+          conn,
+          undefined,
+          graceTimeSeconds,
+          this.targetId,
+          recovery.serverBuildId
+        )
+      : deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
   }
 
   private configureRelayGraceTime(
