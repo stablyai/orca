@@ -2316,9 +2316,12 @@ export async function createLocalWorktree(
 
   if (!resolved) {
     // Why: every suffix collided; reject with a specific reason so the user sees why create failed instead of a generic error or hung spinner.
-    if (lastExistingReviewNumber !== null) {
+    // Read once and format eagerly: the suffix loop assigns this from a callback, so the `let`'s
+    // narrowing does not reach the message.
+    const existingReviewNumber = lastExistingReviewNumber
+    if (existingReviewNumber !== null) {
       throw new Error(
-        `Branch "${branchName}" already has PR #${lastExistingReviewNumber}. Pick a different ${branchConflictSubject}.`
+        `Branch "${branchName}" already has PR #${String(existingReviewNumber)}. Pick a different ${branchConflictSubject}.`
       )
     }
     if (lastBranchConflictKind) {
