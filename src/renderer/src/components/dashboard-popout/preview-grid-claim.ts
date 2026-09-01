@@ -1,11 +1,12 @@
 import type { Terminal } from '@xterm/xterm'
+import {
+  TERMINAL_VIEWPORT_MAX_COLS,
+  TERMINAL_VIEWPORT_MAX_ROWS,
+  TERMINAL_VIEWPORT_MIN_COLS,
+  TERMINAL_VIEWPORT_MIN_ROWS
+} from '../../../../shared/terminal-viewport-clamp'
 
 const FIT_REQUEST_DEBOUNCE_MS = 200
-// Mirror the runtime's clampTerminalViewport so a request always matches what lands.
-const FIT_MIN_COLS = 20
-const FIT_MAX_COLS = 240
-const FIT_MIN_ROWS = 8
-const FIT_MAX_ROWS = 120
 
 function clampGridAxis(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -52,11 +53,15 @@ export function createPreviewGridClaim(args: {
     ) {
       return
     }
-    const cols = clampGridAxis(Math.floor(box.clientWidth / cellWidth), FIT_MIN_COLS, FIT_MAX_COLS)
+    const cols = clampGridAxis(
+      Math.floor(box.clientWidth / cellWidth),
+      TERMINAL_VIEWPORT_MIN_COLS,
+      TERMINAL_VIEWPORT_MAX_COLS
+    )
     const rows = clampGridAxis(
       Math.floor(box.clientHeight / cellHeight),
-      FIT_MIN_ROWS,
-      FIT_MAX_ROWS
+      TERMINAL_VIEWPORT_MIN_ROWS,
+      TERMINAL_VIEWPORT_MAX_ROWS
     )
     const fitKey = `${cols}x${rows}`
     if (fitKey === lastRequestedFit) {

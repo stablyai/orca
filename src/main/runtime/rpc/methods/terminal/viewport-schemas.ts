@@ -1,4 +1,10 @@
 import { z } from 'zod'
+import {
+  TERMINAL_VIEWPORT_MAX_COLS,
+  TERMINAL_VIEWPORT_MAX_ROWS,
+  TERMINAL_VIEWPORT_MIN_COLS,
+  TERMINAL_VIEWPORT_MIN_ROWS
+} from '../../../../../shared/terminal-viewport-clamp'
 import { requiredString } from '../../schemas'
 
 const TerminalHandle = z.object({ terminal: requiredString('Missing terminal handle') })
@@ -39,8 +45,8 @@ export const TerminalUpdateViewport = TerminalHandle.extend({
     type: z.enum(['mobile', 'desktop']).default('mobile').optional()
   }),
   viewport: z.object({
-    cols: z.number().int().min(20).max(240),
-    rows: z.number().int().min(8).max(120)
+    cols: z.number().int().min(TERMINAL_VIEWPORT_MIN_COLS).max(TERMINAL_VIEWPORT_MAX_COLS),
+    rows: z.number().int().min(TERMINAL_VIEWPORT_MIN_ROWS).max(TERMINAL_VIEWPORT_MAX_ROWS)
   }),
   claim: z.boolean().optional()
 })

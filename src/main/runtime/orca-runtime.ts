@@ -153,6 +153,7 @@ import {
   TERMINAL_INPUT_TOO_LARGE_ERROR,
   iterateTerminalInputChunks
 } from '../../shared/terminal-input'
+import { clampTerminalViewport } from '../../shared/terminal-viewport-clamp'
 import {
   AGENT_PROMPT_SUBMIT,
   buildAgentPromptPasteBytes,
@@ -2808,14 +2809,6 @@ async function resolveCreateBranchName(
 
 function normalizeLocalBranchName(branchName: string | undefined): string {
   return branchName?.replace(/^refs\/heads\//, '') ?? ''
-}
-
-// Clamp terminal dimensions to the PTY's supported range (cols 20–240, rows 8–120).
-function clampTerminalViewport(cols: number, rows: number): { cols: number; rows: number } {
-  return {
-    cols: Math.max(20, Math.min(240, Math.round(cols))),
-    rows: Math.max(8, Math.min(120, Math.round(rows)))
-  }
 }
 
 // Subscribe a listener to a per-key Set, pruning the key's entry once its last
