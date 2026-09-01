@@ -3,6 +3,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
+import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
 
 const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
@@ -99,7 +100,7 @@ describe('useNativeChatSessionOptions model reporting', () => {
 
   it('lets a pick stand until the OMP hook reports a different model', async () => {
     discoverModels.mockResolvedValue(OMP_DISCOVERED)
-    const dispatchCommand = vi.fn(async () => 'accepted' as const)
+    const dispatchCommand = vi.fn<NativeChatSessionOptionDispatchCommand>(async () => undefined)
     const readTerminalScreen = (): string | null => null
     const paneKey = 'tab-omp-pick:leaf'
     storeState.agentStatusByPaneKey[paneKey] = { model: 'deepseek/deepseek-v4-pro' }
