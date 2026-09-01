@@ -23,6 +23,7 @@ import {
 import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { bumpWorktreeScanGeneration, listWorktrees } from './worktree-scan-cache'
+import { invalidateSparseCheckoutState } from './worktree-sparse-checkout-cache'
 
 /**
  * Remove a worktree.
@@ -40,6 +41,7 @@ export async function removeWorktree(
     )
   } finally {
     invalidateWslLinkedWorktreeGitRouting(worktreePath)
+    invalidateSparseCheckoutState(worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
 }

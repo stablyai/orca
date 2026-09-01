@@ -19,7 +19,8 @@ import {
   normalizeLocalBranchRef
 } from './worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
-import { detectSparseCheckout, resolveGitCommonDir } from './worktree-sparse-state'
+import { detectSparseCheckoutCached } from './worktree-sparse-checkout-cache'
+import { resolveGitCommonDir } from './worktree-sparse-state'
 import { resolveGitDir } from './source-control/resolve-git-dir'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
@@ -110,7 +111,7 @@ async function annotateSparseCheckoutStatus(
       if (!worktree || worktree.isBare || worktree.isSparse) {
         continue
       }
-      const isSparse = await detectSparseCheckout(worktree.path)
+      const isSparse = await detectSparseCheckoutCached(worktree.path)
       if (isSparse) {
         annotated[index] = { ...worktree, isSparse }
       }

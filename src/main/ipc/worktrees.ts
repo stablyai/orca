@@ -13,12 +13,14 @@ import { registerDetectedWorktreeHandlers } from './worktrees/listing/register-d
 import { registerHostCatalogHandlers } from './worktrees/listing/register-host-catalog-handlers'
 import { registerWorktreeCatalogHandlers } from './worktrees/listing/register-worktree-catalog-handlers'
 import { registerDetectedWorktreeScanInvalidation } from './worktrees/listing/register-detected-worktree-scan-invalidation'
+import { registerSparseCheckoutCacheInvalidation } from './worktrees/listing/register-sparse-checkout-cache-invalidation'
 import { registerWorktreeMetadataHandlers } from './worktrees/metadata/register-worktree-metadata-handlers'
 import { registerWorktreeForgetHandlers } from './worktrees/removal/register-worktree-forget-handlers'
 import { registerWorktreeRemovalHandlers } from './worktrees/removal/register-worktree-removal-handlers'
 import type { WorktreeIpcContext } from './worktrees/worktree-ipc-context'
 
 registerDetectedWorktreeScanInvalidation()
+registerSparseCheckoutCacheInvalidation()
 
 const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:listAll',
