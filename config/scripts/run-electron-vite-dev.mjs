@@ -1,7 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
-  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -16,8 +15,10 @@ import {
 import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 import { isDevBundleInUse, selectStaleDevBundleDirs } from './dev-electron-bundle-cache.mjs'
+import { copyPrivateTree } from './space-sharing-copy.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -298,9 +299,9 @@ function prepareMacDevElectronApp() {
 
   rmSync(distDir, { recursive: true, force: true })
   mkdirSync(distDir, { recursive: true })
-  // Why: Electron.framework uses relative symlinks for its bundle resources;
-  // resolving them to pnpm-store absolutes breaks Chromium's bundle lookup.
-  cpSync(sourceAppPath, appPath, { recursive: true, verbatimSymlinks: true })
+  // Why clone-first: this ~280MB copy is made per branch title x Electron version, and only the
+  // plist/helper/codesign bytes patched below ever diverge from the source.
+  copyPrivateTree(sourceAppPath, appPath)
   restoreElectronFrameworkSymlinks(appPath)
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
@@ -623,6 +624,11 @@ const userPassedPort = forwardedRaw.some(
 const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
 if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
   console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}`)
+}
+// Why: automation launches this app while someone is working; announce that the
+// window will come up without taking the foreground so the mode is visible in logs.
+if (!isHelpOrVersion && process.env.ORCA_BACKGROUND_LAUNCH === '1') {
+  console.error('[orca-dev] Background launch: window shows without stealing focus')
 }
 let forwardedExtras = []
 if (!userPassedPort && !isHelpOrVersion) {

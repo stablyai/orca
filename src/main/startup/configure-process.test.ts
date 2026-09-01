@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -508,20 +508,6 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
-  it('opts hidden pages out of intensive wake-up throttling', async () => {
-    const { app } = await import('electron')
-    const { enableMainProcessGpuFeatures } = await import('./configure-process')
-
-    delete process.env.ORCA_E2E_USER_DATA_DIR
-    vi.mocked(app.commandLine.appendSwitch).mockClear()
-    enableMainProcessGpuFeatures()
-
-    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
-      'disable-features',
-      'IntensiveWakeUpThrottling'
-    )
-  })
-
   it('raises the WebGL context budget above the 16-context Blink default', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
@@ -752,5 +738,79 @@ describe('enableMainProcessGpuFeatures', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
+  })
+})
+
+describe('safe graphics mode startup switches', () => {
+  const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+
+  afterEach(() => {
+    if (originalE2EUserDataDir === undefined) {
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+    } else {
+      process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
+    }
+  })
+
+  function disabledFeaturesFrom(appendSwitch: ReturnType<typeof vi.fn>): string[] {
+    return appendSwitch.mock.calls
+      .filter(([name]) => name === 'disable-features')
+      .flatMap(([, value]) => String(value ?? '').split(','))
+      .filter(Boolean)
+  }
+
+  it('opts hidden pages out of intensive wake-up throttling', async () => {
+    const { app } = await import('electron')
+    const { optOutOfHiddenPageWakeUpThrottling } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    optOutOfHiddenPageWakeUpThrottling()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      'IntensiveWakeUpThrottling'
+    )
+  })
+
+  // Why: the defect was the call site, not the switch — a win32 safe-graphics launch runs
+  // `if (!gpuFallbackActiveThisLaunch) enableMainProcessGpuFeatures()` and skips everything
+  // parked inside it, so only an unconditional call site reaches the users a GPU crash already hit.
+  it('calls the throttling opt-out outside the GPU-fallback gate in index.ts', () => {
+    const mainSource = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+    const gateStart = mainSource.indexOf('if (!gpuFallbackActiveThisLaunch) {')
+    expect(gateStart).toBeGreaterThanOrEqual(0)
+    const gateEnd = mainSource.indexOf('\n  }', gateStart)
+    expect(gateEnd).toBeGreaterThan(gateStart)
+
+    expect(mainSource.match(/\boptOutOfHiddenPageWakeUpThrottling\(\)/g)).toHaveLength(1)
+    expect(mainSource.slice(gateStart, gateEnd)).not.toContain('optOutOfHiddenPageWakeUpThrottling')
+  })
+
+  // Why: Chromium consumes the command line at ready, so this must stay in the pre-ready
+  // top-level block and never move into the whenReady callback, where appendSwitch is a silent
+  // no-op — the same invisible failure as parking it behind the GPU gate.
+  it('appends the throttling opt-out before app ready in index.ts', () => {
+    const mainSource = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+    const readyStart = mainSource.indexOf('void app.whenReady()')
+    expect(readyStart).toBeGreaterThan(0)
+
+    const callIndex = mainSource.indexOf('optOutOfHiddenPageWakeUpThrottling()')
+    expect(callIndex).toBeGreaterThan(0)
+    expect(callIndex).toBeLessThan(readyStart)
+  })
+
+  // Why: Chromium enables IntensiveWakeUpThrottling on every desktop platform, so the opt-out
+  // must never become reachable only through the GPU-feature path again.
+  it('does not couple the throttling opt-out to GPU feature setup', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(disabledFeaturesFrom(vi.mocked(app.commandLine.appendSwitch))).not.toContain(
+      'IntensiveWakeUpThrottling'
+    )
   })
 })

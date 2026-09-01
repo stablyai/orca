@@ -89,7 +89,10 @@ export class RuntimeGitGenerationCommands {
 
     let context: CommitMessageDraftContext | null
     try {
-      context = await getStagedCommitContext(target.worktree.path, localGitOptionsForTarget(target))
+      context = await getStagedCommitContext(target.worktree.path, {
+        ...localGitOptionsForTarget(target),
+        admissionTier: 'interactive'
+      })
     } catch (error) {
       console.error('[runtime-git] Failed to read staged commit context:', error)
       return { success: false, error: 'Failed to read staged changes.' }
@@ -166,7 +169,12 @@ export class RuntimeGitGenerationCommands {
       provider: input.provider,
       repoPath: target.worktree.path,
       connectionId: target.connectionId,
-      localGitOptions: localGitOptionsForTarget(target)
+      localGitOptions: target.connectionId
+        ? {}
+        : {
+            ...localGitOptionsForTarget(target),
+            admissionTier: 'interactive'
+          }
     })
     let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
     try {
@@ -178,18 +186,30 @@ export class RuntimeGitGenerationCommands {
         useTemplate: input.useTemplate
       })
       context = target.connectionId
-        ? await getPullRequestDraftContext((argv) => provider!.exec(argv, target.worktree.path), {
-            base: input.base,
-            currentTitle: input.title,
-            currentBody,
-            currentDraft: input.draft
-          })
+        ? await getPullRequestDraftContext(
+            (argv, commandOptions) => {
+              const timeoutMs = commandOptions?.timeoutMs ?? commandOptions?.timeout
+              return timeoutMs === undefined
+                ? provider!.exec(argv, target.worktree.path)
+                : provider!.exec(argv, target.worktree.path, { timeoutMs })
+            },
+            {
+              base: input.base,
+              currentTitle: input.title,
+              currentBody,
+              currentDraft: input.draft
+            }
+          )
         : await getPullRequestDraftContext(
             (argv, options) =>
               gitExecFileAsync(argv, {
                 cwd: target.worktree.path,
                 ...localGitOptionsForTarget(target),
-                ...options
+                ...(options?.maxBuffer === undefined ? {} : { maxBuffer: options.maxBuffer }),
+                ...(options?.timeoutMs === undefined && options?.timeout === undefined
+                  ? {}
+                  : { timeout: options?.timeoutMs ?? options?.timeout }),
+                admissionTier: 'interactive'
               }),
             {
               base: input.base,

@@ -1,13 +1,13 @@
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
+import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
-import { providerSequenceFromCreateOrAttach } from './daemon-pty-provider-sequence'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
-import { SessionNotFoundError, type CreateOrAttachResult, type ListSessionsResult } from './types'
+import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/types'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
@@ -25,31 +25,23 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
     // Why size-first: attach must ride the session's own geometry — a fixed
     // 80×24 here could resize a live agent's TUI — and a null size means the
     // daemon cannot prove the session, so refuse rather than risk a create.
-    const size = await this.getAppliedSize(id)
+    // Keep transport failures distinct from an answered "absent". Mapping a
+    // dropped SSH/daemon connection to SessionNotFound would authorize a
+    // duplicate shell or retire a live persisted owner.
+    const size = await this.readAppliedSize(id, 'preserve')
     if (!size) {
       throw new SessionNotFoundError(id)
     }
-    const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
+    const result = await this.spawn({
       sessionId: id,
       cols: size.cols,
       rows: size.rows,
       attachOnly: true
     })
-    if (result.isNew) {
-      // Why: a pre-v31 daemon ignores attachOnly; retire its accidental spawn
-      // instead of publishing a fresh shell as an attach.
-      await this.client.request('kill', { sessionId: id, immediate: true }).catch((error) => {
-        // Why surface, not swallow: a failed retire leaves an untracked orphan shell.
-        console.warn('[daemon] attach-only retire of accidental legacy spawn failed', {
-          sessionId: id,
-          error
-        })
-      })
+    if (result.exitedBeforeSpawnReply) {
       throw new SessionNotFoundError(id)
     }
-    this.clearSessionAwaitingDaemonRecovery(id)
-    const providerSequence = providerSequenceFromCreateOrAttach(result)
-    return providerSequence ? { providerSequence } : undefined
+    return result.providerSequence ? { providerSequence: result.providerSequence } : undefined
   }
 
   hasPty(id: string): boolean {
@@ -344,14 +336,22 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
 
   // Why: resize() is fire-and-forget and can be dropped daemon-side; read the actually-applied size so the renderer can detect drift and re-assert.
   async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
-    try {
-      const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
-        'getSize',
-        { sessionId: id }
-      )
-      return result.size ?? null
-    } catch {
-      return null
-    }
+    return await this.readAppliedSize(id, 'suppress')
+  }
+
+  private async readAppliedSize(
+    id: string,
+    failureMode: 'preserve' | 'suppress'
+  ): Promise<DaemonAppliedPtySize | null> {
+    return await readDaemonAppliedPtySize({
+      client: this.client,
+      protocolVersion: this.protocolVersion,
+      sessionId: id,
+      failureMode,
+      getSizeUnsupported: this.getSizeUnsupported,
+      markGetSizeUnsupported: () => {
+        this.getSizeUnsupported = true
+      }
+    })
   }
 }

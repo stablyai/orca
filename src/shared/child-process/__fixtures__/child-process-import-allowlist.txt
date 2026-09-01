@@ -14,10 +14,15 @@
 # `detached: true` for a process-group kill, a synchronous taskkill, and an stdio shape other
 # than all-pipes (a long-lived `ssh -N` must not be handed a stdin pipe nobody closes).
 # Migrating them means teaching run-process.ts those options first.
+# codex-app-server-posix-supervisor.ts requires child_process only inside its
+# dependency-free POSIX supervisor script, never in Orca's process.
 #
 # The src/main/git/command-runner/* entries are the seven spawn sites that used
 # to live in the single line src/main/git/runner.ts; splitting that file moved
 # them, it did not add any.
+#
+# daemon-launched-child.ts holds daemon-init.ts's fork() site; splitting that
+# file moved the import, it did not add one.
 src/cli/handlers/account.ts
 src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
@@ -41,9 +46,12 @@ src/main/browser/browser-cookie-import.ts
 src/main/browser/browser-route-egress-electron-launch.ts
 src/main/browser/browser-route-persisted-worker-electron-process.ts
 src/main/claude-accounts/keychain.ts
-src/main/codex-accounts/runtime-home-service.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
+src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-client.ts
+src/main/codex/codex-app-server-posix-supervisor.ts
 src/main/codex/codex-app-server-session.ts
 src/main/codex/codex-state-db-backfill-recovery.ts
 src/main/codex/codex-wsl-hook-install-plan.ts
@@ -53,7 +61,7 @@ src/main/computer/macos-computer-use-permissions.ts
 src/main/computer/macos-native-provider-transport.ts
 src/main/computer/sidecar-client.ts
 src/main/daemon/daemon-bash-wrapper-osc133-fixture.ts
-src/main/daemon/daemon-init.ts
+src/main/daemon/daemon-launched-child.ts
 src/main/daemon/daemon-process-identity-query.ts
 src/main/daemon/daemon-process-inspection.ts
 src/main/daemon/daemon-process-start-time.ts
@@ -122,7 +130,6 @@ src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
 src/main/rate-limits/codex-fetcher.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts
-src/main/runtime/orca-runtime-files.ts
 src/main/runtime/tls-certificate.ts
 src/main/runtime/windows-default-route-interfaces.ts
 src/main/runtime/windows-mobile-firewall.ts

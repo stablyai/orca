@@ -36,10 +36,16 @@ import {
 import { getAutomationRunContent } from './automation-run-content'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationTargetAvailability } from './automation-target-availability'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
+import {
+  getAutomationDetailNextTab,
+  shouldHandleAutomationDetailEscapeKey,
+  shouldHandleAutomationDetailTabArrowKey
+} from './automation-detail-tab-navigation'
 import { translate } from '@/i18n/i18n'
 
 type AutomationsDetailPaneProps = {
@@ -56,6 +62,8 @@ type AutomationsDetailPaneProps = {
   selectedRepoDisplayName: string
   selectedRepoDefaultBaseRef: string | null
   selectedWorkspaceName: string
+  /** Catalog entry the selected row was listed from; absent for legacy unscoped rows. */
+  selectedHostEntry: AutomationHostCatalogEntry | null
   hostLabelById: ReadonlyMap<string, string>
   selectedRunNowAvailability: AutomationTargetAvailability | null
   selectedAutomationRunPageWorkspaceDisplay: AutomationRunWorkspaceDisplay | null
@@ -107,6 +115,7 @@ export function AutomationsDetailPane({
   selectedRepoDisplayName,
   selectedRepoDefaultBaseRef,
   selectedWorkspaceName,
+  selectedHostEntry,
   hostLabelById,
   selectedRunNowAvailability,
   selectedAutomationRunPageWorkspaceDisplay,
@@ -131,6 +140,53 @@ export function AutomationsDetailPane({
   onBackToList,
   recoverSelectedRuns
 }: AutomationsDetailPaneProps): React.JSX.Element {
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (shouldHandleAutomationDetailEscapeKey(event)) {
+        event.preventDefault()
+        if (selectedExternalRunPage) {
+          onClearExternalRunPage()
+          return
+        }
+        if (selectedAutomationRunPage) {
+          onClearAutomationRunPage()
+          return
+        }
+        onBackToList()
+        return
+      }
+
+      if (selectedExternal || !selected) {
+        return
+      }
+
+      if (shouldHandleAutomationDetailTabArrowKey(event)) {
+        const nextTab = getAutomationDetailNextTab({
+          currentTab: activePaneTab,
+          key: event.key as 'ArrowLeft' | 'ArrowRight',
+          canAccessRuns: Boolean(selected)
+        })
+        if (nextTab && nextTab !== activePaneTab) {
+          event.preventDefault()
+          onActivePaneTabChange(nextTab)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    activePaneTab,
+    onActivePaneTabChange,
+    onBackToList,
+    onClearAutomationRunPage,
+    onClearExternalRunPage,
+    selected,
+    selectedAutomationRunPage,
+    selectedExternal,
+    selectedExternalRunPage
+  ])
+
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {selectedExternal ? (
@@ -209,7 +265,9 @@ export function AutomationsDetailPane({
               </TabsTrigger>
               <TabsTrigger value="runs" disabled={!selected}>
                 {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}{' '}
-                <span className="text-xs text-muted-foreground">{selectedRuns.length}</span>
+                {selectedRunsNotice ? null : (
+                  <span className="text-xs text-muted-foreground">{selectedRuns.length}</span>
+                )}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -221,6 +279,7 @@ export function AutomationsDetailPane({
               projectName={selectedRepoDisplayName}
               projectDefaultBaseRef={selectedRepoDefaultBaseRef}
               workspaceName={selectedWorkspaceName}
+              hostEntry={selectedHostEntry}
               hostLabelById={hostLabelById}
               runNowAvailability={selectedRunNowAvailability}
               now={relativeNow}

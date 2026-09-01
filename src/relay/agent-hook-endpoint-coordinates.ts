@@ -4,7 +4,10 @@
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
+import {
+  ORCA_HOOK_PROTOCOL_VERSION,
+  ORCA_HOOK_RAW_JSON_TRANSPORT
+} from '../shared/agent-hook-types'
 
 // Why: relay's userData equivalent under $HOME so each user on a shared dev box gets their own 0o700 dir.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
@@ -49,7 +52,8 @@ export function buildRelayHookPtyEnv(coordinates: {
     ORCA_AGENT_HOOK_PORT: String(coordinates.port),
     ORCA_AGENT_HOOK_TOKEN: coordinates.token,
     ORCA_AGENT_HOOK_ENV: coordinates.env,
-    ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
+    ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
+    ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
   }
   if (coordinates.endpointFileWritten) {
     env.ORCA_AGENT_HOOK_ENDPOINT = coordinates.endpointFilePath

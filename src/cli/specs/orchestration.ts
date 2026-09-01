@@ -68,6 +68,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'phase'
     ],
     notes: [
+      'Valid --type values: status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question, heartbeat.',
+      'To answer a worker question, use orchestration reply --id <msg_id> --body <text> with the same Orca CLI executable.',
       'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
       "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox.",
       'worker_done requires --outcome succeeded or --outcome failed.',
@@ -173,6 +175,17 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'dry-run',
       'return-preamble',
       'retry-request'
+    ]
+  },
+  {
+    path: ['orchestration', 'request-show'],
+    summary: 'Ask whether one orchestration mutation request already took effect',
+    usage: 'orca orchestration request-show --request <request_id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'request'],
+    notes: [
+      'Read-only: it never starts, retries, or settles anything, so it is safe to run after any lost response.',
+      'completed means the mutation landed and --retry-request replays the recorded outcome instead of starting a second one. pending means the original mutation is still running or Orca restarted before recording its outcome; wait for a live original command, otherwise replay with --retry-request.',
+      'absent means this runtime holds no receipt for that request under your caller identity: it never arrived, it failed before recording anything, or the receipt was pruned. Absent is not proof that nothing happened.'
     ]
   },
   {

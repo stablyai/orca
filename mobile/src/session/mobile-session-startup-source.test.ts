@@ -9,6 +9,10 @@ const reconciliationHookSource = readFileSync(
   new URL('./use-mobile-session-tabs-reconciliation.ts', import.meta.url),
   'utf8'
 )
+const terminalInventoryRecoverySource = readFileSync(
+  new URL('./use-mobile-terminal-inventory-recovery.ts', import.meta.url),
+  'utf8'
+)
 const autoCreateHookSource = readFileSync(
   new URL('./use-initial-session-terminal-autocreate.ts', import.meta.url),
   'utf8'
@@ -68,23 +72,42 @@ describe('mobile session startup', () => {
     expect(autoCreateHookSource).toContain('sawSessionTabs: stateRef.current.sawSessionTabs')
   })
 
-  it('delegates stream ownership while retaining the exact terminal polling cadence', () => {
+  it('delegates stream ownership while retaining degraded polling and a certified sweep', () => {
     expect(source).toContain('useMobileSessionTabsReconciliation<')
     expect(source).toContain('const applicationRevision = ++appliedSessionTabsRevisionRef.current')
     expect(source).toContain('getApplicationRevision: getSessionTabsApplicationRevision')
     expect(source).not.toContain("client.subscribe(\n      'session.tabs.subscribe'")
     expect(reconciliationHookSource).toContain("client.subscribe(\n      'session.tabs.subscribe'")
-    expect(reconciliationHookSource).toContain(
-      "if (AppState.currentState !== 'active') {\n          controller.setReconciliationActive(false)"
-    )
-    expect(reconciliationHookSource).toContain('void controller.poll()')
-    expect(reconciliationHookSource).toContain('void fetchTerminals()')
+    expect(reconciliationHookSource).toContain("if (AppState.currentState !== 'active')")
+    expect(reconciliationHookSource).toContain('suspendTerminalInventoryRecovery(true)')
+    expect(reconciliationHookSource).toContain('controller.poll()')
+    expect(reconciliationHookSource).toContain('tabsRequest !== null')
+    expect(reconciliationHookSource).toContain('void refreshTerminalInventory()')
     expect(reconciliationHookSource).toContain("AppState.addEventListener('change'")
     expect(reconciliationHookSource).toContain('const interval = setInterval(')
-    expect(reconciliationHookSource).toContain('2000')
+    expect(reconciliationHookSource).toContain('RECONCILIATION_INTERVAL_MS = 2000')
+    expect(terminalInventoryRecoverySource).toContain('CERTIFIED_TERMINAL_SWEEP_MS = 60_000')
     expect(reconciliationHookSource).toContain('controller.setReconciliationActive(false)')
     expect(reconciliationHookSource).toContain('clearInterval(interval)')
     expect(reconciliationHookSource).toContain('appStateSubscription.remove()')
+  })
+
+  it('confirms terminal stream teardown with a committed inventory-recovery bridge', () => {
+    expect(source).toContain("if (data.type === 'end' || data.type === 'error')")
+    expect(source).toContain('signalTerminalInventoryRecovery()')
+    expect(terminalInventoryRecoverySource).toContain('actionRef.current = recoveryAction')
+    expect(terminalInventoryRecoverySource).toContain('pendingSignalScopeRef.current = scopeKey')
+    expect(terminalInventoryRecoverySource).toContain(
+      'committedScope !== null && committedScope !== scopeKey'
+    )
+    expect(source).toContain('return terminalInventoryRequest.activate()')
+    expect(source).toContain('if (!isCurrent())')
+    expect(terminalInventoryRecoverySource).toContain(
+      'TERMINAL_INVENTORY_CONFIRMATION_DELAY_MS = 750'
+    )
+    expect(terminalInventoryRecoverySource).toContain(
+      'refreshTerminalInventory({ allowEmptyLoaded: true })'
+    )
   })
 
   it('loads session tabs without waiting for desktop activation', () => {

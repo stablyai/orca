@@ -41,14 +41,12 @@ vi.mock('./e2ee', () => ({
 }))
 
 class FakeSession implements RpcClient {
-  readonly sendRequest = vi.fn(
-    async (): Promise<RpcResponse> => ({
-      id: 'rpc-1',
-      ok: true,
-      result: {},
-      _meta: { runtimeId: 'runtime-1' }
-    })
-  )
+  readonly sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
+    id: 'rpc-1',
+    ok: true,
+    result: {},
+    _meta: { runtimeId: 'runtime-1' }
+  }))
   readonly subscribe = vi.fn(() => () => {})
   readonly updateTerminalSubscriptionViewport = vi.fn()
   readonly notifyForeground = vi.fn()

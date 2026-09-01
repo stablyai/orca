@@ -28,21 +28,23 @@ import {
   linearConnect,
   linearDisconnect,
   linearDisconnectWorkspace,
-  linearGetCustomView,
-  linearGetProject,
-  linearGetIssue,
-  linearListCustomViewIssues,
-  linearListCustomViewProjects,
-  linearListCustomViews,
   linearListIssues,
-  linearListProjectIssues,
-  linearListProjects,
-  linearListTeams,
   linearSearchIssues,
   linearSelectWorkspace,
   linearStatus,
   linearTestConnection
 } from '@/runtime/runtime-linear-client'
+import { linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
+import {
+  linearGetCustomView,
+  linearGetProject,
+  linearListCustomViewIssues,
+  linearListCustomViewProjects,
+  linearListCustomViews,
+  linearListProjectIssues,
+  linearListProjects,
+  linearListTeams
+} from '@/runtime/runtime-linear-project-client'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
 import {
@@ -234,6 +236,7 @@ function linearWorkspaceSignature(workspace: LinearWorkspace): string {
   ].join('\u001f')
 }
 
+/** Cache-invalidation key: broader than `linearWorkspaceScopeSignature`, hashes full viewer and workspace metadata. */
 function linearStatusScopeSignature(status: LinearConnectionStatus): string {
   return JSON.stringify({
     connected: status.connected,
@@ -605,7 +608,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     if (inflightStatusRequest && !force && inflightStatusRequest.contextKey === contextKey) {
       return inflightStatusRequest.promise
     }
-    if (get().linearStatusContextKey !== contextKey) {
+    if (get().linearStatusContextKey !== contextKey && get().linearStatusChecked) {
       set({ linearStatusChecked: false })
     }
 
@@ -730,12 +733,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             linearStatusChecked: true,
             linearStatusContextKey: contextKey
           })
-        } else {
-          set({
-            linearStatus: status,
-            linearStatusChecked: true,
-            linearStatusContextKey: contextKey
-          })
+        } else if (!get().linearStatusChecked || get().linearStatusContextKey !== contextKey) {
+          // Preserve the status reference when the probe did not change scope.
+          set({ linearStatusChecked: true, linearStatusContextKey: contextKey })
         }
       }
       return result

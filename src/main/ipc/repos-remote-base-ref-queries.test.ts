@@ -32,6 +32,7 @@ import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createRepoHandlerHarness } from './repos-remote-test-harness'
+import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../shared/repo-search-limits'
 
 const { handleMock, mockStore, mockGitProvider, prepareLocalWorktreeRootForRepoMock } = reposMocks
 
@@ -282,7 +283,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv.some((arg: string) => arg.startsWith('--exclude=refs/remotes/'))).toBe(true)
     expect(argv).toContain('--count=100')
     expect(argv).toContain('refs/heads/**/**')
     expect(argv).toContain('refs/heads/**/**/**')
@@ -308,7 +309,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv.some((arg: string) => arg.startsWith('--exclude=refs/remotes/'))).toBe(true)
     expect(argv).toContain('--count=100')
     expect(argv).toContain('refs/heads/**/**')
     expect(argv).toContain('refs/heads/**/**/**')
@@ -334,6 +335,36 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
   })
 
+  it('clamps oversized limits before building broad relay searches', async () => {
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\n', stderr: '' })
+      }
+      return Promise.resolve({
+        stdout: 'refs/remotes/origin/main\0origin/main',
+        stderr: ''
+      })
+    })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: REPO_SEARCH_REFS_MAX_LIMIT + 1
+    })
+
+    expect(result).toEqual(['origin/main'])
+    const forEachRefCall = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )
+    expect(forEachRefCall?.[0]).toContain('--count=4000')
+  })
+
   it('retries without --exclude for older git on SSH hosts', async () => {
     const stdout = [
       'refs/remotes/origin/main\0origin/main',
@@ -343,7 +374,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       if (argv[0] === 'remote') {
         return Promise.resolve({ stdout: 'origin\n', stderr: '' })
       }
-      if (argv.includes('--exclude=refs/remotes/**/HEAD')) {
+      if (argv.some((arg) => arg.startsWith('--exclude=refs/remotes/'))) {
         return Promise.reject(
           Object.assign(new Error("unknown option `exclude'"), {
             stderr: "error: unknown option `exclude'"
@@ -376,10 +407,16 @@ describe('repos:searchBaseRefs SSH relay', () => {
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
     expect(forEachRefCalls).toHaveLength(3)
-    expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
-    expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(
+      (forEachRefCalls[0][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(true)
+    expect(
+      (forEachRefCalls[1][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(false)
     expect(forEachRefCalls[1][0]).toContain('--count=104')
-    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(
+      (forEachRefCalls[2][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(false)
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {

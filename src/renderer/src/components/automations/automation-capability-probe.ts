@@ -5,6 +5,7 @@ import {
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
@@ -129,7 +130,18 @@ export async function assertOwnerFencingSupported(
   )
 }
 
+export async function assertAutomationCreateIdempotencySupported(
+  authority: AutomationAuthorityRef
+): Promise<void> {
+  await assertAuthorityCapability(
+    authority,
+    AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+    'Moving automations to this host requires a newer Orca server. Update the HUB and try again.'
+  )
+}
+
 export {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
-  AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE
+  AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 }

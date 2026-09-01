@@ -28,6 +28,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
@@ -485,15 +486,9 @@ async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
   }
 }
 
-async function isDirectoryEntry(
-  dirPath: string,
-  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
-  _resolveEntryPath: (entryPath: string) => Promise<string>
-): Promise<boolean> {
+function isDirectoryEntry(entry: { isDirectory(): boolean; isSymbolicLink(): boolean }): boolean {
   // Why: following a symlink in readDir can touch macOS TCC-protected containers; treat links as file-like until explicitly opened.
-  void _resolveEntryPath
   if (entry.isSymbolicLink()) {
-    void dirPath
     return false
   }
   if (entry.isDirectory()) {
@@ -552,15 +547,11 @@ export function registerFilesystemHandlers(
         const dirPath = await resolveAuthorizedPath(args.dirPath, store)
         throwSite = 'readdir'
         const entries = await readdir(dirPath, { withFileTypes: true })
-        const mapped = await Promise.all(
-          entries.map(async (entry) => ({
-            name: entry.name,
-            isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
-              resolveAuthorizedPath(entryPath, store)
-            ),
-            isSymlink: entry.isSymbolicLink()
-          }))
-        )
+        const mapped = entries.map((entry) => ({
+          name: entry.name,
+          isDirectory: isDirectoryEntry(entry),
+          isSymlink: entry.isSymbolicLink()
+        }))
         return sortDirEntries(mapped)
       } catch (error: unknown) {
         recordCrashBreadcrumb(
@@ -1177,7 +1168,9 @@ export function registerFilesystemHandlers(
       args: {
         worktreePath: string
         connectionId?: string
+        admissionTier?: GitAdmissionTier
         includeIgnored?: boolean
+        includeLineStats?: boolean
         bypassEffectiveUpstreamNegativeCache?: boolean
         reuseLineStats?: boolean
         branchLineTotalMergeBase?: string
@@ -1187,6 +1180,8 @@ export function registerFilesystemHandlers(
       const controller = gitStatusCancellations.begin(event, args.requestToken)
       const options = {
         includeIgnored: args.includeIgnored ?? false,
+        admissionTier: args.admissionTier ?? ('status' as const),
+        ...(args.includeLineStats === false ? { includeLineStats: false } : {}),
         ...(args.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(args.branchLineTotalMergeBase === undefined
           ? {}
@@ -1370,7 +1365,7 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await abortMerge(worktreePath, gitOptions)
+      await abortMerge(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
 
@@ -1390,7 +1385,7 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await abortRebase(worktreePath, gitOptions)
+      await abortRebase(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
 
@@ -1425,7 +1420,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead, gitOptions)
+      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -1452,7 +1450,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      return commitChanges(worktreePath, args.message, gitOptions)
+      return commitChanges(worktreePath, args.message, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -1532,7 +1533,10 @@ export function registerFilesystemHandlers(
       )
       let context
       try {
-        context = await getStagedCommitContext(worktreePath, gitOptions)
+        context = await getStagedCommitContext(worktreePath, {
+          ...gitOptions,
+          admissionTier: 'interactive'
+        })
       } catch (error) {
         console.error('[filesystem] Failed to read staged commit context:', error)
         return {
@@ -1705,7 +1709,12 @@ export function registerFilesystemHandlers(
             useTemplate: args.useTemplate
           })
           context = await getPullRequestDraftContext(
-            (argv) => provider.exec(argv, args.worktreePath),
+            (argv, commandOptions) =>
+              commandOptions?.timeoutMs !== undefined
+                ? provider.exec(argv, args.worktreePath, { timeoutMs: commandOptions.timeoutMs })
+                : commandOptions?.timeout !== undefined
+                  ? provider.exec(argv, args.worktreePath, { timeoutMs: commandOptions.timeout })
+                  : provider.exec(argv, args.worktreePath),
             {
               base: args.base,
               currentTitle: args.title,
@@ -1763,7 +1772,14 @@ export function registerFilesystemHandlers(
         })
         context = await getPullRequestDraftContext(
           (argv, options) =>
-            gitExecFileAsync(argv, { cwd: worktreePath, ...gitOptions, ...options }),
+            gitExecFileAsync(argv, {
+              cwd: worktreePath,
+              ...gitOptions,
+              ...(options?.maxBuffer === undefined ? {} : { maxBuffer: options.maxBuffer }),
+              ...(options?.timeoutMs === undefined && options?.timeout === undefined
+                ? {}
+                : { timeout: options?.timeoutMs ?? options?.timeout })
+            }),
           {
             base: args.base,
             currentTitle: args.title,
@@ -1822,14 +1838,23 @@ export function registerFilesystemHandlers(
     'git:branchCompare',
     async (
       _event,
-      args: { worktreePath: string; baseRef: string; connectionId?: string }
+      args: {
+        worktreePath: string
+        baseRef: string
+        connectionId?: string
+        admissionTier?: GitAdmissionTier
+      }
     ): Promise<GitBranchCompareResult> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.getBranchCompare(args.worktreePath, args.baseRef)
+        return args.admissionTier
+          ? provider.getBranchCompare(args.worktreePath, args.baseRef, {
+              admissionTier: args.admissionTier
+            })
+          : provider.getBranchCompare(args.worktreePath, args.baseRef)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -1837,7 +1862,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      return getBranchCompare(worktreePath, args.baseRef, gitOptions)
+      return getBranchCompare(worktreePath, args.baseRef, {
+        ...gitOptions,
+        ...(args.admissionTier ? { admissionTier: args.admissionTier } : {})
+      })
     }
   )
 
@@ -1914,9 +1942,15 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget, gitOptions)
+        await validateGitPushTarget(worktreePath, args.pushTarget, {
+          ...gitOptions,
+          admissionTier: 'interactive'
+        })
       }
-      await gitFetch(worktreePath, args.pushTarget, gitOptions)
+      await gitFetch(worktreePath, args.pushTarget, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -1946,7 +1980,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      return gitSyncForkDefaultBranch(worktreePath, expectedUpstream, gitOptions)
+      return gitSyncForkDefaultBranch(worktreePath, expectedUpstream, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -1983,11 +2020,15 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget, gitOptions)
+        await validateGitPushTarget(worktreePath, args.pushTarget, {
+          ...gitOptions,
+          admissionTier: 'interactive'
+        })
       }
       await gitPush(worktreePath, publish, args.pushTarget, {
         forceWithLease: args.forceWithLease === true,
-        ...gitOptions
+        ...gitOptions,
+        admissionTier: 'interactive'
       })
     }
   )
@@ -2015,9 +2056,15 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget, gitOptions)
+        await validateGitPushTarget(worktreePath, args.pushTarget, {
+          ...gitOptions,
+          admissionTier: 'interactive'
+        })
       }
-      await gitPull(worktreePath, args.pushTarget, gitOptions)
+      await gitPull(worktreePath, args.pushTarget, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -2044,9 +2091,15 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       if (args.pushTarget) {
-        await validateGitPushTarget(worktreePath, args.pushTarget, gitOptions)
+        await validateGitPushTarget(worktreePath, args.pushTarget, {
+          ...gitOptions,
+          admissionTier: 'interactive'
+        })
       }
-      await gitFastForward(worktreePath, args.pushTarget, gitOptions)
+      await gitFastForward(worktreePath, args.pushTarget, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -2069,7 +2122,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await gitPullRebaseFromBase(worktreePath, args.baseRef, gitOptions)
+      await gitPullRebaseFromBase(worktreePath, args.baseRef, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -2129,7 +2185,7 @@ export function registerFilesystemHandlers(
           filePath,
           oldPath
         },
-        gitOptions
+        { ...gitOptions, admissionTier: 'interactive' }
       )
     }
   )
@@ -2179,7 +2235,7 @@ export function registerFilesystemHandlers(
           filePath,
           oldPath
         },
-        gitOptions
+        { ...gitOptions, admissionTier: 'interactive' }
       )
     }
   )
@@ -2204,7 +2260,7 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await stageFile(worktreePath, filePath, gitOptions)
+      await stageFile(worktreePath, filePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
 
@@ -2228,7 +2284,7 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await unstageFile(worktreePath, filePath, gitOptions)
+      await unstageFile(worktreePath, filePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
 
@@ -2252,7 +2308,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await discardChanges(worktreePath, filePath, gitOptions)
+      await discardChanges(worktreePath, filePath, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -2276,7 +2335,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await bulkDiscardChanges(worktreePath, filePaths, gitOptions)
+      await bulkDiscardChanges(worktreePath, filePaths, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -2300,7 +2362,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await bulkStageFiles(worktreePath, filePaths, gitOptions)
+      await bulkStageFiles(worktreePath, filePaths, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 
@@ -2324,7 +2389,10 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await bulkUnstageFiles(worktreePath, filePaths, gitOptions)
+      await bulkUnstageFiles(worktreePath, filePaths, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 

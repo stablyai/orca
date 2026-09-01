@@ -24,6 +24,10 @@ import {
   GITHUB_TASK_STICKY_TITLE_HEADER_CLASS
 } from './github-task-surface-classes'
 import type { TaskPageGitHubWorkItemMutationRunner } from './github-work-item-mutation-runner'
+import {
+  supersedeGitHubListScrollRestore,
+  type GitHubListRestoreWrite
+} from './github-list-scroll-restore'
 import { GithubWorkItemRows } from './github-work-item-rows'
 import { PaginationBar } from '../pagination/pagination-bar'
 
@@ -32,6 +36,7 @@ export type GithubWorkItemTableProps = {
   githubResumeContextKey: string
   currentPageRef: React.MutableRefObject<number>
   pendingGithubScrollRestoreRef: React.MutableRefObject<number | null>
+  githubRestoreScrollWriteRef: React.MutableRefObject<GitHubListRestoreWrite | null>
   githubListScrollTopRef: React.MutableRefObject<number>
   taskListPositionRef: React.MutableRefObject<{
     contextKey: string
@@ -75,6 +80,7 @@ export function GithubWorkItemTable(props: GithubWorkItemTableProps): React.JSX.
     githubResumeContextKey,
     currentPageRef,
     pendingGithubScrollRestoreRef,
+    githubRestoreScrollWriteRef,
     githubListScrollTopRef,
     taskListPositionRef,
     githubTaskGridClass,
@@ -112,14 +118,21 @@ export function GithubWorkItemTable(props: GithubWorkItemTableProps): React.JSX.
         style={{ scrollbarGutter: 'stable' }}
         onScroll={(event) => {
           const state = useAppStore.getState()
-          if (
-            state.activeView !== 'tasks' ||
-            state.taskPageData.openGitHubWorkItem ||
-            pendingGithubScrollRestoreRef.current !== null
-          ) {
+          if (state.activeView !== 'tasks' || state.taskPageData.openGitHubWorkItem) {
             return
           }
           const scrollTop = event.currentTarget.scrollTop
+          // Why: a scroll the restore did not produce means the user took over, so it
+          // supersedes a pending restore that may never reach its target.
+          if (
+            !supersedeGitHubListScrollRestore({
+              scrollTop,
+              pendingRestoreRef: pendingGithubScrollRestoreRef,
+              restoreWriteRef: githubRestoreScrollWriteRef
+            })
+          ) {
+            return
+          }
           githubListScrollTopRef.current = scrollTop
           taskListPositionRef.current = {
             contextKey: githubResumeContextKey,

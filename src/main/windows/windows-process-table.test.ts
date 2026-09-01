@@ -4,6 +4,7 @@ import {
   __setWindowsProcessTreeLoaderForTests,
   __setWindowsProcessTreeRequireForTests,
   isWindowsProcessTableAvailable,
+  isWindowsProcessStartTimeAvailable,
   readWindowsProcessTable,
   readWindowsProcessTableFresh,
   resetWindowsProcessTableForTests
@@ -17,7 +18,14 @@ const getAllProcesses = vi.fn()
 const SELF = { pid: process.pid, ppid: 0, name: 'vitest.exe' }
 const NATIVE = [
   SELF,
-  { pid: 100, ppid: 4, name: 'orca.exe', commandLine: '"C:/a b/orca.exe" --x', memory: 4096 }
+  {
+    pid: 100,
+    ppid: 4,
+    name: 'orca.exe',
+    commandLine: '"C:/a b/orca.exe" --x',
+    memory: 4096,
+    creationTimeMs: 1_700_000_000_000
+  }
 ]
 
 describe('windows process table', () => {
@@ -29,7 +37,7 @@ describe('windows process table', () => {
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses
     }))
   })
@@ -50,14 +58,24 @@ describe('windows process table', () => {
         ppid: 4,
         name: 'orca.exe',
         command: '"C:/a b/orca.exe" --x',
-        memoryBytes: 4096
+        memoryBytes: 4096,
+        creationTimeMs: 1_700_000_000_000
       }
     ])
   })
 
   it('requests memory and command line together', async () => {
     await readWindowsProcessTableFresh()
-    expect(getAllProcesses.mock.calls[0]?.[1]).toBe(3)
+    expect(getAllProcesses.mock.calls[0]?.[1]).toBe(7)
+  })
+
+  it('only advertises PID-safe ownership when the native creation-time field exists', () => {
+    expect(isWindowsProcessStartTimeAvailable()).toBe(true)
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses
+    }))
+    expect(isWindowsProcessStartTimeAvailable()).toBe(false)
   })
 
   it('serves repeat reads from the shared snapshot', async () => {
@@ -184,7 +202,7 @@ describe('PowerShell fallback when the native binding is absent', () => {
   })
 })
 
-describe('wedge cooldown', () => {
+describe('sticky wedge', () => {
   let platform: PropertyDescriptor | undefined
 
   beforeEach(() => {
@@ -204,11 +222,11 @@ describe('wedge cooldown', () => {
     // The vendored reader latches a global while a request is in flight and
     // drains its queue only when that request completes. In the wedge this
     // guards against it never does, so every retry would add a closure that is
-    // never called. One probe per cooldown bounds that.
+    // never called.
     vi.useFakeTimers()
     const getAllProcesses = vi.fn(() => {})
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses
     }))
 
@@ -218,19 +236,19 @@ describe('wedge cooldown', () => {
     await firstAssertion
     expect(getAllProcesses).toHaveBeenCalledTimes(1)
 
-    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/cooling down/)
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/wedged/)
     expect(getAllProcesses).toHaveBeenCalledTimes(1)
   })
 
-  it('lets exactly one caller probe when the cooldown expires', async () => {
-    // Without claiming the recovery slot before probing, every concurrent
-    // caller passes the cooldown check at expiry and each enqueues a callback
-    // into the still-latched native queue -- so each cycle leaks another batch
-    // rather than bounding it to one probe.
+  it('never re-enters the reader while the timed-out read is still out', async () => {
+    // A cooldown bounds the RATE of new callbacks, not the total: one probe per
+    // window still retains one more closure in the still-latched native queue
+    // every window, for the life of the app. Only the outstanding read can
+    // reopen the gate, so a permanent wedge retains exactly one callback.
     vi.useFakeTimers()
     const getAllProcesses = vi.fn(() => {})
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses
     }))
 
@@ -240,16 +258,72 @@ describe('wedge cooldown', () => {
     await wedgeAssertion
     expect(getAllProcesses).toHaveBeenCalledTimes(1)
 
-    await vi.advanceTimersByTimeAsync(30_000)
-    const attempts = [
-      readWindowsProcessTableFresh().catch(() => 'rejected'),
-      readWindowsProcessTableFresh().catch(() => 'rejected'),
-      readWindowsProcessTableFresh().catch(() => 'rejected')
-    ]
-    await vi.advanceTimersByTimeAsync(3_000)
-    await Promise.all(attempts)
+    // Four windows of the cooldown this replaced, each with concurrent callers.
+    // Rejection reasons are deliberately not asserted here: the leak this test
+    // pins is the call count, and it must fail on that alone.
+    for (let window = 0; window < 4; window += 1) {
+      await vi.advanceTimersByTimeAsync(30_000)
+      const attempts = [
+        readWindowsProcessTableFresh().catch(() => 'rejected'),
+        readWindowsProcessTableFresh().catch(() => 'rejected'),
+        readWindowsProcessTableFresh().catch(() => 'rejected')
+      ]
+      // Long enough for a probe's own deadline, had one been let through.
+      await vi.advanceTimersByTimeAsync(3_000)
+      expect(await Promise.all(attempts)).toEqual(['rejected', 'rejected', 'rejected'])
+    }
 
-    // One recovery probe, not three.
+    // Still the one callback the wedge is holding -- not one more per window.
+    expect(getAllProcesses).toHaveBeenCalledTimes(1)
+  })
+
+  it('resumes as soon as the timed-out read finally calls back', async () => {
+    // The stuck request completing is what drains the vendored queue, so it is
+    // the only honest evidence the reader recovered. Waiting out a wall clock
+    // afterwards would strand a reader that is already answering.
+    vi.useFakeTimers()
+    let stuck: ((rows: typeof NATIVE | undefined) => void) | undefined
+    const getAllProcesses = vi.fn((cb: (rows: typeof NATIVE | undefined) => void) => {
+      if (stuck) {
+        cb(NATIVE)
+        return
+      }
+      stuck = cb
+    })
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses
+    }))
+
+    const wedge = readWindowsProcessTableFresh()
+    const wedgeAssertion = expect(wedge).rejects.toThrow(/timed out/)
+    await vi.advanceTimersByTimeAsync(3_000)
+    await wedgeAssertion
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/wedged/)
+
+    stuck?.(NATIVE)
+    await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(NATIVE.length)
+    expect(getAllProcesses).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores a pending timeout from before a test reset', async () => {
+    vi.useFakeTimers()
+    const getAllProcesses = vi.fn((_cb: (rows: typeof NATIVE | undefined) => void) => {})
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses
+    }))
+
+    const staleRead = readWindowsProcessTableFresh()
+    const staleAssertion = expect(staleRead).rejects.toThrow(/timed out/)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getAllProcesses).toHaveBeenCalledTimes(1)
+    resetWindowsProcessTableForTests()
+    await vi.advanceTimersByTimeAsync(3_000)
+    await staleAssertion
+
+    getAllProcesses.mockImplementation((cb) => cb(NATIVE))
+    await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(NATIVE.length)
     expect(getAllProcesses).toHaveBeenCalledTimes(2)
   })
 
@@ -260,7 +334,7 @@ describe('wedge cooldown', () => {
       throw new Error('addon exploded')
     })
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses
     }))
 
@@ -269,7 +343,7 @@ describe('wedge cooldown', () => {
 
     // The recovered reader must answer, not report a wedge left by a dead timer.
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses: (cb: (rows: typeof NATIVE | undefined) => void) => cb(NATIVE)
     }))
     await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(NATIVE.length)
@@ -332,7 +406,8 @@ describe('resolving the native reader', () => {
         ppid: 4,
         name: 'orca.exe',
         command: '"C:/a b/orca.exe" --x',
-        memoryBytes: 4096
+        memoryBytes: 4096,
+        creationTimeMs: 1_700_000_000_000
       }
     ])
     expect(isWindowsProcessTableAvailable()).toBe(true)

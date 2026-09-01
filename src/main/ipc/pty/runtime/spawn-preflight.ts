@@ -258,6 +258,7 @@ export async function prepareRuntimePtySpawn(
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
         networkProxySettings: ptySettings,
+        routeBrowserOpensToClient: ctx.deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
         deferGitConfigGuardToDaemon:
           ctx.provider.supportsGitCredentialGuardHost?.(ctx.sessionId) === true
       })

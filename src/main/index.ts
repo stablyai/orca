@@ -13,6 +13,7 @@ import {
   type Tray,
   session
 } from 'electron'
+import { applyMacPressAndHoldDefaultAtStartup } from './macos-press-and-hold-default'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -35,7 +36,7 @@ import { setSpeechServiceFactories } from './speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from './ipc/worktree-watcher-removal'
 import { setSecretStore } from '../shared/secret-store'
 import { ElectronSecretStore } from './host/electron-secret-store'
-import { reportSecretProtectionGap } from './host/secret-protection-report'
+import { scheduleSecretProtectionGapReport } from './host/deferred-secret-protection-report'
 import { initSessionParseCachePersistence } from './ai-vault/session-parse-cache-persistence'
 import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
@@ -68,6 +69,7 @@ import {
 import {
   type CodexPaneHomeRoute,
   getCodexPaneAccount,
+  hasAnyRecordedLegacyWslCodexPane,
   hasRecordedManagedHostCodexPane,
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
@@ -88,10 +90,11 @@ import {
   sweepRestoredSubagentsWithoutLiveAgent
 } from './agent-hooks/restored-subagent-liveness-sweep'
 import {
-  applyAgentStatusHooksEnabled,
+  installManagedAgentHooks,
   isAgentStatusHooksEnabled,
-  removeManagedAgentHooks,
   removeManagedAgentHooksAsync,
+  resolveStartupManagedHookAction,
+  shouldInstallStartupManagedAgentHook,
   shouldContinueManagedHookStartup
 } from './agent-hooks/managed-agent-hook-controls'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
@@ -152,6 +155,7 @@ import {
   configureDevUserDataPath,
   configureOrcaUserDataPathEnv,
   disableUnsupportedChromiumFeatures,
+  optOutOfHiddenPageWakeUpThrottling,
   enableMainProcessGpuFeatures,
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
@@ -168,8 +172,10 @@ import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './startup/serve-mode-argv'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
+  clearGpuFallbackMarker,
   readActiveGpuFallbackMarker,
   writeGpuFallbackMarker,
+  type GpuFallbackMarker,
   type GpuFallbackEnvironment,
   type WindowsGpuFallbackEnvironment
 } from './startup/gpu-fallback-marker'
@@ -180,10 +186,13 @@ import {
   GpuCrashFallbackTracker,
   isGpuFallbackCrashCandidate
 } from './crash-reporting/gpu-crash-fallback-decision'
+import { promptForGpuFallbackRestart } from './crash-reporting/gpu-fallback-restart-prompt'
+import { engageGpuFallbackAfterCrashBurst } from './crash-reporting/gpu-fallback-engagement'
+import { GpuCrashDiagnosticsRecorder } from './crash-reporting/gpu-crash-diagnostics'
 import {
-  promptForGpuFallbackRestart,
-  type GpuFallbackRestartDecision
-} from './crash-reporting/gpu-fallback-restart-prompt'
+  handleGpuFallbackRecoveredLaunch,
+  promptForGpuFallbackRecoveredLaunch
+} from './crash-reporting/gpu-fallback-recovered-launch'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
@@ -252,7 +261,8 @@ import {
   type SystemTrayOptions
 } from './tray/system-tray'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { focusExistingMainWindow } from './window/focus-existing-window'
+import { focusExistingMainWindow, safelyRevealWindow } from './window/focus-existing-window'
+import { applyBackgroundActivationPolicy } from './window/foreground-activation-policy'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
@@ -317,7 +327,17 @@ import { EmulatorBridge } from './emulator/emulator-bridge'
 import { browserCertificateTrustController, browserManager } from './browser/browser-manager'
 import { RpcDispatcher } from './runtime/rpc/dispatcher'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
+import { browserSessionRegistry } from './browser/browser-session-registry'
+import {
+  applyBrowserSessionProxies,
+  setBrowserNetworkProxySettingsResolver
+} from './browser/browser-session-proxy'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
+import {
+  installDocPreviewProtocolHandler,
+  registerDocPreviewSchemePrivileges
+} from './browser/doc-preview-protocol'
+import { registerDocPreviewGrantHandlers } from './ipc/doc-preview-grant-ipc'
 import { initializeBrowserClientHostId } from './browser/browser-client-host-id'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
@@ -328,6 +348,7 @@ import { AgentAwakeService } from './agent-awake-service'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
+import { stopStructuredAgentSessionRuntime } from './runtime/structured-agent-session-runtime'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { beginSshShutdown } from './ipc/ssh-shutdown-drain'
 import { PluginService } from './plugins/plugin-service'
@@ -366,6 +387,7 @@ import { startPreGoneProcessMetricsSampling } from './crash-reporting/process-go
 import { resolveExpectedTeardownScope } from './crash-reporting/expected-teardown-state'
 import {
   advanceSyntheticTitleSpinnerEntries,
+  getSyntheticTitleSpinnerPaneKeyToStop,
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
@@ -389,6 +411,8 @@ import {
   applyElectronProxySettings,
   setDefaultProxySessionResolver
 } from './network/proxy-settings'
+import { handleElectronProxyLogin } from './network/electron-proxy-credentials'
+import { installElectronProxyRequestGuard } from './network/electron-proxy-request-guard'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
@@ -454,8 +478,19 @@ const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
   windowMs: DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
 })
+let activeGpuFallbackMarker: GpuFallbackMarker | null = null
 let gpuFallbackActiveThisLaunch = false
 let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
+const gpuCrashDiagnostics =
+  process.platform === 'win32'
+    ? new GpuCrashDiagnosticsRecorder({
+        provider: {
+          getGPUInfo: (infoType) => app.getGPUInfo(infoType),
+          getGPUFeatureStatus: () => app.getGPUFeatureStatus()
+        },
+        recordBreadcrumb: (data) => recordDurableCrashBreadcrumb('gpu_crash_hardware', data)
+      })
+    : null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
@@ -542,6 +577,7 @@ function updateGpuAccelerationAboutPanel(): void {
 
 app.on('gpu-info-update', () => {
   gpuFeatureStatus = app.getGPUFeatureStatus()
+  gpuCrashDiagnostics?.warm()
   if (app.isReady()) {
     updateGpuAccelerationAboutPanel()
   }
@@ -632,6 +668,9 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         }
         currentStore.setWorktreeMeta(worktreeId, {
           displayName,
+          // The first-agent title is an intentional user-facing label; keep it stable after the
+          // generated branch is renamed and across subsequent catalog refreshes.
+          displayNameIsPinned: true,
           pendingFirstAgentMessageRename: false,
           // Success clears the failure badge (redundant with the explicit setRenameError(null)).
           firstAgentMessageRenameError: null
@@ -723,7 +762,16 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
-installServeSupervisorDisconnectQuit(isServeMode)
+// Why these four lines are one step (#16761): the two above decide where userData lives, and
+// everything below may resolve a path. Installing the accessor any later leaves a window where an
+// early resolve either throws — which is what killed `orca serve` — or, worse, memoizes the
+// pre-override directory and silently writes user state to the wrong place for the whole session.
+// Safe this early: ElectronAppEnvironment holds no state and calls `app` lazily per accessor, so it
+// changes no timing, and initDataPath only joins strings.
+setAppEnvironment(new ElectronAppEnvironment())
+// Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
+// changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
+initDataPath()
 
 // Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.
 const TRAY_CREATE_FALLBACK_MS = 12_000
@@ -898,12 +946,11 @@ if (!hasSingleInstanceLock) {
 
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (hasSingleInstanceLock) {
-  // Why first: both accessors throw until installed, and everything below this line
-  // may resolve a path or read a credential. Neither constructor touches `app` or
-  // `safeStorage` — they resolve lazily per call — so installing here changes no
-  // timing, in particular not the pre-ready Keychain service-name resolution and
-  // the app.setName ordering the userData captures below depend on.
-  setAppEnvironment(new ElectronAppEnvironment())
+  // Why first in this block: the accessor throws until installed and everything below may read a
+  // credential. The constructor does not touch `safeStorage` — it resolves lazily per call — so
+  // installing here changes no timing, in particular not the pre-ready Keychain service-name
+  // resolution. The app-environment port and the userData capture install earlier still, next to
+  // the path decision they depend on.
   setSecretStore(new ElectronSecretStore())
   // Why at process level, not per-window: pty.ts registers against injected surfaces so
   // it can load without electron, and an Electron main process always has ipcMain —
@@ -936,8 +983,16 @@ if (hasSingleInstanceLock) {
   installDevParentDisconnectQuit(shouldCoupleToDevParent)
   installDevParentWatchdog(shouldCoupleToDevParent)
   installDevParentSignalQuit(shouldCoupleToDevParent)
-  // Why: run after configureDevUserDataPath but before app.setName('Orca') (whenReady), which changes the resolved path on case-sensitive filesystems.
-  initDataPath()
+  // Why not at module scope with the other lifetime couplings (#16761): this resolves the handoff
+  // path, so it throws until setAppEnvironment() above installs the accessor — which killed every
+  // `orca serve` process before it could listen. After initDataPath() specifically, so the
+  // path-equality check against the CLI's env var uses the dir captured before app.setName().
+  // Safe to defer, and must stay synchronous: no 'disconnect' can be delivered until this module
+  // finishes evaluating, so moving this behind an await would open a real orphan window.
+  installServeSupervisorDisconnectQuit(isServeMode)
+  // Why here: initDataPath above gives the canonical userData path for the record file; the write
+  // itself lands for the next launch (see macos-press-and-hold-default.ts).
+  applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())
   // Why: use the canonical userData path — late app.getPath('userData') can resolve differently across restarts, defeating persistence.
   initSessionParseCachePersistence({
     filePath: join(getCanonicalUserDataPath(), 'ai-vault', 'session-parse-cache.json'),
@@ -958,6 +1013,9 @@ if (hasSingleInstanceLock) {
   if (shouldApplyPreReadyAppName(devInstanceIdentity)) {
     app.setName(devInstanceIdentity.appName)
   }
+  // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
+  // scheme must be declared here or its webview loses fetch/secure-origin privileges.
+  registerDocPreviewSchemePrivileges()
   // Why: must precede app.whenReady() so Crashpad is installed before the
   // first renderer spawns; a CHECK before this point is still exit-code-only.
   startCrashpadCapture()
@@ -968,6 +1026,8 @@ if (hasSingleInstanceLock) {
     ...getMainProcessLifecycleIdentity()
   })
   disableUnsupportedChromiumFeatures()
+  // Why: unconditional — a GPU-fallback launch skips enableMainProcessGpuFeatures() below.
+  optOutOfHiddenPageWakeUpThrottling()
   configureElectronNetworkCompatibility()
   enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
@@ -980,6 +1040,11 @@ if (hasSingleInstanceLock) {
 
 ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
   await Promise.all([firstWindowStartupServicesReady, managedWslCliStartupBarrierReady])
+})
+
+ipcMain.handle('app:prepareTerminalStartupRestoration', async () => {
+  await Promise.all([firstWindowStartupServicesReady, managedWslCliStartupBarrierReady])
+  await runtime?.prepareStructuredAgentSessionStartupRestoration()
 })
 
 ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup', () =>
@@ -1068,7 +1133,8 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
         macosLoginSessionWatch: process.platform === 'darwin' && !isServeMode
       })
       // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
-      if (codexRuntimeHome && hasRecordedManagedHostCodexPane()) {
+      const hasRetainedManagedHostPane = hasRecordedManagedHostCodexPane()
+      if (codexRuntimeHome && (hasRetainedManagedHostPane || hasAnyRecordedLegacyWslCodexPane())) {
         const livePtyIds = await listLiveDaemonPtyIds()
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
@@ -1076,15 +1142,17 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
           // Why (#16441): each retained home can run a codex app-server grant
           // session. Awaiting them here delayed the first window by N sessions;
           // a retained shell cannot invoke Codex before this provider serves.
-          void reconcileRetainedCodexHookHomes({
-            hookService: codexHookService,
-            hooksEnabled:
-              isAgentStatusHooksEnabled(settings) &&
-              settings?.disabledTuiAgents.includes('codex') !== true,
-            runtimeHomePaths: codexRuntimeHome.getRetainedHostCodexHookHomePaths(livePtyIds)
-          }).catch((error: unknown) => {
-            console.warn('[codex-hook-service] retained Codex home reconcile failed:', error)
-          })
+          if (hasRetainedManagedHostPane) {
+            void reconcileRetainedCodexHookHomes({
+              hookService: codexHookService,
+              hooksEnabled:
+                isAgentStatusHooksEnabled(settings) &&
+                settings?.disabledTuiAgents.includes('codex') !== true,
+              runtimeHomePaths: codexRuntimeHome.getRetainedHostCodexHookHomePaths(livePtyIds)
+            }).catch((error: unknown) => {
+              console.warn('[codex-hook-service] retained Codex home reconcile failed:', error)
+            })
+          }
         }
       }
       // Why: retained shells can invoke Codex immediately after the startup gate.
@@ -1182,7 +1250,7 @@ async function prepareCodexRuntimeHomeForLaunch(
   // Why: a ManagedCodexHomeTemporarilyUnavailableError must escape uncaught —
   // the fallbacks below all key off `null`, which means "system default", so
   // swallowing the refusal would launch the wrong account (#STA-4422).
-  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+  let runtimeHomePath = await codexRuntimeHome!.prepareForCodexLaunchAsync(target, launchEnv, {
     unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
   })
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
@@ -1191,7 +1259,7 @@ async function prepareCodexRuntimeHomeForLaunch(
     // re-resolve if the capability gate rejects it.
     realHomeHooksPrepared = await ensureRealHomeHooksIfSelected()
     if (realHomeHooksPrepared) {
-      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+      runtimeHomePath = await codexRuntimeHome!.prepareForCodexLaunchAsync(target, launchEnv, {
         unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
       })
     }
@@ -1211,13 +1279,11 @@ async function prepareCodexRuntimeHomeForLaunch(
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
   try {
     // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
-    const status = hooksEnabled
-      ? ((await codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget)) ??
-        // Why: a managed account's launch home is its own self-contained
-        // CODEX_HOME, so hooks/trust must install there, not the shared mirror.
-        (await codexHookService.install(runtimeHomePath ?? undefined)))
-      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
-        (await codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined)))
+    const status = await codexHookService.prepareRuntimeHomeForLaunch(
+      runtimeHomePath,
+      hookTarget,
+      hooksEnabled
+    )
     if (status.state === 'error') {
       console.warn(
         `[codex-hook-service] failed to ${
@@ -1327,9 +1393,9 @@ async function prepareCodexSessionResumeForLaunch(args: {
             userDataPath: app.getPath('userData')
           })
         } else if (hooksEnabled) {
-          await codexHookService.install(resumeHome)
+          await codexHookService.installForLaunchPrep(resumeHome)
         } else {
-          await codexHookService.refreshRuntimeUserHooks(resumeHome)
+          await codexHookService.refreshRuntimeUserHooksForLaunchPrep(resumeHome)
         }
       } catch (error) {
         // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
@@ -1351,11 +1417,7 @@ async function prepareCodexSessionResumeForLaunch(args: {
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
 function showMainWindowFromTray(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) {
-      mainWindow.restore()
-    }
-    mainWindow.show()
-    mainWindow.focus()
+    safelyRevealWindow(mainWindow)
     return
   }
   if (!isQuittingForUpdate()) {
@@ -1554,6 +1616,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   })
   window.once('show', () => {
     logStartupMilestone('window-shown')
+    void presentGpuFallbackRecoveredLaunchPrompt(window)
   })
   const trayCreateFallback = setTimeout(createSystemTrayDeferred, TRAY_CREATE_FALLBACK_MS)
   trayCreateFallback.unref?.()
@@ -1840,7 +1903,25 @@ function getWindowsGpuFallbackEnvironment(): WindowsGpuFallbackEnvironment | nul
   return { ...environment, platform: 'win32' }
 }
 
-// Why: read the GPU-fallback marker before app.whenReady() so app.disableHardwareAcceleration() takes effect. Windows desktop only.
+// Writes both crash-time and post-recovery consent states through one build-scoped path.
+function persistGpuFallbackMarker(
+  userDataPath: string,
+  info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean }
+): boolean {
+  const environment = getWindowsGpuFallbackEnvironment()
+  if (!environment) {
+    return false
+  }
+  try {
+    writeGpuFallbackMarker(userDataPath, info, environment)
+    return true
+  } catch (error) {
+    console.warn('[gpu-fallback] failed to persist marker:', error)
+    return false
+  }
+}
+
+// Read before app.whenReady() so app.disableHardwareAcceleration() takes effect. Windows desktop only.
 function maybeApplyGpuFallbackForThisLaunch(): void {
   if (isServeMode || process.platform !== 'win32') {
     return
@@ -1849,6 +1930,7 @@ function maybeApplyGpuFallbackForThisLaunch(): void {
   if (!marker) {
     return
   }
+  activeGpuFallbackMarker = marker
   app.disableHardwareAcceleration()
   const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform)
   gpuFallbackActiveThisLaunch = true
@@ -1860,28 +1942,55 @@ function maybeApplyGpuFallbackForThisLaunch(): void {
   })
 }
 
+async function presentGpuFallbackRecoveredLaunchPrompt(window: BrowserWindow): Promise<void> {
+  const marker = activeGpuFallbackMarker
+  if (!marker || marker.userConfirmed || window.isDestroyed() || isQuitting) {
+    return
+  }
+  // One prompt per process. A failure leaves the on-disk marker unconfirmed so the next launch retries.
+  activeGpuFallbackMarker = null
+  const userDataPath = app.getPath('userData')
+  await handleGpuFallbackRecoveredLaunch({
+    isQuitting: () => isQuitting,
+    prompt: () => promptForGpuFallbackRecoveredLaunch(window),
+    confirmSafeGraphics: () => {
+      persistGpuFallbackMarker(userDataPath, {
+        engagedAt: marker.engagedAt,
+        crashesInWindow: marker.crashesInWindow,
+        userConfirmed: true
+      })
+    },
+    clearSafeGraphics: () => clearGpuFallbackMarker(userDataPath),
+    onPromptFailed: (error) =>
+      console.warn('[gpu-fallback] failed to show recovered-launch prompt:', error),
+    onSafeGraphicsKept: () =>
+      recordDurableCrashBreadcrumb('gpu_fallback_safe_graphics_kept', {
+        crashesInWindow: marker.crashesInWindow
+      }),
+    restartWithHardware: () => {
+      isQuitting = true
+      relaunchApp('gpu-fallback', {
+        mode: 'hardware-retry',
+        crashesInWindow: marker.crashesInWindow
+      })
+      destroySystemTray()
+      app.exit(0)
+    }
+  })
+}
+
 // Why: a burst of GPU child crashes means HW acceleration is unusable — persist a build-scoped marker and offer software rendering.
-async function handleGpuChildCrash(reason: string, exitCode: number | null): Promise<void> {
+async function handleGpuChildCrash(
+  reason: string,
+  exitCode: number | null,
+  crashedAt: number
+): Promise<void> {
   // Software rendering already active or shutting down: nothing more to do.
   if (gpuFallbackActiveThisLaunch || isQuitting || isServeMode) {
     return
   }
-  const result = gpuCrashFallbackTracker.recordGpuCrash(performance.now())
+  const result = gpuCrashFallbackTracker.recordGpuCrash(crashedAt)
   if (!result.shouldEngageFallback) {
-    return
-  }
-  recordCrashBreadcrumb('gpu_fallback_engaged', {
-    reason,
-    exitCode,
-    crashesInWindow: result.crashesInWindow
-  })
-  const engagedAt = Date.now()
-  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
-  let restartDecision: GpuFallbackRestartDecision
-  try {
-    restartDecision = await promptForGpuFallbackRestart(window)
-  } catch (error) {
-    console.warn('[gpu-fallback] failed to show restart prompt:', error)
     return
   }
   const fallbackData = {
@@ -1889,35 +1998,48 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
     exitCode,
     crashesInWindow: result.crashesInWindow
   }
-  if (isQuitting) {
-    return
-  }
-  if (restartDecision !== 'restart') {
-    recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData)
-    return
-  }
-  const environment = getWindowsGpuFallbackEnvironment()
-  if (!environment) {
-    return
-  }
-  try {
-    writeGpuFallbackMarker(
-      app.getPath('userData'),
-      {
-        engagedAt,
-        crashesInWindow: result.crashesInWindow
+  const userDataPath = app.getPath('userData')
+  await engageGpuFallbackAfterCrashBurst(
+    { reason, exitCode, crashesInWindow: result.crashesInWindow, engagedAt: Date.now() },
+    {
+      isQuitting: () => isQuitting,
+      onEngaged: (engagement) =>
+        recordCrashBreadcrumb('gpu_fallback_engaged', {
+          reason: engagement.reason,
+          exitCode: engagement.exitCode,
+          crashesInWindow: engagement.crashesInWindow
+        }),
+      persistMarker: (engagement) =>
+        persistGpuFallbackMarker(userDataPath, {
+          engagedAt: engagement.engagedAt,
+          crashesInWindow: engagement.crashesInWindow,
+          userConfirmed: false
+        }),
+      confirmMarker: (engagement) => {
+        persistGpuFallbackMarker(userDataPath, {
+          engagedAt: engagement.engagedAt,
+          crashesInWindow: engagement.crashesInWindow,
+          userConfirmed: true
+        })
       },
-      environment
-    )
-  } catch (error) {
-    console.warn('[gpu-fallback] failed to persist marker:', error)
-    return
-  }
-  isQuitting = true
-  relaunchApp('gpu-fallback', fallbackData)
-  // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
-  destroySystemTray()
-  app.exit(0)
+      clearMarker: () => clearGpuFallbackMarker(userDataPath),
+      promptForRestart: () =>
+        promptForGpuFallbackRestart(
+          mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+        ),
+      onPromptFailed: (error) =>
+        console.warn('[gpu-fallback] failed to show restart prompt:', error),
+      onRestartDeferred: () =>
+        recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData),
+      restartIntoSafeGraphics: () => {
+        isQuitting = true
+        relaunchApp('gpu-fallback', fallbackData)
+        // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
+        destroySystemTray()
+        app.exit(0)
+      }
+    }
+  )
 }
 
 function recordProcessGoneCrash(
@@ -2105,6 +2227,18 @@ registerPaneKeyTeardownListener((paneKey) => {
   stopSyntheticTitleSpinner(paneKey)
 })
 
+// Why: the spinner is a stand-in for a live hook status, so it must retire with the row it
+// stands in for — otherwise a pane whose status was cleared or dismissed keeps rotating a
+// working title long after the agent finished (#13890). Both paths are covered: the
+// pane-scoped clear fan-out, and user dismissal, which never routes through it.
+agentHookServer.subscribePaneStatusClear((clear) => {
+  const paneKey = getSyntheticTitleSpinnerPaneKeyToStop(clear)
+  if (paneKey) {
+    stopSyntheticTitleSpinner(paneKey)
+  }
+})
+agentHookServer.subscribeStatusDrop(stopSyntheticTitleSpinner)
+
 function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return
@@ -2263,6 +2397,19 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
 
 void app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
+  // Why: a headless automated run must not claim a macOS Dock tile or the menu bar.
+  applyBackgroundActivationPolicy({ warn: console.warn })
+  installElectronProxyRequestGuard(session.defaultSession)
+  app.on('login', (event, webContents, details, authInfo, callback) => {
+    handleElectronProxyLogin(
+      event,
+      webContents,
+      details,
+      authInfo,
+      callback,
+      session.defaultSession
+    )
+  })
   installMainThreadHangWatchdog({ userDataPath: getCanonicalUserDataPath() })
   const hangDetection = consumeHangDetectionMarker(
     hangDetectionMarkerPath(getCanonicalUserDataPath())
@@ -2334,11 +2481,17 @@ void app.whenReady().then(async () => {
     dataFile: activeOrcaProfile.dataFile,
     storageAuthority: isServeMode ? 'runtime' : 'desktop'
   })
-  // Why here and not at install time: the report remembers what it last said, and that
-  // state lives beside the profile data file, which does not exist until now.
-  reportSecretProtectionGap({
+  // Why: create pending readiness before the guard can observe the default session.
+  const initialProxyApplication = applyElectronProxySettings(store.getSettings())
+  installElectronProxyRequestGuard(session.defaultSession)
+  // Why armed here and not at install time: the report remembers what it last said, and
+  // that state lives beside the profile data file, which does not exist until now.
+  // Why scheduled and not called: the report probes the OS keyring, which blocks on Linux
+  // and must not gate the first window (STA-5765).
+  scheduleSecretProtectionGapReport({
     dataFile: activeOrcaProfile.dataFile,
-    force: process.env.ORCA_ALWAYS_REPORT_SECRET_PROTECTION === '1'
+    force: process.env.ORCA_ALWAYS_REPORT_SECRET_PROTECTION === '1',
+    deferUntilFirstWindow: !isServeMode
   })
   // Why here: the host key store is a sidecar of the same profile, and every SSH connect consults
   // it. Left unbound it reports nothing trusted, which is safe but silently discards our own
@@ -2425,7 +2578,7 @@ void app.whenReady().then(async () => {
   }
   try {
     // Why: Dock/Launchpad launches don't inherit shell proxy env vars, so apply the persisted proxy before any app-owned network fetchers run.
-    const proxyApplyResult = await applyElectronProxySettings(store.getSettings())
+    const proxyApplyResult = await initialProxyApplication
     if (proxyApplyResult.source === 'invalid-settings') {
       // Why (STA-3442): a silent DIRECT fallback made a dead configured proxy undiagnosable.
       console.warn('[proxy] persisted proxy settings are invalid; using direct networking')
@@ -2433,6 +2586,11 @@ void app.whenReady().then(async () => {
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings')
   }
+  // Why: the partition installer reads the proxy through this resolver, so register it before sessions materialize.
+  setBrowserNetworkProxySettingsResolver(() => store!.getSettings())
+  // Why: the preview session is protocol-scoped, so the handler must exist before any preview webview attaches.
+  installDocPreviewProtocolHandler()
+  registerDocPreviewGrantHandlers()
   // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
   initializeBrowserSessionsForApp({
     orcaProfileId: activeOrcaProfile.profile.id,
@@ -2447,6 +2605,12 @@ void app.whenReady().then(async () => {
       return store.getSshTargets().map((target) => target.id)
     }
   })
+  try {
+    // Why: awaited here so the first guest navigation cannot race the installer's fire-and-forget write.
+    await applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), store.getSettings())
+  } catch {
+    console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
+  }
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
   agentAwakeService.setMode(
@@ -2772,6 +2936,11 @@ void app.whenReady().then(async () => {
         runtimeHome: codexRuntimeHome,
         systemCodexHomePath: resolveHostCodexSessionSourceHome(store!.getSettings())
       }),
+    prepareCodexStructuredLaunch: ({ workspacePath, launchEnv }) =>
+      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv, {
+        launchAgent: 'codex',
+        workspacePath
+      }),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport,
@@ -3074,37 +3243,40 @@ void app.whenReady().then(async () => {
   // ordered before managed-hook reconciliation — an incapable host must re-arm
   // and complete the legacy real-home sweep first — but awaiting it inline
   // stalled app init behind that session, so chain instead of blocking.
-  const realHomeCodexHookState = codexRuntimeHome.isHostSystemDefaultRealHomeSelected()
-    ? ensureRealHomeCodexHookState({
-        hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
-        userDataPath: app.getPath('userData')
-      }).catch((error: unknown) => {
-        console.warn('[codex-real-home-hooks] startup ensure failed:', error)
-      })
-    : Promise.resolve()
-  if (shouldInstallManagedHooks(is.dev)) {
-    // Why: check the persisted off switch before any auto-install so removed hooks don't silently reappear on launch.
-    if (isAgentStatusHooksEnabled(store.getSettings())) {
-      const managedHookStore = store
-      void realHomeCodexHookState
-        .then(() =>
-          applyAgentStatusHooksEnabled(true, managedHookStore.getSettings(), {
-            shouldHydrateShellPath: app.isPackaged,
-            onInstallError: recordManagedHookInstallFailure,
-            shouldContinue: (agent) => {
-              const settings = managedHookStore.getSettings()
-              return shouldContinueManagedHookStartup(isQuitting, settings, agent)
-            }
-          })
-        )
-        .catch((error: unknown) => {
-          console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
+  const startupManagedHookSettings = store.getSettings()
+  const shouldReconcileStartupManagedHooks =
+    shouldInstallManagedHooks(is.dev) &&
+    resolveStartupManagedHookAction(startupManagedHookSettings) === 'install'
+  const realHomeCodexHookState =
+    shouldReconcileStartupManagedHooks &&
+    shouldInstallStartupManagedAgentHook(startupManagedHookSettings, 'codex') &&
+    codexRuntimeHome.isHostSystemDefaultRealHomeSelected()
+      ? ensureRealHomeCodexHookState({
+          hooksEnabled: true,
+          userDataPath: app.getPath('userData')
+        }).catch((error: unknown) => {
+          console.warn('[codex-real-home-hooks] startup ensure failed:', error)
         })
-    } else {
-      void removeManagedAgentHooks().catch((error: unknown) => {
-        console.warn('[agent-hooks] failed to remove managed hooks on startup:', error)
+      : Promise.resolve()
+  // Why skip rather than remove when the off switch is set: the hook files are user-global but this
+  // decision reads only THIS profile's settings, so removing here deletes the hooks every other Orca
+  // instance depends on (STA-5679). Skipping already keeps removed hooks from reappearing on launch.
+  if (shouldReconcileStartupManagedHooks) {
+    const managedHookStore = store
+    void realHomeCodexHookState
+      .then(() =>
+        installManagedAgentHooks(managedHookStore.getSettings(), {
+          shouldHydrateShellPath: app.isPackaged,
+          onInstallError: recordManagedHookInstallFailure,
+          shouldContinue: (agent) => {
+            const settings = managedHookStore.getSettings()
+            return shouldContinueManagedHookStartup(isQuitting, settings, agent)
+          }
+        })
+      )
+      .catch((error: unknown) => {
+        console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
       })
-    }
   }
   // Why: process-gone metrics only see survivors; retain a recent whole-app
   // snapshot for comparison in crash reports.
@@ -3122,7 +3294,9 @@ void app.whenReady().then(async () => {
         reason: details.reason
       })
     ) {
-      void handleGpuChildCrash(details.reason, details.exitCode ?? null)
+      const crashedAt = performance.now()
+      void gpuCrashDiagnostics?.record()
+      void handleGpuChildCrash(details.reason, details.exitCode ?? null, crashedAt)
     }
   })
 
@@ -3274,12 +3448,12 @@ void app.whenReady().then(async () => {
   let desktopWindow: BrowserWindow | null = null
   if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
     const desktopStartup = startWindowsDesktopBeforeShellPathReady({
+      bindServices: bindTerminalRuntimeStartupServices,
       openWindow: () => openMainWindow({ revealOnDidFinishLoad: true }),
       shellPathReady,
       startServices: startTerminalRuntimeStartupServices
     })
     desktopWindow = desktopStartup.window
-    bindTerminalRuntimeStartupServices(desktopStartup.services)
   } else {
     await shellPathReady
     bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
@@ -3295,7 +3469,8 @@ void app.whenReady().then(async () => {
     })
     // Why: headless PTYs must not start on the fallback provider, then get swept when an activated renderer registers desktop lifecycle handlers.
     await localPtyStartupReady
-    registerHeadlessPtyRuntime(
+    await localPtyProviderStartupReady
+    await registerHeadlessPtyRuntime(
       runtime,
       prepareCodexRuntimeHomeForLaunch,
       () => store!.getSettings(),
@@ -3505,6 +3680,7 @@ app.on('will-quit', (e) => {
   pluginMarketplaceInstaller = null
   const pluginHostShutdown = pluginService?.dispose() ?? Promise.resolve()
   const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
+  const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
   pluginService = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
@@ -3606,6 +3782,7 @@ app.on('will-quit', (e) => {
     { name: 'skill-uploads', promise: skillUploadShutdown },
     { name: 'grok-hooks', promise: grokHookCleanup },
     { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
+    { name: 'structured-agent-session', promise: structuredAgentSessionShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'stats', promise: statsFlush },
     { name: 'state', promise: storeFlush }

@@ -40,6 +40,18 @@ describe('runtime host connection state', () => {
     expect(isConnectedRuntimeHostState('disconnected')).toBe(false)
   })
 
+  it('distinguishes a connected transport from an unavailable runtime', () => {
+    expect(
+      runtimeHostConnectionState({
+        hasStatusEntry: true,
+        status: null,
+        transportStatus: 'connected'
+      })
+    ).toBe('runtime-unavailable')
+    expect(runtimeStatusForOverall('runtime-unavailable')).toBe('connected')
+    expect(isConnectedRuntimeHostState('runtime-unavailable')).toBe(true)
+  })
+
   it('still counts a workspace-window-closed remote server as a connected host', () => {
     // Why: the transport is healthy, so demoting it to disconnected would be a lie
     // in the other direction — only the wording changes (#12350).
@@ -76,6 +88,73 @@ describe('runtime host connection state', () => {
         }
       })
     ).toBe('reconnecting')
+  })
+
+  function remoteControl(
+    overrides: Partial<NonNullable<RuntimeStatus['remoteControl']>>
+  ): NonNullable<RuntimeStatus['remoteControl']> {
+    return {
+      state: 'ready',
+      pendingRequestCount: 0,
+      subscriptionCount: 0,
+      reconnectAttempt: 0,
+      lastConnectedAt: null,
+      lastClose: null,
+      lastError: null,
+      ...overrides
+    }
+  }
+
+  it('uses outer transport diagnostics when status is unavailable', () => {
+    expect(
+      runtimeHostConnectionState({
+        hasStatusEntry: true,
+        status: null,
+        remoteControl: remoteControl({ state: 'ready' })
+      })
+    ).toBe('runtime-unavailable')
+    expect(
+      runtimeHostConnectionState({
+        hasStatusEntry: true,
+        status: null,
+        remoteControl: remoteControl({ state: 'reconnecting' })
+      })
+    ).toBe('reconnecting')
+    for (const state of ['awaiting_ready', 'awaiting_authenticated'] as const) {
+      expect(
+        runtimeHostConnectionState({
+          hasStatusEntry: true,
+          status: null,
+          remoteControl: remoteControl({ state })
+        }),
+        state
+      ).toBe('checking')
+    }
+  })
+
+  it('reports a cleanly closed control channel as disconnected even with no error', () => {
+    // Why: a clean close (server restart, host sleep, network blip) leaves lastError null.
+    // Requiring an error string to call it disconnected paints a dead host green.
+    expect(
+      runtimeHostConnectionState({
+        hasStatusEntry: true,
+        status: { ...makeStatus(), remoteControl: remoteControl({ state: 'closed' }) }
+      })
+    ).toBe('disconnected')
+  })
+
+  it('does not call a half-open handshake connected', () => {
+    // Why: the socket is up but the runtime has not completed ready/auth, so nothing
+    // can run there yet. Green here is the same lie as a closed channel reading connected.
+    for (const state of ['awaiting_ready', 'awaiting_authenticated'] as const) {
+      expect(
+        runtimeHostConnectionState({
+          hasStatusEntry: true,
+          status: { ...makeStatus(), remoteControl: remoteControl({ state }) }
+        }),
+        state
+      ).toBe('checking')
+    }
   })
 
   it('does not hide a closed control channel behind workspace-window diagnostics', () => {

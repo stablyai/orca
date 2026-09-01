@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { getCodexSessionBackfillStateDirPath } from './codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
@@ -231,7 +232,7 @@ async function healOneThread(
       recordHealOutcome(paths, thread, 'missing')
       return
     }
-    if (/SQLITE_(?:BUSY|LOCKED)|database (?:is )?(?:busy|locked)/i.test(message)) {
+    if (isTransientSqliteContention(message)) {
       // Why: an active Codex process can briefly own sqlite; leave the id off
       // the ledger and abort this pass so a later startup resumes it.
       throw error

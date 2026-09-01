@@ -17,6 +17,7 @@ import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subag
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
+import { remoteClineSource } from './remote-session-scanner-cline-source'
 import type {
   RemoteParserOptions,
   RemoteScannerContext,
@@ -77,6 +78,7 @@ export function remoteSessionSources(
       parseCursorSessionContent,
       (path) => remotePathSegments(path).includes('agent-transcripts')
     ),
+    remoteClineSource(remoteHome, hostPlatform),
     source(
       'hermes',
       remoteHome,

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
@@ -408,9 +408,17 @@ describe('settings navigation metadata', () => {
 
   it('does not import Settings page or pane UI modules from the metadata hook', () => {
     const testDir = import.meta.dirname
-    const hookSource = readFileSync(resolve(testDir, 'useSettingsNavigationMetadata.ts'), 'utf8')
-    const importLines = hookSource
-      .split('\n')
+    // Why: the section tables live in sibling settings-navigation-* modules, so reading only the
+    // hook would scan a file that no longer holds the imports this guard exists to police.
+    const sourceFiles = [
+      'useSettingsNavigationMetadata.ts',
+      ...readdirSync(testDir).filter(
+        (name) => name.startsWith('settings-navigation-') && name.endsWith('.ts')
+      )
+    ]
+    expect(sourceFiles.length).toBeGreaterThan(1)
+    const importLines = sourceFiles
+      .flatMap((name) => readFileSync(resolve(testDir, name), 'utf8').split('\n'))
       .filter((line) => line.trim().startsWith('import '))
       .join('\n')
 

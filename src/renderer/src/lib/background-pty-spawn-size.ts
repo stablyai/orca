@@ -13,7 +13,11 @@ export const BACKGROUND_PTY_SPAWN_SIZE = { cols: 120, rows: 40 } as const
 
 export function registerBackgroundEagerPtyBuffer(
   ptyId: string,
-  onExit: (ptyId: string, code: number) => void
+  onExit: (ptyId: string, code: number) => void,
+  incarnationId?: string
 ): EagerPtyHandle {
-  return registerEagerPtyBuffer(ptyId, onExit, { captureDims: BACKGROUND_PTY_SPAWN_SIZE })
+  return registerEagerPtyBuffer(ptyId, onExit, {
+    captureDims: BACKGROUND_PTY_SPAWN_SIZE,
+    ...(incarnationId ? { incarnationId } : {})
+  })
 }

@@ -16,6 +16,10 @@ import {
   makeProjectHostSetup
 } from './persistence-test-harness'
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
+import {
+  getLocalWorktreeScanGeneration,
+  isLocalWorktreeScanGenerationCurrent
+} from './local-worktree-scan-generation'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -304,12 +308,13 @@ describe('Store', () => {
 
   it('updates and persists a project Windows runtime preference', async () => {
     const project = makeProject({
-      id: 'project-1',
+      id: 'repo:r1',
       sourceRepoIds: ['r1'],
       localWindowsRuntimePreference: { kind: 'inherit-global' }
     })
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
+      repos: [makeRepo({ id: 'r1' })],
       projects: [project],
       projectHostSetups: [
         makeProjectHostSetup({
@@ -320,12 +325,14 @@ describe('Store', () => {
       ]
     })
     const store = await createStore()
+    const scanGeneration = getLocalWorktreeScanGeneration('r1')
 
-    const updated = store.updateProject('project-1', {
+    const updated = store.updateProject(project.id, {
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
 
     expect(updated?.localWindowsRuntimePreference).toEqual({ kind: 'wsl', distro: 'Ubuntu' })
+    expect(isLocalWorktreeScanGenerationCurrent('r1', scanGeneration)).toBe(false)
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getProjects()[0]?.localWindowsRuntimePreference).toEqual({

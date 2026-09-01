@@ -102,6 +102,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
   const daemonClientMock = vi.fn().mockImplementation(function MockDaemonClient() {
     return {
       ensureConnected: vi.fn(async () => {}),
+      ensureConnectedWithin: vi.fn(async () => {}),
       getDaemonIdentity: vi.fn(readLaunchedDaemonIdentity),
       request: vi.fn(async () => ({ sessions: [] })),
       disconnect: vi.fn()
@@ -212,6 +213,7 @@ export function createDaemonInitMocks(): DaemonInitMocks {
     state.daemonClientMock.mockImplementationOnce(function MockAdoptionClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         request: vi.fn(),
         disconnect: vi.fn()
       }

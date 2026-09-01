@@ -587,7 +587,13 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: null, currentHeadOid: null },
+      params: {
+        repo: 'repo-1',
+        branch,
+        linkedPRNumber: null,
+        currentHeadOid: null,
+        reason: 'swr'
+      },
       timeoutMs: 30_000
     })
   })
@@ -717,7 +723,13 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-1', branch, linkedPRNumber: null, currentHeadOid: null },
+      params: {
+        repo: 'repo-1',
+        branch,
+        linkedPRNumber: null,
+        currentHeadOid: null,
+        reason: 'post-push'
+      },
       timeoutMs: 30_000
     })
   })

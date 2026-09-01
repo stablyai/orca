@@ -24,13 +24,14 @@ const CLI_TO_SERVE_VALUE_FLAG = new Map([
 /**
  * Flags that consume the next argv token as a value (CLI-form + Electron passthrough).
  * Residual class: a flag outside this list whose space-separated value is literally `serve` would
- * read as the subcommand. Chromium switches are `--flag=value` only, so no real launch does that.
+ * read as the subcommand. Include switches that may arrive in either argv shape.
  */
 const VALUE_TAKING_FLAGS = new Set([
   ...CLI_TO_SERVE_VALUE_FLAG.keys(),
   '--serve-port',
   '--serve-pairing-address',
   '--serve-project-root',
+  '--disable-features',
   '--user-data-dir',
   '--environment',
   '--pairing-code'

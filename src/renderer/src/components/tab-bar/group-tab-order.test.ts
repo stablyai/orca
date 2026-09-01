@@ -64,7 +64,42 @@ function simulatorTab(id: string, groupId: string, sortOrder: number): Tab {
   }
 }
 
+function agentSessionTab(id: string, groupId: string, sessionId: string, sortOrder: number): Tab {
+  return {
+    id,
+    entityId: sessionId,
+    groupId,
+    worktreeId: 'wt',
+    contentType: 'agent-session',
+    agentSessionAgent: 'codex',
+    label: 'Codex Chat',
+    customLabel: null,
+    color: null,
+    sortOrder,
+    createdAt: sortOrder
+  }
+}
+
 describe('getGroupVisibleTabOrder', () => {
+  it('includes structured sessions without a terminal backing entity', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-a1',
+      tabOrder: ['tab-t1', 'tab-a1']
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      agentSessionTab('tab-a1', 'g1', 'session-1', 1)
+    ]
+    expect(getGroupVisibleTabOrder(group, tabs, new Set(['term-1']), new Set(), new Set())).toEqual(
+      [
+        { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
+        { type: 'agent-session', id: 'session-1', tabId: 'tab-a1' }
+      ]
+    )
+  })
+
   it('returns active-group refs with backing ids plus unified tab ids', () => {
     const group: TabGroup = {
       id: 'g1',
@@ -398,9 +433,11 @@ describe('group order matches the rendered tab strip', () => {
       editorFileIds: [],
       browserTabIds: [],
       simulatorTabIds: [],
+      agentSessionTabIds: [],
       terminalMap: terminalMap as never,
       editorMap: new Map(),
       browserMap: new Map(),
+      agentSessionMap: new Map(),
       unifiedTabByVisibleId: new Map()
     }).map((item) => item.id)
   }

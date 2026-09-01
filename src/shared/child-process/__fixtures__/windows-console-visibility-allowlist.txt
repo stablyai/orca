@@ -43,7 +43,6 @@ main/pty/posix-pty-foreground-group.ts
 main/pty/posix-pty-process-groups.ts
 main/pty/windows-environment-path.ts
 main/rate-limits/codex-fetcher.ts
-main/runtime/orca-runtime-files.ts
 main/runtime/tls-certificate.ts
 main/ssh/ssh-connection.ts
 main/startup/appimage-cli-redirect.ts

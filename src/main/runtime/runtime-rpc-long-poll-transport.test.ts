@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { readRuntimeMetadata } from './runtime-metadata'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { classifyRuntimeLongPoll, OrcaRuntimeRpcServer } from './runtime-rpc'
 import {
   sendRequest,
   openFramedSession,
@@ -33,6 +33,36 @@ vi.mock('../git/worktree', () => {
 })
 
 describe('OrcaRuntimeRpcServer', () => {
+  it('classifies worker-start as a keepalive-backed long poll', () => {
+    expect(
+      classifyRuntimeLongPoll({
+        id: 'req_worker_start',
+        authToken: 'token',
+        method: 'orchestration.workerStart',
+        params: { task: 'task_1', timeoutMs: 60_000 }
+      })
+    ).toBe('wait')
+  })
+
+  it('keeps agent-prompt submission sockets alive during verification', () => {
+    expect(
+      classifyRuntimeLongPoll({
+        id: 'req_prompt',
+        authToken: 'token',
+        method: 'terminal.send',
+        params: { agentPrompt: true }
+      })
+    ).toBe('wait')
+    expect(
+      classifyRuntimeLongPoll({
+        id: 'req_direct',
+        authToken: 'token',
+        method: 'terminal.send',
+        params: { agentPrompt: false }
+      })
+    ).toBeNull()
+  })
+
   it('rejects oversized RPC frames instead of buffering them indefinitely', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -74,6 +104,45 @@ describe('OrcaRuntimeRpcServer', () => {
   // Exercise the real socket (not a mock) so we catch buffer/flush regressions
   // that a unit-level test would miss.
   describe('long-poll transport (§3.1)', () => {
+    it('emits keepalives while orchestration.workerStart blocks', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 30
+      })
+      const dispatch = server['dispatcher']
+      vi.spyOn(dispatch, 'dispatch').mockImplementation(async (request) => {
+        await sleep(120)
+        return {
+          id: request.id,
+          ok: true,
+          result: { dispatch: { id: 'dispatch_1' } },
+          _meta: { runtimeId: runtime.getRuntimeId() }
+        }
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_worker_start',
+          authToken: metadata!.authToken,
+          method: 'orchestration.workerStart',
+          params: { task: 'task_1', timeoutMs: 60_000 }
+        })
+        await session.done
+
+        expect(
+          session.frames.filter((frame) => frame._keepalive === true).length
+        ).toBeGreaterThanOrEqual(2)
+        expect(session.frames.filter((frame) => frame.ok !== undefined)).toHaveLength(1)
+      } finally {
+        await server.stop()
+      }
+    })
+
     it('emits keepalive frames while a check --wait handler blocks', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
@@ -237,6 +306,45 @@ describe('OrcaRuntimeRpcServer', () => {
           ok: false,
           error: { code: 'timeout' }
         })
+      } finally {
+        await server.stop()
+      }
+    })
+
+    it('emits keepalive frames while agent-prompt verification blocks', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 30
+      })
+      const dispatch = server['dispatcher']
+      vi.spyOn(dispatch, 'dispatch').mockImplementation(async (request) => {
+        await sleep(120)
+        return {
+          id: request.id,
+          ok: true,
+          result: { send: { accepted: true } },
+          _meta: { runtimeId: runtime.getRuntimeId() }
+        }
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_prompt',
+          authToken: metadata!.authToken,
+          method: 'terminal.send',
+          params: { agentPrompt: true }
+        })
+        await session.done
+
+        expect(
+          session.frames.filter((frame) => frame._keepalive === true).length
+        ).toBeGreaterThanOrEqual(2)
+        expect(session.frames.filter((frame) => frame.ok !== undefined)).toHaveLength(1)
       } finally {
         await server.stop()
       }

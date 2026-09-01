@@ -183,6 +183,27 @@ describe('orca cli browser page targeting', () => {
     )
   })
 
+  it('opens browser-launch URLs on the client hosting the current worktree', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_open_url', { browserPageId: 'page-local' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['open-url', '--url', 'https://example.com/login', '--json'], '/tmp/repo/feature')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.openUrl',
+      {
+        url: 'https://example.com/login',
+        worktree: 'id:repo::/tmp/repo/feature'
+      },
+      { timeoutMs: 60_000 }
+    )
+  })
+
   it('passes tab profile updates through by page id', async () => {
     queueFixtures(
       callMock,

@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/workspace-session-state-types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
+import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
@@ -19,6 +20,7 @@ import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tab
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildPersistedClosedTerminalTabTombstones } from './workspace-session-closed-tab-tombstones'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -135,6 +137,9 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('browserUrlHistory')) {
     patch.browserUrlHistory = normalizeBrowserHistoryEntries(snapshot.browserUrlHistory)
   }
+  if (changed.has('workspaceDocHistory')) {
+    patch.workspaceDocHistory = normalizeWorkspaceDocHistoryEntries(snapshot.workspaceDocHistory)
+  }
   if (changed.has('clientHostedBrowserCloseIntentsByEnvironment')) {
     patch.clientHostedBrowserCloseIntentsByEnvironment =
       snapshot.clientHostedBrowserCloseIntentsByEnvironment
@@ -159,6 +164,11 @@ export function buildWorkspaceSessionPatch(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
+  }
+  if (changed.has('closedTerminalTabTombstonesByTabId')) {
+    patch.closedTerminalTabTombstonesByTabId = buildPersistedClosedTerminalTabTombstones(
+      snapshot.closedTerminalTabTombstonesByTabId
+    )
   }
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
     patch.sleepingAgentSessionsByPaneKey =

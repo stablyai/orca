@@ -24,7 +24,8 @@ type RedirectOptions = {
 
 const HELP_FLAGS = new Set(['--help', '-h', 'help'])
 const APPIMAGE_DESKTOP_FLAGS = new Set(['--no-sandbox'])
-const CLI_FLAGS_WITH_VALUES = new Set(['--environment', '--pairing-code'])
+const ELECTRON_LAUNCH_SWITCHES = new Set(['--disable-features'])
+const CLI_FLAGS_WITH_VALUES = new Set(['--environment', '--pairing-code', '--disable-features'])
 // Why: the main tsconfig cannot import the CLI project, but AppImage direct
 // launches need a conservative allow-list before bypassing the GUI startup.
 const APPIMAGE_CLI_COMMAND_NAMES = [
@@ -157,21 +158,44 @@ export function getAppImageCliArgs(
 
   const commandNames = new Set(options.commandNames)
   const firstPositional = findFirstCommandCandidate(cliArgs)
-  return firstPositional && commandNames.has(firstPositional) ? cliArgs : null
+  if (!firstPositional || !commandNames.has(firstPositional)) {
+    return null
+  }
+  // Keep serve in Electron only when an Electron launch switch is present.
+  // Forwarding it to the strict Node-mode CLI parser makes an otherwise valid
+  // serve launch fail, while clean serve invocations retain CLI validation.
+  if (
+    firstPositional === 'serve' &&
+    cliArgs
+      .slice(0, findFirstCommandCandidateIndex(cliArgs))
+      .some((arg) => ELECTRON_LAUNCH_SWITCHES.has(flagName(arg)))
+  ) {
+    return null
+  }
+  return cliArgs
 }
 
 function findFirstCommandCandidate(args: string[]): string | null {
+  const index = findFirstCommandCandidateIndex(args)
+  return index === -1 ? null : args[index]!
+}
+
+function findFirstCommandCandidateIndex(args: string[]): number {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (!arg.startsWith('-')) {
-      return arg
+      return index
     }
-    const flagName = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg
-    if (CLI_FLAGS_WITH_VALUES.has(flagName) && !arg.includes('=')) {
+    if (CLI_FLAGS_WITH_VALUES.has(flagName(arg)) && !arg.includes('=')) {
       index += 1
     }
   }
-  return null
+  return -1
+}
+
+function flagName(arg: string): string {
+  const equalsIndex = arg.indexOf('=')
+  return equalsIndex === -1 ? arg : arg.slice(0, equalsIndex)
 }
 
 function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {

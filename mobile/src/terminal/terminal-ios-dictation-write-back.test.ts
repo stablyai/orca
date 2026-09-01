@@ -13,13 +13,13 @@ const sessionRouteSource = readFileSync(
 // apply dash normalization only on the send/mirror path. See stablyai/orca#7925.
 describe('terminal iOS dictation write-back', () => {
   it('does not write normalized text back into the buffered command input value', () => {
-    expect(sessionRouteSource).toContain('onChangeText={setInput}')
+    expect(sessionRouteSource).toContain('onChangeText={bufferedTerminalDraftState.setInput}')
     expect(sessionRouteSource).not.toContain(
       'setInput((previousText) => normalizeTerminalTextInput'
     )
   })
 
   it('still normalizes the buffered command text at send time', () => {
-    expect(sessionRouteSource).toContain('normalizeTerminalTextInput(input)')
+    expect(sessionRouteSource).toContain('normalizeTerminalTextInput(draft)')
   })
 })

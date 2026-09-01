@@ -1,14 +1,14 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
-import { getConnectionId } from '@/lib/connection-context'
+import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { detectLanguage } from '@/lib/language-detect'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import {
-  isRemoteRuntimeFileOperation,
-  statRuntimePath,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+  buildWorkspaceFileContext,
+  canClientOsOpenWorkspaceFile
+} from '@/lib/workspace-file-host-routing'
+import { statRuntimePath, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
@@ -50,13 +50,7 @@ export function getTerminalFileContext(
   worktreePath: string,
   runtimeEnvironmentId?: string | null
 ): RuntimeFileOperationArgs {
-  const settings = useAppStore.getState().settings
-  return {
-    settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
-    worktreeId: worktreeId || null,
-    worktreePath,
-    connectionId: getConnectionId(worktreeId || null) ?? undefined
-  }
+  return buildWorkspaceFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
 }
 
 // Why: a WSL-runtime pane prints POSIX paths even when the worktree lives on a
@@ -97,7 +91,7 @@ export function shouldOpenTerminalFileWithSystemDefault(
   fileContext: RuntimeFileOperationArgs,
   filePath: string
 ): boolean {
-  return !fileContext.connectionId && !isRemoteRuntimeFileOperation(fileContext, filePath)
+  return canClientOsOpenWorkspaceFile(fileContext, filePath)
 }
 
 let latestOpenDetectedFilePathRequestId = 0
@@ -196,14 +190,28 @@ export function openDetectedFilePath(
       return
     }
 
+    if (openWithSystemDefault && !canOpenWithSystemDefault) {
+      // Why: the popover names Shift+Cmd/Ctrl "Download & open with default app", and the OS
+      // cannot launch a remote path, so the direct gesture must reach the same download.
+      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
+      return
+    }
+
     // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
     // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
-    if (
-      isHtmlFilePath(mappedFilePath) &&
-      shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)
-    ) {
-      openHtmlFileInBrowser(mappedFilePath, worktreeId)
-      return
+    if (isHtmlFilePath(mappedFilePath)) {
+      if (shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)) {
+        openHtmlFileInBrowser(mappedFilePath, worktreeId)
+        return
+      }
+      // Why: the same gesture renders remote HTML too, through the doc preview; only an
+      // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
+      const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
+      if (plan.status === 'doc-preview') {
+        activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
+        openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+        return
+      }
     }
 
     const store = useAppStore.getState()

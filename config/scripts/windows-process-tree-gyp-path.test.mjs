@@ -9,26 +9,37 @@ const PATCH = readFileSync(
   'utf8'
 )
 const PACKAGE_DIR = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
-const ABSOLUTE_GYP = "require.resolve('node-addon-api/node_addon_api.gyp')"
+const RESOLVED_GYP = "require.resolve('node-addon-api/node_addon_api.gyp')"
 
 describe('windows-process-tree node-addon-api gyp path', () => {
-  it('keeps the gyp project path absolute so pnpm Windows source builds find it', () => {
-    expect(PATCH).toContain(
-      `+        "<!(node -p \\"require.resolve('node-addon-api/node_addon_api.gyp')\\"):node_addon_api_except"`
+  it('stages headers without a pnpm-sensitive gyp dependency', () => {
+    expect(PATCH).not.toContain('+        "../../node-addon-api')
+    expect(PATCH).toContain('+          "include_dirs": ["deps/node-addon-api"],')
+    expect(PATCH).toContain('+          "defines": ["NAPI_CPP_EXCEPTIONS", "_HAS_EXCEPTIONS=1"],')
+    const buildScript = readFileSync(
+      join(projectDir, 'config/scripts/build-windows-process-tree-relay-addon.mjs'),
+      'utf8'
     )
-    const bindingGyp = readFileSync(join(PACKAGE_DIR, 'binding.gyp'), 'utf8')
-    expect(bindingGyp).toContain(ABSOLUTE_GYP)
-    expect(bindingGyp).not.toContain("require('node-addon-api').targets")
-    expect(
-      readFileSync(
-        join(projectDir, 'config/scripts/build-windows-process-tree-relay-addon.mjs'),
-        'utf8'
-      )
-    ).toContain(ABSOLUTE_GYP)
+    expect(buildScript).toContain('stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)')
+    expect(buildScript).toContain('Repaired un-applied pnpm patch hunks before build.')
+    const rebuildHelper = readFileSync(
+      join(projectDir, 'config/scripts/windows-process-tree-gyp-rebuild.mjs'),
+      'utf8'
+    )
+    expect(rebuildHelper).toContain("createRequire(join(packageDir, 'package.json'))")
+    expect(rebuildHelper).toContain("resolve('node-addon-api/package.json')")
+    expect(rebuildHelper).toContain("'napi.h'")
+    expect(rebuildHelper).toContain("'napi-inl.h'")
+    expect(rebuildHelper).toContain("'napi-inl.deprecated.h'")
+    const rebuildScript = readFileSync(
+      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      'utf8'
+    )
+    expect(rebuildScript).toContain('stageWindowsProcessTreeNodeAddonApiHeaders()')
   })
 
   it('resolves node_addon_api.gyp to a real file from the package directory', () => {
-    const resolved = execFileSync(process.execPath, ['-p', ABSOLUTE_GYP], {
+    const resolved = execFileSync(process.execPath, ['-p', RESOLVED_GYP], {
       cwd: PACKAGE_DIR,
       encoding: 'utf8'
     }).trim()

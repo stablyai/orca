@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import {
-  ARTIFACT_CLI_MAX_RPC_BYTES,
+  ARTIFACT_MAX_CONTENT_BYTES,
+  ARTIFACT_MAX_REQUEST_BYTES,
+  artifactContentByteLength,
   artifactWriteRequestByteLength
 } from '../../../../shared/artifacts'
 import { defineMethod, type RpcAnyMethod } from '../core'
@@ -23,14 +25,20 @@ const SourceRequest = z.object({
 const WriteRequest = z
   .object({
     sourceKey: z.string().min(1).max(32_768),
-    content: z.string().min(1).max(ARTIFACT_CLI_MAX_RPC_BYTES),
+    content: z
+      .string()
+      .min(1)
+      .max(ARTIFACT_MAX_CONTENT_BYTES)
+      .refine((content) => artifactContentByteLength(content) <= ARTIFACT_MAX_CONTENT_BYTES, {
+        message: 'Artifact content exceeds the 5 MiB limit.'
+      }),
     contentType: z.enum(['text/html', 'text/markdown']),
     fileName: z.string().min(1).max(512),
     title: z.string().max(512).optional(),
     ...CloudOptions
   })
-  .refine((request) => artifactWriteRequestByteLength(request) <= ARTIFACT_CLI_MAX_RPC_BYTES, {
-    message: 'Artifact request exceeds the local RPC size limit.'
+  .refine((request) => artifactWriteRequestByteLength(request) <= ARTIFACT_MAX_REQUEST_BYTES, {
+    message: 'Artifact request exceeds the supported size.'
   })
 
 export const ARTIFACT_METHODS: readonly RpcAnyMethod[] = [

@@ -43,6 +43,11 @@ import {
   buildBrowserClickedLinkRoutingScript,
   buildBrowserIframeClickedLinkRoutingScript
 } from './browser-clicked-link-routing'
+import {
+  createPageInitiatedTabBudget,
+  type PageInitiatedTabBudget
+} from './browser-page-initiated-tab-budget'
+import { isNewBrowserTabPopupIntent } from './browser-popup-new-tab-intent'
 import { cleanElectronUserAgent } from './browser-session-ua'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
@@ -51,13 +56,19 @@ import type {
   BrowserCertificateFailure,
   BrowserLoadError,
   BrowserSessionUserAgentMode,
-  BrowserViewportOverride
+  BrowserViewportOverride,
+  BrowserViewportScrollState
 } from '../../shared/browser-workspace-types'
 import {
   type BrowserAnnotationViewportBridgeOptions,
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
   buildBrowserAnnotationViewportBridgeScript
 } from '../../shared/browser-annotation-viewport-bridge'
+import {
+  getWorkspaceDocPageGuest,
+  installDocPreviewGuestPolicy,
+  isWorkspaceDocPageId
+} from './doc-preview-guest-policy'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import {
   BrowserCertificateTrustController,
@@ -152,6 +163,15 @@ type PopupOwnerContext = {
   browserTabId: string
   rootGuestWebContentsId: number
 }
+/**
+ * What a guest is allowed to be. A browsing guest is the web — popups, clicked-link routing and
+ * anti-detection all apply. A workspace-document guest renders one granted document and gets none
+ * of that; `host` is the renderer that minted its grant, and the only sink for what it reports.
+ */
+export type BrowserGuestPolicy =
+  | { profile: 'browsing' }
+  | { profile: 'workspace-doc'; host: Electron.WebContents }
+const BROWSING_GUEST_POLICY: BrowserGuestPolicy = { profile: 'browsing' }
 type PendingMainFrameNavigation = {
   currentUrl: string
   supersededUrls: string[]
@@ -233,6 +253,8 @@ export class BrowserManager {
   // Why: reverse map gives O(1) guest→tab lookups on every mouse/load/permission/popup event.
   private readonly tabIdByWebContentsId = new Map<number, string>()
   private readonly popupOwnerContextByGuestId = new Map<number, PopupOwnerContext>()
+  // Why: keyed by the opener tree's root so named child popups can't each mint a fresh tab quota.
+  private readonly pageInitiatedTabBudgetByRootGuestId = new Map<number, PageInitiatedTabBudget>()
   // Why: guests are keyed by page id but renderer visibility by workspace id; bridge the mismatch to activate the right tab before capture.
   private readonly workspaceIdByPageId = new Map<string, string>()
   private readonly sessionProfileIdByPageId = new Map<string, string | null>()
@@ -243,6 +265,13 @@ export class BrowserManager {
   // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
   // can re-issue it against the target URL's identity.
   private readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
+  // Why: host-side wheel panning follows the requested local viewport on the owning guest;
+  // replacement guests must not inherit a retired guest's state.
+  private readonly viewportPresetActiveByTabId = new Map<
+    string,
+    { guestWebContentsId: number; active: boolean }
+  >()
+  private readonly viewportScrollStateByTabId = new Map<string, BrowserViewportScrollState>()
   // Why: the confirmed CDP identity outranks getUserAgent; pending intent keeps rapid navigations
   // ordered without claiming a failed write was installed.
   private readonly authUserAgentOverrideStateByGuestId = new Map<
@@ -280,6 +309,36 @@ export class BrowserManager {
 
   setDictationShortcutForwardingPredicate(predicate: (() => boolean) | null): void {
     this.shouldForwardDictationShortcut = predicate
+  }
+
+  setViewportScrollState(
+    browserTabId: string,
+    rendererWebContentsId: number,
+    state: BrowserViewportScrollState
+  ): void {
+    if (this.rendererWebContentsIdByTabId.get(browserTabId) !== rendererWebContentsId) {
+      return
+    }
+    if (
+      ![state.scrollLeft, state.scrollTop, state.maxScrollLeft, state.maxScrollTop].every(
+        (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0
+      )
+    ) {
+      return
+    }
+    this.viewportScrollStateByTabId.set(browserTabId, state)
+  }
+
+  recordViewportScrollDelta(browserTabId: string, deltaX: number, deltaY: number): void {
+    const state = this.viewportScrollStateByTabId.get(browserTabId)
+    if (!state) {
+      return
+    }
+    this.viewportScrollStateByTabId.set(browserTabId, {
+      ...state,
+      scrollLeft: Math.min(state.maxScrollLeft, Math.max(0, state.scrollLeft + deltaX)),
+      scrollTop: Math.min(state.maxScrollTop, Math.max(0, state.scrollTop + deltaY))
+    })
   }
 
   setBrowserGuestStateChangedListener(listener: ((worktreeId: string) => void) | null): void {
@@ -392,6 +451,16 @@ export class BrowserManager {
     }
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
     return null
+  }
+
+  /** Shared across the whole opener tree, so a chain of popups draws from one budget. */
+  private tryConsumePageInitiatedTab(rootGuestWebContentsId: number): boolean {
+    let budget = this.pageInitiatedTabBudgetByRootGuestId.get(rootGuestWebContentsId)
+    if (!budget) {
+      budget = createPageInitiatedTabBudget()
+      this.pageInitiatedTabBudgetByRootGuestId.set(rootGuestWebContentsId, budget)
+    }
+    return budget.tryConsume(Date.now())
   }
 
   private resolveRendererForBrowserTab(browserTabId: string): Electron.WebContents | null {
@@ -654,12 +723,20 @@ export class BrowserManager {
 
   attachGuestPolicies(
     guest: Electron.WebContents,
-    inheritedOwnerContext: PopupOwnerContext | null = null
+    inheritedOwnerContext: PopupOwnerContext | null = null,
+    policy: BrowserGuestPolicy = BROWSING_GUEST_POLICY
   ): void {
     if (this.policyAttachedGuestIds.has(guest.id)) {
       return
     }
     this.policyAttachedGuestIds.add(guest.id)
+    // Why one door with a profile rather than a second installer beside it: whether a guest was
+    // policy-attached at all is what registration and teardown both key on, so a guest that took
+    // another path into the app is invisible to both.
+    if (policy.profile === 'workspace-doc') {
+      this.attachWorkspaceDocGuestPolicies(guest, policy.host)
+      return
+    }
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
@@ -758,8 +835,9 @@ export class BrowserManager {
       this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url, frameName }) => {
-      const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
+    guest.setWindowOpenHandler(({ url, frameName, disposition, features }) => {
+      const ownerContext = this.resolvePopupOwnerContext(guest.id)
+      const browserTabId = ownerContext?.browserTabId ?? null
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
       const expectedClickedLinkFrameName = this.clickedLinkFrameNameByGuestId.get(guest.id)
@@ -781,6 +859,33 @@ export class BrowserManager {
           })
         }
         // Why: a recognized gesture must never fall through to a native popup if its renderer vanished mid-click.
+        return { action: 'deny' }
+      }
+
+      // Why: an unnamed, featureless window.open() is Chromium's own new-tab shape, so an Orca tab is
+      // the honest presentation; a floating origin-bar window is not. Opener-dependent shapes are
+      // excluded by isNewBrowserTabPopupIntent and still get a real child window below.
+      if (
+        ownerContext &&
+        externalUrl &&
+        isNewBrowserTabPopupIntent({ frameName, disposition, features })
+      ) {
+        // Why: one activation lets a page loop window.open, and each routed tab persists into
+        // workspace session state, so it survives the quit that used to clear popup windows.
+        if (!this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
+          this.forwardOrQueuePopupEvent(guest.id, {
+            origin: safeOrigin(externalUrl),
+            action: 'blocked'
+          })
+          return { action: 'deny' }
+        }
+        if (this.openLinkInOrcaTab(ownerContext.browserTabId, externalUrl)) {
+          this.forwardOrQueuePopupEvent(guest.id, {
+            origin: safeOrigin(externalUrl),
+            action: 'opened-in-orca'
+          })
+        }
+        // Why: a recognized new-tab intent must never fall through to a native popup if its renderer vanished mid-open.
         return { action: 'deny' }
       }
 
@@ -967,6 +1072,30 @@ export class BrowserManager {
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
         guest.off('did-fail-load', didFailLoadHandler)
+      }
+    })
+  }
+
+  /**
+   * A workspace document is not the web: no popups, no link routing, no anti-detection, and no
+   * navigation bookkeeping for chrome it does not have. What it does share with a browsing guest is
+   * this method's teardown, so a retired preview drops its listeners on the same path.
+   */
+  private attachWorkspaceDocGuestPolicies(
+    guest: Electron.WebContents,
+    host: Electron.WebContents
+  ): void {
+    const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
+    const handleDestroyed = (): void => {
+      this.cleanupGuestPolicyAttachment(guest.id)
+    }
+    guest.on('destroyed', handleDestroyed)
+    this.policyCleanupByGuestId.set(guest.id, () => {
+      disposeDocPolicy()
+      try {
+        guest.off('destroyed', handleDestroyed)
+      } catch {
+        // guest may already be destroyed
       }
     })
   }
@@ -1243,6 +1372,7 @@ export class BrowserManager {
     this.clickedLinkFrameNameByGuestId.delete(guestWebContentsId)
     this.offscreenGuestIds.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
+    this.pageInitiatedTabBudgetByRootGuestId.delete(guestWebContentsId)
     this.authUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
     this.pendingNavigationByGuestId.delete(guestWebContentsId)
     // Why: a popup must stop inheriting authorization the moment its owner retires, before Chromium destroys the child.
@@ -1272,7 +1402,9 @@ export class BrowserManager {
     rendererWebContentsId
   }: BrowserGuestRegistration): boolean {
     const browserTabId = browserPageId ?? legacyBrowserTabId
-    if (!browserTabId) {
+    // Why refuse rather than overwrite: the two halves of the registry must stay disjoint, or one
+    // id resolves in both and the tool door silently prefers the document guest over the page.
+    if (!browserTabId || isWorkspaceDocPageId(browserTabId)) {
       return false
     }
     // Why: on guest-surface swap, cancel any grab bound to the old guest's listeners so it doesn't strand on a stale webContents.
@@ -1301,6 +1433,8 @@ export class BrowserManager {
     const previousWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
       this.retireStaleGuestWebContents(previousWebContentsId)
+      this.viewportPresetActiveByTabId.delete(browserTabId)
+      this.viewportScrollStateByTabId.delete(browserTabId)
     }
     this.webContentsIdByTabId.set(browserTabId, webContentsId)
     this.tabIdByWebContentsId.set(webContentsId, browserTabId)
@@ -1331,6 +1465,12 @@ export class BrowserManager {
   }
 
   unregisterGuest(browserTabId: string): void {
+    // Why the check on the exit door too: a document page withdraws by revoking its grant, never
+    // through here, so its id arriving is misaddressed — and the cancel below would evict that
+    // preview's live grab on the strength of it.
+    if (isWorkspaceDocPageId(browserTabId)) {
+      return
+    }
     // Why: teardown mid-grab must cancel it so the renderer gets a signal, not a dangling Promise.
     this.cancelGrabOp(browserTabId, 'evicted')
 
@@ -1379,6 +1519,8 @@ export class BrowserManager {
     // Why: drop the viewport-op chain so the Map doesn't retain a promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
     this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+    this.viewportPresetActiveByTabId.delete(browserTabId)
+    this.viewportScrollStateByTabId.delete(browserTabId)
     if (wcId !== undefined) {
       this.pendingNavigationByGuestId.delete(wcId)
     }
@@ -1398,10 +1540,15 @@ export class BrowserManager {
     sessionProfileId?: string | null
     userAgentMode?: BrowserSessionUserAgentMode
     webContentsId: number
-  }): void {
+  }): boolean {
+    // Why the same check on both registration doors: one id resolving in both halves is the exact
+    // confusion the split registries exist to prevent.
+    if (isWorkspaceDocPageId(browserPageId)) {
+      return false
+    }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      return
+      return false
     }
     // Why: offscreen pages have no renderer webview listeners, so main owns their load-failure lifecycle.
     this.offscreenGuestIds.add(webContentsId)
@@ -1409,6 +1556,8 @@ export class BrowserManager {
     const previousWebContentsId = this.webContentsIdByTabId.get(browserPageId)
     if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
       this.retireStaleGuestWebContents(previousWebContentsId)
+      this.viewportPresetActiveByTabId.delete(browserPageId)
+      this.viewportScrollStateByTabId.delete(browserPageId)
     }
     this.webContentsIdByTabId.set(browserPageId, webContentsId)
     this.tabIdByWebContentsId.set(webContentsId, browserPageId)
@@ -1422,6 +1571,7 @@ export class BrowserManager {
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
     }
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserPageId)
+    return true
   }
 
   unregisterAll(): void {
@@ -1444,10 +1594,13 @@ export class BrowserManager {
     this.clickedLinkFrameNameByGuestId.clear()
     this.tabIdByWebContentsId.clear()
     this.popupOwnerContextByGuestId.clear()
+    this.pageInitiatedTabBudgetByRootGuestId.clear()
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
     this.userAgentModeByPageId.clear()
     this.viewportUaOverrideMobileByTabId.clear()
+    this.viewportPresetActiveByTabId.clear()
+    this.viewportScrollStateByTabId.clear()
     this.authUserAgentOverrideStateByGuestId.clear()
     this.pendingNavigationByGuestId.clear()
     this.pendingLoadFailuresByGuestId.clear()
@@ -1466,6 +1619,10 @@ export class BrowserManager {
 
   getWebContentsIdByTabId(): Map<string, number> {
     return this.webContentsIdByTabId
+  }
+
+  getTabIdForWebContentsId(webContentsId: number): string | null {
+    return this.tabIdByWebContentsId.get(webContentsId) ?? null
   }
 
   getWorktreeIdForTab(browserTabId: string): string | undefined {
@@ -1769,6 +1926,11 @@ export class BrowserManager {
       this.unregisterGuest(browserTabId)
       return false
     }
+    // Offscreen guests have no visible window on this desktop; detaching DevTools would open it
+    // on the host display with no route back to the remote client.
+    if (this.offscreenGuestIds.has(webContentsId)) {
+      return false
+    }
     guest.openDevTools({ mode: 'detach' })
     return true
   }
@@ -1779,10 +1941,22 @@ export class BrowserManager {
     override: BrowserViewportOverride | null
   ): Promise<boolean> {
     // Why: chain per-tab so rapid toggles don't interleave CDP commands and the last-requested override wins.
+    const expectedWebContentsId = this.webContentsIdByTabId.get(browserTabId)
+    if (expectedWebContentsId !== undefined) {
+      // Keep host panning available while CDP applies the requested dimensions. The guest id fence
+      // prevents this intent from leaking to a replacement guest; clearing the preset removes it.
+      this.viewportPresetActiveByTabId.set(browserTabId, {
+        guestWebContentsId: expectedWebContentsId,
+        active: override !== null
+      })
+    }
+    // The renderer resizes the host before CDP completes; discard the old geometry until it
+    // reports the new pane bounds so a pending preset cannot route wheel input using stale limits.
+    this.viewportScrollStateByTabId.delete(browserTabId)
     const prev = this.viewportOpsByTabId.get(browserTabId) ?? Promise.resolve()
     const next = prev
       .catch(() => {})
-      .then(() => this.doSetViewportOverrideImpl(browserTabId, override))
+      .then(() => this.doSetViewportOverrideImpl(browserTabId, override, expectedWebContentsId))
     this.viewportOpsByTabId.set(browserTabId, next)
     try {
       return await next
@@ -1796,12 +1970,13 @@ export class BrowserManager {
 
   async setAnnotationViewportBridge(
     browserTabId: string,
-    options: BrowserAnnotationViewportBridgeOptions
+    options: BrowserAnnotationViewportBridgeOptions,
+    resolveGuest: () => Electron.WebContents | null
   ): Promise<boolean> {
     const prev = this.annotationViewportBridgeOpsByTabId.get(browserTabId) ?? Promise.resolve()
     const next = prev
       .catch(() => {})
-      .then(() => this.doSetAnnotationViewportBridgeImpl(browserTabId, options))
+      .then(() => this.doSetAnnotationViewportBridgeImpl(options, resolveGuest))
     this.annotationViewportBridgeOpsByTabId.set(browserTabId, next)
     try {
       return await next
@@ -1812,18 +1987,22 @@ export class BrowserManager {
     }
   }
 
+  // Why the caller resolves the guest: the same bridge serves browsing pages and workspace
+  // documents, which live in different halves of the page registry.
+  // Why a resolver and not the guest itself: this op may have waited behind another one, and a
+  // cross-process navigation meanwhile swaps the tab's contents without destroying the old one —
+  // injecting into the guest the request named would bridge a page nobody is looking at.
+  // Why no tab id: with teardown gone this reaches only the guest the resolver hands back, and
+  // taking an id it cannot act on would invite the next reader to act on it.
   private async doSetAnnotationViewportBridgeImpl(
-    browserTabId: string,
-    options: BrowserAnnotationViewportBridgeOptions
+    options: BrowserAnnotationViewportBridgeOptions,
+    resolveGuest: () => Electron.WebContents | null
   ): Promise<boolean> {
-    const webContentsId = this.webContentsIdByTabId.get(browserTabId)
-    if (!webContentsId) {
-      return false
-    }
-    const guest = webContents.fromId(webContentsId)
+    // Why no teardown here: the resolver already unregisters a page whose guest died, and the only
+    // case it uniquely leaves is an ownership mismatch on a healthy page — where tearing down would
+    // cancel that page's in-flight downloads and grabs over a request that was merely misaddressed.
+    const guest = resolveGuest()
     if (!guest || guest.isDestroyed()) {
-      // Why: a stale guest must clear every per-tab registry entry, not just the WebContents maps.
-      this.unregisterGuest(browserTabId)
       return false
     }
 
@@ -1842,10 +2021,11 @@ export class BrowserManager {
 
   private async doSetViewportOverrideImpl(
     browserTabId: string,
-    override: BrowserViewportOverride | null
+    override: BrowserViewportOverride | null,
+    expectedWebContentsId: number | undefined
   ): Promise<boolean> {
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
-    if (!webContentsId) {
+    if (!webContentsId || webContentsId !== expectedWebContentsId) {
       return false
     }
     const guest = webContents.fromId(webContentsId)
@@ -1878,6 +2058,12 @@ export class BrowserManager {
           deviceScaleFactor: override.deviceScaleFactor,
           mobile: override.mobile
         })
+        if (this.webContentsIdByTabId.get(browserTabId) === webContentsId) {
+          this.viewportPresetActiveByTabId.set(browserTabId, {
+            guestWebContentsId: webContentsId,
+            active: true
+          })
+        }
         await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
           enabled: override.mobile,
           maxTouchPoints: override.mobile ? 5 : 0
@@ -1891,6 +2077,12 @@ export class BrowserManager {
         }
       } else {
         await dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
+        if (this.webContentsIdByTabId.get(browserTabId) === webContentsId) {
+          this.viewportPresetActiveByTabId.set(browserTabId, {
+            guestWebContentsId: webContentsId,
+            active: false
+          })
+        }
         await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
           enabled: false,
           maxTouchPoints: 0
@@ -1921,6 +2113,9 @@ export class BrowserManager {
           throw error
         }
       }
+      if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
+        return false
+      }
       return true
     } catch {
       return false
@@ -1930,10 +2125,21 @@ export class BrowserManager {
   // --- Browser Context Grab — main-owned operations ---
 
   /** Validate that the sender owns browserTabId; returns the guest WebContents or null. */
+  /**
+   * The guest a request from `senderWebContentsId` may act on, across both halves of the page
+   * registry. This is the only door taught about workspace-document guests: they are kept out of
+   * the browsing maps entirely, so page management, agent commands, download routing and
+   * certificate attribution all miss them without a guard of their own — and a reader who opens a
+   * tool on the document in front of them still gets an answer.
+   */
   getAuthorizedGuest(
     browserTabId: string,
     senderWebContentsId: number
   ): Electron.WebContents | null {
+    const docGuest = getWorkspaceDocPageGuest(browserTabId, senderWebContentsId)
+    if (docGuest) {
+      return docGuest
+    }
     const registeredRenderer = this.rendererWebContentsIdByTabId.get(browserTabId)
     if (registeredRenderer == null || registeredRenderer !== senderWebContentsId) {
       return null
@@ -2096,8 +2302,37 @@ export class BrowserManager {
         browserTabId,
         guest,
         resolveRenderer: (tabId) =>
-          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+        isViewportPresetActive: () => {
+          const state = this.viewportPresetActiveByTabId.get(browserTabId)
+          return state?.guestWebContentsId === guest.id && state.active
+        },
+        canViewportScroll: (mouse) => this.canViewportScroll(browserTabId, mouse),
+        onViewportWheelConsumed: (deltaX, deltaY) =>
+          this.recordViewportScrollDelta(browserTabId, deltaX, deltaY)
       })
+    )
+  }
+
+  private canViewportScroll(browserTabId: string, mouse: Electron.MouseWheelInputEvent): boolean {
+    const state = this.viewportScrollStateByTabId.get(browserTabId)
+    if (!state) {
+      return false
+    }
+    const deltaX = typeof mouse.deltaX === 'number' ? mouse.deltaX : 0
+    const deltaY = typeof mouse.deltaY === 'number' ? mouse.deltaY : 0
+    const canScrollAxis = (delta: number, position: number, maximum: number): boolean => {
+      if (delta < 0) {
+        return position > 0
+      }
+      if (delta > 0) {
+        return position < maximum
+      }
+      return false
+    }
+    return (
+      canScrollAxis(deltaX, state.scrollLeft, state.maxScrollLeft) ||
+      canScrollAxis(deltaY, state.scrollTop, state.maxScrollTop)
     )
   }
 

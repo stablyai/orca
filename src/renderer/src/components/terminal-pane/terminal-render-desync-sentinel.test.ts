@@ -25,11 +25,14 @@ vi.mock('../../../../shared/terminal-webgl-diagnostics', () => ({
 
 import {
   getRenderDesyncEvidence,
-  maybeStartTerminalRenderDesyncSentinel,
-  RENDER_DESYNC_SENTINEL_FLAG,
   sampleRenderDesyncOnce,
   stopTerminalRenderDesyncSentinelForTesting
 } from './terminal-render-desync-sentinel'
+import {
+  maybeStartTerminalRenderDesyncSentinel,
+  RENDER_DESYNC_SENTINEL_FLAG,
+  stopTerminalRenderDesyncTriggerForTesting
+} from './terminal-render-desync-trigger'
 
 function fakePane(overrides: { paused?: boolean } = {}) {
   const refreshRows = vi.fn()
@@ -94,6 +97,7 @@ describe('terminal-render-desync-sentinel', () => {
   })
   afterEach(() => {
     stopTerminalRenderDesyncSentinelForTesting()
+    stopTerminalRenderDesyncTriggerForTesting()
     vi.unstubAllGlobals()
   })
 
@@ -123,7 +127,14 @@ describe('terminal-render-desync-sentinel', () => {
     expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledWith(
       expect.objectContaining({
         phase: 'corrupt',
-        metadata: expect.objectContaining({ bufferText: expect.stringContaining('x') })
+        metadata: expect.objectContaining({
+          bufferText: expect.stringContaining('x'),
+          trigger: 'divergence',
+          weightProbe: expect.objectContaining({
+            totalTextCells: expect.any(Number),
+            boldTextCells: expect.any(Number)
+          })
+        })
       })
     )
     expect(getRenderDesyncEvidence()).toHaveLength(1)
@@ -168,9 +179,25 @@ describe('terminal-render-desync-sentinel', () => {
       sampleWith(divergenceOf(manyCells(0)), false, `m1:p${pane}`)
     }
 
-    await vi.waitFor(() => expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledTimes(4))
+    // 4 capture recoveries + 1 budget-exhausted recovery; waiting on the reset
+    // count (not the write count) keeps this robust to persist microtask depth.
+    await vi.waitFor(() => expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(5))
+    expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledTimes(4)
     expect(getRenderDesyncEvidence()).toHaveLength(4)
-    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(5)
+  })
+
+  it('does not spend the capture budget on failed persistence attempts', async () => {
+    writeTerminalRenderDesyncEvidence.mockRejectedValue(new Error('disk unavailable'))
+
+    for (let pane = 1; pane <= 5; pane++) {
+      sampleWith(divergenceOf(manyCells(0)), false, `m1:p${pane}`)
+      sampleWith(divergenceOf(manyCells(0)), false, `m1:p${pane}`)
+      await vi.waitFor(() => expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledTimes(pane))
+      await vi.waitFor(() => expect(getRenderDesyncEvidence()).toHaveLength(0))
+    }
+
+    expect(getRenderDesyncEvidence()).toHaveLength(0)
+    expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
   })
 
   it('resets tracking for paused panes instead of sampling them', () => {
@@ -190,9 +217,11 @@ describe('terminal-render-desync-sentinel', () => {
         setItem: (k: string, v: string) => storage.set(k, v)
       })
       maybeStartTerminalRenderDesyncSentinel()
+      expect(documentAddEventListener).not.toHaveBeenCalled()
       const { pane } = fakePane()
       const target = new FakeNode()
       expect(forEachLivePaneForDesyncSentinel).not.toHaveBeenCalled()
+      expect(writeTerminalRenderDesyncEvidence).not.toHaveBeenCalled()
 
       storage.set(RENDER_DESYNC_SENTINEL_FLAG, '1')
       maybeStartTerminalRenderDesyncSentinel()
@@ -214,5 +243,144 @@ describe('terminal-render-desync-sentinel', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('shift-modifier-click captures immediately and leaves the pane unrecovered', async () => {
+    const storage = new Map<string, string>([[RENDER_DESYNC_SENTINEL_FLAG, '1']])
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => storage.get(k) ?? null,
+      setItem: (k: string, v: string) => storage.set(k, v)
+    })
+    maybeStartTerminalRenderDesyncSentinel()
+    const { pane } = fakePane()
+    ;(
+      pane.terminal as { element: { contains: ReturnType<typeof vi.fn> } }
+    ).element.contains.mockReturnValue(true)
+    forEachLivePaneForDesyncSentinel.mockImplementation(
+      (visit: (key: string, pane: unknown) => void) => visit('m1:p1', pane)
+    )
+    const listener = documentAddEventListener.mock.calls.at(-1)?.[1]
+    listener({ button: 0, metaKey: true, ctrlKey: true, shiftKey: true, target: new FakeNode() })
+
+    await vi.waitFor(() => expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledTimes(1))
+    expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'corrupt',
+        metadata: expect.objectContaining({ trigger: 'manual' })
+      })
+    )
+    expect(recordTerminalWebglDiagnostic).toHaveBeenCalledWith(
+      'webgl-render-desync-manual-capture',
+      expect.objectContaining({ paneKey: 'm1:p1' })
+    )
+    // The captured state must stay on screen for further pokes: no recovery.
+    expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
+  })
+})
+
+describe('sentinel arming surface', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+  afterEach(() => {
+    stopTerminalRenderDesyncSentinelForTesting()
+    stopTerminalRenderDesyncTriggerForTesting()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('arms live on enable and removes the listener on disable', async () => {
+    const storage = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => storage.get(k) ?? null,
+      setItem: (k: string, v: string) => storage.set(k, v),
+      removeItem: (k: string) => storage.delete(k)
+    })
+    vi.stubGlobal('document', {
+      addEventListener: documentAddEventListener,
+      removeEventListener: documentRemoveEventListener
+    })
+    vi.stubGlobal('navigator', { userAgent: 'Mac' })
+    const { isTerminalRenderDesyncSentinelArmed, setTerminalRenderDesyncSentinelArmed } =
+      await import('./terminal-render-desync-trigger')
+
+    expect(isTerminalRenderDesyncSentinelArmed()).toBe(false)
+    setTerminalRenderDesyncSentinelArmed(true)
+    expect(isTerminalRenderDesyncSentinelArmed()).toBe(true)
+    // Live arm: the mouseup listener is registered without a reload.
+    expect(documentAddEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function), true)
+
+    setTerminalRenderDesyncSentinelArmed(false)
+    expect(isTerminalRenderDesyncSentinelArmed()).toBe(false)
+    expect(documentRemoveEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function), true)
+  })
+
+  it('keeps the live arming state when storage is unavailable', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('storage unavailable')
+      },
+      setItem: () => {
+        throw new Error('storage unavailable')
+      },
+      removeItem: () => {
+        throw new Error('storage unavailable')
+      }
+    })
+    vi.stubGlobal('document', {
+      addEventListener: documentAddEventListener,
+      removeEventListener: documentRemoveEventListener
+    })
+    const { isTerminalRenderDesyncSentinelArmed, setTerminalRenderDesyncSentinelArmed } =
+      await import('./terminal-render-desync-trigger')
+
+    expect(isTerminalRenderDesyncSentinelArmed()).toBe(false)
+    setTerminalRenderDesyncSentinelArmed(true)
+    expect(isTerminalRenderDesyncSentinelArmed()).toBe(true)
+    expect(documentAddEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function), true)
+
+    setTerminalRenderDesyncSentinelArmed(false)
+    expect(isTerminalRenderDesyncSentinelArmed()).toBe(false)
+    expect(documentRemoveEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function), true)
+  })
+
+  it('stops an active sampling burst when disarmed', async () => {
+    vi.useFakeTimers()
+    const storage = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => storage.get(k) ?? null,
+      setItem: (k: string, v: string) => storage.set(k, v),
+      removeItem: (k: string) => storage.delete(k)
+    })
+    vi.stubGlobal('document', {
+      addEventListener: documentAddEventListener,
+      removeEventListener: documentRemoveEventListener
+    })
+    vi.stubGlobal('navigator', { userAgent: 'Mac' })
+    vi.stubGlobal('Node', FakeNode)
+    const { isTerminalRenderDesyncSentinelArmed, setTerminalRenderDesyncSentinelArmed } =
+      await import('./terminal-render-desync-trigger')
+    const { pane } = fakePane()
+    ;(
+      pane.terminal as never as {
+        _core: { _renderService: { _renderer: { value: { _canvas: { width: number } } } } }
+      }
+    )._core._renderService._renderer.value._canvas.width = 0
+    ;(
+      pane.terminal as { element: { contains: ReturnType<typeof vi.fn> } }
+    ).element.contains.mockReturnValue(true)
+    forEachLivePaneForDesyncSentinel.mockImplementation(
+      (visit: (key: string, pane: unknown) => void) => visit('m1:p1', pane)
+    )
+
+    setTerminalRenderDesyncSentinelArmed(true)
+    const listener = documentAddEventListener.mock.calls.at(-1)?.[1]
+    listener({ button: 0, metaKey: true, target: new FakeNode() })
+    expect(forEachLivePaneForDesyncSentinel).toHaveBeenCalledTimes(2)
+
+    setTerminalRenderDesyncSentinelArmed(false)
+    vi.advanceTimersByTime(1_000)
+    expect(isTerminalRenderDesyncSentinelArmed()).toBe(false)
+    expect(forEachLivePaneForDesyncSentinel).toHaveBeenCalledTimes(2)
   })
 })

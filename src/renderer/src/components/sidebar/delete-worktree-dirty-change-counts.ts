@@ -1,9 +1,33 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDeleteState } from '../../store/slices/worktree-helpers'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
+
+export function orderDeleteWorktreeStatusHydrationTargets({
+  targets,
+  visibleTargets,
+  activeWorktreeId,
+  activeExecutionHostId
+}: {
+  targets: readonly Worktree[]
+  visibleTargets: readonly Worktree[]
+  activeWorktreeId: string | null
+  activeExecutionHostId: string | null
+}): Worktree[] {
+  const visibleIdentities = new Set(visibleTargets.map(getWorktreeHostIdentity))
+  return targets
+    .map((target, index) => {
+      const isActive =
+        target.id === activeWorktreeId &&
+        (!activeExecutionHostId || (target.hostId ?? 'local') === activeExecutionHostId)
+      const rank = isActive ? 0 : visibleIdentities.has(getWorktreeHostIdentity(target)) ? 1 : 2
+      return { target, index, rank }
+    })
+    .sort((left, right) => left.rank - right.rank || left.index - right.index)
+    .map(({ target }) => target)
+}
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
-import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 export function getDeleteWorktreeDirtyChangeCounts({
   deleteTargets,

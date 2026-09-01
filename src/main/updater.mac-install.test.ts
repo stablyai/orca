@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
   appMock,
@@ -117,6 +118,8 @@ vi.mock('./updater-nudge', () => ({
   shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
 
+warmUpdaterModule()
+
 describe('updater mac install handoff', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -142,7 +145,7 @@ describe('updater mac install handoff', () => {
       const mainWindow = { webContents: { send: sendMock } }
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-      const { setupAutoUpdater } = await import('./updater')
+      const { setupAutoUpdater } = await loadUpdaterModule()
 
       setupAutoUpdater(mainWindow as never)
       await vi.waitFor(() => {
@@ -194,7 +197,7 @@ describe('updater mac install handoff', () => {
       const mainWindow = { webContents: { send: vi.fn() } }
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-      const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+      const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
 
       setupAutoUpdater(mainWindow as never, { onBeforeQuit })
       await vi.waitFor(() => {
@@ -276,7 +279,7 @@ describe('updater mac install handoff', () => {
       const mainWindow = { webContents: { send: sendMock } }
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
-      const { setupAutoUpdater } = await import('./updater')
+      const { setupAutoUpdater } = await loadUpdaterModule()
 
       setupAutoUpdater(mainWindow as never)
       await vi.waitFor(() => {

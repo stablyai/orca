@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState
 } from 'react'
+import { flushSync } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -42,7 +43,6 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
@@ -226,6 +226,7 @@ import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -338,6 +339,8 @@ type OpenTabPaletteItem = BrowserPaletteItem | SimulatorPaletteItem | WorkspaceT
 
 // Why: while the palette is open the workspace digit chord addresses recent rows, so it labels them.
 const DIGIT_INDEX_ACTION_ID = 'workspace.selectByIndex' as const
+// Why: the chord only binds keys 1–9, so expanded rows past the ninth are unaddressable.
+const DIGIT_INDEX_ADDRESSABLE_ROWS = 9
 // Why: this is also the ⌘N ceiling — any deeper and RECENT WORKTREES falls below the first screenful.
 const EMPTY_QUERY_RECENT_TAB_CAP = 6
 // Why: hold total empty-query rows at the pre-existing 10 so the worktree header stays above the fold.
@@ -567,7 +570,7 @@ function PaletteOpenTabPrimaryLine({
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
       <span
         data-slot="palette-open-tab-title"
-        className="min-w-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
+        className="min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
       >
         <HighlightedText text={title} matchRanges={titleRanges} />
       </span>
@@ -879,9 +882,7 @@ function WorktreeJumpPaletteContent({
 
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
-  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal' | 'simulator'>(
-    'terminal'
-  )
+  const previousActiveTabTypeRef = useRef<WorkspaceVisibleTabType>('terminal')
   const previousBrowserPageIdRef = useRef<string | null>(null)
   const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>('webview')
   // Why: the exact element focused before Cmd+J opened, so Escape restores it precisely (not a background worktree's hidden terminal).
@@ -1638,9 +1639,7 @@ function WorktreeJumpPaletteContent({
     const itemByOccurrenceId = new Map(
       openTabRecentRows.map(({ occurrenceId, item }) => [occurrenceId, item])
     )
-    return recentTabOrder
-      .flatMap((occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? [])
-      .slice(0, EMPTY_QUERY_RECENT_TAB_CAP)
+    return recentTabOrder.flatMap((occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? [])
   }, [openTabRecentRows, recentTabOrder])
 
   const settingsResults = useMemo(
@@ -1893,9 +1892,14 @@ function WorktreeJumpPaletteContent({
 
   const paletteSections = useMemo(() => {
     const openTabsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['open-tabs'] ?? 0)
+    // Why: "See more" drops the above-the-fold trim outright instead of stepping 20 at a time, so one
+    // click reveals the whole recent history the shared render cap allows.
+    const recentTabsCap = expandedSectionCaps['open-tabs']
+      ? openTabsCap
+      : EMPTY_QUERY_RECENT_TAB_CAP
     const openTabs = hasQuery
       ? capPaletteSection(openTabItems, openTabsCap)
-      : { visible: recentTabItems, overflowCount: 0 }
+      : capPaletteSection(recentTabItems, recentTabsCap)
     // Why: the worktree section shrinks against the recent rows to hold the empty-query list at its
     // pre-existing 10, so RECENT WORKTREES stays above the fold. An empty recent section hands the
     // whole budget to worktrees but never uncaps — a filter chip or a tab-less session used to drop
@@ -1960,11 +1964,16 @@ function WorktreeJumpPaletteContent({
     openTabsLeadSections
   ])
 
-  // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query.
+  // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query, and an
+  // expanded section leaves its unaddressable rows unbadged rather than advertising ⌘10.
   const recentTabShortcutIndexByItem = useMemo(
     () =>
       new Map(
-        hasQuery ? [] : paletteSections.visibleOpenTabItems.map((item, index) => [item, index])
+        hasQuery
+          ? []
+          : paletteSections.visibleOpenTabItems
+              .slice(0, DIGIT_INDEX_ADDRESSABLE_ROWS)
+              .map((item, index) => [item, index])
       ),
     [hasQuery, paletteSections]
   )
@@ -2023,13 +2032,11 @@ function WorktreeJumpPaletteContent({
       fetchLinearIssue: state.fetchLinearIssue
     })
       .catch(() => null)
-      .then(
-        (issue): CmdJLinearIssuePreview => ({
-          ...pendingPreview,
-          issue,
-          loading: false
-        })
-      )
+      .then((issue): CmdJLinearIssuePreview => ({
+        ...pendingPreview,
+        issue,
+        loading: false
+      }))
     linearIssueLookupRef.current = { query: createWorktreeName, promise }
     void promise.then((preview) => {
       if (linearIssueLookupGenerationRef.current === generation) {
@@ -2078,13 +2085,11 @@ function WorktreeJumpPaletteContent({
       sourceContext
     })
       .catch(() => null)
-      .then(
-        (item): CmdJGitHubWorkItemPreview => ({
-          ...pendingPreview,
-          item: item ?? null,
-          loading: false
-        })
-      )
+      .then((item): CmdJGitHubWorkItemPreview => ({
+        ...pendingPreview,
+        item: item ?? null,
+        loading: false
+      }))
     githubLookupRef.current = { query: createWorktreeName, promise }
     void promise.then((preview) => {
       if (githubLookupGenerationRef.current === generation) {
@@ -3263,30 +3268,33 @@ function WorktreeJumpPaletteContent({
               }
 
               if (entry.type === 'hint') {
-                // Why: plain div (not CommandItem) so cmdk can't select it; arrow keys skip it via selectableItems.
                 return (
-                  <div
+                  <CommandItem
                     key={renderKey}
-                    className="mx-0.5 mt-1 flex items-center gap-2 px-3 py-1.5 text-[12px] text-muted-foreground"
+                    value={renderKey}
+                    onSelect={() => {
+                      const previousIndex = selectionItemIds.indexOf(renderKey)
+                      flushSync(() => entry.onSeeMore?.())
+                      const expandedItemId = Array.from(
+                        listRef.current?.querySelectorAll<HTMLElement>('[cmdk-item]') ?? []
+                      )[previousIndex]?.getAttribute('data-value')
+                      if (expandedItemId) {
+                        setSelectedItemId(expandedItemId)
+                      }
+                      inputRef.current?.focus()
+                    }}
+                    className={cn(
+                      JUMP_PALETTE_ITEM_CLASSNAME,
+                      'mt-1 min-h-0 gap-2 py-1.5 text-[12px] text-muted-foreground'
+                    )}
                   >
                     <span className="truncate">{entry.label}</span>
                     {entry.onSeeMore ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        className="h-6 shrink-0 px-2 text-xs font-medium text-foreground hover:bg-accent"
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          entry.onSeeMore?.()
-                          inputRef.current?.focus()
-                        }}
-                      >
+                      <span className="h-6 shrink-0 rounded-md border border-input bg-background px-2 text-xs font-medium leading-6 text-foreground">
                         {translate('worktreeJumpPalette.seeMore', 'See more')}
-                      </Button>
+                      </span>
                     ) : null}
-                  </div>
+                  </CommandItem>
                 )
               }
 

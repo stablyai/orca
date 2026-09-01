@@ -4,9 +4,11 @@ import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import {
   listWorktreesMock,
+  describeCreatedWorktreeMock,
   addWorktreeMock,
   resolveLocalGitUsernameMock,
   getBaseRefDefaultMock,
+  resolveDefaultBaseRefWithLocalGitMock,
   getBranchConflictKindMock,
   getEffectiveHooksMock,
   createSetupRunnerScriptMock,
@@ -106,6 +108,54 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
+  })
+
+  it('starts username and base-ref probes concurrently', async () => {
+    const events: string[] = []
+    let resolveUsername!: (value: string) => void
+    let resolveBase!: (value: string | null) => void
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'git-username',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace'
+    })
+    resolveLocalGitUsernameMock.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          events.push('username-start')
+          resolveUsername = resolve
+        })
+    )
+    resolveDefaultBaseRefWithLocalGitMock.mockImplementation(
+      () =>
+        new Promise<string | null>((resolve) => {
+          events.push('base-start')
+          resolveBase = resolve
+        })
+    )
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/concurrent-probe',
+        head: 'created-sha',
+        branch: 'jdoe/concurrent-probe',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const creation = handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'concurrent-probe'
+    })
+    await Promise.resolve()
+
+    expect(events).toEqual(['username-start', 'base-start'])
+    resolveUsername('jdoe')
+    resolveBase('origin/main')
+    await expect(creation).resolves.toMatchObject({
+      worktree: expect.objectContaining({ branch: 'jdoe/concurrent-probe' })
+    })
   })
 
   it('prefetches the local default create base through the runtime refresh cache', async () => {
@@ -413,6 +463,49 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).toHaveBeenCalledTimes(listWorktreesCallsAfterCreate)
   })
 
+  it('completes a create the listing failed and keeps sibling worktrees authorized', async () => {
+    const sibling = {
+      path: '/workspace/existing-sibling',
+      head: 'sib123',
+      branch: 'refs/heads/existing-sibling',
+      isBare: false,
+      isMainWorktree: false
+    }
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'base',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      sibling
+    ])
+    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'existing-sibling' })
+
+    // The create Git could no longer list, recovered by reading the worktree directly.
+    listWorktreesMock.mockRejectedValue(new Error('git worktree list timed out.'))
+    describeCreatedWorktreeMock.mockResolvedValue({
+      path: '/workspace/improve-dashboard',
+      head: 'abc123',
+      branch: 'refs/heads/improve-dashboard',
+      isBare: false,
+      isMainWorktree: false
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'improve-dashboard' })
+    ).resolves.toMatchObject({ worktree: { path: '/workspace/improve-dashboard' } })
+    // Why: registration replaces the repo's root set, so a one-row recovery must not revoke it.
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/existing-sibling', store as never)
+    ).resolves.toBe(resolve('/workspace/existing-sibling'))
+    // Why: the recovered create is still a real worktree, so its own path must be usable at once.
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/improve-dashboard', store as never)
+    ).resolves.toBe(resolve('/workspace/improve-dashboard'))
+  })
+
   it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {
     store.getSettings.mockReturnValue({
       branchPrefix: 'git-username',
@@ -514,10 +607,14 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    loadHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    loadHooksMock.mockReturnValue({
+      scripts: { setup: 'pnpm install' },
+      setupAgentStartupPolicy: 'wait-for-setup'
+    })
     getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     shouldRunSetupForCreateMock.mockReturnValue(true)
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
 
     const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
@@ -538,6 +635,14 @@ describe('registerWorktreeHandlers', () => {
       startupTerminal?: { spawned: boolean; surface?: string }
       timing?: { phases: { phase: string }[] }
     }
+    expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      '/workspace/improve-dashboard',
+      'pnpm install',
+      undefined,
+      undefined,
+      'wait-for-setup'
+    )
 
     expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
       1,

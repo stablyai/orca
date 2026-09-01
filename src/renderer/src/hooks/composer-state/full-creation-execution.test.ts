@@ -72,6 +72,7 @@ describe('useFullCreationExecution cancellation', () => {
       normalizedSparseDirectories: [],
       note: '',
       onCreated: vi.fn<NonNullable<FullCreationExecutionInput['onCreated']>>(),
+      parentWorktreeId: null,
       persistDraft: false,
       persistSetupAgentStartupPolicy,
       prepareFullSubmit: vi

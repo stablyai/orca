@@ -92,6 +92,7 @@ describe('launchAgentBackgroundSession', () => {
 
   it('spawns a PTY first and creates the inactive tab already bound to it', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    mockSpawn.mockResolvedValue({ id: 'pty-1', incarnationId: 'inc-fresh' })
 
     const result = await launchAgentBackgroundSession({
       agent: 'claude',
@@ -162,10 +163,11 @@ describe('launchAgentBackgroundSession', () => {
       recordInteraction: false
     })
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'pty-1')
-    // Why: replaying the eager buffer at its spawn grid keeps inline-TUI
-    // cursor rows correct when the pane later adopts the PTY.
+    // Why: replay at the spawn grid, and pass incarnation so a recycled id cannot
+    // drain the previous owner's exit into this handler.
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function), {
-      captureDims: { cols: 120, rows: 40 }
+      captureDims: { cols: 120, rows: 40 },
+      incarnationId: 'inc-fresh'
     })
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))

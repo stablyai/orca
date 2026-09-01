@@ -1,9 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import {
-  getWorkspaceCleanupGitLabel,
-  type WorkspaceCleanupReviewInfo
-} from './workspace-cleanup-presentation'
+import { getWorkspaceCleanupGitLabel } from './workspace-cleanup-presentation'
 import {
   formatUnpushedCommitCount,
   formatWorkspaceCleanupContextDetail,
@@ -170,13 +167,6 @@ function hasGitStatusPill(candidate: WorkspaceCleanupCandidate): boolean {
     return false
   }
   return (candidate.git.upstreamAhead ?? 0) > 0 || candidate.git.clean === false
-}
-
-export function getReviewPillTone(reviewInfo: WorkspaceCleanupReviewInfo): StatusPillTone {
-  if (reviewInfo.state === 'open' || reviewInfo.state === 'draft') {
-    return 'review'
-  }
-  return 'neutral'
 }
 
 export function getContextCount(candidate: WorkspaceCleanupCandidate): number {

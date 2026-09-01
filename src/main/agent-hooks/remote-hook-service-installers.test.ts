@@ -11,6 +11,7 @@ vi.mock('electron', () => ({
 import { CodexHookService, codexHookService } from '../codex/hook-service'
 import { DroidHookService, droidHookService } from '../droid/hook-service'
 import { CursorHookService, cursorHookService } from '../cursor/hook-service'
+import { CURSOR_EVENTS, type CursorEvent } from '../cursor/hook-events'
 import { CommandCodeHookService, commandCodeHookService } from '../command-code/hook-service'
 import { GeminiHookService, geminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService, antigravityHookService } from '../antigravity/hook-service'
@@ -34,6 +35,17 @@ type FakeFs = {
   modes: Map<string, number>
   failRenameTo: Set<string>
 }
+
+const EXPECTED_CURSOR_HOOK_RESPONSES = {
+  beforeSubmitPrompt: '{"continue":true}',
+  stop: '{}',
+  preToolUse: '{"permission":"allow"}',
+  postToolUse: '{}',
+  postToolUseFailure: '{}',
+  beforeShellExecution: '{"permission":"allow"}',
+  beforeMCPExecution: '{"permission":"allow"}',
+  afterAgentResponse: '{}'
+} satisfies Record<CursorEvent, string>
 
 function createFakeSftp(initialFiles: Record<string, string> = {}): {
   sftp: SFTPWrapper
@@ -272,7 +284,7 @@ describe('remote hook service installers', () => {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
     expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain(
-      '/home/dev/.orca/agent-hooks/codex-hook.sh'
+      '/home/dev/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh'
     )
     expect(fs.files.get(`${runtimeHome}/config.toml`)).toContain(
       `${runtimeHome}/hooks.json:stop:0:0`
@@ -366,19 +378,14 @@ describe('remote hook service installers', () => {
       hooks: Record<string, { command?: string; hooks?: unknown[] }[]>
     }
     expect(cursorConfig.version).toBe(1)
-    for (const eventName of [
-      'beforeSubmitPrompt',
-      'stop',
-      'preToolUse',
-      'postToolUse',
-      'postToolUseFailure',
-      'beforeShellExecution',
-      'beforeMCPExecution',
-      'afterAgentResponse'
-    ]) {
+    for (const eventName of CURSOR_EVENTS) {
       const definition = cursorConfig.hooks[eventName]?.[0]
-      expect(definition?.command).toContain('/home/dev/.orca/agent-hooks/cursor-hook.sh')
+      const command = definition?.command
+      expect(command).toContain('/home/dev/.orca/agent-hooks/cursor-hook.sh')
       expect(definition?.hooks).toBeUndefined()
+      const response = EXPECTED_CURSOR_HOOK_RESPONSES[eventName]
+      expect(command).toContain(`ORCA_CURSOR_HOOK_RESPONSE='${response}'`)
+      expect(command).toContain(`printf '%s\\n' '${response}'`)
     }
 
     const commandCodeConfig = JSON.parse(

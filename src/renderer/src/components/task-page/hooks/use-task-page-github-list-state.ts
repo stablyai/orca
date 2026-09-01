@@ -9,6 +9,7 @@ import { sortWorkItemsByNumber } from '../../../../../shared/work-items'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
+import type { GitHubListRestoreWrite } from '@/components/task-page/github/github-list-scroll-restore'
 import type { AppState } from '@/store/types'
 
 export function useTaskPageGitHubListState({
@@ -99,6 +100,8 @@ export function useTaskPageGitHubListState({
   const githubListScrollRef = useRef<HTMLDivElement>(null)
   const githubListScrollTopRef = useRef(0)
   const pendingGithubScrollRestoreRef = useRef<number | null>(null)
+  // Why: lets the scroll handler tell the restore's own write apart from a user gesture.
+  const githubRestoreScrollWriteRef = useRef<GitHubListRestoreWrite | null>(null)
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
   const [countedTotalPages, setCountedTotalPages] = useState<number | null>(null)
@@ -157,6 +160,7 @@ export function useTaskPageGitHubListState({
     githubListScrollRef,
     githubListScrollTopRef,
     pendingGithubScrollRestoreRef,
+    githubRestoreScrollWriteRef,
     paginationLoading,
     setPaginationLoading,
     loadingTargetPage,

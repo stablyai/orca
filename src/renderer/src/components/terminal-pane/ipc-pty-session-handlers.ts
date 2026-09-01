@@ -30,7 +30,7 @@ type IpcPtySessionHandlersOptions = {
 
 export type IpcPtySessionHandlers = {
   registerData: (id: string) => void
-  registerExit: (id: string) => boolean
+  registerExit: (id: string, incarnationId?: string) => boolean
   unregisterAll: (id: string) => void
   unregisterData: (id: string) => void
   clearAccumulatedState: () => void
@@ -133,8 +133,8 @@ export function createIpcPtySessionHandlers({
     }
   }
 
-  function registerExit(id: string): boolean {
-    const hadBufferedExit = hasPreHandlerPtyExit(id)
+  function registerExit(id: string, incarnationId?: string): boolean {
+    const hadBufferedExit = hasPreHandlerPtyExit(id, incarnationId)
     const exit = (code: number): void => {
       const currentId = getPtyId()
       if (currentId !== null && currentId !== id) {
@@ -154,7 +154,7 @@ export function createIpcPtySessionHandlers({
     ptyTeardownHandlers.set(id, clearAccumulatedState)
     ptyShutdownLifecycleHandlers.set(id, shutdownLifecycle)
     try {
-      drainPreHandlerPtyExit(id, exit)
+      drainPreHandlerPtyExit(id, exit, incarnationId)
     } catch (error) {
       if (!hadBufferedExit) {
         throw error

@@ -177,6 +177,8 @@ export function MobileHomeScreen() {
           onDismiss: () => setActionTarget(null),
           onReconnect: (hostId) => void forceReconnectHost(hostId),
           onDisconnect: disconnectHostClient,
+          onDiagnostics: (hostId) =>
+            data.router.push({ pathname: '/connection-log', params: { hostId } }),
           onEdit: openMobileHostEdit,
           onRemove: (host) => setConfirmRemove(host)
         })}

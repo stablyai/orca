@@ -80,6 +80,7 @@ import type { TaskPageJiraFiltersProps } from '@/components/task-page/chrome/tas
 import type { TaskPageGitlabFiltersProps } from '@/components/task-page/chrome/task-page-gitlab-filters'
 import type { GithubDetailHostProps } from '@/components/task-page/github/github-detail-host'
 import type { GithubWorkItemTableProps } from '@/components/task-page/github/github-work-item-table'
+import { startGitHubListScrollRestore } from '@/components/task-page/github/github-list-scroll-restore'
 import type { GitlabWorkItemListProps } from '@/components/task-page/gitlab/gitlab-work-item-list'
 import type { JiraIssueListHostProps } from '@/components/task-page/jira/jira-issue-list-host'
 import type { NewGithubIssueDialogProps } from '@/components/task-page/dialogs/new-github-issue-dialog'
@@ -349,6 +350,12 @@ export default function TaskPage(): React.JSX.Element {
     setGitlabDialogItem,
     gitlabView,
     setGitlabView,
+    gitlabIssuePage,
+    setGitlabIssuePage,
+    gitlabIssueTotalPages,
+    setGitlabIssueTotalPages,
+    gitlabIssueLoadingTargetPage,
+    setGitlabIssueLoadingTargetPage,
     gitlabTodos,
     setGitlabTodos,
     gitlabTodosLoading,
@@ -356,7 +363,7 @@ export default function TaskPage(): React.JSX.Element {
     gitlabEmptyState,
     activeGitlabFilter,
     displayedGitLabItems
-  } = useTaskPageGitLabListState({ selectedRepos })
+  } = useTaskPageGitLabListState({ taskSource, selectedRepos, selectedReposKey })
   const {
     taskSearchInput,
     setTaskSearchInput,
@@ -401,6 +408,7 @@ export default function TaskPage(): React.JSX.Element {
     githubListScrollRef,
     githubListScrollTopRef,
     pendingGithubScrollRestoreRef,
+    githubRestoreScrollWriteRef,
     paginationLoading,
     setPaginationLoading,
     loadingTargetPage,
@@ -434,7 +442,6 @@ export default function TaskPage(): React.JSX.Element {
     page: number
     scrollTop: number
   } | null>(null)
-
   useLayoutEffect(() => {
     if (
       taskSource !== 'github' ||
@@ -529,71 +536,36 @@ export default function TaskPage(): React.JSX.Element {
     : null
 
   useLayoutEffect(() => {
-    const scrollTop = pendingGithubScrollRestoreRef.current
-    const scrollElement = githubListScrollRef.current
-    if (scrollTop === null || !scrollElement || !pages[currentPage]) {
+    const target = pendingGithubScrollRestoreRef.current
+    // Start observing as soon as the list mounts; its page rows may be committed
+    // by a later render, and the restore helper will retry when they appear.
+    // Keep the target armed while the detail route is transitioning and the list is still mounted.
+    if (target === null || pageData.openGitHubWorkItem) {
       return
     }
-    let frame: number | null = null
-    let timeout: number | null = null
-    let observer: ResizeObserver | null = null
-    const clearScheduledRestore = (): void => {
-      if (frame !== null) {
-        window.cancelAnimationFrame(frame)
-        frame = null
-      }
-      if (timeout !== null) {
-        window.clearTimeout(timeout)
-        timeout = null
-      }
-      observer?.disconnect()
-    }
-    const restore = (): void => {
-      const committedScrollElement = githubListScrollRef.current
-      if (!committedScrollElement || pendingGithubScrollRestoreRef.current !== scrollTop) {
-        return
-      }
-      committedScrollElement.scrollTop = scrollTop
-      githubListScrollTopRef.current = scrollTop
-      taskListPositionRef.current = {
-        contextKey: githubResumeContextKey,
-        page: currentPage,
-        scrollTop
-      }
-      if (Math.abs(committedScrollElement.scrollTop - scrollTop) < 1) {
-        pendingGithubScrollRestoreRef.current = null
-        clearScheduledRestore()
-      }
-    }
-    observer = new ResizeObserver(restore)
-    for (const child of scrollElement.children) {
-      observer.observe(child)
-    }
-    restore()
-    if (pendingGithubScrollRestoreRef.current === scrollTop) {
-      frame = window.requestAnimationFrame(restore)
-      timeout = window.setTimeout(() => {
-        if (pendingGithubScrollRestoreRef.current === scrollTop) {
-          const committedScrollTop = githubListScrollRef.current?.scrollTop ?? 0
-          githubListScrollTopRef.current = committedScrollTop
-          taskListPositionRef.current = {
-            contextKey: githubResumeContextKey,
-            page: currentPage,
-            scrollTop: committedScrollTop
-          }
-          pendingGithubScrollRestoreRef.current = null
+    return startGitHubListScrollRestore({
+      target,
+      scrollElementRef: githubListScrollRef,
+      pendingRestoreRef: pendingGithubScrollRestoreRef,
+      restoreWriteRef: githubRestoreScrollWriteRef,
+      onScrollTopApplied: (scrollTop) => {
+        githubListScrollTopRef.current = scrollTop
+        taskListPositionRef.current = {
+          contextKey: githubResumeContextKey,
+          page: currentPage,
+          scrollTop
         }
-        clearScheduledRestore()
-      }, 5_000)
-    }
-    return clearScheduledRestore
+      }
+    })
   }, [
     currentPage,
     dialogWorkItem,
     githubResumeContextKey,
+    pageData.openGitHubWorkItem,
     pages,
     githubListScrollTopRef,
     pendingGithubScrollRestoreRef,
+    githubRestoreScrollWriteRef,
     githubListScrollRef.current?.scrollTop,
     githubListScrollRef
   ])
@@ -752,8 +724,8 @@ export default function TaskPage(): React.JSX.Element {
     // Hard guarantee (K4): always overlay pending after reconcile so list
     // fetch clobbers never paint unprotected coordinator fields.
     setPages((current) =>
-      reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries).map((page) =>
-        page ? (overlayPendingOnTaskPagePages([page])[0] ?? []) : null
+      reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries).map(
+        (page) => (page ? (overlayPendingOnTaskPagePages([page])[0] ?? []) : null)
       )
     )
   }, [githubMode, selectedWorkItemsCacheEntries, taskSource, setPages])
@@ -1083,9 +1055,13 @@ export default function TaskPage(): React.JSX.Element {
     selectedRepos,
     selectedReposKey,
     primaryRepo,
+    gitlabIssuePage,
     setGitlabItems,
     setGitlabLoading,
     setGitlabError,
+    setGitlabIssuePage,
+    setGitlabIssueTotalPages,
+    setGitlabIssueLoadingTargetPage,
     setGitlabTodos,
     setGitlabTodosLoading
   })
@@ -1369,6 +1345,8 @@ export default function TaskPage(): React.JSX.Element {
     setJiraCreateFieldsError,
     newJiraIssueCustomFieldValues,
     setNewJiraIssueCustomFieldValues,
+    jiraUserFieldSelections,
+    setJiraUserFieldSelections,
     discardNewJiraIssueDraft,
     includeJiraSiteNameInProjectLabel,
     sortedAvailableJiraProjects,
@@ -1385,6 +1363,8 @@ export default function TaskPage(): React.JSX.Element {
     selectedJiraSiteId,
     availableJiraProjects,
     jiraConnected,
+    jiraViewer: jiraConnected ? jiraStatus.viewer : null,
+    jiraViewerSiteId: jiraConnected ? (jiraStatus.activeSiteId ?? null) : null,
     settings,
     jiraTaskSourceContext
   })
@@ -2179,7 +2159,7 @@ export default function TaskPage(): React.JSX.Element {
       setAppliedLinearProjectSearch(linearProjectSearchInput)
     }, TASK_SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timeout)
-  }, [linearProjectSearchInput, taskResumeApplied])
+  }, [linearProjectSearchInput, setAppliedLinearProjectSearch, taskResumeApplied])
 
   useEffect(() => {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
@@ -2274,6 +2254,12 @@ export default function TaskPage(): React.JSX.Element {
     fetchLinearProject,
     linearRefreshNonce,
     selectedLinearProject,
+    setLinearProjectDetailError,
+    setLinearProjectDetailLoading,
+    setLinearProjectParentView,
+    setLinearProjectsError,
+    setSelectedLinearProject,
+    setSelectedLinearProjectDetail,
     setTaskResumeState,
     linearTaskSourceContext
   ])
@@ -2315,7 +2301,10 @@ export default function TaskPage(): React.JSX.Element {
     linearRefreshNonce,
     listLinearProjectIssues,
     linearTaskSourceContext,
-    selectedLinearProject
+    selectedLinearProject,
+    setLinearProjectIssuesError,
+    setLinearProjectIssuesLoading,
+    setLinearProjectIssuesResult
   ])
 
   useEffect(() => {
@@ -2433,7 +2422,11 @@ export default function TaskPage(): React.JSX.Element {
     listLinearCustomViewIssues,
     listLinearCustomViewProjects,
     linearTaskSourceContext,
-    selectedLinearCustomView
+    selectedLinearCustomView,
+    setLinearCustomViewContentsError,
+    setLinearCustomViewContentsLoading,
+    setLinearCustomViewIssuesResult,
+    setLinearCustomViewProjectsResult
   ])
 
   useEffect(() => {
@@ -2739,6 +2732,7 @@ export default function TaskPage(): React.JSX.Element {
     githubResumeContextKey,
     currentPageRef,
     pendingGithubScrollRestoreRef,
+    githubRestoreScrollWriteRef,
     githubListScrollTopRef,
     taskListPositionRef,
     githubTaskGridClass,
@@ -2778,7 +2772,18 @@ export default function TaskPage(): React.JSX.Element {
     displayedGitLabItems,
     gitlabEmptyState,
     openGitLabDetailPage,
-    handleUseGitLabItem
+    handleUseGitLabItem,
+    showGitlabIssuePagination: gitlabView === 'issues' && gitlabIssueTotalPages > 1,
+    gitlabIssuePage,
+    gitlabIssueTotalPages,
+    gitlabIssueLoadingTargetPage,
+    onGitlabIssuePageChange: (page: number) => {
+      if (page === gitlabIssuePage) {
+        return
+      }
+      setGitlabIssueLoadingTargetPage(page)
+      setGitlabIssuePage(page)
+    }
   }
   const jiraList: JiraIssueListHostProps = {
     jiraStatusReady,
@@ -3043,6 +3048,9 @@ export default function TaskPage(): React.JSX.Element {
     visibleJiraCreateFields,
     newJiraIssueCustomFieldValues,
     setNewJiraIssueCustomFieldValues,
+    jiraUserFieldSelections,
+    setJiraUserFieldSelections,
+    jiraProviderSettings: jiraTaskSourceContext ?? settings,
     submitShortcutLabel,
     hasMissingJiraCreateField
   }

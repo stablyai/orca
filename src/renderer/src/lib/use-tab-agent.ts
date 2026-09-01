@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { isShellProcess } from '../../../shared/agent-detection'
 import { worktreeUsesRemoteConnection } from '@/store/terminals/terminal-workspace-routing'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { hasRemoteRuntimePtyForTab } from './tab-agent-remote-pty-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import {
   resolveFocusedCompletedTabAgent,
@@ -254,14 +254,12 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     }
     return (s.ptyIdsByTabId[tab.id] ?? []).length <= 1
   })
-  const hasRemoteRuntimePty = useAppStore((s) => {
-    const layout = s.terminalLayoutsByTabId[tab.id]
-    const ptyIds = new Set(s.ptyIdsByTabId[tab.id] ?? [])
-    for (const ptyId of Object.values(layout?.ptyIdsByLeafId ?? {})) {
-      ptyIds.add(ptyId)
-    }
-    return [...ptyIds].some((ptyId) => parseRemoteRuntimePtyId(ptyId) !== null)
-  })
+  const hasRemoteRuntimePty = useAppStore((s) =>
+    hasRemoteRuntimePtyForTab(
+      s.ptyIdsByTabId[tab.id],
+      s.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
+    )
+  )
   const isRemoteWorktree = useAppStore((s) => worktreeUsesRemoteConnection(s, tab.worktreeId))
   const isRemoteLike = isRemoteWorktree || hasRemoteRuntimePty
 
@@ -284,7 +282,13 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
       ? explicitTitleAgent === tab.launchAgent
       : Boolean(explicitTitleAgent || siblingHookAgent)
     // Why: a recognized foreground process arms exit clearing even for agents with no hook or title integration.
-    if (focusedHookAgent || completedHookEvidence || processAgent || fallbackAgentSignal) {
+    // Why the ref gate: this effect re-runs on every title frame, and re-dispatching an
+    // already-true flag costs SortableTab a second commit each time — and names its fiber
+    // in #185 stacks driven elsewhere (see shared/react-update-depth-attribution.ts).
+    if (
+      !hasObservedAgentSignalRef.current &&
+      (focusedHookAgent || completedHookEvidence || processAgent || fallbackAgentSignal)
+    ) {
       hasObservedAgentSignalRef.current = true
       setHasObservedAgentSignal(true)
     }

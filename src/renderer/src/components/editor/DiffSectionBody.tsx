@@ -6,9 +6,11 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
+import { isCombinedDiffSizeUnknown } from './combined-diff-on-demand-load'
 import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
+import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 
@@ -41,6 +43,7 @@ type DiffSectionBodyProps = {
   onCancelComment: () => void
   onSubmitComment: (body: string) => Promise<void>
   onRetrySection: (index: number) => void
+  onLoadDeferredSection: (index: number) => void
   onSaveLimitedDiff: () => void
   onMount: DiffOnMount
 }
@@ -66,6 +69,7 @@ export function DiffSectionBody({
   onCancelComment,
   onSubmitComment,
   onRetrySection,
+  onLoadDeferredSection,
   onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
@@ -94,7 +98,12 @@ export function DiffSectionBody({
           onSubmit={onSubmitComment}
         />
       ) : null}
-      {section.loading ? (
+      {section.loadOnDemand ? (
+        <LargeDiffLoadPrompt
+          sizeUnknown={isCombinedDiffSizeUnknown(section)}
+          onLoad={() => onLoadDeferredSection(index)}
+        />
+      ) : section.loading ? (
         <div className="flex h-full items-center gap-2 bg-muted/10 px-3 text-[11px] text-muted-foreground">
           <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
           <span>

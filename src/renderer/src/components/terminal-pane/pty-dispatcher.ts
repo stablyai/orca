@@ -203,6 +203,9 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
       deliverPtyExitToHandlers({
         ptyId: payload.id,
         code: payload.code,
+        // Why forwarded: pty ids are reused, so a buffered exit needs the lifetime it describes to
+        // tell "this pane's shell died" from "the id's previous owner died" (#16970).
+        ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {}),
         ...(primary ? { primary } : {}),
         sidecars: sidecars ? Array.from(sidecars) : []
       })
@@ -248,31 +251,27 @@ export function subscribeToPtyExit(
 // ─── Eager PTY buffer for reconnection on restart ────────────────────
 // Why: PTYs spawn before TerminalPane mounts; buffer the early shell output (prompt/MOTD) so attach() can replay it.
 
-export type EagerPtyCaptureDims = { cols: number; rows: number }
 export type EagerPtyHandle = {
-  // Non-destructive read of buffered bytes so adopt can inspect DECTCEM / screen
-  // shape before flush() empties the buffer inside transport.attach().
   peek: () => string
   flush: () => string
   dispose: () => void
-  // Grid the PTY was spawned at while buffering. Attach replays the buffer at
-  // these dims so inline-TUI cursor math survives adoption into a
-  // differently-sized pane.
-  captureDims?: EagerPtyCaptureDims
+  captureDims?: { cols: number; rows: number }
 }
 const eagerPtyHandles = new Map<string, EagerPtyHandle>()
 
-export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefined {
-  return eagerPtyHandles.get(ptyId)
-}
+export const getEagerPtyBufferHandle = (ptyId: string): EagerPtyHandle | undefined =>
+  eagerPtyHandles.get(ptyId)
 
 // Why: cap matches TerminalPane's scrollback serialization limit so a restored shell (e.g. tail -f) can't grow unbounded.
 const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
+/** `incarnationId` names the lifetime the caller just spawned. Without it a background launch that
+ *  is handed a relay-recycled id drains whatever the id's PREVIOUS owner left here and tears its own
+ *  freshly started agent session down seconds after launch. */
 export function registerEagerPtyBuffer(
   ptyId: string,
   onExit: (ptyId: string, code: number) => void,
-  options?: { captureDims?: EagerPtyCaptureDims }
+  options?: { captureDims?: { cols: number; rows: number }; incarnationId?: string }
 ): EagerPtyHandle {
   ensurePtyDispatcher()
   // Why: head index instead of Array.shift() (O(n)) so pre-attach buffering isn't quadratic under many small chunks.
@@ -323,8 +322,7 @@ export function registerEagerPtyBuffer(
     flush() {
       const data = readBufferedData()
       chunks.length = 0
-      head = 0
-      bufferBytes = 0
+      head = bufferBytes = 0
       return data
     },
     dispose() {
@@ -345,7 +343,7 @@ export function registerEagerPtyBuffer(
   // Why: defer the pre-handler exit one microtask so the caller receives the returned handle before onExit fires.
   queueMicrotask(() => {
     if (ptyExitHandlers.get(ptyId) === exitHandler) {
-      drainPreHandlerPtyExit(ptyId, exitHandler)
+      drainPreHandlerPtyExit(ptyId, exitHandler, options?.incarnationId)
     } else {
       clearPreHandlerPtyState(ptyId)
     }

@@ -249,6 +249,7 @@ describe('repos:add + repos:clone', () => {
     expect(gitSpawnMock).toHaveBeenCalledWith(
       ['clone', '--progress', '--', 'https://example.com/orca.git', join(destination, 'orca')],
       expect.objectContaining({
+        admissionTier: 'interactive',
         env: expect.objectContaining({
           GIT_TERMINAL_PROMPT: '0',
           GCM_INTERACTIVE: 'never'

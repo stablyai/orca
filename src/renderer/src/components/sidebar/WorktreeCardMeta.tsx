@@ -70,8 +70,10 @@ export function WorktreeCardDetailsHover({
   onEditIssue,
   onEditComment,
   onOpenGitHubIssueInOrca,
+  onOpenIssueInBrowser,
   onOpenLinearIssueInOrca,
   onOpenReviewInOrca,
+  onOpenReviewInBrowser,
   onUnlinkReview,
   onOpenAutomation,
   onOpenAutomationRun,
@@ -212,6 +214,14 @@ export function WorktreeCardDetailsHover({
             onOpenGitHubIssueInOrca={
               onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
             }
+            onOpenIssueInBrowser={
+              onOpenIssueInBrowser && issue?.url
+                ? (url: string) => {
+                    closeHover()
+                    onOpenIssueInBrowser(url)
+                  }
+                : undefined
+            }
           />
 
           {linearIssue && (
@@ -305,6 +315,9 @@ export function WorktreeCardDetailsHover({
             reviewMenuOpen={reviewMenuOpen}
             onReviewMenuOpenChange={handleReviewMenuOpenChange}
             onOpenReviewInOrca={onOpenReviewInOrca}
+            onOpenReviewInBrowser={
+              onOpenReviewInBrowser && review?.url ? onOpenReviewInBrowser : undefined
+            }
             onCopyReviewLink={review?.url ? handleCopyReviewLink : undefined}
             onUnlinkReview={onUnlinkReview}
             closeHover={closeHover}

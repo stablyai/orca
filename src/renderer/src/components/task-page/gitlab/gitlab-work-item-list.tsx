@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { RepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import { PaginationBar } from '../pagination/pagination-bar'
 
 export type GitlabWorkItemListProps = {
   gitlabError: string | null
@@ -16,6 +17,11 @@ export type GitlabWorkItemListProps = {
   gitlabEmptyState: RepoBackedTaskEmptyState
   openGitLabDetailPage: (item: GitLabWorkItem) => void
   handleUseGitLabItem: (item: GitLabWorkItem) => void
+  showGitlabIssuePagination: boolean
+  gitlabIssuePage: number
+  gitlabIssueTotalPages: number
+  gitlabIssueLoadingTargetPage: number | null
+  onGitlabIssuePageChange: (page: number) => void
 }
 
 export function GitlabWorkItemList({
@@ -25,7 +31,12 @@ export function GitlabWorkItemList({
   displayedGitLabItems,
   gitlabEmptyState,
   openGitLabDetailPage,
-  handleUseGitLabItem
+  handleUseGitLabItem,
+  showGitlabIssuePagination,
+  gitlabIssuePage,
+  gitlabIssueTotalPages,
+  gitlabIssueLoadingTargetPage,
+  onGitlabIssuePageChange
 }: GitlabWorkItemListProps): React.JSX.Element {
   return (
     <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
@@ -148,6 +159,16 @@ export function GitlabWorkItemList({
           ))}
         </div>
       </div>
+      {showGitlabIssuePagination ? (
+        <div className="flex-none border-t border-border/50 bg-muted/50">
+          <PaginationBar
+            currentPage={gitlabIssuePage}
+            totalPages={gitlabIssueTotalPages}
+            loadingTarget={gitlabIssueLoadingTargetPage}
+            onPageChange={onGitlabIssuePageChange}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
+import {
+  clearLocalImageCachePins,
+  pinLocalImageCacheKey,
+  prunePinnedLocalImageCache,
+  unpinLocalImageCacheKey
+} from './local-image-cache-pinning'
 
 // Why: the renderer is served from http://localhost in dev mode, so file://
 // URLs in <img> tags are blocked by cross-origin restrictions. Loading images
@@ -43,17 +49,9 @@ function cacheBlobUrl(key: string, url: string): void {
     }
   }
   blobUrlCache.set(key, url)
-  if (blobUrlCache.size > BLOB_URL_CACHE_MAX_SIZE) {
-    const oldest = blobUrlCache.keys().next().value
-    if (oldest !== undefined) {
-      const oldUrl = blobUrlCache.get(oldest)
-      blobUrlCache.delete(oldest)
-      if (oldUrl) {
-        URL.revokeObjectURL(oldUrl)
-      }
-    }
-  }
+  prunePinnedLocalImageCache(blobUrlCache, BLOB_URL_CACHE_MAX_SIZE, URL.revokeObjectURL)
 }
+
 const cacheListeners = new Set<() => void>()
 let cacheGeneration = 0
 const pendingBlobUrlRevocations = new Set<string>()
@@ -122,6 +120,7 @@ function disposeImageCacheModuleState(): void {
     URL.revokeObjectURL(url)
   }
   blobUrlCache.clear()
+  clearLocalImageCachePins()
   inFlightBlobUrlLoads.clear()
   cacheListeners.clear()
 }
@@ -169,6 +168,22 @@ export function useLocalImageSrc(
   runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
 ): string | undefined {
   const [generation, setGeneration] = useState(cacheGeneration)
+
+  useEffect(() => {
+    if (!rawSrc || isExternalUrl(rawSrc)) {
+      return
+    }
+    const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
+    if (!absolutePath) {
+      return
+    }
+    const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+    pinLocalImageCacheKey(cacheKey)
+    return () => {
+      unpinLocalImageCacheKey(cacheKey)
+      prunePinnedLocalImageCache(blobUrlCache, BLOB_URL_CACHE_MAX_SIZE, URL.revokeObjectURL)
+    }
+  }, [rawSrc, filePath, connectionId, runtimeContext])
 
   useEffect(() => {
     return onImageCacheInvalidated(() => setGeneration(cacheGeneration))
@@ -323,6 +338,7 @@ export function resetLocalImageSrcStateForTests(): void {
     URL.revokeObjectURL(url)
   }
   blobUrlCache.clear()
+  clearLocalImageCachePins()
   inFlightBlobUrlLoads.clear()
   cacheGeneration = 0
   pendingBlobUrlRevocations.clear()
