@@ -1,8 +1,12 @@
 import { readdir, readFile } from 'node:fs/promises'
-import type { Dirent } from 'node:fs'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import {
+  FULL_HEAD_IDENTITY_SCOPE,
+  headIdentityEntryKey,
+  type WorktreeHeadIdentityScope
+} from './worktree-head-identity-scope'
 
 // Why: the whole point of this reader is replacing `git worktree list` fanout
 // with bounded metadata-file reads, so head freshness never re-creates the
@@ -13,6 +17,24 @@ const MAX_SYMREF_DEPTH = 5
 // bounded while avoiding a serial round trip per linked worktree (especially
 // noticeable on WSL/UNC and network-backed worktrees).
 const HEAD_IDENTITY_READ_CONCURRENCY = 8
+
+/** Per-common-dir memo so a scoped refresh re-reads only the entries a watcher
+ *  burst could have moved. Misses are never cached: an unresolvable read may be
+ *  a transient fs error, so it must be retried rather than remembered. */
+export type WorktreeHeadIdentityCache = {
+  /** admin entry dir name → last resolved identity. */
+  entries: Map<string, WorktreeHeadIdentity>
+  /** last `worktrees/` listing, in readdir order; null before first enumeration. */
+  entryNames: string[] | null
+  primary: WorktreeHeadIdentity | null
+}
+
+export function createWorktreeHeadIdentityCache(): WorktreeHeadIdentityCache {
+  return { entries: new Map(), entryNames: null, primary: null }
+}
+
+/** ref → oid resolved during one pass; null means the ref no longer resolves. */
+type ResolvedRefOids = Map<string, string | null>
 
 async function readTrimmedFile(path: string): Promise<string | null> {
   try {
@@ -88,7 +110,8 @@ async function readHeadIdentity(
   commonDirPath: string,
   headFilePath: string,
   worktreePath: string,
-  packedRefs: () => Promise<Map<string, string>>
+  packedRefs: () => Promise<Map<string, string>>,
+  resolved: ResolvedRefOids
 ): Promise<WorktreeHeadIdentity | null> {
   const head = await readTrimmedFile(headFilePath)
   if (!head) {
@@ -97,6 +120,7 @@ async function readHeadIdentity(
   if (head.startsWith('ref: ')) {
     const ref = head.slice('ref: '.length).trim()
     const oid = await resolveRefToOid(commonDirPath, ref, packedRefs)
+    resolved.set(ref, oid)
     // Unborn branches (no commit yet) stay covered by the structural listing.
     if (!oid) {
       return null
@@ -107,65 +131,135 @@ async function readHeadIdentity(
   return detachedOid ? { worktreePath, head: detachedOid, branch: null } : null
 }
 
+async function readLinkedEntryIdentity(
+  commonDirPath: string,
+  entryName: string,
+  packedRefs: () => Promise<Map<string, string>>,
+  resolved: ResolvedRefOids
+): Promise<WorktreeHeadIdentity | null> {
+  const entryPath = join(commonDirPath, 'worktrees', entryName)
+  const gitdirContent = await readTrimmedFile(join(entryPath, 'gitdir'))
+  if (!gitdirContent) {
+    return null
+  }
+  // `gitdir` holds `<worktree>/.git`, absolute or (with relative-path
+  // worktrees) relative to the entry dir.
+  const gitdirAbsolute = isAbsolute(gitdirContent) ? gitdirContent : join(entryPath, gitdirContent)
+  return readHeadIdentity(
+    commonDirPath,
+    join(entryPath, 'HEAD'),
+    dirname(gitdirAbsolute),
+    packedRefs,
+    resolved
+  )
+}
+
+async function listLinkedEntryNames(commonDirPath: string): Promise<string[]> {
+  try {
+    const entries = await readdir(join(commonDirPath, 'worktrees'), { withFileTypes: true })
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+  } catch {
+    return []
+  }
+}
+
+// Why: `git worktree add --force` lets several worktrees share one branch, and
+// only the committing worktree's HEAD reflog is appended. Replaying every ref
+// resolved this pass onto the cached entries that point at it keeps the others
+// current without re-reading their metadata.
+function retargetCachedIdentity(
+  identity: WorktreeHeadIdentity,
+  resolved: ResolvedRefOids
+): WorktreeHeadIdentity | null {
+  if (identity.branch === null || !resolved.has(identity.branch)) {
+    return identity
+  }
+  const oid = resolved.get(identity.branch) ?? null
+  return oid === null ? null : { ...identity, head: oid }
+}
+
+function applyResolvedRefOids(cache: WorktreeHeadIdentityCache, resolved: ResolvedRefOids): void {
+  if (resolved.size === 0) {
+    return
+  }
+  for (const [name, identity] of cache.entries) {
+    const next = retargetCachedIdentity(identity, resolved)
+    if (next === null) {
+      cache.entries.delete(name)
+    } else if (next !== identity) {
+      cache.entries.set(name, next)
+    }
+  }
+  if (cache.primary) {
+    cache.primary = retargetCachedIdentity(cache.primary, resolved)
+  }
+}
+
 /** Reads head/branch for the primary checkout and every linked worktree of a
  *  Git common dir using only metadata-file reads (HEAD, gitdir, loose refs,
  *  packed-refs) — no Git subprocess. Unresolvable entries are skipped so
- *  callers never overwrite store state with partial reads. */
+ *  callers never overwrite store state with partial reads.
+ *
+ *  Pass a `cache` plus a narrowed `scope` to re-read only the entries a watcher
+ *  burst could have moved; the defaults re-read everything. */
 export async function readGitCommonHeadIdentities(
-  commonDirPath: string
+  commonDirPath: string,
+  cache: WorktreeHeadIdentityCache = createWorktreeHeadIdentityCache(),
+  scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE
 ): Promise<WorktreeHeadIdentity[]> {
   let packedRefsPromise: Promise<Map<string, string>> | null = null
   const packedRefs = (): Promise<Map<string, string>> =>
     (packedRefsPromise ??= readPackedRefs(commonDirPath))
+  const resolved: ResolvedRefOids = new Map()
 
-  const identities: WorktreeHeadIdentity[] = []
   // Only the standard `<checkout>/.git` layout maps a common dir back to its
   // primary checkout path; bare/custom GIT_DIR layouts have no primary row.
-  if (basename(commonDirPath) === '.git') {
-    const primary = await readHeadIdentity(
+  if (basename(commonDirPath) !== '.git') {
+    cache.primary = null
+  } else if (scope.all || scope.primary || cache.primary === null) {
+    cache.primary = await readHeadIdentity(
       commonDirPath,
       join(commonDirPath, 'HEAD'),
       dirname(commonDirPath),
-      packedRefs
+      packedRefs,
+      resolved
     )
-    if (primary) {
-      identities.push(primary)
+  }
+
+  let entryNames = cache.entryNames
+  if (entryNames === null || scope.all || scope.listing) {
+    entryNames = await listLinkedEntryNames(commonDirPath)
+    const listed = new Set(entryNames)
+    for (const name of cache.entries.keys()) {
+      if (!listed.has(name)) {
+        cache.entries.delete(name)
+      }
     }
   }
 
-  let entries: Dirent[]
-  try {
-    entries = await readdir(join(commonDirPath, 'worktrees'), { withFileTypes: true })
-  } catch {
-    return identities
-  }
-
-  const linkedEntries = entries.filter((entry) => entry.isDirectory())
+  const staleNames = entryNames.filter(
+    (name) =>
+      scope.all || !cache.entries.has(name) || scope.entryNames.has(headIdentityEntryKey(name))
+  )
   // mapWithConcurrency retains input order, so publishing identities stays
   // deterministic while independent worktree metadata reads overlap.
-  const linkedIdentities = await mapWithConcurrency(
-    linkedEntries,
-    HEAD_IDENTITY_READ_CONCURRENCY,
-    async (entry) => {
-      const entryPath = join(commonDirPath, 'worktrees', entry.name)
-      const gitdirContent = await readTrimmedFile(join(entryPath, 'gitdir'))
-      if (!gitdirContent) {
-        return null
-      }
-      // `gitdir` holds `<worktree>/.git`, absolute or (with relative-path
-      // worktrees) relative to the entry dir.
-      const gitdirAbsolute = isAbsolute(gitdirContent)
-        ? gitdirContent
-        : join(entryPath, gitdirContent)
-      return readHeadIdentity(
-        commonDirPath,
-        join(entryPath, 'HEAD'),
-        dirname(gitdirAbsolute),
-        packedRefs
-      )
-    }
+  const reads = await mapWithConcurrency(staleNames, HEAD_IDENTITY_READ_CONCURRENCY, (name) =>
+    readLinkedEntryIdentity(commonDirPath, name, packedRefs, resolved)
   )
-  for (const identity of linkedIdentities) {
+  staleNames.forEach((name, index) => {
+    const identity = reads[index]
+    if (identity) {
+      cache.entries.set(name, identity)
+    } else {
+      cache.entries.delete(name)
+    }
+  })
+  applyResolvedRefOids(cache, resolved)
+
+  cache.entryNames = entryNames
+  const identities: WorktreeHeadIdentity[] = cache.primary ? [cache.primary] : []
+  for (const name of entryNames) {
+    const identity = cache.entries.get(name)
     if (identity) {
       identities.push(identity)
     }

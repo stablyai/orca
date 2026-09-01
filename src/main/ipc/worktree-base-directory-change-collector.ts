@@ -3,6 +3,11 @@ import {
   classifyWorktreeBaseChange,
   type WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
+import {
+  EMPTY_HEAD_IDENTITY_SCOPE,
+  mergeHeadIdentityScopes,
+  type WorktreeHeadIdentityScope
+} from './worktree-head-identity-scope'
 
 type WorktreeBaseWatcherEvent = {
   type: 'create' | 'update' | 'delete'
@@ -14,6 +19,7 @@ export type WorktreeBaseCollectedChanges = {
   structureRepoIds: string[]
   gitStatusRepoIds: string[]
   headIdentityRepoIds: string[]
+  headIdentityScope: WorktreeHeadIdentityScope
 }
 
 export function hasCollectedWorktreeBaseChanges(changes: WorktreeBaseCollectedChanges): boolean {
@@ -26,13 +32,15 @@ type ChangeBuckets = {
   structureRepoIds: Set<string>
   gitStatusRepoIds: Set<string>
   headIdentityRepoIds: Set<string>
+  headIdentityScope: WorktreeHeadIdentityScope
 }
 
 function emptyBuckets(): ChangeBuckets {
   return {
     structureRepoIds: new Set<string>(),
     gitStatusRepoIds: new Set<string>(),
-    headIdentityRepoIds: new Set<string>()
+    headIdentityRepoIds: new Set<string>(),
+    headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
   }
 }
 
@@ -41,7 +49,8 @@ function emptyChanges(): WorktreeBaseCollectedChanges {
     overflow: false,
     structureRepoIds: [],
     gitStatusRepoIds: [],
-    headIdentityRepoIds: []
+    headIdentityRepoIds: [],
+    headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
   }
 }
 
@@ -60,6 +69,10 @@ function addMatchingChange(
   for (const repoId of change.headIdentityRepoIds) {
     buckets.headIdentityRepoIds.add(repoId)
   }
+  buckets.headIdentityScope = mergeHeadIdentityScopes(
+    buckets.headIdentityScope,
+    change.headIdentityScope
+  )
 }
 
 function toCollectedChanges(buckets: ChangeBuckets): WorktreeBaseCollectedChanges {
@@ -67,7 +80,8 @@ function toCollectedChanges(buckets: ChangeBuckets): WorktreeBaseCollectedChange
     overflow: false,
     structureRepoIds: [...buckets.structureRepoIds],
     gitStatusRepoIds: [...buckets.gitStatusRepoIds],
-    headIdentityRepoIds: [...buckets.headIdentityRepoIds]
+    headIdentityRepoIds: [...buckets.headIdentityRepoIds],
+    headIdentityScope: buckets.headIdentityScope
   }
 }
 

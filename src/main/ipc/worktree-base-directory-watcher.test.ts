@@ -32,7 +32,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 vi.mock('./worktree-head-identity-reader', () => ({
-  readGitCommonHeadIdentities: vi.fn(async () => [])
+  readGitCommonHeadIdentities: vi.fn(async () => []),
+  createWorktreeHeadIdentityCache: () => ({ entries: new Map(), entryNames: null, primary: null })
 }))
 
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -624,6 +625,70 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(300)
     await vi.advanceTimersByTimeAsync(0)
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
+  })
+
+  it('scopes a linked reflog head read to the worktree the event named', async () => {
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    await vi.advanceTimersByTimeAsync(0)
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+
+    emit(PROJECT_GIT_COMMON_DIR, [
+      {
+        type: 'update',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'logs', 'HEAD')
+      }
+    ])
+    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(readGitCommonHeadIdentities).toHaveBeenCalledWith(
+      PROJECT_GIT_COMMON_DIR,
+      expect.anything(),
+      { listing: false, primary: false, all: false, entryNames: new Set(['external-5104']) }
+    )
+  })
+
+  it('re-reads every head identity when the watcher loses events', async () => {
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    await vi.advanceTimersByTimeAsync(0)
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+
+    // A watcher failure attributes to no worktree, so nothing may stay cached.
+    pollerOptions
+      .get(PROJECT_GIT_COMMON_DIR)
+      ?.onWatchError?.(new Error('Git common watcher interrupted'))
+    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(readGitCommonHeadIdentities).toHaveBeenCalledWith(
+      PROJECT_GIT_COMMON_DIR,
+      expect.anything(),
+      {
+        listing: true,
+        primary: true,
+        all: true,
+        entryNames: new Set()
+      }
+    )
+  })
+
+  it('reads no head identities for a worktree lock write', async () => {
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    await vi.advanceTimersByTimeAsync(0)
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+
+    // `git worktree lock` is structural for the listing but can move no head.
+    emit(PROJECT_GIT_COMMON_DIR, [
+      {
+        type: 'create',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'locked')
+      }
+    ])
+    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(notifyWorktreesChanged).toHaveBeenCalledTimes(1)
+    expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
   })
 
   it('never reads head identities for SSH watches', async () => {
