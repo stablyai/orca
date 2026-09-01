@@ -126,9 +126,49 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     expect(process.env.DISPLAY).toBe(':77')
   })
 
+  // #15084 review: a container that bind-mounts only /tmp/.X11-unix used to serve and would
+  // otherwise now exit(1) at index.ts, since the serve gate treats false as fatal.
+  it('serves on an externally configured display that has no lock file', async () => {
+    setPlatform('linux')
+    process.env.DISPLAY = ':0'
+    statSyncMock.mockReturnValue({ isSocket: () => true })
+    readFileSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
+
+    expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(rmSyncMock).not.toHaveBeenCalled()
+    expect(process.env.DISPLAY).toBe(':0')
+  })
+
+  // removeStaleDisplayArtifacts unlinks the lock before the socket, so a crash between the two
+  // leaves a lockless socket on Orca's OWN :99. Adopting it would resurrect the orphan-socket bug.
+  it('does not adopt its own :99 socket when the lock is missing', async () => {
+    setPlatform('linux')
+    statSyncMock.mockReturnValue({ isSocket: () => true })
+    existsSyncMock.mockReturnValue(true)
+    readFileSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    spawnMock.mockReturnValue({ pid: 1234, once: vi.fn(), kill: vi.fn(), killed: false })
+    const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
+
+    expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
+    // Cleaned up and respawned rather than trusted.
+    expect(rmSyncMock).toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledWith(
+      'Xvfb',
+      expect.arrayContaining([':99']),
+      expect.any(Object)
+    )
+  })
+
   it('reuses an existing virtual display only when its X server is alive', async () => {
     setPlatform('linux')
-    existsSyncMock.mockReturnValue(true) // :99 socket + lock present
+    statSyncMock.mockReturnValue({ isSocket: () => true }) // :99 socket present
+    existsSyncMock.mockReturnValue(true)
     readFileSyncMock.mockReturnValue('4321\n') // lock holds a PID
     const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true as never) // PID alive
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
@@ -143,7 +183,8 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
 
   it('treats a stale socket (dead server) as no display and starts a fresh Xvfb', async () => {
     setPlatform('linux')
-    existsSyncMock.mockReturnValue(true) // orphan socket + lock present
+    statSyncMock.mockReturnValue({ isSocket: () => true }) // orphan socket present
+    existsSyncMock.mockReturnValue(true) // lock present
     readFileSyncMock.mockReturnValue('9999\n')
     // PID is gone: process.kill throws ESRCH.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
@@ -181,14 +222,71 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       expect(statSyncMock).toHaveBeenCalledWith('/run/user/1000/wayland-0')
     })
 
-    it('rejects an orphaned local X11 socket without a live server lock', async () => {
+    it('rejects an orphaned local X11 socket whose server PID is gone', async () => {
       setPlatform('linux')
       statSyncMock.mockReturnValue({ isSocket: () => true })
-      existsSyncMock.mockReturnValue(false)
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue('9999\n')
+      vi.spyOn(process, 'kill').mockImplementation(() => {
+        throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
+      })
       const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
 
       expect(hasUsableLinuxDisplay({ DISPLAY: ':77' })).toBe(false)
       expect(readFileSyncMock).toHaveBeenCalledWith('/tmp/.X77-lock', 'utf8')
+    })
+
+    // An X server writes its lock beside the socket and both survive a crash, so a lockless
+    // socket is an endpoint published from elsewhere (container bind mount, WSLg) — not an orphan.
+    it('accepts a local X11 socket published without a lock file', async () => {
+      setPlatform('linux')
+      statSyncMock.mockReturnValue({ isSocket: () => true })
+      readFileSyncMock.mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      const killSpy = vi.spyOn(process, 'kill')
+      const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
+
+      expect(hasUsableLinuxDisplay({ DISPLAY: ':0' })).toBe(true)
+      expect(killSpy).not.toHaveBeenCalled()
+    })
+
+    // WSLg with ELECTRON_OZONE_PLATFORM_HINT=x11 has no Wayland fallback to rescue it.
+    it('accepts a lockless X11 socket when x11 is pinned and Wayland is unavailable', async () => {
+      setPlatform('linux')
+      statSyncMock.mockImplementation((path: string) => ({
+        isSocket: () => path === '/tmp/.X11-unix/X0'
+      }))
+      readFileSyncMock.mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
+
+      expect(
+        hasUsableLinuxDisplay({ DISPLAY: ':0', ELECTRON_OZONE_PLATFORM_HINT: 'x11' })
+      ).toBe(true)
+    })
+
+    it('still rejects a missing socket even when no lock file exists', async () => {
+      setPlatform('linux')
+      statSyncMock.mockReturnValue({ isSocket: () => false })
+      readFileSyncMock.mockImplementation(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      })
+      const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
+
+      expect(hasUsableLinuxDisplay({ DISPLAY: ':0' })).toBe(false)
+    })
+
+    it('rejects a lock that exists but cannot be read', async () => {
+      setPlatform('linux')
+      statSyncMock.mockReturnValue({ isSocket: () => true })
+      readFileSyncMock.mockImplementation(() => {
+        throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+      })
+      const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
+
+      expect(hasUsableLinuxDisplay({ DISPLAY: ':0' })).toBe(false)
     })
 
     it('accepts a live local X11 server owned by another user', async () => {

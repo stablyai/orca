@@ -8,7 +8,11 @@ Linux, the packaged AppImage still needs the libraries that Electron expects at
 startup. Current Orca builds start Xvfb automatically for `orca serve` when no
 `DISPLAY` is set, but Xvfb must be installed first. A separate D-Bus session is
 not required. When `DISPLAY` is set, Orca uses that display instead of starting
-a competing Xvfb process.
+a competing Xvfb process, provided the display is usable: its socket must exist,
+and if an X lock file is present it must name a running process. A `DISPLAY`
+whose lock names a dead process is refused rather than replaced, and `orca serve`
+exits — unset `DISPLAY` to let Orca start its own Xvfb. A socket published with
+no lock at all (a container bind-mounting `/tmp/.X11-unix`, or WSLg) is accepted.
 
 The supported deployment matrix covers Ubuntu 20.04, 22.04, and 24.04 and
 current Debian stable — anything with glibc 2.31 or newer (see
@@ -879,8 +883,8 @@ refuse to run there and print the command to run on the machine you want.
 - `dlopen(): error loading libfuse.so.2`: install `libfuse2`.
 - `Missing X server or $DISPLAY`: install `xvfb`, or start the managed Xvfb
   service and set `DISPLAY=:99`.
-- `Xvfb not found`: confirm `command -v Xvfb` and use that absolute path in the
-  systemd unit.
+- `[serve] Xvfb failed to start` or `[serve] Could not start Xvfb`: confirm
+  `command -v Xvfb` and that it is on the service `PATH`.
 - GPU or DRI warnings on a VPS: keep `LIBGL_ALWAYS_SOFTWARE=1` in the service
   environment.
 - Chromium sandbox errors: confirm the service is running as the non-root

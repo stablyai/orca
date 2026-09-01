@@ -36,27 +36,53 @@ function xDisplayLockPath(displayNumber: number): string {
   return `/tmp/.X${displayNumber}-lock`
 }
 
-// Why: a socket file can outlive the X server that made it. The X lock file holds
-// the server PID; if that process is gone, the display is dead despite the socket.
-function isDisplayServerAlive(displayNumber: number): boolean {
-  const lockPath = xDisplayLockPath(displayNumber)
+// Why: a socket file can outlive the X server that made it. The X lock file holds the server PID;
+// if that process is gone, the display is dead despite the socket. `missing` is a third outcome the
+// two callers must treat differently — see each call site.
+type DisplayLockProbe = 'alive' | 'dead' | 'missing'
+
+function probeDisplayLock(displayNumber: number): DisplayLockProbe {
   let pid: number
   try {
-    pid = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10)
-  } catch {
-    // Missing or unreadable lock means no server claimed this display.
-    return false
+    pid = Number.parseInt(readFileSync(xDisplayLockPath(displayNumber), 'utf8').trim(), 10)
+  } catch (error) {
+    // An unreadable lock is a lock we cannot clear: treat it as dead, not absent.
+    return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 'missing' : 'dead'
   }
   if (!Number.isInteger(pid) || pid <= 0) {
-    return false
+    return 'dead'
   }
   try {
     // signal 0 probes existence without affecting the process.
     process.kill(pid, 0)
-    return true
+    return 'alive'
   } catch (error) {
+    // EPERM means the PID exists under another uid — a root-owned X server is still live.
     return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EPERM'
+      ? 'alive'
+      : 'dead'
   }
+}
+
+/**
+ * Liveness for a display Orca did not create. An X server writes its lock beside the socket and
+ * both survive a crash (verified against Xvfb under SIGKILL), so a socket with no lock was never
+ * left by a crashed server — it is an endpoint published from elsewhere: a container bind-mounting
+ * only /tmp/.X11-unix, WSLg, or a foreign PID namespace. We cannot judge those, and refusing them
+ * blocks startup on displays that work.
+ */
+function isForeignDisplayServerAlive(displayNumber: number): boolean {
+  return probeDisplayLock(displayNumber) !== 'dead'
+}
+
+/**
+ * Liveness for Orca's own VIRTUAL_DISPLAY_NUMBER. Stricter on purpose: `removeStaleDisplayArtifacts`
+ * unlinks the lock before the socket, so a lockless socket here is Orca's own half-finished
+ * teardown, not a foreign endpoint. Adopting it would resurrect the orphan-socket bug and stop the
+ * cleanup below from self-healing.
+ */
+function isManagedDisplayServerAlive(displayNumber: number): boolean {
+  return probeDisplayLock(displayNumber) === 'alive'
 }
 
 function removeStaleDisplayArtifacts(displayNumber: number): void {
@@ -138,7 +164,7 @@ function hasUsableXDisplay(value: string | undefined): boolean {
     return /^\S+:\d+(?:\.\d+)?$/.test(display)
   }
   const displayNumber = Number(localDisplay[1])
-  return isUnixSocket(xvfbSocketPath(displayNumber)) && isDisplayServerAlive(displayNumber)
+  return isUnixSocket(xvfbSocketPath(displayNumber)) && isForeignDisplayServerAlive(displayNumber)
 }
 
 function hasUsableWaylandDisplay(env: NodeJS.ProcessEnv): boolean {
@@ -184,8 +210,8 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
   // Why: reuse an existing display ONLY if a live X server actually backs it.
   // A crashed prior run can leave an orphan socket; trusting it by path alone
   // would advertise browser support that then fails at tab creation.
-  if (existsSync(xvfbSocketPath(VIRTUAL_DISPLAY_NUMBER))) {
-    if (isDisplayServerAlive(VIRTUAL_DISPLAY_NUMBER)) {
+  if (isUnixSocket(xvfbSocketPath(VIRTUAL_DISPLAY_NUMBER))) {
+    if (isManagedDisplayServerAlive(VIRTUAL_DISPLAY_NUMBER)) {
       process.env.DISPLAY = VIRTUAL_DISPLAY
       return true
     }
