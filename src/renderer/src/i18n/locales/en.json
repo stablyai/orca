@@ -11839,6 +11839,10 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+          },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "Package Metadata Lookups",
+          "b3496fe6cc": "Show live description, version, and links when hovering a dependency in package.json. Disabling this stops all network lookups, including the local npm CLI (it also queries a registry) — the installed version from node_modules keeps working."
         }
       },
       "right": {

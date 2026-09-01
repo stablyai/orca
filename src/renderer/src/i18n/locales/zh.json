@@ -6083,6 +6083,10 @@
           "7ddd66fede": "编辑器自动换行",
           "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动。"
         },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "包元数据查询",
+          "b3496fe6cc": "将鼠标悬停在 package.json 中的依赖项上时，显示说明、最新版本和链接。禁用此设置将停止所有网络查询，包括本地 npm CLI（它也会访问注册表）；从 node_modules 读取的已安装版本仍然可以正常显示。"
+        },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
           "33ee3ca3af": "可选。用逗号、分号或换行符分隔主机。",

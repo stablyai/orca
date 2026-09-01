@@ -6022,6 +6022,10 @@
           "7ddd66fede": "편집기 자동 줄 바꿈",
           "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
         },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "패키지 메타데이터 조회",
+          "b3496fe6cc": "package.json에서 종속성에 마우스를 올리면 설명, 최신 버전, 링크를 표시합니다. 이 설정을 끄면 레지스트리에도 접속하는 로컬 npm CLI를 포함한 모든 네트워크 조회가 중단되지만, node_modules에서 읽는 설치된 버전 표시는 계속 작동합니다."
+        },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
           "33ee3ca3af": "선택 사항. 쉼표, 세미콜론 또는 새 줄로 호스트를 구분합니다.",

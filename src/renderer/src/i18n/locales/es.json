@@ -10283,6 +10283,10 @@
           "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
           "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
           "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
+        },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "Búsquedas de metadatos de paquetes",
+          "b3496fe6cc": "Muestra la descripción, la versión más reciente y los enlaces al pasar el cursor sobre una dependencia en package.json. Al desactivar esta opción se detienen todas las búsquedas en red, incluida la CLI local de npm (que también consulta un registro); la versión instalada, leída desde node_modules, sigue funcionando."
         }
       },
       "right": {
