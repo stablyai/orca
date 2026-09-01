@@ -17,7 +17,6 @@ function isWellFormedRequest(value: unknown): value is NpmPackageInfoRequest {
   const request = value as Record<string, unknown>
   return (
     typeof request.packageName === 'string' &&
-    typeof request.worktreeRoot === 'string' &&
     typeof request.executionHostId === 'string' &&
     isValidNpmPackageName(request.packageName)
   )

@@ -64,7 +64,6 @@ export async function resolvePackageJsonDependencyHover(
   const rawResult = params.lookupPackageInfo
     ? await params.lookupPackageInfo({
         packageName: location.packageName,
-        worktreeRoot: context.worktreeRoot,
         executionHostId: context.executionHostId
       })
     : undefined

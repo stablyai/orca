@@ -53,7 +53,6 @@ describe('registerNpmPackageInfoHandlers', () => {
 
     const result = await invoke({
       packageName: '-evil-flag',
-      worktreeRoot: '/repo',
       executionHostId: 'local'
     })
 
@@ -76,7 +75,6 @@ describe('registerNpmPackageInfoHandlers', () => {
 
     const result = await invoke({
       packageName: 'react',
-      worktreeRoot: '/repo',
       executionHostId: 'local'
     })
 

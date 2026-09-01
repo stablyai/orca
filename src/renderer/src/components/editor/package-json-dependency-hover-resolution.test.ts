@@ -156,7 +156,6 @@ describe('resolvePackageJsonDependencyHover', () => {
       expect(resolveInstalledVersion).toHaveBeenCalledWith(CONTEXT, 'react')
       expect(lookupPackageInfo).toHaveBeenCalledWith({
         packageName: 'react',
-        worktreeRoot: CONTEXT.worktreeRoot,
         executionHostId: CONTEXT.executionHostId
       })
       expect(result?.markdown).not.toContain('catalog:')

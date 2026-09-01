@@ -3,12 +3,10 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { NpmPackageInfoResult } from '../../shared/npm-package-info-types'
 import type { Store } from '../persistence'
 
-const { npmCliPackageViewMock, npmRegistryHttpLookupMock } = vi.hoisted(() => ({
-  npmCliPackageViewMock: vi.fn(),
+const { npmRegistryHttpLookupMock } = vi.hoisted(() => ({
   npmRegistryHttpLookupMock: vi.fn()
 }))
 
-vi.mock('./npm-cli-package-view', () => ({ npmCliPackageView: npmCliPackageViewMock }))
 vi.mock('./npm-registry-http-lookup', () => ({
   npmRegistryHttpLookup: npmRegistryHttpLookupMock
 }))
@@ -36,7 +34,6 @@ function fakeStore(overrides: Partial<GlobalSettings> = {}): Store {
 
 describe('createNpmPackageInfoService', () => {
   beforeEach(() => {
-    npmCliPackageViewMock.mockReset()
     npmRegistryHttpLookupMock.mockReset()
   })
 
@@ -47,28 +44,28 @@ describe('createNpmPackageInfoService', () => {
 
     const result = await service.lookup({
       packageName: 'react',
-      worktreeRoot: '/repo',
       executionHostId: 'local'
     })
 
     expect(result).toEqual({ status: 'lookup-disabled' })
-    expect(npmCliPackageViewMock).not.toHaveBeenCalled()
     expect(npmRegistryHttpLookupMock).not.toHaveBeenCalled()
   })
 
-  it('routes a local host through the npm CLI path', async () => {
-    npmCliPackageViewMock.mockResolvedValue(okResult)
+  // Why every host, including local: npm reads its configuration from the
+  // workspace, so a checked-in `.npmrc` decides which host `npm view` talks to.
+  // Until an explicit workspace-trust decision exists, no execution host gets
+  // the local CLI.
+  it('routes a local host through the registry HTTP path', async () => {
+    npmRegistryHttpLookupMock.mockResolvedValue(okResult)
     const service = createNpmPackageInfoService(fakeStore({}))
 
     const result = await service.lookup({
       packageName: 'react',
-      worktreeRoot: '/repo',
       executionHostId: 'local'
     })
 
     expect(result).toEqual(okResult)
-    expect(npmCliPackageViewMock).toHaveBeenCalledWith('react', '/repo', expect.anything())
-    expect(npmRegistryHttpLookupMock).not.toHaveBeenCalled()
+    expect(npmRegistryHttpLookupMock).toHaveBeenCalledWith('react')
   })
 
   it('routes an ssh host through the registry HTTP path, never the local CLI', async () => {
@@ -77,13 +74,11 @@ describe('createNpmPackageInfoService', () => {
 
     const result = await service.lookup({
       packageName: 'react',
-      worktreeRoot: '/repo',
       executionHostId: 'ssh:conn-1'
     })
 
     expect(result).toEqual(okResult)
     expect(npmRegistryHttpLookupMock).toHaveBeenCalledWith('react')
-    expect(npmCliPackageViewMock).not.toHaveBeenCalled()
   })
 
   it('routes a runtime host through the registry HTTP path', async () => {
@@ -92,28 +87,10 @@ describe('createNpmPackageInfoService', () => {
 
     const result = await service.lookup({
       packageName: 'react',
-      worktreeRoot: '/repo',
       executionHostId: 'runtime:env-1'
     })
 
     expect(result).toEqual(okResult)
-    expect(npmRegistryHttpLookupMock).toHaveBeenCalledWith('react')
-    expect(npmCliPackageViewMock).not.toHaveBeenCalled()
-  })
-
-  it('falls back to the registry HTTP path when the local host has no resolvable npm binary', async () => {
-    npmCliPackageViewMock.mockResolvedValue({ status: 'npm-unresolvable' })
-    npmRegistryHttpLookupMock.mockResolvedValue(okResult)
-    const service = createNpmPackageInfoService(fakeStore({}))
-
-    const result = await service.lookup({
-      packageName: 'react',
-      worktreeRoot: '/repo',
-      executionHostId: 'local'
-    })
-
-    expect(result).toEqual(okResult)
-    expect(npmCliPackageViewMock).toHaveBeenCalledTimes(1)
     expect(npmRegistryHttpLookupMock).toHaveBeenCalledWith('react')
   })
 })

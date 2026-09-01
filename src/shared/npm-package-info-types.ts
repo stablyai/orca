@@ -10,7 +10,6 @@ export const NPM_PACKAGE_INFO_LOOKUP_CHANNEL = 'npm-package-info:lookup'
 export type NpmPackageInfoRequest = {
   packageName: string
   /** Must be a registered worktree root; the local npm CLI runs with this cwd. */
-  worktreeRoot: string
   executionHostId: ExecutionHostId
 }
 

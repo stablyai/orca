@@ -52,7 +52,6 @@ describe('web fallback proxy chain — npmPackageInfo (real createFallbackProxy/
     // this is genuine production code, no fake/mock in this path.
     const result = await api.npmPackageInfo.lookup({
       packageName: 'react',
-      worktreeRoot: CONTEXT.worktreeRoot,
       executionHostId: CONTEXT.executionHostId
     })
 
