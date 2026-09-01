@@ -1,10 +1,15 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import { fork } from 'node:child_process'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import { daemonLogArgs } from './daemon-launch-paths'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
+import {
+  canForkDaemonThroughUtilityProcess,
+  forkDaemonThroughUtilityProcess,
+  type LaunchedDaemonChild as UtilityLaunchedDaemonChild
+} from './daemon-utility-process-fork'
 
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
@@ -20,7 +25,7 @@ export class DaemonEndpointUnavailableError extends Error {
 }
 
 export type LaunchedDaemonChild = {
-  child: ChildProcess
+  child: UtilityLaunchedDaemonChild
   identity: DaemonEndpointIdentity
 }
 
@@ -50,27 +55,57 @@ export async function launchDaemonChild(
     launchNonce,
     macosLoginSessionWatch
   } = options
-  const child = fork(
-    forkEntryPath,
-    [
-      '--socket',
-      socketPath,
-      '--token',
-      tokenPath,
-      '--pid-record',
-      pidPath,
-      '--launch-nonce',
-      launchNonce,
-      '--entry-path',
-      entryPath,
-      '--app-version',
-      getAppEnvironment().getVersion(),
-      '--spawner-exec-path',
-      process.execPath,
-      ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
-      ...daemonLogArgs()
-    ],
-    {
+  const daemonArgs = [
+    '--socket',
+    socketPath,
+    '--token',
+    tokenPath,
+    '--pid-record',
+    pidPath,
+    '--launch-nonce',
+    launchNonce,
+    '--entry-path',
+    entryPath,
+    '--app-version',
+    getAppEnvironment().getVersion(),
+    '--spawner-exec-path',
+    process.execPath,
+    ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
+    ...daemonLogArgs()
+  ]
+  const daemonEnv = {
+    ...process.env,
+    ELECTRON_RUN_AS_NODE: '1',
+    // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
+    ORCA_USER_DATA_PATH: userDataPath
+  }
+  // Why the utility-process hop on Linux/Windows: a daemon forked directly from
+  // main inherits Chromium descriptors that are not close-on-exec/non-inheritable
+  // (CDP listener, crashpad channel, profile file descriptors) and hands them to
+  // every PTY child for its detached lifetime — a restarted app then finds its
+  // debug port bound by the old daemon lineage. A utility-process child starts
+  // with a clean table. macOS posix_spawn already strips these and its TCC
+  // attribution needs the direct fork, so it keeps the old path. Fail-open: the
+  // leak is recoverable, a missing daemon is not.
+  const child: UtilityLaunchedDaemonChild = await forkDaemonChildForLaunch()
+  async function forkDaemonChildForLaunch(): Promise<UtilityLaunchedDaemonChild> {
+    if (canForkDaemonThroughUtilityProcess()) {
+      try {
+        return await forkDaemonThroughUtilityProcess({
+          entryPath: forkEntryPath,
+          args: daemonArgs,
+          cwd: userDataPath,
+          env: daemonEnv,
+          execPath: relocatedExecPath ?? process.execPath
+        })
+      } catch (error) {
+        console.warn(
+          '[daemon] Utility-process launch failed; falling back to a direct fork (children may inherit Chromium descriptors):',
+          error instanceof Error ? error.message : error
+        )
+      }
+    }
+    return fork(forkEntryPath, daemonArgs, {
       // Why: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
       cwd: userDataPath,
       // Why: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
@@ -79,14 +114,9 @@ export async function launchDaemonChild(
       // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
       ...(relocatedExecPath ? { execPath: relocatedExecPath } : {}),
       // Why: run the fork as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
-        ORCA_USER_DATA_PATH: userDataPath
-      }
-    }
-  )
+      env: daemonEnv
+    })
+  }
 
   // Why: keep only the startup-window stderr tail so a crash cause is visible without unbounded memory.
   let startupStderr = ''
@@ -226,7 +256,9 @@ export async function launchDaemonChild(
   return { child, identity: launchedIdentity }
 }
 
-export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise<void> {
+export async function terminateLaunchedDaemonChild(
+  child: UtilityLaunchedDaemonChild
+): Promise<void> {
   try {
     if (
       (child.exitCode !== null && child.exitCode !== undefined) ||
