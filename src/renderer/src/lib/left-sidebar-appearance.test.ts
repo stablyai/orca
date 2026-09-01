@@ -49,7 +49,7 @@ describe('resolveLeftSidebarStyleVariables', () => {
     })
     expect(vars?.['--input']).toContain('#f0f4f8 15%')
     expect(vars?.['--ring']).toContain('#f0f4f8 44%')
-    expect(vars?.['--bg-titlebar']).toBe(vars?.['--card'])
+    expect(vars?.['--bg-titlebar']).toBe(vars?.['--background'])
   })
 
   it('classifies App Appearance from terminal luminance instead of app preference', () => {
