@@ -8,12 +8,14 @@ vi.mock('./worktree-remote', () => ({
 vi.mock('./worktree-head-identity-reader', () => ({
   readGitCommonHeadIdentities: vi.fn(async () => ({
     identities: [] as WorktreeHeadIdentity[],
-    listingComplete: true
+    complete: true
   })),
   createWorktreeHeadIdentityCache: vi.fn(() => ({
     entries: new Map(),
+    unverified: new Set(),
     entryNames: null,
-    primary: null
+    primary: null,
+    primaryUnverified: false
   }))
 }))
 
@@ -50,8 +52,8 @@ function identity(head: string): WorktreeHeadIdentity {
   return { worktreePath: WT_A, head, branch: 'refs/heads/feature' }
 }
 
-function mockRead(identities: WorktreeHeadIdentity[] = [], listingComplete = true): void {
-  vi.mocked(readGitCommonHeadIdentities).mockResolvedValue({ identities, listingComplete })
+function mockRead(identities: WorktreeHeadIdentity[] = [], complete = true): void {
+  vi.mocked(readGitCommonHeadIdentities).mockResolvedValue({ identities, complete })
 }
 
 // Advance only the clock, so promotion-on-the-next-event is exercised without
@@ -190,7 +192,7 @@ describe('refreshWorktreeHeadIdentities', () => {
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          release = () => resolve({ identities: [], listingComplete: true })
+          release = () => resolve({ identities: [], complete: true })
         })
     )
     const inFlight = refreshWorktreeHeadIdentities(
@@ -265,7 +267,7 @@ describe('refreshWorktreeHeadIdentities', () => {
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          release = () => resolve({ identities: [], listingComplete: true })
+          release = () => resolve({ identities: [], complete: true })
         })
     )
     const inFlight = refreshWorktreeHeadIdentities(
@@ -302,7 +304,7 @@ describe('refreshWorktreeHeadIdentities', () => {
 
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(async () => {
       windowState.destroyed = true
-      return { identities: [identity('bbb')], listingComplete: true }
+      return { identities: [identity('bbb')], complete: true }
     })
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
 
@@ -399,7 +401,7 @@ describe('refreshWorktreeHeadIdentities', () => {
 
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(async () => {
       host.disposed = true
-      return { identities: [identity('bbb')], listingComplete: true }
+      return { identities: [identity('bbb')], complete: true }
     })
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
 

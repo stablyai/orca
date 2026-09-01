@@ -156,7 +156,7 @@ export async function refreshWorktreeHeadIdentities(
   }
   state.inFlight = true
   try {
-    const { identities, listingComplete } = await readGitCommonHeadIdentities(
+    const { identities, complete } = await readGitCommonHeadIdentities(
       host.path,
       state.cache,
       effectiveScope
@@ -165,15 +165,15 @@ export async function refreshWorktreeHeadIdentities(
       return
     }
     // After the teardown check, so a read whose result is discarded cannot pass
-    // for a checkpoint. A read that could not enumerate `worktrees/` has not
-    // seen entries added since the last good listing, so it is not one either.
-    if (effectiveScope.all && listingComplete) {
+    // for a checkpoint. A read that could not enumerate `worktrees/`, or that hit
+    // an unreadable entry, has not observed the whole repo — not one either.
+    if (effectiveScope.all && complete) {
       state.lastFullReadAtMs = Date.now()
     }
     const baseline = state.baseline
     // Rows this pass could not observe are carried forward: dropping them would
     // make the next successful listing report every linked worktree as changed.
-    const nextBaseline = listingComplete ? new Map<string, string>() : new Map(baseline ?? [])
+    const nextBaseline = complete ? new Map<string, string>() : new Map(baseline ?? [])
     for (const identity of identities) {
       nextBaseline.set(identity.worktreePath, headIdentitySignature(identity))
     }

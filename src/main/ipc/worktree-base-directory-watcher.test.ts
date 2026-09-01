@@ -32,8 +32,14 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 vi.mock('./worktree-head-identity-reader', () => ({
-  readGitCommonHeadIdentities: vi.fn(async () => ({ identities: [], listingComplete: true })),
-  createWorktreeHeadIdentityCache: () => ({ entries: new Map(), entryNames: null, primary: null })
+  readGitCommonHeadIdentities: vi.fn(async () => ({ identities: [], complete: true })),
+  createWorktreeHeadIdentityCache: () => ({
+    entries: new Map(),
+    unverified: new Set(),
+    entryNames: null,
+    primary: null,
+    primaryUnverified: false
+  })
 }))
 
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -93,7 +99,7 @@ function makeWindow(options: { destroyed?: () => boolean } = {}) {
 }
 
 function mockHeadIdentities(identities: WorktreeHeadIdentity[]): void {
-  vi.mocked(readGitCommonHeadIdentities).mockResolvedValue({ identities, listingComplete: true })
+  vi.mocked(readGitCommonHeadIdentities).mockResolvedValue({ identities, complete: true })
 }
 
 function emit(root: string, events: WorktreeBasePollEvent[]): void {
