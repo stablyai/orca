@@ -23,11 +23,7 @@ function parseGitDecorationRefs(raw: string, revision: string): GitHistoryItemRe
   const refs: GitHistoryItemRef[] = []
   // Why: Git permits commas in ref names, so Orca's git log format uses a
   // control-character separator that Git ref names cannot contain.
-  const parts = raw.includes(GIT_HISTORY_DECORATION_SEPARATOR)
-    ? raw.split(GIT_HISTORY_DECORATION_SEPARATOR)
-    : raw.split(',')
-
-  for (const part of parts) {
+  for (const part of raw.split(GIT_HISTORY_DECORATION_SEPARATOR)) {
     const ref = part.trim()
     if (!ref || ref === 'HEAD' || /^refs\/remotes\/[^/]+\/HEAD(?:\s|$)/.test(ref)) {
       continue
