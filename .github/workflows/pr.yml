@@ -686,6 +686,9 @@ jobs:
       - name: Verify headless serve signal shutdown
         run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
 
+      - name: Verify AppImage CLI sandbox boundary
+        run: node config/scripts/run-appimage-cli-sandbox-docker.mjs --appimage dist/orca-linux.AppImage
+
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
 

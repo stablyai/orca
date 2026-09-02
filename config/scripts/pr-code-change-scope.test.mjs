@@ -181,6 +181,17 @@ describe('per-job path classification', () => {
     expectClassification(['native/computer-use-macos/Package.swift'], {})
   })
 
+  it('runs Linux packaging when AppImage CLI sandbox inputs change', () => {
+    for (const file of [
+      'config/docker/appimage-cli-sandbox/Dockerfile',
+      'config/docker/appimage-cli-sandbox/run-contract.sh',
+      'config/patches/app-builder-lib@26.15.3.patch',
+      'config/scripts/run-appimage-cli-sandbox-docker.mjs'
+    ]) {
+      expectClassification([file], { package: true })
+    }
+  })
+
   it('runs shell contracts when live-shell inputs change', () => {
     expectClassification(['src/main/daemon/shell-ready.ts'], {
       shell_contracts: true,

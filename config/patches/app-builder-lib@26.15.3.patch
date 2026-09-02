@@ -1,0 +1,13 @@
+diff --git a/out/targets/appimage/appImageUtil.js b/out/targets/appimage/appImageUtil.js
+index b685375f1194e3a71da14b3105e7ed11e4d57f45..8dbecb809c1bd720e1e90ced55097462909d6b6c 100644
+--- a/out/targets/appimage/appImageUtil.js
++++ b/out/targets/appimage/appImageUtil.js
+@@ -219,7 +219,7 @@ NO_SANDBOX=()
+ #   - On minimal systems (e.g. Alpine or stripped-down containers) 'unshare' may not exist.
+ #     In that case the shell will return exit code 127 ("command not found"), which will cause
+ #     us to add '--no-sandbox'. This is an intentional fail-safe: we prefer the app to start
+ #     without sandboxing rather than crash on startup.
+-if [ $HAVE_NO_SANDBOX -eq 0 ] && ! unshare -Ur true 2>/dev/null ; then
++if [ -z "\${ELECTRON_RUN_AS_NODE-}" ] && [ $HAVE_NO_SANDBOX -eq 0 ] && ! unshare -Ur true 2>/dev/null ; then
+   NO_SANDBOX=(--no-sandbox)
+ fi

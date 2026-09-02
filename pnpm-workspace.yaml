@@ -41,6 +41,7 @@ overrides:
   monaco-editor>dompurify: 3.4.13
 
 patchedDependencies:
+  app-builder-lib@26.15.3: config/patches/app-builder-lib@26.15.3.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.300': config/patches/@xterm__addon-ligatures@0.11.0-beta.300.patch
   '@xterm/addon-webgl@0.20.0-beta.299': config/patches/@xterm__addon-webgl@0.20.0-beta.299.patch

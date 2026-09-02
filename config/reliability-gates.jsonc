@@ -16806,6 +16806,105 @@
       "demotionRule": "Keep experimental or demote if either signal traps, returns nonzero, retains its listener/Xvfb/run-owned process identity, touches the unrelated canary, or the focused gate flakes without an identified product or harness defect."
     },
     {
+      "id": "runtime.appimage-cli-sandbox-argument-boundary",
+      "title": "AppImage sandbox fallback preserves Electron Node CLI arguments",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "linux-appimage-launcher",
+      "surfaces": [
+        "packaged Linux AppImage GUI startup",
+        "registered AppImage orca-ide CLI",
+        "direct ELECTRON_RUN_AS_NODE AppImage execution"
+      ],
+      "platforms": ["linux"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "An Ubuntu 24.04 amd64 container extracts a real x64 AppImage, forces the generated AppRun unshare probe to fail, and executes its packaged Electron and Orca CLI as an unprivileged user. The PR package lane repeats the same contract against the newly generated x64 AppImage; arm64 packaging and direct outer-AppImage runtime execution remain uncollected.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-5597",
+        "https://github.com/stablyai/orca/issues/16650"
+      ],
+      "invariant": "When unshare -Ur fails, generated AppRun prepends exactly one --no-sandbox only for Electron GUI semantics (ELECTRON_RUN_AS_NODE unset or empty). Every non-empty Node-mode value skips the probe and fallback, preserves byte-exact user argv, and reaches Orca CLI parsing.",
+      "oracle": "Extract the packaged AppImage into a disposable Docker volume, shadow unshare with a deterministic failing executable, then use the actual packaged Electron to capture Node argv for ELECTRON_RUN_AS_NODE values 0, 1, and 1-ish, including empty, spaced, dollar, UTF-8, option-shaped, and explicit user --no-sandbox arguments. Independently require the actual packaged Orca CLI main function to render help. Trace NUL-delimited GUI argv for unset and empty values, require --no-sandbox first, and require exactly two unshare probes. Expected-red mode additionally requires all three exact Node bad-option rejections while both GUI cases remain green.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/appimage-cli-sandbox-contract.test.mjs --reporter=dot",
+        "shellcheck config/docker/appimage-cli-sandbox/run-contract.sh",
+        "node config/scripts/run-appimage-cli-sandbox-docker.mjs --appimage dist/orca-linux.AppImage --platform linux/amd64"
+      ],
+      "testFiles": [
+        "config/scripts/appimage-cli-sandbox-contract.test.mjs",
+        "config/scripts/run-appimage-cli-sandbox-docker.mjs",
+        "config/docker/appimage-cli-sandbox/run-contract.sh"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/appimage-cli-sandbox-contract.test.mjs",
+          "assertions": [
+            "the generated AppRun gates fallback on unset or empty ELECTRON_RUN_AS_NODE",
+            "the exact-version app-builder-lib patch remains pinned in the manifest and lockfile",
+            "PR CI builds an x64 AppImage before invoking the packaged contract"
+          ]
+        },
+        {
+          "file": "config/scripts/run-appimage-cli-sandbox-docker.mjs",
+          "assertions": [
+            "the exact AppImage SHA-256, AppRun override, and Docker platform are published",
+            "expected-red runs require the original Node bad-option signal for every non-empty value",
+            "expected-red runs still require both GUI fallback cases to pass"
+          ]
+        },
+        {
+          "file": "config/docker/appimage-cli-sandbox/run-contract.sh",
+          "assertions": [
+            "actual packaged Electron preserves byte-exact Node argv and explicit user --no-sandbox",
+            "actual packaged Orca main reaches argument parsing for every non-empty value",
+            "GUI unset and empty prepend fallback and are the only modes that probe unshare"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-29",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/appimage-cli-sandbox-contract.test.mjs --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 1,
+          "summary": "The generated-script, dependency-patch, lockfile, and PR workflow assertions passed. The separately recorded four-way Docker oracle used the actual v1.4.188 packaged Electron and CLI with generated AppRun variants."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "one pinned Ubuntu 24.04 image build, AppImage extraction, nine packaged Node/CLI executions, and two GUI argv traces"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The deterministic failing executable and exact argv comparisons are new; native CI history has not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The identical oracle against v1.4.188 AppImage 2e70cb5e199 with packaged AppRun f48e4f9b653, latest-main generated AppRun f48e4f9b653, and candidate with the guard reverted all reject Node values 0, 1, and 1-ish before JavaScript with bad option: --no-sandbox while GUI fallback passes. Candidate generated AppRun d0bb9032926 preserves all Node argv, reaches Orca parsing, keeps GUI fallback first, and reduces probes from five to exactly two."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Node-mode AppRun replaces a failing external unshare probe with one shell environment check; GUI startup retains the existing probe. The product change adds no process, polling, IPC, listener, filesystem scan, renderer work, wire field, or retained state."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive native amd64 CI passes or 14 days of soak history.",
+        "Collect one direct outer-AppImage run on a native Linux host without user namespaces.",
+        "Collect the same packaged contract for the arm64 AppImage release artifact.",
+        "Keep exact Node argv, real CLI parser, GUI fallback order, and probe-count assertions green."
+      ],
+      "knownGaps": [
+        "Local Docker on arm64 macOS uses amd64 emulation and cannot execute the outer AppImage runtime, so the harness extracts it with 7z before running the actual AppRun and packaged Electron.",
+        "The PR package lane builds x64 only; the architecture-neutral generated script has not yet been exercised from a packaged arm64 AppImage.",
+        "The pnpm patch is version-specific and must be refreshed or retired when app-builder-lib changes."
+      ],
+      "demotionRule": "Demote if any non-empty Node value triggers the namespace probe or receives an injected fallback flag, GUI fallback stops reaching Electron, byte-exact argv or CLI parsing regresses, or the packaged gate flakes without an identified product or harness defect."
+    },
+    {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",
       "title": "SSH managed-hook companions load and install hooks on Node 18",
       "maturity": "experimental",

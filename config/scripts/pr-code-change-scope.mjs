@@ -180,6 +180,9 @@ const SHARED_PACKAGE_PREFIXES = [
 
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  'config/docker/appimage-cli-sandbox/',
+  'config/patches/app-builder-lib@',
+  'config/scripts/run-appimage-cli-sandbox',
   'native/computer-use-linux/',
   'resources/linux/',
   'config/scripts/run-headless-serve'
