@@ -1,6 +1,11 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../../shared/repo-types'
+import {
+  clampRepoSearchRefsLimit,
+  REPO_SEARCH_REFS_DEFAULT_LIMIT,
+  isRepoSearchRefsRequestLimit
+} from '../../../shared/repo-search-limits'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import {
@@ -111,10 +116,13 @@ async function searchBaseRefDetailsForRepo(
   if (!repo || isFolderRepo(repo)) {
     return []
   }
-  const limit = args.limit ?? 25
-  if (!Number.isInteger(limit) || limit <= 0) {
+  const requestedLimit = args.limit ?? REPO_SEARCH_REFS_DEFAULT_LIMIT
+  if (!isRepoSearchRefsRequestLimit(requestedLimit)) {
     return []
   }
+  // Keep the public IPC shape forgiving while bounding Git and retained results
+  // for callers that request an unusually large page.
+  const limit = clampRepoSearchRefsLimit(requestedLimit)
   // Why: remote repos need the relay to list branches on the remote host.
   if (repo.connectionId) {
     const provider = getSshGitProvider(repo.connectionId)

@@ -55,9 +55,13 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
-          npx electron-vite build --mode e2e
-          pnpm run build:web-from-renderer
-          pnpm run build:relay
+          status=0
+          pnpm run build:relay &
+          relay_pid=$!
+          npx electron-vite build --mode e2e || status=1
+          pnpm run build:web-from-renderer || status=1
+          wait "$relay_pid" || status=1
+          exit "$status"
 
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7
@@ -71,36 +75,12 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  e2e:
-    name: e2e ${{ matrix.shard_name }}
-    needs: build
-    if: inputs.test_files == ''
+  # Build Electron-native dependencies once per workflow. Consumer shards restore
+  # this immutable cache instead of compiling the same ABI concurrently.
+  prepare-native-cache:
+    name: prepare Electron native cache
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - shard: '1/10'
-            shard_name: 1-of-10
-          - shard: '2/10'
-            shard_name: 2-of-10
-          - shard: '3/10'
-            shard_name: 3-of-10
-          - shard: '4/10'
-            shard_name: 4-of-10
-          - shard: '5/10'
-            shard_name: 5-of-10
-          - shard: '6/10'
-            shard_name: 6-of-10
-          - shard: '7/10'
-            shard_name: 7-of-10
-          - shard: '8/10'
-            shard_name: 8-of-10
-          - shard: '9/10'
-            shard_name: 9-of-10
-          - shard: '10/10'
-            shard_name: 10-of-10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -108,18 +88,65 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Why: pnpm install used to rebuild native modules here; the composite
-      # action restores them from cache and only compiles on a miss. The
-      # toolchain is still required for that miss path, and for paired Quick
-      # Open coverage which exercises the resource-bounded host search.
       - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
 
-      # Why: Electron on Linux needs an X display even when the app
-      # suppresses mainWindow.show() via ORCA_E2E_HEADLESS. xvfb provides a
-      # virtual framebuffer so Chromium can initialize without a real display.
-      - name: Install xvfb
-        run: sudo apt-get install -y xvfb
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+
+  e2e:
+    name: e2e ${{ matrix.shard_name }}
+    needs: [build, prepare-native-cache]
+    if: inputs.test_files == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Fourteen scheduled runs averaged 24.6 minutes per shard; shards 4
+          # and 9 repeatedly hit the 30-minute cap. A 12-way trial still left
+          # one 30-minute shard, so 14 gives the suite enough failure headroom.
+          - shard: '1/14'
+            shard_name: 1-of-14
+          - shard: '2/14'
+            shard_name: 2-of-14
+          - shard: '3/14'
+            shard_name: 3-of-14
+          - shard: '4/14'
+            shard_name: 4-of-14
+          - shard: '5/14'
+            shard_name: 5-of-14
+          - shard: '6/14'
+            shard_name: 6-of-14
+          - shard: '7/14'
+            shard_name: 7-of-14
+          - shard: '8/14'
+            shard_name: 8-of-14
+          - shard: '9/14'
+            shard_name: 9-of-14
+          - shard: '10/14'
+            shard_name: 10-of-14
+          - shard: '11/14'
+            shard_name: 11-of-14
+          - shard: '12/14'
+            shard_name: 12-of-14
+          - shard: '13/14'
+            shard_name: 13-of-14
+          - shard: '14/14'
+            shard_name: 14-of-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # Native cache misses need the compiler, Electron needs Xvfb, and paired
+      # Quick Open needs ripgrep. Install them in one apt transaction per shard.
+      - name: Install native build and headless UI tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep xvfb zsh
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -156,7 +183,7 @@ jobs:
 
   changed-e2e:
     name: changed e2e specs
-    needs: build
+    needs: [build, prepare-native-cache]
     if: inputs.test_files != ''
     runs-on: ubuntu-latest
     # Why 45: pr.yml now maps SSH source edits onto Docker-backed specs, so this lane can
@@ -190,12 +217,16 @@ jobs:
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
         run: |
+          # Why the native IME spec is dropped: it test.skip()s itself without
+          # ORCA_E2E_NATIVE_IBUS_HANGUL, which this lane cannot set because it has no ibus
+          # session. Running it here reported a green skip as coverage.
           mapfile -t TEST_FILES < <(jq -r '.[] | select(
             . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
-            . != "tests/e2e/paired-startup-exec-readiness.spec.ts"
+            . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
+            . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
           )' <<<"$TEST_FILES_JSON")
           if [ "${#TEST_FILES[@]}" -eq 0 ]; then
-            echo "Changed startup-readiness specs are owned by the dedicated live lane."
+            echo "Changed specs are all owned by dedicated lanes."
             exit 0
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
@@ -224,8 +255,7 @@ jobs:
 
   ssh-docker-watcher-isolation:
     name: ssh docker watcher isolation
-    needs: build
-    # Why ssh_source_changed first: this lane used to trigger on SSH source only as a side
+    needs: [build, prepare-native-cache]
     # effect of one route listing a startup-readiness spec — pruning that spec would have
     # silently retired the whole lane. The signal is now derived from the SSH routes directly.
     # The two spec clauses stay for their honest purpose: changed-e2e hands these specs to this
@@ -265,11 +295,30 @@ jobs:
       - name: Run Docker SSH watcher isolation E2E
         run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
 
+      # Why: Playwright empties test-results/ when it starts, so each step here used to
+      # destroy the previous step's traces. Only the last lane's failure was ever
+      # diagnosable from the artifact; set each lane aside before the next one runs.
+      - name: Keep watcher-isolation traces
+        if: always()
+        run: |
+          if [ -d test-results ]; then
+            mkdir -p e2e-traces
+            mv test-results "e2e-traces/watcher-isolation"
+          fi
+
       # Why always(): this lane gates SSH parking/retention plus startup-exec
       # readiness across live SSH, headed paired, and headless serve topologies.
       - name: Run Docker SSH terminal parking + startup readiness E2E
         if: always()
         run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
+
+      - name: Keep terminal-parking traces
+        if: always()
+        run: |
+          if [ -d test-results ]; then
+            mkdir -p e2e-traces
+            mv test-results "e2e-traces/terminal-parking"
+          fi
 
       # Why here rather than the sharded lanes: the shards set no ORCA_E2E_SSH_DOCKER, so every
       # spec below skipped itself while the shard still reported green. Running them on this one
@@ -279,11 +328,19 @@ jobs:
         if: always()
         run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker
 
+      - name: Keep remaining-ssh-docker traces
+        if: always()
+        run: |
+          if [ -d test-results ]; then
+            mkdir -p e2e-traces
+            mv test-results "e2e-traces/remaining-ssh-docker"
+          fi
+
       - name: Upload watcher isolation traces
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-ssh-docker-watcher-isolation
-          path: test-results/
+          path: e2e-traces/
           retention-days: 7
           if-no-files-found: ignore

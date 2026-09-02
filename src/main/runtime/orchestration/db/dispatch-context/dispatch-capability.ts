@@ -56,7 +56,12 @@ export function verifyDispatchCapability(
     return { valid: false, reason: `Dispatch ${params.dispatchId} capability is revoked.` }
   }
   if (!params.capability) {
-    return { valid: false, reason: 'The Dispatch capability is missing.' }
+    // Why: a worker that omits the flag needs the flag name, not just the diagnosis.
+    return {
+      valid: false,
+      reason:
+        'The Dispatch capability is missing. Pass --dispatch-capability <token> from your dispatch preamble.'
+    }
   }
   const expected = Buffer.from(dispatch.capability_hash, 'hex')
   const observed = Buffer.from(hashDispatchCapability(params.capability), 'hex')

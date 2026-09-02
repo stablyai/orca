@@ -204,6 +204,7 @@ describe('worktree remote runtime mutations', () => {
       executionHostId: 'local',
       updates: {
         displayName: 'Fix auth',
+        displayNameIsPinned: true,
         pendingFirstAgentMessageRename: false,
         firstAgentMessageRenameError: null
       }
@@ -361,6 +362,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'review-branch', {
       repoId: 'repo1',
+      repoOwnerExecutionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: 789,
       linkedBitbucketPR: null,

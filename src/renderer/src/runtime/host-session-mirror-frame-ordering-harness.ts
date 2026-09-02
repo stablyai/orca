@@ -139,13 +139,17 @@ export function setDocumentVisibility(state: 'visible' | 'hidden'): void {
   document.dispatchEvent(new Event('visibilitychange'))
 }
 
-export async function publish(subscription: RuntimeSubscription, result: unknown): Promise<void> {
+export async function publish(
+  subscription: RuntimeSubscription,
+  result: unknown,
+  runtimeId = 'runtime-a'
+): Promise<void> {
   await act(async () => {
     subscription.callbacks.onResponse({
       id: 'subscription-event',
       ok: true as const,
       result,
-      _meta: { runtimeId: 'runtime-a' }
+      _meta: { runtimeId }
     } as never)
     await settle()
   })

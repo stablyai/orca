@@ -144,6 +144,13 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).not.toHaveBeenCalled()
   })
 
+  it('fails closed when the renderer has not selected a repo yet', async () => {
+    const listed = await handlers['worktrees:list'](null, undefined)
+
+    expect(listed).toEqual([])
+    expect(store.getRepo).not.toHaveBeenCalled()
+  })
+
   it('returns reconstructed rows when an SSH provider is unavailable', async () => {
     const repo = {
       id: 'repo-ssh',

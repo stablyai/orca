@@ -3,7 +3,8 @@ import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type AgentType,
   type NativeChatMessage,
-  type NativeChatSession
+  type NativeChatSession,
+  type NativeChatTurnLifecycle
 } from '../../../../shared/native-chat-types'
 import {
   applyAppend,
@@ -39,6 +40,8 @@ export type UseNativeChatLiveSessionArgs = {
 
 /** A live session plus the older-history pagination controls the view needs. */
 export type NativeChatLiveSession = NativeChatSession & {
+  /** Latest provider turn boundary, used to settle orphaned running tool rows. */
+  transcriptLifecycle?: NativeChatTurnLifecycle
   /** True when an older page may still exist (the last read filled the window). */
   hasMore: boolean
   /** Whether an older-history page is currently loading. */

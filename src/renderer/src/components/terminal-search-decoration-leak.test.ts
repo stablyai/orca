@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * closed, until the window was minimized and restored.
  *
  * Mechanism, in @xterm/xterm's SortedList (patched in
- * config/patches/@xterm__xterm@6.1.0-beta.287.patch):
+ * config/patches/@xterm__xterm@*.patch, generated from the source patch under
+ * config/patches/xterm-src/):
  *
  *   - DecorationService keys its SortedList on `decoration.marker.line`.
  *   - `delete()` only records an index and defers the array compaction, while

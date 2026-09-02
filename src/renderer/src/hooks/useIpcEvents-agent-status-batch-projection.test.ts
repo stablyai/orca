@@ -107,18 +107,16 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expandedLeafId: null
       }
     }
-    const snapshot = cases.map(
-      (entry, index): AgentStatusSetData => ({
-        paneKey: makePaneKey(entry.tabId, entry.leafId),
-        worktreeId: entry.payloadWorktreeId,
-        ...(entry.connectionId ? { connectionId: entry.connectionId } : {}),
-        state: 'working',
-        prompt: `routing case ${index}`,
-        agentType: 'claude',
-        receivedAt: 1_700_000_001_000 + index,
-        stateStartedAt: 1_700_000_001_000 + index
-      })
-    )
+    const snapshot = cases.map((entry, index): AgentStatusSetData => ({
+      paneKey: makePaneKey(entry.tabId, entry.leafId),
+      worktreeId: entry.payloadWorktreeId,
+      ...(entry.connectionId ? { connectionId: entry.connectionId } : {}),
+      state: 'working',
+      prompt: `routing case ${index}`,
+      agentType: 'claude',
+      receivedAt: 1_700_000_001_000 + index,
+      stateStartedAt: 1_700_000_001_000 + index
+    }))
     const localRepo = { ...TEST_REPO, id: 'repo-routing-local', connectionId: null }
     const sshRepo = { ...TEST_REPO, id: 'repo-routing-ssh', connectionId: 'ssh-live' }
     const store = createTestStore()

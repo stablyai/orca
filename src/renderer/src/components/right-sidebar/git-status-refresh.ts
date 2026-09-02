@@ -112,6 +112,7 @@ export async function refreshGitStatusForWorktree({
   pushTarget?: GitPushTarget
   deps: GitStatusRefreshDeps
   request?: {
+    admissionTier?: 'interactive' | 'status' | 'background'
     reuseLineStats?: boolean
     signal?: AbortSignal
     shouldApply?: () => boolean
@@ -131,6 +132,7 @@ export async function refreshGitStatusForWorktree({
         connectionId
       },
       {
+        admissionTier: request?.admissionTier ?? 'status',
         ...(request?.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(request?.signal ? { signal: request.signal } : {}),
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
@@ -256,6 +258,7 @@ export async function refreshGitStatusForWorktreeStrict({
       connectionId
     },
     {
+      admissionTier: 'interactive',
       // Why: strict refreshes are user-triggered reconciliation and must not reuse
       // automatic polling's no-upstream backoff window.
       bypassEffectiveUpstreamNegativeCache: true,

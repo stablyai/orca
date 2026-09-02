@@ -2746,7 +2746,8 @@
             "e4aa243f8c": "데몬 재시작",
             "a7e2fd2699": "이슈 등록",
             "5c8ce20be6": "문제가 계속되면",
-            "cc6d997c65": "오래된 데몬 상태를 지우려면 여기에서 terminal 데몬을 다시 시작하세요."
+            "cc6d997c65": "오래된 데몬 상태를 지우려면 여기에서 terminal 데몬을 다시 시작하세요.",
+            "remoteTerminalClosed": "원격 터미널이 종료되었습니다."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash 콘솔 한도에 도달했습니다",
@@ -3017,7 +3018,8 @@
             "25dc1cd653": "파일 열기",
             "7cdf8ee0c8": "URL 열기",
             "b27864279e": "agent 실행",
-            "0e5b7a3f16": "열린 탭, 파일, URL, agent 검색…",
+            "omniboxPlaceholderWithHistory": "열린 탭, 방문 기록, 파일, URL, agent 검색…",
+            "openPage": "페이지 열기",
             "8f0a1c4d92": "탭으로 전환",
             "2c38630a01": "워크스페이스가 더 이상 존재하지 않습니다",
             "4f0d9a71c2": "탭이 더 이상 존재하지 않습니다",
@@ -3063,7 +3065,6 @@
                 "classifier": {
                   "42e6262ae9": "사용할 수 있는 작업이 없습니다.",
                   "097a982ee0": "파일 로드 중...",
-                  "c41f8d20b7": "열린 탭, 파일, URL, agent 검색…",
                   "90eb94dc48": "http:// 또는 https:// URL을 입력하세요.",
                   "5553b283ce": "URL 또는 파일 경로를 입력하세요.",
                   "queryTooLarge": "검색 텍스트가 너무 큽니다.",
@@ -12411,6 +12412,30 @@
           },
           "feature": {
             "wall": {
+              "setup": {
+                "checklist": {
+                  "localized": {
+                    "copy": {
+                      "ec0a363633": "동시 작업",
+                      "62bac8f43c": "동시에 2개의 서로 다른 워크트리에서 작업하세요. 같은 프로젝트 내에서도 각각 완벽히 격리되어 있어 2개의 기능을 동시에 작업하기에 적합합니다.",
+                      "908898c3ee": "Orca 브라우저 사용",
+                      "43781563c3": "Orca를 벗어나지 않고 웹 앱을 탐색하세요. 원하는 요소를 선택하고 클릭 한 번으로 정확한 소스와 스타일을 에이전트에 전달할 수 있습니다.",
+                      "29aa2c2077": "알림 켜기",
+                      "71bd9a8c95": "에이전트가 작업을 완료했거나, 확인이 필요하거나, 차단된 순간을 즉시 알 수 있습니다.",
+                      "46db810da8": "기본 에이전트 선택",
+                      "b8e5bae17f": "선호하는 에이전트를 미리 선택하여 새로운 작업을 더 빠르게 시작하세요.",
+                      "fee5557b02": "Orca CLI 활성화",
+                      "7bcb4097fa": "Orca 셸 명령을 등록하고 브라우저, 컴퓨터 및 오케스트레이션 워크플로를 위한 에이전트 스킬을 설치하세요.",
+                      "ad342dd4c6": "서비스 연동",
+                      "06fe30fdb0": "클릭 한 번으로 작업에서 에이전트를 시작하고 PR 상태를 한눈에 확인하세요.",
+                      "eddc532e58": "워크스페이스 설정 자동화",
+                      "56049b74c2": "설치 및 설정 명령을 자동으로 실행하여 모든 새 워크트리가 에이전트 작업을 바로 수행할 수 있도록 준비합니다.",
+                      "2cf795433b": "여러 저장소에서 작업 시작",
+                      "42525ba8a4": "주요 저장소를 Orca로 가져와 폴더를 일일이 찾을 필요 없이 에이전트 작업을 시작하세요."
+                    }
+                  }
+                }
+              },
               "usage": {
                 "tracking": {
                   "b94ec70eda": "추적이 설정되지 않았습니다.",
@@ -12775,8 +12800,9 @@
           "7e7ca60816": "변경된 파일",
           "b6c3b84476": "파일 트리 표시",
           "39f8007549": "충돌 리뷰",
-          "39e73e7181": "이 차이점 보기에서 제외되었습니다.",
-          "689b99f8ad": "미해결 충돌",
+          "skippedConflictsExcluded": "미해결 충돌 {{count}}개가 이 차이점 보기에서 제외되었습니다.",
+          "skippedConflictsExcluded_one": "미해결 충돌 {{count}}개가 이 차이점 보기에서 제외되었습니다.",
+          "skippedConflictsExcluded_other": "미해결 충돌 {{count}}개가 이 차이점 보기에서 제외되었습니다.",
           "820ec01f24": "충돌하는 파일은 별도로 리뷰됩니다.",
           "fd8892b120": "표시할 변경사항이 없습니다.",
           "eb5f40e49c": "일반적인 양방향 diff 파이프라인은 충돌로부터 안전하지 않기 때문에 이 diff 보기는 해결되지 않은 충돌을 제외합니다.",
@@ -14664,7 +14690,10 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "terminal 보기로 전환",
           "switchToChatView": "채팅 보기로 전환",
-          "closeTabsToLeft": "왼쪽으로 탭 닫기"
+          "closeTabsToLeft": "왼쪽으로 탭 닫기",
+          "copySessionId": "세션 ID 복사",
+          "copySessionIdSuccess": "세션 ID를 복사했습니다",
+          "copySessionIdError": "세션 ID를 복사하지 못했습니다"
         },
         "BrowserTab": {
           "closeOthers": "다른 탭 닫기",
@@ -14679,28 +14708,15 @@
     "workspace": {
       "cleanup": {
         "browse": {
-          "selectionWithheldOne": "선택한 워크스페이스 1개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.",
-          "selectionWithheld": "선택한 워크스페이스 {{value0}}개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.",
-          "selectAllCountOne": "안전 검사를 통과한 워크스페이스 1개 선택",
-          "selectAllCount": "안전 검사를 통과한 워크스페이스 {{value0}}개 모두 선택"
-        },
-        "scan": {
-          "readyOne": "워크스페이스 1개를 찾았습니다.",
-          "readyMany": "워크스페이스 {{value0}}개를 찾았습니다."
-        },
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "알파 정리 검토"
-        },
-        "presentation": {
-          "gitlabMergeRequestNumber": "MR #{{value0}}",
-          "githubPullRequestNumber": "PR #{{value0}}"
-        },
-        "browse": {
           "gitStatusCheckFailed": "Git 상태 확인 실패",
           "gitStatusUnverified": "Git 상태를 확인할 수 없음",
           "deleteAnyway": "그래도 삭제",
           "forceDeleteProjectionOne": "현재 워크스페이스 {{count}}개에 위험 요소가 표시되며 강제 삭제가 필요할 수 있습니다",
           "forceDeleteProjectionMany": "현재 워크스페이스 {{count}}개에 위험 요소가 표시되며 강제 삭제가 필요할 수 있습니다",
+          "selectionWithheldOne": "선택한 워크스페이스 1개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.",
+          "selectionWithheld": "선택한 워크스페이스 {{value0}}개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.",
+          "selectAllCountOne": "안전 검사를 통과한 워크스페이스 1개 선택",
+          "selectAllCount": "안전 검사를 통과한 워크스페이스 {{value0}}개 모두 선택",
           "appliedFilters": "적용된 필터",
           "removeFilter": "{{value0}} 필터 제거",
           "chip": {
@@ -14747,6 +14763,17 @@
               "retainedAgents": "완료된 에이전트"
             }
           }
+        },
+        "scan": {
+          "readyOne": "워크스페이스 1개를 찾았습니다.",
+          "readyMany": "워크스페이스 {{value0}}개를 찾았습니다."
+        },
+        "presentationFixtures": {
+          "reviewAlphaCleanup": "알파 정리 검토"
+        },
+        "presentation": {
+          "gitlabMergeRequestNumber": "MR #{{value0}}",
+          "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
     },
@@ -14800,24 +14827,24 @@
       "agentCount": "에이전트 {{count}}개"
     },
     "placeholder": {
-      "title": "Agent dashboard",
-      "description": "This is where all your agents will show up at a glance. The board is coming soon."
+      "title": "에이전트 대시보드",
+      "description": "모든 에이전트를 한눈에 볼 수 있는 곳입니다. 보드는 곧 제공됩니다."
     },
     "recoverableError": {
-      "title": "Orca dashboard hit an error.",
-      "description": "The dashboard could not finish rendering. Retry to remount it, or reopen it."
+      "title": "Orca 대시보드에서 오류가 발생했습니다.",
+      "description": "대시보드 렌더링을 완료하지 못했습니다. 다시 시도해 다시 마운트하거나 다시 열어 보세요."
     },
     "bucket": {
-      "attention": "Needs You",
-      "working": "Working",
-      "idle": "Idle",
-      "empty": "None",
+      "attention": "확인 필요",
+      "working": "작업 중",
+      "idle": "유휴",
+      "empty": "없음",
       "done": "완료"
     },
-    "title": "Agents",
-    "total": "{{count}} total",
+    "title": "에이전트",
+    "total": "총 {{count}}개",
     "card": {
-      "you": "You",
+      "you": "나",
       "time": {
         "justNow": "방금",
         "minutes": "{{count}}분",
@@ -14834,11 +14861,11 @@
       "subagents_other": "서브에이전트 {{count}}개"
     },
     "terminal": {
-      "closed": "No live terminal — this agent's pane has closed.",
-      "focusWorktree": "Open worktree",
-      "close": "Close"
+      "closed": "실시간 터미널이 없습니다 — 이 에이전트의 창이 닫혔습니다.",
+      "focusWorktree": "워크트리 열기",
+      "close": "닫기"
     },
-    "close": "Close dashboard",
+    "close": "대시보드 닫기",
     "settingsTooltip": "보드 설정",
     "filters": {
       "remove": "{{label}} 필터 제거",

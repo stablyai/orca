@@ -21,7 +21,7 @@ export function assertPairedClientWindowRevealed(report: PairedClientWindowRevea
   }
   if (!report.isVisible) {
     throw new Error(
-      `Paired client window stayed hidden after show() (windows: ${report.windowCount})`
+      `Paired client window stayed hidden after showInactive() (windows: ${report.windowCount})`
     )
   }
 }
@@ -64,8 +64,10 @@ export async function revealPairedClientWindow(
     const windows = BrowserWindow.getAllWindows()
     const window = windows[0]
     const wasVisible = window?.isVisible() ?? false
+    // Why showInactive: the renderer only needs `visibilityState === 'visible'`;
+    // show() would also raise the window over whatever the developer is doing.
     if (window && !wasVisible) {
-      window.show()
+      window.showInactive()
     }
     return {
       isVisible: window?.isVisible() ?? false,

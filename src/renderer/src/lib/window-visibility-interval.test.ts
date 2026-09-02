@@ -127,4 +127,93 @@ describe('installWindowVisibilityInterval', () => {
     expect(setIntervalMock).toHaveBeenCalledTimes(1)
     cleanup()
   })
+
+  it('staggers visibilitychange runs across per-instance jitter delays', async () => {
+    vi.useFakeTimers()
+    let visibilityState: DocumentVisibilityState = 'hidden'
+    const listeners: (() => void)[] = []
+    vi.stubGlobal('document', {
+      get visibilityState() {
+        return visibilityState
+      },
+      addEventListener: vi.fn((_event: string, listener: () => void) => listeners.push(listener)),
+      removeEventListener: vi.fn()
+    })
+    const runs = [vi.fn(), vi.fn(), vi.fn()]
+    const cleanups = runs.map((run, index) =>
+      installWindowVisibilityInterval({
+        run,
+        intervalMs: 10_000,
+        jitterOnVisible: true,
+        jitterFn: () => [0, 100, 400][index] ?? 0
+      })
+    )
+
+    visibilityState = 'visible'
+    listeners.forEach((listener) => listener())
+    expect(runs.map((run) => run.mock.calls.length)).toEqual([0, 0, 0])
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(runs.map((run) => run.mock.calls.length)).toEqual([1, 0, 0])
+    await vi.advanceTimersByTimeAsync(99)
+    expect(runs.map((run) => run.mock.calls.length)).toEqual([1, 0, 0])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(runs.map((run) => run.mock.calls.length)).toEqual([1, 1, 0])
+    await vi.advanceTimersByTimeAsync(300)
+    expect(runs.map((run) => run.mock.calls.length)).toEqual([1, 1, 1])
+
+    cleanups.forEach((cleanup) => cleanup())
+    vi.useRealTimers()
+  })
+
+  it('does not jitter the install-time first run', () => {
+    vi.useFakeTimers()
+    const run = vi.fn()
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+
+    const cleanup = installWindowVisibilityInterval({
+      run,
+      intervalMs: 3000,
+      jitterOnVisible: true,
+      jitterFn: () => 400
+    })
+
+    expect(run).toHaveBeenCalledTimes(1)
+    cleanup()
+    vi.useRealTimers()
+  })
+
+  it('cancels a pending visibility jitter run on cleanup', async () => {
+    vi.useFakeTimers()
+    let visibilityState: DocumentVisibilityState = 'hidden'
+    let visibilityListener: (() => void) | undefined
+    const run = vi.fn()
+    vi.stubGlobal('document', {
+      get visibilityState() {
+        return visibilityState
+      },
+      addEventListener: vi.fn((_event: string, listener: () => void) => {
+        visibilityListener = listener
+      }),
+      removeEventListener: vi.fn()
+    })
+
+    const cleanup = installWindowVisibilityInterval({
+      run,
+      intervalMs: 3000,
+      jitterOnVisible: true,
+      jitterFn: () => 400
+    })
+    visibilityState = 'visible'
+    visibilityListener?.()
+    cleanup()
+
+    await vi.advanceTimersByTimeAsync(400)
+    expect(run).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
 })

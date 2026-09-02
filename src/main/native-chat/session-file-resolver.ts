@@ -14,9 +14,17 @@ import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
-import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
+import {
+  createWslTranscriptResolutionSnapshot,
+  needsWslHostResolution,
+  needsWslHostTranslation,
+  toHostReadableTranscriptPath,
+  wslCodexSessionsDirs,
+  type WslTranscriptResolutionSnapshot
+} from './host-readable-transcript-path'
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
+import { proveClaudeTranscriptBranch } from '../claude/claude-transcript-branch-proof'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -72,6 +80,8 @@ export type ResolveSessionFileOptions = {
    *  directly — recent Claude Code names the transcript with a UUID that differs
    *  from the hook session_id, so the id-based glob below would miss it. */
   transcriptPath?: string
+  /** Internal running-distro view shared across one resolve attempt. */
+  wslSnapshot?: WslTranscriptResolutionSnapshot
 }
 
 /**
@@ -101,9 +111,15 @@ export async function resolveSessionFilePath(
   // stale/missing paths fall through to the id-based search.
   let unavailable: WslTranscriptFsError | undefined
   const hookPath = options.transcriptPath?.trim()
+  let wslSnapshot = options.wslSnapshot
   if (hookPath && extname(hookPath) === '.jsonl') {
     try {
-      const hostReadable = await toHostReadableTranscriptPath(hookPath, { signal })
+      if (!wslSnapshot && needsWslHostResolution(hookPath)) {
+        wslSnapshot = await createWslTranscriptResolutionSnapshot({
+          includeHomes: needsWslHostTranslation(hookPath)
+        })
+      }
+      const hostReadable = await toHostReadableTranscriptPath(hookPath, { signal, wslSnapshot })
       if (hostReadable) {
         return hostReadable
       }
@@ -114,13 +130,35 @@ export async function resolveSessionFilePath(
       // it does not, so a stalled distro reads as unavailable, never "missing".
       unavailable = wslTranscriptFsRefusal(error)
     }
+    if (needsWslHostResolution(hookPath)) {
+      if (unavailable) {
+        throw unavailable
+      }
+      return null
+    }
   }
 
-  const resolved = await resolveSessionFileById(transcriptAgent, sessionId, options, signal)
+  const resolveOptions = wslSnapshot === options.wslSnapshot ? options : { ...options, wslSnapshot }
+  const resolved = await resolveSessionFileById(transcriptAgent, sessionId, resolveOptions, signal)
   if (!resolved && unavailable) {
     throw unavailable
   }
   return resolved
+}
+
+/** Read and validate Claude's authoritative transcript branch marker. */
+export async function readClaudeTranscriptLeafUuid(
+  transcriptPath: string,
+  providerSessionId: string,
+  previousLeafUuid: string | null = null
+): Promise<string> {
+  return (
+    await proveClaudeTranscriptBranch({
+      transcriptPath,
+      providerSessionId,
+      previousLeafUuid
+    })
+  ).leafUuid
 }
 
 async function resolveSessionFileById(
@@ -148,7 +186,7 @@ async function resolveSessionFileById(
       overrideDirs ?? codexSessionsDirs(),
       // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
       // user left stopped. Only pay that after this host's own Codex roots miss.
-      overrideDirs ? undefined : wslCodexSessionsDirs,
+      overrideDirs ? undefined : () => wslCodexSessionsDirs({ wslSnapshot: options.wslSnapshot }),
       signal
     )
   }

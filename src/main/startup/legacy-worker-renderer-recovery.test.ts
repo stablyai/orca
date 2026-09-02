@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-renderer-recovery'
+import {
+  FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS,
+  LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS,
+  startFirstWindowStartupServices
+} from './first-window-startup-services'
 
 describe('legacy worker renderer recovery', () => {
-  it('hydrates after bounded barriers while provider startup remains pending', async () => {
+  it('waits for daemon adoption before renderer recovery can continue', async () => {
     let resolveFirstWindow!: () => void
     let resolveWslBarrier!: () => void
     let resolveProvider!: () => void
@@ -29,14 +34,15 @@ describe('legacy worker renderer recovery', () => {
     expect(reconcile).not.toHaveBeenCalled()
 
     resolveWslBarrier()
-    await startup
-    expect(reconcile).toHaveBeenCalledTimes(1)
+    await Promise.resolve()
+    expect(reconcile).not.toHaveBeenCalled()
 
     resolveProvider()
-    await vi.waitFor(() => expect(reconcile).toHaveBeenCalledTimes(2))
+    await startup
+    expect(reconcile).toHaveBeenCalledOnce()
   })
 
-  it('retries after initial recovery when the provider is already ready', async () => {
+  it('recovers once when the provider is already ready', async () => {
     const reconcile = vi.fn().mockResolvedValue(undefined)
 
     await recoverLegacyWorkerTerminalsForRendererStartup({
@@ -47,7 +53,7 @@ describe('legacy worker renderer recovery', () => {
       onDeferredRecoveryError: vi.fn()
     })
 
-    await vi.waitFor(() => expect(reconcile).toHaveBeenCalledTimes(2))
+    expect(reconcile).toHaveBeenCalledOnce()
   })
 
   it('contains provider startup rejection after initial recovery', async () => {
@@ -67,12 +73,12 @@ describe('legacy worker renderer recovery', () => {
     })
 
     await expect(reportedError).resolves.toBe(providerError)
-    expect(reconcile).toHaveBeenCalledTimes(1)
+    expect(reconcile).not.toHaveBeenCalled()
   })
 
-  it('contains deferred recovery rejection', async () => {
+  it('contains recovery rejection', async () => {
     const recoveryError = new Error('recovery failed')
-    const reconcile = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(recoveryError)
+    const reconcile = vi.fn().mockRejectedValueOnce(recoveryError)
     let reportError!: (error: unknown) => void
     const reportedError = new Promise<unknown>((resolve) => {
       reportError = resolve
@@ -87,31 +93,42 @@ describe('legacy worker renderer recovery', () => {
     })
 
     await expect(reportedError).resolves.toBe(recoveryError)
-    expect(reconcile).toHaveBeenCalledTimes(2)
+    expect(reconcile).toHaveBeenCalledOnce()
   })
 
-  it('contains initial recovery rejection and still retries when the provider becomes ready', async () => {
-    const initialError = new Error('initial recovery failed')
-    let resolveProvider!: () => void
-    const providerReady = new Promise<void>((resolve) => {
-      resolveProvider = resolve
-    })
-    const reconcile = vi.fn().mockRejectedValueOnce(initialError).mockResolvedValueOnce(undefined)
-    const onDeferredRecoveryError = vi.fn()
-
-    await expect(
-      recoverLegacyWorkerTerminalsForRendererStartup({
-        firstWindowStartupServicesReady: Promise.resolve(),
-        managedWslCliStartupBarrierReady: Promise.resolve(),
-        localPtyProviderStartupReady: providerReady,
-        reconcile,
-        onDeferredRecoveryError
+  it('fails open at the hard cap without allowing a premature recovery', async () => {
+    vi.useFakeTimers()
+    let daemonSignal: AbortSignal | undefined
+    try {
+      const services = startFirstWindowStartupServices({
+        startDaemonPtyProvider: (signal) => {
+          daemonSignal = signal
+          return new Promise<void>(() => {})
+        },
+        startAgentHookServer: () => Promise.resolve(),
+        onDaemonError: vi.fn(),
+        onAgentHookServerError: vi.fn()
       })
-    ).resolves.toBeUndefined()
+      const reconcile = vi.fn().mockResolvedValue(undefined)
+      const startup = recoverLegacyWorkerTerminalsForRendererStartup({
+        firstWindowStartupServicesReady: services.firstWindowReady,
+        managedWslCliStartupBarrierReady: Promise.resolve(),
+        localPtyProviderStartupReady: services.localPtyProviderReady,
+        reconcile,
+        onDeferredRecoveryError: vi.fn()
+      })
 
-    expect(onDeferredRecoveryError).toHaveBeenCalledWith(initialError)
-    expect(reconcile).toHaveBeenCalledTimes(1)
-    resolveProvider()
-    await vi.waitFor(() => expect(reconcile).toHaveBeenCalledTimes(2))
+      await vi.advanceTimersByTimeAsync(FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
+      expect(reconcile).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(
+        LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS - FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS
+      )
+      await startup
+      expect(reconcile).toHaveBeenCalledOnce()
+      expect(daemonSignal?.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

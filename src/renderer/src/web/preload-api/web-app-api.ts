@@ -33,6 +33,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
       // Staging already wrote through to browser storage, so there is nothing left to join.
       awaitBeforeUnloadCheckpoint: () => Promise.resolve(),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
+      prepareTerminalStartupRestoration: () => Promise.resolve(),
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),

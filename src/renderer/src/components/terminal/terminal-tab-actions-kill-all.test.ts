@@ -37,6 +37,7 @@ function baseState(overrides: Record<string, unknown> = {}): Record<string, unkn
     activeTabId: 'terminal-1',
     openFiles: [],
     browserTabsByWorktree: {},
+    reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
     closeTab: vi.fn(),
     closeUnifiedTab: vi.fn(),
     setActiveFile: vi.fn(),

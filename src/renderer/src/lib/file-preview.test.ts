@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
   canShowWorkspaceFileBrowserAction,
+  convertBrowserPageToWorkspaceDoc,
   getWorkspaceFileBrowserOpenTarget,
   openFileInBrowserTab,
   openFilePreviewToSide
@@ -27,10 +28,14 @@ const mocks = vi.hoisted(() => ({
   createEmptySplitGroup: vi.fn(() => 'group-2'),
   setActiveBrowserTab: vi.fn(),
   setActiveBrowserPage: vi.fn(),
+  setActiveWorktree: vi.fn(),
+  activeWorktreeId: 'wt-1',
   focusGroup: vi.fn(),
   activateTab: vi.fn(),
   unifiedTabsByWorktree: {} as Record<string, unknown[]>,
   browserTabsByWorktree: {} as Record<string, unknown[]>,
+  browserPagesByWorkspace: {} as Record<string, unknown[]>,
+  convertBrowserPage: vi.fn(),
   environmentId: null as string | null,
   connectionId: null as string | null,
   layoutByWorktree: {} as Record<string, unknown>,
@@ -54,10 +59,14 @@ vi.mock('@/store', () => ({
       createEmptySplitGroup: mocks.createEmptySplitGroup,
       setActiveBrowserTab: mocks.setActiveBrowserTab,
       setActiveBrowserPage: mocks.setActiveBrowserPage,
+      setActiveWorktree: mocks.setActiveWorktree,
+      activeWorktreeId: mocks.activeWorktreeId,
       focusGroup: mocks.focusGroup,
       activateTab: mocks.activateTab,
       unifiedTabsByWorktree: mocks.unifiedTabsByWorktree,
       browserTabsByWorktree: mocks.browserTabsByWorktree,
+      browserPagesByWorkspace: mocks.browserPagesByWorkspace,
+      convertBrowserPage: mocks.convertBrowserPage,
       getKnownWorktreeById: () => ({ id: 'wt-1', path: '/srv/repo' }),
       groupsByWorktree: {},
       layoutByWorktree: mocks.layoutByWorktree,
@@ -76,7 +85,9 @@ beforeEach(() => {
   mocks.connectionId = null
   mocks.layoutByWorktree = {}
   mocks.browserTabsByWorktree = {}
+  mocks.browserPagesByWorkspace = {}
   mocks.unifiedTabsByWorktree = {}
+  mocks.activeWorktreeId = 'wt-1'
 })
 
 /**
@@ -458,4 +469,100 @@ describe('getWorkspaceFileBrowserOpenTarget', () => {
       message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
     })
   })
+})
+
+// Why the reuse case is pinned here too: the address bar's way into a document must obey the same
+// one-grant-per-document rule the preview action does.
+describe('convertBrowserPageToWorkspaceDoc', () => {
+  const DOC_LOCATION = {
+    kind: 'workspace-doc' as const,
+    worktreeId: 'wt-1',
+    filePath: '/home/alice/report.html'
+  }
+
+  // Why per-page and not the workspace mirror: a mixed workspace whose doc page is inactive
+  // mirrors docLocation null, and conversion is what makes mixed workspaces routine.
+  it('activates the tab already showing the document, even as an inactive page', () => {
+    mocks.browserTabsByWorktree = {
+      'wt-1': [{ id: 'browser-9', docLocation: null }]
+    }
+    mocks.browserPagesByWorkspace = {
+      'browser-9': [
+        { id: 'page-web', worktreeId: 'wt-1' },
+        { id: 'page-doc', worktreeId: 'wt-1', docLocation: DOC_LOCATION }
+      ]
+    }
+
+    const outcome = convertBrowserPageToWorkspaceDoc('page-1', DOC_LOCATION)
+
+    expect(outcome).toBe('activated-existing')
+    expect(mocks.convertBrowserPage).not.toHaveBeenCalled()
+    expect(mocks.setActiveBrowserTab).toHaveBeenCalledWith('browser-9')
+    expect(mocks.setActiveBrowserPage).toHaveBeenCalledWith('browser-9', 'page-doc')
+  })
+
+  it('converts the page in place when no tab shows the document', () => {
+    mocks.browserPagesByWorkspace = {
+      'browser-1': [{ id: 'page-1', worktreeId: 'wt-1' }]
+    }
+    mocks.convertBrowserPage.mockReturnValue({ id: 'new-page' })
+
+    const outcome = convertBrowserPageToWorkspaceDoc('page-1', DOC_LOCATION)
+
+    expect(outcome).toBe('converted')
+    expect(mocks.convertBrowserPage).toHaveBeenCalledWith(
+      'page-1',
+      { kind: 'workspace-doc', docLocation: DOC_LOCATION },
+      undefined
+    )
+  })
+
+  // Why a document in another worktree opens there instead of converting here: a converted row
+  // keeps its worktree, and a row whose worktree differs from its document's can never be the
+  // reader's surface — its guest would never take focus and every link would be dead.
+  it('opens a document from another worktree in that worktree instead of converting', () => {
+    mocks.connectionId = 'ssh-1'
+    mocks.activeWorktreeId = 'wt-other'
+    mocks.browserPagesByWorkspace = {
+      'browser-1': [{ id: 'page-1', worktreeId: 'wt-other' }]
+    }
+
+    const outcome = convertBrowserPageToWorkspaceDoc('page-1', DOC_LOCATION)
+
+    expect(outcome).toBe('opened-in-owning-worktree')
+    expect(mocks.convertBrowserPage).not.toHaveBeenCalled()
+    // The reader follows the document to its worktree — a tab opened out of sight is
+    // indistinguishable from nothing having happened.
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith('wt-1')
+    // The document opened through the preview action's own door, in its owning worktree.
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      ...docPreviewCall(DOC_LOCATION.filePath, { activate: true })
+    )
+  })
+
+  // Back and Forward mean "this tab, as it was": a history leg converts in place even when the
+  // document is also open elsewhere, or history would jump to the other tab forever.
+  it.each(['history-return', 'history-advance'] as const)(
+    'skips reuse on the %s leg and converts in place',
+    (leg) => {
+      mocks.browserTabsByWorktree = {
+        'wt-1': [{ id: 'browser-9', docLocation: null }]
+      }
+      mocks.browserPagesByWorkspace = {
+        'browser-9': [{ id: 'page-doc', worktreeId: 'wt-1', docLocation: DOC_LOCATION }],
+        'browser-1': [{ id: 'page-1', worktreeId: 'wt-1' }]
+      }
+      mocks.convertBrowserPage.mockReturnValue({ id: 'new-page' })
+
+      const outcome = convertBrowserPageToWorkspaceDoc('page-1', DOC_LOCATION, { leg })
+
+      expect(outcome).toBe('converted')
+      expect(mocks.setActiveBrowserTab).not.toHaveBeenCalled()
+      expect(mocks.convertBrowserPage).toHaveBeenCalledWith(
+        'page-1',
+        { kind: 'workspace-doc', docLocation: DOC_LOCATION },
+        { leg }
+      )
+    }
+  )
 })

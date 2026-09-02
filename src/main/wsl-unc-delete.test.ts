@@ -50,8 +50,11 @@ describe('tryDeleteWslUncPath', () => {
     })
 
     expect(execFileMock).toHaveBeenCalledTimes(1)
-    const [binary, spawnArgs] = execFileMock.mock.calls[0]
+    const [binary, spawnArgs, spawnOptions] = execFileMock.mock.calls[0]
     expect(binary).toBe('wsl.exe')
+    // Why a concrete directory (#16463): this deletes worktrees, so the cwd it
+    // would otherwise inherit is the very directory about to disappear.
+    expect(spawnOptions).toEqual(expect.objectContaining({ cwd: expect.any(String) }))
     expect(spawnArgs).toEqual([
       '-d',
       'Ubuntu',

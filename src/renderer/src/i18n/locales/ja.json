@@ -2741,7 +2741,8 @@
             "e4aa243f8c": "デーモンを再起動します",
             "a7e2fd2699": "Issue を登録",
             "5c8ce20be6": "この状態が続く場合は、",
-            "cc6d997c65": "ここからターミナルデーモンを再起動して、古いデーモン状態をクリアします。"
+            "cc6d997c65": "ここからターミナルデーモンを再起動して、古いデーモン状態をクリアします。",
+            "remoteTerminalClosed": "リモートターミナルが閉じられました。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash のコンソール上限に達しました",
@@ -3012,7 +3013,8 @@
             "25dc1cd653": "ファイルを開く",
             "7cdf8ee0c8": "URLを開く",
             "b27864279e": "Agent を起動",
-            "0e5b7a3f16": "開いているタブ、ファイル、URL、Agent を検索…",
+            "omniboxPlaceholderWithHistory": "開いているタブ、履歴、ファイル、URL、Agent を検索…",
+            "openPage": "ページを開く",
             "8f0a1c4d92": "タブに切り替える",
             "2c38630a01": "ワークスペースは存在しません",
             "4f0d9a71c2": "タブは存在しません",
@@ -3058,7 +3060,6 @@
                 "classifier": {
                   "42e6262ae9": "利用可能な操作はありません。",
                   "097a982ee0": "ファイルを読み込み中…",
-                  "c41f8d20b7": "開いているタブ、ファイル、URL、Agent を検索…",
                   "90eb94dc48": "http:// または https:// URL を入力します。",
                   "5553b283ce": "URL またはファイルパスを入力します。",
                   "queryTooLarge": "検索テキストが大きすぎます。",
@@ -12767,8 +12768,9 @@
           "7e7ca60816": "変更されたファイル",
           "b6c3b84476": "ファイルツリーを表示",
           "39f8007549": "競合をレビューする",
-          "39e73e7181": "はこの差分ビューから除外されました。",
-          "689b99f8ad": "未解決の競合",
+          "skippedConflictsExcluded": "未解決の競合 {{count}} 件がこの差分ビューから除外されました。",
+          "skippedConflictsExcluded_one": "未解決の競合 {{count}} 件がこの差分ビューから除外されました。",
+          "skippedConflictsExcluded_other": "未解決の競合 {{count}} 件がこの差分ビューから除外されました。",
           "820ec01f24": "競合したファイルは個別にレビューされます",
           "fd8892b120": "表示に変更はありません",
           "eb5f40e49c": "通常の双方向 diff パイプラインは競合に対して安全ではないため、この diff ビューでは未解決の競合が除外されます。",
@@ -14645,7 +14647,10 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "ターミナルビューに切り替える",
           "switchToChatView": "チャットビューに切り替える",
-          "closeTabsToLeft": "左側のタブを閉じる"
+          "closeTabsToLeft": "左側のタブを閉じる",
+          "copySessionId": "セッション ID をコピー",
+          "copySessionIdSuccess": "セッション ID をコピーしました",
+          "copySessionIdError": "セッション ID のコピーに失敗しました"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる",

@@ -123,6 +123,25 @@ describe('prepareWslLinkedWorktreeGitRouting', () => {
     expect(fileSystem.readFile).not.toHaveBeenCalled()
   })
 
+  it('re-probes a half-written marker rather than caching it as distro-owned', async () => {
+    const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
+      stat: vi.fn(async () => fileMarker),
+      readFile: vi
+        .fn<WslLinkedWorktreeRoutingFileSystem['readFile']>()
+        .mockResolvedValueOnce('')
+        .mockResolvedValueOnce('gitdir: C:/main/.git/worktrees/linked\n')
+    }
+    const prepare = (): Promise<boolean> =>
+      prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, 'Ubuntu', {
+        platform: 'win32',
+        fileSystem
+      })
+
+    await expect(prepare()).resolves.toBe(false)
+    await expect(prepare()).resolves.toBe(true)
+    expect(fileSystem.stat).toHaveBeenCalledTimes(2)
+  })
+
   it('fails closed without caching a marker read error', async () => {
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(async () => fileMarker),

@@ -13,10 +13,12 @@ export type DiffSectionItemProps = {
     terminalFontSize?: number
     terminalFontFamily?: string
     diffWordWrap?: boolean
+    diffShowWhitespace?: boolean
   } | null
   sectionHeight: number | undefined
   worktreeId?: string
   loadSection: (index: number) => void
+  loadDeferredSection?: (index: number) => void
   retrySection: (index: number) => void
   toggleSection: (index: number) => void
   openSection: (index: number) => void

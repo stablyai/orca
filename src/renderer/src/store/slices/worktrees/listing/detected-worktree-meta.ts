@@ -17,6 +17,7 @@ import { worktreeMatchesHost } from './worktree-host-ownership'
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
+import { branchName } from '@/lib/git-utils'
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
@@ -37,7 +38,15 @@ export function applyDetectedWorktreeUpdates(
       }
       repoChanged = true
       changed = true
-      return { ...worktree, ...updates }
+      const next = { ...worktree, ...updates }
+      if (updates.displayNameIsPinned !== undefined) {
+        next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
+        if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
+          const automaticName = branchName(next.branch)
+          next.displayName = automaticName || worktree.displayName
+        }
+      }
+      return next
     })
     nextByRepo[repoId] = repoChanged ? { ...result, worktrees: nextWorktrees } : result
   }

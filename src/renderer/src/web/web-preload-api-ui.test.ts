@@ -800,6 +800,41 @@ describe('web UI preload API', () => {
     )
   })
 
+  it('setWithAck rejects on transport failure while set stays best-effort (STA-5781)', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'ui.set') {
+            return Promise.reject(new Error('runtime disconnected'))
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    // Plain set swallows the failure so fire-and-forget callers stay quiet...
+    await expect(
+      globals.window.api.ui.set({ hideDefaultBranchWorkspace: true })
+    ).resolves.toBeUndefined()
+    // ...but the diff writer's ack path must see it, or it folds a patch the
+    // host never received into its baseline and silently stops retrying it.
+    await expect(
+      globals.window.api.ui.setWithAck!({ hideSleepingWorkspaces: true })
+    ).rejects.toThrow('runtime disconnected')
+  })
+
   it('rejects paired web skill discovery failures instead of returning an empty scan', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {

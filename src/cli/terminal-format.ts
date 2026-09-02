@@ -1,4 +1,5 @@
 import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
+import { structuredChatPtyWriteRefusalCopy } from '../shared/agent-session-pty-write-refusal-copy'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
@@ -181,6 +182,12 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
 }
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
+  if (result.send.agentSessionRefusal) {
+    const copy = structuredChatPtyWriteRefusalCopy(result.send.agentSessionRefusal, 'terminal-send')
+    if (copy) {
+      return copy
+    }
+  }
   return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
 }
 

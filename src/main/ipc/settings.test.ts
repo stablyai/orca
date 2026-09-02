@@ -11,7 +11,9 @@ const {
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
   resolveEnvironmentMock,
-  rebuildAppMenuMock
+  rebuildAppMenuMock,
+  applyBrowserSessionProxiesMock,
+  listProfilesMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyAgentStatusHooksEnabledMock: vi.fn(),
@@ -23,7 +25,9 @@ const {
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
-  rebuildAppMenuMock: vi.fn()
+  rebuildAppMenuMock: vi.fn(),
+  applyBrowserSessionProxiesMock: vi.fn(),
+  listProfilesMock: vi.fn(() => [])
 }))
 
 vi.mock('electron', () => ({
@@ -43,6 +47,14 @@ vi.mock('../warp-themes', () => ({
 
 vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
+}))
+
+vi.mock('../browser/browser-session-proxy', () => ({
+  applyBrowserSessionProxies: applyBrowserSessionProxiesMock
+}))
+
+vi.mock('../browser/browser-session-registry', () => ({
+  browserSessionRegistry: { listProfiles: listProfilesMock }
 }))
 
 vi.mock('../app-icon', () => ({
@@ -100,6 +112,8 @@ describe('registerSettingsHandlers', () => {
       return { id: 'windows-2' }
     })
     rebuildAppMenuMock.mockClear()
+    applyBrowserSessionProxiesMock.mockReset().mockResolvedValue(undefined)
+    listProfilesMock.mockReset().mockReturnValue([])
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
@@ -627,6 +641,119 @@ describe('registerSettingsHandlers', () => {
       httpProxyUrl: 'http://proxy.example:8080',
       httpProxyBypassRules: 'localhost;*.internal'
     })
+  })
+
+  it('does not sweep sessions for a no-op proxy save', async () => {
+    const settings = {
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: 'localhost'
+    }
+    store.getSettings.mockReturnValue(settings)
+    store.updateSettings.mockReturnValue(settings)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { httpProxyUrl: string }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { httpProxyUrl: 'http://proxy.example:8080' })
+
+    expect(applyElectronProxySettingsMock).not.toHaveBeenCalled()
+    expect(listProfilesMock).not.toHaveBeenCalled()
+    expect(applyBrowserSessionProxiesMock).not.toHaveBeenCalled()
+  })
+
+  it('queues every proxy snapshot on both authorities before either apply settles', async () => {
+    store.getSettings.mockReturnValue({ httpProxyUrl: '', httpProxyBypassRules: '' })
+    store.updateSettings.mockImplementation((args) =>
+      args.httpProxyUrl !== undefined
+        ? { httpProxyUrl: 'socks5://127.0.0.1:1080', httpProxyBypassRules: '' }
+        : { httpProxyUrl: 'socks5://127.0.0.1:1080', httpProxyBypassRules: 'late.example' }
+    )
+    let releaseFirstApply = (): void => {}
+    let markFirstApplyStarted = (): void => {}
+    const firstApplyStarted = new Promise<void>((resolve) => (markFirstApplyStarted = resolve))
+    applyElectronProxySettingsMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFirstApply = () => resolve({ source: 'settings' })
+          markFirstApplyStarted()
+        })
+    )
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { httpProxyUrl?: string; httpProxyBypassRules?: string }
+    ) => Promise<unknown>
+
+    const first = handler(settingsInvokeEvent, { httpProxyUrl: 'socks5://127.0.0.1:1080' })
+    await firstApplyStarted
+    expect(applyBrowserSessionProxiesMock).toHaveBeenCalledWith([], {
+      httpProxyUrl: 'socks5://127.0.0.1:1080',
+      httpProxyBypassRules: ''
+    })
+    const second = handler(settingsInvokeEvent, { httpProxyBypassRules: 'late.example' })
+    await second
+    releaseFirstApply()
+    await first
+
+    expect(applyBrowserSessionProxiesMock.mock.calls.map((call) => call[1])).toEqual([
+      {
+        httpProxyUrl: 'socks5://127.0.0.1:1080',
+        httpProxyBypassRules: ''
+      },
+      {
+        httpProxyUrl: 'socks5://127.0.0.1:1080',
+        httpProxyBypassRules: 'late.example'
+      }
+    ])
+  })
+
+  it('orders proxy writes before unrelated settings reconciliation can suspend', async () => {
+    store.getSettings.mockReturnValue({
+      httpProxyUrl: '',
+      httpProxyBypassRules: '',
+      agentStatusHooksEnabled: false,
+      disabledTuiAgents: []
+    })
+    store.updateSettings.mockImplementation((args) => ({
+      httpProxyUrl: args.httpProxyUrl,
+      httpProxyBypassRules: '',
+      agentStatusHooksEnabled: args.agentStatusHooksEnabled ?? true,
+      disabledTuiAgents: []
+    }))
+    let releaseHookReconciliation = (): void => {}
+    let markHookReconciliationStarted = (): void => {}
+    const hookReconciliationStarted = new Promise<void>(
+      (resolve) => (markHookReconciliationStarted = resolve)
+    )
+    applyAgentStatusHooksEnabledMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseHookReconciliation = () => resolve([])
+          markHookReconciliationStarted()
+        })
+    )
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { httpProxyUrl: string; agentStatusHooksEnabled?: boolean }
+    ) => Promise<unknown>
+
+    const first = handler(settingsInvokeEvent, {
+      httpProxyUrl: 'http://old.example:8080',
+      agentStatusHooksEnabled: true
+    })
+    await hookReconciliationStarted
+    await handler(settingsInvokeEvent, { httpProxyUrl: 'http://new.example:8080' })
+    releaseHookReconciliation()
+    await first
+
+    expect(applyElectronProxySettingsMock.mock.calls.map((call) => call[0].httpProxyUrl)).toEqual([
+      'http://old.example:8080',
+      'http://new.example:8080'
+    ])
   })
 
   it('drops invalid proxy URLs at the settings boundary', async () => {

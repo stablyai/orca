@@ -12,6 +12,47 @@ const git: GitWorktreeInfo = {
 }
 
 describe('mergeWorktree identity projection', () => {
+  it('re-derives an automatic display name from the current branch', () => {
+    const worktree = mergeWorktree(
+      'repo-1',
+      { ...git, branch: 'refs/heads/main' },
+      {
+        displayName: 'feature',
+        displayNameIsPinned: false,
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0
+      }
+    )
+
+    expect(worktree.displayName).toBe('main')
+    expect(worktree.displayNameMode).toBe('automatic')
+  })
+
+  it('treats legacy CLI labels as fixed display names', () => {
+    const worktree = mergeWorktree('repo-1', git, {
+      displayName: 'feature',
+      cliProvenance: { kind: 'created-by-cli', createdAt: 1 },
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    })
+
+    expect(worktree.displayNameMode).toBe('fixed')
+  })
+
   it('publishes canonical identity when host and instance metadata are known', () => {
     const worktree = mergeWorktree('repo-1', git, {
       instanceId: '11111111-1111-4111-8111-111111111111',
@@ -43,5 +84,23 @@ describe('mergeWorktree identity projection', () => {
     const worktree = mergeWorktree('repo-1', git, undefined)
 
     expect(worktree.identity).toBeUndefined()
+  })
+
+  it('projects optional GitHub PR suppression metadata', () => {
+    const worktree = mergeWorktree('repo-1', git, {
+      displayName: 'Feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      suppressedGitHubPR: 42,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    })
+
+    expect(worktree.suppressedGitHubPR).toBe(42)
   })
 })

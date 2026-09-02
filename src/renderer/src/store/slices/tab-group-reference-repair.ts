@@ -30,6 +30,55 @@ export function layoutSpanningGroups(
     )
 }
 
+/** Prevent one retained tab row from hydrating into multiple groups. */
+export function resolveTabGroupOwners(
+  tabs: readonly Tab[],
+  groups: readonly TabGroup[],
+  tabIdAliasesByGroup?: Map<string, Map<string, string>>
+): Map<string, string> {
+  const persistedGroupIds = new Set(groups.map((group) => group.id))
+  const tabGroupIdById = new Map(tabs.map((tab) => [tab.id, tab.groupId]))
+  const tabOwners = new Map(
+    tabs.filter((tab) => persistedGroupIds.has(tab.groupId)).map((tab) => [tab.id, tab.groupId])
+  )
+  for (const group of groups) {
+    const tabIdAliases = tabIdAliasesByGroup?.get(group.id)
+    for (const persistedTabId of group.tabOrder) {
+      const tabId = tabIdAliases?.get(persistedTabId) ?? persistedTabId
+      if (!tabGroupIdById.has(tabId)) {
+        continue
+      }
+      if (!tabOwners.has(tabId)) {
+        tabOwners.set(tabId, group.id)
+      }
+    }
+  }
+  return tabOwners
+}
+
+/** Restore declared-owner rows omitted from a persisted tab order. */
+export function appendOwnedTabIdsToGroups(
+  groups: readonly TabGroup[],
+  tabOwners: ReadonlyMap<string, string>
+): TabGroup[] {
+  const tabIdsByGroup = new Map<string, string[]>()
+  for (const [tabId, groupId] of tabOwners) {
+    const tabIds = tabIdsByGroup.get(groupId) ?? []
+    tabIds.push(tabId)
+    tabIdsByGroup.set(groupId, tabIds)
+  }
+  return groups.map((group) => {
+    const ownedTabIds = tabIdsByGroup.get(group.id)
+    if (!ownedTabIds) {
+      return group
+    }
+    const missingTabIds = ownedTabIds.filter((tabId) => !group.tabOrder.includes(tabId))
+    return missingTabIds.length > 0
+      ? { ...group, tabOrder: [...group.tabOrder, ...missingTabIds] }
+      : group
+  })
+}
+
 /** Re-home tabs stranded by a dropped group so hydration cannot render a blank workspace. */
 export function adoptGrouplessTabs(
   tabsByWorktree: Record<string, Tab[]>,

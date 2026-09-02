@@ -12,6 +12,7 @@ import { createDirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver-ipc-bridge'
+import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge'
 import { registerProjectCatalogIpcBridge } from './project-catalog-ipc-bridge'
 import { registerRateLimitIpcBridge } from './rate-limit-ipc-bridge'
 import { registerRemoteWorkspaceIpcBridge } from './remote-workspace-ipc-bridge'
@@ -60,6 +61,14 @@ export function installAppLifetimeIpcEvents(
   )
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
+  const onSharedControlDiagnostics = window.api.runtimeEnvironments?.onSharedControlDiagnostics
+  if (onSharedControlDiagnostics) {
+    unsubs.push(
+      onSharedControlDiagnostics((event) => {
+        useAppStore.getState().publishRuntimeEnvironmentDiagnostics(event)
+      })
+    )
+  }
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerProjectCatalogIpcBridge(
     unsubs,
@@ -69,6 +78,7 @@ export function installAppLifetimeIpcEvents(
   )
   registerSettingsAndSidebarIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
+  registerOsMarkdownFileOpenBridge(unsubs)
   unsubs.push(
     window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
       void worktreeRuntime

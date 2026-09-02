@@ -1,0 +1,13 @@
+{
+  "title": "Reviewing & Shipping Code",
+  "defaultOpen": true,
+  "pages": [
+    "diff-viewer",
+    "annotate-ai-diff",
+    "attribution",
+    "commit-push",
+    "github",
+    "linear",
+    "jira"
+  ]
+}

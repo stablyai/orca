@@ -1,5 +1,7 @@
+import { defaultSchema } from 'rehype-sanitize'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
 
 export type MarkdownRichModeUnsupportedReason =
@@ -13,6 +15,13 @@ type UnsupportedMatch = {
   message: string
   pattern: RegExp
 }
+
+export type MarkdownRichModeEligibility = {
+  exceedsSizeLimit: boolean
+  unsupportedMessage: string | null
+}
+
+const KNOWN_MARKDOWN_HTML_TAG_NAMES = new Set(defaultSchema.tagNames ?? [])
 
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   {
@@ -66,7 +75,7 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
   // opinion when HTML is detected, to verify the HTML survives the round-trip
   // before blocking the user from rich mode.
   const htmlMatcher = UNSUPPORTED_PATTERNS.find((m) => m.reason === 'html-or-jsx')
-  const hasHtml = htmlMatcher && htmlMatcher.pattern.test(contentWithoutCode)
+  const hasHtml = htmlMatcher && hasHtmlOrJsx(contentWithoutCode, htmlMatcher.pattern)
 
   for (const matcher of UNSUPPORTED_PATTERNS) {
     if (matcher.reason === 'html-or-jsx') {
@@ -89,6 +98,44 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
   }
 
   return null
+}
+
+export function getMarkdownRichModeEligibility({
+  content,
+  sizeOverridden
+}: {
+  content: string
+  sizeOverridden: boolean
+}): MarkdownRichModeEligibility {
+  const exceedsSizeLimit = !sizeOverridden && exceedsMarkdownRichModeSizeLimit(content)
+  return {
+    exceedsSizeLimit,
+    unsupportedMessage: getMarkdownRichModeUnsupportedMessage(content)
+  }
+}
+
+function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {
+  for (const match of content.matchAll(new RegExp(pattern, 'g'))) {
+    if (isHtmlOrJsxFragment(match[0])) {
+      return true
+    }
+  }
+  return false
+}
+
+function isHtmlOrJsxFragment(fragment: string): boolean {
+  if (fragment.startsWith('<!--') || fragment.startsWith('</')) {
+    return true
+  }
+
+  const tagMatch = fragment.match(/^<([A-Za-z][\w.:-]*)/)
+  const tagName = tagMatch?.[1]
+  if (!tagName) {
+    return false
+  }
+
+  const suffix = fragment.slice(tagName.length + 1, -1)
+  return suffix.length > 0 || KNOWN_MARKDOWN_HTML_TAG_NAMES.has(tagName.toLowerCase())
 }
 
 function stripMarkdownCode(content: string): string {

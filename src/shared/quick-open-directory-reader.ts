@@ -29,23 +29,29 @@ export async function readQuickOpenDirectoryEntries(opts: {
 
     const entries: QuickOpenDirectoryEntry[] = []
     const directory = await opendir(opts.absPath)
-    throwIfFileListingCancelled(opts.signal)
-    assertQuickOpenReaddirDeadline(opts.budget)
-    for await (const entry of directory) {
+    try {
       throwIfFileListingCancelled(opts.signal)
       assertQuickOpenReaddirDeadline(opts.budget)
-      consumeQuickOpenReaddirEntryBudget(opts.budget)
-      consumeQuickOpenReaddirPathBudget(opts.budget, entry.name)
-      entries.push({
-        name: entry.name,
-        kind: entry.isDirectory()
-          ? 'directory'
-          : entry.isFile()
-            ? 'file'
-            : entry.isSymbolicLink()
-              ? 'symlink'
-              : 'other'
-      })
+      for await (const entry of directory) {
+        throwIfFileListingCancelled(opts.signal)
+        assertQuickOpenReaddirDeadline(opts.budget)
+        consumeQuickOpenReaddirEntryBudget(opts.budget)
+        consumeQuickOpenReaddirPathBudget(opts.budget, entry.name)
+        entries.push({
+          name: entry.name,
+          kind: entry.isDirectory()
+            ? 'directory'
+            : entry.isFile()
+              ? 'file'
+              : entry.isSymbolicLink()
+                ? 'symlink'
+                : 'other'
+        })
+      }
+    } finally {
+      try {
+        await directory.close()
+      } catch {}
     }
     entries.sort((left, right) => compareFileNames(left.name, right.name))
 
