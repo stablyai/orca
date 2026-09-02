@@ -8649,7 +8649,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Restart now",
           "907131d741": "Restarting…",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
+          "1a23894d84": "Minimum Contrast",
+          "9f2eadb63a": "Lift text that is too close to its background color.",
+          "926624a9ea": "Set a fixed minimum contrast ratio between text and its background. Leave blank for automatic: 3 on dark backgrounds, 4.5 on light backgrounds. Set 1 to render the exact colors programs send.",
+          "3d992f9745": "Automatic"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Reset"
@@ -10281,7 +10285,13 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
-            }
+            },
+            "f89b96dc4e": "Minimum Contrast",
+            "2a6e5a18de": "Lift text that is too close to its background color.",
+            "a6dcfe179e": "contrast",
+            "2bb60a2cdd": "readability",
+            "4fbdfcb1ae": "legibility",
+            "6e42c477dc": "wcag"
           },
           "windows": {
             "search": {

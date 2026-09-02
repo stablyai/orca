@@ -117,6 +117,26 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.terminal.search.f89b96dc4e', 'Minimum Contrast'),
+    description: translate(
+      'auto.components.settings.terminal.search.2a6e5a18de',
+      'Lift text that is too close to its background color.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.a6dcfe179e', 'contrast'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.2bb60a2cdd',
+        'readability'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.4fbdfcb1ae',
+        'legibility'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.6e42c477dc', 'wcag'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.674b7c8436', 'color')
+    ]
+  },
+  {
     title: translate('auto.components.settings.terminal.search.aed2a4b4eb', 'Color Overrides'),
     description: translate(
       'auto.components.settings.terminal.search.3023e01415',

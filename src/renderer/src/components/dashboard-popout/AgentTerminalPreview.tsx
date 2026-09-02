@@ -9,6 +9,7 @@ import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-ki
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import {
+  applyPreviewMinimumContrastRatio,
   buildPreviewAppearanceOptions,
   buildPreviewTerminalOptions
 } from './preview-terminal-options'
@@ -413,8 +414,9 @@ export function AgentTerminalPreview({
       terminal.options,
       buildPreviewAppearanceOptions(settings, macOptionAsAlt === 'true')
     )
+    applyPreviewMinimumContrastRatio(terminal.options, settings, terminalTheme, terminalMode)
     syncPreviewTerminalLigatures(terminal, settings)
-  }, [settings, macOptionAsAlt])
+  }, [settings, macOptionAsAlt, terminalTheme, terminalMode])
 
   return (
     // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden

@@ -262,13 +262,15 @@ type ColorFieldProps = {
 type NumberFieldProps = {
   label: string
   description: string
-  value: number
+  value?: number
   defaultValue?: number
   min: number
   max?: number
   step?: number
   integer?: boolean
   onChange: (value: number) => void
+  onReset?: () => void
+  placeholder?: string
   suffix?: string
 }
 
@@ -315,6 +317,8 @@ export function NumberField({
   step = 1,
   integer = false,
   onChange,
+  onReset,
+  placeholder,
   suffix
 }: NumberFieldProps): React.JSX.Element {
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
@@ -329,7 +333,11 @@ export function NumberField({
   const commit = (): void => {
     const trimmed = draft.trim()
     if (trimmed === '') {
-      // Empty input — reset to current value rather than committing 0
+      if (onReset) {
+        onReset()
+        setDraft('')
+        return
+      }
       setDraft(Number.isFinite(value) ? String(value) : '')
       return
     }
@@ -367,6 +375,7 @@ export function NumberField({
             step={step}
             aria-label={label}
             value={draft}
+            placeholder={placeholder}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {

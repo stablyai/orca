@@ -7,6 +7,7 @@ import { Switch } from '../ui/switch'
 import { ColorField, NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
+import { MAX_CONTRAST_RATIO, MIN_CONTRAST_RATIO } from '@/lib/terminal-contrast-correction'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
@@ -255,6 +256,48 @@ export function TerminalWindowSection({
                 terminalMouseHideWhileTyping: checked
               })
             }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalWindowSection.1a23894d84',
+            'Minimum Contrast'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalWindowSection.9f2eadb63a',
+            'Lift text that is too close to its background color.'
+          )}
+          keywords={['contrast', 'readability', 'legibility', 'wcag', 'color']}
+        >
+          <NumberField
+            label={translate(
+              'auto.components.settings.TerminalWindowSection.1a23894d84',
+              'Minimum Contrast'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalWindowSection.926624a9ea',
+              'Set a fixed minimum contrast ratio between text and its background. Leave blank for automatic: 3 on dark backgrounds, 4.5 on light backgrounds. Set 1 to render the exact colors programs send.'
+            )}
+            value={settings.terminalMinimumContrastRatio}
+            min={MIN_CONTRAST_RATIO}
+            max={MAX_CONTRAST_RATIO}
+            step={0.5}
+            placeholder={translate(
+              'auto.components.settings.TerminalWindowSection.3d992f9745',
+              'Automatic'
+            )}
+            suffix="1–21"
+            onChange={(value) =>
+              updateSettings({
+                terminalMinimumContrastRatio: clampNumber(
+                  value,
+                  MIN_CONTRAST_RATIO,
+                  MAX_CONTRAST_RATIO
+                )
+              })
+            }
+            onReset={() => updateSettings({ terminalMinimumContrastRatio: undefined })}
           />
         </SearchableSetting>
 

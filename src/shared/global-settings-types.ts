@@ -147,6 +147,8 @@ export type GlobalSettings = {
   terminalMouseHideWhileTyping?: boolean
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
+  /** xterm's foreground/background contrast floor; 1 disables correction. */
+  terminalMinimumContrastRatio?: number
   terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */

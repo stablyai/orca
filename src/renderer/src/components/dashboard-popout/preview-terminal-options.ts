@@ -13,6 +13,22 @@ import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/windows-pty-
 import { buildFontFamily } from '@/components/terminal-pane/layout-serialization'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 
+export function applyPreviewMinimumContrastRatio(
+  options: ITerminalOptions,
+  settings: GlobalSettings | null,
+  theme: ITheme | null,
+  themeMode: 'dark' | 'light'
+): void {
+  const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
+    theme?.background,
+    themeMode,
+    settings?.terminalMinimumContrastRatio
+  )
+  if (options.minimumContrastRatio !== minimumContrastRatio) {
+    options.minimumContrastRatio = minimumContrastRatio
+  }
+}
+
 /** Options a live settings change can write onto an open preview terminal. */
 export function buildPreviewAppearanceOptions(
   settings: GlobalSettings | null,
@@ -80,7 +96,8 @@ export function buildPreviewTerminalOptions(args: {
     theme: args.theme ?? undefined,
     minimumContrastRatio: resolveTerminalMinimumContrastRatio(
       args.theme?.background,
-      args.themeMode
+      args.themeMode,
+      args.settings?.terminalMinimumContrastRatio
     )
   }
 }
