@@ -1,12 +1,18 @@
 import type { TuiAgent } from './tui-agent'
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgentConfig, TuiAgentDetectionRuntime } from './tui-agent-config-types'
+import {
+  serializeIdentityExclusion,
+  type SerializedIdentityExclusion
+} from './tui-agent-identity-exclusion'
 
 export type TuiAgentDetectionCommand = {
   id: TuiAgent
   cmd: string
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
+  /** Serialized so the same probe runs on every detection host, including SSH relays. */
+  identityExclusion?: SerializedIdentityExclusion
 }
 
 export const KNOWN_TUI_AGENT_DETECTION_COMMANDS = buildTuiAgentDetectionCommands()
@@ -32,6 +38,9 @@ function buildTuiAgentDetectionCommand(
       : {}),
     ...(config.detectUnsupportedRuntimes?.length
       ? { unsupportedRuntimes: config.detectUnsupportedRuntimes }
+      : {}),
+    ...(config.detectIdentityExclusion
+      ? { identityExclusion: serializeIdentityExclusion(config.detectIdentityExclusion) }
       : {})
   }
 }

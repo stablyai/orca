@@ -20,7 +20,9 @@ import {
   detectWslCommandsOnPath,
   type WslPreflightTarget
 } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { resolveCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { excludeMisidentifiedAgents } from '../../shared/tui-agent-identity-exclusion'
+import { buildIdentityProbe, clearIdentityProbeCache } from './preflight-identity-probe'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
@@ -32,10 +34,10 @@ import {
   execCommandInWslOrThrow,
   execLocalPreflightCommandOrThrow,
   isCommandAvailable,
-  isCommandOnPath,
+  resolveLocalCommandPath,
+  runLocalPreflightProgramOrThrow,
   shellQuote
 } from '../ipc/preflight-command-exec'
-import { excludeMisidentifiedAgents } from './preflight-agent-identity-exclusion'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
@@ -113,6 +115,7 @@ function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  clearIdentityProbeCache()
   cachedByWslDistro.clear()
   preflightInFlight.clear()
   latestPreflightRun.clear()
@@ -144,14 +147,18 @@ async function detectCommandRuntime(
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    const foundCommands = await detectWslCommandsOnPath(
+    const foundPaths = await detectWslCommandsOnPath(
       wslTarget,
       getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )
+    const foundCommands = new Set(foundPaths.keys())
     return excludeMisidentifiedAgents(
+      KNOWN_TUI_AGENT_DETECTION_COMMANDS,
       resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl'),
-      (command, args) =>
-        execCommandInWslOrThrow(wslTarget, [command, ...args].map(shellQuote).join(' '))
+      foundCommands,
+      buildIdentityProbe(foundPaths, preflightCacheKey(wslTarget), (program, args) =>
+        execCommandInWslOrThrow(wslTarget, [program, ...args].map(shellQuote).join(' '))
+      )
     )
   }
 
@@ -160,23 +167,25 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
     process.platform
   )
   const pathChecks = await Promise.all(
-    probeCommands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
+    probeCommands.map(async (cmd) => ({ cmd, resolvedPath: await resolveLocalCommandPath(cmd) }))
   )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
+  const missedCommands = pathChecks.filter((check) => !check.resolvedPath).map(({ cmd }) => cmd)
   // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
   // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
-  const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
-  )
+  const installDirPaths = resolveCommandsInInstallDirs(missedCommands)
+  const foundPaths = new Map<string, string>()
+  for (const { cmd, resolvedPath } of pathChecks) {
+    const program = resolvedPath ?? installDirPaths.get(cmd)
+    if (program) {
+      foundPaths.set(cmd, program)
+    }
+  }
+  const foundCommands = new Set(foundPaths.keys())
   return excludeMisidentifiedAgents(
+    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, process.platform),
-    (command, args) => execLocalPreflightCommandOrThrow(command, [...args])
+    foundCommands,
+    buildIdentityProbe(foundPaths, LOCAL_PREFLIGHT_CACHE_KEY, runLocalPreflightProgramOrThrow)
   )
 }
 
@@ -220,6 +229,7 @@ export async function refreshShellPathAndDetectAgents(
     // keep reporting a just-installed CLI as absent -- the exact case this
     // function exists to handle.
     invalidateWslGuestEnvironment(wslTarget.distro)
+    clearIdentityProbeCache()
     const agents = await detectInstalledAgents(context)
     return {
       agents,
@@ -232,6 +242,7 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
+  clearIdentityProbeCache()
   const agents = await detectInstalledAgents(context)
   return {
     agents,
