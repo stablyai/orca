@@ -57,8 +57,11 @@ describe('serve flag parity between the CLI spec and the Electron argv rewrite',
     // both ends of the contract are only readable statically. Without this leg the rewrite could
     // emit a name nothing reads and every behavioural assertion above would still pass.
     const launchSource = readFileSync(join(process.cwd(), 'src/cli/runtime/launch.ts'), 'utf8')
-    const mainSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const start = mainSource.indexOf('function getServeOptions(')
+    const mainSource = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-serve.ts'),
+      'utf8'
+    )
+    const start = mainSource.indexOf('export function getServeOptions(')
     // Why bound the anchor: an unresolved indexOf slices to EOF and passes vacuously.
     expect(start).toBeGreaterThanOrEqual(0)
     const end = mainSource.indexOf('\n}', start)

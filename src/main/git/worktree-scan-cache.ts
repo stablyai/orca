@@ -1,8 +1,8 @@
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import {
+  annotateSparseCheckoutStatus,
   listWorktreeGraph as listWorktreeGraphUnshared,
-  listWorktreesStrict as listWorktreesStrictUnshared,
-  listWorktreesUnshared
+  listWorktreesStrict as listWorktreesStrictUnshared
 } from './worktree-listing'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from './worktree-operation-options'
@@ -91,6 +91,22 @@ function shareWorktreeScan(
 }
 
 /**
+ * Sparse annotation layered over the shared graph scan rather than its own `git worktree list`.
+ *
+ * Both paths soften a Git failure to `[]`, so they can share one listing; only this one pays the
+ * per-worktree sparse probe. That lets a caller which reads just `worktree.path` skip the probes
+ * without costing a second subprocess when it overlaps a badge reader — the two ran Git twice
+ * before. Strict stays on its own scan because it must be able to reject.
+ */
+async function runAnnotatedWorktreeScan(
+  repoPath: string,
+  options: GitWorktreeExecOptions
+): Promise<GitWorktreeInfo[]> {
+  const worktrees = await listWorktreeGraph(repoPath, options)
+  return annotateSparseCheckoutStatus(repoPath, worktrees, options)
+}
+
+/**
  * List all worktrees for a git repo at the given path. Concurrent calls for
  * the same repo share one scan (unless the caller passes an AbortSignal,
  * which must only cancel its own scan). Git failures soften to `[]`.
@@ -99,7 +115,7 @@ export function listWorktrees(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
-  return shareWorktreeScan(repoPath, options, 'lenient', listWorktreesUnshared)
+  return shareWorktreeScan(repoPath, options, 'lenient', runAnnotatedWorktreeScan)
 }
 
 /**

@@ -34,10 +34,13 @@ afterAll(() => {
 
 /** The `app.*` call the shipped lock-loss gate executes, so a revert to `app.quit()` fails here. */
 function readLockLossTermination(): string {
-  const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-  const start = source.indexOf('if (!hasSingleInstanceLock) {')
+  const source = readFileSync(
+    join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
+    'utf8'
+  )
+  const start = source.indexOf('if (!hasLock) {')
   expect(start).toBeGreaterThanOrEqual(0)
-  const end = source.indexOf('\n}', start)
+  const end = source.indexOf('\n  }', start)
   expect(end).toBeGreaterThan(start)
 
   return source

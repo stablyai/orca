@@ -83,6 +83,7 @@ import {
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
 import {
+  BOTH_NATIVE_DEPS_MISSING_PROBE,
   decodePowerShellCommand,
   makeExecResponses,
   makeMockConnection,
@@ -677,8 +678,8 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
-      'MISSING', // health probe: require() fails
-      'MISSING', // re-probe after lock
+      BOTH_NATIVE_DEPS_MISSING_PROBE, // health probe: require() names both deps
+      BOTH_NATIVE_DEPS_MISSING_PROBE, // re-probe after lock
       '', // SFTP-namespace install-owner marker (repair)
       { reject: 'npm ERR! network ETIMEDOUT' }, // npm install fails (offline)
       'DEAD',
@@ -701,8 +702,8 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.mocked(execCommand)
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       .mockResolvedValueOnce('/home/u')
-      .mockResolvedValueOnce('MISSING')
-      .mockResolvedValueOnce('MISSING')
+      .mockResolvedValueOnce(BOTH_NATIVE_DEPS_MISSING_PROBE)
+      .mockResolvedValueOnce(BOTH_NATIVE_DEPS_MISSING_PROBE)
       .mockResolvedValueOnce('') // SFTP-namespace install-owner marker (repair)
       .mockRejectedValueOnce(
         Object.assign(new Error('npm termination was not confirmed'), {
@@ -843,7 +844,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
-      'MISSING',
+      BOTH_NATIVE_DEPS_MISSING_PROBE,
       'DEAD',
       '', // remote credential generation without a namespace marker
       'READY'

@@ -126,6 +126,20 @@ export class OrcaRuntimeWithRuntimeId {
     }
   >()
 
+  // Why: worktree ids are path-derived and get recreated, so a renderer frame
+  // that raced the delete must be rejected by the removed occupant's identity.
+  // Entries are cleared once a snapshot carrying the successor's instanceId
+  // is accepted; identity-less frames are fenced by renderer generation.
+  protected readonly removedMobileSessionWorktreeIds = new Map<
+    string,
+    {
+      removedPublicationEpoch?: string
+      // Why: a rejected frame is still "published" on the renderer side, so a
+      // later unchanged-list mention must not spiral into resync requests.
+      rejectedPublication?: boolean
+    }
+  >()
+
   protected clientSessionTabSelections = new ClientSessionTabSelectionStore()
 
   // Why: idempotency map for mobile terminal creation — a retried create with the

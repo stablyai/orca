@@ -77,6 +77,8 @@ import {
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { resolveRelayEndpointBeforeRelaunch } from './ssh-relay-endpoint-takeover'
+import { sweepSupersededRelayEndpoints } from './ssh-relay-superseded-endpoints'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
   isWindowsRelayPipePath,
@@ -116,12 +118,13 @@ function execHostCommand(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
   command: string,
-  options?: { timeoutMs?: number; signal?: AbortSignal }
+  options?: { timeoutMs?: number; signal?: AbortSignal; onStderr?: (stderr: string) => void }
 ): Promise<string> {
   return execCommand(conn, command, {
     wrapCommand: !isWindowsRemoteHost(hostPlatform),
     timeoutMs: options?.timeoutMs,
-    signal: options?.signal
+    signal: options?.signal,
+    onStderr: options?.onStderr
   })
 }
 
@@ -581,6 +584,17 @@ async function deployAndLaunchRelayAttempt(
     recoverOneStaleRelayUploadStageCommand(hostPlatform, uploadStagePoolDir)
   )
     .catch(() => {})
+    // Why before GC: a superseded relay pins its version dir via the live-socket probe, so the
+    // sweep has to settle first or GC keeps every orphan's tree forever.
+    .then(() =>
+      sweepSupersededRelayEndpoints(conn, hostPlatform, {
+        remoteHome,
+        currentRelayDir: remoteRelayDir,
+        sockName: relaySocketNameForInstanceId(relayInstanceId),
+        nodePath: launched.nodePath
+      })
+    )
+    .catch(() => {})
     .then(() =>
       gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
         windowsNodePath: launched.nodePath,
@@ -722,16 +736,38 @@ function nativeDepsProbeJs(successToken: string): string {
   return `(()=>{const missing=[];try{${loadNodePty}}catch{missing.push("node-pty")}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{console.log(${JSON.stringify(successToken)})}})()`
 }
 
-function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] {
+/**
+ * Which deps the probe *named* as unloadable, or `undefined` when the answer names none.
+ *
+ * Only the probe's own marker line is evidence about the deps. An answer without one (node never
+ * ran, was killed, exited before the script) says nothing, so it must not be read as "all of them" —
+ * that inference deleted both native modules on every reconnect of an affected host.
+ */
+function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] | undefined {
   const marker = output
     .split(/\r?\n/)
     .find((line) => line.trim().startsWith(NATIVE_DEPS_MISSING_PREFIX))
   if (!marker) {
-    return [...RELAY_NATIVE_DEP_NAMES]
+    return undefined
   }
   const reported = marker.trim().slice(NATIVE_DEPS_MISSING_PREFIX.length).split(',')
-  return RELAY_NATIVE_DEP_NAMES.filter((name) => reported.includes(name))
+  const named = RELAY_NATIVE_DEP_NAMES.filter((name) => reported.includes(name))
+  return named.length > 0 ? named : undefined
 }
+
+/**
+ * `ok` — the probe answered and both deps loaded. `blocked` — the probe answered with a marker
+ * naming deps that failed to load. `unverifiable` — the probe never answered, or answered nothing
+ * that names a dep; both are evidence about the probe, not about the deps.
+ *
+ * Why `unverifiable` is not `blocked`: repairing on it does `rm -rf node_modules/node-pty` and a
+ * node-gyp source build (no Linux prebuild) against a relay that was never shown to be broken. An
+ * unparseable answer is the worse half of that — it is deterministic and per-host, so a node that
+ * cannot start (bad NODE_OPTIONS, OOM, exit 127) deleted both modules on every reconnect forever.
+ * Same verdict discipline as `src/main/orcad/node-pty-precondition.ts` and
+ * docs/reference/ssh-execution-boundary.md — loss of contact is not evidence.
+ */
+type RelayNativeDepsProbeStatus = 'ok' | 'blocked' | 'unverifiable'
 
 async function probeRequiredNativeDeps(
   conn: SshConnection,
@@ -739,9 +775,10 @@ async function probeRequiredNativeDeps(
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   signal?: AbortSignal
-): Promise<{ available: boolean; missing: RelayNativeDepName[] }> {
+): Promise<{ status: RelayNativeDepsProbeStatus; missing: RelayNativeDepName[] }> {
   const escapedNode = shellEscape(nodePath)
   const probeJs = nativeDepsProbeJs('ORCA-NATIVE-DEPS-OK')
+  let probeStderr = ''
   try {
     const command = isWindowsRemoteHost(hostPlatform)
       ? commandWithNodePath(
@@ -750,18 +787,37 @@ async function probeRequiredNativeDeps(
           remoteDir,
           `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)} } catch { 'MISSING' }`
         )
-      : commandWithNodePath(
+      : // Why: no `2>/dev/null` — it discarded the only line that says why node never reached the
+        // script. stderr stays its own stream so it can't be mistaken for the verdict, mirroring
+        // src/main/orcad/node-pty-precondition.ts.
+        commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `(${escapedNode} -e ${shellEscape(probeJs)} 2>/dev/null || echo MISSING)`
+          `(${escapedNode} -e ${shellEscape(probeJs)} || echo MISSING)`
         )
-    const probe = await execHostCommand(conn, hostPlatform, command, { signal })
-    const available = probe.includes('ORCA-NATIVE-DEPS-OK')
-    return { available, missing: available ? [] : missingNativeDepsFromProbe(probe) }
+    const probe = await execHostCommand(conn, hostPlatform, command, {
+      signal,
+      onStderr: (text) => {
+        probeStderr = text
+      }
+    })
+    if (probe.includes('ORCA-NATIVE-DEPS-OK')) {
+      return { status: 'ok', missing: [] }
+    }
+    const missing = missingNativeDepsFromProbe(probe)
+    if (!missing) {
+      console.warn(
+        `[ssh-relay][NATIVE-DEPS-PROBE-UNPARSEABLE] Probe at ${remoteDir} answered without naming a dep; launching as-is. stdout=${probe.trim().slice(-200)} stderr=${probeStderr.trim().slice(-500)}`
+      )
+      return { status: 'unverifiable', missing: [] }
+    }
+    return { status: 'blocked', missing }
   } catch {
     signal?.throwIfAborted()
-    return { available: false, missing: [...RELAY_NATIVE_DEP_NAMES] }
+    // Why: an unanswered probe says nothing about the deps; reporting MISSING here reset and
+    // recompiled healthy relays, turning one dropped exec channel into a multi-minute reconnect.
+    return { status: 'unverifiable', missing: [] }
   }
 }
 
@@ -810,7 +866,8 @@ async function repairInstalledNativeDeps(
     lockResult === 'busy' || lockResult === 'error'
       ? await acquireRelayLaunchGcFence(conn, remoteDir, hostPlatform, signal)
       : undefined
-  if (initialProbe.available) {
+  // Why: only a probe that answered may trigger repair; an unverifiable one launches as-is and the next reconnect re-probes.
+  if (initialProbe.status !== 'blocked') {
     // Why: even a healthy reconnect stays fenced until launch liveness is observable, or cross-version GC can rename after this probe.
     if (lockResult !== 'acquired') {
       return { ownsInstallLock: false, gcClaimToken }
@@ -847,7 +904,9 @@ async function repairInstalledNativeDeps(
     // Why: older complete relay dirs predate @parcel/watcher; re-probe under the lock so only one reconnect mutates the dir.
     const probe = await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
     let repairNamespace: RelayInstallNamespace | undefined
-    if (!probe.available) {
+    if (probe.status !== 'ok') {
+      // Why: the locked re-probe can only narrow the repair; when it can't answer, the initial probe's answered evidence still stands.
+      const resetDeps = probe.status === 'unverifiable' ? initialProbe.missing : probe.missing
       // Why: only stamp ownership once the locked recheck proves this connection is the one about to write.
       repairNamespace = await createRelayLaunchNamespace(
         conn,
@@ -863,7 +922,7 @@ async function repairInstalledNativeDeps(
         hostPlatform,
         nodePath,
         signal,
-        probe.missing,
+        resetDeps,
         repairNamespace
       )
       await finalizeInstall(conn, remoteDir, hostPlatform, { signal, releaseLock: false })
@@ -1319,7 +1378,8 @@ async function probeInstalledNativeDeps(
   }
   return {
     available: probeOutput.includes(PROBE_OK),
-    missing: probeOutput.includes(PROBE_OK) ? [] : missingNativeDepsFromProbe(probeOutput),
+    // A markerless answer names no dep, so it reports none; `available` already carries the failure.
+    missing: probeOutput.includes(PROBE_OK) ? [] : (missingNativeDepsFromProbe(probeOutput) ?? []),
     output: probeOutput,
     stderr: remoteStderr
   }
@@ -1439,17 +1499,15 @@ async function launchRelay(
       } catch (err) {
         signal?.throwIfAborted()
         console.warn(
-          '[ssh-relay] Socket reconnect failed, launching fresh relay:',
+          '[ssh-relay] Socket reconnect failed, establishing what owns the endpoint:',
           err instanceof Error ? err.message : String(err)
         )
-        // Why: stale socket from a crashed relay — remove it so the fresh launch can bind at the same path.
-        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`, { signal }).catch(
-          (cleanupErr) => {
-            if (isUnconfirmedSshCommandTermination(cleanupErr)) {
-              throw cleanupErr
-            }
-          }
-        )
+        // Why not `rm -f`: unlinking does not close the listener the incumbent already holds,
+        // so a refused --connect (version mismatch, rotated credential) used to leave a live
+        // relay running forever with its PTYs while a replacement bound the same path (#8585).
+        await resolveRelayEndpointBeforeRelaunch(conn, hostPlatform, nodePath, sockFile, err, {
+          signal
+        })
         signal?.throwIfAborted()
       }
     }

@@ -186,9 +186,9 @@ describe('deployAndLaunchRelay', () => {
     expect(progress).toContain('Starting relay...')
   })
 
-  it('does not launch fresh after unconfirmed stale-socket cleanup', async () => {
+  it('does not launch fresh after an unconfirmed endpoint-incumbent probe', async () => {
     const conn = makeMockConnection()
-    const unconfirmedCleanup = Object.assign(new Error('socket cleanup still running'), {
+    const unconfirmedCleanup = Object.assign(new Error('endpoint probe still running'), {
       sshChannelCloseConfirmed: false
     })
     vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('stale relay reconnect failed'))

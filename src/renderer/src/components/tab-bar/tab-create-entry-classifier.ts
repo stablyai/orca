@@ -1,6 +1,7 @@
 import { getPreparedQuickOpenFiles, isQuickOpenQueryTooLarge } from '../quick-open-search'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
+import { getTabEntryOmniboxPlaceholder } from './tab-create-entry-copy'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
 import { findExistingFileMatches, isLikelyNewFileIntent } from './tab-create-entry-file-matches'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
@@ -69,13 +70,9 @@ function tabEntryActionOptionId(classification: TabEntryActionClassification): s
 function emptyOption(): TabEntryOption {
   return {
     id: 'empty',
-    classification: {
-      kind: 'empty',
-      message: translate(
-        'auto.components.tab.bar.tab.create.entry.classifier.c41f8d20b7',
-        'Search open tabs, files, URLs, agents…'
-      )
-    }
+    // Why shared: the empty status row and the input placeholder describe the
+    // same list, and drifting copy makes the omnibox look like two surfaces.
+    classification: { kind: 'empty', message: getTabEntryOmniboxPlaceholder() }
   }
 }
 

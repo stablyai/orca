@@ -14,6 +14,12 @@ import {
   DAEMON_AUDIT_TRIGGER_VALUES,
   DAEMON_EVIDENCE_SOURCE_VALUES
 } from './daemon-audit-eligibility'
+import {
+  DAEMON_ADOPTED_APP_VERSION_MATCH,
+  DAEMON_PTY_CWD_CLASSES,
+  DAEMON_SPAWNER_PATH_CLASSES,
+  DAEMON_TCC_ATTRIBUTION_VALUES
+} from './daemon-adoption-telemetry'
 import { errorClassSchema, settingsChangedKeySchema } from './telemetry-property-schemas'
 
 // Why: daemon start-failure signal (fleet-wide outage like v1.4.129-rc.1); enum-only so raw stderr never reaches the wire.
@@ -47,6 +53,27 @@ export const mainThreadHangDetectedSchema = z
   .object({
     unresponsive_ms: z.number().int().nonnegative(),
     self_recovered: z.boolean()
+  })
+  .strict()
+
+// Why: #17696 — a macOS app adopting a daemon from an earlier bundle is invisible to
+// `daemon_lifecycle` (nothing is replaced). Once per macOS launch that adopts; enum-only.
+export const daemonAdoptedSchema = z
+  .object({
+    app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH),
+    spawner_path_class: z.enum(DAEMON_SPAWNER_PATH_CLASSES),
+    tcc_attribution: z.enum(DAEMON_TCC_ATTRIBUTION_VALUES),
+    live_session_count_bucket: z.enum(DAEMON_LIFECYCLE_SESSION_BUCKETS)
+  })
+  .strict()
+
+// Why: the #17696 symptom itself — the daemon spawned a terminal into a cwd it cannot read while
+// the app can. Emitted only on that proven divergence, so a missing or app-unreadable cwd never counts.
+export const daemonPtyCwdDeniedSchema = z
+  .object({
+    cwd_class: z.enum(DAEMON_PTY_CWD_CLASSES),
+    app_version_match: z.enum(DAEMON_ADOPTED_APP_VERSION_MATCH),
+    spawner_path_class: z.enum(DAEMON_SPAWNER_PATH_CLASSES)
   })
   .strict()
 

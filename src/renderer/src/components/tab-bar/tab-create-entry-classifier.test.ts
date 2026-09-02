@@ -16,7 +16,7 @@ describe('tab create entry classification', () => {
   it('advertises tab search in the empty-query message', () => {
     expect(classifyTabEntryQuery('', readyFiles([]))).toEqual({
       kind: 'empty',
-      message: 'Search open tabs, files, URLs, agents…'
+      message: 'Search open tabs, history, files, URLs, agents…'
     })
   })
 

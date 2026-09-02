@@ -12,6 +12,8 @@ import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { showClientCreationActionError } from '@/lib/client-creation-action-error'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 import { translate } from '@/i18n/i18n'
 import { getActiveWorktreeRuntimeEnvironmentId } from './terminal-workspace-model'
@@ -122,7 +124,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     void openMobileEmulatorTab(activeWorktreeId, {
       placement: 'rightSplit',
       targetGroupId: targetGroupId ?? undefined
-    })
+    }).catch(showClientCreationActionError)
   }, [activeWorktreeId])
 
   const handleNewBrowserTab = useCallback(() => {
@@ -133,22 +135,31 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
       useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
       useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
     if (targetGroupId) {
-      void openNewBrowserTabInActiveWorkspace(targetGroupId)
+      void openNewBrowserTabInActiveWorkspace(targetGroupId).catch(showClientCreationActionError)
       return
     }
-    const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
+    const state = useAppStore.getState()
+    const browserAvailability = getClientCreationActionPolicy(state, activeWorktreeId)[
+      'managed-browser'
+    ]
+    if (browserAvailability.state !== 'enabled') {
+      toast.error(browserAvailability.reason)
+      return
+    }
+    const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
     const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    if (browserAvailability.provider === 'paired-runtime' && runtimeEnvironmentId) {
       void createWebRuntimeSessionBrowserTab({
         worktreeId: activeWorktreeId,
         environmentId: runtimeEnvironmentId,
         url: defaultUrl
-      })
+      }).catch(showClientCreationActionError)
       return
     }
     createBrowserTab(activeWorktreeId, defaultUrl, {
       title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
-      focusAddressBar: true
+      focusAddressBar: true,
+      ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
     })
   }, [activeWorktreeId, createBrowserTab, openNewBrowserTabInActiveWorkspace])
 
@@ -168,8 +179,16 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         return
       }
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      const browserAvailability = getClientCreationActionPolicy(state, activeWorktreeId)[
+        'managed-browser'
+      ]
+      if (browserAvailability.state !== 'enabled') {
+        toast.error(browserAvailability.reason)
+        return
+      }
       if (
-        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+        browserAvailability.provider === 'paired-runtime' &&
+        runtimeEnvironmentId &&
         browserWorkspaceHasRemoteOwner(state, source.id, runtimeEnvironmentId)
       ) {
         void createWebRuntimeSessionBrowserTab({
@@ -177,12 +196,17 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           environmentId: runtimeEnvironmentId,
           url: source.url,
           profileId: source.sessionProfileId
-        })
+        }).catch(showClientCreationActionError)
         return
       }
-      createBrowserTab(activeWorktreeId, source.url, {
-        ...buildDuplicatedBrowserTabOptions(source)
-      })
+      try {
+        createBrowserTab(activeWorktreeId, source.url, {
+          ...buildDuplicatedBrowserTabOptions(source),
+          ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+        })
+      } catch (error) {
+        showClientCreationActionError(error)
+      }
     },
     [activeWorktreeId, createBrowserTab]
   )

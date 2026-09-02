@@ -49,14 +49,17 @@ describe('serve argv rewrite vs AppImage CLI redirect ordering', () => {
     expect(getAppImageCliArgs(argv, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toEqual(['status'])
   })
 
-  // Why source text: the ordering only exists as statement order at index.ts module scope, and the
+  // Why source text: the ordering is the preflight phase's executable statement order, and the
   // cases above stay green if it is reversed — nothing else would catch the regression.
-  it('keeps index.ts running both CLI redirects before the argv rewrite', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+  it('keeps the preflight running both CLI redirects before the argv rewrite', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
+      'utf8'
+    )
     const packagedRedirect = source.indexOf('maybeRedirectPackagedCliEntryLaunch({')
     const appImageRedirect = source.indexOf('maybeRedirectAppImageCliLaunch({')
     const rewrite = source.indexOf('process.argv = normalizeServeModeArgv(process.argv)')
-    const serveModeCheck = source.indexOf("const isServeMode = process.argv.includes('--serve')")
+    const serveModeCheck = source.indexOf("state.isServeMode = process.argv.includes('--serve')")
 
     expect(packagedRedirect).toBeGreaterThanOrEqual(0)
     expect(appImageRedirect).toBeGreaterThanOrEqual(0)

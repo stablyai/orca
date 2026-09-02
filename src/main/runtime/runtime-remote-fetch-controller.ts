@@ -1,4 +1,9 @@
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
+import { getCanonicalRepoKey } from '../git/canonical-repo-key'
+import {
+  armLocalRepoRefMaintenance,
+  setRepoRefMaintenanceBusyProbe
+} from '../git/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../git/runner'
 import { setBoundedMapEntry } from './runtime-async-boundaries'
 
@@ -33,6 +38,11 @@ export class RuntimeRemoteFetchController {
     return this.fetchLastCompletedAt
   }
 
+  /** `${runtimeKey}::${gitCommonDir}` -- one repo on one execution host. */
+  async getCanonicalRepoKey(repoPath: string, gitOptions: GitOptions = {}): Promise<string> {
+    return getCanonicalRepoKey(repoPath, gitOptions)
+  }
+
   async getCanonicalFetchKey(
     repoPath: string,
     remote: string,
@@ -45,21 +55,39 @@ export class RuntimeRemoteFetchController {
       setBoundedMapEntry(this.canonicalFetchKeyCache, cacheKey, cached, REMOTE_FETCH_CACHE_MAX)
       return cached
     }
-    let resolved = cacheKey
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-        { cwd: repoPath, ...gitOptions }
-      )
-      const commonDir = stdout.trim()
-      if (commonDir) {
-        resolved = `${runtimeKey}::${commonDir}::${remote}`
-      }
-    } catch {
-      // The caller path remains a safe serialization key when canonicalization fails.
-    }
+    const resolved = `${await this.getCanonicalRepoKey(repoPath, gitOptions)}::${remote}`
     setBoundedMapEntry(this.canonicalFetchKeyCache, cacheKey, resolved, REMOTE_FETCH_CACHE_MAX)
     return resolved
+  }
+
+  /**
+   * Orca strips git's auto-maintenance off these fetches, so every one of them
+   * adds to a loose-ref backlog nothing else will ever pack. Arm the idle sweep
+   * that pays it back; each fetch pushes the attempt a further quiet period out.
+   */
+  private armRefMaintenance(repoPath: string, gitOptions: GitOptions): void {
+    void this.getCanonicalRepoKey(repoPath, gitOptions)
+      .then((key) => {
+        setRepoRefMaintenanceBusyProbe(key, () => this.hasInflightFetchForRepo(key))
+        armLocalRepoRefMaintenance({
+          key,
+          repoPath,
+          ...(gitOptions.wslDistro ? { wslDistro: gitOptions.wslDistro } : {})
+        })
+      })
+      .catch(() => {
+        // Maintenance is best effort; a repo we cannot name is a repo we skip.
+      })
+  }
+
+  private hasInflightFetchForRepo(repoKey: string): boolean {
+    const prefix = `${repoKey}::`
+    for (const key of this.fetchInflight.keys()) {
+      if (key.startsWith(prefix)) {
+        return true
+      }
+    }
+    return false
   }
 
   private enqueueRemoteFetch(
@@ -123,6 +151,7 @@ export class RuntimeRemoteFetchController {
         })
     ).finally(() => {
       this.fetchInflight.delete(key)
+      this.armRefMaintenance(repoPath, gitOptions)
     })
     this.fetchInflight.set(key, promise)
     return promise
@@ -178,6 +207,7 @@ export class RuntimeRemoteFetchController {
         })
     }).finally(() => {
       this.fetchInflight.delete(key)
+      this.armRefMaintenance(repoPath, gitOptions)
     })
     this.fetchInflight.set(key, promise)
     return promise

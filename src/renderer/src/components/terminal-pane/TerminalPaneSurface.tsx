@@ -6,7 +6,8 @@ import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/works
 import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import { TerminalErrorToast } from './TerminalErrorToast'
+import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
@@ -157,6 +158,25 @@ export function TerminalPaneSurface({
               error={visibleTerminalError}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onRetry={
+                isPaneOwnerUnverifiedError(visibleTerminalError)
+                  ? () => {
+                      const ptyId = activePane
+                        ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+                        : null
+                      return requestTerminalPaneRecovery({
+                        tabId,
+                        ptyId,
+                        reason: 'reattach-unverifiable'
+                      }).then((recovered) => {
+                        if (recovered) {
+                          dismissTerminalError()
+                        }
+                        return recovered
+                      })
+                    }
+                  : undefined
+              }
             />,
             activePane.container,
             `terminal-error-${activePane.id}`

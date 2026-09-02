@@ -12,6 +12,7 @@ import {
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../../../shared/git-status-line-stats-cache'
+import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
@@ -80,14 +81,19 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
 async function dropSharedSymlinkUntrackedEntries(
   worktreePath: string,
   entries: GitStatusEntry[],
-  sharedLinkPaths: readonly string[]
+  options: GetStatusOptions
 ): Promise<void> {
+  const sharedLinkPaths = options.sharedLinkPaths ?? []
   // Why: a clean tree has no untracked entries, so this costs nothing on the
   // common status-poll path — no syscall, no config read, no subprocess.
   if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
     return
   }
-  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  const sharedLinks = new Set(
+    await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths, {
+      wslDistro: options.wslDistro
+    })
+  )
   if (sharedLinks.size === 0) {
     return
   }
@@ -112,7 +118,7 @@ async function runGetStatus(
   const limit = resolveGitStatusLimit(options.limit)
 
   // Why: detectConflictOperation and git status are independent, so run them concurrently to save I/O latency.
-  const conflictPromise = detectConflictOperation(worktreePath)
+  const conflictPromise = detectConflictOperation(worktreePath, options)
   // Why: core.quotePath=false keeps non-ASCII paths as raw UTF-8, not octal escapes, so entry.path is readable and lookups match.
   const statusArgs = [
     '-c',
@@ -167,6 +173,8 @@ async function runGetStatus(
 
   const entries: GitStatusEntry[] = []
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
+  // Why: git runs in the distro and answers in its namespace; the working-tree probes below run here.
+  const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
 
   // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
   // an early conflict behind ordinary rows that appeared later in the stream.
@@ -177,14 +185,14 @@ async function runGetStatus(
     if (record.type === 'entry') {
       entries.push(record.entry)
     } else {
-      const unmergedEntry = await parseUnmergedEntry(worktreePath, record.line)
+      const unmergedEntry = await parseUnmergedEntry(hostWorktreePath, record.line)
       if (unmergedEntry) {
         entries.push(unmergedEntry)
       }
     }
   }
 
-  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options.sharedLinkPaths ?? [])
+  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options)
 
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
     const branchName = getShortBranchName(branch)

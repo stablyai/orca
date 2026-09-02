@@ -63,13 +63,14 @@ describe('WebSocketTransport accepted socket ordering', () => {
     socket.once('open', () => events.push('open'))
     socket.emit('open')
     lifecycle.handleConnection(socket)
+    transport.setClientId(socket, 'client')
     await vi.advanceTimersByTimeAsync(100)
 
     expect(firstProbeListeners).toEqual({ pong: 1, message: 1, close: 1, error: 1 })
     expect(events.slice(0, 4)).toEqual(['open', 'ping', 'ready', 'pong'])
     expect(socket.terminate).not.toHaveBeenCalled()
     expect(lifecycle.heartbeatConnections.size).toBe(1)
-    expect(vi.getTimerCount()).toBe(2)
+    expect(vi.getTimerCount()).toBe(1)
 
     events.push('close')
     socket.emit('close')
@@ -94,15 +95,17 @@ describe('WebSocketTransport accepted socket ordering', () => {
         socket.emit('close')
       }
     })
-    const { lifecycle } = createHarness(socket)
+    const { lifecycle, transport } = createHarness(socket)
 
     socket.once('open', () => events.push('open'))
     socket.emit('open')
     lifecycle.handleConnection(socket)
+    transport.setClientId(socket, 'client')
+    expect(socket.terminate).not.toHaveBeenCalled()
     // A single silent interval is not evidence: the socket is re-probed, not reaped.
     await vi.advanceTimersByTimeAsync(100)
     expect(socket.terminate).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(199)
+    await vi.advanceTimersByTimeAsync(299)
     expect(socket.terminate).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
@@ -125,11 +128,12 @@ describe('WebSocketTransport accepted socket ordering', () => {
         firstSocket.emit('pong')
       }
     })
-    const { lifecycle } = createHarness(firstSocket)
+    const { lifecycle, transport } = createHarness(firstSocket)
 
     lifecycle.handleConnection(firstSocket)
+    transport.setClientId(firstSocket, 'first-client')
     const sharedTimer = lifecycle.heartbeat.timer
-    expect(firstPingTimes).toEqual([0])
+    expect(firstPingTimes).toEqual([])
 
     await vi.advanceTimersByTimeAsync(50)
     const laterPingTimes: number[] = []
@@ -147,21 +151,25 @@ describe('WebSocketTransport accepted socket ordering', () => {
 
     expect(lifecycle.heartbeat.timer).toBe(sharedTimer)
     expect(laterPingTimes).toEqual([])
-    expect(vi.getTimerCount()).toBe(3)
+    expect(vi.getTimerCount()).toBe(2)
 
     await vi.advanceTimersByTimeAsync(50)
-    expect(laterPingTimes).toEqual([100])
+    expect(laterPingTimes).toEqual([])
     expect(laterSocket.terminate).not.toHaveBeenCalled()
+
+    transport.setClientId(laterSocket, 'later-client')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(laterPingTimes).toEqual([200])
 
     // Re-probed on every sweep while its misses bank, so a recovered path can answer immediately.
     await vi.advanceTimersByTimeAsync(299)
-    expect(laterPingTimes).toEqual([100, 200, 300])
+    expect(laterPingTimes).toEqual([200, 300, 400])
     expect(laterSocket.terminate).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
     expect(laterSocket.terminate).toHaveBeenCalledTimes(1)
-    expect(laterReapTimes).toEqual([400])
-    expect(firstPingTimes).toEqual([0, 100, 200, 300, 400])
+    expect(laterReapTimes).toEqual([500])
+    expect(firstPingTimes).toEqual([100, 200, 300, 400, 500])
     expect(
       ['pong', 'message', 'close', 'error'].map((event) => laterSocket.listenerCount(event))
     ).toEqual([0, 0, 0, 0])
@@ -182,11 +190,12 @@ describe('WebSocketTransport accepted socket ordering', () => {
         socket.emit('error', new Error('probe failed'))
       }
     })
-    const { lifecycle } = createHarness(socket)
+    const { lifecycle, transport } = createHarness(socket)
 
     socket.once('open', () => events.push('open'))
     socket.emit('open')
     lifecycle.handleConnection(socket)
+    transport.setClientId(socket, 'client')
     await vi.advanceTimersByTimeAsync(100)
     events.push('close')
     socket.emit('close')

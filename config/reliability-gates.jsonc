@@ -2493,30 +2493,31 @@
         "https://github.com/stablyai/orca/issues/11298",
         "https://github.com/stablyai/orca/pull/11300"
       ],
-      "invariant": "Every accepted runtime socket installs message, pong, close, and error ownership before any heartbeat probe. With uninterrupted timer delivery, the first socket that arms an idle heartbeat is probed immediately and an unresponsive socket is reaped within one interval. Later sockets join the existing shared cadence without another timer or immediate sweep and are reaped within two intervals. Responsive sockets survive, pause recovery grants a fresh probe, and close or error-to-close releases connection listeners and timers.",
-      "oracle": "With one fake clock and exact socket identities, accept the first socket at 0 ms and require an immediate owned probe plus reaping at 100 ms when unresponsive. Keep a responsive first socket, accept an unresponsive later socket at 50 ms, require the same shared timer, its first probe at 100 ms, no early reap, and termination at 200 ms. Inject synchronous message, pong, close, and error events, then require exact heartbeat membership and zero retained timers/listeners after final close. Production transport tests independently cover real socket round trips, pre-auth and capacity bounds, revocation, shutdown, and half-open cleanup.",
+      "invariant": "Every accepted runtime socket installs message, pong, close, and error ownership before any heartbeat probe. Unauthenticated sockets receive no heartbeat control frames during E2EE and are bounded by the pre-auth timeout; authenticated sockets share one periodic cadence, tolerate missed probes and event-loop pause, and release listeners and timers on close or error.",
+      "oracle": "With one fake clock and exact socket identities, accept an authenticated first socket at 0 ms and require its first probe on the 100 ms tick. Accept an unauthenticated later socket at 50 ms and require no probe at the 100 ms tick; authenticate it, then require its first probe on the next shared tick and termination only after the configured consecutive-miss budget. Inject synchronous message, pong, close, and error events, then require exact heartbeat membership and zero retained timers/listeners after final close. Production transport tests independently cover real socket round trips, pre-auth and capacity bounds, revocation, shutdown, and half-open cleanup.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/rpc/ws-transport-accept-order.test.ts",
         "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
-        "src/main/runtime/rpc/ws-transport.test.ts"
+        "src/main/runtime/rpc/ws-transport.test.ts",
+        "src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "src/main/runtime/rpc/ws-transport-accept-order.test.ts",
           "assertions": [
-            "the first synchronous probe observes message, pong, close, and error ownership",
-            "the first unresponsive socket is reaped at one interval",
-            "a later socket keeps the original shared timer, is first probed on the shared tick, and is reaped within two intervals",
+            "the first periodic probe observes message, pong, close, and error ownership",
+            "an authenticated unresponsive socket is reaped on the configured consecutive-miss budget",
+            "an unauthenticated later socket is not probed before authentication, then joins the original shared timer",
             "final close releases heartbeat membership, listeners, and timers"
           ]
         },
         {
           "file": "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
           "assertions": [
-            "one missed probe reaps only the unresponsive client",
+            "a single missed probe does not reap the unresponsive client",
             "event-loop resume grants clients a fresh probe"
           ]
         },
@@ -2527,6 +2528,12 @@
             "pre-auth, raw TCP, and accepted WebSocket resource bounds remain enforced",
             "error and close races finalize membership once"
           ]
+        },
+        {
+          "file": "src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts",
+          "assertions": [
+            "an authenticated real WebSocket survives one swallowed pong and responds to later probes"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -2534,10 +2541,10 @@
           "date": "2026-07-29",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/ws-transport-accept-order.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/ws-transport.test.ts src/main/runtime/rpc/ws-transport-transient-packet-loss.test.ts",
           "result": "passed",
           "durationSeconds": 0.91,
-          "summary": "Three runtime transport files and 35 tests passed with deterministic first- and later-socket cadence, exact listener/timer ownership, pause recovery, security bounds, and cleanup."
+          "summary": "Four runtime transport files and 42 tests passed with deterministic authenticated heartbeat cadence, handshake grace for later sockets, exact listener/timer ownership, pause recovery, transient packet-loss tolerance, security bounds, and cleanup."
         }
       ],
       "runtimeBudget": {
@@ -2550,7 +2557,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "On latest main and with the listener-order fix disabled, the first synchronous probe observed no message, pong, close, or error owner. The structural listener-order fix passed those assertions. The published delayed-first-sweep alternative missed the first-socket one-interval cleanup bound. A later-socket oracle now separately pins the intended shared cadence at a 100 ms first probe and 200 ms reap after acceptance at 50 ms."
+        "evidence": "On the candidate before this review fix, an authenticated first socket kept the shared timer alive while an unauthenticated socket accepted at 50 ms was pinged at the 100 ms tick; the new oracle failed. After filtering heartbeat clients to the authenticated transport map, the same byte-identical oracle passes: no pre-auth ping, first post-auth probe on the next shared tick, and bounded cleanup."
       },
       "performanceBudget": {
         "required": true,

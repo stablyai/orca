@@ -3027,7 +3027,8 @@
             "25dc1cd653": "打开文件",
             "7cdf8ee0c8": "打开网址",
             "b27864279e": "启动智能体",
-            "0e5b7a3f16": "搜索打开的标签页、文件、URL 和智能体…",
+            "omniboxPlaceholderWithHistory": "搜索打开的标签页、历史记录、文件、URL 和智能体…",
+            "openPage": "打开页面",
             "8f0a1c4d92": "切换到标签页",
             "2c38630a01": "工作区已不存在",
             "4f0d9a71c2": "标签页已不存在",
@@ -3073,7 +3074,6 @@
                 "classifier": {
                   "42e6262ae9": "没有可用的操作。",
                   "097a982ee0": "正在加载文件...",
-                  "c41f8d20b7": "搜索打开的标签页、文件、URL 和智能体…",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
                   "5553b283ce": "输入 URL 或文件路径。",
                   "queryTooLarge": "搜索文本过长。",
@@ -14689,7 +14689,10 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "切换到终端视图",
           "switchToChatView": "切换到聊天视图",
-          "closeTabsToLeft": "关闭左侧的选项卡"
+          "closeTabsToLeft": "关闭左侧的选项卡",
+          "copySessionId": "复制会话 ID",
+          "copySessionIdSuccess": "已复制会话 ID",
+          "copySessionIdError": "复制会话 ID 失败"
         },
         "BrowserTab": {
           "closeOthers": "关闭其他",

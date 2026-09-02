@@ -34,6 +34,11 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   connectionId: string | null
   /** Timestamp (ms) when the hook server received this latest status event. */
   receivedAt: number
+  /** When the reported evidence was first observed, as distinct from `receivedAt` (delivery
+   *  order). A relay reconnect replays cached rows, and `receivedAt` must restamp to stay
+   *  monotonic past the transient-clear watermark — so only this clock can measure staleness.
+   *  Optional: absent from old hosts, where consumers fall back to `receivedAt`. */
+  evidenceObservedAt?: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext

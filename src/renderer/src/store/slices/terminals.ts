@@ -55,6 +55,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     set({ terminalStartupRestorationReady: value })
   },
   restoredRuntimeHostIdByWorkspaceSessionKey: {},
+  contestedHostWorkspaceSessions: {},
+  contestedPrimaryHostBySessionKey: {},
   defaultTerminalTabsAppliedByWorktreeId: {},
   closedTerminalTabTombstonesByTabId: {},
   hydrationSucceeded: false,
