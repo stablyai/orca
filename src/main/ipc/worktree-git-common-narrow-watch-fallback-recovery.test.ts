@@ -51,6 +51,18 @@ describe('git-common narrow watch, recovering from the crash-fuse polling fallba
     })
   }
 
+  // Why: each retry attempt's real fs I/O (the stat in trySubscribe, the
+  // fallback poller's snapshot) is not advanced by the fake clock -- a bulk
+  // advanceTimersByTimeAsync loop can exhaust its bound before that I/O
+  // settles under load, so give it real wall-clock time on top rather than
+  // asserting the instant the loop stops.
+  async function waitForSubscribeCalls(count: number): Promise<void> {
+    await vi.waitFor(() => expect(subscribeMock).toHaveBeenCalledTimes(count), {
+      timeout: 5_000,
+      interval: 25
+    })
+  }
+
   async function makeCommonDir(): Promise<{ commonDir: string; worktreesDir: string }> {
     const root = await mkdtemp(join(tmpdir(), 'orca-git-common-fallback-retry-'))
     cleanups.push(() => rm(root, { recursive: true, force: true }))
@@ -110,7 +122,7 @@ describe('git-common narrow watch, recovering from the crash-fuse polling fallba
     ) {
       await vi.advanceTimersByTimeAsync(1_000)
     }
-    expect(subscribeMock).toHaveBeenCalledTimes(2)
+    await waitForSubscribeCalls(2)
 
     const recovered = subscriptions[1]
     expect(recovered).toBeDefined()
@@ -152,7 +164,7 @@ describe('git-common narrow watch, recovering from the crash-fuse polling fallba
       await vi.advanceTimersByTimeAsync(1_000)
     }
     // First retry attempt fired and failed the same way -- still fallback.
-    expect(subscribeMock).toHaveBeenCalledTimes(2)
+    await waitForSubscribeCalls(2)
 
     installSubscribeMock()
     for (
@@ -163,7 +175,7 @@ describe('git-common narrow watch, recovering from the crash-fuse polling fallba
       await vi.advanceTimersByTimeAsync(1_000)
     }
     // Second retry, on the doubled backoff, finally succeeds.
-    expect(subscribeMock).toHaveBeenCalledTimes(3)
+    await waitForSubscribeCalls(3)
   })
 
   it('resets the backoff after a recovery, so a later fallback episode restarts at the base delay', async () => {
@@ -196,7 +208,7 @@ describe('git-common narrow watch, recovering from the crash-fuse polling fallba
     ) {
       await vi.advanceTimersByTimeAsync(1_000)
     }
-    expect(subscribeMock).toHaveBeenCalledTimes(2)
+    await waitForSubscribeCalls(2)
 
     // Second, unrelated fallback episode, off the now-recovered subscription.
     subscriptions[1].callback(
@@ -215,6 +227,6 @@ describe('git-common narrow watch, recovering from the crash-fuse polling fallba
     ) {
       await vi.advanceTimersByTimeAsync(1_000)
     }
-    expect(subscribeMock).toHaveBeenCalledTimes(3)
+    await waitForSubscribeCalls(3)
   })
 })
