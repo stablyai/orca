@@ -1055,14 +1055,16 @@ export async function materializeWorktreePushTargetRemote(
   }
   const execGit: GitRemoteExec = (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions })
   if (await remoteAlreadyMatchesUrl(execGit, repoPath, target.remoteName, target.remoteUrl)) {
-    return adoptExistingForkRemoteForBranch(
-      execGit,
-      repoPath,
-      target,
-      gitOptions,
-      store,
-      repoId,
-      worktreeId
+    return runForkRemoteAdoption(repoPath, target, () =>
+      adoptExistingForkRemoteForBranch(
+        execGit,
+        repoPath,
+        target,
+        gitOptions,
+        store,
+        repoId,
+        worktreeId
+      )
     )
   }
   const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
@@ -1071,16 +1073,23 @@ export async function materializeWorktreePushTargetRemote(
     // Why: the single flight is keyed on the *remote*, but everything after the remote add is
     // per-branch. A joiner waiting on a sibling worktree's mint must not take that sibling's
     // target -- it would inherit the sibling's branch and silently skip its own refspec widen,
-    // tracking-ref fetch, and upstream link. Wait for the remote to exist, then do its own.
-    await existing.catch(() => {})
-    return adoptExistingForkRemoteForBranch(
-      execGit,
-      repoPath,
-      target,
-      gitOptions,
-      store,
-      repoId,
-      worktreeId
+    // tracking-ref fetch, and upstream link. Wait for the remote, then do its own.
+    //
+    // Why not swallow the rejection: both mint rollbacks remove the remote, so adopting after a
+    // failed mint would write `remote.<name>.fetch` with no URL -- a config-only ghost that
+    // breaks `git fetch --all`, forces every later mint to a `-2` name, and survives
+    // `git remote remove`. Propagate instead; the map is already cleared, so a retry re-mints.
+    await existing
+    return runForkRemoteAdoption(repoPath, target, () =>
+      adoptExistingForkRemoteForBranch(
+        execGit,
+        repoPath,
+        target,
+        gitOptions,
+        store,
+        repoId,
+        worktreeId
+      )
     )
   }
   const promise = prepareWorktreePushTarget(repoPath, target, store, repoId, gitOptions)
@@ -1135,14 +1144,43 @@ async function adoptExistingForkRemoteForBranch(
   // Why: a remote another worktree minted is still Orca-owned. Without stamping ownership on
   // the adopting worktree too, removing the minter leaves the survivor's metadata unowned and
   // #17842's sweep -- which gates solely on `remoteCreated` -- can never reclaim the remote.
+  // Why derive: no caller supplies both -- IPC handlers pass a store with no repo id, runtime
+  // commands pass a repo id with no store -- so requiring both made this branch unreachable.
+  const ownerRepoId = repoId ?? (worktreeId ? getRepoIdFromWorktreeId(worktreeId) : undefined)
   const owned =
-    restored.remoteCreated === true ||
-    (store !== undefined &&
-      repoId !== undefined &&
-      isPushTargetRemoteCreatedByKnownWorktree(store, restored, repoId))
+    store !== undefined &&
+    ownerRepoId !== undefined &&
+    isPushTargetRemoteCreatedByKnownWorktree(store, restored, ownerRepoId)
   const adopted = owned ? { ...restored, remoteCreated: true } : restored
   persistMaterializedPushTargetIfCreated(store, worktreeId, adopted)
   return adopted
+}
+
+// Why: the mint single flight only covers `remote add`. Every adopter afterwards writes
+// `remote.<name>.fetch` and `.tagOpt`, and concurrent `git config --add` has no lock retry --
+// measured 135/160 failures at 8-way concurrency, plus duplicate refspecs when two adopts add
+// the same value. Chain adopts per remote so they serialize instead of fanning out.
+const forkRemoteAdoptionQueue = new Map<string, Promise<unknown>>()
+
+function runForkRemoteAdoption<T>(
+  repoPath: string,
+  target: GitPushTarget,
+  run: () => Promise<T>
+): Promise<T> {
+  const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
+  const previous = forkRemoteAdoptionQueue.get(key)
+  const next = previous ? previous.then(run, run) : run()
+  const settled = next.then(
+    () => undefined,
+    () => undefined
+  )
+  forkRemoteAdoptionQueue.set(key, settled)
+  void settled.finally(() => {
+    if (forkRemoteAdoptionQueue.get(key) === settled) {
+      forkRemoteAdoptionQueue.delete(key)
+    }
+  })
+  return next
 }
 
 // Why (review follow-up): on-demand materialization never went through the create-time
@@ -1308,6 +1346,39 @@ export async function prepareWorktreePushTargetSsh(
   return { ...sanitizedTarget, remoteName, ...(remoteCreated ? { remoteCreated: true } : {}) }
 }
 
+// SSH twin of `adoptExistingForkRemoteForBranch`. Refspec widening is intentionally absent --
+// SSH's bare `remote add` (no `-t`/`--no-tags`) is a pre-existing, documented gap -- but the
+// tracking ref must still exist before `--set-upstream-to` can succeed, and the upstream link
+// must be made against *this* target's branch rather than a minting sibling's.
+async function adoptExistingSshForkRemoteForBranch(
+  provider: SshGitProvider,
+  execGit: GitRemoteExec,
+  repoPath: string,
+  target: GitPushTarget,
+  store: WorktreePushTargetStore | undefined,
+  worktreeId: string | undefined
+): Promise<GitPushTarget> {
+  if (
+    !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
+  ) {
+    await provider.fetchRemoteTrackingRef(
+      repoPath,
+      target.remoteName,
+      target.branchName,
+      `refs/remotes/${target.remoteName}/${target.branchName}`
+    )
+  }
+  const restored = await restoreUpstreamAfterMaterialize(execGit, repoPath, target)
+  const ownerRepoId = worktreeId ? getRepoIdFromWorktreeId(worktreeId) : undefined
+  const owned =
+    store !== undefined &&
+    ownerRepoId !== undefined &&
+    isPushTargetRemoteCreatedByKnownWorktree(store, restored, ownerRepoId)
+  const adopted = owned ? { ...restored, remoteCreated: true } : restored
+  persistMaterializedPushTargetIfCreated(store, worktreeId, adopted)
+  return adopted
+}
+
 // SSH twin of `materializeWorktreePushTargetRemote` -- the relay has no store
 // access and trusts `pushTarget.remoteName` already exists, so a deferred fork
 // remote must be materialized client-side before dispatching push/pull/fetch/
@@ -1335,23 +1406,20 @@ export async function materializeWorktreePushTargetRemoteSsh(
     // but imports nothing on its own. Fetch just this branch (a one-off refspec argument,
     // not a config write) when it isn't already there; skip it otherwise so a repeat
     // push/pull materialize stays a local-only probe with no relay round-trip.
-    if (
-      !(await forkRemoteTrackingRefExists(execGit, repoPath, target.remoteName, target.branchName))
-    ) {
-      await provider.fetchRemoteTrackingRef(
-        repoPath,
-        target.remoteName,
-        target.branchName,
-        `refs/remotes/${target.remoteName}/${target.branchName}`
-      )
-    }
-    return restoreUpstreamAfterMaterialize(execGit, repoPath, target)
+    return runForkRemoteAdoption(repoPath, target, () =>
+      adoptExistingSshForkRemoteForBranch(provider, execGit, repoPath, target, store, worktreeId)
+    )
   }
   const inflight = getSshWorktreePushTargetMaterializeInflight(provider)
   const key = worktreePushTargetMaterializeKey(repoPath, target.remoteName)
   const existing = inflight.get(key)
   if (existing) {
-    return existing
+    // Why: same per-branch reasoning as the local twin -- a joiner must not inherit the
+    // minter's branch. Rejection propagates rather than adopting a remote the rollback removed.
+    await existing
+    return runForkRemoteAdoption(repoPath, target, () =>
+      adoptExistingSshForkRemoteForBranch(provider, execGit, repoPath, target, store, worktreeId)
+    )
   }
   const promise = prepareWorktreePushTargetSsh(provider, repoPath, target, store, repoId)
     .then((prepared) => restoreUpstreamAfterMaterialize(execGit, repoPath, prepared))

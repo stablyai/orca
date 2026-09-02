@@ -248,6 +248,36 @@ describe('materializeWorktreePushTargetRemote', () => {
     expect(calls.filter((call) => call[0] === 'remote' && call[1] === 'add')).toHaveLength(1)
   })
 
+  it('propagates a failed mint instead of adopting a remote the rollback removed', async () => {
+    // Why (#17828 review): both mint rollbacks `remote remove`, so adopting after a failed mint
+    // writes `remote.<name>.fetch` with no URL -- a config-only ghost that breaks
+    // `git fetch --all`, forces later mints to a `-2` name, and survives `git remote remove`.
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        throw new Error('No such remote')
+      }
+      if (args[0] === 'remote' && args[1] === 'add') {
+        throw new Error('mint failed')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const minter = materializeWorktreePushTargetRemote(REPO_PATH, forkTarget())
+    await Promise.resolve()
+    const joiner = materializeWorktreePushTargetRemote(
+      REPO_PATH,
+      forkTarget({ branchName: 'joiner/branch' })
+    )
+
+    await expect(minter).rejects.toThrow()
+    await expect(joiner).rejects.toThrow()
+    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
+    // No ghost: nothing wrote refspec or tagOpt config for a remote that does not exist.
+    expect(
+      calls.filter((call) => call[0] === 'config' && String(call[2] ?? '').includes(FORK_REMOTE))
+    ).toHaveLength(0)
+  })
+
   it('persists remoteCreated to the store when a worktreeId is provided and the mint succeeds', async () => {
     // Why (#17828 review follow-up): on-demand materialization never went through the
     // create-time setWorktreeMeta write, so a lazily-minted remote stayed invisible to
