@@ -6,6 +6,7 @@ import type { RecognizedAgentProcess } from '../../../../shared/agent-process-re
 import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import {
+  NO_EVIDENCE_ACTIVITY_ARMED_WINDOW_MS,
   NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS,
   POLL_TIER_INTERVAL_MS,
   type PollCadenceTier
@@ -204,7 +205,7 @@ export function createAgentCompletionProcessMonitor({
         options.shouldPollNoEvidenceProcessCadence?.() !== false) ||
       (options.shouldPollProcessCadence?.() !== false &&
         state.lastPaneActivityAt !== null &&
-        Date.now() - state.lastPaneActivityAt < NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
+        Date.now() - state.lastPaneActivityAt < NO_EVIDENCE_ACTIVITY_ARMED_WINDOW_MS)
     )
   }
 

@@ -11,7 +11,10 @@ import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-
 import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-facts-handler'
 
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
-import { isAgentProcessInspectionCostly } from '../agent-process-inspection-cost'
+import {
+  isAgentProcessInspectionCostly,
+  shouldPollNoEvidenceProcessCadenceForPty
+} from '../agent-process-inspection-cost'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -231,6 +234,8 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       isAgentTaskCompleteTrackingEnabled() && session.deps.isVisibleRef.current,
     isProcessInspectionCostly: () =>
       isAgentProcessInspectionCostly(navigator.userAgent, session.transport.getPtyId()),
+    shouldPollNoEvidenceProcessCadence: () =>
+      shouldPollNoEvidenceProcessCadenceForPty(session.transport.getPtyId()),
     isLive: () => {
       if (session.disposed) {
         return false

@@ -13,7 +13,10 @@ import {
   resetAgentCompletionCoordinatorIdentitiesForTest
 } from './agent-completion-coordinator'
 import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
-import { isAgentProcessInspectionCostly } from './agent-process-inspection-cost'
+import {
+  isAgentProcessInspectionCostly,
+  shouldPollNoEvidenceProcessCadenceForPty
+} from './agent-process-inspection-cost'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
@@ -111,6 +114,137 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(1)
   })
 
+  describe('remote pane in the shipped option shape (push-driven, no idle timer)', () => {
+    // Why: mirror terminal-keydown-fit.ts exactly — both predicates fed from the
+    // same pty id — so these counts are what production remote panes pay.
+    function createRemoteCoordinator(
+      ptyId: string,
+      inspectProcess: AgentCompletionCoordinatorOptions['inspectProcess']
+    ) {
+      return createCoordinator(inspectProcess, {
+        getPtyId: () => ptyId,
+        isProcessInspectionCostly: () => isAgentProcessInspectionCostly(MAC_UA, ptyId),
+        shouldPollNoEvidenceProcessCadence: () => shouldPollNoEvidenceProcessCadenceForPty(ptyId)
+      })
+    }
+
+    it('costs zero idle host round trips for a silent remote pane with no evidence', async () => {
+      for (const ptyId of [
+        toAppSshPtyId('target-1', 'pty-1'),
+        toRemoteRuntimePtyId('term_1', 'env-a')
+      ]) {
+        const inspectProcess = vi.fn(async () => processResult(null, false))
+        const { coordinator } = createRemoteCoordinator(ptyId, inspectProcess)
+
+        coordinator.startProcessTracking()
+        await vi.advanceTimersByTimeAsync(60_000)
+
+        // Was 30 (2s idle), then 4 (15s no-evidence tier); now nothing is armed.
+        expect(inspectProcess).not.toHaveBeenCalled()
+        coordinator.dispose()
+      }
+    })
+
+    it('runs the exact 2/4/6/8/10/25/40s schedule after activity, then disarms at 45s', async () => {
+      // Why: a reattach paint routes through writeReplayData, which records
+      // pane activity exactly like a live byte. The 2s hot burst catches the
+      // common case; three more looks 15s apart give a slow host up to 45s to
+      // show a foreground agent before the pane goes fully quiet.
+      const ptyId = toAppSshPtyId('target-1', 'pty-1')
+      const inspectedAt: number[] = []
+      const inspectProcess = vi.fn(async () => {
+        inspectedAt.push(vi.getMockedSystemTime()?.getTime() ?? Date.now())
+        return processResult(null, false)
+      })
+      const { coordinator } = createRemoteCoordinator(ptyId, inspectProcess)
+      const start = Date.now()
+
+      coordinator.startProcessTracking()
+      coordinator.observeOutputActivity()
+      await vi.advanceTimersByTimeAsync(120_000)
+
+      expect(inspectedAt.map((at) => (at - start) / 1000)).toEqual([2, 4, 6, 8, 10, 25, 40])
+      // Nothing after 45s: the next tick (55s) finds the armed window closed.
+      expect(inspectProcess).toHaveBeenCalledTimes(7)
+    })
+
+    it('re-arms the full schedule from activity late in the armed window', async () => {
+      const ptyId = toRemoteRuntimePtyId('term_1', 'env-a')
+      const inspectProcess = vi.fn(async () => processResult(null, false))
+      const { coordinator } = createRemoteCoordinator(ptyId, inspectProcess)
+
+      coordinator.startProcessTracking()
+      coordinator.observeOutputActivity()
+      await vi.advanceTimersByTimeAsync(41_000)
+      expect(inspectProcess).toHaveBeenCalledTimes(7)
+
+      // A byte at 41s (a slow agent's first output) restarts the 2s hot burst.
+      coordinator.observeOutputActivity()
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(inspectProcess).toHaveBeenCalledTimes(8)
+    })
+
+    it('escalates a running agent found in the hot window to the active cadence', async () => {
+      // Why: the reattach hot window must be enough to establish process evidence,
+      // after which the pane is on the ordinary active/idle tiers and exit
+      // detection is unchanged from every other host.
+      const ptyId = toRemoteRuntimePtyId('term_1', 'env-a')
+      let foreground: string | null = 'claude'
+      const inspectProcess = vi.fn(async () => processResult(foreground, foreground !== null))
+      const { coordinator, dispatchCompletion } = createRemoteCoordinator(ptyId, inspectProcess)
+
+      coordinator.startProcessTracking()
+      coordinator.observeOutputActivity()
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(inspectProcess).toHaveBeenCalledTimes(1)
+
+      // Active tier is 750ms: well past the 10s hot window it must keep polling.
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(inspectProcess.mock.calls.length).toBeGreaterThan(30)
+
+      foreground = null
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(dispatchCompletion).toHaveBeenCalledWith(
+        'claude',
+        expect.objectContaining({ terminalIdleConfirmed: true })
+      )
+    })
+
+    it('re-arms the hot window from a title change or hook status with no output', async () => {
+      const ptyId = toAppSshPtyId('target-1', 'pty-1')
+      const inspectProcess = vi.fn(async () => processResult(null, false))
+      const { coordinator } = createRemoteCoordinator(ptyId, inspectProcess)
+
+      coordinator.startProcessTracking()
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(inspectProcess).not.toHaveBeenCalled()
+
+      coordinator.observeTitle('vim')
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(inspectProcess).toHaveBeenCalledTimes(1)
+    })
+
+    it('finds an agent that only appears on the third slow look', async () => {
+      // Why: the whole point of the 45s armed window — a box that is slow to
+      // exec the agent still gets caught before the pane disarms.
+      const ptyId = toAppSshPtyId('target-1', 'pty-1')
+      let foreground: string | null = null
+      const inspectProcess = vi.fn(async () => processResult(foreground, foreground !== null))
+      const { coordinator } = createRemoteCoordinator(ptyId, inspectProcess)
+
+      coordinator.startProcessTracking()
+      coordinator.observeOutputActivity()
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(inspectProcess).toHaveBeenCalledTimes(6)
+
+      foreground = 'codex'
+      await vi.advanceTimersByTimeAsync(15_000)
+      // The 40s look saw codex: the pane is on the 750ms active tier, well past
+      // the 45s point where a still-empty pane would have disarmed.
+      expect(inspectProcess.mock.calls.length).toBeGreaterThan(10)
+    })
+  })
+
   it('looks within 2s, not 15s, when a reattach paint marks activity at tracking start', async () => {
     // Why: a reattach/restore paint goes through writeReplayData, which now
     // records pane activity (see fresh-spawn-follow-reset-replay-activity.test.ts).
@@ -179,11 +313,12 @@ describe('agent completion no-evidence inspection cadence', () => {
     coordinator.observeOutputActivity()
     await vi.advanceTimersByTimeAsync(12_000)
 
-    // Output arms 2s polls only for the 10s activity window; silence then
-    // disarms the host reads again instead of falling back to a slow timer.
-    expect(inspectProcess).toHaveBeenCalledTimes(4)
+    // Output arms 2s polls for the 10s hot window (2/4/6/8s, and the 10s tick
+    // armed at 8s still runs), then the no-evidence tier keeps three slower
+    // looks alive (10/25/40s) until the 45s armed window closes.
+    expect(inspectProcess).toHaveBeenCalledTimes(5)
     await vi.advanceTimersByTimeAsync(60_000)
-    expect(inspectProcess).toHaveBeenCalledTimes(4)
+    expect(inspectProcess).toHaveBeenCalledTimes(7)
   })
 
   it('does not re-arm no-evidence scans for output from hidden panes', async () => {
@@ -362,5 +497,21 @@ describe('isAgentProcessInspectionCostly', () => {
   // inspection crosses a link (see remote-execution-host-pty.test.ts).
   it('does not relax a POSIX pane for an ssh-prefixed id carrying no relay pty id', () => {
     expect(isAgentProcessInspectionCostly(MAC_UA, 'ssh:target-1')).toBe(false)
+  })
+})
+
+describe('shouldPollNoEvidenceProcessCadenceForPty', () => {
+  it('disarms the idle timer only for remote-execution-host ptys', () => {
+    expect(shouldPollNoEvidenceProcessCadenceForPty(toAppSshPtyId('target-1', 'pty-1'))).toBe(false)
+    expect(shouldPollNoEvidenceProcessCadenceForPty(toRemoteRuntimePtyId('term_1', 'env-a'))).toBe(
+      false
+    )
+    expect(shouldPollNoEvidenceProcessCadenceForPty(toRemoteRuntimePtyId('term_1'))).toBe(false)
+  })
+
+  it('keeps the timer for local, daemon-shaped, null and bare-ssh ids', () => {
+    expect(shouldPollNoEvidenceProcessCadenceForPty('worktree-1|pane-1')).toBe(true)
+    expect(shouldPollNoEvidenceProcessCadenceForPty(null)).toBe(true)
+    expect(shouldPollNoEvidenceProcessCadenceForPty('ssh:target-1')).toBe(true)
   })
 })

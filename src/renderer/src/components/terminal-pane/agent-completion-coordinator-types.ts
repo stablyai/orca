@@ -40,11 +40,10 @@ export type AgentCompletionCoordinatorOptions = {
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
-  // Why: a host that publishes foreground evidence with its inventory lets a
-  // pane without agent evidence stay push-driven instead of scheduling
-  // redundant host process-table reads while idle. Wire a producer only once
-  // this renderer CONSUMES that evidence and can tell "no evidence published"
-  // from "host too old to publish it" — mixed-version hosts omit the field.
+  // Why: returning false disarms the perpetual no-evidence timer so the pane
+  // inspects only inside the bounded window after pane activity
+  // (output/replay/title/hook). Remote panes use this — see
+  // shouldPollNoEvidenceProcessCadenceForPty.
   shouldPollNoEvidenceProcessCadence?: () => boolean
   // Why: where one inspection is a whole-process-table scan (local Windows
   // PowerShell/CIM) or a host round trip plus a host-side scan (remote/SSH),
