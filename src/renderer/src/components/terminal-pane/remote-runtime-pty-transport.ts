@@ -1029,8 +1029,6 @@ export function createRemoteRuntimePtyTransport(
     let recoveryDeadlineAt: number | null = recovery.isActive
       ? Date.now() + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS
       : null
-    let lastError: unknown =
-      terminalCreateUnknownOutcomeError ?? new Error('Remote terminal creation was cancelled.')
     while (
       !destroyed &&
       lifecycleEpoch === expectedLifecycleEpoch &&
@@ -1085,7 +1083,9 @@ export function createRemoteRuntimePtyTransport(
           continue
         }
         if (!status.capabilities?.includes(TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY)) {
-          throw lastError
+          // Why: rethrowing a recoverable timeout would re-enter connect and risk
+          // duplicate PTYs on pre-idempotency hosts; stop create without auto-retry.
+          return null
         }
         idempotencySupported = true
       }
@@ -1103,7 +1103,6 @@ export function createRemoteRuntimePtyTransport(
       try {
         return await invoke(Math.min(15_000, createRemainingMs ?? 15_000), reconcileExisting)
       } catch (error) {
-        lastError = error
         const clientError = toRemoteRuntimeClientErrorLike(error)
         if (!isRecoverableRemoteRuntimeConnectionError(clientError)) {
           throw error
@@ -1853,6 +1852,26 @@ export function createRemoteRuntimePtyTransport(
     })
   }
 
+  // Why: thinner connect paths (resolve, post-create subscribe) can throw recoverable
+  // errors outside createWithUnknownOutcomeRecovery; markDisconnected alone leaves
+  // Reconnect/online with nothing to re-enter create (#12684).
+  function scheduleConnectRecovery(): void {
+    if (destroyed || terminalEnded || !lastConnectOptions) {
+      recovery.markDisconnected()
+      return
+    }
+    const epoch = recovery.begin()
+    const scheduled = recovery.schedule(epoch, (nextEpoch) => {
+      if (destroyed || terminalEnded || !lastConnectOptions || !recovery.isCurrent(nextEpoch)) {
+        return
+      }
+      void transport.connect(lastConnectOptions)
+    })
+    if (!scheduled) {
+      recovery.markDisconnected()
+    }
+  }
+
   async function subscribeToHandle(
     expectedRecoveryEpoch?: number,
     sameHandleEndRecovery = false
@@ -2102,6 +2121,9 @@ export function createRemoteRuntimePtyTransport(
         if (options.sessionId && !getRemoteRuntimeTerminalHandle(options.sessionId)) {
           // Why: a HUB session persists host-native PTY ids; resolve its pane handle without exposing that SSH identity as a client transport id.
           const terminal = await resolvePersistedHostPane()
+          if (destroyed || lifecycleEpoch !== connectLifecycleEpoch) {
+            return
+          }
           if (terminal) {
             return await adoptResolvedHostPane(terminal, options)
           }
@@ -2301,7 +2323,9 @@ export function createRemoteRuntimePtyTransport(
           } else if (
             isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))
           ) {
-            recovery.markDisconnected()
+            // Why: bare markDisconnected latches Reconnect with no pending retry and
+            // without guarantee that retryRecovery re-enters create (#12684).
+            scheduleConnectRecovery()
           } else {
             recovery.cancel()
             emitRecoveryState()
@@ -2590,12 +2614,12 @@ export function createRemoteRuntimePtyTransport(
           return true
         }
       }
+      // Why: any latched connect failure with stored options must re-enter create —
+      // not only reconciliation / host-authority flags (#12684).
       if (
         !destroyed &&
         !terminalEnded &&
         !connected &&
-        !handle &&
-        (terminalCreateNeedsReconciliation || agentSessionRequiresHostAuthorityReplay) &&
         lastConnectOptions &&
         recovery.currentPhase === 'disconnected'
       ) {

@@ -122,6 +122,233 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(latestSubscribePayload()).toMatchObject({ terminal: 'hub-terminal-1' })
   })
 
+  it('keeps recoverable resolve failures auto-revivable', async () => {
+    vi.useFakeTimers()
+    try {
+      let reachable = false
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method !== 'terminal.resolvePane') {
+          throw new Error(`Unexpected method ${args.method}`)
+        }
+        if (!reachable) {
+          throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+            code: 'runtime_timeout'
+          })
+        }
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'hub-terminal-recovered',
+              tabId: 'tab-1',
+              leafId,
+              ptyId: 'ssh:hub-private@@pty-2',
+              worktreeId: 'wt-1'
+            }
+          }
+        }
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const recoveryPhases: string[] = []
+      const transport = createRemoteRuntimePtyTransport('hub-env', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId
+      })
+
+      await transport.connect({
+        url: '',
+        sessionId: 'ssh:hub-private@@pty-2',
+        callbacks: {
+          onError,
+          onRecoveryStateChange: (state) => recoveryPhases.push(state.phase)
+        }
+      })
+
+      expect(onError).not.toHaveBeenCalled()
+      expect(recoveryPhases).toContain('backoff')
+      expect(transport.getRecoveryState?.().phase).toMatch(/backoff|recovering/)
+      const resolveCallsAfterFirst = runtimeCall.mock.calls.filter(
+        ([args]) => (args as { method: string }).method === 'terminal.resolvePane'
+      ).length
+
+      reachable = true
+      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.waitFor(() =>
+        expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-recovered')
+      )
+      expect(onError).not.toHaveBeenCalled()
+      expect(
+        runtimeCall.mock.calls.filter(
+          ([args]) => (args as { method: string }).method === 'terminal.resolvePane'
+        ).length
+      ).toBeGreaterThan(resolveCallsAfterFirst)
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not revive a detached transport through scheduled connect recovery', async () => {
+    vi.useFakeTimers()
+    try {
+      let reachable = false
+      let resolveCalls = 0
+      const leafId = '33333333-3333-4333-8333-333333333333'
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method !== 'terminal.resolvePane') {
+          throw new Error(`Unexpected method ${args.method}`)
+        }
+        resolveCalls += 1
+        if (!reachable) {
+          throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+            code: 'runtime_timeout'
+          })
+        }
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'hub-terminal-detached',
+              tabId: 'tab-1',
+              leafId,
+              ptyId: 'ssh:hub-private@@pty-d',
+              worktreeId: 'wt-1'
+            }
+          }
+        }
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('hub-env', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId
+      })
+
+      await transport.connect({
+        url: '',
+        sessionId: 'ssh:hub-private@@pty-d',
+        callbacks: {}
+      })
+      const callsAfterFail = resolveCalls
+
+      transport.detach?.()
+      reachable = true
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(resolveCalls).toBe(callsAfterFail)
+      expect(transport.getPtyId()).toBeNull()
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not adopt a pane resolved after the transport detaches', async () => {
+    let finishResolve: (() => void) | undefined
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method !== 'terminal.resolvePane') {
+        throw new Error(`Unexpected method ${args.method}`)
+      }
+      await new Promise<void>((resolve) => {
+        finishResolve = resolve
+      })
+      return {
+        ok: true,
+        result: {
+          terminal: {
+            handle: 'hub-terminal-stale',
+            tabId: 'tab-1',
+            leafId,
+            ptyId: 'ssh:hub-private@@pty-stale',
+            worktreeId: 'wt-1'
+          }
+        }
+      }
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId
+    })
+
+    const connecting = transport.connect({
+      url: '',
+      sessionId: 'ssh:hub-private@@pty-stale',
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(finishResolve).toBeDefined())
+
+    transport.detach?.()
+    finishResolve?.()
+    await connecting
+
+    expect(transport.getPtyId()).toBeNull()
+    expect(runtimeSubscribe).not.toHaveBeenCalled()
+    transport.destroy?.()
+  })
+
+  it('lets manual Reconnect re-enter connect after a recoverable resolve latch', async () => {
+    vi.useFakeTimers()
+    try {
+      let reachable = false
+      const leafId = '22222222-2222-4222-8222-222222222222'
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method !== 'terminal.resolvePane') {
+          throw new Error(`Unexpected method ${args.method}`)
+        }
+        if (!reachable) {
+          throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+            code: 'runtime_timeout'
+          })
+        }
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'hub-terminal-manual',
+              tabId: 'tab-1',
+              leafId,
+              ptyId: 'ssh:hub-private@@pty-9',
+              worktreeId: 'wt-1'
+            }
+          }
+        }
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('hub-env', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId
+      })
+
+      await transport.connect({
+        url: '',
+        sessionId: 'ssh:hub-private@@pty-9',
+        callbacks: { onError }
+      })
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      expect(onError).not.toHaveBeenCalled()
+
+      reachable = true
+      expect(transport.retryRecovery?.()).toBe(true)
+      await vi.waitFor(() =>
+        expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-manual')
+      )
+      expect(onError).not.toHaveBeenCalled()
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('verifies a legacy pane response against the requested worktree session', async () => {
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
       if (request.method === 'terminal.resolvePane') {
