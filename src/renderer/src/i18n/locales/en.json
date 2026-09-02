@@ -3489,6 +3489,12 @@
           "TabBarQuickCommandHostLoadStatus": {
             "82e294f3ca": "Host unavailable",
             "7c129b08ff": "Loading host…"
+          },
+          "TabBarOpenInAppsButton": {
+            "addApps": "Add apps to open this workspace in",
+            "openIn": "Open in",
+            "openInApp": "Open in {{value0}}",
+            "moreApps": "More apps"
           }
         }
       },

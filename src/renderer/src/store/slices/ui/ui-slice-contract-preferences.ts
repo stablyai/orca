@@ -124,6 +124,9 @@ export type UISliceSurfaces = {
   // Why: cleared by the diff decorator after it reveals the line, so the same id can be requested again without a stale value.
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
+  /** Transient: last app launched from the tab-strip Open-in button, so its primary action follows usage. */
+  recentOpenInApplicationId: string | null
+  setRecentOpenInApplicationId: (id: string | null) => void
 }
 
 export type UISlicePersistence = {

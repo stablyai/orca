@@ -164,6 +164,8 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
     clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
     clearPendingRevealSidebarRow: () => set({ pendingRevealSidebarRow: null }),
     scrollToDiffCommentId: null,
-    setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id })
+    setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
+    recentOpenInApplicationId: null,
+    setRecentOpenInApplicationId: (id) => set({ recentOpenInApplicationId: id })
   }
 }

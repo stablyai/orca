@@ -26,6 +26,9 @@ type WorktreeOpenInMenuItemsProps = {
   connectionId?: string | null
   disabled?: boolean
   labelPrefix?: string
+  /** Default true; the tab-strip launcher lists only the configured apps. */
+  includeFileManager?: boolean
+  onOpenEntry?: (entry: OpenInMenuEntry) => void
 }
 
 export type OpenInMenuEntry = {
@@ -37,15 +40,20 @@ export type OpenInMenuEntry = {
 
 export function getWorktreeOpenInEntries(
   openInApplications: readonly OpenInApplication[],
-  fileManagerLabel: string
+  fileManagerLabel: string,
+  options: { includeFileManager?: boolean } = {}
 ): OpenInMenuEntry[] {
+  const applicationEntries = openInApplications.map((application) => ({
+    id: application.id,
+    label: application.label,
+    target: 'external-editor' as const,
+    command: application.command
+  }))
+  if (options.includeFileManager === false) {
+    return applicationEntries
+  }
   return [
-    ...openInApplications.map((application) => ({
-      id: application.id,
-      label: application.label,
-      target: 'external-editor' as const,
-      command: application.command
-    })),
+    ...applicationEntries,
     { id: 'file-manager', label: fileManagerLabel, target: 'file-manager' }
   ]
 }
@@ -301,7 +309,9 @@ export function WorktreeOpenInMenuItems({
   worktreePath,
   connectionId,
   disabled,
-  labelPrefix = ''
+  labelPrefix = '',
+  includeFileManager = true,
+  onOpenEntry
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   const openInWorktreePath = useOpenInWorktreePath({ worktreePath, connectionId })
   const openInApplications = useAppStore(
@@ -309,7 +319,9 @@ export function WorktreeOpenInMenuItems({
   )
   const settings = useAppStore((s) => s.settings)
   const fileManagerLabel = getLocalFileManagerLabel()
-  const entries = getWorktreeOpenInEntries(openInApplications, fileManagerLabel)
+  const entries = getWorktreeOpenInEntries(openInApplications, fileManagerLabel, {
+    includeFileManager
+  })
 
   return (
     <>
@@ -320,6 +332,7 @@ export function WorktreeOpenInMenuItems({
             key={entry.id}
             onClick={stopMenuPropagation}
             onSelect={() => {
+              onOpenEntry?.(entry)
               void openInWorktreePath(entry.target, entry.command)
             }}
             disabled={disabled || availability.disabled}
