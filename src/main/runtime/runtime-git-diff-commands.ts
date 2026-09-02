@@ -13,6 +13,7 @@ import {
   getDiff
 } from '../git/status'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
@@ -48,20 +49,18 @@ export class RuntimeGitDiffCommands {
       )
     }
     return assertGitDiffWithinTransportBudget(
-      await getDiff(
-        target.worktree.path,
-        relativePath,
-        staged,
-        compareAgainstHead,
-        localGitOptionsForTarget(target)
-      ),
+      await getDiff(target.worktree.path, relativePath, staged, compareAgainstHead, {
+        ...localGitOptionsForTarget(target),
+        admissionTier: 'interactive'
+      }),
       maxContentBytes
     )
   }
 
   async getRuntimeGitBranchCompare(
     worktreeSelector: string,
-    baseRef: string
+    baseRef: string,
+    admissionTier: GitAdmissionTier = 'interactive'
   ): Promise<GitBranchCompareResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
@@ -69,9 +68,12 @@ export class RuntimeGitDiffCommands {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.getBranchCompare(target.worktree.path, baseRef)
+      return provider.getBranchCompare(target.worktree.path, baseRef, { admissionTier })
     }
-    return getBranchCompare(target.worktree.path, baseRef, localGitOptionsForTarget(target))
+    return getBranchCompare(target.worktree.path, baseRef, {
+      ...localGitOptionsForTarget(target),
+      admissionTier
+    })
   }
 
   async getRuntimeGitCommitCompare(
@@ -86,7 +88,10 @@ export class RuntimeGitDiffCommands {
       }
       return provider.getCommitCompare(target.worktree.path, commitId)
     }
-    return getCommitCompare(target.worktree.path, commitId, localGitOptionsForTarget(target))
+    return getCommitCompare(target.worktree.path, commitId, {
+      ...localGitOptionsForTarget(target),
+      admissionTier: 'interactive'
+    })
   }
 
   async getRuntimeGitBranchDiff(
@@ -130,7 +135,10 @@ export class RuntimeGitDiffCommands {
           filePath: relativePath,
           oldPath: oldRelativePath
         },
-        localGitOptionsForTarget(target)
+        {
+          ...localGitOptionsForTarget(target),
+          admissionTier: 'interactive'
+        }
       ),
       maxContentBytes
     )
@@ -168,7 +176,10 @@ export class RuntimeGitDiffCommands {
           filePath: relativePath,
           oldPath: oldRelativePath
         },
-        localGitOptionsForTarget(target)
+        {
+          ...localGitOptionsForTarget(target),
+          admissionTier: 'interactive'
+        }
       ),
       maxContentBytes
     )

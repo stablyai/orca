@@ -2,9 +2,8 @@ import { lstat, open, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
+import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
 import { getPersistedWorkspaceCleanupActivityAt } from '../../shared/workspace-cleanup'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { toWindowsWslPath } from '../wsl'
 
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>
 type ReadTextFile = (targetPath: string, options?: { tailBytes?: number }) => Promise<string>
@@ -176,12 +175,10 @@ async function readLocalWorktreeGitDir(
       return null
     }
     // Why: linked worktrees keep mutable git state outside the worktree; the
-    // pointer file mtime alone can miss recent external commits.
-    const wslWorktree = parseWslUncPath(worktreePath)
-    if (wslWorktree && gitDir.startsWith('/')) {
-      return toWindowsWslPath(gitDir, wslWorktree.distro)
-    }
-    return path.isAbsolute(gitDir) ? gitDir : path.resolve(worktreePath, gitDir)
+    // pointer file mtime alone can miss recent external commits. The pointer is
+    // written in the namespace of the git that wrote it, which on Windows may
+    // be a WSL guest spelling that Win32 stat cannot follow.
+    return resolveGitMetadataPath(worktreePath, gitDir)
   } catch {
     return null
   }

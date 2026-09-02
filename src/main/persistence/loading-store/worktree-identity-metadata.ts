@@ -36,11 +36,18 @@ function resolveAliasIdentityKey(state: PersistedState, alias: string): string |
 }
 
 /** Drop identity metadata no alias points at any more. */
-export function pruneUnreferencedWorktreeIdentityMeta(state: PersistedState): boolean {
+export function pruneUnreferencedWorktreeIdentityMeta(
+  state: PersistedState,
+  candidates?: ReadonlySet<string>
+): boolean {
   const referenced = new Set(Object.values(state.worktreeIdentityAliases ?? {}).flat())
   let changed = false
-  for (const identityKey of Object.keys(state.worktreeMetaByIdentity ?? {})) {
-    if (!referenced.has(identityKey)) {
+  const identityKeys = candidates ?? Object.keys(state.worktreeMetaByIdentity ?? {})
+  for (const identityKey of identityKeys) {
+    if (
+      Object.hasOwn(state.worktreeMetaByIdentity ?? {}, identityKey) &&
+      !referenced.has(identityKey)
+    ) {
       delete state.worktreeMetaByIdentity?.[identityKey]
       changed = true
     }

@@ -19,6 +19,7 @@ export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedRevi
 export type HostedReviewFetchOptions = {
   force?: boolean
   repoId?: string
+  admissionTier?: 'interactive' | 'status' | 'background'
   staleWhileRevalidate?: boolean
   currentHeadOid?: string | null
   /**

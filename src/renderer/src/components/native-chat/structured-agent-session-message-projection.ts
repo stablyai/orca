@@ -25,14 +25,12 @@ export function projectStructuredAgentSessionMessages(
     ...projectStructuredItemsToNativeChat(items),
     ...optimistic
       .filter((entry) => !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)))
-      .map(
-        (entry): NativeChatMessage => ({
-          id: agentJournalSubmissionKey(entry.clientMessageId),
-          role: 'user',
-          source: 'transcript',
-          timestamp: entry.queuedAt,
-          blocks: entry.body.blocks
-        })
-      )
+      .map((entry): NativeChatMessage => ({
+        id: agentJournalSubmissionKey(entry.clientMessageId),
+        role: 'user',
+        source: 'transcript',
+        timestamp: entry.queuedAt,
+        blocks: entry.body.blocks
+      }))
   ]
 }

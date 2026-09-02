@@ -71,6 +71,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       {
         tabId: owner.surface.tabId,
         leafId: owner.surface.leafId,
+        terminalHandle: owner.surface.terminalHandle,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
       }
@@ -113,7 +114,6 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   ) {
     markNativeWindowsConptyPty(ctx.result.id)
   }
-  const relayResultId = getRelayPtyId(args.connectionId, ctx.result.id)
   const persistSshLease = (): void => {
     if (!ctx.deps.store || !args.connectionId) {
       return
@@ -121,7 +121,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     // Why: SSH leases keep relay ids for remote reconciliation, while session bindings keep app-facing ids for hydration.
     ctx.deps.store.upsertSshRemotePtyLease({
       targetId: args.connectionId,
-      ptyId: relayResultId,
+      ptyId: getRelayPtyId(args.connectionId, ctx.result.id),
       ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
       ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
       ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
@@ -207,6 +207,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ? {
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
+            ...(args.preAllocatedHandle ? { terminalHandle: args.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }

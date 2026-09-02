@@ -8,6 +8,7 @@ import {
 } from '../pty-shutdown-exit-deferral'
 import { replayIntoTerminal } from '../replay-guard'
 import { POST_REPLAY_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
+import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence
@@ -183,6 +184,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       })
       return
     }
+    const isUnverifiedExit = !isProvenProcessExit(exitCode)
     const preserveRendererBinding =
       opts.preserveRendererBinding === true ||
       consumeCommittedPtyShutdownExit(ptyId, session.runtimeEnvironmentId)
@@ -193,7 +195,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       // rebound to a replacement PTY; only clear ownership for the exited id.
       session.handledExitPtyId = ptyId
       session.processExitStateByPtyId.delete(ptyId)
-      if (!preserveRendererBinding) {
+      if (!preserveRendererBinding && !isUnverifiedExit) {
         session.deps.clearTabPtyId(session.deps.tabId, ptyId)
       }
       session.deps.consumeSuppressedPtyExit(ptyId)
@@ -209,16 +211,20 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     // Why: main clears gate state on PTY exit too; this only resets the
     // pane-local marker so a reused pane cannot skip re-marking a new PTY.
     session.releaseHiddenRendererPtyDelivery()
-    session.clearPanePtyFitBinding()
+    // A synthetic host-loss exit only retires this transport. Keep the mounted
+    // leaf↔PTY identity so reconnect/replay can adopt it after the host returns.
+    if (!isUnverifiedExit) {
+      session.clearPanePtyFitBinding()
+    }
     // Why: the negotiating application died with its PTY; any replacement
     // session starts with kitty keyboard flags at zero.
     session.kittyKeyboardModes.reset()
     const isSuppressedExit = session.deps.consumeSuppressedPtyExit(ptyId) || preserveRendererBinding
-    if (!isSuppressedExit) {
-      session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, ptyId)
+    if (!isSuppressedExit && !isUnverifiedExit) {
+      session.clearExitedPanePtyLayoutBinding(ptyId)
     }
     session.deps.clearRuntimePaneTitle(session.deps.tabId, session.pane.id)
-    if (!preserveRendererBinding) {
+    if (!preserveRendererBinding && !isUnverifiedExit) {
       session.deps.clearTabPtyId(session.deps.tabId, ptyId)
     }
     // Why: if the PTY exits abruptly (Ctrl-D, crash, shell termination) without
@@ -233,6 +239,13 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     // we must republish when a pane loses its PTY instead of waiting for a
     // broader layout change that may never happen.
     scheduleRuntimeGraphSync()
+    if (isUnverifiedExit && !isSuppressedExit) {
+      // The tab-level owner records liveness as unknown and leaves the row in
+      // place. This must happen before the split/sole-pane close branches.
+      session.manager.setPaneGpuRendering(session.pane.id, true)
+      session.deps.onPtyExitRef.current(ptyId, exitCode)
+      return
+    }
     // Why: intentional restarts suppress the PTY exit ahead of time so the
     // pane stays mounted and can reconnect in place. Without consuming the
     // suppression here, split-pane Codex restarts would still close the pane
@@ -308,7 +321,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       if (session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt)) {
         return
       }
-      session.deps.onPtyExitRef.current(ptyId)
+      session.deps.onPtyExitRef.current(ptyId, exitCode)
       return
     }
     if (

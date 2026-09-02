@@ -31,7 +31,7 @@ function pastePayload(repeats = 4): string {
     '',
     '- If the worktree is dirty before starting, stop and report it.',
     '',
-    '- Use native Windows PowerShell, Node 24, and pnpm 10.',
+    '- Use native Windows PowerShell, Node 24, and pnpm 12.',
     '',
     '- Confirm the checked-out full SHA before testing.',
     '',

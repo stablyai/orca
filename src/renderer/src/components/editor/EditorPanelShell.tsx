@@ -149,6 +149,7 @@ export function EditorPanelShell({
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
           mdViewMode={model.mdViewMode}
+          inlineMarkdownRenderState={model.inlineMarkdownRenderState}
           isChangesMode={model.isDiffSurface && !model.isSingleDiff}
           sideBySide={sideBySide}
           pendingEditorReveal={pendingEditorReveal}

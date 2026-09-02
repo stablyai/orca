@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
-import {
-  DOC_PREVIEW_PARTITION,
-  type DocPreviewFileFailure,
-  type DocPreviewFileFailureReason
+import type {
+  DocPreviewFileFailure,
+  DocPreviewFileFailureReason
 } from '../../../../../shared/doc-preview-scheme'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import type { BrowserPageConversionOrigin } from '../../../../../shared/browser-workspace-types'
+import {
+  advanceAcrossBrowserPageConversion,
+  returnAcrossBrowserPageConversion
+} from '@/lib/browser-page-conversion-history'
 import { BrowserGuestAnnotateOverlays } from '@/components/browser-pane/annotate/browser-guest-annotate-overlays'
 import { useGuestDragPassthrough } from '@/components/browser-pane/host-guest/use-guest-drag-passthrough'
-import { isWebviewDragPassthroughActive } from '@/components/browser-pane/host-guest/webview-drag-passthrough'
-import { moveFocusToRendererBeforeWebviewDetach } from '@/components/browser-pane/host-guest/webview-registry'
+import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 import {
   buildDocPreviewGrantRequest,
   ensureDocPreviewGrant,
@@ -35,81 +37,6 @@ import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
 
-function attachDocPreviewWebview({
-  container,
-  url,
-  ariaLabel,
-  onLoadStarted,
-  onLoadStopped,
-  onLoadFailed,
-  onNavigated,
-  onTitleUpdated
-}: {
-  container: HTMLDivElement
-  url: string
-  ariaLabel: string
-  onLoadStarted: () => void
-  onLoadStopped: () => void
-  onLoadFailed: (event: Electron.DidFailLoadEvent) => void
-  onNavigated: () => void
-  onTitleUpdated: (event: Electron.PageTitleUpdatedEvent) => void
-}): { webview: Electron.WebviewTag; detach: () => void; reload: () => void } {
-  const webview = document.createElement('webview') as Electron.WebviewTag
-  // Why no allowpopups: the guest's preload intercepts a trusted click on a link before Chromium
-  // considers a popup at all, so target="_blank" needs no popup path and every one stays denied.
-  webview.setAttribute('partition', DOC_PREVIEW_PARTITION)
-  webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
-  webview.setAttribute('aria-label', ariaLabel)
-  // Browsers paint an undeclared page canvas white; the guest is transparent, so without this the
-  // editor's dark surface shows through and default black text becomes unreadable.
-  webview.style.backgroundColor = '#fff'
-  webview.style.display = 'flex'
-  webview.style.width = '100%'
-  webview.style.height = '100%'
-  webview.style.border = 'none'
-  webview.addEventListener('did-start-loading', onLoadStarted)
-  webview.addEventListener('did-stop-loading', onLoadStopped)
-  webview.addEventListener('did-fail-load', onLoadFailed)
-  // Both: a link to a sibling document is a full navigation, a fragment link is an in-page one,
-  // and only the pair together tracks what Back can actually return to.
-  webview.addEventListener('did-navigate', onNavigated)
-  webview.addEventListener('did-navigate-in-page', onNavigated)
-  // Why the document names its own tab: a preview is a browser tab, and this is how every other
-  // one is named. What the document cannot do is name it the grant it is served over.
-  webview.addEventListener('page-title-updated', onTitleUpdated)
-  // Why here and not in the enrolling hook: appending is what makes this guest hittable, and the
-  // registry's contract is that the path doing so settles it. Dragging the preview's own tab
-  // remounts this component mid-drag, and a hook effect lands a turn too late — for the rest of
-  // that turn the fresh guest eats the pointer stream and the drag freezes.
-  if (isWebviewDragPassthroughActive()) {
-    webview.style.pointerEvents = 'none'
-  }
-  container.appendChild(webview)
-  webview.setAttribute('src', url)
-
-  return {
-    webview,
-    detach: () => {
-      webview.removeEventListener('did-start-loading', onLoadStarted)
-      webview.removeEventListener('did-stop-loading', onLoadStopped)
-      webview.removeEventListener('did-fail-load', onLoadFailed)
-      webview.removeEventListener('did-navigate', onNavigated)
-      webview.removeEventListener('did-navigate-in-page', onNavigated)
-      webview.removeEventListener('page-title-updated', onTitleUpdated)
-      moveFocusToRendererBeforeWebviewDetach(webview)
-      webview.remove()
-    },
-    // Why: the protocol handler answers with no-store, so a reload re-reads the workspace disk.
-    reload: () => {
-      try {
-        webview.reload()
-      } catch {
-        webview.setAttribute('src', url)
-      }
-    }
-  }
-}
-
 /** Frames a preview keeps offering focus to a guest that is still attaching. */
 const GUEST_FOCUS_FRAMES = 10
 const MAX_ASSET_FAILURES = 50
@@ -121,7 +48,9 @@ export function HtmlDocPreview({
   worktreeId,
   holdsGuestFocus = false,
   runtimeEnvironmentId = null,
-  externalSshTargetId = null
+  externalSshTargetId = null,
+  convertedFrom = null,
+  convertedTo = null
 }: {
   previewId: string
   filePath: string
@@ -131,6 +60,10 @@ export function HtmlDocPreview({
   holdsGuestFocus?: boolean
   runtimeEnvironmentId?: string | null
   externalSshTargetId?: string | null
+  /** Set when the address bar converted this page; Back returns across it once guest history runs out. */
+  convertedFrom?: BrowserPageConversionOrigin | null
+  /** Set when Back returned across a conversion to this page; Forward re-crosses it. */
+  convertedTo?: BrowserPageConversionOrigin | null
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
@@ -152,6 +85,38 @@ export function HtmlDocPreview({
 
   const history = useDocPreviewWebviewHistory(webviewRef)
   const { sync: syncHistory, reset: resetHistory } = history
+  // Why wrapped rather than a second control: guest history cannot survive a conversion (the
+  // guest was replaced), so once it runs out Back returns across the conversion — and Forward
+  // re-crosses it — instead of dying.
+  const historyWithConversionCrossings = useMemo(
+    () =>
+      convertedFrom || convertedTo
+        ? {
+            ...history,
+            canGoBack: history.canGoBack || Boolean(convertedFrom),
+            canGoForward: history.canGoForward || Boolean(convertedTo),
+            goBack: (): void => {
+              if (history.canGoBack) {
+                history.goBack()
+                return
+              }
+              if (convertedFrom) {
+                returnAcrossBrowserPageConversion(previewId, convertedFrom)
+              }
+            },
+            goForward: (): void => {
+              if (history.canGoForward) {
+                history.goForward()
+                return
+              }
+              if (convertedTo) {
+                advanceAcrossBrowserPageConversion(previewId, convertedTo)
+              }
+            }
+          }
+        : history,
+    [convertedFrom, convertedTo, history, previewId]
+  )
 
   const worktreeRoot = useAppStore((store) => store.getKnownWorktreeById(worktreeId)?.path ?? null)
   const hostLabel = useAppStore((store) => selectWorktreeHostDisplayLabel(store, worktreeId))
@@ -264,6 +229,14 @@ export function HtmlDocPreview({
           onNavigated: syncHistory,
           onTitleUpdated: (event) => {
             useAppStore.getState().updateBrowserPageState(previewId, { title: event.title })
+            // A rename only — the mount already recorded this document's visit.
+            useAppStore
+              .getState()
+              .recordWorkspaceDocVisit(
+                { kind: 'workspace-doc', worktreeId, filePath },
+                event.title,
+                { bump: false }
+              )
           }
         })
         detach = attached.detach
@@ -296,6 +269,14 @@ export function HtmlDocPreview({
     syncHistory,
     worktreeId
   ])
+
+  // The dropdown's doc-history source: opening a document is a visit, once per document per mount
+  // (a hard reload re-mints the grant but is not a new visit).
+  useEffect(() => {
+    useAppStore
+      .getState()
+      .recordWorkspaceDocVisit({ kind: 'workspace-doc', worktreeId, filePath }, null)
+  }, [filePath, worktreeId])
 
   // Why the guest is handed focus: a preview has no address bar to make the usual handoff, so a
   // surfaced document would otherwise look active while its keyboard and link input land elsewhere.
@@ -378,7 +359,9 @@ export function HtmlDocPreview({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-editor-surface">
       <DocPreviewToolbar
         identity={identity}
-        history={history}
+        previewId={previewId}
+        worktreeId={worktreeId}
+        history={historyWithConversionCrossings}
         loading={state === 'loading' && failureReason === null}
         onReload={handleReload}
         onHardReload={handleHardReload}

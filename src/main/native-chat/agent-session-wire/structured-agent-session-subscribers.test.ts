@@ -13,7 +13,7 @@ import {
 } from '../../../shared/remote-runtime-memory-limits'
 import { JOURNAL_LOG_FILE } from '../agent-session-journal/journal-log-file'
 import { serializeJournalRow, type JournalRow } from '../agent-session-journal/journal-row-schema'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 
 const SESSION = 'subscriber-session'

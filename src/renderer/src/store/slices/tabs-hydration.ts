@@ -2,10 +2,15 @@ import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-t
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { adoptGrouplessTabs, layoutSpanningGroups } from './tab-group-reference-repair'
 import {
+  adoptGrouplessTabs,
+  appendOwnedTabIdsToGroups,
+  layoutSpanningGroups,
+  resolveTabGroupOwners
+} from './tab-group-reference-repair'
+import {
+  dedupeEditorTabsWithinGroups,
   dedupeTabOrder,
-  dedupeTabsById,
   getPersistedEditFileIdsByWorktree,
   isTransientEditorContentType,
   sanitizeRecentTabIds,
@@ -66,6 +71,7 @@ function hydrateUnifiedFormat(
   const groupsByWorktree: Record<string, TabGroup[]> = {}
   const activeGroupIdByWorktree: Record<string, string> = {}
   const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
+  const tabIdAliasesByWorktree: Record<string, Map<string, Map<string, string>>> = {}
   const persistedEditFileIdsByWorktree = getPersistedEditFileIdsByWorktree(session)
 
   for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs!)) {
@@ -137,7 +143,9 @@ function hydrateUnifiedFormat(
       })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
     // Why after the sort: the surviving record is the one the strip renders first.
-    tabsByWorktree[worktreeId] = dedupeTabsById(hydratedTabs)
+    const deduped = dedupeEditorTabsWithinGroups(hydratedTabs)
+    tabsByWorktree[worktreeId] = deduped.tabs
+    tabIdAliasesByWorktree[worktreeId] = deduped.tabIdAliasesByGroup
   }
 
   for (const [worktreeId, groups] of Object.entries(session.tabGroups!)) {
@@ -148,18 +156,28 @@ function hydrateUnifiedFormat(
       continue
     }
 
-    const validTabIds = new Set((tabsByWorktree[worktreeId] ?? []).map((t) => t.id))
-    const validatedGroups = groups.map((g) => {
+    const hydratedTabsForWorktree = tabsByWorktree[worktreeId] ?? []
+    const tabIdAliasesByGroup = tabIdAliasesByWorktree[worktreeId]
+    const tabOwners = resolveTabGroupOwners(hydratedTabsForWorktree, groups, tabIdAliasesByGroup)
+    const validatedGroups = appendOwnedTabIdsToGroups(groups, tabOwners).map((g) => {
+      const tabIdAliases = tabIdAliasesByGroup?.get(g.id)
+      const canonicalTabId = (tabId: string): string => tabIdAliases?.get(tabId) ?? tabId
       // Why: persisted tabOrder can contain duplicates from older buggy
       // writes. Deduping during hydration restores the store invariant before
       // later group operations branch on tab counts or neighbors.
-      const tabOrder = dedupeTabOrder(g.tabOrder.filter((tid) => validTabIds.has(tid)))
-      const activeTabId = g.activeTabId && validTabIds.has(g.activeTabId) ? g.activeTabId : null
+      const tabOrder = dedupeTabOrder(
+        g.tabOrder.map(canonicalTabId).filter((tid) => tabOwners.get(tid) === g.id)
+      )
+      const canonicalActiveTabId = g.activeTabId ? canonicalTabId(g.activeTabId) : null
+      const activeTabId =
+        canonicalActiveTabId && tabOwners.get(canonicalActiveTabId) === g.id
+          ? canonicalActiveTabId
+          : null
       // Why: persisted MRU may reference tabs that no longer exist. Sanitize
       // against the live tabOrder, then ensure the current active tab sits at
       // the tail so the first close after restore jumps back to the previous
       // tab rather than falling through to neighbor selection.
-      const sanitizedRecent = sanitizeRecentTabIds(g.recentTabIds, tabOrder)
+      const sanitizedRecent = sanitizeRecentTabIds(g.recentTabIds?.map(canonicalTabId), tabOrder)
       const recentTabIds =
         activeTabId && sanitizedRecent.at(-1) !== activeTabId
           ? [...sanitizedRecent.filter((id) => id !== activeTabId), activeTabId]

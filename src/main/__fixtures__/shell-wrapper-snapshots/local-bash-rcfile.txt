@@ -47,9 +47,20 @@ __orca_omp_should_skip_extension() {
   esac
   return 1
 }
-__orca_omp() {
-  local __orca_use_extension=1
-  __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+__orca_omp_cwd_is_usable() {
+  local __orca_physical_cwd
+  [[ -x . ]] || return 1
+  if [[ -n "${PWD:-}" && -d "${PWD:-}" ]]; then
+    [[ "${PWD}" -ef . ]]
+  else
+    # Why compare the path: shell builtins can print a cached path for a deleted cwd.
+    __orca_physical_cwd="$(builtin pwd -P 2>/dev/null)" || return 1
+    [[ -d "$__orca_physical_cwd" && "$__orca_physical_cwd" -ef . ]]
+  fi
+}
+__orca_omp_invoke() {
+  local __orca_use_extension="$1"
+  shift
   if [[ $__orca_use_extension -eq 1 && -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
     if [[ "${1:-}" == "launch" ]]; then
       shift
@@ -59,6 +70,27 @@ __orca_omp() {
     fi
   else
     command omp "$@"
+  fi
+}
+__orca_omp() {
+  local __orca_use_extension=1
+  __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+  if ! __orca_omp_cwd_is_usable; then
+    local __orca_logical_cwd="${PWD:-${ORCA_WORKTREE_PATH:-${ORCA_ROOT_PATH:-}}}"
+    # Why: a restored shell can retain the deleted directory inode after its path is recreated.
+    (
+      if [[ -z "$__orca_logical_cwd" ]]; then
+        printf 'Orca: OMP cannot start because no terminal working directory is available. Open a new terminal in an existing directory.\n' >&2
+        return 1
+      fi
+      if ! builtin cd -P -- "$__orca_logical_cwd" 2>/dev/null; then
+        printf 'Orca: OMP cannot access the terminal working directory "%s". Open a new terminal in an existing directory.\n' "$__orca_logical_cwd" >&2
+        return 1
+      fi
+      __orca_omp_invoke "$__orca_use_extension" "$@"
+    )
+  else
+    __orca_omp_invoke "$__orca_use_extension" "$@"
   fi
 }
 if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
@@ -333,6 +365,37 @@ if [[ -n "$__orca_ready_marker" ]]; then
 fi
 __orca_append_prompt_command '__orca_in_debug_capture=1; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace __orca_in_debug_capture'
 __orca_append_prompt_command "__orca_osc133_prompt_done"
+if [[ ${ORCA_POSIX_SHELL_STARTUP_COMMAND+present} == present ]]; then
+  __orca_remove_startup_command_prompt_hook() {
+    local __orca_item
+    local -a __orca_remaining=()
+    if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+      for __orca_item in "${PROMPT_COMMAND[@]+"${PROMPT_COMMAND[@]}"}"; do
+        [[ "$__orca_item" == "__orca_run_startup_command" ]] || __orca_remaining+=("$__orca_item")
+      done
+      PROMPT_COMMAND=("${__orca_remaining[@]+"${__orca_remaining[@]}"}")
+    else
+      for __orca_item in "${__orca_prompt_command_suffix[@]+"${__orca_prompt_command_suffix[@]}"}"; do
+        [[ "$__orca_item" == "__orca_run_startup_command" ]] || __orca_remaining+=("$__orca_item")
+      done
+      __orca_prompt_command_suffix=("${__orca_remaining[@]+"${__orca_remaining[@]}"}")
+    fi
+  }
+  __orca_run_startup_command() {
+    local __orca_command="$ORCA_POSIX_SHELL_STARTUP_COMMAND" __orca_status
+    unset ORCA_POSIX_SHELL_STARTUP_COMMAND
+    __orca_remove_startup_command_prompt_hook
+    unset -f __orca_remove_startup_command_prompt_hook
+    builtin history -s "$__orca_command" 2>/dev/null || true
+    builtin printf '%s
+' "$__orca_command"
+    eval "$__orca_command"
+    __orca_status=$?
+    unset -f __orca_run_startup_command
+    return "$__orca_status"
+  }
+  __orca_append_prompt_command "__orca_run_startup_command"
+fi
 __orca_had_functrace=""
 [[ -o functrace ]] && __orca_had_functrace=1
 set +T

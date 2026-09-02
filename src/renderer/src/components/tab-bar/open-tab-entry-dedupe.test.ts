@@ -89,6 +89,7 @@ describe('dropFileEntriesCoveredByTabResults', () => {
         worktreeId: 'wt-1',
         contentType: 'browser',
         pageId: 'page-1',
+        url: 'https://example.com/zebra',
         workspaceId: 'ws-1'
       },
       {

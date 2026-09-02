@@ -30,7 +30,10 @@ export class RuntimeGitStagingCommands {
       await provider.stageFile(target.worktree.path, relativePath)
       return { ok: true }
     }
-    await stageFile(target.worktree.path, relativePath, localGitOptionsForTarget(target))
+    await stageFile(target.worktree.path, relativePath, {
+      ...localGitOptionsForTarget(target),
+      admissionTier: 'interactive'
+    })
     return { ok: true }
   }
 
@@ -45,7 +48,10 @@ export class RuntimeGitStagingCommands {
       await provider.unstageFile(target.worktree.path, relativePath)
       return { ok: true }
     }
-    await unstageFile(target.worktree.path, relativePath, localGitOptionsForTarget(target))
+    await unstageFile(target.worktree.path, relativePath, {
+      ...localGitOptionsForTarget(target),
+      admissionTier: 'interactive'
+    })
     return { ok: true }
   }
 
@@ -63,7 +69,10 @@ export class RuntimeGitStagingCommands {
       await provider.bulkStageFiles(target.worktree.path, relativePaths)
       return { ok: true }
     }
-    await bulkStageFiles(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
+    await bulkStageFiles(target.worktree.path, relativePaths, {
+      ...localGitOptionsForTarget(target),
+      admissionTier: 'interactive'
+    })
     return { ok: true }
   }
 
@@ -81,7 +90,10 @@ export class RuntimeGitStagingCommands {
       await provider.bulkUnstageFiles(target.worktree.path, relativePaths)
       return { ok: true }
     }
-    await bulkUnstageFiles(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
+    await bulkUnstageFiles(target.worktree.path, relativePaths, {
+      ...localGitOptionsForTarget(target),
+      admissionTier: 'interactive'
+    })
     return { ok: true }
   }
 
@@ -99,7 +111,10 @@ export class RuntimeGitStagingCommands {
       await provider.bulkDiscardChanges(target.worktree.path, relativePaths)
       return { ok: true }
     }
-    await bulkDiscardChanges(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
+    await bulkDiscardChanges(target.worktree.path, relativePaths, {
+      ...localGitOptionsForTarget(target),
+      admissionTier: 'interactive'
+    })
     return { ok: true }
   }
 
@@ -114,7 +129,10 @@ export class RuntimeGitStagingCommands {
       await provider.discardChanges(target.worktree.path, relativePath)
       return { ok: true }
     }
-    await discardChanges(target.worktree.path, relativePath, localGitOptionsForTarget(target))
+    await discardChanges(target.worktree.path, relativePath, {
+      ...localGitOptionsForTarget(target),
+      admissionTier: 'interactive'
+    })
     return { ok: true }
   }
 }

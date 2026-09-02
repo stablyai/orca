@@ -99,7 +99,10 @@ describe('ghExecFileAsync WSL fallback', () => {
         '-c',
         "cd '/home/jinwoo/stably/noqa' && 'gh' 'issue' 'list' '--repo' 'stablyhq/noqa' '--json' 'number,title'"
       ],
-      expect.objectContaining({ cwd: undefined }),
+      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
+      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
+      // worktree. The Linux directory still rides inside the command.
+      expect.objectContaining({ cwd: expect.any(String) }),
       expect.any(Function)
     )
     expect(execFileMock).toHaveBeenNthCalledWith(
@@ -382,7 +385,11 @@ describe('ghExecFileAsync WSL fallback', () => {
       2,
       'wsl.exe',
       ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'gh' 'api' 'rate_limit'"],
-      expect.objectContaining({ cwd: undefined }),
+      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
+      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
+      // worktree. This global call has no repo directory at all, so nothing about
+      // where it runs changes.
+      expect.objectContaining({ cwd: expect.any(String) }),
       expect.any(Function)
     )
   })
@@ -501,7 +508,11 @@ describe('ghExecFileAsync WSL fallback', () => {
       2,
       'wsl.exe',
       ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'glab' 'api' 'projects'"],
-      expect.objectContaining({ cwd: undefined }),
+      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
+      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
+      // worktree. This global call has no repo directory at all, so nothing about
+      // where it runs changes.
+      expect.objectContaining({ cwd: expect.any(String) }),
       expect.any(Function)
     )
   })

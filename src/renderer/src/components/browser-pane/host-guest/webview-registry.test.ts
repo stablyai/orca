@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const viewportMocks = vi.hoisted(() => ({
+  clearBrowserPageViewportPresetSize: vi.fn(),
   removeBrowserPageViewport: vi.fn()
 }))
 
@@ -33,6 +34,7 @@ describe('webview registry drag listeners', () => {
     removedListeners = []
     unregisterGuestMock = vi.fn()
     viewportMocks.removeBrowserPageViewport.mockReset()
+    viewportMocks.clearBrowserPageViewportPresetSize.mockReset()
 
     vi.stubGlobal('window', {
       addEventListener: vi.fn(
@@ -219,6 +221,7 @@ describe('webview registry drag listeners', () => {
     registerPersistentWebview('page-1', createWebview())
     await destroyPersistentWebview('page-1')
     expect(getExplicitBrowserPageZoomLevel('page-1')).toBeNull()
+    expect(viewportMocks.clearBrowserPageViewportPresetSize).toHaveBeenCalledWith('page-1')
     expect(viewportMocks.removeBrowserPageViewport).toHaveBeenCalledWith('page-1')
   })
 

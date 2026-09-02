@@ -10,13 +10,12 @@ import {
   BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID
 } from '@/lib/settings-navigation-types'
 import {
-  isRuntimeOwnedSshTargetId,
-  parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../../shared/execution-host'
 import { getHostSettingOverride } from '../../../../../shared/host-setting-overrides'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
 
 /**
  * The address bar's leading icon, egress-aware: pages that render locally and
@@ -103,19 +102,13 @@ export function SshEgressIndicator({
   worktreeId: string
 }): React.JSX.Element | null {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
-  const routingEnabled = useAppStore((s) => s.settings?.browserSshWorkspaceRoutingEnabled !== false)
-  const disabledTargetIds = useAppStore(
-    (s) => s.settings?.browserSshWorkspaceRoutingDisabledTargetIds
-  )
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const settings = useAppStore((s) => s.settings)
-  const parsed = parseExecutionHostId(executionHostId)
-  const targetId =
-    parsed?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsed.targetId) ? parsed.targetId : null
-  if (!targetId) {
+  const routeEligibility = resolveSshWorkspaceBrowserRouteEligibility(executionHostId, settings)
+  if (!routeEligibility) {
     return <Globe className="size-4 shrink-0 text-muted-foreground" />
   }
-  const routed = routingEnabled && !disabledTargetIds?.includes(targetId)
+  const { targetId, eligible: routed } = routeEligibility
   const hostLabel =
     getHostSettingOverride(settings, toSshExecutionHostId(targetId), 'displayLabel') ??
     sshTargetLabels.get(targetId) ??

@@ -57,6 +57,13 @@ const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
   'relay-assets',
   NODE_PTY_CONSOLE_LIST_PATCH_FILENAME
 )
+const NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME = 'node-pty-1.1.0-master-cloexec-patch.cjs'
+const NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE = join(
+  ROOT,
+  'config',
+  'relay-assets',
+  NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME
+)
 // Written by build-windows-process-tree-relay-addon.mjs, which only runs on a
 // Windows machine.
 const WINDOWS_PROCESS_TREE_BUILD_DIR = join(ROOT, '.build', 'windows-process-tree')
@@ -126,6 +133,10 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
       join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
     )
   }
+  copyFileSync(
+    NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
+    join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
+  )
   stageWindowsProcessTreeAddon(platform, outDir)
 
   await build({

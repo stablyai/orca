@@ -529,6 +529,8 @@ describe('registerPtyHandlers', () => {
               ORCA_TAB_ID: 'tab-1',
               ORCA_WORKTREE_ID: 'wt-1'
             },
+            tabId: 'tab-1',
+            leafId: '11111111-1111-4111-8111-111111111111',
             connectionId: 'ssh-1'
           })
           const env = sshSpawn.mock.calls.at(-1)![0].env

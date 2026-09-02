@@ -178,9 +178,12 @@ function DropdownMenuSubTrigger({
   className,
   inset,
   children,
+  hideChevron,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
   inset?: boolean
+  // Why: collision-flipped submenus open leftward, where a right-pointing chevron misleads.
+  hideChevron?: boolean
 }) {
   return (
     <DropdownMenuPrimitive.SubTrigger
@@ -193,7 +196,7 @@ function DropdownMenuSubTrigger({
       {...props}
     >
       {children}
-      <ChevronRightIcon className="ml-auto size-4" />
+      {hideChevron ? null : <ChevronRightIcon className="ml-auto size-4" />}
     </DropdownMenuPrimitive.SubTrigger>
   )
 }

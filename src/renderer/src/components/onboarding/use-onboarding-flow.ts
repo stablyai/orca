@@ -174,7 +174,8 @@ export function useOnboardingFlow(
     progressSteps.findIndex(({ index }) => index === displayedStepIndex)
   )
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
-  const startTimeRef = useRef<number>(Date.now())
+  const [initialStartTime] = useState(() => Date.now())
+  const startTimeRef = useRef<number>(initialStartTime)
 
   // Why: ref so the unmount-only revert reads the freshest theme without retriggering on each settings change.
   const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')

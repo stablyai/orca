@@ -14,6 +14,12 @@ const REPLAY_TIMEOUT_MS = 15_000
  */
 const PAGE_UNKNOWN_CODES = ['browser_tab_not_found', 'browser_no_tab', 'selector_not_found']
 
+/** True when a failed close means the runtime has definitively forgotten the page — nothing left
+ *  to resurrect, so no intent should be recorded or kept. Anything else is a "not now". */
+export function isBrowserPageDefinitivelyGone(error: unknown): boolean {
+  return PAGE_UNKNOWN_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))
+}
+
 const replayingEnvironmentIds = new Set<string>()
 
 export type ClientHostedBrowserCloseIntentReplayStore = {
@@ -65,7 +71,7 @@ export async function replayClientHostedBrowserCloseIntents(
         )
         settled.push(intent.browserPageId)
       } catch (error) {
-        if (PAGE_UNKNOWN_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))) {
+        if (isBrowserPageDefinitivelyGone(error)) {
           settled.push(intent.browserPageId)
           continue
         }

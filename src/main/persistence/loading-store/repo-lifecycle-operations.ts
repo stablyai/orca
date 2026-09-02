@@ -12,9 +12,14 @@ import {
 import { mergeProjectHostSetupCompatibilityState } from '../tracking-repos/project-host-compatibility'
 import { RepoOrderPersistenceOperations } from '../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../tracking-repos/repo-worktree-pruning'
+import { collectDeregisteredRepoIds } from '../tracking-repos/deregistered-repo-residue'
+import { retireLocalWorktreeMetadataPruneStateForRepo } from '../../local-worktree-metadata-prune-gate'
 import { hydrateRepo as hydrateRepoOperation } from '../tracking-repos/repo-hydration'
 import { RepoUpdatePersistenceOperations } from '../tracking-repos/repo-update-operations'
 import { ProjectHostSetupPersistenceOperations } from '../tracking-repos/project-host-setup-update'
+import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import type { PersistedState } from '../../../shared/persisted-state-types'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
@@ -43,6 +48,7 @@ export class RepoLifecycleOperations {
   }
 
   addRepo(repo: Repo): void {
+    bumpLocalWorktreeScanGeneration(repo.id)
     getRepoOrderOperations(this).addRepo(repo)
   }
 
@@ -55,9 +61,15 @@ export class RepoLifecycleOperations {
   }
 
   removeProject(id: string): void {
+    const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
+      (repo) => repo.id === id
+    )
     this[repoLifecycleOperationsContext].runtime.state.repos = this[
       repoLifecycleOperationsContext
     ].runtime.state.repos.filter((r) => r.id !== id)
+    if (repoRemoved) {
+      bumpLocalWorktreeScanGeneration(id)
+    }
     syncProjectHostSetupCompatibilityState(this)
     // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
     delete this[repoLifecycleOperationsContext].runtime.state.sparsePresetsByRepo[id]
@@ -77,9 +89,15 @@ export class RepoLifecycleOperations {
   }
 
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
+    const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
+      (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
+    )
     this[repoLifecycleOperationsContext].runtime.state.repos = this[
       repoLifecycleOperationsContext
     ].runtime.state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))
+    if (repoRemoved) {
+      bumpLocalWorktreeScanGeneration(id)
+    }
     const idStillPresent = this[repoLifecycleOperationsContext].runtime.state.repos.some(
       (r) => r.id === id
     )
@@ -113,6 +131,33 @@ export class RepoLifecycleOperations {
       }
     }
     scheduleSave(this[repoLifecycleOperationsContext].scheduling)
+  }
+
+  /**
+   * Drop every persisted row owned by a repo id that is no longer registered.
+   *
+   * Runs at load because no removal path can: `removeProject` only fires while the repo is still in
+   * `state.repos`, and a paired client's mirror of a remote host's rows is keyed by ids that client
+   * never registers, so the owning host's removal never reaches it (#17776). An orphan has no owner
+   * that could object, so this ignores the session-ownership and local-execution-host gates the
+   * missing-directory sweeper needs.
+   */
+  sweepDeregisteredRepoResidue(): string[] {
+    const state = this[repoLifecycleOperationsContext].runtime.state
+    const orphanRepoIds = collectDeregisteredRepoIds(state)
+    if (orphanRepoIds.size === 0) {
+      return []
+    }
+    for (const repoId of orphanRepoIds) {
+      pruneWorktreeStateForRepo(this, repoId, null)
+      state.workspaceSession = removeRepoFromWorkspaceSession(state.workspaceSession, repoId)
+      state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+        state.workspaceSessionsByHostId,
+        repoId
+      )
+    }
+    pruneDeregisteredRepoUiResidue(state.ui, orphanRepoIds)
+    return [...orphanRepoIds]
   }
 
   updateRepo(
@@ -177,6 +222,9 @@ export function pruneWorktreeStateForRepo(
     hostId,
     (matchesWorktreeId) => pruneMobileClientTabSelections(owner, matchesWorktreeId)
   )
+  // Why: this drops metadata, lineage, leases and session owners in bulk, which can unpin rows in
+  // other repos, and a full removal retires this repo's own gate state (#17775).
+  retireLocalWorktreeMetadataPruneStateForRepo(id, hostId)
 }
 
 export function pruneMobileClientTabSelections(
@@ -198,12 +246,33 @@ export function pruneMobileClientTabSelections(
   }
 }
 
+function pruneDeregisteredRepoUiResidue(
+  ui: PersistedState['ui'],
+  orphanRepoIds: ReadonlySet<string>
+): void {
+  const isOrphanWorktree = (worktreeId: string): boolean =>
+    orphanRepoIds.has(getRepoIdFromWorktreeId(worktreeId))
+  if (ui.lastActiveRepoId && orphanRepoIds.has(ui.lastActiveRepoId)) {
+    ui.lastActiveRepoId = null
+  }
+  if (ui.lastActiveWorktreeId && isOrphanWorktree(ui.lastActiveWorktreeId)) {
+    ui.lastActiveWorktreeId = null
+  }
+  ui.filterRepoIds = ui.filterRepoIds?.filter((repoId) => !orphanRepoIds.has(repoId)) ?? []
+  for (const worktreeId of Object.keys(ui.showDotfilesByWorktree ?? {})) {
+    if (isOrphanWorktree(worktreeId)) {
+      delete ui.showDotfilesByWorktree?.[worktreeId]
+    }
+  }
+}
+
 export function getRepoUpdateOperations(
   owner: RepoLifecycleOperations
 ): RepoUpdatePersistenceOperations {
   owner[repoLifecycleOperationsContext].runtime.repoUpdateOperations ??=
     new RepoUpdatePersistenceOperations({
       state: owner[repoLifecycleOperationsContext].runtime.state,
+      bumpLocalWorktreeScanGeneration,
       syncProjectHostSetupCompatibilityState: () => syncProjectHostSetupCompatibilityState(owner),
       scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling),
       hydrateRepo: (repo) => hydrateRepo(owner, repo)

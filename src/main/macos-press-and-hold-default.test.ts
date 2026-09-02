@@ -267,20 +267,26 @@ describe('readBundleIdentifierFromExecutablePath', () => {
 })
 
 describe('startup wiring', () => {
-  const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+  const source = readFileSync(
+    join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
+    'utf8'
+  )
+  const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
 
   it('runs before app.whenReady(), which is the last point AppKit could still see it', () => {
     const callIndex = source.indexOf(
       'applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())'
     )
     const initDataPathIndex = source.indexOf('initDataPath()')
-    const readyIndex = source.indexOf('app.whenReady().then(')
+    const readyIndex = entrySource.indexOf('void app.whenReady().then(async () => {')
+    const preflightCall = entrySource.indexOf('runMainProcessPreflight({')
 
     expect(callIndex).toBeGreaterThanOrEqual(0)
     expect(readyIndex).toBeGreaterThanOrEqual(0)
+    expect(preflightCall).toBeGreaterThanOrEqual(0)
     // Why after initDataPath: the record lives beside orca-data.json, and the canonical userData
     // path is only captured there.
     expect(callIndex).toBeGreaterThan(initDataPathIndex)
-    expect(callIndex).toBeLessThan(readyIndex)
+    expect(preflightCall).toBeLessThan(readyIndex)
   })
 })

@@ -1,204 +1,298 @@
-import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeTerminalListResult,
-  RuntimeTerminalOrphanAdoptionResult
-} from '../../../shared/runtime-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 import {
-  buildWebTerminalOrphanTopologyProposal,
-  type WebTerminalOrphanTopologyState
-} from './web-session-terminal-orphan-topology'
+  cacheRetainedSurfaces,
+  claimSurfaces,
+  isAdoptionResult,
+  isRpcResponse,
+  isStableAdoptionFailure,
+  mergeAdoptionResponse,
+  mergeFailedAdoption,
+  retainedSharesClaimedTab
+} from './web-session-terminal-orphan-recovery-adoption'
+import {
+  buildTopologyCandidates,
+  isRemovedSnapshot,
+  isValidReadySurface,
+  prepareTerminalOrphanRecovery,
+  mergeRetainedTerminalSurfaces,
+  captureTerminalRecoveryTopologyToken,
+  surfaceKey,
+  terminalRowsBySurface,
+  type AnyRecoverySurface,
+  type TerminalOrphanRecoveryState
+} from './web-session-terminal-orphan-recovery-surface'
+import { resolveTerminalOrphanInventory } from './web-session-terminal-orphan-recovery-inventory'
+import { resolvePersistedTerminalSurfaces } from './web-session-terminal-orphan-recovery-pane'
+import {
+  clearCachedSurfaceResolutions,
+  clearSurfaceInventoryAbsence
+} from './web-session-terminal-orphan-recovery-cache'
+import {
+  clearTerminalRecoveryQueues,
+  enqueueLatestTerminalRecovery,
+  supersedeTerminalRecovery
+} from './web-session-terminal-orphan-recovery-queue'
+import {
+  clearTerminalRecoveryRpcLaneForTests,
+  runInTerminalRecoveryRpcLane
+} from './web-session-terminal-orphan-recovery-rpc-lane'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
+import { buildWebTerminalOrphanTopologyProposal } from './web-session-terminal-orphan-topology'
 
-type TerminalOrphanRecoveryState = WebTerminalOrphanTopologyState & {
-  tabsByWorktree: Record<string, TerminalTab[]>
-}
+export type { TerminalOrphanRecoveryState } from './web-session-terminal-orphan-recovery-surface'
 
 type RuntimeCall = (args: {
   selector: string
   method: string
   params: unknown
   timeoutMs: number
+  expectedEnvironmentPairingRevision?: number
 }) => Promise<RuntimeRpcResponse<unknown>>
 
-const inFlightRecoveryByWorktree = new Map<string, Promise<RuntimeMobileSessionTabsResult | null>>()
-
-function recoveryKey(environmentId: string, worktreeId: string): string {
-  return `${environmentId}\0${worktreeId}`
+export type TerminalOrphanRecoveryOptions = {
+  expectedEnvironmentPairingRevision?: number
+  call?: RuntimeCall
+  /** Reads live renderer topology so an RPC cannot apply a stale local claim. */
+  getCurrentState?: () => TerminalOrphanRecoveryState
 }
 
-function isTerminalListResult(value: unknown): value is RuntimeTerminalListResult {
-  return (
-    Boolean(value) &&
-    typeof value === 'object' &&
-    Array.isArray((value as { terminals?: unknown }).terminals)
-  )
-}
-
-function isAdoptionResult(value: unknown): value is RuntimeTerminalOrphanAdoptionResult {
-  return (
-    Boolean(value) &&
-    typeof value === 'object' &&
-    Boolean((value as { snapshot?: unknown }).snapshot) &&
-    Array.isArray((value as { snapshot?: { tabs?: unknown } }).snapshot?.tabs)
-  )
+function recoveryKey(
+  environmentId: string,
+  worktreeId: string,
+  expectedEnvironmentPairingRevision: number | undefined
+): string {
+  return `${environmentId}\0${expectedEnvironmentPairingRevision ?? 'unknown'}\0${worktreeId}`
 }
 
 async function recoverTerminalOrphans(
   state: TerminalOrphanRecoveryState,
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  call: RuntimeCall
+  call: RuntimeCall,
+  expectedEnvironmentPairingRevision: number | undefined,
+  isCurrent: () => boolean,
+  getCurrentState: (() => TerminalOrphanRecoveryState) | undefined
 ): Promise<RuntimeMobileSessionTabsResult | null> {
-  const hostSurfaceKeys = new Set(
-    snapshot.tabs
-      .filter((tab) => tab.type === 'terminal')
-      .map((tab) => `${tab.parentTabId}\0${tab.leafId}`)
-  )
-  const candidates = (state.tabsByWorktree[snapshot.worktree] ?? []).filter(
-    (tab) =>
-      isWebTerminalSurfaceTabId(tab.id) &&
-      Object.keys(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).some(
-        (leafId) => !hostSurfaceKeys.has(`${toHostSessionTabId(tab.id)}\0${leafId}`)
-      )
-  )
-  if (candidates.length === 0) {
-    return snapshot
-  }
-  const candidateSurfaces = candidates.flatMap((tab) => {
-    const layout = state.terminalLayoutsByTabId[tab.id]
-    return Object.entries(layout?.ptyIdsByLeafId ?? {}).flatMap(([leafId, remotePtyId]) => {
-      const remote = parseRemoteRuntimePtyId(remotePtyId)
-      return remote?.environmentId === environmentId &&
-        !hostSurfaceKeys.has(`${toHostSessionTabId(tab.id)}\0${leafId}`)
-        ? [{ tabId: toHostSessionTabId(tab.id), leafId, handle: remote.handle }]
-        : []
-    })
-  })
-  const candidateHandles = new Set(candidateSurfaces.map((surface) => surface.handle))
-  if (candidateHandles.size === 0) {
-    return snapshot
-  }
-  if (candidateHandles.size > 64) {
-    return null
-  }
-  const listedResponse = await call({
-    selector: environmentId,
-    method: 'terminal.list',
-    params: {
-      worktree: toRuntimeWorktreeSelector(snapshot.worktree),
-      handles: [...candidateHandles],
-      requireFreshPtyLiveness: true,
-      includeVisualLayouts: false
-    },
-    timeoutMs: 15_000
-  })
-  if (listedResponse.ok === false || !isTerminalListResult(listedResponse.result)) {
-    return null
-  }
-  const listed = listedResponse.result
-  const orphanByHandle = new Map(
-    listed.terminals
-      .filter(
-        (terminal) =>
-          terminal.orphaned === true &&
-          typeof terminal.ptyId === 'string' &&
-          typeof terminal.incarnationId === 'string'
-      )
-      .map((terminal) => [terminal.handle, terminal])
-  )
-  const claims = candidateSurfaces.flatMap(({ tabId, leafId, handle }) => {
-    const orphan = orphanByHandle.get(handle)
-    if (!orphan?.ptyId || !orphan.incarnationId) {
-      return []
-    }
-    return [
-      {
-        terminal: orphan.handle,
-        ptyId: orphan.ptyId,
-        incarnationId: orphan.incarnationId,
-        tabId,
-        leafId
-      }
-    ]
-  })
-  const claimedHandles = new Set(claims.map((claim) => claim.terminal))
-  const listedCandidateHandles = new Set(
-    listed.terminals
-      .filter((terminal) => candidateHandles.has(terminal.handle))
-      .map((terminal) => terminal.handle)
-  )
+  const recoveryState = getCurrentState?.() ?? state
+  const topologyToken = captureTerminalRecoveryTopologyToken(recoveryState, snapshot.worktree)
+  const localTopologyIsCurrent = (): boolean =>
+    !getCurrentState ||
+    captureTerminalRecoveryTopologyToken(getCurrentState(), snapshot.worktree) === topologyToken
+  const isRecoveryCurrent = (): boolean => isCurrent() && localTopologyIsCurrent()
+  const prepared = prepareTerminalOrphanRecovery(recoveryState, snapshot, environmentId)
   if (
-    listed.truncated &&
-    [...candidateHandles].some((handle) => !listedCandidateHandles.has(handle))
+    prepared.candidates.length === 0 &&
+    prepared.unresolved.length === 0 &&
+    prepared.retained.length === 0
   ) {
-    return null
-  }
-  const hasUnresolvedLiveCandidate = listed.terminals.some(
-    (terminal) => candidateHandles.has(terminal.handle) && !claimedHandles.has(terminal.handle)
-  )
-  if (hasUnresolvedLiveCandidate) {
-    return null
-  }
-  if (claims.length === 0) {
     return snapshot
   }
-  const localActiveTabId = state.activeTabIdByWorktree[snapshot.worktree]
+  const paneResolution = await resolvePersistedTerminalSurfaces({
+    surfaces: prepared.unresolved,
+    snapshot,
+    environmentId,
+    call,
+    expectedEnvironmentPairingRevision,
+    isCurrent
+  })
+  if (!paneResolution || !isRecoveryCurrent()) {
+    return null
+  }
+  const candidates = [...prepared.candidates, ...paneResolution.resolved]
+  const unresolved = paneResolution.unresolved
+  const retainedSurfaces: AnyRecoverySurface[] = [...prepared.retained, ...unresolved]
+  if (candidates.length === 0) {
+    return mergeRetainedTerminalSurfaces(snapshot, retainedSurfaces)
+  }
+  const inventory = await resolveTerminalOrphanInventory({
+    candidates,
+    snapshot,
+    environmentId,
+    call,
+    expectedEnvironmentPairingRevision,
+    isCurrent
+  })
+  if (!inventory || !isRecoveryCurrent()) {
+    return null
+  }
+  const { retained, removed, claims } = inventory
+  retainedSurfaces.push(...retained)
+  if (claims.length === 0) {
+    return mergeRetainedTerminalSurfaces(snapshot, retainedSurfaces, removed)
+  }
+
+  const localActiveTabId = recoveryState.activeTabIdByWorktree[snapshot.worktree]
   const activeTabId =
     localActiveTabId && isWebTerminalSurfaceTabId(localActiveTabId)
       ? toHostSessionTabId(localActiveTabId)
       : undefined
-  const activeGroupId = state.activeGroupIdByWorktree[snapshot.worktree] ?? undefined
-  const topology = buildWebTerminalOrphanTopologyProposal(
-    state,
-    snapshot.worktree,
-    candidates,
-    claims
-  )
-  const response = await call({
-    selector: environmentId,
-    method: 'terminal.adoptOrphans',
-    params: {
-      worktree: toRuntimeWorktreeSelector(snapshot.worktree),
-      expectedTopologyRevision: listed.topologyRevisions?.[snapshot.worktree] ?? 0,
-      claims,
-      ...(activeTabId ? { activeTabId } : {}),
-      ...(activeGroupId ? { activeGroupId } : {}),
-      ...(topology ? { topology } : {})
-    },
-    timeoutMs: 15_000
+  const activeGroupId = recoveryState.activeGroupIdByWorktree[snapshot.worktree] ?? undefined
+  const topology = !retainedSharesClaimedTab(retainedSurfaces, claims)
+    ? buildWebTerminalOrphanTopologyProposal(
+        recoveryState,
+        snapshot.worktree,
+        buildTopologyCandidates(candidates, claims),
+        claims
+      )
+    : undefined
+  const claimedSurfaces = claimSurfaces(candidates, claims)
+  const retainAfterAdoptionFailure = (cache: boolean): RuntimeMobileSessionTabsResult => {
+    if (cache) {
+      cacheRetainedSurfaces(
+        environmentId,
+        snapshot,
+        claimedSurfaces,
+        expectedEnvironmentPairingRevision
+      )
+    }
+    return mergeFailedAdoption(snapshot, candidates, retainedSurfaces, claims, removed)
+  }
+  let adoptionResponse: unknown = undefined
+  let adoptionThrew = false
+  let thrownAdoptionError: unknown
+  try {
+    if (!localTopologyIsCurrent()) {
+      return null
+    }
+    adoptionResponse = await runInTerminalRecoveryRpcLane(isCurrent, () =>
+      call({
+        selector: environmentId,
+        method: 'terminal.adoptOrphans',
+        params: {
+          worktree: toRuntimeWorktreeSelector(snapshot.worktree),
+          expectedTopologyRevision: inventory.topologyRevision,
+          claims,
+          ...(activeTabId ? { activeTabId } : {}),
+          ...(activeGroupId ? { activeGroupId } : {}),
+          ...(topology ? { topology } : {})
+        },
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision
+      })
+    )
+  } catch (error) {
+    adoptionThrew = true
+    thrownAdoptionError = error
+  }
+  if (!isCurrent()) {
+    return null
+  }
+  // Adoption mutates host ownership. If the local pane disappeared or moved
+  // while it was in flight, never publish the response against old topology.
+  if (!localTopologyIsCurrent()) {
+    return null
+  }
+  // A lane refusal (queue pressure or supersession) is transient. Do not
+  // turn it into an inventory retain entry that would suppress the next frame.
+  if (adoptionResponse === null) {
+    return retainAfterAdoptionFailure(false)
+  }
+  if (adoptionThrew) {
+    return retainAfterAdoptionFailure(isStableAdoptionFailure(thrownAdoptionError))
+  }
+  if (!isRpcResponse(adoptionResponse)) {
+    // A malformed envelope/result is a stable protocol incompatibility for
+    // this exact semantic frame, so bounded deduplication is safe.
+    return retainAfterAdoptionFailure(true)
+  }
+  if (!isCurrent()) {
+    return null
+  }
+  if (!adoptionResponse.ok) {
+    return retainAfterAdoptionFailure(isStableAdoptionFailure(adoptionResponse))
+  }
+  if (!isAdoptionResult(adoptionResponse.result)) {
+    return retainAfterAdoptionFailure(true)
+  }
+  if (adoptionResponse.result.snapshot.worktree !== snapshot.worktree) {
+    // A valid response for another worktree is stale routing evidence; retry
+    // on the next replay instead of pinning this surface as a protocol fault.
+    return retainAfterAdoptionFailure(false)
+  }
+
+  const adoptedSnapshot = adoptionResponse.result.snapshot
+  const adoptedRows = terminalRowsBySurface(adoptedSnapshot)
+  const missingClaims = claimedSurfaces.filter((surface) => {
+    const rows = adoptedRows.get(surfaceKey(surface.tabId, surface.leafId))
+    return !rows?.some(isValidReadySurface)
   })
-  return response.ok !== false &&
-    isAdoptionResult(response.result) &&
-    response.result.snapshot.worktree === snapshot.worktree
-    ? response.result.snapshot
-    : null
+  cacheRetainedSurfaces(environmentId, snapshot, missingClaims, expectedEnvironmentPairingRevision)
+  return mergeAdoptionResponse(adoptedSnapshot, retainedSurfaces, missingClaims, removed)
+}
+
+function normalizeOptions(
+  optionsOrCall: TerminalOrphanRecoveryOptions | RuntimeCall | undefined
+): TerminalOrphanRecoveryOptions {
+  return typeof optionsOrCall === 'function' ? { call: optionsOrCall } : (optionsOrCall ?? {})
 }
 
 export function recoverWebSessionTerminalOrphansBeforeApply(
   state: TerminalOrphanRecoveryState,
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  call: RuntimeCall = (args) => window.api.runtimeEnvironments.call(args)
+  optionsOrCall?: TerminalOrphanRecoveryOptions | RuntimeCall
 ): Promise<RuntimeMobileSessionTabsResult | null> {
-  const key = recoveryKey(environmentId, snapshot.worktree)
-  const existing = inFlightRecoveryByWorktree.get(key)
-  const recovery = (existing ?? Promise.resolve(null))
-    .catch(() => null)
-    .then(() => recoverTerminalOrphans(state, snapshot, environmentId, call))
-    .catch(() => null)
-    .finally(() => {
-      if (inFlightRecoveryByWorktree.get(key) === recovery) {
-        inFlightRecoveryByWorktree.delete(key)
-      }
+  const options = normalizeOptions(optionsOrCall)
+  const key = recoveryKey(
+    environmentId,
+    snapshot.worktree,
+    options.expectedEnvironmentPairingRevision
+  )
+  if (isRemovedSnapshot(snapshot)) {
+    supersedeTerminalRecovery(key)
+    return Promise.resolve(snapshot)
+  }
+  const prepared = prepareTerminalOrphanRecovery(state, snapshot, environmentId)
+  for (const surface of prepared.observed) {
+    clearSurfaceInventoryAbsence({
+      environmentId,
+      snapshot,
+      surface,
+      expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision
     })
-  inFlightRecoveryByWorktree.set(key, recovery)
-  return recovery
+  }
+  if (
+    prepared.candidates.length === 0 &&
+    prepared.unresolved.length === 0 &&
+    prepared.retained.length === 0
+  ) {
+    supersedeTerminalRecovery(key)
+    return Promise.resolve(snapshot)
+  }
+  if (prepared.candidates.length === 0 && prepared.unresolved.length === 0) {
+    // Preserve stale off-tree evidence while superseding any older recovery
+    // queued for this worktree.
+    supersedeTerminalRecovery(key)
+    return Promise.resolve(mergeRetainedTerminalSurfaces(snapshot, prepared.retained))
+  }
+  const call: RuntimeCall =
+    options.call ??
+    ((args) =>
+      callRuntimeEnvironmentWithRevision({
+        environmentId,
+        method: args.method,
+        params: args.params,
+        timeoutMs: args.timeoutMs,
+        expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision
+      }) as Promise<RuntimeRpcResponse<unknown>>)
+  return enqueueLatestTerminalRecovery(key, (isCurrent) =>
+    recoverTerminalOrphans(
+      state,
+      snapshot,
+      environmentId,
+      call,
+      options.expectedEnvironmentPairingRevision,
+      isCurrent,
+      options.getCurrentState
+    )
+  )
 }
 
 export function clearWebSessionTerminalOrphanRecoveryForTests(): void {
-  inFlightRecoveryByWorktree.clear()
+  clearTerminalRecoveryQueues()
+  clearCachedSurfaceResolutions()
+  clearTerminalRecoveryRpcLaneForTests()
 }

@@ -17,7 +17,7 @@ if (!appImageArg) {
 if (!['app', 'serving-electron'].includes(signalTarget)) {
   fail(`Unsupported --signal-target: ${signalTarget}`)
 }
-if (!['app', 'launcher'].includes(entrypoint)) {
+if (!['app', 'appimage', 'launcher'].includes(entrypoint)) {
   fail(`Unsupported --entrypoint: ${entrypoint}`)
 }
 if (!['pid', 'foreground-process-group'].includes(intDelivery)) {
@@ -54,11 +54,19 @@ try {
     shutdownDockerDirectory
   ])
   docker(['volume', 'create', artifactVolume])
+  runDesktopStartupOracle({ image, appImage, platform })
   docker([
     'run',
     '--rm',
     '--platform',
     platform,
+    '--network',
+    'none',
+    '--read-only',
+    '--cap-drop',
+    'ALL',
+    '--security-opt',
+    'no-new-privileges',
     '--entrypoint',
     'bash',
     '-v',
@@ -68,11 +76,17 @@ try {
     image,
     '-lc',
     [
-      '7z x /input/orca.AppImage -o/artifacts/root -y >/dev/null',
+      'trap \'status=$?; if [ "$status" -ne 0 ]; then cat /artifacts/appimage-help.log /artifacts/appimage-extract.log 2>/dev/null || true; fi; exit "$status"\' EXIT',
+      'test -r /input/orca.AppImage && test -x /input/orca.AppImage || { echo "FAIL: AppImage bind must be readable and executable" >&2; exit 1; }',
+      'timeout --kill-after=5s 15s /input/orca.AppImage --appimage-help > /artifacts/appimage-help.log 2>&1',
+      'cd /artifacts',
+      'timeout --kill-after=10s 120s /input/orca.AppImage --appimage-extract > /artifacts/appimage-extract.log 2>&1',
+      'mv squashfs-root root',
       launcherExecOverlay
         ? "sed -i 's/^ELECTRON_RUN_AS_NODE=1 /export ELECTRON_RUN_AS_NODE=1\\nexec /' /artifacts/root/resources/bin/orca-ide"
         : ':',
-      'chmod -R a+rX /artifacts/root'
+      'chmod -R a+rX /artifacts/root',
+      'rm /artifacts/appimage-help.log /artifacts/appimage-extract.log'
     ].join(' && ')
   ])
 
@@ -108,6 +122,8 @@ try {
         '-e',
         `ORCA_INT_DELIVERY=${intDelivery}`,
         '-v',
+        `${appImage}:/input/orca.AppImage:ro`,
+        '-v',
         `${artifactVolume}:/artifacts:ro`,
         image,
         signal
@@ -127,6 +143,38 @@ try {
 } finally {
   docker(['volume', 'rm', artifactVolume], { allowFailure: true })
   docker(['image', 'rm', image], { allowFailure: true })
+}
+
+function runDesktopStartupOracle({ image, appImage, platform }) {
+  console.log('Running original AppImage desktop startup oracle...')
+  docker([
+    'run',
+    '--rm',
+    '--init',
+    '--platform',
+    platform,
+    '--network',
+    'none',
+    '--read-only',
+    '--tmpfs',
+    '/tmp:rw,nosuid,nodev,exec,size=1g',
+    '--shm-size',
+    '256m',
+    '--cap-drop',
+    'ALL',
+    '--security-opt',
+    'no-new-privileges',
+    '--user',
+    'orca',
+    '--entrypoint',
+    '/usr/local/bin/run-appimage-desktop-startup-case',
+    '-e',
+    'ORCA_STARTUP_DIAGNOSTICS=1',
+    '-v',
+    `${appImage}:/input/orca.AppImage:ro`,
+    image,
+    '/input/orca.AppImage'
+  ])
 }
 
 function valueAfter(flag) {

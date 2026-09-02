@@ -20,6 +20,7 @@ export const PR_CHECK_JOBS = [
   'static_analysis',
   'typecheck',
   'git_compatibility',
+  'codex_index_heal_contract',
   'xterm_patch_sync',
   'shell_contracts',
   'test',
@@ -46,6 +47,24 @@ const GIT_COMPAT_PREFIXES = [
   'src/main/git/',
   'src/relay/git-',
   'config/scripts/git-binary-compatibility'
+]
+
+// Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
+// depends on it, its app-server transport, or the contract itself changes.
+const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
+  'src/main/codex/codex-index-heal-binary-contract',
+  'src/main/codex/codex-session-index-heal',
+  'src/main/codex/codex-app-server-session',
+  'src/main/codex/codex-state-db',
+  'src/main/sqlite/sync-database',
+  'src/main/codex/codex-app-server-capability-signal',
+  'src/main/codex/codex-process-exit-deadline',
+  'src/main/codex/codex-session-backfill',
+  'src/main/codex/codex-session-index-heal-state',
+  'src/main/codex-cli/command',
+  'src/main/win32-utils',
+  'src/shared/node-cli-command-resolution',
+  'src/shared/windows-batch-spawn'
 ]
 
 const XTERM_PREFIXES = [
@@ -148,6 +167,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/smoke-packaged',
   'config/scripts/install-electron-package-binary',
   'config/scripts/verify-packaged',
+  'config/scripts/verify-skills-cli-runtime',
   'config/scripts/verify-linux-glibc',
   'config/scripts/run-electron-vite',
   'skills/',
@@ -161,6 +181,12 @@ const SHARED_PACKAGE_PREFIXES = [
 
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  'config/docker/cli-launch-contract/',
+  'config/docker/headless-pairing/',
+  'config/docker/headless-serve-shutdown/',
+  'config/scripts/run-linux-cli-launch-contract',
+  'config/scripts/run-headless-linux-pairing-docker',
+  'config/scripts/static-appimage-package-contract',
   'native/computer-use-linux/',
   'resources/linux/',
   'config/scripts/run-headless-serve'
@@ -256,6 +282,9 @@ function jobDetector(job) {
   switch (job) {
     case 'git_compatibility':
       return (files) => files.some((file) => matchesPrefix(file, GIT_COMPAT_PREFIXES))
+    case 'codex_index_heal_contract':
+      return (files) =>
+        files.some((file) => matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES))
     case 'xterm_patch_sync':
       return (files) => files.some((file) => matchesPrefix(file, XTERM_PREFIXES))
     case 'shell_contracts':

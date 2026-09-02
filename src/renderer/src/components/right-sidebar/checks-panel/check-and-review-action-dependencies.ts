@@ -11,6 +11,7 @@ export type ChecksPanelCheckAndReviewActionsInput = Pick<
   | 'linkedGiteaPR'
   | 'linkedGitLabMR'
   | 'linkedPR'
+  | 'suppressedGitHubPR'
   | 'pr'
   | 'prCacheKey'
 > &

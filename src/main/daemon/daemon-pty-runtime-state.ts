@@ -33,7 +33,7 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type PendingDaemonSpawnOperation = {
-  exitsBySessionId: Map<string, { incarnationId?: string }[]>
+  exitsBySessionId: Map<string, { code: number; incarnationId?: string }[]>
   ignoredExitIncarnationIds: Set<string>
   ignoreNextExit: boolean
 }
@@ -161,6 +161,44 @@ export abstract class DaemonPtyRuntimeState {
     additionalEvidenceSources?: readonly DaemonEvidenceSource[],
     endpointGoneProof?: 'windows_named_pipe_missing'
   ): void
+  protected abstract clearSessionAwaitingDaemonRecovery(sessionId: string): void
+  protected abstract stopCheckpointTimerIfIdle(): void
+
+  protected clearExitedSessionState(
+    sessionId: string,
+    exitCode: number,
+    expectedIncarnationId?: string
+  ): void {
+    const currentIncarnationId = this.sessionIncarnations.get(sessionId)
+    if (currentIncarnationId !== undefined && expectedIncarnationId !== currentIncarnationId) {
+      return
+    }
+    this.activeSessionIds.delete(sessionId)
+    this.clearSessionAwaitingDaemonRecovery(sessionId)
+    this.dirtySessionVersions.delete(sessionId)
+    this.pausedProducerSessionIds.delete(sessionId)
+    this.producerResumesOwedOnReconnect.delete(sessionId)
+    this.backgroundedSessionIds.delete(sessionId)
+    if (!this.sleepRestoreSessionIds.has(sessionId)) {
+      this.coldRestoreCache.delete(sessionId)
+    }
+    this.sessionsNeedingFullCheckpoint.delete(sessionId)
+    this.sessionsNeedingLiveCheckpoint.delete(sessionId)
+    this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
+    this.overlayDeadlineWarnedSessionIds.delete(sessionId)
+    this.periodicDeadlineWarnedSessionIds.delete(sessionId)
+    this.nonFinalAdmissionDeniedSessionIds.delete(sessionId)
+    this.lastFullCheckpointAt.delete(sessionId)
+    this.stopCheckpointTimerIfIdle()
+    if (this.historyManager) {
+      void this.historyManager
+        .closeSession(sessionId, exitCode)
+        .catch((error) => console.warn('[history] closeSession failed:', sessionId, error))
+    }
+    this.initialCwds.delete(sessionId)
+    this.wslDistrosBySessionId.delete(sessionId)
+    this.sessionIncarnations.delete(sessionId)
+  }
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION

@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as gitRunner from '../git/runner'
 import {
   handlers,
   store,
@@ -174,6 +175,56 @@ describe('registerFilesystemHandlers', () => {
       expect(generatePullRequestFieldsFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
         'linkedIssue'
       )
+    })
+
+    it('forwards PR-context command limits through local and SSH adapters', async () => {
+      const localGitExec = vi
+        .spyOn(gitRunner, 'gitExecFileAsync')
+        .mockResolvedValue({ stdout: '', stderr: '' })
+      const sshExec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+      getSshGitProviderMock.mockReturnValue({
+        exec: sshExec,
+        executeCommitMessagePlan: vi.fn()
+      })
+      getPullRequestDraftContextMock.mockImplementation(async (execute) => {
+        await execute(['show-ref', '--verify'], { maxBuffer: 123, timeoutMs: 456 })
+        await execute(['legacy-probe'], { timeout: 789 })
+        return PULL_REQUEST_CONTEXT
+      })
+
+      try {
+        registerFilesystemHandlers(store as never)
+
+        await handlers.get('git:generatePullRequestFields')!(null, {
+          ...PULL_REQUEST_ARGS,
+          worktreePath: WORKTREE_FEATURE_PATH
+        })
+
+        expect(localGitExec).toHaveBeenCalledWith(['show-ref', '--verify'], {
+          cwd: WORKTREE_FEATURE_PATH,
+          maxBuffer: 123,
+          timeout: 456
+        })
+        expect(localGitExec).toHaveBeenCalledWith(['legacy-probe'], {
+          cwd: WORKTREE_FEATURE_PATH,
+          timeout: 789
+        })
+
+        await handlers.get('git:generatePullRequestFields')!(null, {
+          ...PULL_REQUEST_ARGS,
+          worktreePath: '/remote/repo',
+          connectionId: 'conn-1'
+        })
+
+        expect(sshExec).toHaveBeenCalledWith(['show-ref', '--verify'], '/remote/repo', {
+          timeoutMs: 456
+        })
+        expect(sshExec).toHaveBeenCalledWith(['legacy-probe'], '/remote/repo', {
+          timeoutMs: 789
+        })
+      } finally {
+        localGitExec.mockRestore()
+      }
     })
   })
 })

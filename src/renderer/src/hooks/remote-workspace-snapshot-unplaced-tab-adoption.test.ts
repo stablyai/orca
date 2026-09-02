@@ -20,7 +20,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
+import type { RemoteWorkspaceObservedSnapshot } from '../../../shared/remote-workspace-types'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
 import { createTestStore, makeWorktree } from '../store/slices/store-test-helpers'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'
@@ -72,7 +72,7 @@ function tabRow(worktreePath: string, tabId: string, sortOrder: number) {
 }
 
 /** Three host terminals spread over two host workspaces. */
-function snapshot(revision: number): RemoteWorkspaceSnapshot {
+function snapshot(revision: number): RemoteWorkspaceObservedSnapshot {
   const tabsByWorktreePath = {
     [ALPHA]: [tabRow(ALPHA, 'T1', 0), tabRow(ALPHA, 'T2', 1)],
     [BETA]: [tabRow(BETA, 'T3', 0)]
@@ -82,6 +82,7 @@ function snapshot(revision: number): RemoteWorkspaceSnapshot {
     revision,
     updatedAt: revision,
     schemaVersion: 1,
+    hostObservationToken: `observation-${revision}`,
     session: {
       activeWorktreePath: ALPHA,
       activeTabId: 'T1',
@@ -93,11 +94,11 @@ function snapshot(revision: number): RemoteWorkspaceSnapshot {
       lastVisitedAtByWorktreePath: { [ALPHA]: revision, [BETA]: revision },
       defaultTerminalTabsAppliedByWorktreePath: { [ALPHA]: true, [BETA]: true }
     }
-  } satisfies RemoteWorkspaceSnapshot
+  } satisfies RemoteWorkspaceObservedSnapshot
 }
 
 /** Same shape as the snapshot above, minus the terminal rows. */
-function emptySnapshot(revision: number): RemoteWorkspaceSnapshot {
+function emptySnapshot(revision: number): RemoteWorkspaceObservedSnapshot {
   const base = snapshot(revision)
   return {
     ...base,
@@ -155,7 +156,47 @@ function landHostLineage(store: TestStore): void {
   })
 }
 
-async function applySnapshot(store: TestStore, snap: RemoteWorkspaceSnapshot): Promise<void> {
+function landAlphaLineage(store: TestStore): void {
+  store.setState({
+    worktreesByRepo: {
+      repoA: [
+        makeWorktree({
+          id: ALPHA_ID,
+          repoId: 'repoA',
+          path: ALPHA,
+          hostId: `ssh:${TARGET_ID}`
+        } as never)
+      ]
+    }
+  })
+}
+
+function addLocalTab(store: TestStore, tabId: string): void {
+  const current = store.getState()
+  store.setState({
+    tabsByWorktree: {
+      ...current.tabsByWorktree,
+      [ALPHA_ID]: [
+        ...(current.tabsByWorktree[ALPHA_ID] ?? []),
+        {
+          id: tabId,
+          worktreeId: ALPHA_ID,
+          ptyId: null,
+          title: tabId,
+          customTitle: null,
+          color: null,
+          sortOrder: 99,
+          createdAt: Date.now()
+        } as never
+      ]
+    }
+  })
+}
+
+async function applySnapshot(
+  store: TestStore,
+  snap: RemoteWorkspaceObservedSnapshot
+): Promise<void> {
   await applyDirectSshRemoteWorkspaceSnapshot({
     store,
     snapshot: snap,
@@ -184,6 +225,42 @@ function syncPhase(store: TestStore): string | undefined {
 }
 
 describe('a host snapshot whose terminal tabs cannot be placed locally', () => {
+  it('merges against state changed while an unplaced path waits and times out', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = createStore()
+      // ALPHA is placeable, while BETA keeps the placement waiter open.
+      landAlphaLineage(store)
+
+      const pending = applyDirectSshRemoteWorkspaceSnapshot({
+        store,
+        snapshot: snapshot(100),
+        token: token(100),
+        arrival: 1,
+        isArrivalCurrent: () => true,
+        isPreparationTokenCurrent: () => true,
+        waitForWorkspaceSessionReady: async () => true,
+        finalizeHydratedTerminals: () => 0
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      addLocalTab(store, 'created-while-waiting')
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      await pending
+
+      expect(adoptedTabIds(store)).toContain('created-while-waiting')
+      expect(store.getState().tabsByWorktree[ALPHA_ID]?.map((tab) => tab.id)).toEqual([
+        'T1',
+        'T2',
+        'created-while-waiting'
+      ])
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
   it('does not call the empty result authoritative when the local catalog never landed', async () => {
     const store = createStore()
     // Degraded lineage: the catalog holds no worktree row for this host.

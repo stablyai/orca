@@ -16,6 +16,7 @@ function context(): StructuredAgentSessionEvictionContext & { order: string[] } 
       unbind: vi.fn(() => order.push('unbind')),
       drained: vi.fn(async () => {
         order.push('drained')
+        return { ok: true }
       }),
       close: vi.fn(() => order.push('close'))
     } as unknown as StructuredAgentSessionEvictionContext['eventSink'],
@@ -79,6 +80,24 @@ describe('structured agent session eviction', () => {
       'release-lease',
       'forget-session'
     ])
+  })
+
+  it('aborts after a failed drain barrier without unbinding or forgetting the session', async () => {
+    const ctx = context()
+    ctx.eventSink.drained = vi.fn(async () => {
+      ctx.order.push('drained')
+      return { ok: false, error: new Error('append failed') }
+    }) as unknown as StructuredAgentSessionEvictionContext['eventSink']['drained']
+
+    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
+      step: 'drain-published'
+    })
+    expect(ctx.eventSink.unbind).not.toHaveBeenCalled()
+    expect(ctx.eventSink.close).not.toHaveBeenCalled()
+    expect(ctx.discardSink).not.toHaveBeenCalled()
+    expect(ctx.releaseLease).not.toHaveBeenCalled()
+    expect(ctx.forget).not.toHaveBeenCalled()
+    expect(ctx.order).toEqual(['closeSession', 'drained'])
   })
 })
 

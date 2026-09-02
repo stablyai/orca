@@ -49,7 +49,9 @@ export async function listWorktreeLineageForRuntime(
     lineage?: Record<string, WorktreeLineage>
     workspaceLineage?: Record<string, WorkspaceLineage>
   }
-  const normalizeLineageResponse = (value: Record<string, WorktreeLineage> | LineageListResponse) =>
+  const normalizeLineageResponse = (
+    value: Record<string, WorktreeLineage> | LineageListResponse
+  ) =>
     Object.hasOwn(value, 'lineage') || Object.hasOwn(value, 'workspaceLineage')
       ? {
           worktreeLineageById: (value as LineageListResponse).lineage ?? {},

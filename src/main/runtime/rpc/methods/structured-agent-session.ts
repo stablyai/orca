@@ -91,7 +91,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
           envelope: { ...params.envelope, payloadFingerprint: hostFingerprint }
         })
         if (result.ok && resolved.agent === 'codex') {
-          ctx.runtime.publishStructuredAgentSessionTab({
+          await ctx.runtime.publishStructuredAgentSessionTab({
             workspaceId: resolved.location.workspaceId,
             sessionId: result.value.sessionId,
             agent: 'codex',
@@ -128,7 +128,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.close',
     params: OptionsParams,
     handler: async (params, ctx) => {
-      await requireHost(ctx).close(params.sessionId)
+      const host = requireHost(ctx)
+      await host.close(params.sessionId)
+      // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
+      if (typeof host.setSessionTabVisibility === 'function') {
+        await host.setSessionTabVisibility(params.sessionId, false)
+      }
       return { ok: true as const }
     }
   }),

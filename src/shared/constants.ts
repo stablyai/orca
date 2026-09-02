@@ -83,14 +83,13 @@ export const getDefaultTerminalRightClickToPaste = (
   platform = typeof process !== 'undefined' ? process.platform : ''
 ): boolean => platform === 'win32'
 
-/** Why: ProseMirror renders the whole document — no virtualization — so cost is
- *  linear in file size and every keystroke re-runs it. Measured in a packaged
- *  build (M-series, `out/`), typing latency and the blocking mount on open:
- *  100 KB 17 ms / 0 ms · 200 KB 46 ms / 0 ms · 300 KB 84 ms / 1.4 s ·
- *  600 KB 265 ms / 4.2 s. 300 KB is already the knee, so this is a ceiling to
- *  hold rather than raise; past it, fall back to source mode (Monaco) with a
- *  per-file "Open anyway" escape hatch. Real headroom needs #7056. */
-export const RICH_MARKDOWN_MAX_SIZE_BYTES = 300 * 1024
+/** Why: ProseMirror renders the whole document without virtualization. After the
+ *  parser/highlighter work in #17134/#17147/#17158, M-series Electron measurements
+ *  on distinct code blocks every ~600 bytes put visible mount / longest task at
+ *  300 KB 0.70 / 0.66 s · 450 KB 1.09 / 1.02 s · 600 KB 1.49 / 1.41 s, with
+ *  600 KB typing at 38 ms median / 39 ms p95. Bytes remain the only cheap
+ *  pre-parse guard; larger files use source mode with an "Open anyway" escape hatch. */
+export const RICH_MARKDOWN_MAX_SIZE_BYTES = 600 * 1024
 
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
 export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250

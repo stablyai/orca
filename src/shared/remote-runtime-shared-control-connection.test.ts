@@ -1,16 +1,5 @@
 import path from 'node:path'
-import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { WebSocketServer, type WebSocket } from 'ws'
-import {
-  decrypt,
-  deriveSharedKey,
-  encrypt,
-  generateKeyPair,
-  publicKeyFromBase64,
-  publicKeyToBase64
-} from './e2ee-crypto'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
 import {
   REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
   retainedRemoteRuntimeJsonStringBytes,
@@ -21,36 +10,22 @@ import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabil
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
+import {
+  closeSharedControlTestServers,
+  createSharedControlTestServer as createServer
+} from './remote-runtime-shared-control-test-server'
 
 const TEST_PROJECT_PATH = path.join('tmp', 'project')
-type TestServer = {
-  pairing: PairingOffer
-  requests: { id: string; method: string; params?: unknown }[]
-  auths: unknown[]
-  connectionCount: () => number
-  flushDelayedResponses: () => void
-}
 
-const servers: WebSocketServer[] = []
-
-afterEach(async () => {
-  await Promise.all(
-    servers.splice(0).map(
-      (server) =>
-        new Promise<void>((resolve) => {
-          for (const client of server.clients) {
-            client.close()
-          }
-          server.close(() => resolve())
-        })
-    )
-  )
-})
+afterEach(closeSharedControlTestServers)
 
 describe('RemoteRuntimeSharedControlConnection', () => {
   it('routes multiple one-shot RPCs over one authenticated WebSocket', async () => {
     const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const states: string[] = []
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      onDiagnosticsChanged: ({ state }) => states.push(state)
+    })
 
     const first = await connection.request('worktree.ps', undefined, 1000)
     const second = await connection.request('session.tabs.listAll', null, 1000)
@@ -67,8 +42,9 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       'worktree.ps',
       'session.tabs.listAll'
     ])
-
-    connection.close()
+    expect((connection.close(), states)).toEqual(
+      expect.arrayContaining(['awaiting_ready', 'ready', 'closed'])
+    )
   })
 
   it('preserves orchestration authority fields on shared-control requests', async () => {
@@ -695,7 +671,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     })
   })
 
-  it('rejects pending requests and records close diagnostics when the socket closes', async () => {
+  it('rejects pending requests and schedules standing recovery when the socket closes', async () => {
     const server = await createServer({ closeBeforeResponse: true })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
 
@@ -703,215 +679,12 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       'Remote Orca runtime closed the connection'
     )
     expect(connection.getDiagnostics()).toMatchObject({
-      state: 'closed',
+      state: 'reconnecting',
       pendingRequestCount: 0,
       lastClose: { code: 4001, reason: 'test close' }
     })
-
+    connection.pauseStandingRetry()
+    expect(connection.getDiagnostics()).toMatchObject({ state: 'closed' })
     connection.close()
   })
 })
-
-async function createServer(
-  options: {
-    delaySubscriptionReady?: boolean
-    sendKeepaliveBeforeResponse?: boolean
-    keepaliveDelayMs?: number
-    responseDelayMs?: number
-    sendBinaryAfterAuth?: boolean
-    sendUnknownResponseBeforeResponse?: boolean
-    closeAfterFirstStreamingResponse?: boolean
-    closeBeforeResponse?: boolean
-    suppressReadyFrame?: boolean
-    suppressReadyFrameCount?: number
-    // Why: half-open simulation — the socket stays open but never answers
-    // protocol pings, like a wedged tunnel that swallows frames silently.
-    disableAutoPong?: boolean
-    delayedMethods?: string[]
-    silentMethods?: string[]
-  } = {}
-): Promise<TestServer> {
-  const serverKeyPair = generateKeyPair()
-  const requests: TestServer['requests'] = []
-  const auths: unknown[] = []
-  const delayedResponses: (() => void)[] = []
-  let connectionCount = 0
-  let closedAfterFirstStreamingResponse = false
-  const wss = new WebSocketServer({ port: 0, autoPong: options.disableAutoPong !== true })
-  servers.push(wss)
-
-  wss.on('connection', (ws) => {
-    connectionCount += 1
-    let sharedKey: Uint8Array | null = null
-    let authenticated = false
-    ws.on('message', (data, isBinary) => {
-      if (isBinary) {
-        return
-      }
-      const frame = data.toString()
-      if (!sharedKey) {
-        const hello = JSON.parse(frame) as { publicKeyB64: string }
-        sharedKey = deriveSharedKey(
-          serverKeyPair.secretKey,
-          publicKeyFromBase64(hello.publicKeyB64)
-        )
-        if (
-          options.suppressReadyFrame ||
-          connectionCount <= (options.suppressReadyFrameCount ?? 0)
-        ) {
-          return
-        }
-        ws.send(JSON.stringify({ type: 'e2ee_ready' }))
-        return
-      }
-      const plaintext = decrypt(frame, sharedKey)
-      if (!plaintext) {
-        return
-      }
-      if (!authenticated) {
-        auths.push(JSON.parse(plaintext))
-        authenticated = true
-        sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
-        if (options.sendBinaryAfterAuth) {
-          ws.send(Buffer.from([1, 2, 3]), { binary: true })
-        }
-        return
-      }
-      handleRequest(
-        ws,
-        sharedKey,
-        requests,
-        JSON.parse(plaintext),
-        {
-          ...options,
-          closeAfterStreamingResponse: () => {
-            if (!options.closeAfterFirstStreamingResponse || closedAfterFirstStreamingResponse) {
-              return false
-            }
-            closedAfterFirstStreamingResponse = true
-            return true
-          }
-        },
-        delayedResponses
-      )
-    })
-  })
-
-  await new Promise<void>((resolve) => wss.once('listening', resolve))
-  const address = wss.address() as AddressInfo
-  const pairing = parsePairingCode(
-    encodePairingOffer({
-      v: 2,
-      endpoint: `ws://127.0.0.1:${address.port}`,
-      deviceToken: 'device-token',
-      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
-    })
-  )
-  if (!pairing) {
-    throw new Error('Failed to create test pairing')
-  }
-  return {
-    pairing,
-    requests,
-    auths,
-    connectionCount: () => connectionCount,
-    flushDelayedResponses: () => delayedResponses.splice(0).forEach((send) => send())
-  }
-}
-
-function handleRequest(
-  ws: WebSocket,
-  sharedKey: Uint8Array,
-  requests: TestServer['requests'],
-  request: { id: string; method: string; params?: unknown },
-  options: {
-    delaySubscriptionReady?: boolean
-    sendKeepaliveBeforeResponse?: boolean
-    keepaliveDelayMs?: number
-    responseDelayMs?: number
-    sendUnknownResponseBeforeResponse?: boolean
-    closeAfterStreamingResponse?: () => boolean
-    closeBeforeResponse?: boolean
-    delayedMethods?: string[]
-    silentMethods?: string[]
-  },
-  delayedResponses: (() => void)[]
-): void {
-  requests.push(request)
-  // Why: keepalives are armed by an unrelated long-poll and keep flowing even
-  // while a method is deliberately silent — emit them before the silent return.
-  if (options.sendKeepaliveBeforeResponse && options.keepaliveDelayMs !== undefined) {
-    const timer = setInterval(
-      () => sendEncrypted(ws, sharedKey, { _keepalive: true }),
-      options.keepaliveDelayMs
-    )
-    ws.once('close', () => clearInterval(timer))
-  }
-  if (options.silentMethods?.includes(request.method)) {
-    return
-  }
-  if (options.closeBeforeResponse) {
-    ws.close(4001, 'test close')
-    return
-  }
-  const streaming = isStreamingMethod(request.method)
-  const result = streaming
-    ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
-    : { method: request.method }
-  const sendResponse = (): void => {
-    if (options.sendUnknownResponseBeforeResponse) {
-      sendEncrypted(ws, sharedKey, {
-        id: 'unknown-response-id',
-        ok: true,
-        result: { method: 'unknown' },
-        _meta: { runtimeId: 'runtime-test' }
-      })
-    }
-    sendEncrypted(ws, sharedKey, {
-      id: request.id,
-      ok: true,
-      result,
-      streaming: streaming ? true : undefined,
-      _meta: { runtimeId: 'runtime-test' }
-    })
-  }
-  const closeAfterResponse = streaming && options.closeAfterStreamingResponse?.() === true
-  // Delayed/periodic keepalives are handled by the interval above; here we only
-  // cover the immediate single-keepalive-before-response case.
-  if (options.sendKeepaliveBeforeResponse && options.keepaliveDelayMs === undefined) {
-    sendEncrypted(ws, sharedKey, { _keepalive: true })
-  }
-  if (options.delaySubscriptionReady && streaming) {
-    delayedResponses.push(sendResponse)
-    return
-  }
-  if (options.delayedMethods?.includes(request.method)) {
-    delayedResponses.push(sendResponse)
-    return
-  }
-  if (options.responseDelayMs !== undefined) {
-    setTimeout(() => {
-      sendResponse()
-      if (closeAfterResponse) {
-        setTimeout(() => ws.close(), 0)
-      }
-    }, options.responseDelayMs)
-    return
-  }
-  sendResponse()
-  if (closeAfterResponse) {
-    setTimeout(() => ws.close(), 0)
-  }
-}
-
-function isStreamingMethod(method: string): boolean {
-  return (
-    method.endsWith('.subscribe') ||
-    method === 'session.tabs.subscribeAll' ||
-    method === 'files.watch'
-  )
-}
-
-function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {
-  ws.send(encrypt(JSON.stringify(message), sharedKey))
-}

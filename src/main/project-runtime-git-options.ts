@@ -1,6 +1,10 @@
 import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
-import { resolveLocalProjectRuntimeForRepo } from './local-project-runtime-resolution'
+import { isFolderRepo } from '../shared/repo-kind'
+import {
+  resolveLocalProjectRuntimeForRepo,
+  type ProjectRuntimeResolutionStore
+} from './local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 
 export {
@@ -55,6 +59,28 @@ export function getLocalProjectWorktreeGitOptions(
   return wslDistro ? { wslDistro } : {}
 }
 
+/**
+ * Git routing for the speculative worktree-create warm-up.
+ *
+ * Deliberately non-throwing where `getLocalProjectWorktreeGitOptions` throws: an
+ * optimistic prefetch must not report a repair-required runtime as a failure, so
+ * an unresolved runtime falls back to the host Git the warm-up used before
+ * routing existed.
+ */
+export function getWorktreeCreatePrefetchGitOptions(
+  store: Store,
+  repo: Repo
+): LocalProjectWorktreeGitOptions {
+  if (isFolderRepo(repo)) {
+    return {}
+  }
+  const projectRuntime = resolveLocalProjectRuntimeForRepo(store, repo)
+  if (!projectRuntime || projectRuntime.status !== 'resolved') {
+    return {}
+  }
+  return getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+}
+
 export function getLocalProjectWorktreeGitOptionsForRuntime(
   repo: Repo,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -63,4 +89,22 @@ export function getLocalProjectWorktreeGitOptionsForRuntime(
   // every project once per repo on a polling path.
   const { wslDistro } = getLocalProjectGitExecOptionsForRuntime(repo, projectRuntime)
   return wslDistro ? { wslDistro } : {}
+}
+
+/**
+ * Distro whose filesystem this repo's worktrees belong on, or undefined.
+ *
+ * Deliberately non-throwing where `getLocalProjectGitExecOptions` throws: a
+ * runtime that needs repair must not block creating a worktree, it just falls
+ * back to the Windows-side placement that has always been used.
+ */
+export function getWorktreeMirrorDistro(
+  store: ProjectRuntimeResolutionStore,
+  repo: Repo
+): string | undefined {
+  const projectRuntime = resolveLocalProjectRuntimeForRepo(store, repo)
+  if (!projectRuntime || projectRuntime.status !== 'resolved') {
+    return undefined
+  }
+  return projectRuntime.runtime.kind === 'wsl' ? projectRuntime.runtime.distro : undefined
 }

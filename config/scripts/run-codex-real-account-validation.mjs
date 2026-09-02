@@ -520,7 +520,11 @@ async function main() {
 
     if (!options.dryRun) {
       const mainPath = buildAppIfNeeded(repoRoot, options.skipBuild)
-      app = await electron.launch({ args: [mainPath], env: launchEnv })
+      app = await electron.launch({
+        args: [mainPath],
+        // Why: a validation run must not pull the window over the developer's work.
+        env: { ...launchEnv, ORCA_BACKGROUND_LAUNCH: '1' }
+      })
       report.electronPaths = await app.evaluate(({ app: electronApp }) => ({
         home: electronApp.getPath('home'),
         userData: electronApp.getPath('userData'),

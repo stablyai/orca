@@ -95,6 +95,8 @@ function hostStub(): StructuredAgentSessionHost {
     })),
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
+    close: vi.fn(async () => undefined),
+    setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
@@ -178,6 +180,14 @@ afterEach(() => {
 })
 
 describe('capability gating', () => {
+  it('clears durable tab visibility when closing through the agent-session RPC', async () => {
+    const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
+  })
+
   it('advertises the capability without bumping the protocol version', () => {
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)

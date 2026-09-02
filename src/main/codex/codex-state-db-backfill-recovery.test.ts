@@ -191,13 +191,11 @@ describe('Codex state DB backfill recovery', () => {
 
     const summary = await runCodexStateDbBackfillRecovery('/managed-home', controller.signal, {
       spawnProcess: spawnProcess as never,
-      readStatus: vi.fn(
-        (): CodexStateDbBackfillStatus => ({
-          kind: 'incomplete',
-          stateDbPath: '/state.sqlite',
-          status: 'running'
-        })
-      ),
+      readStatus: vi.fn((): CodexStateDbBackfillStatus => ({
+        kind: 'incomplete',
+        stateDbPath: '/state.sqlite',
+        status: 'running'
+      })),
       terminate,
       sleep,
       now: () => now
@@ -270,15 +268,14 @@ describe('Codex state DB backfill recovery', () => {
       new AbortController().signal,
       {
         spawnProcess: spawnProcess as never,
-        readStatus: vi.fn(
-          (): CodexStateDbBackfillStatus =>
-            spawnProcess.mock.calls.length >= 3
-              ? { kind: 'complete', stateDbPath: '/state.sqlite' }
-              : {
-                  kind: 'incomplete',
-                  stateDbPath: '/state.sqlite',
-                  status: 'running'
-                }
+        readStatus: vi.fn((): CodexStateDbBackfillStatus =>
+          spawnProcess.mock.calls.length >= 3
+            ? { kind: 'complete', stateDbPath: '/state.sqlite' }
+            : {
+                kind: 'incomplete',
+                stateDbPath: '/state.sqlite',
+                status: 'running'
+              }
         ),
         terminate: terminate as never,
         sleep,
@@ -328,11 +325,10 @@ describe('Codex state DB backfill recovery', () => {
     await expect(
       runCodexStateDbBackfillRecovery('/managed-home', new AbortController().signal, {
         spawnProcess: spawnProcess as never,
-        readStatus: vi.fn(
-          (): CodexStateDbBackfillStatus =>
-            spawnCount >= 2
-              ? { kind: 'complete', stateDbPath: '/state.sqlite' }
-              : { kind: 'incomplete', stateDbPath: '/state.sqlite', status: 'running' }
+        readStatus: vi.fn((): CodexStateDbBackfillStatus =>
+          spawnCount >= 2
+            ? { kind: 'complete', stateDbPath: '/state.sqlite' }
+            : { kind: 'incomplete', stateDbPath: '/state.sqlite', status: 'running' }
         ),
         terminate,
         sleep: vi.fn(async (ms: number) => {
@@ -427,11 +423,10 @@ describe('Codex state DB backfill recovery', () => {
       }
       return child
     })
-    const readStatus = vi.fn(
-      (): CodexStateDbBackfillStatus =>
-        spawnCount >= 2
-          ? { kind: 'complete', stateDbPath: '/state.sqlite' }
-          : { kind: 'incomplete', stateDbPath: '/state.sqlite', status: 'running' }
+    const readStatus = vi.fn((): CodexStateDbBackfillStatus =>
+      spawnCount >= 2
+        ? { kind: 'complete', stateDbPath: '/state.sqlite' }
+        : { kind: 'incomplete', stateDbPath: '/state.sqlite', status: 'running' }
     )
 
     await expect(
