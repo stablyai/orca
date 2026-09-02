@@ -876,6 +876,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       .mockRejectedValueOnce(new Error('completion persistence unavailable'))
       .mockResolvedValueOnce(undefined)
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      args.onAgentStatus?.({ state: 'working' })
       args.onAgentStatus?.({ state: 'done' })
       return {
         tabId: 'agent-tab',
@@ -918,6 +919,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     })
 
     await registerAndDispatch()
+    onAgentStatus?.({ state: 'working' })
     onAgentStatus?.({ state: 'done' })
     onAgentStatus?.({ state: 'done' })
     await vi.waitFor(() => expect(errorSpy).toHaveBeenCalledOnce())
