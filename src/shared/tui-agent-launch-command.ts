@@ -21,7 +21,6 @@ export type ResolvedAgentLaunchCommand =
     }
   | { ok: false; error: string }
 
-// Why: split from tui-agent-config.ts to keep that file under the oxlint max-lines (300) budget.
 export function getTuiAgentLaunchCommand(
   config: TuiAgentConfig,
   platform: NodeJS.Platform,
