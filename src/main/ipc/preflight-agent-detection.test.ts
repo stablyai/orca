@@ -12,6 +12,7 @@ const {
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
   isCommandOnLocalPathMock,
+  resolveCommandOnLocalPathMock,
   mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
@@ -26,6 +27,7 @@ const {
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
+  resolveCommandOnLocalPathMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
 }))
@@ -34,6 +36,11 @@ const runWslProcessMock = vi.hoisted(() => vi.fn())
 // Why the runner and not child_process: WSL agent detection goes through
 // runWslProcess now, so a child_process mock never sees it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+
+const runProcessMock = vi.hoisted(() => vi.fn())
+// Why: the identity probe starts the resolved executable through runProcess
+// (so Windows `.cmd` shims work), which the child_process mock never sees.
+vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -64,7 +71,8 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 // These tests express "which commands are on PATH" via the where/which mock,
 // so route the resolver through that same mock to preserve their intent.
 vi.mock('./command-path-resolver', () => ({
-  isCommandOnLocalPath: isCommandOnLocalPathMock
+  isCommandOnLocalPath: isCommandOnLocalPathMock,
+  resolveCommandOnLocalPath: resolveCommandOnLocalPathMock
 }))
 
 vi.mock('../pty/windows-environment-path', () => ({
@@ -123,6 +131,7 @@ describe('preflight', () => {
 
   beforeEach(() => {
     runWslProcessMock.mockReset()
+    runProcessMock.mockReset()
     resetPreflightMocks(
       {
         handleMock,
@@ -135,6 +144,7 @@ describe('preflight', () => {
         getGiteaAuthStatusMock,
         resolveCliCommandsMock,
         isCommandOnLocalPathMock,
+        resolveCommandOnLocalPathMock,
         mergePersistedWindowsPathAsyncMock,
         mergePersistedWindowsPathMock
       },
@@ -483,109 +493,118 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
   })
 
-  it('detects IBM Bob from the installed bob executable', async () => {
+  const BOB_PATH = '/home/test/.local/bin/bob'
+
+  function whichFinds(paths: Record<string, string>): void {
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
-      if (String(args[0]) === 'bob') {
-        return { stdout: '/home/test/.local/bin/bob\n' }
+      const found = paths[String(args[0])]
+      if (found) {
+        return { stdout: `${found}\n` }
       }
       throw new Error('not found')
     })
+  }
+
+  function bobHelpPrints(stdout: string, code = 0): void {
+    runProcessMock.mockImplementation(
+      async (spec: { program: string; args: readonly string[] }) => {
+        if (spec.program === BOB_PATH && spec.args[0] === '--help') {
+          return { code, signal: null, stdout, stderr: '', timedOut: false }
+        }
+        throw new Error(`unexpected program ${spec.program}`)
+      }
+    )
+  }
+
+  it('detects IBM Bob by probing the executable detection resolved', async () => {
+    whichFinds({ bob: BOB_PATH })
+    bobHelpPrints(BOB_SHELL_2_0_1_HELP)
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
+    expect(runProcessMock.mock.calls[0][0]).toMatchObject({ program: BOB_PATH, args: ['--help'] })
+  })
+
+  it('excludes the Neovim version manager when it owns the bob executable', async () => {
+    whichFinds({ bob: '/home/test/.cargo/bin/bob' })
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: 'bob 4.0.3\nA version manager for Neovim\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+    expect(runProcessMock.mock.calls[0][0]).toMatchObject({ program: '/home/test/.cargo/bin/bob' })
+  })
+
+  it('keeps IBM Bob when the identity probe cannot start', async () => {
+    // Why: a probe that errors says nothing about identity, so it must not hide a real install.
+    whichFinds({ bob: BOB_PATH })
+    runProcessMock.mockRejectedValue(new Error('probe unavailable'))
 
     await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
   })
 
-  it('excludes the Neovim version manager when it owns the bob executable', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command === 'which') {
-        if (String(args[0]) === 'bob') {
-          return { stdout: '/home/test/.cargo/bin/bob\n' }
-        }
-        throw new Error('not found')
-      }
-      if (command === 'bob' && String(args[0]) === '--help') {
-        return { stdout: 'bob 4.0.3\nA version manager for Neovim\n', stderr: '' }
-      }
-      throw new Error(`unexpected command ${String(command)}`)
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual([])
-  })
-
-  it('keeps IBM Bob when the identity probe fails', async () => {
-    // Why: a probe that errors says nothing about identity, so it must not hide a real install.
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command === 'which') {
-        if (String(args[0]) === 'bob') {
-          return { stdout: '/home/test/.local/bin/bob\n' }
-        }
-        throw new Error('not found')
-      }
-      throw new Error('probe unavailable')
-    })
+  it('keeps IBM Bob when the identity probe exits non-zero', async () => {
+    whichFinds({ bob: BOB_PATH })
+    bobHelpPrints('A version manager for Neovim\n', 1)
 
     await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
   })
 
   it('keeps IBM Bob when its own help text is returned', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command === 'which') {
-        if (String(args[0]) === 'bob') {
-          return { stdout: '/home/test/.local/bin/bob\n' }
-        }
-        throw new Error('not found')
-      }
-      if (command === 'bob' && String(args[0]) === '--help') {
-        return {
-          stdout:
-            'Usage: bob [options] [command]\n\nBob in your terminal\n\n  --accept-license  Accept the IBM license agreement and continue\n',
-          stderr: ''
-        }
-      }
-      throw new Error(`unexpected command ${String(command)}`)
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
-  })
-
-  it('keeps IBM Bob for the verbatim Bob Shell 2.0.1 help text', async () => {
-    // Why: both identity anchors are prose (the tagline and the --accept-license
-    // description). Pinning the real output makes a fixture refresh from a newer
-    // Bob fail in review instead of silently false-positiving on the Neovim bob.
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command === 'which') {
-        if (String(args[0]) === 'bob') {
-          return { stdout: '/home/test/.local/bin/bob\n' }
-        }
-        throw new Error('not found')
-      }
-      if (command === 'bob' && String(args[0]) === '--help') {
-        return { stdout: BOB_SHELL_2_0_1_HELP, stderr: '' }
-      }
-      throw new Error(`unexpected command ${String(command)}`)
-    })
+    whichFinds({ bob: BOB_PATH })
+    bobHelpPrints(
+      'Usage: bob [options] [command]\n\nBob in your terminal\n\n  --accept-license  Accept the IBM license agreement and continue\n'
+    )
 
     await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
   })
 
   it('excludes an unrelated bob executable whose help carries no Bob Shell signature', async () => {
     // Why: the exclusion is otherwise fail-open, so any stray `bob` script would pass as IBM Bob.
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command === 'which') {
-        if (String(args[0]) === 'bob') {
-          return { stdout: '/home/test/.local/bin/bob\n' }
-        }
-        throw new Error('not found')
-      }
-      if (command === 'bob' && String(args[0]) === '--help') {
-        return { stdout: 'usage: bob <target>\nProject build runner\n', stderr: '' }
-      }
-      throw new Error(`unexpected command ${String(command)}`)
-    })
+    whichFinds({ bob: BOB_PATH })
+    bobHelpPrints('usage: bob <target>\nProject build runner\n')
 
     await expect(detectInstalledAgents()).resolves.toEqual([])
+  })
+
+  it('probes the install-dir executable when bob is absent from PATH', async () => {
+    // Why: a cold GUI launch finds CLIs in user install dirs before PATH is
+    // hydrated; probing the bare name there would ENOENT and fail open.
+    whichFinds({})
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) =>
+        new Map(commands.map((command) => [command, command === 'bob' ? BOB_PATH : command]))
+    )
+    bobHelpPrints('A version manager for Neovim\n')
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+    expect(runProcessMock.mock.calls[0][0]).toMatchObject({ program: BOB_PATH })
+  })
+
+  it('reuses the identity probe for the same executable across detections', async () => {
+    whichFinds({ bob: BOB_PATH })
+    bobHelpPrints(BOB_SHELL_2_0_1_HELP)
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reuse a failed identity probe', async () => {
+    whichFinds({ bob: BOB_PATH })
+    runProcessMock.mockRejectedValueOnce(new Error('probe unavailable'))
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+    bobHelpPrints('A version manager for Neovim\n')
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+    expect(runProcessMock).toHaveBeenCalledTimes(2)
   })
 
   it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {

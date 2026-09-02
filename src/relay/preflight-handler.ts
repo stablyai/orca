@@ -9,6 +9,10 @@ import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 import { runProcess } from '../shared/child-process/run-process'
+import {
+  excludeMisidentifiedAgents,
+  type SerializedIdentityExclusion
+} from '../shared/tui-agent-identity-exclusion'
 
 const execFileAsync = promisify(execFile)
 
@@ -32,7 +36,10 @@ type AgentDetectionCommand = {
   reportVersion?: true
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly AgentDetectionRuntime[]
+  identityExclusion?: SerializedIdentityExclusion
 }
+
+const IDENTITY_PROBE_TIMEOUT_MS = 5000
 
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
@@ -78,9 +85,13 @@ export class PreflightHandler {
         executablePath: await resolveCommandPathForRelay(cmd)
       }))
     )
-    const foundCommands = new Set(
-      results.filter((result) => result.executablePath !== null).map(({ cmd }) => cmd)
-    )
+    const foundPaths = new Map<string, string>()
+    for (const { cmd, executablePath } of results) {
+      if (executablePath) {
+        foundPaths.set(cmd, executablePath)
+      }
+    }
+    const foundCommands = new Set(foundPaths.keys())
     const detectedCommands = commands.filter(
       (command) =>
         !isDetectionUnsupportedInRuntime(command, process.platform) &&
@@ -96,7 +107,7 @@ export class PreflightHandler {
       ) {
         continue
       }
-      const executablePath = results.find((result) => result.cmd === command.cmd)?.executablePath
+      const executablePath = foundPaths.get(command.cmd)
       if (!executablePath) {
         continue
       }
@@ -106,8 +117,16 @@ export class PreflightHandler {
       }
     }
 
+    // Why here too: a same-named unrelated tool on the SSH host would otherwise be
+    // reported as the agent; the client cannot probe a remote binary itself.
+    const agents = await excludeMisidentifiedAgents(
+      commands,
+      [...new Set(detectedCommands.map(({ id }) => id))],
+      foundCommands,
+      (cmd, args) => runIdentityProbe(foundPaths.get(cmd), args)
+    )
     return {
-      agents: [...new Set(detectedCommands.map(({ id }) => id))],
+      agents,
       ...(Object.keys(versions).length > 0 ? { versions } : {})
     }
   }
@@ -166,6 +185,26 @@ async function probeCommandVersion(executablePath: string): Promise<string | nul
   } catch {
     return null
   }
+}
+
+async function runIdentityProbe(
+  program: string | undefined,
+  args: readonly string[]
+): Promise<{ stdout: string; stderr: string }> {
+  if (!program) {
+    throw new Error('no resolved path to probe')
+  }
+  // Why runProcess: it starts Windows `.cmd` shims, which execFile cannot without a shell.
+  const result = await runProcess({
+    program,
+    args,
+    env: buildRelayCommandEnv(process.env, process.platform),
+    timeoutMs: IDENTITY_PROBE_TIMEOUT_MS
+  })
+  if (result.timedOut || result.code !== 0) {
+    throw new Error(`${program} exited with ${result.code ?? result.signal ?? 'timeout'}`)
+  }
+  return { stdout: result.stdout, stderr: result.stderr }
 }
 
 function isDetectionUnsupportedInRuntime(
