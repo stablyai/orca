@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { findKnownWorktreeById } from '../../store/slices/worktrees/listing/detected-worktree-meta'
 
 type MockState = {
   activeWorktreeId: string | null
@@ -29,6 +30,8 @@ type MockState = {
   >
   repos: { id: string; displayName?: string; connectionId?: string | null }[]
   folderWorkspaces: { id: string; projectGroupId: string; name: string; folderPath: string }[]
+  detectedWorktreesByRepo: Record<string, unknown[]>
+  getKnownWorktreeById: (worktreeId: string) => unknown
   settings: {
     experimentalTerminalAttention?: boolean
     notifications?: {
@@ -141,6 +144,14 @@ describe('dispatchTerminalNotification', () => {
       },
       repos: [{ id: 'repo1', displayName: 'orca', connectionId: null }],
       folderWorkspaces: [],
+      detectedWorktreesByRepo: {},
+      // The real resolver, bound to this mock state — keeps the folder tests
+      // exercising the actual folder-workspace projection.
+      getKnownWorktreeById: (worktreeId: string) =>
+        findKnownWorktreeById(
+          mockState as unknown as Parameters<typeof findKnownWorktreeById>[0],
+          worktreeId
+        ),
       settings: { experimentalTerminalAttention: true, notifications: { customSoundPath: null } },
       markWorktreeUnread: vi.fn(),
       markTerminalTabUnread: vi.fn(),
