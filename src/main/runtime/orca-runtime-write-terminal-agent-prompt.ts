@@ -59,7 +59,16 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
 
     if (renderGate) {
       try {
-        await waitForAgentPromptPromise(renderGate.wait(), options.signal)
+        // Why: the render gate is a readiness signal, not proof of ingest -- a redraw can
+        // fire before the child has attached the completed paste, so the byte-count floor
+        // still has to hold even on the closed-loop path.
+        await Promise.all([
+          waitForAgentPromptPromise(renderGate.wait(), options.signal),
+          waitForAgentPromptDelay(
+            getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
+            options.signal
+          )
+        ])
       } finally {
         renderGate.dispose()
       }
