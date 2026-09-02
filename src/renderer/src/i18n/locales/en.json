@@ -12609,7 +12609,7 @@
               },
               "compare": {
                 "summary": {
-                  "dd72a6fd37": "{{value0}} commit{{value1}} ahead of {{value2}}"
+                  "dd72a6fd37": "Commits ahead of {{value2}}: {{value0}}"
                 }
               },
               "conflict": {

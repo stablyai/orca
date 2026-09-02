@@ -168,7 +168,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.tab.bar.TabBarCreateEntry.b27864279e': {
     ko: '에이전트 실행',
-    zh: '启动代理',
+    zh: '启动智能体',
     ja: 'Agent を起動'
   },
   'auto.components.sidebar.SidebarNav.c39ab10000': {
@@ -427,12 +427,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.settings.AgentsPane.9bccf48906': {
     ko: '에이전트 위치',
-    zh: '代理位置',
+    zh: '智能体位置',
     ja: 'Agent の場所'
   },
   'auto.components.sidebar.SidebarNav.e518f544b1': {
     ko: '감지된 에이전트 없음',
-    zh: '未检测到代理',
+    zh: '未检测到智能体',
     ja: 'Agent が検出されません'
   },
   'auto.components.onboarding.OnboardingFlow.04ae28d8ca': {
@@ -467,7 +467,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.settings.ExperimentalPane.0277901cf7': {
     ko: '완료된 에이전트, 차단 질문, 읽지 않은 상태 및 작업 트리 생성 이벤트에 대한 스레드 작업 트리 피드가 있는 에이전트 항목을 왼쪽 사이드바에 추가합니다. 실험적 — 이벤트 모델과 UI가 변경될 수 있습니다.',
-    zh: '将代理条目添加到左侧边栏，其中包含已完成代理、阻塞待办、未读状态和工作树创建事件的线程工作树提要。实验性——事件模型和 UI 可能会改变。',
+    zh: '将智能体条目添加到左侧边栏，其中包含已完成智能体、阻塞待办、未读状态和工作树创建事件的线程工作树提要。实验性——事件模型和 UI 可能会改变。',
     ja: '完了した Agent、ブロック中の質問、未読状態、ワークツリー作成イベントのスレッドワークツリーフィード付き Agent 項目を左サイドバーに追加します。実験的 — イベントモデルと UI は変更される場合があります。'
   },
   'auto.lib.fix.checks.agent.launch.9f00d7df0c': {
