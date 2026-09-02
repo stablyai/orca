@@ -130,6 +130,9 @@ async function fetchNousAccountCredits(
 ): Promise<NousCreditsInfo | null> {
   try {
     const response = await fetch(`${portalBaseUrl}/api/oauth/account`, {
+      // Why: never follow a redirect — a compromised portal response must not
+      // exfiltrate the bearer token to a different origin (redirect: error).
+      redirect: 'error',
       headers: {
         Accept: 'application/json',
         Authorization: `Bearer ${token}`
@@ -171,6 +174,9 @@ export async function fetchNousRateLimits(
   try {
     const [response, nousCredits] = await Promise.all([
       fetch(`${authReadResult.session.portalBaseUrl}/api/billing/subscription`, {
+        // Why: never follow a redirect — a compromised portal response must not
+        // exfiltrate the bearer token to a different origin (redirect: error).
+        redirect: 'error',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${resolved.token}`

@@ -151,6 +151,9 @@ export async function resolveAccessToken(
   try {
     const response = await fetch(`${session.portalBaseUrl}/api/oauth/token`, {
       method: 'POST',
+      // Why: never follow a redirect — a compromised portal response must not
+      // exfiltrate the refresh token to a different origin (redirect: error).
+      redirect: 'error',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/x-www-form-urlencoded',
