@@ -51,6 +51,8 @@ test.skip(
   process.env.ORCA_E2E_REAL_BOB !== '1' || !BOB_BIN_DIR,
   'needs ORCA_E2E_REAL_BOB=1 and a real, logged-in Bob Shell install on PATH'
 )
+// Why: the process-count test uses a system-wide pgrep, so sibling tests must not overlap.
+test.describe.configure({ mode: 'serial' })
 
 const BOB_COMPOSER_HINT = 'Build Anything'
 
@@ -216,10 +218,8 @@ test('Create Workspace defaults to IBM Bob and launches it first', async ({
   expect(pickerShowsBob).toBe(true)
   await testInfo.attach('composer', { body: await orcaPage.screenshot(), contentType: 'image/png' })
 
-  // Why: the quick composer has no prompt field (name, project, run-on, agent, branch, note);
-  // prompt delivery is covered by the orchestration worker path.
-  const promptVisible = false
-
+  // Why no prompt assertion: the quick composer has no prompt field; prompt
+  // delivery is covered by the orchestration worker path.
   const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
   await expect(createButton).toBeEnabled()
   await createButton.click()
@@ -233,17 +233,11 @@ test('Create Workspace defaults to IBM Bob and launches it first', async ({
 
   await focusActiveTerminalInput(orcaPage)
   await waitForTerminalOutput(orcaPage, BOB_COMPOSER_HINT, 60_000)
-  if (promptVisible) {
-    await expect
-      .poll(() => getTerminalContent(orcaPage), { timeout: 20_000 })
-      .toContain('E2E PROMPT')
-  }
   await testInfo.attach('workspace-bob', {
     body: await orcaPage.screenshot(),
     contentType: 'image/png'
   })
   testInfo.annotations.push({ type: 'picker-shows-bob', description: String(pickerShowsBob) })
-  testInfo.annotations.push({ type: 'prompt-field-found', description: String(promptVisible) })
 })
 
 async function launchBobFromNewTab(page: Parameters<typeof waitForSessionReady>[0]): Promise<void> {
