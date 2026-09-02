@@ -8,8 +8,14 @@ type FakeSession = RpcClient & {
   listenerCount: () => number
 }
 
-// Why: waitForAuthenticated only touches getState/onStateChange, so the fake keeps to
-// those two and tracks unsubscribe so the leak branches are observable.
+/**
+ * Builds a minimal RpcClient stand-in whose state can be driven from a test.
+ *
+ * Why: waitForAuthenticated only touches getState/onStateChange, so the fake keeps to
+ * those two and tracks unsubscribe so the leak branches are observable. Pass
+ * `emitOnSubscribe` to fire a state change synchronously during registration, which is
+ * the case the production file arms its timer before subscribing to survive.
+ */
 function fakeSession(
   initial: ConnectionState,
   options: { emitOnSubscribe?: ConnectionState } = {}

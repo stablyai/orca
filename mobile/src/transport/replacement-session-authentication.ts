@@ -1,8 +1,15 @@
 import type { RpcClient } from './rpc-client'
 
-// Why: a migration must not cut over to a session that has only opened a socket — the
-// replacement has to reach 'connected' (E2EE authenticated) first, and a relay dial can
-// sit in handshaking for seconds, so the wait is bounded by the caller's timeout.
+/**
+ * Resolves once `session` reaches 'connected' (E2EE authenticated), rejecting if it
+ * lands on a terminal state or the timeout elapses first.
+ *
+ * Why: a migration must not cut over to a session that has only opened a socket — the
+ * replacement has to reach 'connected' first, and a relay dial can sit in handshaking
+ * for seconds, so the wait is bounded by the caller's timeout. The rejection names the
+ * phase it timed out in, because 'connecting' (socket never opened) and 'handshaking'
+ * (E2EE stalled after it did) need different investigation.
+ */
 export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Promise<void> {
   if (session.getState() === 'connected') {
     return Promise.resolve()

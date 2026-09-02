@@ -17,6 +17,10 @@ export type RelayDialAttemptContext = {
   totalCredentials: number
 }
 
+/**
+ * Records a relay dial or active-session failure on the recovery log, appending the
+ * director's retry-after when present and the dialed credential when `context` is given.
+ */
 export function logRelayDialFailure(
   log: RelayRecoveryLog,
   error: Error | null,
