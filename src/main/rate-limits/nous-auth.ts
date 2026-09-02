@@ -113,8 +113,7 @@ export function readNousAuthSession(): NousAuthReadResult {
       return { status: 'missing' }
     }
     const state = providerState as Record<string, unknown>
-    const portalBaseUrl =
-      asOptionalString(state.portal_base_url) ?? DEFAULT_NOUS_PORTAL_BASE_URL
+    const portalBaseUrl = asOptionalString(state.portal_base_url) ?? DEFAULT_NOUS_PORTAL_BASE_URL
     // Why: fail closed on a tampered portal_base_url so the credentialed
     // requests below can never be redirected to an arbitrary host.
     if (!isTrustedNousPortalBaseUrl(portalBaseUrl)) {

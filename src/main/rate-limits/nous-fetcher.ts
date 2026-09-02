@@ -1,5 +1,9 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
-import { isTrustedNousPortalBaseUrl, readNousAuthSession, type NousAuthReadResult } from './nous-auth'
+import {
+  isTrustedNousPortalBaseUrl,
+  readNousAuthSession,
+  type NousAuthReadResult
+} from './nous-auth'
 import { asFiniteNumber, resolveAccessToken, withEndpointDeadline } from './nous-oauth'
 
 // Why: the portal subscription runs on a calendar-month cycle (cycleEndsAt).
