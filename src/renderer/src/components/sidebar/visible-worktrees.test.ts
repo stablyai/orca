@@ -837,6 +837,43 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([child.id])
   })
 
+  it('hides a bare repository backing store while keeping the linked checkout', () => {
+    const bare = { ...makeWorktree('bare'), isBare: true, isMainWorktree: true, branch: '' }
+    const linked = makeWorktree('linked')
+    expect(
+      computeVisibleWorktreeIds({ repo1: [bare, linked] }, [bare.id, linked.id], visibleOptions())
+    ).toEqual([linked.id])
+  })
+
+  it('does not resurrect a bare lineage parent as a sidebar card', () => {
+    const parent = {
+      ...makeWorktree('bare-parent'),
+      isBare: true,
+      isMainWorktree: true,
+      branch: ''
+    }
+    const child = makeWorktree('child')
+    const result = computeVisibleWorktreeIds(
+      { repo1: [parent, child] },
+      [child.id, parent.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
+        ptyIdsByTabId: { 't-child': ['p-child'] },
+        worktreeLineageById: { [child.id]: makeWorktreeLineage(child, parent) }
+      })
+    )
+    expect(result).toEqual([child.id])
+  })
+
+  it('keeps a non-bare main worktree visible as a primary checkout', () => {
+    const main = { ...makeWorktree('main'), isMainWorktree: true }
+    const linked = makeWorktree('linked')
+    expect(
+      computeVisibleWorktreeIds({ repo1: [main, linked] }, [main.id, linked.id], visibleOptions())
+    ).toEqual([main.id, linked.id])
+  })
+
   it('includes default-branch parents hidden by the explicit setting when a visible child needs them', () => {
     const parent = makeWorktree('parent')
     parent.isMainWorktree = true

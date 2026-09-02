@@ -94,8 +94,12 @@ export function computeVisibleWorktrees(
   // Filter archived
   all = all.filter((w) => !w.isArchived)
 
-  // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
-  // every other valid ancestor can bypass filters so children never orphan.
+  // Bare GIT_COMMON_DIR is storage, not a checkout (#16553).
+  all = all.filter((w) => !w.isBare)
+
+  // Why: sidebar lineage is structural. Archived and bare workspaces stay
+  // hidden, but every other valid ancestor can bypass filters so children
+  // never orphan.
   const lineageAncestorById = new Map(all.map((w) => [w.id, w]))
 
   if (opts.hideWorkspacesFromOtherDevices) {
