@@ -216,31 +216,33 @@ describe('checkForAndroidUpdate', () => {
     ).toBe('0.0.48')
   })
 
-  it('keeps a skip issued while a check is still in flight', async () => {
+  it('shares one in-flight request across overlapping checks', async () => {
+    const gate = deferred<void>()
+    const slow = vi.fn(async () => {
+      await gate.promise
+      return pageResponse({ body: [release('mobile-android-v0.0.48')] })
+    }) as unknown as typeof fetch
+    const first = checkForAndroidUpdate({ currentVersion: '0.0.47', now: 1, fetchFn: slow })
+    const second = checkForAndroidUpdate({ currentVersion: '0.0.47', now: 1, fetchFn: slow })
+    gate.resolve()
+    const results = await Promise.all([first, second])
+    expect(results.map((result) => result?.version)).toEqual(['0.0.48', '0.0.48'])
+    expect(slow).toHaveBeenCalledTimes(1)
+  })
+
+  it('persists a skip immediately while a request is pending, and the request honours it', async () => {
     const gate = deferred<void>()
     const slow = vi.fn(async () => {
       await gate.promise
       return pageResponse({ body: [release('mobile-android-v0.0.48')] })
     }) as unknown as typeof fetch
     const checking = checkForAndroidUpdate({ currentVersion: '0.0.47', now: 1, fetchFn: slow })
-    const skipping = skipAndroidUpdate('0.0.48')
+    // Why: resolving before the gate opens proves the skip is not queued behind the request.
+    await skipAndroidUpdate('0.0.48')
     gate.resolve()
-    await Promise.all([checking, skipping])
+    expect(await checking).toBeNull()
     expect(
       await checkForAndroidUpdate({ currentVersion: '0.0.47', now: 2, fetchFn: fetchReturning([]) })
-    ).toBeNull()
-  })
-
-  it('persists a skip immediately even while the release request is still pending', async () => {
-    const never = vi.fn(() => new Promise(() => {})) as unknown as typeof fetch
-    void checkForAndroidUpdate({ currentVersion: '0.0.47', now: 1, fetchFn: never })
-    await skipAndroidUpdate('0.0.48')
-    expect(
-      await checkForAndroidUpdate({
-        currentVersion: '0.0.47',
-        now: 2,
-        fetchFn: fetchReturning([release('mobile-android-v0.0.48')])
-      })
     ).toBeNull()
   })
 

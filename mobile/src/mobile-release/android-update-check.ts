@@ -104,6 +104,18 @@ function withStateLock<T>(task: () => Promise<T>): Promise<T> {
   return run
 }
 
+// Why: a mount check and an AppState "active" check can overlap; they must not each walk the pages.
+// ponytail: a stalled request delays the next check until it settles; add an AbortController deadline if that bites.
+let inFlightRelease: Promise<AndroidUpdate | null | undefined> | null = null
+function fetchLatestAndroidReleaseShared(fetchFn?: typeof fetch) {
+  inFlightRelease ??= fetchLatestAndroidRelease(fetchFn)
+    .catch(() => undefined)
+    .finally(() => {
+      inFlightRelease = null
+    })
+  return inFlightRelease
+}
+
 function isCheckDue(state: StoredState | null, now: number): boolean {
   if (state?.checkedAt == null) {
     return true
@@ -121,7 +133,7 @@ export async function checkForAndroidUpdate(opts: {
   if (isCheckDue(await loadState(), now)) {
     // Why: the request has no deadline, so it runs outside the lock; a skip must not wait on it.
     // A failed request leaves checkedAt stale so the next foreground retries instead of waiting a day.
-    const latest = await fetchLatestAndroidRelease(opts.fetchFn).catch(() => undefined)
+    const latest = await fetchLatestAndroidReleaseShared(opts.fetchFn)
     if (latest !== undefined) {
       await withStateLock(async () => {
         const fresh = await loadState()
