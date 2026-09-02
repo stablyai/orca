@@ -80,10 +80,32 @@ describe('Pi background subagent status', () => {
     vi.useFakeTimers()
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
 
+    expect(harness.eventListenerCount()).toBe(2)
+    await harness.callHook('agent_start')
+    harness.emitEvent('subagent:async-started', { id: 'run-1' })
+    await harness.callHook('agent_settled')
+    await harness.callHook('session_shutdown')
+    expect(harness.eventListenerCount()).toBe(0)
+
+    harness.reload()
+    expect(harness.eventListenerCount()).toBe(2)
+    await harness.callHook('session_start', { reason: 'reload' })
+    harness.emitEvent('subagent:async-complete', { runId: 'run-1' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
+  })
+
+  it('keeps stale process listeners inert when reload has no shutdown callback', async () => {
+    vi.useFakeTimers()
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+
     await harness.callHook('agent_start')
     harness.emitEvent('subagent:async-started', { id: 'run-1' })
     await harness.callHook('agent_settled')
     harness.reload()
+    expect(harness.eventListenerCount()).toBe(4)
+
     await harness.callHook('session_start', { reason: 'reload' })
     harness.emitEvent('subagent:async-complete', { runId: 'run-1' })
     await vi.advanceTimersByTimeAsync(0)

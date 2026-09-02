@@ -92,7 +92,7 @@ export function getPiAgentStatusBackgroundActivitySourceLines(
       kind === 'pi'
         ? [
             '  const processEvents = (pi as { events?: { on?: (name: string, handler: (payload: unknown) => void) => unknown } }).events',
-            "  processEvents?.on?.('subagent:async-started', (payload: unknown) => {",
+            '  const asyncStartedHandler = (payload: unknown): void => {',
             '    if (backgroundActivity.generation !== extensionGeneration) return',
             '    const id = (payload as { id?: unknown } | null)?.id',
             "    if (typeof id !== 'string' || !id || backgroundActivity.activeSubagentIds.has(id)) return",
@@ -101,13 +101,22 @@ export function getPiAgentStatusBackgroundActivitySourceLines(
             '    clearDeferredAgentEnd()',
             '    backgroundActivity.completionReported = false',
             "    if (!wasWorking) post('agent_start')",
-            '  })',
+            '  }',
             '',
-            "  processEvents?.on?.('subagent:async-complete', (payload: unknown) => {",
+            '  const asyncCompleteHandler = (payload: unknown): void => {',
             '    if (backgroundActivity.generation !== extensionGeneration) return',
             '    const runId = (payload as { runId?: unknown } | null)?.runId',
             "    if (typeof runId !== 'string' || !runId || !backgroundActivity.activeSubagentIds.delete(runId)) return",
             '    if (!isEffectivelyWorking()) scheduleDeferredAgentEnd()',
+            '  }',
+            '',
+            '  const backgroundEventUnsubscribes = [',
+            "    processEvents?.on?.('subagent:async-started', asyncStartedHandler),",
+            "    processEvents?.on?.('subagent:async-complete', asyncCompleteHandler),",
+            "  ].filter((unsubscribe): unsubscribe is () => void => typeof unsubscribe === 'function')",
+            '',
+            "  pi.on('session_shutdown', () => {",
+            '    for (const unsubscribe of backgroundEventUnsubscribes.splice(0)) unsubscribe()',
             '  })',
             ''
           ]
