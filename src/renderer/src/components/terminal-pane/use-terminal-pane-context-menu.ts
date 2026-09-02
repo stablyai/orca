@@ -73,6 +73,7 @@ type TerminalMenuState = {
   runForPane: <Result>(paneId: number, action: () => Result) => Result
 }
 
+/** Context-menu actions for a terminal tab, including Copy Terminal ID. */
 export function useTerminalPaneContextMenu({
   managerRef,
   paneTransportsRef,
@@ -167,8 +168,11 @@ export function useTerminalPaneContextMenu({
   const onCopyPaneId = async (): Promise<void> =>
     copyTerminalPaneMenuPaneId(resolveMenuPane(), tabId)
 
-  const onCopyTerminalId = async (): Promise<void> =>
-    copyTerminalPaneMenuTerminalId(resolveMenuPane(), tabId)
+  const onCopyTerminalId = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    const ptyId = pane ? (paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null) : null
+    return copyTerminalPaneMenuTerminalId(pane, tabId, ptyId)
+  }
 
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
 
