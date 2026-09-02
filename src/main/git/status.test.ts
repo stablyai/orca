@@ -264,7 +264,6 @@ describe('getStatus', () => {
 
   it('asks git for submodule entries only when the repo opted in', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
 
     await getStatus('/repo')

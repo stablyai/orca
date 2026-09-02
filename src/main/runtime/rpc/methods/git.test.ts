@@ -46,6 +46,7 @@ describe('git RPC methods', () => {
     )
 
     expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      admissionTier: 'status',
       showSubmoduleChanges: true
     })
   })

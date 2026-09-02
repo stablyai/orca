@@ -166,6 +166,7 @@ describe('registerFilesystemHandlers', () => {
     await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
 
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'status',
       includeIgnored: false,
       showSubmoduleChanges: true
     })

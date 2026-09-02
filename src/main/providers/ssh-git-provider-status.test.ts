@@ -65,6 +65,10 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledWith(
       'git.status',
       { worktreePath: '/home/user/repo', includeLineStats: false },
+      { signal: expect.any(AbortSignal) }
+    )
+  })
+
   it('getStatus forwards the submodule opt-in only when requested', async () => {
     mux.request.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
 
