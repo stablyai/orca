@@ -143,7 +143,7 @@ export function buildPullRequestFieldsPrompt(
   ].join('\n')
 }
 
-function stripJsonFence(raw: string): string {
+export function stripJsonFence(raw: string): string {
   let text = raw.trim()
   const fencedBody = getJsonFenceBody(text)
   if (fencedBody !== null) {

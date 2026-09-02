@@ -240,6 +240,14 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       )
     }),
     cancelGeneratePullRequestFields: () => Promise.resolve(),
+    generateIssueFields: async () => ({
+      success: false,
+      error: translate(
+        'auto.web.preload.api.web.git.api.091814b9fa',
+        'Issue detail generation is unavailable in the web client.'
+      )
+    }),
+    cancelGenerateIssueFields: () => Promise.resolve(),
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
     bulkStage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkStage', worktreePath, filePaths),

@@ -357,6 +357,17 @@
             "07f788de83": "WebSocket"
           }
         }
+      },
+      "preload": {
+        "api": {
+          "web": {
+            "git": {
+              "api": {
+                "091814b9fa": "Issue detail generation is unavailable in the web client."
+              }
+            }
+          }
+        }
       }
     },
     "store": {
@@ -16129,6 +16140,12 @@
                   }
                 }
               }
+            },
+            "IssueDialog": {
+              "8e8eaf6e69": "Generate issue details with AI",
+              "985c23e752": "Stop generating issue details",
+              "0e2eee0769": "Generating…",
+              "318d801f0b": "Generate"
             }
           },
           "hooks": {
@@ -16488,6 +16505,24 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "use": {
+        "task": {
+          "page": {
+            "github": {
+              "issue": {
+                "generation": {
+                  "4c2d3431ed": "Wait for issue creation to finish.",
+                  "fb018f71b8": "Issue generation is unavailable for remote environments.",
+                  "8dfc617348": "Enter a title or description first.",
+                  "835a4cd82e": "Issue details generated.",
+                  "0147080ec2": "Undo",
+                  "e45c7181da": "Failed to generate issue details."
+                }
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {

@@ -24,7 +24,8 @@ import { Input } from '@/components/ui/input'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { GitHubIssueLabelSelector, GitHubIssueAssigneeSelector } from './IssueSelectors'
 import { Button } from '@/components/ui/button'
-import { LoaderCircle } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { LoaderCircle, RefreshCw, Sparkles, Square } from 'lucide-react'
 export function TaskPageGitHubIssueDialog({
   model
 }: {
@@ -51,13 +52,65 @@ export function TaskPageGitHubIssueDialog({
     newIssueTargetRepo,
     newIssueRepoLabels,
     newIssueRepoAssignees,
-    handleCreateNewIssue
+    handleCreateNewIssue,
+    newIssueAiEnabled,
+    newIssueGenerating,
+    newIssueGenerateError,
+    newIssueGenerateDisabledReason,
+    handleGenerateNewIssue,
+    handleCancelGenerateNewIssue
   } = model
+  // Why: generated fields only apply safely when the user can't race the request; lock title/body like the PR composer does.
+  const newIssueFieldsLocked = newIssueSubmitting || newIssueGenerating
+  const generateDisabled = !newIssueGenerating && Boolean(newIssueGenerateDisabledReason)
+  const generateLabel = translate(
+    'auto.components.task.page.github.IssueDialog.8e8eaf6e69',
+    'Generate issue details with AI'
+  )
+  const stopGeneratingLabel = translate(
+    'auto.components.task.page.github.IssueDialog.985c23e752',
+    'Stop generating issue details'
+  )
+  const generateTooltipLabel = newIssueGenerating
+    ? stopGeneratingLabel
+    : (newIssueGenerateDisabledReason ?? generateLabel)
+  const generateButton = newIssueGenerating ? (
+    <Button
+      type="button"
+      variant="outline"
+      size="xs"
+      onClick={() => handleCancelGenerateNewIssue()}
+      className="text-[11px] text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+      aria-label={stopGeneratingLabel}
+    >
+      <RefreshCw className="size-3 animate-spin" />
+      <span>
+        {translate('auto.components.task.page.github.IssueDialog.0e2eee0769', 'Generating…')}
+      </span>
+      <Square className="size-2.5 fill-current" />
+    </Button>
+  ) : (
+    <Button
+      type="button"
+      variant="outline"
+      size="xs"
+      disabled={generateDisabled}
+      onClick={() => void handleGenerateNewIssue()}
+      className="text-[11px] disabled:hover:bg-background"
+      aria-label={generateLabel}
+    >
+      <Sparkles className="size-3" />
+      {translate('auto.components.task.page.github.IssueDialog.318d801f0b', 'Generate')}
+    </Button>
+  )
   return (
     <Dialog
       open={newIssueOpen}
       onOpenChange={(open) => {
         if (!newIssueSubmitting) {
+          if (!open) {
+            handleCancelGenerateNewIssue()
+          }
           setNewIssueOpen(open)
         }
       }}
@@ -67,7 +120,9 @@ export function TaskPageGitHubIssueDialog({
         onKeyDown={(event) => {
           if (isScreenSubmitShortcut(event)) {
             event.preventDefault()
-            void handleCreateNewIssue()
+            if (!newIssueGenerating) {
+              void handleCreateNewIssue()
+            }
           }
         }}
       >
@@ -158,9 +213,27 @@ export function TaskPageGitHubIssueDialog({
             </div>
           ) : null}
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.TaskPage.16cba35bee', 'Title')}
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                {translate('auto.components.TaskPage.16cba35bee', 'Title')}
+              </label>
+              {newIssueAiEnabled ? (
+                <Tooltip>
+                  {!newIssueGenerating && generateDisabled ? (
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex shrink-0 cursor-not-allowed">
+                        {generateButton}
+                      </span>
+                    </TooltipTrigger>
+                  ) : (
+                    <TooltipTrigger asChild>{generateButton}</TooltipTrigger>
+                  )}
+                  <TooltipContent side="left" sideOffset={6}>
+                    {generateTooltipLabel}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
+            </div>
             <Input
               autoFocus
               value={newIssueTitle}
@@ -172,7 +245,7 @@ export function TaskPageGitHubIssueDialog({
                 }
               }}
               placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
-              disabled={newIssueSubmitting}
+              disabled={newIssueFieldsLocked}
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -183,10 +256,13 @@ export function TaskPageGitHubIssueDialog({
               value={newIssueBody}
               onChange={setNewIssueBody}
               placeholder={translate('auto.components.TaskPage.34d97ca682', "What's going on?")}
-              disabled={newIssueSubmitting}
+              disabled={newIssueFieldsLocked}
               minHeightClassName="min-h-40"
               onSubmitShortcut={() => void handleCreateNewIssue()}
             />
+            {newIssueGenerateError ? (
+              <p className="text-xs text-destructive">{newIssueGenerateError}</p>
+            ) : null}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <GitHubIssueLabelSelector
@@ -194,7 +270,7 @@ export function TaskPageGitHubIssueDialog({
               selectedLabels={newIssueLabels}
               loading={newIssueRepoLabels.loading}
               error={newIssueRepoLabels.error}
-              disabled={newIssueSubmitting || !newIssueTargetRepo}
+              disabled={newIssueFieldsLocked || !newIssueTargetRepo}
               onChange={setNewIssueLabels}
             />
             <GitHubIssueAssigneeSelector
@@ -202,7 +278,7 @@ export function TaskPageGitHubIssueDialog({
               selectedAssignees={newIssueAssignees}
               loading={newIssueRepoAssignees.loading}
               error={newIssueRepoAssignees.error}
-              disabled={newIssueSubmitting || !newIssueTargetRepo}
+              disabled={newIssueFieldsLocked || !newIssueTargetRepo}
               onChange={setNewIssueAssignees}
             />
           </div>
@@ -213,14 +289,17 @@ export function TaskPageGitHubIssueDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => setNewIssueOpen(false)}
+            onClick={() => {
+              handleCancelGenerateNewIssue()
+              setNewIssueOpen(false)
+            }}
             disabled={newIssueSubmitting}
           >
             {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
           </Button>
           <Button
             onClick={() => void handleCreateNewIssue()}
-            disabled={!newIssueTargetRepo || !newIssueTitle.trim() || newIssueSubmitting}
+            disabled={!newIssueTargetRepo || !newIssueTitle.trim() || newIssueFieldsLocked}
           >
             {newIssueSubmitting ? (
               <>

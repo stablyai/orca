@@ -14,6 +14,12 @@ import {
   sanitizeBranchSlug,
   type BranchNameWorkContext
 } from '../../shared/branch-name-from-work'
+import {
+  buildIssueFieldsPrompt,
+  parseGeneratedIssueFields,
+  type GeneratedIssueFields,
+  type IssueDraftContext
+} from '../../shared/issue-draft-generation'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import {
   planCommitMessageGeneration,
@@ -29,6 +35,7 @@ import type {
   CommitMessageGenerationTarget,
   GenerateBranchNameResult,
   GenerateCommitMessageResult,
+  GenerateIssueFieldsResult,
   GeneratePullRequestFieldsResult,
   InternalTextGenerationResult,
   SpawnSourceControlAgent,
@@ -178,6 +185,43 @@ export async function generatePullRequestFields(input: {
       error: 'Generated pull request details could not be parsed.',
       branchChangedByPreparation: context.branchChangedByPreparation
     }
+  }
+}
+
+export async function generateIssueFields(input: {
+  context: IssueDraftContext
+  params: GenerateParams
+  target: CommitMessageGenerationTarget
+  spawnAgent: SpawnSourceControlAgent
+}): Promise<GenerateIssueFieldsResult<GeneratedIssueFields>> {
+  const { context, params, target } = input
+  // Why: agent/model choice reuses the pullRequest lane, but its PR-shaped
+  // instructions and command templates would mislead an issue prompt — skip them.
+  const prompt = buildIssueFieldsPrompt(context)
+  const planned = planCommitMessageGeneration(
+    { ...params, backslash: commandBackslashMode(target) },
+    prompt
+  )
+  if (!planned.ok) {
+    return { success: false, error: planned.error }
+  }
+  const result = await executeGenerationPlan({
+    ...input,
+    plan: planned.plan,
+    emptyResultName: 'issue details',
+    operation: 'issue-fields'
+  })
+  if (!result.success) {
+    return { success: false, error: result.error, canceled: result.canceled }
+  }
+  try {
+    return {
+      success: true,
+      fields: parseGeneratedIssueFields(result.rawOutput, context),
+      agentLabel: result.agentLabel
+    }
+  } catch {
+    return { success: false, error: 'Generated issue details could not be parsed.' }
   }
 }
 

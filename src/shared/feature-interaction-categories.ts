@@ -53,6 +53,7 @@ export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
   'mobile-emulator-agent-setup': 'setup',
   'ai-commit-generation': 'source_control',
   'ai-pr-generation': 'source_control',
+  'ai-issue-generation': 'source_control',
   'claude-account-switching': 'settings',
   'computer-use-setup': 'setup',
   'computer-use': 'agent',

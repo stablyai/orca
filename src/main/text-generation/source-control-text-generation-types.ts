@@ -29,6 +29,10 @@ export type GeneratePullRequestFieldsResult<TFields> =
     }
   | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
 
+export type GenerateIssueFieldsResult<TFields> =
+  | { success: true; fields: TFields; agentLabel?: string }
+  | { success: false; error: string; canceled?: boolean }
+
 export type RemoteCommitMessageExecResult = {
   stdout: string
   stderr: string
@@ -38,7 +42,11 @@ export type RemoteCommitMessageExecResult = {
   spawnError?: string
 }
 
-export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
+export type TextGenerationOperation =
+  | 'commit-message'
+  | 'pull-request-fields'
+  | 'branch-name'
+  | 'issue-fields'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
