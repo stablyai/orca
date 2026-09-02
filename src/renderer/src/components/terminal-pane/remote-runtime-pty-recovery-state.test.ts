@@ -122,6 +122,27 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     state.dispose()
   })
 
+  it('spends the auto-recovery window only on the real deadline, not markDisconnected', async () => {
+    // #12683: UI latch must not enable same-handle reattach fencing.
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    expect(state.didSpendAutoRecoveryWindow).toBe(false)
+
+    state.markDisconnected()
+    expect(state.currentPhase).toBe('disconnected')
+    expect(state.didSpendAutoRecoveryWindow).toBe(false)
+
+    state.begin()
+    expect(state.didSpendAutoRecoveryWindow).toBe(false)
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+    expect(state.currentPhase).toBe('disconnected')
+    expect(state.didSpendAutoRecoveryWindow).toBe(true)
+
+    state.cancel()
+    expect(state.didSpendAutoRecoveryWindow).toBe(false)
+    state.dispose()
+  })
+
   it('cancels scheduled work when a caller reaches its own recovery cutoff', async () => {
     vi.useFakeTimers()
     const state = new RemoteRuntimePtyRecoveryState()
@@ -173,6 +194,25 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
     expect(retry).toHaveBeenCalledWith(firstEpoch + 1)
     expect(state.currentPhase).toBe('recovering')
+    state.dispose()
+  })
+
+  it('resets deadline-spent state when retryNow starts a new epoch', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
+    const firstEpoch = state.begin()
+    state.parkRetryForExternalTrigger(firstEpoch, retry)
+
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+    expect(state.didSpendAutoRecoveryWindow).toBe(true)
+
+    expect(state.retryNow()).toBe(true)
+    expect(retry).toHaveBeenCalledWith(firstEpoch + 1)
+    expect(state.didSpendAutoRecoveryWindow).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+    expect(state.didSpendAutoRecoveryWindow).toBe(true)
     state.dispose()
   })
 
