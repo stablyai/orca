@@ -1,4 +1,5 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type { readFileSync as NodeReadFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +11,16 @@ import {
   jwtSubject,
   readCursorAuthSession
 } from './cursor-auth'
+
+const fsMocks = vi.hoisted(() => ({
+  readFileSync: vi.fn()
+}))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<{ readFileSync: typeof NodeReadFileSync }>()
+  fsMocks.readFileSync.mockImplementation(actual.readFileSync)
+  return { ...actual, readFileSync: fsMocks.readFileSync }
+})
 
 function mintJwt(sub: string): string {
   const payload = Buffer.from(JSON.stringify({ sub }), 'utf8').toString('base64url')
@@ -180,17 +191,15 @@ describe('cursor-auth', () => {
     const authPath = join(authDir, 'auth.json')
     mkdirSync(authDir, { recursive: true })
     writeFileSync(authPath, '{}')
-    chmodSync(authPath, 0)
     vi.stubEnv('XDG_CONFIG_HOME', dir)
+    fsMocks.readFileSync.mockImplementationOnce(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    })
 
-    try {
-      expect(readCursorAuthSession()).toEqual({
-        status: 'error',
-        error: 'Unable to read Cursor Agent auth file'
-      })
-    } finally {
-      chmodSync(authPath, 0o600)
-    }
+    expect(readCursorAuthSession()).toEqual({
+      status: 'error',
+      error: 'Unable to read Cursor Agent auth file'
+    })
   })
 
   it('returns error when Cursor Agent auth.json is malformed', () => {

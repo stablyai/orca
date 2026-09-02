@@ -8,6 +8,7 @@ import {
   getVisibleUsageProvider,
   hasUsageProviderSettings,
   hasUsageProviderSettingsForProvider,
+  isCursorStatusBarAvailable,
   isUsageEmptyState,
   isProviderConfigured,
   type UsageProviderSettings
@@ -138,6 +139,14 @@ describe('hasUsageProviderSettings', () => {
   it('does not treat empty or unloaded settings as configured', () => {
     expect(hasUsageProviderSettings(usageSettings())).toBe(false)
     expect(hasUsageProviderSettings(null)).toBe(false)
+  })
+})
+
+describe('isCursorStatusBarAvailable', () => {
+  it('uses desktop auth or a provider snapshot instead of CLI detection', () => {
+    expect(isCursorStatusBarAvailable(undefined, true)).toBe(true)
+    expect(isCursorStatusBarAvailable(provider('ok', { provider: 'cursor' }), false)).toBe(true)
+    expect(isCursorStatusBarAvailable(undefined, false)).toBe(false)
   })
 })
 

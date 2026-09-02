@@ -123,6 +123,17 @@ export function hasUsageProviderSettingsForProvider(
   return false
 }
 
+export function isCursorStatusBarAvailable(
+  provider: ProviderRateLimits | null | undefined,
+  cursorAuthConfigured: boolean
+): boolean {
+  return (
+    getVisibleUsageProvider('cursor', provider, {
+      cursorAuthConfigured
+    }) !== null
+  )
+}
+
 function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRateLimits {
   return {
     provider: providerId,

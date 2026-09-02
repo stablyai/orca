@@ -18,6 +18,7 @@ export function StatusBarVisibilityMenu({
   controller: StatusBarController
 }): React.JSX.Element {
   const {
+    cursorAvailable,
     detectedAgentIds,
     menuOpen,
     menuPoint,
@@ -133,7 +134,7 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
           </DropdownMenuCheckboxItem>
         )}
-        {isStatusBarItemAvailable('cursor', detectedAgentIds) && (
+        {cursorAvailable && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('cursor')}
             onCheckedChange={() => {
