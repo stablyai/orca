@@ -118,7 +118,10 @@ describe('replayPendingSshPtyKills', () => {
       shouldContinue: () => true,
       now: () => NOW
     })
-    expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', { immediate: true })
+    expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', {
+      immediate: true,
+      expectedIncarnationId: 'inc-a'
+    })
     expect(cleared).toEqual(['pty-1'])
     expect(terminated).toEqual(['pty-1'])
   })

@@ -225,6 +225,9 @@ export function createAgentStatusEventApplicator(args: {
       terminalTitle,
       timing: {
         updatedAt: data.receivedAt,
+        ...(data.evidenceObservedAt !== undefined
+          ? { evidenceObservedAt: data.evidenceObservedAt }
+          : {}),
         stateStartedAt: data.stateStartedAt
       },
       routing: {

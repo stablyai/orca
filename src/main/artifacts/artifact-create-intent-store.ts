@@ -10,7 +10,12 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
-import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts'
+import {
+  ARTIFACT_MAX_CONTENT_BYTES,
+  ARTIFACT_MAX_REQUEST_BYTES,
+  artifactContentByteLength,
+  artifactWriteRequestByteLength
+} from '../../shared/artifacts'
 import {
   bestEffortFsyncDirectorySync,
   fsyncFileSync,
@@ -21,7 +26,7 @@ import type { ArtifactWriteBody } from './artifact-cloud-request'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
 export const MAX_PENDING_ARTIFACT_CREATES = 32
-export const MAX_ARTIFACT_CREATE_INTENT_BYTES = ARTIFACT_CLI_MAX_RPC_BYTES + 128 * 1024
+export const MAX_ARTIFACT_CREATE_INTENT_BYTES = ARTIFACT_MAX_REQUEST_BYTES + 128 * 1024
 
 const MAX_HARDENED_INTENT_DIRECTORIES = 64
 const hardenedIntentDirectories = new Set<string>()
@@ -116,10 +121,15 @@ function isWriteBody(value: unknown): value is ArtifactWriteBody {
   const body = value as Partial<ArtifactWriteBody>
   return (
     typeof body.content === 'string' &&
+    artifactContentByteLength(body.content) <= ARTIFACT_MAX_CONTENT_BYTES &&
     (body.contentType === 'text/html' || body.contentType === 'text/markdown') &&
     typeof body.fileName === 'string' &&
     (body.title === undefined || typeof body.title === 'string')
   )
+}
+
+function artifactIntentRequestByteLength(sourceKey: string, body: ArtifactWriteBody): number {
+  return artifactWriteRequestByteLength({ sourceKey, ...body })
 }
 
 function isScope(value: unknown): value is ArtifactShareScope {
@@ -165,6 +175,9 @@ function readIntent(path: string): ArtifactCreateIntent {
   ) {
     throw new Error('Artifact create recovery record has an unsupported format.')
   }
+  if (artifactIntentRequestByteLength(intent.sourceKey, intent.body) > ARTIFACT_MAX_REQUEST_BYTES) {
+    throw new Error('Artifact create recovery record exceeds the supported size.')
+  }
   return intent as ArtifactCreateIntent
 }
 
@@ -193,6 +206,12 @@ export function getOrCreateArtifactCreateIntent(
   idempotencyKey: string,
   body: ArtifactWriteBody
 ): ArtifactCreateIntent {
+  if (artifactContentByteLength(body.content) > ARTIFACT_MAX_CONTENT_BYTES) {
+    throw new Error('Artifact content exceeds the 10 MiB limit.')
+  }
+  if (artifactIntentRequestByteLength(sourceKey, body) > ARTIFACT_MAX_REQUEST_BYTES) {
+    throw new Error('Artifact create recovery record exceeds the supported size.')
+  }
   const existing = getArtifactCreateIntent(profileId, userDataPath, sourceKey, scope)
   if (existing) {
     return existing

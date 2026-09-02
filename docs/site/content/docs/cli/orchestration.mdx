@@ -3,18 +3,21 @@ title: Orchestration
 description: Coordinate agents with Runs, tasks, supervised workers, messages, and decision gates.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 Orchestration is Orca's structured multi-agent layer: a **Run** (namespace + coordinator inbox), **Tasks**, **Dispatches**, supervised **workers**, messages, and decision gates.
 
 Use it when you need ownership, completion tracking, or a DAG. For one-off prompts, use `orca terminal send`. For full ownership handoffs without supervision, use worktree/terminal commands from the `orca-cli` skill.
 
 <Callout title="Experimental">
-Enable orchestration under Settings → Experimental before using these commands. The CLI talks to the running Orca runtime, so `orca status --json` should succeed first.
+  Enable orchestration under Settings → Experimental before using these commands. The CLI talks to
+  the running Orca runtime, so `orca status --json` should succeed first.
 </Callout>
 
 <Callout title="Legacy commands retired">
-`orca orchestration run` and `run-stop` (and `coordinator-start` / `coordinator-stop`) perform **no effects**. They return recovery text pointing at `orca skills get orchestration --full`. Use the Run + worker-start flow below.
+  `orca orchestration run` and `run-stop` (and `coordinator-start` / `coordinator-stop`) perform
+  **no effects**. They return recovery text pointing at `orca skills get orchestration --full`. Use
+  the Run + worker-start flow below.
 </Callout>
 
 ## Core model

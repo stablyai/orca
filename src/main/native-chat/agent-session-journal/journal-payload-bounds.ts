@@ -75,6 +75,30 @@ export function boundInlineText(
   }
 }
 
+/** Keep arbitrary tool input JSON bounded before lifecycle admission. */
+export function boundToolInput(input: unknown, limits: JournalPayloadLimits): unknown {
+  let encoded: string
+  try {
+    encoded = JSON.stringify(input) ?? 'null'
+  } catch {
+    return {
+      truncated: true,
+      byteLength: 0,
+      digest: digestPayload(''),
+      head: '[unserializable input]'
+    }
+  }
+  const bounded = boundPayload(encoded, limits)
+  return bounded.truncated
+    ? {
+        truncated: true,
+        byteLength: bounded.byteLength,
+        digest: bounded.digest,
+        head: bounded.head
+      }
+    : input
+}
+
 /** Slice at a byte budget without splitting a multi-byte character. */
 function clipUtf8(buffer: Buffer, maxBytes: number): string {
   let end = maxBytes

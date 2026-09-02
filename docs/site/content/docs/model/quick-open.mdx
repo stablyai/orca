@@ -3,7 +3,7 @@ title: Quick Open & Jump Palette
 description: Cmd-J scoped jump across worktrees, recents, and tabs.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 Once you have more than a handful of worktrees, navigation becomes the bottleneck. Orca ships two keyboard-first navigation tools.
 
@@ -13,13 +13,13 @@ File search scoped to the current worktree. Type a fragment; Orca ranks by recen
 
 ## New-tab omnibox
 
-The tab strip **+** omnibox searches **open tabs**, files, URLs, and agents in one field (placeholder: *Search open tabs, files, URLs, agents…*). File rows use the same filename-first layout as Quick Open. Matching an already-open editor tab prefers that tab over a duplicate file result, so you jump to the open buffer instead of opening a second copy.
+The tab strip **+** omnibox searches **open tabs**, files, URLs, and agents in one field (placeholder: _Search open tabs, files, URLs, agents…_). File rows use the same filename-first layout as Quick Open. Matching an already-open editor tab prefers that tab over a duplicate file result, so you jump to the open buffer instead of opening a second copy.
 
 Type a web search instead of a path or URL to open it in the worktree browser with your [Default Search Engine](/docs/settings). A single token still ranks file matches first; a multi-word phrase promotes the search row. Prefix the query with `?` to skip file and tab matching and search immediately.
 
 ## Worktree Jump Palette (Cmd-J)
 
-Jump across every worktree and every tab in one search. The placeholder in the empty input reads *repo/worktree* — type either half and Orca filters accordingly. Once you start typing, search includes non-archived worktrees even if they are hidden by the sidebar's current filters. Slack-style emoji shortcodes (`:rocket:`) use the same suggestion popover as workspace naming.
+Jump across every worktree and every tab in one search. The placeholder in the empty input reads _repo/worktree_ — type either half and Orca filters accordingly. Once you start typing, search includes non-archived worktrees even if they are hidden by the sidebar's current filters. Slack-style emoji shortcodes (`:rocket:`) use the same suggestion popover as workspace naming.
 
 Press **Tab** in the palette for a host and project filter menu. Selected hosts and projects narrow the result set and show as chips you can remove one at a time; closing the palette clears the filter so the next open is unscoped.
 
@@ -32,12 +32,10 @@ Results include:
 - Worktrees matched by cached GitHub PR title or number (`#123`) and cached GitLab merge request title or number (`!123`) when that review metadata is already available.
 - Every open tab, scoped first by current worktree, then globally. A match in the tab's title or content ranks ahead of a match only in its worktree, branch, or repo; equally strong matches prefer the tab you used more recently. Rows show the last-active age when Orca has one. Type aliases such as `terminal` or `simulator` still match those tab types without cluttering the row label.
 
-When a typed query hits **both** open tabs and worktrees, the palette interleaves a short preview of each section so neither primary list is buried. If a section has more matches, click **See more** in its *N more* row to reveal 20 additional entries at a time. Changing the query resets the expanded sections. Single-section results keep a full hard-capped list.
+When a typed query hits **both** open tabs and worktrees, the palette interleaves a short preview of each section so neither primary list is buried. If a section has more matches, click **See more** in its _N more_ row to reveal 20 additional entries at a time. Changing the query resets the expanded sections. Single-section results keep a full hard-capped list.
 
 Shift-Enter on a worktree opens it in a new split instead of swapping the current pane.
 
 When the query does not match an existing worktree, the palette offers a **Create worktree** row using the typed text as the name. Existing matches stay selected first, so pressing Enter still jumps when a real result is available.
 
-<Callout>
-Shortcut bindings are remappable under [Settings → Shortcuts](/docs/settings).
-</Callout>
+<Callout>Shortcut bindings are remappable under [Settings → Shortcuts](/docs/settings).</Callout>

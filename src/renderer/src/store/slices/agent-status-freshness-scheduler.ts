@@ -1,6 +1,9 @@
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusEvidenceObservedAt
+} from '../../../../shared/agent-status-types'
 
 export type FreshnessSchedulerDeps = {
   getEntries: () => AgentStatusEntry[]
@@ -67,7 +70,7 @@ export function createFreshnessScheduler(deps: FreshnessSchedulerDeps): Freshnes
     // future timer: the setAgentStatus write already bumped the epoch, so
     // freshness-aware selectors can decay them immediately on that render.
     for (const entry of entries) {
-      const expiryAt = entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS
+      const expiryAt = agentStatusEvidenceObservedAt(entry) + AGENT_STATUS_STALE_AFTER_MS
       if (expiryAt >= now) {
         nextExpiryAt = Math.min(nextExpiryAt, expiryAt)
       }

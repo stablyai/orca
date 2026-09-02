@@ -12,21 +12,21 @@ keywords:
   - orca-emulator-android skill
 ---
 
-Orca ships **skills** that agents install into their skill directories. Public install packages are **hybrid discovery stubs**: short `SKILL.md` files that tell the agent *when* to engage Orca and how to load the full guide from the running CLI. Command flags live in the binary so they cannot drift from the app version.
+Orca ships **skills** that agents install into their skill directories. Public install packages are **hybrid discovery stubs**: short `SKILL.md` files that tell the agent _when_ to engage Orca and how to load the full guide from the running CLI. Command flags live in the binary so they cannot drift from the app version.
 
 ## Installable Orca skills
 
 Use `npx skills add` with the public Orca repo and the skill name. Default agent setup usually installs `orca-cli`, `computer-use`, and `orchestration`.
 
-| Skill | Install | Use it for |
-| --- | --- | --- |
-| [`orca-cli`](#orca-cli) | `npx skills add https://github.com/stablyai/orca --skill orca-cli --global` | Worktrees, terminals, files, automations, embedded browser. |
-| [`orchestration`](#orchestration) | `npx skills add https://github.com/stablyai/orca --skill orchestration --global` | Multi-agent Runs, tasks, supervised workers, messages, gates. |
-| [`computer-use`](#computer-use) | `npx skills add https://github.com/stablyai/orca --skill computer-use --global` | Desktop apps via accessibility trees and safe UI actions. |
-| [`orca-linear`](#orca-linear) | `npx skills add https://github.com/stablyai/orca --skill orca-linear --global` | Linear ticket read/write through `orca linear`. |
-| [`orca-emulator`](#orca-emulator) | `npx skills add https://github.com/stablyai/orca --skill orca-emulator --global` | iOS Simulator control. |
-| [`orca-emulator-android`](#orca-emulator-android) | `npx skills add https://github.com/stablyai/orca --skill orca-emulator-android --global` | Android emulator/device via adb. |
-| [`orca-per-workspace-env`](#orca-per-workspace-env) | `npx skills add https://github.com/stablyai/orca --skill orca-per-workspace-env --global` | Per-workspace environment recipes (`orca.yaml`). |
+| Skill                                               | Install                                                                                   | Use it for                                                    |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [`orca-cli`](#orca-cli)                             | `npx skills add https://github.com/stablyai/orca --skill orca-cli --global`               | Worktrees, terminals, files, automations, embedded browser.   |
+| [`orchestration`](#orchestration)                   | `npx skills add https://github.com/stablyai/orca --skill orchestration --global`          | Multi-agent Runs, tasks, supervised workers, messages, gates. |
+| [`computer-use`](#computer-use)                     | `npx skills add https://github.com/stablyai/orca --skill computer-use --global`           | Desktop apps via accessibility trees and safe UI actions.     |
+| [`orca-linear`](#orca-linear)                       | `npx skills add https://github.com/stablyai/orca --skill orca-linear --global`            | Linear ticket read/write through `orca linear`.               |
+| [`orca-emulator`](#orca-emulator)                   | `npx skills add https://github.com/stablyai/orca --skill orca-emulator --global`          | iOS Simulator control.                                        |
+| [`orca-emulator-android`](#orca-emulator-android)   | `npx skills add https://github.com/stablyai/orca --skill orca-emulator-android --global`  | Android emulator/device via adb.                              |
+| [`orca-per-workspace-env`](#orca-per-workspace-env) | `npx skills add https://github.com/stablyai/orca --skill orca-per-workspace-env --global` | Per-workspace environment recipes (`orca.yaml`).              |
 
 ## Hybrid stubs vs the live guide
 

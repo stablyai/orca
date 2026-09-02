@@ -17,6 +17,7 @@ import {
 export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:openDevTools')
   ipcMain.removeHandler('browser:setViewportOverride')
+  ipcMain.removeAllListeners?.('browser:reportViewportScrollState')
   ipcMain.removeHandler('browser:setAnnotationViewportBridge')
   ipcMain.removeHandler('browser:acceptDownload')
   ipcMain.removeHandler('browser:cancelDownload')
@@ -67,6 +68,36 @@ export function registerBrowserGuestViewHandlers(): void {
         }
       }
       return browserManager.setViewportOverride(args.browserPageId, args.override)
+    }
+  )
+
+  ipcMain.on?.(
+    'browser:reportViewportScrollState',
+    (
+      event,
+      args: {
+        browserPageId?: unknown
+        state?: {
+          scrollLeft?: unknown
+          scrollTop?: unknown
+          maxScrollLeft?: unknown
+          maxScrollTop?: unknown
+        }
+      }
+    ) => {
+      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
+        return
+      }
+      const state = args.state
+      if (!state) {
+        return
+      }
+      browserManager.setViewportScrollState(args.browserPageId, event.sender.id, {
+        scrollLeft: Number(state.scrollLeft),
+        scrollTop: Number(state.scrollTop),
+        maxScrollLeft: Number(state.maxScrollLeft),
+        maxScrollTop: Number(state.maxScrollTop)
+      })
     }
   )
 

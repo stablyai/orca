@@ -9,6 +9,37 @@ import {
 } from './pty-process-list-admission'
 
 describe('PtyProcessListAdmission', () => {
+  const evidence = {
+    verdict: 'live' as const,
+    processName: 'codex',
+    authorityGeneration: 'relay-generation',
+    observationEpoch: 4,
+    capturedAgeMs: 12
+  }
+
+  it('preserves and clones optional foreground evidence', () => {
+    const admission = new PtyProcessListAdmission()
+    const admitted = admission.admit({
+      id: 'pty-1',
+      cwd: '/repo',
+      title: 'shell',
+      foregroundProcessEvidence: evidence
+    })
+    expect(admitted.foregroundProcessEvidence).toEqual(evidence)
+    expect(admitted.foregroundProcessEvidence).not.toBe(evidence)
+  })
+
+  it('rejects malformed foreground evidence instead of stripping it', () => {
+    expect(() =>
+      new PtyProcessListAdmission().admit({
+        id: 'pty-1',
+        cwd: '/repo',
+        title: 'shell',
+        foregroundProcessEvidence: { ...evidence, verdict: 'wat' }
+      } as never)
+    ).toThrow('invalid_pty_process_list')
+  })
+
   it('strips unknown provider payloads from admitted process metadata', () => {
     const admission = new PtyProcessListAdmission()
 

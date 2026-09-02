@@ -177,6 +177,120 @@ describe('connectPanePty', () => {
     expect(notifyCodexPaneBoundForStaleSweep).toHaveBeenCalledWith('leaf-pty-2')
   })
 
+  it('publishes async layout bindings by the pane leaf, not a remapped numeric id', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const syncPanePtyLayoutBindingForLeaf = vi.fn()
+    const manager = createManager(1)
+    // A successor manager can reuse the numeric slot for a different leaf
+    // while an older callback is still settling.
+    manager.getPanes.mockReturnValue([{ id: 1, leafId: LEAF_2 }])
+    const deps = createDeps({ syncPanePtyLayoutBindingForLeaf })
+    const pane = createPane(1)
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(12)
+
+    expect(syncPanePtyLayoutBindingForLeaf).toHaveBeenCalledWith(LEAF_1, 'tab-pty', 1)
+    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalled()
+  })
+
+  it('does not publish a stale layout callback after a successor transport takes the pane slot', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const reattach = createDeferred<{ id: string; isReattach: true }>()
+    const staleTransport = createMockTransport('terminal-old')
+    staleTransport.connect.mockImplementation(async () => reattach.promise)
+    transportFactoryQueue.push(staleTransport)
+    const syncPanePtyLayoutBindingForLeaf = vi.fn()
+    const paneTransportsRef = { current: new Map<number, MockTransport>() }
+    const deps = createDeps({ paneTransportsRef, syncPanePtyLayoutBindingForLeaf })
+    const pane = createPane(1)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      Object.assign(deps, {
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'terminal-old' }
+      }) as never
+    )
+    await flushAsyncTicks(8)
+    const callsBeforeReplacement = syncPanePtyLayoutBindingForLeaf.mock.calls.length
+    paneTransportsRef.current.set(pane.id, createMockTransport('terminal-successor'))
+    reattach.resolve({ id: 'terminal-new', isReattach: true })
+    await flushAsyncTicks(16)
+
+    expect(syncPanePtyLayoutBindingForLeaf).toHaveBeenCalledTimes(callsBeforeReplacement)
+  })
+
+  it('does not clear a successor pane error from a stale stream callback', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const staleTransport = createMockTransport('terminal-old')
+    let callbacks: ConnectCallbacks | undefined
+    staleTransport.connect.mockImplementation(async (options) => {
+      callbacks = options.callbacks
+      return { id: 'terminal-old', isReattach: true }
+    })
+    transportFactoryQueue.push(staleTransport)
+    const paneTransportsRef = { current: new Map<number, MockTransport>() }
+    const onPtyErrorCleared = vi.fn()
+    const deps = createDeps({
+      paneTransportsRef,
+      onPtyErrorClearedRef: { current: onPtyErrorCleared }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(12)
+    expect(callbacks?.onErrorCleared).toBeDefined()
+
+    paneTransportsRef.current.set(1, createMockTransport('terminal-successor'))
+    callbacks?.onErrorCleared?.('stale stream')
+
+    expect(onPtyErrorCleared).not.toHaveBeenCalled()
+  })
+
+  it('does not clear a successor pane error when a stale binding is disposed', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const staleTransport = createMockTransport('terminal-old')
+    transportFactoryQueue.push(staleTransport)
+    const paneTransportsRef = { current: new Map<number, MockTransport>() }
+    const onPtyErrorCleared = vi.fn()
+    const deps = createDeps({
+      paneTransportsRef,
+      onPtyErrorClearedRef: { current: onPtyErrorCleared }
+    })
+
+    const binding = connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(12)
+
+    paneTransportsRef.current.set(1, createMockTransport('terminal-successor'))
+    binding.dispose()
+
+    expect(onPtyErrorCleared).not.toHaveBeenCalled()
+  })
+
+  it('does not spend queued startup from a stale spawn callback', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const staleTransport = createMockTransport()
+    transportFactoryQueue.push(staleTransport)
+    const paneTransportsRef = { current: new Map<number, MockTransport>() }
+    const onStartupBound = vi.fn()
+    const startup = { command: 'echo queued-startup' }
+    const deps = createDeps({ paneTransportsRef, startup, onStartupBound })
+    const binding = connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(12)
+
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    paneTransportsRef.current.set(1, createMockTransport('terminal-successor'))
+    onPtySpawn?.('stale-pty')
+
+    expect(onStartupBound).not.toHaveBeenCalled()
+    binding.dispose()
+  })
+
   it('resizes a reattached PTY to the current grid when the pane narrows before reattach resolves', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const reattach = createDeferred<void>()
@@ -220,6 +334,194 @@ describe('connectPanePty', () => {
     expect(transport.resize).toHaveBeenCalledWith(65, 63)
     expect(transport.resize).toHaveBeenLastCalledWith(65, 63, { claim: true })
   })
+
+  it('does not let a stale pane transport publish a completed reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const reattach = createDeferred<{ id: string; isReattach: true }>()
+    const staleTransport = createMockTransport()
+    let stalePtyId: string | null = 'terminal-old'
+    staleTransport.getPtyId.mockImplementation(() => stalePtyId)
+    staleTransport.connect.mockImplementation(async () => {
+      stalePtyId = 'terminal-new'
+      return reattach.promise
+    })
+    transportFactoryQueue.push(staleTransport)
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const paneTransportsRef = { current: new Map<number, MockTransport>() }
+    const deps = createDeps({
+      paneTransportsRef,
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'terminal-old' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(4)
+    expect(staleTransport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'terminal-old' })
+    )
+
+    const currentTransport = createMockTransport('terminal-current')
+    paneTransportsRef.current.set(pane.id, currentTransport)
+    pane.container.dataset.ptyId = 'terminal-current'
+    reattach.resolve({ id: 'terminal-new', isReattach: true })
+    await flushAsyncTicks(12)
+
+    expect(pane.container.dataset.ptyId).toBe('terminal-current')
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(1, 'terminal-new')
+  })
+
+  it('accepts an explicit reattach id before the transport publishes its id', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const reattach = createDeferred<{ id: string; isReattach: true }>()
+    const transport = createMockTransport()
+    let transportPtyId: string | null = null
+    transport.getPtyId.mockImplementation(() => transportPtyId)
+    transport.connect.mockImplementation(async () => reattach.promise)
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'terminal-old' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(4)
+    reattach.resolve({ id: 'terminal-new', isReattach: true })
+    await flushAsyncTicks(12)
+
+    expect(pane.container.dataset.ptyId).toBe('terminal-new')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'terminal-new', 'terminal-old')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'terminal-new')
+  })
+
+  it('does not replace a split sibling with the tab-level source PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    // The source pane is still mounted while the parked tab's new split leaf
+    // is hydrated. The daemon may report the split spawn as a reattach even
+    // though this pane has no stale session id of its own.
+    const sourceTransport = createMockTransport('tab-pty')
+    const splitTransport = createMockTransport('split-pty')
+    splitTransport.connect.mockResolvedValue({ id: 'split-pty', isReattach: true })
+    const paneTransportsRef = {
+      current: new Map<number, MockTransport>([[1, sourceTransport]])
+    }
+    transportFactoryQueue.push(splitTransport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }] },
+      ptyIdsByTabId: { 'tab-1': ['tab-pty'] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: LEAF_1 },
+            second: { type: 'leaf', leafId: LEAF_2 }
+          },
+          activeLeafId: LEAF_2,
+          expandedLeafId: null,
+          // The split leaf is intentionally unbound until its connect settles.
+          ptyIdsByLeafId: { [LEAF_1]: 'tab-pty' }
+        }
+      }
+    } as StoreState
+    const deps = createDeps({ paneTransportsRef })
+
+    connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(splitTransport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sessionId: expect.any(String) })
+    )
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'split-pty')
+    expect(deps.updateTabPtyId).not.toHaveBeenCalledWith('tab-1', 'split-pty', 'tab-pty')
+    expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+      [LEAF_1]: 'tab-pty',
+      [LEAF_2]: 'split-pty'
+    })
+  })
+
+  it('infers a replacement when the tab PTY is bound to this leaf', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const splitTransport = createMockTransport('replacement-pty')
+    splitTransport.connect.mockResolvedValue({ id: 'replacement-pty', isReattach: true })
+    transportFactoryQueue.push(splitTransport)
+    // Keep this pane on the fresh-spawn path while retaining a tab-level
+    // identity that is also bound to its leaf.
+    const paneTransportsRef = {
+      current: new Map<number, MockTransport>([[1, createMockTransport()]])
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'terminal-old' }] },
+      ptyIdsByTabId: { 'tab-1': ['terminal-old'] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_2 },
+          activeLeafId: LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_2]: 'terminal-old' }
+        }
+      }
+    } as StoreState
+    const deps = createDeps({ paneTransportsRef })
+
+    connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'replacement-pty', 'terminal-old')
+    expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+      [LEAF_2]: 'replacement-pty'
+    })
+  })
+
+  it.each([
+    ['session-expired', { id: 'terminal-new', isReattach: true, sessionExpired: true }],
+    ['no-pty', undefined]
+  ] as const)(
+    'does not let a stale pane transport clear ownership on %s',
+    async (_label, result) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const reattach = createDeferred<
+        { id: string; isReattach: true; sessionExpired?: boolean } | undefined
+      >()
+      const staleTransport = createMockTransport()
+      let stalePtyId: string | null = 'terminal-old'
+      staleTransport.getPtyId.mockImplementation(() => stalePtyId)
+      staleTransport.connect.mockImplementation(async () => {
+        stalePtyId = 'terminal-new'
+        return reattach.promise
+      })
+      transportFactoryQueue.push(staleTransport)
+      const pane = createPane(1)
+      const paneTransportsRef = { current: new Map<number, MockTransport>() }
+      const deps = createDeps({
+        paneTransportsRef,
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'terminal-old' }
+      })
+
+      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(4)
+      const currentTransport = createMockTransport('terminal-current')
+      paneTransportsRef.current.set(pane.id, currentTransport)
+      pane.container.dataset.ptyId = 'terminal-current'
+      if (result === undefined) {
+        stalePtyId = null
+      }
+      reattach.resolve(result)
+      await flushAsyncTicks(12)
+
+      expect(pane.container.dataset.ptyId).toBe('terminal-current')
+      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(1, null)
+      expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(1, 'terminal-new')
+    }
+  )
 
   it('adopts a live eager PTY and withholds snapshots after its renderer dies', async () => {
     // Why: a live eager buffer means "attach + replay", not "reattach" — else first mount mis-routes to daemon-reattach and orphans the eager agent PTY.

@@ -32,7 +32,7 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { MAX_RELAY_PTY_SESSIONS, PtyHandler, formatNodePtyUnavailableMessage } from './pty-handler'
+import { MAX_RELAY_PTY_SESSIONS, PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 import {
   beginPtyHandlerTest,
@@ -222,24 +222,6 @@ describe('PtyHandler', () => {
     expect(mockPtySpawn).toHaveBeenCalledOnce()
   })
 
-  it('hedges both causes on Linux and offers the build-tools remedy nowhere else', () => {
-    const linux = formatNodePtyUnavailableMessage('linux')
-    expect(linux).toContain('Remote terminals are unavailable')
-    // Conditional, not asserted: a host with build-essential can still hit an ABI/Node-version flip.
-    expect(linux).toMatch(/If it is missing the C\/C\+\+ build tools/)
-    expect(linux).toContain('python3')
-    expect(linux).toContain('version and architecture match the installed binding')
-
-    // Windows/macOS ship node-pty prebuilds, so "install make/g++/python3" sends the user chasing nothing.
-    for (const platform of ['win32', 'darwin'] as const) {
-      const message = formatNodePtyUnavailableMessage(platform)
-      expect(message).toContain('Remote terminals are unavailable')
-      expect(message).not.toContain('build tools')
-      expect(message).not.toContain('python3')
-      expect(message).toMatch(/reconnect/i)
-    }
-  })
-
   it('normalizes a missing native binding as degraded node-pty availability', async () => {
     mockPtySpawn.mockImplementationOnce(() => {
       throw new Error(
@@ -251,6 +233,30 @@ describe('PtyHandler', () => {
       'Remote terminals are unavailable'
     )
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('keeps the load error it was handed instead of replacing it with guesses', async () => {
+    // #17830: the user got three remedies for four possible faults and could verify none.
+    // The relay must carry what it was actually told, and must not prescribe a toolchain
+    // install it never probed for.
+    const thrown =
+      'Failed to load native module: conpty.node, checked: build/Release, prebuilds/win32-x64'
+    mockPtySpawn.mockImplementationOnce(() => {
+      throw new Error(thrown)
+    })
+
+    const message = await dispatcher.callRequest('pty.spawn', {}).then(
+      () => '',
+      (error: Error) => error.message
+    )
+
+    expect(message).toContain(thrown)
+    expect(message).not.toContain('install make, a C++ compiler, and python3')
+    // Nothing here established a cause — the relay's node-pty directory is not on disk in
+    // this harness — so per docs/reference/ssh-execution-boundary.md it must say so rather
+    // than pick a diagnosis. Every message still names the host, for the bug report.
+    expect(message).toContain('could not establish why')
+    expect(message).toMatch(/Host: linux\/\w+, .*Node v[\d.]+ \(ABI \d+\)/)
   })
 
   it('preserves unrelated node-pty spawn failures', async () => {

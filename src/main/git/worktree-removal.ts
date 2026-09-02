@@ -13,6 +13,7 @@ import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
 import { listWorktreesStrict } from './worktree-listing'
+import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 import type { RemoveWorktreeOptions } from './worktree-operation-options'
 import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
@@ -21,7 +22,9 @@ import {
 } from './worktree-operation-options'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
+import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { bumpWorktreeScanGeneration, listWorktrees } from './worktree-scan-cache'
+import { invalidateSparseCheckoutState } from './worktree-sparse-checkout-cache'
 
 /**
  * Remove a worktree.
@@ -34,10 +37,17 @@ export async function removeWorktree(
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   try {
-    return await runWithGitReadCacheInvalidation(() =>
-      performRemoveWorktree(repoPath, worktreePath, force, options)
+    // Removal deletes branches, and a ref deletion needs the packed-refs lock a
+    // running idle pack holds while it rewrites. Waits that window out; the
+    // prune phase that follows it is concurrency-safe and is left to finish.
+    return await withRepoRefMaintenancePaused('worktree-remove', () =>
+      runWithGitReadCacheInvalidation(() =>
+        performRemoveWorktree(repoPath, worktreePath, force, options)
+      )
     )
   } finally {
+    invalidateWslLinkedWorktreeGitRouting(worktreePath)
+    invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
 }

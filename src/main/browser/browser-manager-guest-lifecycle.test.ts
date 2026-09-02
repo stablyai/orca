@@ -174,6 +174,52 @@ describe('browserManager', () => {
     }
   )
 
+  it('refuses devtools for an offscreen guest instead of opening it on the host display', async () => {
+    const guest = {
+      id: 138,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    expect(
+      browserManager.registerOffscreenGuest({
+        browserPageId: 'offscreen-devtools',
+        webContentsId: guest.id
+      })
+    ).toBe(true)
+
+    await expect(browserManager.openDevTools('offscreen-devtools')).resolves.toBe(false)
+    expect(guestOpenDevToolsMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps devtools available for a desktop webview guest', async () => {
+    const guest = {
+      id: 139,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'desktop-devtools',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    await expect(browserManager.openDevTools('desktop-devtools')).resolves.toBe(true)
+    expect(guestOpenDevToolsMock).toHaveBeenCalledWith({ mode: 'detach' })
+  })
+
   // Why the exit door needs the same check: a document page withdraws by revoking its grant, so its
   // id here is misaddressed — and unregistering opens by evicting whatever grab that id names.
   it('refuses unregisterGuest for a page the document registry holds', () => {

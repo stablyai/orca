@@ -3,7 +3,7 @@ title: Worktrees
 description: How Orca turns every feature or bug into its own git worktree.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 Orca is worktree-native. Instead of branching and stashing on one checkout, every task gets its own on-disk copy of the repo via `git worktree`. This is what makes parallel agents safe — they never step on each other's files.
 
@@ -126,7 +126,7 @@ Bulk-deleting workspaces (sidebar multi-select or Resource Manager cleanup) stil
 
 When you import a parent folder that contains several Git repos, Orca can group those repos under a single **project group** in the sidebar. Each project group exposes a **folder workspace** flow — a worktree-like entry that lives at the parent-folder level and binds its task source to one of the repos underneath, so one feature's GitHub/GitLab/Linear/Jira task surface stays attached to the right repo even though the workspace itself is grouped with its siblings in the sidebar.
 
-To create one, hover the project group's header row in the sidebar and click the **+** action (tooltip: "Create workspace for *group*"). The composer dialog ("Create Folder Workspace") asks you to pick the source project for the workspace's task source, name the workspace, and optionally attach a linked issue or PR. Submit, and the folder workspace appears under the project group alongside the regular repo-scoped worktrees.
+To create one, hover the project group's header row in the sidebar and click the **+** action (tooltip: "Create workspace for _group_"). The composer dialog ("Create Folder Workspace") asks you to pick the source project for the workspace's task source, name the workspace, and optionally attach a linked issue or PR. Submit, and the folder workspace appears under the project group alongside the regular repo-scoped worktrees.
 
 When deleting a project group, Orca also offers a checkbox to remove the group's contained projects (the underlying repo registrations) in the same action — so cleanup of a no-longer-used cluster is one confirmation, not several.
 
@@ -139,5 +139,6 @@ Worktrees you create yourself with `git worktree add` stay external until you sh
 In **Settings → General → Workspace**, set global defaults for external-worktree sources: Claude Code worktrees, GSD worktrees, other locations, and any custom absolute-path locations you add. Those defaults apply to current and future worktrees on that host; new global custom roots start hidden. In a project's **Non-Orca worktrees** dialog, you can override a source for that project or return it to the global setting, then search and recover individual hidden worktrees.
 
 <Callout>
-If you `git worktree remove` from the CLI, Orca will notice and clean up its own state the next time it refreshes that repo.
+  If you `git worktree remove` from the CLI, Orca will notice and clean up its own state the next
+  time it refreshes that repo.
 </Callout>

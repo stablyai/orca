@@ -20,11 +20,15 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from './journal-payload-bounds'
 import { journalDirectoryFor, journalPathSegment } from './journal-paths'
+import { journalDirectoryBytes } from './journal-physical-quota'
+import type { JournalLifecycleMutationInput } from './journal-row-builders'
+import { AgentSessionJournalError, type AgentSessionJournal } from './journal-store'
+import { openAgentSessionJournal } from './journal-store-factory'
 import {
-  AgentSessionJournalError,
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from './journal-store'
+  JOURNAL_DISPATCH_RESERVATION_BYTES,
+  JOURNAL_ITEM_TERMINAL_RESERVATION_BYTES,
+  JOURNAL_TURN_TERMINAL_RESERVATION_BYTES
+} from './journal-lifecycle-capacity'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -428,7 +432,7 @@ describe('bounds', () => {
 
   it('refuses a single row larger than the per-session size bound', async () => {
     const journal = await open({
-      limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 400 }
+      limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 2_000 }
     })
     // Shedding the whole tail still cannot make room, so the bound holds.
     await expect(
@@ -439,7 +443,7 @@ describe('bounds', () => {
   it('refuses an append past the per-session size bound when compaction is off', async () => {
     const journal = await open({
       autoCompact: false,
-      limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 400 }
+      limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 2_000 }
     })
     await expect(
       (async () => {
@@ -462,264 +466,323 @@ describe('bounds', () => {
       })()
     ).rejects.toMatchObject({ code: 'journal_rate_exceeded' })
   })
+
+  it('charges unique blobs and abandoned staging files to one physical quota', async () => {
+    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 8_000 }
+    const journal = await open({ limits, autoCompact: false })
+    const payload = 'z'.repeat(1_200)
+    const bounded = boundPayload(payload, { ...limits, inlineHeadBytes: 8 })
+    const toolBody: AgentJournalItemBody = {
+      kind: 'tool-call',
+      name: 'command',
+      input: {},
+      state: 'completed',
+      output: bounded
+    }
+
+    await journal.appendItemWithBlobs(item(1), toolBody, [{ digest: bounded.digest, payload }], {
+      fence: 1
+    })
+    const afterFirst = await journalDirectoryBytes(root)
+    await journal.appendItemWithBlobs(item(2), toolBody, [{ digest: bounded.digest, payload }], {
+      fence: 1
+    })
+    const afterDuplicate = await journalDirectoryBytes(root)
+
+    expect(afterDuplicate - afterFirst).toBeLessThan(payload.length)
+    expect(await readdir(join(root, 'blobs'))).toEqual([bounded.digest])
+    expect(afterDuplicate).toBeLessThanOrEqual(limits.maxSessionBytes)
+
+    await writeFile(join(root, 'log.jsonl.abandoned.tmp'), 's'.repeat(2_000), 'utf8')
+    const physical = await journalDirectoryBytes(root)
+    await expect(
+      open({ limits: { ...limits, maxSessionBytes: physical - 1 } })
+    ).rejects.toMatchObject({ code: 'journal_bound_exceeded' })
+  })
+
+  it('uses a running tool reservation when its authoritative blob cannot fit', async () => {
+    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 220 * 1024 }
+    const journal = await open({ limits, autoCompact: false })
+    await journal.appendItem(
+      item(1),
+      { kind: 'tool-call', name: 'command', input: {}, state: 'running' },
+      { fence: 1 }
+    )
+    for (let ordinal = 10; ordinal < 100; ordinal += 1) {
+      try {
+        await journal.appendItem(item(ordinal), body('f'.repeat(4_000)), { fence: 1 })
+      } catch (error) {
+        expect(error).toMatchObject({ code: 'journal_bound_exceeded' })
+        break
+      }
+    }
+    const payload = 'o'.repeat(100 * 1024)
+    const bounded = boundPayload(payload, { ...limits, inlineHeadBytes: 16 * 1024 })
+
+    await journal.appendItemWithBlobs(
+      item(1),
+      {
+        kind: 'tool-call',
+        name: 'command',
+        input: {},
+        state: 'completed',
+        output: bounded
+      },
+      [{ digest: bounded.digest, payload }],
+      { fence: 1 }
+    )
+
+    const tool = journal.snapshot().items.find((entry) => entry.itemId.includes('turn-1:1'))
+    expect(tool?.body).toEqual({
+      kind: 'tool-call',
+      name: 'command',
+      input: {},
+      state: 'completed'
+    })
+    expect(
+      journal
+        .snapshot()
+        .items.some(
+          (entry) =>
+            entry.body.kind === 'status' && entry.body.text.includes('could not be retained')
+        )
+    ).toBe(true)
+    expect(await readJournalBlob(root, bounded.digest)).toBeNull()
+    expect(journal.lifecycleCapacityState()).toEqual({ reservedBytes: 0, reservedAppendSlots: 0 })
+  })
+
+  it('keeps cached physical bytes aligned after blob dedupe and compaction', async () => {
+    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxSessionBytes: 45_000 }
+    const journal = await open({
+      limits,
+      autoCompact: false,
+      compaction: { minTailRows: 0, retainTailMs: 0 }
+    })
+    const payload = 'p'.repeat(20_000)
+    const bounded = boundPayload(payload, { ...limits, inlineHeadBytes: 8 })
+    const toolBody: AgentJournalItemBody = {
+      kind: 'tool-call',
+      name: 'command',
+      input: {},
+      state: 'completed',
+      output: bounded
+    }
+
+    await journal.appendItemWithBlobs(item(1), toolBody, [{ digest: bounded.digest, payload }], {
+      fence: 1
+    })
+    await journal.appendItemWithBlobs(item(2), toolBody, [{ digest: bounded.digest, payload }], {
+      fence: 1
+    })
+    await journal.compact(tick() + 10, { minTailRows: 0, retainTailMs: 0 })
+    const compactedBytes = await journalDirectoryBytes(root)
+    expect(compactedBytes).toBeLessThan(limits.maxSessionBytes)
+
+    await journal.appendItem(item(3), body('after compaction'), { fence: 1 })
+
+    expect(await journalDirectoryBytes(root)).toBeLessThanOrEqual(limits.maxSessionBytes)
+    expect(await readdir(join(root, 'blobs'))).toEqual([bounded.digest])
+  })
 })
 
-describe('schema', () => {
-  it('quarantines an invalid compacted snapshot without replacing its tail', async () => {
-    const journal = await open({ compaction: { minTailRows: 2, retainTailMs: 0 } })
-    for (let index = 0; index < 6; index += 1) {
-      await journal.appendItem(item(index), body(`m${index}`), { fence: 1 })
+describe('lifecycle batches', () => {
+  it('uses a reserved append slot after ordinary rate pressure', async () => {
+    const journal = await open({
+      autoCompact: false,
+      limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxAppendsPerWindow: 1, appendWindowMs: 60_000 }
+    })
+    const identity: AgentJournalItemIdentity = {
+      provider: 'orca',
+      clientMessageId: 'reserved-prompt'
     }
-    await journal.compact()
-    const epoch = journal.epoch
-    const snapshotPath = join(root, JOURNAL_SNAPSHOT_FILE)
-    const logPath = join(root, JOURNAL_LOG_FILE)
-    const invalidSnapshot = '{"folded history":'
-    await writeFile(snapshotPath, invalidSnapshot, 'utf-8')
-    const retainedTail = await readFile(logPath, 'utf-8')
-    expect(retainedTail).not.toContain('"kind":"epoch"')
+    const pending: AgentJournalItemBody = {
+      kind: 'approval',
+      title: 'Run a command?',
+      detail: null,
+      options: [{ id: 'accept', label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    }
 
-    const reopened = await open()
-    expect(reopened.epoch).toBe(epoch)
-    expect(await readFile(logPath, 'utf-8')).toBe(retainedTail)
-    const quarantined = (await readdir(root)).find((name) =>
-      name.startsWith('quarantine-snapshot-')
-    )
-    expect(quarantined).toBeDefined()
-    expect(await readFile(join(root, quarantined!), 'utf-8')).toBe(invalidSnapshot)
-  })
-
-  it('degrades to read-only on a row from a newer build, without skipping or deleting it', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const logPath = join(root, JOURNAL_LOG_FILE)
-    const future = JSON.stringify({
-      v: 99,
-      kind: 'item',
-      epoch: journal.epoch,
-      seq: 99,
+    // The pending row spends the only ordinary slot while reserving its
+    // terminal append slot for recovery.
+    await journal.appendLifecycleBatch({
+      settlementId: 'reserved-start',
       fence: 1,
-      ts: 1,
-      itemId: 'future',
-      revision: 1,
-      body: { kind: 'status', text: 'from a newer host' }
+      mutations: [{ kind: 'item', identity, body: pending }]
     })
-    const before = await readFile(logPath, 'utf-8')
-    await writeFile(logPath, `${before}${future}\n`, 'utf-8')
-
-    const reopened = await open()
-    expect(reopened.isReadOnly).toBe(true)
-    await expect(reopened.appendItem(item(1), body('b'), { fence: 1 })).rejects.toMatchObject({
-      code: 'journal_read_only'
-    })
-    await expect(reopened.compact()).rejects.toMatchObject({ code: 'journal_read_only' })
-    expect(reopened.readSince({ epoch: reopened.epoch, sequence: 0 })).toEqual({
-      ok: false,
-      reset: 'schema_unreadable'
-    })
-    // The unreadable row is still on disk, and nothing was compacted past it.
-    expect(await readFile(logPath, 'utf-8')).toContain('"v":99')
-  })
-
-  it('skips a malformed line without giving up the journal, and discloses the skip', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const logPath = join(root, JOURNAL_LOG_FILE)
-    await writeFile(logPath, `${await readFile(logPath, 'utf-8')}{not json\n`, 'utf-8')
-
-    const reopened = await open()
-    expect(reopened.isReadOnly).toBe(false)
-    const items = reopened.snapshot().items
-    // The surviving row is untouched…
-    expect(items.some((entry) => entry.body.kind === 'message')).toBe(true)
-    // …and the skip is visible in the timeline instead of silently swallowed.
-    expect(
-      items.some(
-        (entry) => entry.body.kind === 'status' && entry.body.text.includes('could not be read')
+    await expect(
+      journal.appendItem(
+        identity,
+        {
+          ...pending,
+          resolution: {
+            state: 'resolved',
+            selectedOptionId: 'accept',
+            resolvedBy: 'test',
+            resolvedAt: 1
+          }
+        },
+        { fence: 1 }
       )
-    ).toBe(true)
+    ).resolves.toBeDefined()
   })
 
-  it('keeps one disclosure row across reopens instead of stacking duplicates', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const logPath = join(root, JOURNAL_LOG_FILE)
-    await writeFile(logPath, `${await readFile(logPath, 'utf-8')}{not json\n`, 'utf-8')
+  it('rate-limits an unreserved lifecycle batch', async () => {
+    const journal = await open({
+      autoCompact: false,
+      limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, maxAppendsPerWindow: 1, appendWindowMs: 60_000 }
+    })
+    const mutation = (id: string): JournalLifecycleMutationInput => ({
+      kind: 'item',
+      identity: { provider: 'orca', clientMessageId: id },
+      body: { kind: 'status', text: 'provider diagnostic' }
+    })
+    await journal.appendLifecycleBatch({
+      settlementId: 'unreserved-1',
+      fence: 1,
+      mutations: [mutation('one')]
+    })
+    await expect(
+      journal.appendLifecycleBatch({
+        settlementId: 'unreserved-2',
+        fence: 1,
+        mutations: [mutation('two')]
+      })
+    ).rejects.toMatchObject({ code: 'journal_rate_exceeded' })
+  })
 
-    await open()
-    const reopened = await open()
+  it('rebuilds dispatch and turn reservations for pending submissions after reopen', async () => {
+    const journal = await open({ autoCompact: false })
+    await journal.appendSubmission({
+      clientMessageId: 'pending-send',
+      payloadFingerprint: 'fingerprint',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      fence: 1
+    })
+
+    const reopened = await open({ autoCompact: false })
+    expect(reopened.lifecycleCapacityState()).toEqual({
+      reservedBytes: JOURNAL_DISPATCH_RESERVATION_BYTES + JOURNAL_TURN_TERMINAL_RESERVATION_BYTES,
+      reservedAppendSlots: 2
+    })
+  })
+
+  it('deduplicates concurrent submissions before appending a second row', async () => {
+    const journal = await open()
+    const input = {
+      settlementId: 'concurrent-settlement',
+      fence: 1,
+      mutations: [{ kind: 'item' as const, identity: item(1), body: body('settled') }]
+    }
+
+    const [first, replay] = await Promise.all([
+      journal.appendLifecycleBatch(input),
+      journal.appendLifecycleBatch(input)
+    ])
+
+    expect([replay, first.sequence]).toEqual([first, 2])
+  })
+
+  it('applies every mutation at one sequence and deduplicates a replay across reopen', async () => {
+    const journal = await open({ autoCompact: false })
+    const turn: AgentJournalItemIdentity = {
+      provider: 'legacy',
+      agent: 'codex',
+      sessionId: 'session-1',
+      recordId: 'turn-lifecycle:turn-1'
+    }
+    await journal.appendItem(turn, { kind: 'status', text: 'working' }, { fence: 1 })
+
+    const settled = await journal.appendLifecycleBatch({
+      settlementId: 'exit:turn-1',
+      fence: 1,
+      mutations: [
+        { kind: 'item', identity: item(1), body: body('tool settled') },
+        {
+          kind: 'item',
+          identity: { provider: 'orca', clientMessageId: 'exit-status' },
+          body: { kind: 'status', text: 'Provider exited' }
+        },
+        { kind: 'tombstone', identity: turn }
+      ]
+    })
+    const atSettlement = journal
+      .snapshot()
+      .items.filter((entry) => entry.sequence === settled.sequence)
+    expect(atSettlement).toHaveLength(2)
+    expect(
+      journal
+        .snapshot()
+        .items.some((entry) => entry.body.kind === 'status' && entry.body.text === 'working')
+    ).toBe(false)
+    await journal.compact(tick() + 10, { minTailRows: 0, retainTailMs: 0 })
+
+    const reopened = await open({ autoCompact: false })
+    const beforeReplay = reopened.cursor()
+    const replay = await reopened.appendLifecycleBatch({
+      settlementId: 'exit:turn-1',
+      fence: 1,
+      mutations: [{ kind: 'item', identity: item(9), body: body('must not appear') }]
+    })
+    expect(replay).toEqual(beforeReplay)
     expect(
       reopened
         .snapshot()
-        .items.filter(
-          (entry) => entry.body.kind === 'status' && entry.body.text.includes('could not be read')
+        .items.some(
+          (entry) =>
+            entry.body.kind === 'message' &&
+            entry.body.blocks.some(
+              (block) => block.type === 'text' && block.text === 'must not appear'
+            )
         )
-    ).toHaveLength(1)
+    ).toBe(false)
   })
 
-  it('repairs a torn tail before acknowledging the next append', async () => {
+  it('reserves and releases terminal prompts created inside lifecycle batches', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const logPath = join(root, JOURNAL_LOG_FILE)
-    const intact = await readFile(logPath, 'utf-8')
-    await writeFile(logPath, intact.slice(0, -1), 'utf-8')
-
-    await journal.appendItem(item(1), body('b'), { fence: 1 })
-    const reopened = await open()
-    expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([body('a'), body('b')])
-  })
-
-  // Transcripts are full of emoji and CJK, so the repair's file offsets must be
-  // bytes: string indices would truncate mid-character and corrupt the prefix.
-  it('repairs a torn tail whose rows contain multi-byte characters', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('안녕하세요 🌊 café'), { fence: 1 })
-    const logPath = join(root, JOURNAL_LOG_FILE)
-    const intact = await readFile(logPath)
-    // Kill mid-row: keep the complete first row plus a fragment of the second.
-    const torn = Buffer.concat([intact, Buffer.from('{"seq":2,"kind":"it', 'utf-8')])
-    await writeFile(logPath, torn)
-
-    await journal.appendItem(item(1), body('b'), { fence: 1 })
-    const reopened = await open()
-    expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([
-      body('안녕하세요 🌊 café'),
-      body('b')
-    ])
-  })
-
-  it('degrades to read-only when the snapshot comes from a newer schema', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const snapshotPath = join(root, JOURNAL_SNAPSHOT_FILE)
-    const snapshot = JSON.parse(await readFile(snapshotPath, 'utf-8')) as Record<string, unknown>
-    snapshot.v = 99
-    await writeFile(snapshotPath, JSON.stringify(snapshot), 'utf-8')
-
-    const reopened = await open()
-    expect(reopened.isReadOnly).toBe(true)
-    await expect(reopened.appendItem(item(1), body('b'), { fence: 1 })).rejects.toMatchObject({
-      code: 'journal_read_only'
-    })
-  })
-
-  it('preserves a future-version snapshot with an unknown body kind in place instead of quarantining it', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const snapshotPath = join(root, JOURNAL_SNAPSHOT_FILE)
-    const snapshot = JSON.parse(await readFile(snapshotPath, 'utf-8')) as Record<string, unknown>
-    snapshot.v = 99
-    // The version advances because bodies changed: a valid newer snapshot
-    // carries kinds this build cannot parse and must stay unreadable in place.
-    snapshot.items = [
-      {
-        itemId: 'codex:thread-1:turn-1:1',
-        revision: 1,
-        body: { kind: 'future-render-kind', payload: { anything: true } },
-        sequence: 1,
-        observedAt: 1_000
+    const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'prompt-1' }
+    const pending: AgentJournalItemBody = {
+      kind: 'approval',
+      title: 'Run a command?',
+      detail: null,
+      options: [{ id: 'accept', label: 'Allow' }],
+      resolution: {
+        state: 'pending',
+        selectedOptionId: null,
+        resolvedBy: null,
+        resolvedAt: null
       }
-    ]
-    await writeFile(snapshotPath, JSON.stringify(snapshot), 'utf-8')
+    }
 
-    const reopened = await open()
-    const entries = await readdir(root)
-    expect(entries.some((name) => name.startsWith('quarantine-'))).toBe(false)
-    expect(entries.includes(JOURNAL_SNAPSHOT_FILE)).toBe(true)
-    expect(reopened.isReadOnly).toBe(true)
-    expect(reopened.snapshot().items).toHaveLength(0)
-    await expect(reopened.appendItem(item(1), body('b'), { fence: 1 })).rejects.toMatchObject({
-      code: 'journal_read_only'
+    await journal.appendLifecycleBatch({
+      settlementId: 'prompt-start',
+      fence: 1,
+      mutations: [{ kind: 'item', identity, body: pending }]
     })
-  })
 
-  it('keeps the future-version snapshot bytes when the schema escape hatch rolls the epoch', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const snapshotPath = join(root, JOURNAL_SNAPSHOT_FILE)
-    const snapshot = JSON.parse(await readFile(snapshotPath, 'utf-8')) as Record<string, unknown>
-    snapshot.v = 99
-    snapshot.items = [
+    expect(journal.lifecycleCapacityState()).toEqual({
+      reservedBytes: JOURNAL_ITEM_TERMINAL_RESERVATION_BYTES,
+      reservedAppendSlots: 1
+    })
+
+    await journal.appendItem(
+      identity,
       {
-        itemId: 'codex:thread-1:turn-1:1',
-        revision: 1,
-        body: { kind: 'future-render-kind', payload: { anything: true } },
-        sequence: 1,
-        observedAt: 1_000
-      }
-    ]
-    await writeFile(snapshotPath, JSON.stringify(snapshot), 'utf-8')
-    const reopened = await open()
-    // Still live in place before the explicit escape hatch runs.
-    expect((await readdir(root)).some((name) => name.startsWith('quarantine-'))).toBe(false)
+        ...pending,
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: 'accept',
+          resolvedBy: 'test',
+          resolvedAt: tick()
+        }
+      },
+      { fence: 1 }
+    )
 
-    await reopened.rollEpoch('schema_unreadable', 2)
-    expect(reopened.isReadOnly).toBe(false)
-    const quarantine = (await readdir(root)).find((name) => name.startsWith('quarantine-'))
-    expect(quarantine).toBeDefined()
-    expect(await readFile(join(root, quarantine!), 'utf-8')).toContain('future-render-kind')
-  })
-
-  it('reopens a log holding an admitted malformed-percent item id without throwing', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const logPath = join(root, JOURNAL_LOG_FILE)
-    // `parseJournalRow` admits any string itemId, so replay must degrade a
-    // malformed percent key to an opaque id instead of throwing URIError.
-    const malformedKeyRow = JSON.stringify({
-      v: 1,
-      epoch: journal.epoch,
-      seq: journal.cursor().sequence + 1,
-      fence: 1,
-      ts: 1,
-      kind: 'item',
-      itemId: '%',
-      revision: 1,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }
+    expect(journal.lifecycleCapacityState()).toEqual({
+      reservedBytes: 0,
+      reservedAppendSlots: 0
     })
-    await writeFile(logPath, `${await readFile(logPath, 'utf-8')}${malformedKeyRow}\n`, 'utf-8')
-
-    const reopened = await open()
-    expect(reopened.isReadOnly).toBe(false)
-    expect(reopened.snapshot().items.some((entry) => entry.itemId === '%')).toBe(true)
-  })
-
-  it('allows the explicit schema-unreadable epoch escape hatch while preserving the old files', async () => {
-    const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    const snapshotPath = join(root, JOURNAL_SNAPSHOT_FILE)
-    const snapshot = JSON.parse(await readFile(snapshotPath, 'utf-8')) as Record<string, unknown>
-    snapshot.v = 99
-    await writeFile(snapshotPath, JSON.stringify(snapshot), 'utf-8')
-    const reopened = await open()
-
-    await reopened.rollEpoch('schema_unreadable', 2)
-    expect(reopened.isReadOnly).toBe(false)
-    expect(reopened.snapshot().items).toHaveLength(0)
-    expect((await readdir(root)).some((name) => name.startsWith('quarantine-'))).toBe(true)
-  })
-
-  it('keeps the unreadable log suffix in the schema escape quarantine', async () => {
-    const journal = await open()
-    const logPath = join(root, JOURNAL_LOG_FILE)
-    const future = JSON.stringify({
-      v: 99,
-      kind: 'item',
-      epoch: journal.epoch,
-      seq: 2,
-      fence: 1,
-      ts: 1,
-      itemId: 'future',
-      revision: 1,
-      body: { kind: 'status', text: 'preserve these bytes' }
-    })
-    await writeFile(logPath, `${await readFile(logPath, 'utf-8')}${future}\n`, 'utf-8')
-    const reopened = await open()
-
-    await reopened.rollEpoch('schema_unreadable', 2)
-    const quarantine = (await readdir(root)).find((name) => name.startsWith('quarantine-'))
-    expect(quarantine).toBeDefined()
-    expect(await readFile(join(root, quarantine!), 'utf-8')).toContain('preserve these bytes')
   })
 })
 

@@ -57,7 +57,7 @@ vi.mock('./useEditorConflictNavigation', () => ({
 
 vi.mock('@/store', () => {
   const state = {
-    markdownRichModeSizeOverride: {},
+    markdownRichModeSizeOverridden: false,
     setMarkdownRichModeSizeOverride: () => {},
     reloadOpenCheckRunDetailsTab: () => {}
   }
@@ -111,7 +111,7 @@ function renderEditPath({
     gitStatusEntries: undefined,
     gitBranchEntries: undefined,
     markdownViewMode: { [activeFile.id]: viewMode },
-    markdownRichModeSizeOverride: {},
+    markdownRichModeSizeOverridden: false,
     isChangesMode: false,
     canOpenWorkspaceFileBrowser: true
   })
@@ -165,7 +165,7 @@ function getGuardedRenderModel({
     gitStatusEntries: undefined,
     gitBranchEntries: undefined,
     markdownViewMode: { [activeFile.id]: 'rich' },
-    markdownRichModeSizeOverride: {},
+    markdownRichModeSizeOverridden: false,
     isChangesMode,
     canOpenWorkspaceFileBrowser: true
   })

@@ -22,7 +22,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     handleBulkStage,
     handleBulkUnstage,
     handleCreatePrHeaderClick,
-    handleOpenComment,
     handleRelinkSuppressedGitHubPR,
     handleSourceControlKeyDown,
     handleToggleSourceControlViewMode,

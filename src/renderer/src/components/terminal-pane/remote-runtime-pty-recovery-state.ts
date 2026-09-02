@@ -162,7 +162,11 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return
     }
-    this.clearTimers()
+    // Why: same latch the deadline arrives at, so it must be equally revivable — stop auto-retry but keep
+    // the parked retry registered for online/resume/reconnect. clearTimers() here would be strictly more
+    // destructive than exhausting the whole recovery budget.
+    this.stopRetryTimer()
+    this.clearDeadlineTimer()
     this.phase = 'disconnected'
     this.onChange?.()
   }

@@ -1,6 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
+import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const { autoUpdaterMock, fetchNewerReleaseTagsMock, moduleFactories, resetUpdaterMocks } =
   await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
@@ -21,6 +22,8 @@ vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBui
 
 const SILENT_SETTLE_DELAY_MS = 1_000
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+warmUpdaterModule()
 
 describe('updater test harness real-timer tracking', () => {
   beforeEach(() => {
@@ -79,7 +82,7 @@ describe('abandoned updater instance', () => {
     })
     leakedStatusSend = vi.fn()
 
-    const { setupAutoUpdater } = await import('./updater')
+    const { setupAutoUpdater } = await loadUpdaterModule()
 
     setupAutoUpdater({ webContents: { send: leakedStatusSend } } as never, {
       getLastUpdateCheckAt: () => Date.now() - 25 * 60 * 60 * 1000

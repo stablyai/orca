@@ -15,8 +15,7 @@ const {
   readFileMock,
   statMock,
   rmMock,
-  accessMock,
-  existsSyncMock
+  accessMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncBufferMock: vi.fn(),
@@ -26,8 +25,7 @@ const {
   readFileMock: vi.fn(),
   statMock: vi.fn(),
   rmMock: vi.fn(),
-  accessMock: vi.fn(),
-  existsSyncMock: vi.fn()
+  accessMock: vi.fn()
 }))
 
 vi.mock('./runner', () =>
@@ -49,11 +47,6 @@ vi.mock('fs/promises', () =>
   })
 )
 
-// Why still here: unmerged-entry parsing probes the working tree through node:fs directly.
-vi.mock('fs', () => ({
-  existsSync: existsSyncMock
-}))
-
 vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) =>
   createBoundedFileReaderModuleMock(await importOriginal<typeof BoundedFileReader>(), {
     readFileMock,
@@ -71,7 +64,6 @@ describe('getStatus', () => {
     gitStreamOptionsMock.mockReset()
     lstatMock.mockReset()
     readFileMock.mockReset()
-    existsSyncMock.mockReset()
     accessMock.mockReset()
     accessMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     // Why: untracked line counting stats a file before reading it; any
@@ -130,11 +122,9 @@ describe('getStatus', () => {
     })
   })
 
-  it('falls back to modified when the filesystem existence check throws', async () => {
+  it('falls back to modified when the working-tree probe fails for a non-absence reason', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockImplementation(() => {
-      throw new Error('stat failed')
-    })
+    accessMock.mockRejectedValue(Object.assign(new Error('EIO'), { code: 'EIO' }))
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         'u AU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/new.ts\n'
@@ -144,6 +134,61 @@ describe('getStatus', () => {
 
     expect(result.entries[0]?.status).toBe('modified')
     expect(result.entries[0]?.conflictKind).toBe('added_by_us')
+  })
+
+  // Why both cases normalize separators: git reports the worktree in the WSL guest namespace, and
+  // the assertion is about which path is probed, not which separator this host's `path` emits.
+  it('probes the conflict working tree through the distro spelling on Windows', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockResolvedValue('gitdir: /home/me/repo/.git/worktrees/feature\n')
+    accessMock.mockImplementation(async (target: string) => {
+      if (String(target).endsWith('new.ts')) {
+        return undefined
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        'u DU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/new.ts\n'
+    })
+
+    try {
+      const result = await getStatus('/home/me/repo/feature', { wslDistro: 'Ubuntu' })
+
+      const probed = accessMock.mock.calls.map(([target]) => String(target).replaceAll('\\', '/'))
+      expect(probed).toContain('//wsl.localhost/Ubuntu/home/me/repo/feature/src/new.ts')
+      expect(result.entries[0]?.status).toBe('modified')
+      expect(result.entries[0]?.conflictKind).toBe('deleted_by_us')
+      // The conflict-marker probes travel the same way.
+      expect(
+        probed.filter((target) =>
+          target.startsWith('//wsl.localhost/Ubuntu/home/me/repo/.git/worktrees/feature/')
+        )
+      ).toHaveLength(4)
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it('probes shared symlinks through the distro spelling on Windows', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockResolvedValue('gitdir: /home/me/repo/.git/worktrees/feature\n')
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => true })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '? node_modules\n' })
+
+    try {
+      const result = await getStatus('/home/me/repo/feature', {
+        wslDistro: 'Ubuntu',
+        sharedLinkPaths: ['node_modules']
+      })
+
+      expect(String(lstatMock.mock.calls[0]?.[0]).replaceAll('\\', '/')).toContain(
+        '//wsl.localhost/Ubuntu/home/me/repo/feature/node_modules'
+      )
+      expect(result.entries).toEqual([])
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('passes core.quotePath=false and round-trips UTF-8 paths', async () => {
@@ -632,7 +677,6 @@ describe('getStatus', () => {
 
   it('caps unmerged conflicts and keeps the visible conflict rows', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(true)
     const lines = [
       'u UU S... 160000 160000 160000 160000 aa bb cc vendor/submodule',
       ...Array.from(
@@ -655,7 +699,6 @@ describe('getStatus', () => {
 
   it('keeps an early conflict ahead of later ordinary rows at the cap', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(true)
     const lines = [
       '? before.ts',
       'u UU N... 100644 100644 100644 100644 aa bb cc conflict.ts',

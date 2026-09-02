@@ -3,6 +3,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 
 export type SshPtyLeaseOperations = {
   state: PersistedState
@@ -272,6 +273,8 @@ export function removeSshRemotePtyLease(
     (lease) => lease.targetId !== targetId || lease.ptyId !== relayPtyId
   )
   if (operations.state.sshRemotePtyLeases.length !== before) {
+    // Why: the lease may have been the last claim on a dangling metadata row (#17775).
+    invalidateLocalWorktreeMetadataPruneInputs()
     operations.flush()
   }
 }
@@ -287,6 +290,8 @@ export function removeSshRemotePtyLeases(
     (lease) => lease.targetId !== targetId
   )
   if (operations.state.sshRemotePtyLeases.length !== before) {
+    // Why: the leases may have been the last claim on dangling metadata rows (#17775).
+    invalidateLocalWorktreeMetadataPruneInputs()
     operations.flush()
   }
 }

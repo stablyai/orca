@@ -211,6 +211,19 @@ describe('orchestration federation', () => {
     )
   })
 
+  it('carries an explicit worker label as user display-name provenance', async () => {
+    const task = createHomeTask()
+
+    await homeDispatcher.dispatch(startRequest(task.id, { displayName: 'Windows release audit' }))
+
+    expect(workerRuntime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: 'Windows release audit',
+        displayNameKind: 'user'
+      })
+    )
+  })
+
   it('does not report remotely rejected preferences as effective', async () => {
     const task = createHomeTask()
 

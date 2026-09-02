@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   GitConflictKind,
@@ -78,10 +78,15 @@ async function getConflictCompatibilityStatus(
     return 'deleted'
   }
 
+  // Why async: on a WSL worktree this path is a `\\wsl.localhost\...` share, and a sync probe
+  // per asymmetric conflict blocks the Electron main thread for a 9p round trip each.
   try {
-    return existsSync(path.join(worktreePath, filePath)) ? 'modified' : 'deleted'
-  } catch {
-    // Why: on an fs check failure, 'modified' is safer — it keeps the row visible rather than falsely showing 'deleted'.
+    await access(path.join(worktreePath, filePath))
     return 'modified'
+  } catch (error) {
+    // Why: only a definite "not there" reads as deleted; any other fs failure keeps the row visible
+    // rather than falsely showing 'deleted'.
+    const code = (error as NodeJS.ErrnoException).code
+    return code === 'ENOENT' || code === 'ENOTDIR' ? 'deleted' : 'modified'
   }
 }

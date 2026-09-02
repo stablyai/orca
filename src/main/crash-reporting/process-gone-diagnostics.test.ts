@@ -612,6 +612,35 @@ describe('process gone diagnostics', () => {
     expect(details.systemMemorySwapFreeMB).toBeUndefined()
   })
 
+  it('reports Linux MemAvailable as its own field alongside MemFree', () => {
+    // MemFree alone hid the pressure on the SIGKILL-at-OOM reports; MemAvailable
+    // is the kernel's reclaim-aware estimate. Electron 43 exposes it on Linux.
+    setSystemMemoryInfoReaderForTest(() => ({
+      total: 1024 * 14_551,
+      free: 1024 * 1_292,
+      available: 1024 * 340,
+      swapTotal: 1024 * 4_096,
+      swapFree: 1024 * 167
+    }))
+
+    expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
+      systemMemoryFreeMB: 1_292,
+      systemMemoryAvailableMB: 340
+    })
+  })
+
+  it('omits the available field on platforms that do not report it', () => {
+    setSystemMemoryInfoReaderForTest(() => ({ total: 1024 * 65_536, free: 1024 * 59 }))
+    expect(buildProcessGoneCrashDetails({}, 'renderer').systemMemoryAvailableMB).toBeUndefined()
+  })
+
+  it('drops a NaN available reading instead of emitting it as zero', () => {
+    setSystemMemoryInfoReaderForTest(() => ({ total: 1024 * 16_384, available: Number.NaN }))
+    const details = buildProcessGoneCrashDetails({}, 'renderer')
+    expect(details.systemMemoryAvailableMB).toBeUndefined()
+    expect(details.systemMemoryTotalMB).toBe(16_384)
+  })
+
   it('samples system memory at gone time but never into the pre-gone snapshot', () => {
     appMetricsMock.mockReturnValue([{ pid: 1, type: 'Browser', memory: { workingSetSize: 0 } }])
     samplePreGoneProcessMetrics()

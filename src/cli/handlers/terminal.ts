@@ -23,6 +23,7 @@ import {
   formatTerminalShow,
   formatTerminalSplit,
   formatTerminalWait,
+  reportCliError,
   printResult
 } from '../format'
 import {
@@ -42,6 +43,24 @@ import {
 // timeout. Even without an explicit server timeout, the client must allow
 // long waits instead of failing at the generic 15s transport cap.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+/** A false stop receipt is an error only when the host supplied a liveness verdict. */
+function terminalCloseFailure(close: RuntimeTerminalClose): RuntimeClientError | null {
+  if (close.ptyKilled || close.ptyStopVerdict === undefined) {
+    return null
+  }
+
+  const verdict = close.ptyStopVerdict
+  const detail =
+    verdict === 'live'
+      ? 'The PTY is live.'
+      : `The PTY was not confirmed stopped: ${close.ptyStopReason ?? 'its host could not be reached'}.`
+  return new RuntimeClientError(
+    verdict === 'live' ? 'terminal_stop_live' : 'terminal_stop_unverifiable',
+    `Terminal ${close.handle} close failed to confirm the PTY stopped (${verdict}). ${detail}`,
+    { close }
+  )
+}
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
@@ -183,6 +202,20 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{ close: RuntimeTerminalClose }>(method, {
       terminal: await getTerminalHandle(flags, cwd, client)
     })
+    // Why: a transport-level success must not hide a live or unverifiable PTY. Keep the receipt in
+    // error.data so JSON callers retain the host's exact evidence while receiving a failing outcome.
+    const failure = terminalCloseFailure(result.result.close)
+    if (failure) {
+      // Keep the established human receipt (including its liveness warning); JSON needs the
+      // standard failure envelope so callers do not mistake transport success for a stopped PTY.
+      if (json) {
+        reportCliError(failure, true)
+      } else {
+        printResult(result, false, formatTerminalClose)
+      }
+      process.exitCode = 1
+      return
+    }
     printResult(result, json, formatTerminalClose)
   },
   'terminal split': async ({ flags, client, cwd, json }) => {

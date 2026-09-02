@@ -11,7 +11,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "format": "oxfmt --write .",
-    "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:max-lines-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
+    "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:max-lines-ratchet && pnpm run check:ts-nocheck-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",
     "audit:code-quality:native": "oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings",
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
@@ -29,6 +29,7 @@
     "test:repro:remote-agent-session": "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/remote-agent-session-authority-repro.mjs",
     "check:reliability-gates": "node config/scripts/check-reliability-gates.mjs",
     "check:max-lines-ratchet": "node config/scripts/check-max-lines-ratchet.mjs",
+    "check:ts-nocheck-ratchet": "node config/scripts/check-ts-nocheck-ratchet.mjs",
     "check:runtime-electron-ratchet": "node config/scripts/check-runtime-electron-ratchet.mjs",
     "build:orcad": "node config/scripts/build-orcad.mjs",
     "build:orcad-prebuilds": "node config/scripts/build-orcad-prebuilds.mjs",
@@ -74,6 +75,7 @@
     "verify:localization-coverage": "node config/scripts/audit-localization-coverage.mjs --check",
     "audit:localization": "node config/scripts/audit-localization-coverage.mjs",
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/verify-cli-bin.mjs --fix-executable --fix-package-json && node config/scripts/install-dev-cli.mjs",
+    "test:linux-cli-contract": "node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage",
     "test:repro:skills-cli-runtime": "pnpm run build:cli && pnpm run build:electron-vite && pnpm run verify:built-skills-cli",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
     "build:electron-vite:parallel": "node config/scripts/run-electron-vite-targets-in-parallel.mjs",
@@ -85,13 +87,15 @@
     "build:release:parallel": "pnpm run build:relay && pnpm run build:native && pnpm run verify:computer-native && pnpm run build:cli && pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer",
     "postinstall": "node config/scripts/rebuild-native-deps.mjs",
     "rebuild:electron": "node config/scripts/rebuild-native-deps.mjs",
+    "reclaim:electron-dists": "node config/scripts/reclaim-electron-dists.mjs",
+    "reclaim:dev-bundles": "node config/scripts/reclaim-dev-electron-bundles.mjs",
     "rebuild:node": "pnpm rebuild node-pty",
     "build:unpack": "pnpm run build && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",
     "build:mac": "pnpm run build:desktop && pnpm run build:computer-macos && pnpm run build:keyboard-layout-macos && pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && node config/scripts/build-mac-local.mjs",
     "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build:desktop && ORCA_MAC_RELEASE=1 pnpm run build:computer-macos && ORCA_MAC_RELEASE=1 pnpm run build:keyboard-layout-macos && ORCA_MAC_RELEASE=1 pnpm run build:notification-status-macos && pnpm run ensure:electron-runtime && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
-    "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --linux AppImage deb",
+    "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && node config/scripts/build-linux-local.mjs",
     "test:e2e": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project=electron-headless",
     "test:e2e:workspace-session-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-quit-relaunch-session.spec.ts tests/e2e/golden-terminal-file-link.spec.ts tests/e2e/golden-worktree-create-switch.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:multi-client-navigation": "node config/scripts/run-multi-client-navigation-e2e.mjs",
@@ -308,6 +312,15 @@
           ],
           "rules": [
             "react-doctor/no-derived-state-effect"
+          ]
+        },
+        {
+          "files": [
+            "src/renderer/src/components/use-task-page-github-issue-draft.ts",
+            "src/renderer/src/components/use-task-page-jira-creation-state.ts"
+          ],
+          "rules": [
+            "react-doctor/no-adjust-state-on-prop-change"
           ]
         },
         {

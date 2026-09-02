@@ -186,18 +186,29 @@ export class RuntimeGitGenerationCommands {
         useTemplate: input.useTemplate
       })
       context = target.connectionId
-        ? await getPullRequestDraftContext((argv) => provider!.exec(argv, target.worktree.path), {
-            base: input.base,
-            currentTitle: input.title,
-            currentBody,
-            currentDraft: input.draft
-          })
+        ? await getPullRequestDraftContext(
+            (argv, commandOptions) => {
+              const timeoutMs = commandOptions?.timeoutMs ?? commandOptions?.timeout
+              return timeoutMs === undefined
+                ? provider!.exec(argv, target.worktree.path)
+                : provider!.exec(argv, target.worktree.path, { timeoutMs })
+            },
+            {
+              base: input.base,
+              currentTitle: input.title,
+              currentBody,
+              currentDraft: input.draft
+            }
+          )
         : await getPullRequestDraftContext(
             (argv, options) =>
               gitExecFileAsync(argv, {
                 cwd: target.worktree.path,
                 ...localGitOptionsForTarget(target),
-                ...options,
+                ...(options?.maxBuffer === undefined ? {} : { maxBuffer: options.maxBuffer }),
+                ...(options?.timeoutMs === undefined && options?.timeout === undefined
+                  ? {}
+                  : { timeout: options?.timeoutMs ?? options?.timeout }),
                 admissionTier: 'interactive'
               }),
             {

@@ -12,7 +12,7 @@ vi.mock('../github/client', async (importOriginal) => ({
 const getRepoUpstream = vi.mocked(client.getRepoUpstream)
 const getRepoSlug = vi.mocked(client.getRepoSlug)
 
-type BackfillInternals = { backfillForkUpstreams(): Promise<void> }
+type BackfillInternals = { repositoryForkBackfill: { run(): Promise<void> } }
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -52,7 +52,7 @@ describe('startup fork-upstream backfill', () => {
     getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
     getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket-pro' })
 
-    await (runtime as unknown as BackfillInternals).backfillForkUpstreams()
+    await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
 
     expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
       upstream: { owner: 'upstream-org', repo: 'rocket' },
@@ -81,7 +81,7 @@ describe('startup fork-upstream backfill', () => {
     getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
     getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket' })
 
-    await (runtime as unknown as BackfillInternals).backfillForkUpstreams()
+    await (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
 
     expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
       upstream: { owner: 'upstream-org', repo: 'rocket' },
@@ -113,7 +113,7 @@ describe('startup fork-upstream backfill', () => {
         })
     )
 
-    const backfill = (runtime as unknown as BackfillInternals).backfillForkUpstreams()
+    const backfill = (runtime as unknown as BackfillInternals).repositoryForkBackfill.run()
     await slugStarted
     repos[0] = { ...repo, repoIcon: { type: 'emoji', emoji: '🚀' } }
     resolveSlug({ owner: 'acme', repo: 'rocket-pro' })

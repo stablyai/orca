@@ -132,19 +132,14 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
       },
       async () => {
         // Why: Git <2.36 lacks worktree-list `-z`, so fall back to the newline-block parser (loses newline-in-path safety).
-        try {
-          const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
-            signal: context?.signal
-          })
-          const normalized = await this.normalizeMainWorktreePath(
-            repoPath,
-            parseWorktreeList(stdout)
-          )
-          // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
-          return annotatePrunableWorktreesByExistence(normalized)
-        } catch {
-          return []
-        }
+        // Why no catch (#14004): swallowing to `[]` would report an unreadable catalog as an authoritative
+        // empty one, and callers use that to authorize missing-worktree teardown. Let the failure propagate.
+        const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
+          signal: context?.signal
+        })
+        const normalized = await this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
+        // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
+        return annotatePrunableWorktreesByExistence(normalized)
       },
       isUnsupportedWorktreeListZError
     )

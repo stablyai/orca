@@ -60,6 +60,20 @@ export class JournalAppendBudget {
     return this.limits.maxSessionBytes
   }
 
+  get maxAppendsPerWindow(): number {
+    return this.limits.maxAppendsPerWindow
+  }
+
+  /** Capture rate state so a speculative append can be rolled back safely. */
+  checkpoint(): { windowStart: number; appendsInWindow: number } {
+    return { windowStart: this.windowStart, appendsInWindow: this.appendsInWindow }
+  }
+
+  restore(checkpoint: { windowStart: number; appendsInWindow: number }): void {
+    this.windowStart = checkpoint.windowStart
+    this.appendsInWindow = checkpoint.appendsInWindow
+  }
+
   wouldExceedSize(row: JournalRow, sizeBytes: number): boolean {
     return sizeBytes + journalRowByteLength(row) > this.limits.maxSessionBytes
   }
@@ -71,16 +85,50 @@ export class JournalAppendBudget {
         `agent-session journal for ${this.sessionId} reached its ${this.limits.maxSessionBytes}-byte bound`
       )
     }
-    if (ts - this.windowStart >= this.limits.appendWindowMs) {
-      this.windowStart = ts
-      this.appendsInWindow = 0
+    this.assertRate(ts)
+  }
+
+  /** Lifecycle capacity cannot bypass the session-wide append rate. */
+  assertLifecycle(row: JournalRow, sizeBytes: number): void {
+    if (this.wouldExceedSize(row, sizeBytes)) {
+      throw new AgentSessionJournalError(
+        'journal_bound_exceeded',
+        `agent-session journal for ${this.sessionId} reached its ${this.limits.maxSessionBytes}-byte bound`
+      )
     }
-    this.appendsInWindow += 1
-    if (this.appendsInWindow > this.limits.maxAppendsPerWindow) {
+    this.assertRate(row.ts)
+  }
+
+  /**
+   * Consume a lifecycle row covered by a pre-reserved append slot. Reserved
+   * rows still observe the physical quota, but do not spend ordinary window
+   * rate headroom that may be needed by unrelated traffic.
+   */
+  assertReservedLifecycle(row: JournalRow, sizeBytes: number): void {
+    if (this.wouldExceedSize(row, sizeBytes)) {
+      throw new AgentSessionJournalError(
+        'journal_bound_exceeded',
+        `agent-session journal for ${this.sessionId} reached its ${this.limits.maxSessionBytes}-byte bound`
+      )
+    }
+  }
+
+  private assertRate(ts: number): void {
+    let windowStart = this.windowStart
+    let appendsInWindow = this.appendsInWindow
+    if (ts - windowStart >= this.limits.appendWindowMs) {
+      windowStart = ts
+      appendsInWindow = 0
+    }
+    appendsInWindow += 1
+    if (appendsInWindow > this.limits.maxAppendsPerWindow) {
+      // A refusal must not consume a slot, so a later retry can succeed.
       throw new AgentSessionJournalError(
         'journal_rate_exceeded',
         `agent-session journal for ${this.sessionId} exceeded ${this.limits.maxAppendsPerWindow} appends per ${this.limits.appendWindowMs}ms`
       )
     }
+    this.windowStart = windowStart
+    this.appendsInWindow = appendsInWindow
   }
 }

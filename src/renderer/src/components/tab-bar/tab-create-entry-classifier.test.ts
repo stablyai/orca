@@ -16,7 +16,7 @@ describe('tab create entry classification', () => {
   it('advertises tab search in the empty-query message', () => {
     expect(classifyTabEntryQuery('', readyFiles([]))).toEqual({
       kind: 'empty',
-      message: 'Search open tabs, files, URLs, agents…'
+      message: 'Search open tabs, history, files, URLs, agents…'
     })
   })
 
@@ -190,7 +190,21 @@ describe('tab create entry classification', () => {
       getTabEntryOptions('type script', readyFiles(['docs/typescript-guide.md'])).map(
         (option) => option.classification.kind
       )
-    ).toEqual(['search', 'new-file'])
+    ).toEqual(['search'])
+  })
+
+  it('never offers to create a file from a spaced phrase without path syntax', () => {
+    expect(
+      getTabEntryOptions('release notes', readyFiles(['docs/release notes draft.md'])).map(
+        (option) => option.classification.kind
+      )
+    ).toEqual(['search', 'existing-file'])
+    // Path syntax still marks intent, so spaces inside a real path keep the create row.
+    expect(
+      getTabEntryOptions('docs/release notes.md', readyFiles([])).map(
+        (option) => option.classification.kind
+      )
+    ).toEqual(['new-file', 'search'])
   })
 
   // Fuzzy matching is a subsequence scan, so a short token matches broadly.

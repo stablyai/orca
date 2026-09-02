@@ -63,6 +63,16 @@ import {
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
+import {
+  resolveAgentForegroundProcessesBatch,
+  toForegroundProcessEvidence,
+  type BatchedForegroundProcessResult
+} from '../main/providers/agent-foreground-process'
+import {
+  getStrictProcessTableSnapshot,
+  type ProcessTableRow
+} from '../shared/process-table-snapshot'
+import type { ForegroundProcessEvidence } from '../shared/foreground-process-evidence'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
 import {
   agentSessionOwnerBindingsEqual,
@@ -92,23 +102,16 @@ import {
   injectRelayFishHistoryEnv,
   injectRelayHistoryEnv
 } from './terminal-history'
-
-// Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
-// there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
-// why — a skipped compile and a later Node/ABI flip look identical here — so Linux hedges both causes.
-export function formatNodePtyUnavailableMessage(platform: NodeJS.Platform): string {
-  const remedy =
-    platform === 'linux'
-      ? "node-pty's native binding is not loadable on this host. If it is missing the C/C++ build tools needed to compile node-pty, install make, a C++ compiler, and python3 on the remote host, then reconnect. Otherwise reconnect to reinstall the relay's native modules, and check that the remote Node.js version and architecture match the installed binding."
-      : "node-pty's native binding failed to load on this host. Reconnect to reinstall the relay's native modules; if it persists, check that the remote Node.js version and architecture match the installed binding."
-  return `Remote terminals are unavailable: ${remedy}`
-}
+import { isFlattenedNodePtyLoaderMessage } from '../main/orcad/node-pty-loader-diagnosis'
+import { collectNodePtyUnavailableDiagnosis } from './node-pty-binding-survey'
+import {
+  formatNodePtyUnavailableMessage,
+  toTerminalUnavailableCause
+} from './node-pty-unavailable-diagnosis'
+import { TERMINAL_UNAVAILABLE_RPC_ERROR_CODE } from '../shared/terminal-unavailable-cause'
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /Failed to load native module: (?:conpty|pty)\.node(?:,|$)/.test(error.message)
-  )
+  return error instanceof Error && isFlattenedNodePtyLoaderMessage(error.message)
 }
 
 function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | undefined {
@@ -364,6 +367,7 @@ type PtyProcessSummary = {
   title: string
   worktreeId?: string
   terminalHandle?: string
+  foregroundProcessEvidence?: ForegroundProcessEvidence
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
@@ -439,6 +443,7 @@ export type RelayPtyWorktreeRemovalCoordinator = {
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
   private readonly ptyIdMintEpoch: string
+  private foregroundEvidenceEpoch = 0
   private nextId = 1
   private dispatcher: RelayDispatcher
   private graceTimeMs: number
@@ -462,6 +467,8 @@ export class PtyHandler {
   private ptyModule: typeof NodePty | null = null
   private ptyModuleLoadPromise: Promise<typeof NodePty | null> | null = null
   private reloadPtyModuleFromDisk = false
+  /** The last thing `require('node-pty')` threw, kept because it is the only cause anyone has. */
+  private lastPtyLoadError: unknown = null
   // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
   private surfaceRetiredListener: PtySurfaceRetiredListener | null = null
@@ -535,27 +542,56 @@ export class PtyHandler {
       try {
         this.ptyModule = await import('node-pty')
         return this.ptyModule
-      } catch {
+      } catch (error) {
+        // Why keep it: this is the only place the load error exists. Discarding it here is
+        // what left the relay able to say "unavailable" and never why.
+        this.lastPtyLoadError = error
         this.reloadPtyModuleFromDisk = true
       }
     }
     // Why: tie module resolution to the deployed bundle dir, not cwd.
-    const moduleEntry = join(__dirname, 'node_modules', 'node-pty', 'lib', 'index.js')
+    const moduleEntry = join(this.relayNodePtyDir(), 'lib', 'index.js')
     if (!existsSync(moduleEntry)) {
+      this.lastPtyLoadError = this.lastPtyLoadError ?? new Error(`no node-pty at ${moduleEntry}`)
       return null
     }
     try {
       this.ptyModule = require(moduleEntry) as typeof NodePty
       return this.ptyModule
-    } catch {
+    } catch (error) {
+      this.lastPtyLoadError = error
       return null
     }
+  }
+
+  /** Where the relay's own node-pty lives — the deployed bundle dir, never cwd. */
+  private relayNodePtyDir(): string {
+    return join(__dirname, 'node_modules', 'node-pty')
+  }
+
+  /**
+   * The rejection for a spawn that cannot happen: prose for a human, and the structured
+   * cause for a client that can repair the host instead of printing a paragraph.
+   *
+   * Runs the survey and out-of-process load probe only here, on the failure path, so a
+   * healthy relay never pays for them.
+   */
+  private async nodePtyUnavailableError(spawnError?: unknown): Promise<Error> {
+    const nodePtyDir = this.relayNodePtyDir()
+    const diagnosis = await collectNodePtyUnavailableDiagnosis({
+      nodePtyDir: existsSync(nodePtyDir) ? nodePtyDir : null,
+      error: spawnError ?? this.lastPtyLoadError
+    })
+    return Object.assign(new Error(formatNodePtyUnavailableMessage(diagnosis)), {
+      code: TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
+      data: toTerminalUnavailableCause(diagnosis)
+    })
   }
 
   private invalidatePtyModuleAfterBindingFailure(): void {
     this.ptyModule = null
     this.reloadPtyModuleFromDisk = true
-    const moduleRoot = join(__dirname, 'node_modules', 'node-pty')
+    const moduleRoot = this.relayNodePtyDir()
     for (const cachedPath of Object.keys(require.cache)) {
       if (isPathInsideOrEqual(moduleRoot, cachedPath)) {
         delete require.cache[cachedPath]
@@ -1706,7 +1742,7 @@ export class PtyHandler {
   }> {
     const pty = await this.loadPty()
     if (!pty) {
-      throw new Error(formatNodePtyUnavailableMessage(process.platform))
+      throw await this.nodePtyUnavailableError()
     }
 
     const cols = (params.cols as number) || 80
@@ -1819,7 +1855,7 @@ export class PtyHandler {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
       if (isMissingNodePtyNativeBinding(error)) {
         this.invalidatePtyModuleAfterBindingFailure()
-        throw new Error(formatNodePtyUnavailableMessage(process.platform))
+        throw await this.nodePtyUnavailableError(error)
       }
       throw error
     }
@@ -2064,9 +2100,19 @@ export class PtyHandler {
   private async shutdown(params: Record<string, unknown>): Promise<void> {
     const id = params.id as string
     const immediate = params.immediate as boolean
+    const expectedIncarnationId = params.expectedIncarnationId
+    if (
+      expectedIncarnationId !== undefined &&
+      (typeof expectedIncarnationId !== 'string' || expectedIncarnationId.length === 0)
+    ) {
+      throw new Error('Invalid expectedIncarnationId')
+    }
     const managed = this.ptys.get(id)
     if (!managed) {
       return
+    }
+    if (expectedIncarnationId !== undefined && expectedIncarnationId !== managed.incarnationId) {
+      throw new Error(`PTY incarnation mismatch for ${id}`)
     }
     // Why: `pty.shutdown` is the only authoritative statement this host ever gets that a tab is
     // gone. Record it before the kill request, because the kill is the part that can fail: an agent
@@ -2354,13 +2400,52 @@ export class PtyHandler {
     // listing is what publishes `agentSessionOwners`, i.e. "there is a live agent session here you
     // can adopt". A shell can exit without node-pty's onExit, and an unverified entry advertised
     // that session forever. Snapshot the map because reaping mutates it.
-    for (const [id, managed] of Array.from(this.ptys)) {
+    const managedEntries = Array.from(this.ptys)
+    // R1 seed evidence is additive and POSIX-only. Windows authorities retain
+    // the existing title/liveness path until the measured relay adapter lands.
+    let evidenceRows: readonly ProcessTableRow[] | null = null
+    let evidenceResults: BatchedForegroundProcessResult[] = []
+    const evidenceEpoch = ++this.foregroundEvidenceEpoch
+    if (process.platform !== 'win32' && managedEntries.length > 0) {
+      try {
+        evidenceRows = await getStrictProcessTableSnapshot()
+        evidenceResults = await resolveAgentForegroundProcessesBatch(
+          managedEntries.map(([, managed]) => ({
+            rootPid: managed.pty.pid,
+            fallbackProcess: managed.pty.process || null
+          })),
+          { rows: evidenceRows }
+        )
+      } catch {
+        // An unreadable capture is represented as unverifiable evidence below;
+        // existing inventory fields remain available for old clients.
+      }
+    }
+    for (const [entryIndex, [id, managed]] of managedEntries.entries()) {
       if (managed.disposed || (managed.pty.pid && !isProcessAlive(managed.pty.pid))) {
         this.reapExitedPty(managed)
         continue
       }
+      // Reuse batched correlation; per-PTY tree scans recreate O(PTY × rows) work.
       const title =
-        (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
+        (evidenceRows
+          ? (evidenceResults[entryIndex]?.processName ?? managed.pty.process ?? null)
+          : await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
+      const foregroundProcessEvidence =
+        process.platform !== 'win32'
+          ? toForegroundProcessEvidence(
+              evidenceResults[entryIndex] ?? {
+                available: false,
+                processName: managed.pty.process || null,
+                reason: 'table_unreadable'
+              },
+              {
+                authorityGeneration: this.ptyIdMintEpoch,
+                observationEpoch: evidenceEpoch,
+                capturedAgeMs: 0
+              }
+            )
+          : undefined
       results.push({
         id,
         incarnationId: managed.incarnationId,
@@ -2368,6 +2453,7 @@ export class PtyHandler {
         title,
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
+        ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
         ...(this.agentSessionOwners.listForPty(id).length
           ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
           : {})
