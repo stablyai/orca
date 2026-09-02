@@ -27,6 +27,7 @@ import type {
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
 import { getPRForBranch } from '../github/client'
+import { confirmsSelectedGitHubPrByNumber } from '../github/selected-pr-branch-confirmation'
 import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import { consumePreparedWorktreeCreate } from '../worktree-create-preparation'
@@ -729,11 +730,16 @@ function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
 function getLocalGitHubPrForBranch(
   repoPath: string,
   branchName: string,
-  gitOptions: { wslDistro?: string }
+  gitOptions: { wslDistro?: string },
+  linkedPRNumber: number | null = null
 ): ReturnType<typeof getPRForBranch> {
   return hasLocalGitOptions(gitOptions)
-    ? getPRForBranch(repoPath, branchName, null, null, null, { localGitExecOptions: gitOptions })
-    : getPRForBranch(repoPath, branchName)
+    ? getPRForBranch(repoPath, branchName, linkedPRNumber, null, null, {
+        localGitExecOptions: gitOptions
+      })
+    : linkedPRNumber === null
+      ? getPRForBranch(repoPath, branchName)
+      : getPRForBranch(repoPath, branchName, linkedPRNumber)
 }
 
 function hasRemoteCommitObject(
@@ -2263,6 +2269,22 @@ export async function createLocalWorktree(
               lastBranchConflictKind = null
             } else if (lastExistingPR) {
               lastExistingReviewNumber = lastExistingPR.number
+            } else if (
+              !lookupFailed &&
+              (await confirmsSelectedGitHubPrByNumber({
+                lookupByNumber: (linkedPRNumber) =>
+                  getLocalGitHubPrForBranch(
+                    repo.path,
+                    branchName,
+                    localWorktreeGitOptions,
+                    linkedPRNumber
+                  ),
+                linkedPR: args.linkedPR,
+                branchNameOverride: args.branchNameOverride,
+                branchName
+              }))
+            ) {
+              lastBranchConflictKind = null
             }
           } else if (selectedReview) {
             let hostedReview: Awaited<ReturnType<typeof getSelectedHostedReviewForBranch>> = null

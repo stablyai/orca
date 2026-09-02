@@ -77,13 +77,16 @@ export async function canCheckoutExistingLocalBranch(
 export function getLocalGitHubPrForBranch(
   repoPath: string,
   branchName: string,
-  gitOptions: { wslDistro?: string }
+  gitOptions: { wslDistro?: string },
+  linkedPRNumber: number | null = null
 ): ReturnType<typeof getPRForBranch> {
   return hasLocalGitOptions(gitOptions)
-    ? getPRForBranch(repoPath, branchName, null, null, null, {
+    ? getPRForBranch(repoPath, branchName, linkedPRNumber, null, null, {
         localGitExecOptions: gitOptions
       })
-    : getPRForBranch(repoPath, branchName)
+    : linkedPRNumber === null
+      ? getPRForBranch(repoPath, branchName)
+      : getPRForBranch(repoPath, branchName, linkedPRNumber)
 }
 
 export async function getSelectedHostedReviewForBranch(
