@@ -10,17 +10,19 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 const consumeReset = vi.fn(async () => {})
 const updateSettings = vi.fn(async () => {})
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
-let activeRuntimeEnvironmentId: string | null = null
-
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
+const translateMock = vi.hoisted(() =>
+  vi.fn((_key: string, fallback: string, values?: Record<string, string | number>) =>
     values
       ? Object.entries(values).reduce(
           (text, [token, value]) => text.replace(`{{${token}}}`, String(value)),
           fallback
         )
       : fallback
-}))
+  )
+)
+let activeRuntimeEnvironmentId: string | null = null
+
+vi.mock('@/i18n/i18n', () => ({ translate: translateMock }))
 
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
@@ -167,6 +169,26 @@ describe('GrokResetMenu', () => {
 
     expect(screen.getByRole('menuitem', { name: 'Reset now' })).toBeDisabled()
     expect(consumeReset).not.toHaveBeenCalled()
+  })
+
+  it('uses a semantic count placeholder for available resets', () => {
+    render(
+      <GrokResetMenu
+        grok={{
+          ...grok,
+          rateLimitResetCredits: { availableCount: 2, nextExpiresAt: null }
+        }}
+        compact={false}
+        iconOnly={false}
+      />
+    )
+
+    expect(screen.getByText('2 rate-limit resets available')).toBeInTheDocument()
+    expect(translateMock).toHaveBeenCalledWith(
+      'components.grokResetMenu.availableMany',
+      '{{count}} rate-limit resets available',
+      { count: 2 }
+    )
   })
 
   it('shows a localized failure toast when redemption fails', async () => {

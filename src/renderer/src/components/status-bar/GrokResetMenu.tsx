@@ -178,8 +178,8 @@ export function GrokResetMenu({
                 ? translate('components.grokResetMenu.availableOne', '1 rate-limit reset available')
                 : translate(
                     'components.grokResetMenu.availableMany',
-                    '{{value0}} rate-limit resets available',
-                    { value0: resetCreditCount }
+                    '{{count}} rate-limit resets available',
+                    { count: resetCreditCount }
                   )}
             </div>
             {resetCreditExpiry ? (

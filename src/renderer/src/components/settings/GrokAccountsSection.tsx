@@ -242,8 +242,8 @@ export function GrokAccountsSection(): React.JSX.Element {
                   )
                 : translate(
                     'components.grokAccounts.resetCredits.availableMany',
-                    '{{value0}} resets available',
-                    { value0: String(resetCreditCount) }
+                    '{{count}} resets available',
+                    { count: resetCreditCount }
                   )}
             </Badge>
             {resetCreditExpiry ? (

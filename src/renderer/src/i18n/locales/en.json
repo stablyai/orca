@@ -16966,7 +16966,7 @@
         "title": "Usage-limit resets",
         "description": "Same SuperGrok reset tokens as Settings → Usage on grok.com. Redeem from the Grok usage menu in the status bar.",
         "availableOne": "1 reset available",
-        "availableMany": "{{value0}} resets available",
+        "availableMany": "{{count}} resets available",
         "openUsage": "Open grok.com Usage"
       }
     },
@@ -16981,14 +16981,14 @@
       "redeeming": "Using reset…",
       "redeemNow": "Reset now",
       "availableOne": "1 rate-limit reset available",
-      "availableMany": "{{value0}} rate-limit resets available",
+      "availableMany": "{{count}} rate-limit resets available",
       "manageAccounts": "Manage Accounts…"
     },
     "resetCreditExpiry": {
       "nextNow": "Next expires now",
       "singleNow": "Expires now",
-      "nextIn": "Next expires in {{value0}}",
-      "singleIn": "Expires in {{value0}}"
+      "nextIn": "Next expires in {{duration}}",
+      "singleIn": "Expires in {{duration}}"
     },
     "usageRoster": { "openDetails": "Open usage details" },
     "jiraUserPicker": {

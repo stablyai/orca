@@ -15,10 +15,10 @@ export function formatResetCreditExpiry(
       : translate('components.resetCreditExpiry.singleNow', 'Expires now')
   }
   return count > 1
-    ? translate('components.resetCreditExpiry.nextIn', 'Next expires in {{value0}}', {
-        value0: duration
+    ? translate('components.resetCreditExpiry.nextIn', 'Next expires in {{duration}}', {
+        duration
       })
-    : translate('components.resetCreditExpiry.singleIn', 'Expires in {{value0}}', {
-        value0: duration
+    : translate('components.resetCreditExpiry.singleIn', 'Expires in {{duration}}', {
+        duration
       })
 }

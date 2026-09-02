@@ -14671,7 +14671,7 @@
         "title": "使用限额重置",
         "description": "与 grok.com 的“设置 → 使用情况”中相同的 SuperGrok 重置令牌。可从状态栏的 Grok 使用情况菜单中兑换。",
         "availableOne": "1 个重置可用",
-        "availableMany": "{{value0}} 个重置可用",
+        "availableMany": "{{count}} 个重置可用",
         "openUsage": "打开 grok.com 使用情况"
       }
     },
@@ -14686,14 +14686,14 @@
       "redeeming": "正在使用重置…",
       "redeemNow": "立即重置",
       "availableOne": "1 次速率限制重置可用",
-      "availableMany": "{{value0}} 次速率限制重置可用",
+      "availableMany": "{{count}} 次速率限制重置可用",
       "manageAccounts": "管理账户…"
     },
     "resetCreditExpiry": {
       "nextNow": "下一个现在过期",
       "singleNow": "现在过期",
-      "nextIn": "下一个将在 {{value0}} 后过期",
-      "singleIn": "将在 {{value0}} 后过期"
+      "nextIn": "下一个将在 {{duration}} 后过期",
+      "singleIn": "将在 {{duration}} 后过期"
     },
     "usageRoster": { "openDetails": "查看使用详情" },
     "native-chat": {

@@ -14706,7 +14706,7 @@
         "title": "사용 한도 재설정",
         "description": "grok.com의 설정 → 사용량에 표시되는 것과 동일한 SuperGrok 재설정 토큰입니다. 상태 표시줄의 Grok 사용량 메뉴에서 사용할 수 있습니다.",
         "availableOne": "재설정 1개 사용 가능",
-        "availableMany": "재설정 {{value0}}개 사용 가능",
+        "availableMany": "재설정 {{count}}개 사용 가능",
         "openUsage": "grok.com 사용량 열기"
       }
     },
@@ -14721,14 +14721,14 @@
       "redeeming": "재설정 사용 중…",
       "redeemNow": "지금 재설정",
       "availableOne": "rate-limit 재설정 1회 사용 가능",
-      "availableMany": "rate-limit 재설정 {{value0}}회 사용 가능",
+      "availableMany": "rate-limit 재설정 {{count}}회 사용 가능",
       "manageAccounts": "계정 관리…"
     },
     "resetCreditExpiry": {
       "nextNow": "다음 항목이 지금 만료됨",
       "singleNow": "지금 만료됨",
-      "nextIn": "다음 항목이 {{value0}} 후 만료됨",
-      "singleIn": "{{value0}} 후 만료됨"
+      "nextIn": "다음 항목이 {{duration}} 후 만료됨",
+      "singleIn": "{{duration}} 후 만료됨"
     },
     "usageRoster": { "openDetails": "사용량 세부 정보 열기" },
     "native-chat": {

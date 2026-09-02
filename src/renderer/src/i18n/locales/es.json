@@ -14593,7 +14593,7 @@
         "title": "Restablecimientos del límite de uso",
         "description": "Los mismos tokens de restablecimiento de SuperGrok que en Configuración → Uso en grok.com. Canjéalos desde el menú de uso de Grok en la barra de estado.",
         "availableOne": "1 restablecimiento disponible",
-        "availableMany": "{{value0}} restablecimientos disponibles",
+        "availableMany": "{{count}} restablecimientos disponibles",
         "openUsage": "Abrir Uso en grok.com"
       }
     },
@@ -14608,14 +14608,14 @@
       "redeeming": "Aplicando restablecimiento…",
       "redeemNow": "Restablecer ahora",
       "availableOne": "1 restablecimiento del límite disponible",
-      "availableMany": "{{value0}} restablecimientos del límite disponibles",
+      "availableMany": "{{count}} restablecimientos del límite disponibles",
       "manageAccounts": "Administrar cuentas…"
     },
     "resetCreditExpiry": {
       "nextNow": "El siguiente vence ahora",
       "singleNow": "Vence ahora",
-      "nextIn": "El siguiente vence en {{value0}}",
-      "singleIn": "Vence en {{value0}}"
+      "nextIn": "El siguiente vence en {{duration}}",
+      "singleIn": "Vence en {{duration}}"
     },
     "usageRoster": { "openDetails": "Abrir detalles de uso" },
     "native-chat": {
