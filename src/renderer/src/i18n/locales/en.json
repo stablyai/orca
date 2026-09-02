@@ -3848,7 +3848,14 @@
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "justNow": "just now",
+            "minutesAgo": "{{value0}}m ago",
+            "hoursAgo": "{{value0}}h ago",
+            "updatedTimeAgo": "Updated {{value0}}",
+            "notYetUpdated": "Not yet updated",
+            "resetsNow": "Resets now",
+            "resetsIn": "Resets in {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"

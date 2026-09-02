@@ -11,7 +11,7 @@ import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
-import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
+import { barColor, formatLocalizedResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
@@ -77,7 +77,7 @@ function soonestResetLabel(sections: UsageSection[], now: number): string | null
   if (resets.length === 0) {
     return null
   }
-  return formatResetCountdown(Math.min(...resets) - now)
+  return formatLocalizedResetCountdown(Math.min(...resets) - now)
 }
 
 function UsageMetric({
