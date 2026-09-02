@@ -188,6 +188,14 @@ type ClaudeSpawnConfig = {
   windowsVerbatimArguments: boolean
 }
 
+function claudeConfigDirEnv(configDir: string): NodeJS.ProcessEnv {
+  return {
+    CLAUDE_CONFIG_DIR: configDir,
+    // Why: Claude Code 2.1.220+ hashes this for the Keychain service name.
+    CLAUDE_SECURESTORAGE_CONFIG_DIR: configDir
+  }
+}
+
 function resolveClaudeInvocation(
   args: string[],
   configDir: ClaudeCommandConfig,
@@ -200,7 +208,7 @@ function resolveClaudeInvocation(
         args: interactiveLogin.args,
         env: withCliRuntimeOnPath(hostClaudeCommand(), {
           ...process.env,
-          CLAUDE_CONFIG_DIR: configDir.windowsPath
+          ...claudeConfigDirEnv(configDir.windowsPath)
         }),
         windowsVerbatimArguments: false
       }
@@ -213,7 +221,7 @@ function resolveClaudeInvocation(
             '--exec',
             'bash',
             '-lc',
-            `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
+            `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; export CLAUDE_SECURESTORAGE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
           ],
           env: process.env,
           windowsVerbatimArguments: false
@@ -223,7 +231,7 @@ function resolveClaudeInvocation(
             ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...process.env,
-              CLAUDE_CONFIG_DIR: configDir.windowsPath
+              ...claudeConfigDirEnv(configDir.windowsPath)
             })
           }
         : {
@@ -231,7 +239,7 @@ function resolveClaudeInvocation(
             args,
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...process.env,
-              CLAUDE_CONFIG_DIR: configDir.windowsPath
+              ...claudeConfigDirEnv(configDir.windowsPath)
             }),
             windowsVerbatimArguments: false
           }
