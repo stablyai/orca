@@ -15,7 +15,11 @@ import type {
   RepoBackedSearchTarget,
   RepoOption
 } from './smart-workspace-name-field-model'
-import { findMatchingRepoForSlug, getRepoSlugCached, sameSlug } from './smart-workspace-repo-slug'
+import {
+  findMatchingRepoForSlug,
+  getRepoSlugCached,
+  selectedRepoMatchesPastedSlug
+} from './smart-workspace-repo-slug'
 
 type DirectLink = NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
 
@@ -73,7 +77,17 @@ export async function resolveSmartWorkspaceGithubDirectLink({
     return { items: [], prompt: null }
   }
   const selectedSlug = await getRepoSlugCached(selectedRepo, githubSourceContext, repoSlugCache)
-  if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
+  // Why: contributor clones keep the fork as origin, so upstream issue/PR URLs
+  // must count as the same project (#18168). A repo with no origin still falls
+  // through when the lookup misses, so that paste can offer Switch project.
+  if (
+    await selectedRepoMatchesPastedSlug(
+      selectedRepo,
+      githubSourceContext,
+      repoSlugCache,
+      directLink.slug
+    )
+  ) {
     const item = await lookupSmartGitHubSubmitItem({
       repoPath: selectedRepo.path,
       repoId: selectedRepo.id,
