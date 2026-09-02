@@ -37,6 +37,24 @@ describe('SourceControl compare summary', () => {
     ).toBe('refs/remotes/upstream/main')
   })
 
+  it('prefers a remote-tracking repo base over a stale local worktree default', () => {
+    expect(
+      resolveSourceControlBaseRef({
+        worktreeBaseRef: 'master',
+        repoBaseRef: 'origin/master',
+        defaultBaseRef: 'origin/master'
+      })
+    ).toBe('origin/master')
+
+    expect(
+      resolveSourceControlBaseRef({
+        worktreeBaseRef: 'refs/heads/master',
+        repoBaseRef: null,
+        defaultBaseRef: 'origin/master'
+      })
+    ).toBe('origin/master')
+  })
+
   it('keeps exact slash-containing target branch matches', () => {
     expect(
       resolveSourceControlBaseRef({
@@ -46,6 +64,18 @@ describe('SourceControl compare summary', () => {
         defaultBaseRef: 'origin/release/main'
       })
     ).toBe('origin/release/main')
+  })
+
+  it('prefers a remote-tracking repo pin over a stale local worktree default when on', () => {
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: true,
+        worktreeBaseRef: 'master',
+        repoBaseRef: 'origin/master',
+        upstreamName: 'origin/feature',
+        fallbackBaseRef: 'origin/master'
+      })
+    ).toBe('origin/master')
   })
 
   it('prefers a pinned base over the upstream when the setting is on', () => {
