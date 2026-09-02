@@ -1,7 +1,11 @@
 import { installRelayLogRotation } from './rotating-log-writer'
 import { readLaunchVersion } from './relay-handshake'
 import type { RelayLaunchOptions } from './relay-launch-options'
-import { RELAY_EMPTY_DETACHED_STARTUP_GRACE_MS, RELAY_IDLE_GRACE_MS } from './relay-launch-options'
+import {
+  RELAY_ABANDONED_GRACE_MS,
+  RELAY_EMPTY_DETACHED_STARTUP_GRACE_MS,
+  RELAY_IDLE_GRACE_MS
+} from './relay-launch-options'
 import { relayLogLine } from './relay-diagnostic-log'
 import { RelayPrimaryChannel } from './relay-primary-channel'
 import { RelayRuntimeServices } from './relay-runtime-services'
@@ -60,6 +64,7 @@ export async function runRelayDaemon(
     detached: options.detached,
     emptyDetachedStartupGraceMs: RELAY_EMPTY_DETACHED_STARTUP_GRACE_MS,
     idleRelayGraceMs: RELAY_IDLE_GRACE_MS,
+    abandonedRelayGraceMs: RELAY_ABANDONED_GRACE_MS,
     readSocketClientCount: () => reconnectListener?.clientCount ?? 0,
     hasAcceptedSocketClient: () => reconnectListener?.hasAcceptedClient ?? false,
     ownsSocketPath: () => socketOwnership.owned,

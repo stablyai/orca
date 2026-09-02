@@ -14,6 +14,7 @@ type RelayGraceLifecycleOptions = {
   detached: boolean
   emptyDetachedStartupGraceMs: number
   idleRelayGraceMs: number
+  abandonedRelayGraceMs: number
   readSocketClientCount: () => number
   hasAcceptedSocketClient: () => boolean
   ownsSocketPath: () => boolean
@@ -65,7 +66,9 @@ export class RelayGraceLifecycle {
       activePtyCount: this.options.ptyHandler.activePtyCount,
       retryDeferredShutdown: options?.retryDeferredShutdown === true,
       emptyDetachedStartupGraceMs: this.options.emptyDetachedStartupGraceMs,
-      idleRelayGraceMs: this.options.idleRelayGraceMs
+      idleRelayGraceMs: this.options.idleRelayGraceMs,
+      abandonedRelayGraceMs: this.options.abandonedRelayGraceMs,
+      hasConnectedSocketClient: this.options.readSocketClientCount() > 0
     })
     this.graceBranch = decision.branch
     this.graceDeadlineAt = decision.timeoutMs === 0 ? null : Date.now() + decision.timeoutMs
@@ -74,6 +77,11 @@ export class RelayGraceLifecycle {
       `[relay] Grace started (${reason}): timeoutMs=${decision.timeoutMs}, branch=${this.graceBranch}, ptys=${this.options.ptyHandler.activePtyCount}, clients=${this.options.readSocketClientCount()}`
     )
     this.options.ptyHandler.startGraceTimer(() => {
+      if (this.graceBranch === 'abandoned-no-client' && this.options.readSocketClientCount() > 0) {
+        relayLogLine(`[relay] Grace expired (${reason}) but a client is attached; re-evaluating`)
+        this.start(reason)
+        return
+      }
       if (this.graceBranch === 'idle-no-ptys' && !this.isRelayIdle()) {
         relayLogLine(`[relay] Grace expired (${reason}) but relay is no longer idle; re-evaluating`)
         this.start(reason)
@@ -86,7 +94,12 @@ export class RelayGraceLifecycle {
 
   installProcessLifecycle(): void {
     this.stopPoolWatch = this.options.ptyHandler.onPtyPoolEmpty(() => {
-      if (this.graceReason !== null && this.graceDeadlineAt === null && !this.shutdownInFlight) {
+      if (this.graceReason === null || this.shutdownInFlight) {
+        return
+      }
+      // Why the branch test alongside the deadline test: the abandoned window has a deadline, but a
+      // far longer one — going idle must still collapse it to the idle grace rather than wait days.
+      if (this.graceDeadlineAt === null || this.graceBranch === 'abandoned-no-client') {
         this.start('last pty exited')
       }
     })

@@ -81,6 +81,8 @@ import {
 import type { RelayPtySourceOutput } from './relay-pty-source-output'
 import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
 import { readPtsName } from '../main/pty/node-pty-pts-name'
+import { ensureNodePtySpawnHelperExecutable } from '../main/pty/node-pty-spawn-helper'
+import { formatRelayPtySpawnError } from './pty-spawn-failure-diagnostics'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
 import type {
   PtySourceRecoveryRequest,
@@ -474,6 +476,8 @@ export class PtyHandler {
   private ptyModule: typeof NodePty | null = null
   private ptyModuleLoadPromise: Promise<typeof NodePty | null> | null = null
   private reloadPtyModuleFromDisk = false
+  /** Set only when node-pty came off the deployed bundle dir; diagnostics probe this root. */
+  private nodePtyPackageRoot: string | undefined
   // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
   private surfaceRetiredListener: PtySurfaceRetiredListener | null = null
@@ -546,6 +550,7 @@ export class PtyHandler {
     if (!this.reloadPtyModuleFromDisk) {
       try {
         this.ptyModule = await import('node-pty')
+        ensureNodePtySpawnHelperExecutable()
         return this.ptyModule
       } catch {
         this.reloadPtyModuleFromDisk = true
@@ -558,6 +563,10 @@ export class PtyHandler {
     }
     try {
       this.ptyModule = require(moduleEntry) as typeof NodePty
+      this.nodePtyPackageRoot = join(__dirname, 'node_modules', 'node-pty')
+      // Why here: SFTP drops the +x bit and the packaged prebuild helper ships 0644, so the
+      // deployed relay can hold a node-pty whose helper posix_spawn can never execute.
+      ensureNodePtySpawnHelperExecutable(this.nodePtyPackageRoot)
       return this.ptyModule
     } catch {
       return null
@@ -1833,7 +1842,7 @@ export class PtyHandler {
         this.invalidatePtyModuleAfterBindingFailure()
         throw new Error(formatNodePtyUnavailableMessage(process.platform))
       }
-      throw error
+      throw formatRelayPtySpawnError(error, shell, cwd, this.nodePtyPackageRoot)
     }
     onPhysicalSpawnCommitted?.()
 

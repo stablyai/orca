@@ -10,6 +10,7 @@ import {
 
 const EMPTY_DETACHED_STARTUP_GRACE_MS = 30_000
 const IDLE_RELAY_GRACE_MS = 15 * 60_000
+const ABANDONED_RELAY_GRACE_MS = 7 * 24 * 60 * 60_000
 
 function decide(overrides: Partial<RelayGraceDecisionInput> = {}) {
   return decideRelayGrace({
@@ -17,10 +18,13 @@ function decide(overrides: Partial<RelayGraceDecisionInput> = {}) {
     relayIdle: false,
     detached: false,
     hasAcceptedSocketClient: true,
+    // Default: a client is attached, so existing cases keep exercising the unbounded window.
+    hasConnectedSocketClient: true,
     activePtyCount: 1,
     retryDeferredShutdown: false,
     emptyDetachedStartupGraceMs: EMPTY_DETACHED_STARTUP_GRACE_MS,
     idleRelayGraceMs: IDLE_RELAY_GRACE_MS,
+    abandonedRelayGraceMs: ABANDONED_RELAY_GRACE_MS,
     ...overrides
   })
 }
@@ -250,5 +254,47 @@ describe('applyRelayGraceTimeConfiguration', () => {
       expect(host.configuredGraceMs()).toBe(10_000)
       expect(host.startGrace).not.toHaveBeenCalled()
     }
+  })
+})
+
+describe('the abandoned-relay bound', () => {
+  it('bounds an unlimited grace once no client is left to reattach', () => {
+    // The leak this exists for: an Orca update leaves the old version's relay running, and
+    // cross-version isolation means its client never comes back — so it held its PTYs forever.
+    expect(decide({ hasConnectedSocketClient: false })).toEqual({
+      branch: 'abandoned-no-client',
+      timeoutMs: ABANDONED_RELAY_GRACE_MS
+    })
+  })
+
+  it('leaves the window unlimited while a client is still attached', () => {
+    expect(decide({ hasConnectedSocketClient: true })).toEqual({
+      branch: 'configured',
+      timeoutMs: 0
+    })
+  })
+
+  it('honors an explicitly configured grace instead of the abandoned bound', () => {
+    // A configured grace is the host's own deadline; only the unlimited default needs a ceiling.
+    expect(decide({ hasConnectedSocketClient: false, configuredGraceMs: 5_000 })).toEqual({
+      branch: 'configured',
+      timeoutMs: 5_000
+    })
+  })
+
+  it('prefers the idle bound when the relay holds no PTYs at all', () => {
+    expect(decide({ hasConnectedSocketClient: false, relayIdle: true, activePtyCount: 0 })).toEqual(
+      {
+        branch: 'idle-no-ptys',
+        timeoutMs: IDLE_RELAY_GRACE_MS
+      }
+    )
+  })
+
+  it('does not preempt a deferred shutdown retry', () => {
+    expect(decide({ hasConnectedSocketClient: false, retryDeferredShutdown: true })).toEqual({
+      branch: 'shutdown-deferred',
+      timeoutMs: IDLE_RELAY_GRACE_MS
+    })
   })
 })
