@@ -6398,7 +6398,13 @@
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
           "codexConfigSyncManagedHomeUnavailable": "Orca could not read this account’s Codex files just now, so settings may not be syncing. This usually clears on its own — antivirus or a backup tool briefly locks them.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "antigravityTitle": "Antigravity",
+          "antigravityDescription": "Configure Antigravity provider settings.",
+          "useAntigravityCredentials": "Use Antigravity credentials",
+          "useAntigravityCredentialsDescription": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google. This uses credentials issued to the Antigravity app, not Orca. May break if Google updates Antigravity. Use at your own risk.",
+          "useAntigravityCredentialsExp": "Use Antigravity credentials (experimental)",
+          "useAntigravityCredentialsWithRuntime": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google for {{value0}}. This uses credentials issued to the Antigravity app, not Orca. May break if Google updates Antigravity. Use at your own risk."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -8765,7 +8771,10 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "useAntigravityCredentials": "Use Antigravity credentials",
+            "useAntigravityCredentialsDescription": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google.",
+            "antigravity": "antigravity"
           }
         },
         "advanced": {

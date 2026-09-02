@@ -15,26 +15,27 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
       <div className="space-y-1">
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           <GeminiIcon size={16} />
-          {translate('auto.components.settings.AccountsPane.0c64dc2a64', 'Gemini')}
+          {translate('auto.components.settings.AccountsPane.antigravityTitle', 'Antigravity')}
         </h3>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.AccountsPane.973741a871',
-            'Configure Gemini provider settings.'
+            'auto.components.settings.AccountsPane.antigravityDescription',
+            'Configure Antigravity provider settings.'
           )}
         </p>
       </div>
 
       <SearchableSetting
         title={translate(
-          'auto.components.settings.AccountsPane.0c7f915b01',
-          'Use Gemini CLI credentials'
+          'auto.components.settings.AccountsPane.useAntigravityCredentials',
+          'Use Antigravity credentials'
         )}
         description={translate(
-          'auto.components.settings.AccountsPane.d676c41fc6',
-          'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.'
+          'auto.components.settings.AccountsPane.useAntigravityCredentialsDescription',
+          'Extracts OAuth credentials from your local Antigravity installation to authenticate with Google. This uses credentials issued to the Antigravity app, not Orca. May break if Google updates Antigravity. Use at your own risk.'
         )}
         keywords={[
+          'antigravity',
           'gemini',
           'cli',
           'oauth',
@@ -48,22 +49,22 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
         <div className="space-y-0.5">
           <Label>
             {translate(
-              'auto.components.settings.AccountsPane.96f3649526',
-              'Use Antigravity / Gemini CLI credentials (experimental)'
+              'auto.components.settings.AccountsPane.useAntigravityCredentialsExp',
+              'Use Antigravity credentials (experimental)'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.AccountsPane.c2aee76420',
-              'Extracts OAuth credentials from your local Antigravity or Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
+              'auto.components.settings.AccountsPane.useAntigravityCredentialsWithRuntime',
+              'Extracts OAuth credentials from your local Antigravity installation to authenticate with Google for {{value0}}. This uses credentials issued to the Antigravity app, not Orca. May break if Google updates Antigravity. Use at your own risk.',
               { value0: localAccountRuntimeSentenceLabel }
             )}
           </p>
         </div>
         <Switch
           aria-label={translate(
-            'auto.components.settings.AccountsPane.96f3649526',
-            'Use Antigravity / Gemini CLI credentials (experimental)'
+            'auto.components.settings.AccountsPane.useAntigravityCredentialsExp',
+            'Use Antigravity credentials (experimental)'
           )}
           checked={settings.geminiCliOAuthEnabled}
           onCheckedChange={(checked) => {
