@@ -382,6 +382,27 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(openUrlMock).toHaveBeenCalledWith('http://example.com/')
   })
 
+  it('joins a wrapped PowerShell URL before opening when WebLinksAddon reports the first row', () => {
+    const firstRow = 'https://example.com/orca-14291/wrapped-url-part-one'
+    const continuationRow = '/wrapped-url-part-two'
+    const { terminal } = makeTerminal({
+      cols: 80,
+      urlRows: [firstRow, continuationRow],
+      softWrapped: false
+    })
+
+    expect(
+      handleTerminalWebLinkClick(firstRow, mouseEventForRow(0), {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(`${firstRow}${continuationRow}`)
+  })
+
   it('does not glue the next logical line onto a URL that ends mid-row (#8832)', () => {
     const { terminal, registrations } = makeTerminal({
       cols: 80,
