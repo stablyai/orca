@@ -11746,6 +11746,7 @@
             "78f5ff294c": "This will reopen the {{value0}}.",
             "a3d572a4de": "This will close the {{value0}}.",
             "e4aca40024": "Delete Workspace",
+            "removeProject": "Remove Project",
             "eefd50457e": "Deleting...",
             "3ce211ece6": "Reopen {{value0}}",
             "6645ac7dd1": "Reopening...",
