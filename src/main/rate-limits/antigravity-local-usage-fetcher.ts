@@ -2,7 +2,6 @@ import http from 'node:http'
 import https from 'node:https'
 import type {
   ProviderRateLimits,
-  RateLimitBucket,
   RateLimitWindow
 } from '../../shared/rate-limit-types'
 import {
@@ -134,9 +133,10 @@ async function probeEndpoint(ep: AntigravityEndpoint): Promise<ProviderRateLimit
     null
 
   const groups = quotaRes.data.response.groups ?? []
-  const buckets: RateLimitBucket[] = []
-  let sessionWindow: RateLimitWindow | null = null
-  let weeklyWindow: RateLimitWindow | null = null
+  let gemini5h: RateLimitWindow | null = null
+  let geminiWeekly: RateLimitWindow | null = null
+  let thirdParty5h: RateLimitWindow | null = null
+  let thirdPartyWeekly: RateLimitWindow | null = null
 
   for (const group of groups) {
     const dispName = (group.displayName || '').toLowerCase()
@@ -155,65 +155,50 @@ async function probeEndpoint(ep: AntigravityEndpoint): Promise<ProviderRateLimit
         typeof bucket.remainingFraction === 'number' ? bucket.remainingFraction : 1
       const usedPercent = Math.min(100, Math.max(0, Math.round((1 - remainingFraction) * 100)))
       const resetsAt = bucket.resetTime ? new Date(bucket.resetTime).getTime() : null
+      const validResetsAt = Number.isFinite(resetsAt) ? resetsAt : null
 
-      const bucketLabel = isGeminiGroup
-        ? isWeekly
-          ? 'Gemini Weekly'
-          : is5h
-            ? 'Gemini 5h'
-            : bucket.displayName || bucketId
-        : isThirdParty
-          ? isWeekly
-            ? 'Claude/GPT Weekly'
-            : is5h
-              ? 'Claude/GPT 5h'
-              : bucket.displayName || bucketId
-          : bucket.displayName || bucketId
-
-      const rateLimitBucket: RateLimitBucket = {
-        name: bucketLabel,
+      const windowObj: RateLimitWindow = {
         usedPercent,
         windowMinutes: isWeekly ? 10080 : is5h ? 300 : 60,
-        resetsAt: Number.isFinite(resetsAt) ? resetsAt : null,
+        resetsAt: validResetsAt,
         resetDescription: null
       }
-      buckets.push(rateLimitBucket)
 
       if (isGeminiGroup) {
-        if (is5h && (!sessionWindow || usedPercent > sessionWindow.usedPercent)) {
-          sessionWindow = {
-            usedPercent,
-            windowMinutes: 300,
-            resetsAt: Number.isFinite(resetsAt) ? resetsAt : null,
-            resetDescription: null
-          }
-        } else if (isWeekly && (!weeklyWindow || usedPercent > weeklyWindow.usedPercent)) {
-          weeklyWindow = {
-            usedPercent,
-            windowMinutes: 10080,
-            resetsAt: Number.isFinite(resetsAt) ? resetsAt : null,
-            resetDescription: null
-          }
+        if (is5h && (!gemini5h || usedPercent > gemini5h.usedPercent)) {
+          gemini5h = windowObj
+        } else if (isWeekly && (!geminiWeekly || usedPercent > geminiWeekly.usedPercent)) {
+          geminiWeekly = windowObj
+        }
+      } else if (isThirdParty) {
+        if (is5h && (!thirdParty5h || usedPercent > thirdParty5h.usedPercent)) {
+          thirdParty5h = windowObj
+        } else if (isWeekly && (!thirdPartyWeekly || usedPercent > thirdPartyWeekly.usedPercent)) {
+          thirdPartyWeekly = windowObj
         }
       }
     }
   }
 
-  if (!sessionWindow && buckets.length > 0) {
-    const worst = buckets.reduce((w, b) => (b.usedPercent > w.usedPercent ? b : w))
-    sessionWindow = {
-      usedPercent: worst.usedPercent,
-      windowMinutes: worst.windowMinutes,
-      resetsAt: worst.resetsAt,
-      resetDescription: null
-    }
-  }
+  // Dynamic selection:
+  // If Claude/GPT models in Antigravity are actively used or more constrained, track them;
+  // otherwise track the primary Gemini models.
+  const isThirdPartyActive =
+    (thirdParty5h !== null && thirdParty5h.usedPercent > (gemini5h?.usedPercent ?? 0)) ||
+    (thirdPartyWeekly !== null && thirdPartyWeekly.usedPercent > (geminiWeekly?.usedPercent ?? 0))
+
+  const sessionWindow = isThirdPartyActive
+    ? (thirdParty5h ?? gemini5h)
+    : (gemini5h ?? thirdParty5h)
+
+  const weeklyWindow = isThirdPartyActive
+    ? (thirdPartyWeekly ?? geminiWeekly)
+    : (geminiWeekly ?? thirdPartyWeekly)
 
   return {
     provider: 'gemini',
     session: sessionWindow,
     weekly: weeklyWindow,
-    buckets,
     planType: planName,
     updatedAt: Date.now(),
     error: null,

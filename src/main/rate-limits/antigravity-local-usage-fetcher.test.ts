@@ -157,7 +157,7 @@ n127.0.0.1:8080
       expect(result?.session?.windowMinutes).toBe(300)
       expect(result?.weekly?.usedPercent).toBe(10)
       expect(result?.weekly?.windowMinutes).toBe(10080)
-      expect(result?.buckets).toHaveLength(3)
+      expect(result?.buckets).toBeUndefined()
 
       mockServer.close()
     })

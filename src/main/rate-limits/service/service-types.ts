@@ -68,11 +68,10 @@ export type ActiveWindowRefreshPlan =
   | { kind: 'full' }
   | { kind: 'providers'; providers: ActiveRateLimitProvider[] }
 
-// Why: Claude's usage endpoint has a tight budget and quota is only informational; prefer a recent snapshot over polling into 429s.
-export const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes
+export const DEFAULT_POLL_MS = 60 * 1000 // 1 minute
 export const MIN_POLL_MS = 30 * 1000 // 30 seconds — renderer input should never create a tight loop.
 export const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clamps back to 1ms.
-export const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
+export const MIN_REFETCH_MS = 60 * 1000 // 1 minute — debounce resume/manual refresh bursts
 export const ACTIVE_FAILURE_REFETCH_MS = MIN_POLL_MS
 // Why: retrying a persistent failure at the 30s floor hammers endpoints into 429s; back off per failure, capped at the poll cadence.
 export const MAX_ACTIVE_FAILURE_REFETCH_MS = DEFAULT_POLL_MS
@@ -81,7 +80,9 @@ export const MAX_ACTIVE_FAILURE_STREAK = 8
 export const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> = new Set([
   'claude',
   'codex',
-  'grok'
+  'grok',
+  'antigravity',
+  'gemini'
 ])
 export const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 // Why: usage-endpoint 429 windows can outlast the generic threshold (Retry-After ~1h); quota is informational, so a stale snapshot beats a bare "Limited".
