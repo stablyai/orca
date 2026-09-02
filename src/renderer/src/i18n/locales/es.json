@@ -14646,7 +14646,10 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Cambiar a la vista de terminal",
           "switchToChatView": "Cambiar a vista de chat",
-          "closeTabsToLeft": "Cerrar pestañas a la izquierda"
+          "closeTabsToLeft": "Cerrar pestañas a la izquierda",
+          "copySessionId": "Copiar ID de sesión",
+          "copySessionIdSuccess": "ID de sesión copiado",
+          "copySessionIdError": "No se pudo copiar el ID de sesión"
         },
         "BrowserTab": {
           "closeOthers": "Cerrar otras",

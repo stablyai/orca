@@ -4,19 +4,20 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 
 async function copySessionId(sessionId: string): Promise<void> {
-  const label = translate('components.tab.bar.SortableTabContextMenu.sessionId', 'Session ID')
   try {
     await window.api.ui.writeClipboardText(sessionId)
     toast.success(
-      translate('auto.components.JiraIssueWorkspace.2ff69a3545', '{{value0}} copied', {
-        value0: label
-      })
+      translate(
+        'components.tab.bar.SortableTabContextMenu.copySessionIdSuccess',
+        'Session ID copied'
+      )
     )
   } catch {
     toast.error(
-      translate('auto.components.JiraIssueWorkspace.6c41a9bcea', 'Failed to copy {{value0}}', {
-        value0: label.toLowerCase()
-      })
+      translate(
+        'components.tab.bar.SortableTabContextMenu.copySessionIdError',
+        'Failed to copy Session ID'
+      )
     )
   }
 }

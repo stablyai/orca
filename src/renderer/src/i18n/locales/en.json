@@ -16725,8 +16725,9 @@
           "switchToTerminalView": "Switch to terminal view",
           "switchToChatView": "Switch to chat view",
           "closeTabsToLeft": "Close Tabs To The Left",
-          "sessionId": "Session ID",
-          "copySessionId": "Copy Session ID"
+          "copySessionId": "Copy Session ID",
+          "copySessionIdSuccess": "Session ID copied",
+          "copySessionIdError": "Failed to copy Session ID"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

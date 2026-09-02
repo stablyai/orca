@@ -73,7 +73,7 @@ describe('TabAgentSessionIdMenuItem', () => {
 
     act(() => button?.click())
     await vi.waitFor(() =>
-      expect(toastMock.error).toHaveBeenCalledWith('Failed to copy {{value0}}')
+      expect(toastMock.error).toHaveBeenCalledWith('Failed to copy Session ID')
     )
   })
 })
