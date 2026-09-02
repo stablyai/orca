@@ -1,13 +1,21 @@
 import { useMemo, useRef } from 'react'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '../store'
 import { useWorktreeMap } from '../store/selectors'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
 import { selectPairedRuntimeParkingEnvironmentIds } from './terminal-pane/terminal-hidden-view-parking'
+import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 
 export function useTerminalWorkspaceFoundation() {
+  const terminalTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
+    TerminalTab,
+    TerminalTab
+  > | null>(null)
+  terminalTopologyProjectionRef.current ??= createTerminalWorktreeTopologyProjection()
   const mountedWorktreeIdsRef = useRef(new Set<string>())
   const browserGuestWorktreeRecencyRef = useRef<string[]>([])
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
@@ -39,7 +47,12 @@ export function useTerminalWorkspaceFoundation() {
     [worktreesById, folderWorkspaces, renderedActiveWorktreeId, activeFolderSurfaceHostId]
   )
   const activeView = useAppStore((state) => state.activeView)
-  const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
+  // Why: terminal titles are leaf chrome. The root host only subscribes to
+  // mount/parking semantics; a real transition publishes fresh tab objects,
+  // while LiveTerminalTabBar reads title-only updates from the active bucket.
+  const tabsByWorktree = useAppStore((state) =>
+    terminalTopologyProjectionRef.current!.project(state.tabsByWorktree)
+  )
   const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore(
     (state) => state.settings?.terminalHiddenViewParking !== false

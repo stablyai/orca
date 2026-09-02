@@ -10,13 +10,15 @@ import type {
   SshTarget,
   SshTargetUpdateInput,
   PortForwardEntry,
-  EnrichedDetectedPort
+  EnrichedDetectedPort,
+  SshTerminateSessionsResult
 } from '../../shared/ssh-types'
 import {
   admitSshConnectionStateForAuthorityReconciliation,
   admitSshDetectedPorts
 } from '../../shared/ssh-retained-payload-admission'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { PreloadApi } from '../api-types'
 
 export const sshApi = {
   listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
@@ -50,7 +52,7 @@ export const sshApi = {
   disconnect: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:disconnect', args),
 
-  terminateSessions: (args: { targetId: string }): Promise<void> =>
+  terminateSessions: (args: { targetId: string }): Promise<SshTerminateSessionsResult> =>
     ipcRenderer.invoke('ssh:terminateSessions', args),
 
   resetRelay: (args: { targetId: string }): Promise<void> =>
@@ -180,4 +182,4 @@ export const sshApi = {
 
   submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>
     ipcRenderer.invoke('ssh:submitCredential', args)
-}
+} satisfies PreloadApi['ssh']

@@ -6,6 +6,7 @@ import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getRuntimeFolderWorkspaceRootId } from './runtime-folder-workspace'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
 
 export async function removeOrphanOrFolderWorktree({
   runtime,
@@ -94,19 +95,16 @@ export async function removeOrphanOrFolderWorktree({
   const folderSshPtyProvider = folderConnectionId
     ? runtime.getSshProviderFn?.(folderConnectionId)
     : undefined
-  const folderPtyProvider = folderSshPtyProvider ?? runtime.getLocalProvider()
-  if (folderPtyProvider) {
-    await killAllProcessesForWorktree(removalTarget.id, {
+  await teardownFolderWorkspacePtys(
+    {
       runtime,
-      resolvedWorktreeId: removalTarget.id,
-      ...(folderConnectionId ? { resolvedConnectionId: folderConnectionId } : {}),
-      localProvider: folderPtyProvider,
-      onPtyStopped: runtime.onPtyStopped ?? undefined,
-      ...(folderConnectionId
-        ? { includeProviderInventory: Boolean(folderSshPtyProvider), includeLocalRegistry: false }
-        : {})
-    }).catch((err) => console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err))
-  }
+      getSshProvider: runtime.getSshProviderFn,
+      getLocalProvider: () => runtime.getLocalProvider(),
+      onPtyStopped: runtime.onPtyStopped
+    },
+    removalTarget.id,
+    folderConnectionId
+  )
   await deleteRemoteWorktreeHistory(folderSshPtyProvider, removalTarget.id)
   runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
   runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)

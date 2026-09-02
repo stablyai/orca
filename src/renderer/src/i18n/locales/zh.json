@@ -14689,7 +14689,10 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "切换到终端视图",
           "switchToChatView": "切换到聊天视图",
-          "closeTabsToLeft": "关闭左侧的选项卡"
+          "closeTabsToLeft": "关闭左侧的选项卡",
+          "copySessionId": "复制会话 ID",
+          "copySessionIdSuccess": "已复制会话 ID",
+          "copySessionIdError": "复制会话 ID 失败"
         },
         "BrowserTab": {
           "closeOthers": "关闭其他",

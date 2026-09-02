@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { PreflightRuntimeContext, RefreshAgentsResult } from '../api-types'
+import type { PreflightRuntimeContext, PreloadApi, RefreshAgentsResult } from '../api-types'
 
 export const preflightApi = {
   check: (args?: {
@@ -40,4 +40,4 @@ export const preflightApi = {
     gitBashAvailable: boolean
     hostPlatform: NodeJS.Platform | null
   }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
-}
+} satisfies PreloadApi['preflight']

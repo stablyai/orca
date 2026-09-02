@@ -95,7 +95,9 @@ describe('SSH IPC handlers', () => {
     mockPtyProvider.shutdown.mockResolvedValue(undefined)
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
-    await handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+    await expect(
+      handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+    ).resolves.toEqual({ terminated: 2, unverifiable: 0 })
 
     expect(mockPtyProvider.shutdown).toHaveBeenCalledWith('ssh:ssh-1@@pty-live', {
       immediate: true,
@@ -168,7 +170,9 @@ describe('SSH IPC handlers', () => {
     await expect(reconnect).resolves.toMatchObject({ targetId: 'ssh-1', status: 'connected' })
   })
 
-  it('ssh:terminateSessions cannot reach expired leases without a relay', async () => {
+  // Issue #12661: an offline sweep tears down local transport only. Reporting plain success would
+  // read as "the remote shells are gone" when nobody asked the host.
+  it('ssh:terminateSessions reports expired leases as unverifiable without a relay', async () => {
     mockStore.getSshRemotePtyLeases.mockReturnValue([
       { targetId: 'ssh-1', ptyId: 'pty-expired', state: 'expired' }
     ])
@@ -177,10 +181,26 @@ describe('SSH IPC handlers', () => {
 
     await expect(
       handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
-    ).resolves.toBeUndefined()
+    ).resolves.toEqual({ terminated: 0, unverifiable: 1 })
 
     expect(mockPtyProvider.shutdown).not.toHaveBeenCalled()
+    // Still no forced reconnect: an expired lease can name a host that is gone for good (#2626).
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+      'ssh-1',
+      'pty-expired',
+      'terminated'
+    )
+  })
+
+  it('ssh:terminateSessions reports nothing unverifiable when there is nothing to reach', async () => {
+    mockStore.getSshRemotePtyLeases.mockReturnValue([])
+    vi.mocked(getSshPtyProvider).mockReturnValue(undefined)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+
+    await expect(
+      handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+    ).resolves.toEqual({ terminated: 0, unverifiable: 0 })
   })
 
   it('ssh:terminateSessions kills expired leases whose remote PTY may still be alive', async () => {

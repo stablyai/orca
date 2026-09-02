@@ -7,19 +7,19 @@ import {
 
 const taskPageSource = readTaskPageSourceFamily()
 const linearCreateDialogsSource = readFileSync(
-  new URL('./task-page/hooks/use-task-page-linear-create-dialogs.ts', import.meta.url),
+  new URL('./use-task-page-linear-creation-state.ts', import.meta.url),
   'utf8'
 )
 const jiraCreateDialogSource = readFileSync(
-  new URL('./task-page/hooks/use-task-page-jira-create-dialog.tsx', import.meta.url),
+  new URL('./use-task-page-jira-creation-state.ts', import.meta.url),
   'utf8'
 )
 const jiraCreateSubmitSource = readFileSync(
-  new URL('./task-page/hooks/use-task-page-create-jira-submit.ts', import.meta.url),
+  new URL('./use-task-page-jira-issue-creation.ts', import.meta.url),
   'utf8'
 )
 const draftWriterSource = readFileSync(
-  new URL('./task-page/dialogs/task-creation-draft-writers.ts', import.meta.url),
+  new URL('./task-page-draft-storage.tsx', import.meta.url),
   'utf8'
 )
 const draftRetentionSource = [linearCreateDialogsSource, jiraCreateDialogSource].join('\n')
@@ -49,11 +49,11 @@ describe('TaskPage Linear/Jira creation drafts', () => {
 
   it('restores dismissed typed text when each dialog reopens', () => {
     const linearFilters = readFileSync(
-      new URL('./task-page/chrome/task-page-linear-filters.tsx', import.meta.url),
+      new URL('./task-page/linear/Filters.tsx', import.meta.url),
       'utf8'
     )
     const jiraFilters = readFileSync(
-      new URL('./task-page/chrome/task-page-jira-filters.tsx', import.meta.url),
+      new URL('./task-page/jira/Filters.tsx', import.meta.url),
       'utf8'
     )
     expect(linearFilters).toContain("setNewLinearProjectName(draft?.name ?? '')")
@@ -92,7 +92,7 @@ describe('TaskPage Linear/Jira creation drafts', () => {
     const jiraIssueSection = sectionBetween(
       jiraCreateSubmitSource,
       'const handleCreateNewJiraIssue',
-      'return { handleCreateNewJiraIssue }'
+      'const nextModel'
     )
     expect(jiraIssueSection).toContain('} catch (error) {')
     expect(jiraIssueSection).toContain(

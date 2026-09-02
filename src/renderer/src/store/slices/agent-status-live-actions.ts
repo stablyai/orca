@@ -9,14 +9,15 @@ import type {
 import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   buildAgentStatusLiveEntry,
-  type AgentStatusLiveEntryBuild
+  type AgentStatusLiveEntryBuild,
+  type AgentStatusLiveEntryRejection
 } from './agent-status-live-entry-builder'
 import { reduceAgentStatusLiveUpdate } from './agent-status-live-reducer'
 import {
   agentStatusTabAlreadyHasProtectedOrGeneratedTitle,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
-} from './agent-status-pane-helpers'
+} from './agent-status-pane-key-tab-binding'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -49,7 +50,7 @@ export function createAgentStatusLiveActions(
     ) {
       return
     }
-    let built: AgentStatusLiveEntryBuild | null = null
+    let built: AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null = null
     set((state) => {
       built = buildAgentStatusLiveEntry({
         state,
@@ -61,14 +62,16 @@ export function createAgentStatusLiveActions(
         metadata,
         updatedAt
       })
-      return built ? reduceAgentStatusLiveUpdate(state, built, updatedAt) : state
+      return built.entry ? reduceAgentStatusLiveUpdate(state, built, updatedAt) : state
     })
     // Zustand's updater runs synchronously, but TypeScript cannot observe the closure assignment.
-    const builtResult = built as AgentStatusLiveEntryBuild | null
-    if (!builtResult) {
-      // Keep standalone calls' deferred freshness contract even when a stale
-      // event is rejected by the reducer.
-      requestFreshness(false)
+    const builtResult = built as AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null
+    if (!builtResult?.entry) {
+      // Keep standalone calls' deferred freshness contract when a stale event is rejected, but a
+      // suppressed inherited-terminal frame returns without buying the deferred O(entries) scan.
+      if (builtResult?.reason !== 'suppressed-inherited-terminal') {
+        requestFreshness(false)
+      }
       return
     }
     const { entry } = builtResult

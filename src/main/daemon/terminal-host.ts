@@ -21,24 +21,10 @@ import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { isShellProcess } from '../../shared/agent-detection'
 import { TerminalAttachCanceledError } from './daemon-errors'
+import { rejectOnAbort } from './terminal-attach-cancellation'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
-/** Never resolves; only rejects, so it can bound a wait without settling it. */
-function rejectOnAbort(signal: AbortSignal | undefined, sessionId: string): Promise<never> {
-  if (!signal) {
-    return new Promise<never>(() => {})
-  }
-  return new Promise<never>((_resolve, reject) => {
-    if (signal.aborted) {
-      reject(new TerminalAttachCanceledError(sessionId))
-      return
-    }
-    signal.addEventListener('abort', () => reject(new TerminalAttachCanceledError(sessionId)), {
-      once: true
-    })
-  })
-}
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
@@ -106,6 +92,7 @@ export class TerminalHost {
           }
           return await createOrAttachTerminalSession(options, {
             sessions: this.sessions,
+            assertCreateAllowed: () => this.assertCreateOrAttachAllowed(options),
             sessionTeardown: this.sessionTeardown,
             killedTombstones: this.killedTombstones,
             spawnSubprocess: this.spawnSubprocess,

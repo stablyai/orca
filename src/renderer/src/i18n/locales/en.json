@@ -1112,6 +1112,17 @@
         "events": {
           "browserStateIpcBridge": {
             "docPreviewLinkFailed": "Could not open this link in Orca Browser."
+          },
+          "os": {
+            "markdown": {
+              "file": {
+                "open": {
+                  "bridge": {
+                    "1e9a1a63c4": "Failed to open the Markdown file."
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -3067,10 +3078,14 @@
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
+            "retry": "Retry",
+            "retrying": "Retrying…",
+            "retryUnavailable": "Retry could not reconnect yet. Try again shortly.",
             "a7e2fd2699": "file an issue",
             "5c8ce20be6": "If this persists, please",
             "cc6d997c65": "Restart the terminal daemon from here to clear stale daemon state.",
-            "7ee11bc0db": "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry.",
+            "ownerUnknown": "Orca couldn't verify this terminal's owner.",
+            "42b283ecfc": "Orca couldn't safely reconnect this terminal because the host couldn't verify its saved session. Orca left the saved session unchanged. Click Retry to try reconnecting now. If it still cannot reconnect, open a new terminal.",
             "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.",
             "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
           },
@@ -8250,7 +8265,8 @@
           "4db9afce1c": "Port must be between 1 and 65535",
           "0e5aa04161": "Host or SSH config alias is required",
           "f1fc50dad2": "Failed to load SSH targets",
-          "0cda732f43": "Connection test failed"
+          "0cda732f43": "Connection test failed",
+          "terminateUnverifiable": "{{terminals}} remote terminal(s) could not be reached. Reconnect to end them."
         },
         "SshPassphraseDialog": {
           "d5a234456f": "Cancel",
@@ -16713,7 +16729,10 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Switch to terminal view",
           "switchToChatView": "Switch to chat view",
-          "closeTabsToLeft": "Close Tabs To The Left"
+          "closeTabsToLeft": "Close Tabs To The Left",
+          "copySessionId": "Copy Session ID",
+          "copySessionIdSuccess": "Session ID copied",
+          "copySessionIdError": "Failed to copy Session ID"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

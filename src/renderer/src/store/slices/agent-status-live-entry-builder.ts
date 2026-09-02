@@ -26,8 +26,8 @@ import type {
   AgentStatusTiming
 } from './agent-status-contract'
 import { registryEntryMatchesStatus } from './agent-status-launch-config'
-import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-helpers'
-import { mergeCurrentOrchestrationContext } from './agent-status-map-helpers'
+import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
+import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 
 export type AgentStatusLiveEntryBuild = {
@@ -52,6 +52,11 @@ export type AgentStatusLiveEntryBuild = {
   boundaryResolved: boolean
 }
 
+export type AgentStatusLiveEntryRejection = {
+  entry: null
+  reason: 'stale' | 'suppressed-inherited-terminal'
+}
+
 export type AgentStatusLiveEntryArgs = {
   state: AppState
   paneKey: string
@@ -63,14 +68,14 @@ export type AgentStatusLiveEntryArgs = {
   updatedAt: number
 }
 
-/** Build one accepted live row and the derived map-update facts. */
+/** Build one accepted live row and the derived map-update facts, or say why the frame was rejected. */
 export function buildAgentStatusLiveEntry(
   args: AgentStatusLiveEntryArgs
-): AgentStatusLiveEntryBuild | null {
+): AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection {
   const { state, paneKey, payload, terminalTitle, timing, routing, metadata, updatedAt } = args
   const existing = state.agentStatusByPaneKey[paneKey]
   if (existing && updatedAt < existing.updatedAt) {
-    return null
+    return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
   let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
@@ -141,7 +146,7 @@ export function buildAgentStatusLiveEntry(
       incomingState: payload.state
     })
   ) {
-    return null
+    return { entry: null, reason: 'suppressed-inherited-terminal' }
   }
   const runtimeOrchestration = state.runtimeAgentOrchestrationByPaneKey[paneKey]
   const runtimeMergedOrchestration = runtimeOrchestration

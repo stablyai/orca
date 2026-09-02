@@ -8,6 +8,7 @@ import type {
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
+import type { PreloadApi } from '../api-types'
 
 export const fsApi = {
   readDir: (args: {
@@ -216,4 +217,4 @@ export const fsApi = {
     ipcRenderer.on('fs:changed', listener)
     return () => ipcRenderer.removeListener('fs:changed', listener)
   }
-}
+} satisfies PreloadApi['fs']

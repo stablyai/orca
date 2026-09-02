@@ -6,7 +6,7 @@ import {
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
-import { validateFullGitObjectId } from './filesystem-worktree-helpers'
+import { validateFullGitObjectId } from '../filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 
 export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerContext): void {

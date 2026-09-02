@@ -105,6 +105,11 @@ const winSpeechNativeResource = {
   to: 'node_modules/sherpa-onnx-win-x64'
 }
 
+// Why mirrored, not imported: this config is CJS loaded by electron-builder outside the TS build.
+// Keep in sync with isMarkdownDocumentName() in src/main/ipc/markdown-documents.ts and with
+// config/nsis/orca-installer-hooks.nsh, which registers the same set on Windows.
+const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
@@ -376,12 +381,24 @@ module.exports = {
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
-    // Why: on a real uninstall, stop and remove the relocated terminal daemon
-    // (which lives outside the install dir under LOCALAPPDATA by design). Guarded
-    // by ${isUpdated} inside so it never runs during an update's uninstallOldVersion.
-    include: resolve(__dirname, 'nsis', 'daemon-host-uninstall.nsh')
+    // Why: electron-builder allows one include, so both Windows installer hooks live in it -
+    // the relocated-daemon uninstall sweep (guarded by ${isUpdated} so it never runs during an
+    // update's uninstallOldVersion) and the additive markdown "Open with" registration.
+    // Windows markdown association is deliberately NOT done via `fileAssociations`; see the
+    // header comment in that file for why that would steal the user's default .md handler.
+    include: resolve(__dirname, 'nsis', 'orca-installer-hooks.nsh')
   },
   mac: {
+    // Why rank Alternate: Orca joins Finder's "Open With" list for Markdown without claiming
+    // LSHandlerRank ownership, so whichever editor the user already prefers stays the default.
+    // Why one entry per extension: app-builder-lib globs `*.${ext}`, which an array would break.
+    fileAssociations: MARKDOWN_FILE_EXTENSIONS.map((ext) => ({
+      ext,
+      name: 'Markdown Document',
+      description: 'Markdown Document',
+      role: 'Editor',
+      rank: 'Alternate'
+    })),
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
@@ -468,6 +485,12 @@ module.exports = {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
   linux: {
+    // Why mimeTypes and not fileAssociations: shared-mime-info already maps *.md/*.markdown to
+    // text/markdown, so reusing that type puts Orca in the Open With list without shipping a glob
+    // override. A desktop entry's MimeType only adds a handler - mimeapps.list still owns the
+    // default. .mdx is deliberately absent: Ubuntu 24.04's mime database maps it to
+    // application/x-genesis-32x-rom, so claiming it here would need a glob override.
+    mimeTypes: ['text/markdown'],
     // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',

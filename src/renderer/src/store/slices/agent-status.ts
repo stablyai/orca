@@ -51,16 +51,16 @@ export {
   collectSleepingAgentSessionRecordsForWorktree,
   collectHibernatedCompletionEvidenceForWorktree
 } from './agent-status-recovery-collection'
-export { removeSleepingRecordsReplacedByManualWorktreeSleep } from './agent-status-recovery-helpers'
+export { removeSleepingRecordsReplacedByManualWorktreeSleep } from './agent-status-sleeping-records'
 export {
   buildAgentStatusTabPrefixDropPatch,
   type AgentStatusTabPrefixDropState
 } from './agent-status-drop-reducer'
-export { MAX_LIVE_AGENT_STATUSES } from './agent-status-pane-helpers'
+export { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
 export {
   RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX,
   RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX
-} from './agent-status-map-helpers'
+} from './agent-status-pane-keyed-records'
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
   storeSet,

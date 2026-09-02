@@ -2,7 +2,8 @@ import { ipcRenderer } from 'electron'
 import type {
   NativeChatAppendedPayload,
   NativeChatReadSessionResult,
-  NativeChatSubscriptionFrame
+  NativeChatSubscriptionFrame,
+  PreloadApi
 } from '../api-types'
 import type { AgentType } from '../../shared/native-chat-types'
 
@@ -37,4 +38,4 @@ export const nativeChatApi = {
       ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
     }
   }
-}
+} satisfies PreloadApi['nativeChat']

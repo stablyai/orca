@@ -3,7 +3,7 @@ import type { FileHandle } from 'node:fs/promises'
 import type { Store } from '../../persistence'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
 import type { SenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
-import { cleanupLocalTransferPath } from './filesystem-file-helpers'
+import { cleanupLocalTransferPath } from './filesystem-download-promotion'
 
 export type DownloadSession = {
   destinationPath: string

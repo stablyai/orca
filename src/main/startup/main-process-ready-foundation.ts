@@ -148,7 +148,8 @@ export async function initializeReadyFoundation(): Promise<void> {
   scheduleSecretProtectionGapReport({
     dataFile: profile.dataFile,
     force: process.env.ORCA_ALWAYS_REPORT_SECRET_PROTECTION === '1',
-    deferUntilFirstWindow: !state.isServeMode
+    deferUntilFirstWindow: !state.isServeMode,
+    skipInDevelopment: is.dev
   })
   // Why here: the host key store is a sidecar of the same profile, and every SSH connect consults
   // it. Left unbound it reports nothing trusted, which is safe but silently discards our own

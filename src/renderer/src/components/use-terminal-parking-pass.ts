@@ -2,11 +2,14 @@ import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  countEvictionExemptTabRoutes,
+  formatEvictionExemptRouteCounts,
   hasPendingRetentionSpawnWork,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-pane/terminal-hidden-worktree-retention'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/terminal-eviction-exempt-tabs'
 import { captureForceParkedWorktreeBuffers } from './terminal-pane/force-park-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
@@ -91,10 +94,18 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
         const evictableTabIds = selectForceParkEvictableTabIds(forceParkedTabs, (tab) =>
           exemptTabIds.has(tab.id)
         )
+        // Why routed + breadcrumbed: only per-route counts in a field bundle
+        // can say whether fail-open ids or unresolved snapshot capability
+        // dominates the degenerate all-exempt force-park (which frees no heap).
         if (evictableTabIds.length === 0 && forceParkedTabs.length > 0) {
+          const exemptRouteCounts = countEvictionExemptTabRoutes(forceParkedTabs, worktreeId)
           warnTerminalLifecycleAnomaly('retention force-park freed no panes', {
             worktreeId,
-            reason: `exemptTabs=${forceParkedTabs.length}`
+            reason: `exemptTabs=${forceParkedTabs.length} ${formatEvictionExemptRouteCounts(exemptRouteCounts)}`
+          })
+          recordRendererCrashBreadcrumb('terminal_force_park_freed_no_panes', {
+            exemptTabs: forceParkedTabs.length,
+            ...exemptRouteCounts
           })
         }
         if (

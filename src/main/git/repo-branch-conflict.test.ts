@@ -134,3 +134,123 @@ describe('getBranchConflictKindViaExec', () => {
     expect(exec).not.toHaveBeenCalled()
   })
 })
+
+describe('getBranchConflictKindViaExec batched remote probe', () => {
+  function remoteNames(count: number): string {
+    return `${Array.from({ length: count }, (_, index) => `remote${index}`).join('\n')}\n`
+  }
+
+  function baseExec(calls: string[][]): (argv: string[]) => Promise<{ stdout: string }> {
+    return async (argv) => {
+      calls.push(argv)
+      if (argv[0] === 'rev-parse') {
+        throw new Error('local branch is absent')
+      }
+      if (argv[0] === 'remote') {
+        return { stdout: remoteNames(3) }
+      }
+      throw new Error(`unexpected git command: ${argv.join(' ')}`)
+    }
+  }
+
+  it('asks one batched child instead of one probe per remote', async () => {
+    const calls: string[][] = []
+    const stdinPayloads: (string | undefined)[] = []
+    const exec = baseExec(calls)
+    const batched = async (
+      argv: string[],
+      options: { stdin: string }
+    ): Promise<{ stdout: string }> => {
+      calls.push(argv)
+      stdinPayloads.push(options.stdin)
+      return {
+        stdout: [
+          'refs/remotes/remote0/feature missing',
+          'refs/remotes/remote1/feature missing',
+          'refs/remotes/remote2/feature missing'
+        ].join('\n')
+      }
+    }
+
+    await expect(
+      getBranchConflictKindViaExec(exec, 'feature', undefined, {}, batched)
+    ).resolves.toBeNull()
+    expect(calls).toEqual([
+      ['rev-parse', '--verify', 'refs/heads/feature'],
+      ['remote'],
+      ['cat-file', '--batch-check']
+    ])
+    expect(stdinPayloads).toEqual([
+      'refs/remotes/remote0/feature\nrefs/remotes/remote1/feature\nrefs/remotes/remote2/feature\n'
+    ])
+  })
+
+  it('reports a remote conflict from the batched answer', async () => {
+    const calls: string[][] = []
+    const exec = baseExec(calls)
+    const batched = async (): Promise<{ stdout: string }> => ({
+      stdout: [
+        'refs/remotes/remote0/feature missing',
+        `${'a'.repeat(40)} commit 214`,
+        'refs/remotes/remote2/feature missing'
+      ].join('\n')
+    })
+
+    await expect(
+      getBranchConflictKindViaExec(exec, 'feature', undefined, {}, batched)
+    ).resolves.toBe('remote')
+  })
+
+  it('falls back to per-ref probes when the batch cannot answer', async () => {
+    const calls: string[][] = []
+    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
+      calls.push(argv)
+      if (argv[0] === 'rev-parse') {
+        throw new Error('local branch is absent')
+      }
+      if (argv[0] === 'remote') {
+        return { stdout: remoteNames(3) }
+      }
+      if (argv[0] === 'show-ref') {
+        if (argv[4] === 'refs/remotes/remote1/feature') {
+          return { stdout: 'abc refs/remotes/remote1/feature\n' }
+        }
+        throw Object.assign(new Error('missing'), { code: 1, stderr: '' })
+      }
+      throw new Error(`unexpected git command: ${argv.join(' ')}`)
+    }
+    const batched = async (): Promise<{ stdout: string }> => {
+      throw new Error('cat-file is unavailable')
+    }
+
+    await expect(
+      getBranchConflictKindViaExec(exec, 'feature', undefined, {}, batched)
+    ).resolves.toBe('remote')
+    expect(calls.filter((argv) => argv[0] === 'show-ref')).toHaveLength(3)
+  })
+
+  it('treats a short batch read as undecided rather than as absence', async () => {
+    const calls: string[][] = []
+    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
+      calls.push(argv)
+      if (argv[0] === 'rev-parse') {
+        throw new Error('local branch is absent')
+      }
+      if (argv[0] === 'remote') {
+        return { stdout: remoteNames(3) }
+      }
+      if (argv[0] === 'show-ref') {
+        throw Object.assign(new Error('missing'), { code: 1, stderr: '' })
+      }
+      throw new Error(`unexpected git command: ${argv.join(' ')}`)
+    }
+    const batched = async (): Promise<{ stdout: string }> => ({
+      stdout: 'refs/remotes/remote0/feature missing'
+    })
+
+    await expect(
+      getBranchConflictKindViaExec(exec, 'feature', undefined, {}, batched)
+    ).resolves.toBeNull()
+    expect(calls.filter((argv) => argv[0] === 'show-ref')).toHaveLength(3)
+  })
+})

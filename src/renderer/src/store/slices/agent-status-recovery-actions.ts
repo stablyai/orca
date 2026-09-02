@@ -5,13 +5,13 @@ import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-re
 import {
   removeSleepingRecordsReplacedByManualWorktreeSleep,
   sleepingRecordFromEntry
-} from './agent-status-recovery-helpers'
+} from './agent-status-sleeping-records'
 import {
   recoveryRecordTargetsSameSession,
   sleepingRecordsEquivalentIgnoringCaptureTime
 } from './agent-status-recovery-equivalence'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
-import { findAgentPaneWorktreeId } from './agent-status-pane-helpers'
+import { findAgentPaneWorktreeId } from './agent-status-pane-key-tab-binding'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
 
 export function createAgentStatusRecoveryActions(

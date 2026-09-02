@@ -14646,7 +14646,10 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "ターミナルビューに切り替える",
           "switchToChatView": "チャットビューに切り替える",
-          "closeTabsToLeft": "左側のタブを閉じる"
+          "closeTabsToLeft": "左側のタブを閉じる",
+          "copySessionId": "セッション ID をコピー",
+          "copySessionIdSuccess": "セッション ID をコピーしました",
+          "copySessionIdError": "セッション ID のコピーに失敗しました"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる",

@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   getWorktreeOptions: vi.fn(),
   getMirrorDistro: vi.fn(),
   getWslHome: vi.fn(),
-  getWslHomeAsync: vi.fn()
+  getWslHomeAsync: vi.fn(),
+  resolveBaseRef: vi.fn()
 }))
 
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
@@ -26,6 +27,9 @@ vi.mock('./git/worktree-create-preparation', () => ({
   finalizePreparedWorktree: mocks.finalize,
   discardPreparedWorktree: mocks.discard,
   unlockPreparedWorktree: mocks.unlock
+}))
+vi.mock('./git/worktree-base-ref-probe', () => ({
+  resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
 }))
 vi.mock('./project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
@@ -86,6 +90,9 @@ beforeEach(() => {
     throw new Error('the blocking wsl.exe home probe must not run while preparing')
   })
   mocks.getWslHomeAsync.mockReset().mockResolvedValue(WSL_HOME)
+  mocks.resolveBaseRef
+    .mockReset()
+    .mockImplementation(async (_repoPath: string, baseRef: string) => `refs/remotes/${baseRef}`)
 })
 
 afterEach(async () => {

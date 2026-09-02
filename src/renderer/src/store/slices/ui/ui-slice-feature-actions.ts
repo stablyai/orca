@@ -3,7 +3,7 @@ import {
   mergeFeatureInteractionState,
   mergeContextualTourSeenIds
 } from './ui-slice-hydration-values'
-import { getContextualTourProgressionForFeatureInteraction } from './ui-slice-tour-helpers'
+import { getContextualTourProgressionForFeatureInteraction } from './ui-slice-contextual-tour-progression'
 import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
 
 export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {

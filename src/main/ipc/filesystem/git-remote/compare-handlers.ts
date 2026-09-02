@@ -10,7 +10,7 @@ import {
 } from '../../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { validateFullGitObjectId } from '../filesystem-worktree-helpers'
+import { validateFullGitObjectId } from '../../filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
 

@@ -14689,7 +14689,10 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "terminal 보기로 전환",
           "switchToChatView": "채팅 보기로 전환",
-          "closeTabsToLeft": "왼쪽으로 탭 닫기"
+          "closeTabsToLeft": "왼쪽으로 탭 닫기",
+          "copySessionId": "세션 ID 복사",
+          "copySessionIdSuccess": "세션 ID를 복사했습니다",
+          "copySessionIdError": "세션 ID를 복사하지 못했습니다"
         },
         "BrowserTab": {
           "closeOthers": "다른 탭 닫기",

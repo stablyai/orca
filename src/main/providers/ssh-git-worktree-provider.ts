@@ -2,6 +2,7 @@ import type { GitStatusResult } from '../../shared/git-status-types'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
+import { assertAuthoritativeWorktreeCatalog } from '../../shared/worktree/worktree-catalog-availability'
 import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
 import { SshGitReviewHeadProvider } from './ssh-git-review-head-provider'
 
@@ -32,11 +33,14 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
     repoPath: string,
     options?: { signal?: AbortSignal }
   ): Promise<GitWorktreeInfo[]> {
-    return (await this.mux.request(
+    const response = await this.mux.request(
       'git.listWorktrees',
       { repoPath },
       { signal: options?.signal }
-    )) as GitWorktreeInfo[]
+    )
+    // Why (#14004): relays before this fix answered a failed worktree scan with `[]`. Mixed versions are
+    // normal, so refuse the shape here too — a Git repo always lists its own checkout.
+    return assertAuthoritativeWorktreeCatalog<GitWorktreeInfo>(response, repoPath)
   }
 
   async addWorktree(

@@ -17,10 +17,10 @@ import {
   findAgentPaneWorktreeId,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
-} from './agent-status-pane-helpers'
-import { removePaneKeys } from './agent-status-map-helpers'
+} from './agent-status-pane-key-tab-binding'
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { registryEntryMatchesStatus } from './agent-status-launch-config'
-import { copyLaunchConfig } from './agent-status-recovery-helpers'
+import { copyLaunchConfig } from './agent-status-sleeping-records'
 
 export function createAgentStatusProviderSessionActions(
   runtime: AgentStatusRuntime

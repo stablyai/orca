@@ -97,7 +97,7 @@ export async function listWorktreesStrict(
   return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
 }
 
-async function annotateSparseCheckoutStatus(
+export async function annotateSparseCheckoutStatus(
   repoPath: string,
   worktrees: GitWorktreeInfo[],
   options: GitWorktreeExecOptions = {}

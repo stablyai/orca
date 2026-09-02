@@ -6,7 +6,7 @@ import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-worksp
 import { useStartupActions } from './use-app-startup-actions'
 import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
 import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/codex-stale-pane-sweep'
-import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace-session-host-persistence'
+import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace-session-host-hydration'
 import {
   collectFolderWorkspaceKeysFromSession,
   collectWorktreeHydrationRepoIdsFromSession
@@ -189,7 +189,9 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
             actions.hydrateWorkspaceSession(sessionRead.session, {
               ...sessionHydrationOptions,
-              runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey
+              runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey,
+              contestedHostWorkspaceSessions: sessionRead.contestedHostWorkspaceSessions,
+              contestedPrimaryHostBySessionKey: sessionRead.contestedPrimaryHostBySessionKey
             })
             actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)

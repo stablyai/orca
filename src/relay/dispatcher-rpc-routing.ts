@@ -4,6 +4,10 @@ import {
   SkillInstallFailureSchema
 } from '../shared/skill-install-failure'
 import {
+  TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
+  TerminalUnavailableCauseSchema
+} from '../shared/terminal-unavailable-cause'
+import {
   RelayErrorCode,
   type JsonRpcNotification,
   type JsonRpcRequest,
@@ -135,11 +139,16 @@ export abstract class RelayDispatcherRpcRouting extends RelayDispatcherFrameCode
       const message = err instanceof Error ? err.message : String(err)
       const errorCode = (err as { code?: unknown }).code
       const code = typeof errorCode === 'number' ? errorCode : -32000
-      const skillFailure =
+      // Why an allowlist keyed on the error code: error `data` is otherwise dropped, so a
+      // handler cannot leak internals by attaching them. Each published shape is validated
+      // against its own schema before it crosses.
+      const structured =
         errorCode === SKILL_INSTALL_RPC_ERROR_CODE
           ? SkillInstallFailureSchema.safeParse((err as { data?: unknown }).data)
-          : null
-      const data = skillFailure?.success === true ? skillFailure.data : undefined
+          : errorCode === TERMINAL_UNAVAILABLE_RPC_ERROR_CODE
+            ? TerminalUnavailableCauseSchema.safeParse((err as { data?: unknown }).data)
+            : null
+      const data = structured?.success === true ? structured.data : undefined
       const accepted = this.sendResponse(
         client,
         req.id,
