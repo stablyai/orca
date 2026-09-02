@@ -226,6 +226,11 @@ describe('TabBarOpenInAppsButton', () => {
     }
     expect(trigger.getAttribute('data-slot')).toBe('tooltip-trigger')
     expect(trigger.tabIndex).toBe(0)
+    // Why: the stop must announce what it is; the inert inner button is hidden so its name is not read twice.
+    expect(trigger.getAttribute('role')).toBe('button')
+    expect(trigger.getAttribute('aria-disabled')).toBe('true')
+    expect(trigger.getAttribute('aria-label')).toBe('Open in Cursor')
+    expect(primaryButton().getAttribute('aria-hidden')).toBe('true')
 
     await act(async () => {
       trigger.focus()
@@ -237,9 +242,13 @@ describe('TabBarOpenInAppsButton', () => {
     expect(tooltip?.textContent).toContain('Local only')
   })
 
-  it('does not make the wrapper focusable while the primary button is enabled', () => {
+  it('leaves the wrapper inert and unnamed while the primary button is enabled', () => {
     render()
-    expect(primaryButton().parentElement?.hasAttribute('tabindex')).toBe(false)
+    const wrapper = primaryButton().parentElement
+    expect(wrapper?.hasAttribute('tabindex')).toBe(false)
+    expect(wrapper?.hasAttribute('role')).toBe(false)
+    expect(wrapper?.hasAttribute('aria-label')).toBe(false)
+    expect(primaryButton().hasAttribute('aria-hidden')).toBe(false)
   })
 
   it('lists every configured app in the dropdown and remembers the one launched from it', async () => {

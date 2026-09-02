@@ -179,15 +179,19 @@ export function TabBarOpenInAppsButton({
     <div className={TAB_BAR_SPLIT_BUTTON_CLASS}>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* Why: a disabled button gets no pointer or focus events, so the wrapper carries the tooltip that says why. */}
+          {/* Why: a disabled button gets no pointer or focus events, so while disabled the wrapper is the focusable, named stop that carries the tooltip saying why. */}
           <span
             className="flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             tabIndex={primaryAvailability.disabled ? 0 : undefined}
+            role={primaryAvailability.disabled ? 'button' : undefined}
+            aria-disabled={primaryAvailability.disabled || undefined}
+            aria-label={primaryAvailability.disabled ? openPrimaryLabel : undefined}
           >
             <button
               type="button"
               onClick={openPrimary}
               disabled={primaryAvailability.disabled}
+              aria-hidden={primaryAvailability.disabled || undefined}
               className={TAB_BAR_SPLIT_BUTTON_PRIMARY_CLASS}
               aria-label={openPrimaryLabel}
             >
