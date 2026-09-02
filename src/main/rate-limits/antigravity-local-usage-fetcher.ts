@@ -82,6 +82,7 @@ function requestRpcJson<T>(
       'Content-Length': Buffer.byteLength(body)
     }
     if (csrfToken) {
+      // Why: Antigravity Language Server builds upon the Exa/Codeium LS architecture and expects this exact CSRF header.
       headers['X-Codeium-Csrf-Token'] = csrfToken
     }
 
@@ -137,6 +138,7 @@ function requestRpcJson<T>(
 }
 
 async function probeEndpoint(ep: AntigravityEndpoint): Promise<ProviderRateLimits | null> {
+  // Why: Antigravity's local language server exposes its quota/user-status RPCs under the exa.language_server_pb namespace.
   const quotaRes = await requestRpcJson<QuotaResponsePayload>(
     ep.port,
     ep.isHttps,
