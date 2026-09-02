@@ -2712,7 +2712,12 @@
             "619b5a35d2": "最上位のワークスペースフォークを作成し、キャプチャされたコンテキストを使用して新しい Agent タブを開始します。",
             "64e292e8e3": "Agent セッションをフォークする",
             "9d25de2920": "フォークの作成",
-            "2b10412cfc": "作成中…"
+            "2b10412cfc": "作成中…",
+            "0f91a549fe": "Start a fresh agent with this session's context.",
+            "c730579670": "The new agent receives a bounded transcript as an editable draft.",
+            "3d187cd60d": "Agent",
+            "c040642db4": "Opening...",
+            "4256baaae3": "Fork in this worktree"
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
@@ -2812,7 +2817,8 @@
                   "c00421d320": "フォークコンテキストがコピーされました。Agent を起動し、貼り付けてフォークを開始します。",
                   "f62b40e2c7": "コピーするターミナルコンテキストがありません",
                   "373a3103e7": "コンテキストをコピーしました",
-                  "3fc568a49d": "コンテキストのコピーに失敗しました。"
+                  "3fc568a49d": "コンテキストのコピーに失敗しました。",
+                  "1e709b950c": "Session fork opened in a new tab"
                 }
               }
             },

@@ -2712,7 +2712,12 @@
             "619b5a35d2": "Crea un fork de espacio de trabajo de nivel superior e inicia una nueva pestaña de agente con el contexto capturado.",
             "64e292e8e3": "Fork de sesión de agente",
             "9d25de2920": "Crear fork",
-            "2b10412cfc": "Creando..."
+            "2b10412cfc": "Creando...",
+            "0f91a549fe": "Start a fresh agent with this session's context.",
+            "c730579670": "The new agent receives a bounded transcript as an editable draft.",
+            "3d187cd60d": "Agent",
+            "c040642db4": "Opening...",
+            "4256baaae3": "Fork in this worktree"
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "Borrar pantalla",
@@ -2812,7 +2817,8 @@
                   "c00421d320": "Se copió el contexto del fork. Inicia un agente y pégalo para iniciar el fork.",
                   "f62b40e2c7": "No hay contexto de terminal para copiar",
                   "373a3103e7": "Contexto copiado",
-                  "3fc568a49d": "Error al copiar el contexto."
+                  "3fc568a49d": "Error al copiar el contexto.",
+                  "1e709b950c": "Session fork opened in a new tab"
                 }
               }
             },

@@ -1,6 +1,5 @@
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import {
   buildAgentSessionForkPrompt,
   buildBoundedSessionTranscript
@@ -12,9 +11,8 @@ import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { launchForkAgentTab } from './fork-agent-tab-launch'
 import { translate } from '@/i18n/i18n'
 
 type ForkAgentSessionFromPaneArgs = {
@@ -86,44 +84,6 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
   }
 }
 
-function getForkAgentLaunchPlatform(args: {
-  repo: { connectionId?: string | null } | null | undefined
-  worktreePath?: string | null
-  projectRuntime?: ProjectExecutionRuntimeResolution
-}): NodeJS.Platform | undefined {
-  if (args.projectRuntime?.status === 'repair-required') {
-    return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : undefined
-  }
-  if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-  if (args.repo?.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
-    return 'linux'
-  }
-  return undefined
-}
-
-async function preflightForkAgentTrust(args: {
-  agent: TuiAgent
-  workspacePath?: string | null
-  connectionId?: string | null
-}): Promise<void> {
-  const { agent, workspacePath, connectionId } = args
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preflight || !workspacePath || !window.api.agentTrust?.markTrusted) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset: preflight,
-      workspacePath,
-      ...(connectionId ? { connectionId } : {})
-    })
-  } catch {
-    // Best-effort: if the trust artifact cannot be written, keep the existing launch path.
-  }
-}
-
 export function prepareAgentSessionForkFromPane({
   pane,
   tabId,
@@ -169,6 +129,19 @@ export async function copyAgentSessionForkContext(
   return copyForkContext(fork.prompt, fork.pane)
 }
 
+export type StartAgentSessionForkOptions = {
+  /** Agent the new tab should launch, overriding the source-pane detection.
+   *  Omitted keeps the detected source agent; `null` forces the copy fallback. */
+  agent?: TuiAgent | null
+}
+
+function resolveForkAgent(
+  fork: PreparedAgentSessionFork,
+  options?: StartAgentSessionForkOptions
+): TuiAgent | null {
+  return options && 'agent' in options ? (options.agent ?? null) : fork.agent
+}
+
 // Why: the standalone "Copy Context" action copies the bounded transcript on its
 // own — for pasting into another tool — so it must not carry the fork prompt's
 // "this is a fork… acknowledge and wait" framing the dialog button uses.
@@ -210,8 +183,12 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
   }
 }
 
-export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Promise<boolean> {
+export async function startAgentSessionFork(
+  fork: PreparedAgentSessionFork,
+  options?: StartAgentSessionForkOptions
+): Promise<boolean> {
   const store = useAppStore.getState()
+  const agent = resolveForkAgent(fork, options)
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
   if (!sourceWorktree) {
     toast.error(
@@ -248,7 +225,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
       undefined,
       undefined,
       undefined,
-      fork.agent ?? undefined
+      agent ?? undefined
     )
   } catch (error) {
     toast.error(
@@ -263,38 +240,71 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   }
   const forkWorktreeId = created.worktree.id
 
-  if (!fork.agent) {
+  if (!agent) {
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }
-  await preflightForkAgentTrust({
-    agent: fork.agent,
-    workspacePath: created.worktree.path,
-    connectionId: sourceRepo?.connectionId
-  })
-  const launchPlatform = getForkAgentLaunchPlatform({
-    repo: sourceRepo,
-    worktreePath: created.worktree.path,
-    projectRuntime: sourceProjectRuntime
-  })
-  const result = launchAgentInNewTab({
-    agent: fork.agent,
+  const outcome = await launchForkAgentTab({
+    agent,
     worktreeId: forkWorktreeId,
     prompt: fork.prompt,
-    promptDelivery: 'draft',
-    launchSource: 'terminal_context_menu',
-    ...(launchPlatform ? { launchPlatform } : {})
+    workspacePath: created.worktree.path,
+    repo: sourceRepo,
+    projectRuntime: sourceProjectRuntime
   })
   activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
 
-  if (!result) {
+  if (outcome === 'failed') {
     return copyAgentSessionForkContext(fork)
   }
-
   toast.success(
     translate(
       'auto.components.terminal.pane.terminal.agent.session.fork.88e34d00eb',
       'Top-level session fork opened in a new workspace'
+    )
+  )
+  return true
+}
+
+export async function startAgentSessionForkInSameWorktree(
+  fork: PreparedAgentSessionFork,
+  options?: StartAgentSessionForkOptions
+): Promise<boolean> {
+  const store = useAppStore.getState()
+  const agent = resolveForkAgent(fork, options)
+  const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
+  if (!sourceWorktree) {
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.agent.session.fork.f867385bb5',
+        'Could not find the source workspace for this fork.'
+      )
+    )
+    return false
+  }
+  // Why: no agent to receive the draft — copy the context so the user can paste
+  // it into a manually-launched agent, mirroring the top-level fork fallback.
+  if (!agent) {
+    return copyAgentSessionForkContext(fork)
+  }
+  const sourceRepo = store.repos.find((repo) => repo.id === sourceWorktree.repoId)
+  const sourceProjectRuntime = getLocalProjectExecutionRuntimeContext(store, fork.worktreeId)
+  const outcome = await launchForkAgentTab({
+    agent,
+    worktreeId: fork.worktreeId,
+    prompt: fork.prompt,
+    workspacePath: sourceWorktree.path,
+    repo: sourceRepo,
+    projectRuntime: sourceProjectRuntime
+  })
+
+  if (outcome === 'failed') {
+    return copyAgentSessionForkContext(fork)
+  }
+  toast.success(
+    translate(
+      'auto.components.terminal.pane.terminal.agent.session.fork.1e709b950c',
+      'Session fork opened in a new tab'
     )
   )
   return true

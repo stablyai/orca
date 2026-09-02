@@ -3054,7 +3054,12 @@
             "619b5a35d2": "Create a top-level workspace fork and start a fresh agent tab with captured context.",
             "64e292e8e3": "Fork Agent Session",
             "9d25de2920": "Create fork",
-            "2b10412cfc": "Creating..."
+            "2b10412cfc": "Creating...",
+            "0f91a549fe": "Start a fresh agent with this session's context.",
+            "c730579670": "The new agent receives a bounded transcript as an editable draft.",
+            "3d187cd60d": "Agent",
+            "c040642db4": "Opening...",
+            "4256baaae3": "Fork in this worktree"
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "Clear Screen",
@@ -3182,7 +3187,8 @@
                   "c00421d320": "Fork context copied. Launch an agent and paste it to start the fork.",
                   "f62b40e2c7": "No terminal context to copy",
                   "373a3103e7": "Context copied",
-                  "3fc568a49d": "Failed to copy context."
+                  "3fc568a49d": "Failed to copy context.",
+                  "1e709b950c": "Session fork opened in a new tab"
                 }
               }
             },
