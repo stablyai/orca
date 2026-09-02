@@ -1,27 +1,13 @@
 import { isRuntimePathAbsolute } from '../../../../shared/cross-platform-path'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { parseVaultQuery } from './ai-vault-session-filters'
+import type { AiVaultSearchQuerySplit } from '../../../../shared/ai-vault-search-query-operators'
 
-// Mirrors the operator arm of the panel tokenizer so the same spellings the
-// client-side filter accepts are the ones stripped from the server text.
-const QUERY_OPERATOR_PATTERN = /(?:repo|path):(?:"[^"]*"|'[^']*'|\S*)/gi
-
-export type AiVaultSearchQuerySplit = {
-  /** Free text sent to the index; operator terms removed. */
-  text: string
-  repoTerms: readonly string[]
-  pathTerms: readonly string[]
-}
-
-export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit {
-  const parsed = parseVaultQuery(query)
-  return {
-    text: query.replaceAll(QUERY_OPERATOR_PATTERN, ' ').replace(/\s+/g, ' ').trim(),
-    repoTerms: parsed.repoTerms,
-    pathTerms: parsed.pathTerms
-  }
-}
+// Re-exported so the panel keeps splitting and resolving through one import.
+export {
+  splitAiVaultSearchQuery,
+  type AiVaultSearchQuerySplit
+} from '../../../../shared/ai-vault-search-query-operators'
 
 /**
  * Operator terms narrowed to absolute paths the panel already knows about, so

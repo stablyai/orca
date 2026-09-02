@@ -18,6 +18,11 @@ import {
 } from './session-search-query-planner'
 import { isCollapsibleContentHash } from './session-search-content-hash'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
+import { sessionRowFilter, type SessionRowFilter } from './session-search-row-filter'
+import {
+  hasAiVaultSearchQueryOperators,
+  splitAiVaultSearchQuery
+} from '../../shared/ai-vault-search-query-operators'
 
 // Measured: user 3 / assistant 2 / tool 1 / identifiers 1 (MRR 0.503 vs 0.475 flat).
 const FULL_WEIGHTS = '3.0, 2.0, 1.0, 1.0'
@@ -59,6 +64,15 @@ type ScoredSession = {
   duplicateCount: number
 }
 
+/** One search pass: the caller's args plus everything the operators decided. */
+type Retrieval = {
+  args: AiVaultSearchArgs
+  tier: 'full' | 'conversation'
+  filter: SessionRowFilter
+  /** Query text with `repo:` / `path:` operators removed; what FTS sees. */
+  text: string
+}
+
 export type SessionSearchExecution = {
   hits: AiVaultSearchHit[]
   route: AiVaultSearchRoute
@@ -73,29 +87,55 @@ export class SessionSearchQuery {
   }
 
   execute(args: AiVaultSearchArgs): SessionSearchExecution {
-    const plan = planSessionSearchQuery(args.query)
-    if (plan.terms.length === 0) {
-      return { hits: [], route: 'or' }
+    const split = splitAiVaultSearchQuery(args.query)
+    const retrieval: Retrieval = {
+      args,
+      tier: args.tier ?? 'full',
+      filter: sessionRowFilter(args, split),
+      text: split.text
     }
-    const tier = args.tier ?? 'full'
-    const exact = this.retrieveLiteral(plan, tier)
+    const plan = planSessionSearchQuery(retrieval.text)
+    if (plan.terms.length === 0) {
+      // Operators with no free text still name a scope, so answer with the
+      // newest sessions inside it rather than nothing.
+      const hits = hasAiVaultSearchQueryOperators(split) ? this.recent(retrieval) : []
+      return { hits, route: 'or' }
+    }
+    const exact = this.retrieveLiteral(plan, retrieval.tier)
     if (exact) {
-      return { hits: this.rollUp(exact.rows, args, tier), route: exact.route }
+      return { hits: this.rollUp(exact.rows, retrieval), route: exact.route }
     }
     // Why: repair runs before the OR fallback, not after it fails; a typo next
     // to a common word would otherwise be masked by the common word's hits.
     const repaired = this.repair(plan)
     const effective = repaired ?? plan
-    const literal = repaired ? this.retrieveLiteral(repaired, tier) : null
+    const literal = repaired ? this.retrieveLiteral(repaired, retrieval.tier) : null
     const result = literal ?? {
-      rows: this.match(orExpression(effective.terms), tier),
+      rows: this.match(orExpression(effective.terms), retrieval.tier),
       route: 'or' as const
     }
     return {
-      hits: this.rollUp(result.rows, args, tier),
+      hits: this.rollUp(result.rows, retrieval),
       route: repaired ? (`typo+${result.route}` as AiVaultSearchRoute) : result.route,
       ...(repaired ? { repairedTerms: repaired.body } : {})
     }
+  }
+
+  /** Operator-only queries: newest sessions the constraints allow, no evidence. */
+  private recent(retrieval: Retrieval): AiVaultSearchHit[] {
+    const { conditions, values } = retrieval.filter
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM sessions ${where} ORDER BY updated_at DESC LIMIT ${resolveLimit(retrieval.args)}`
+        )
+        .all(...values) as SessionRow[]
+    ).map((session) => ({
+      ...sessionFields(session),
+      score: 0,
+      evidence: { role: 'unknown' as const, timestamp: null, snippet: '' }
+    }))
   }
 
   private repair(plan: SessionSearchQueryPlan): SessionSearchQueryPlan | null {
@@ -152,11 +192,7 @@ export class SessionSearchQuery {
     }
   }
 
-  private rollUp(
-    rows: MessageRow[],
-    args: AiVaultSearchArgs,
-    tier: 'full' | 'conversation'
-  ): AiVaultSearchHit[] {
+  private rollUp(rows: MessageRow[], retrieval: Retrieval): AiVaultSearchHit[] {
     const best = new Map<number, MessageRow>()
     for (const row of rows) {
       const current = best.get(row.session_row_id)
@@ -167,8 +203,7 @@ export class SessionSearchQuery {
     if (best.size === 0) {
       return []
     }
-    const sessions = this.loadSessions([...best.keys()], args)
-    const limit = Math.min(args.limit ?? AI_VAULT_SEARCH_LIMIT_DEFAULT, AI_VAULT_SEARCH_LIMIT_MAX)
+    const sessions = this.loadSessions([...best.keys()], retrieval.filter)
     const scored = collapseForks(
       sessions.map((session) => {
         const message = best.get(session.id)!
@@ -181,30 +216,23 @@ export class SessionSearchQuery {
       })
     )
     scored.sort((left, right) =>
-      args.sort === 'newest'
+      retrieval.args.sort === 'newest'
         ? (right.session.updated_at ?? '').localeCompare(left.session.updated_at ?? '')
         : right.score - left.score
     )
-    const table = tier === 'full' ? 'messages_fts' : 'conversation_fts'
-    return scored.slice(0, limit).map(({ session, message, score, duplicateCount }) => ({
-      agent: session.agent,
-      sessionId: session.session_id,
-      filePath: session.file_path,
-      codexHome: session.codex_home,
-      title: session.title,
-      cwd: session.cwd,
-      branch: session.branch,
-      updatedAt: session.updated_at,
-      messageCount: session.message_count,
-      resumeCommand: session.resume_command,
-      score,
-      ...(duplicateCount > 1 ? { duplicateCount } : {}),
-      evidence: {
-        role: message.role as AiVaultSearchHit['evidence']['role'],
-        timestamp: message.ts,
-        snippet: this.snippet(table, message.rowid, args.query)
-      }
-    }))
+    const table = retrieval.tier === 'full' ? 'messages_fts' : 'conversation_fts'
+    return scored
+      .slice(0, resolveLimit(retrieval.args))
+      .map(({ session, message, score, duplicateCount }) => ({
+        ...sessionFields(session),
+        score,
+        ...(duplicateCount > 1 ? { duplicateCount } : {}),
+        evidence: {
+          role: message.role as AiVaultSearchHit['evidence']['role'],
+          timestamp: message.ts,
+          snippet: this.snippet(table, message.rowid, retrieval.text)
+        }
+      }))
   }
 
   private snippet(table: string, rowid: number, query: string): string {
@@ -225,27 +253,30 @@ export class SessionSearchQuery {
     }
   }
 
-  private loadSessions(ids: number[], args: AiVaultSearchArgs): SessionRow[] {
-    const conditions = [`id IN (${ids.map(() => '?').join(',')})`]
-    const values: (string | number)[] = [...ids]
-    if (args.agents && args.agents.length > 0) {
-      conditions.push(`agent IN (${args.agents.map(() => '?').join(',')})`)
-      values.push(...args.agents)
-    }
-    if (args.since) {
-      conditions.push('updated_at >= ?')
-      values.push(args.since)
-    }
-    if (args.scopePaths && args.scopePaths.length > 0) {
-      conditions.push(`(${args.scopePaths.map(() => '(cwd = ? OR cwd LIKE ?)').join(' OR ')})`)
-      for (const scope of args.scopePaths) {
-        const trimmed = scope.replace(/[\\/]+$/, '')
-        values.push(trimmed, `${trimmed}${trimmed.includes('\\') ? '\\' : '/'}%`)
-      }
-    }
+  private loadSessions(ids: number[], filter: SessionRowFilter): SessionRow[] {
+    const conditions = [`id IN (${ids.map(() => '?').join(',')})`, ...filter.conditions]
     return this.db
       .prepare(`SELECT * FROM sessions WHERE ${conditions.join(' AND ')}`)
-      .all(...values) as SessionRow[]
+      .all(...ids, ...filter.values) as SessionRow[]
+  }
+}
+
+function resolveLimit(args: AiVaultSearchArgs): number {
+  return Math.min(args.limit ?? AI_VAULT_SEARCH_LIMIT_DEFAULT, AI_VAULT_SEARCH_LIMIT_MAX)
+}
+
+function sessionFields(session: SessionRow): Omit<AiVaultSearchHit, 'score' | 'evidence'> {
+  return {
+    agent: session.agent,
+    sessionId: session.session_id,
+    filePath: session.file_path,
+    codexHome: session.codex_home,
+    title: session.title,
+    cwd: session.cwd,
+    branch: session.branch,
+    updatedAt: session.updated_at,
+    messageCount: session.message_count,
+    resumeCommand: session.resume_command
   }
 }
 

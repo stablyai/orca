@@ -77,6 +77,12 @@ describe('orca search --agent-session', () => {
     expect(logSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards repo:/path: operators verbatim for the runtime to resolve', async () => {
+    await runSearch({ 'agent-session': 'repo:orca flaky path:/work/a' })
+    expect(searchParams().query).toBe('repo:orca flaky path:/work/a')
+    expect(searchParams().scopePaths).toBeUndefined()
+  })
+
   it('maps --newest to the newest sort', async () => {
     await runSearch({ 'agent-session': 'q', newest: true })
     expect(searchParams().sort).toBe('newest')

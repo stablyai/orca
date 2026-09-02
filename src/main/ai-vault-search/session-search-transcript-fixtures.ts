@@ -19,12 +19,17 @@ export function recordTimestamp(index: number): string {
   return new Date(RECORD_EPOCH_MS + index * 60_000).toISOString()
 }
 
-export function userRecord(index: number, content: unknown, sessionId = CLAUDE_SESSION_ID): string {
+export function userRecord(
+  index: number,
+  content: unknown,
+  sessionId = CLAUDE_SESSION_ID,
+  cwd = '/repo/app'
+): string {
   return JSON.stringify({
     type: 'user',
     sessionId,
     timestamp: recordTimestamp(index),
-    cwd: '/repo/app',
+    cwd,
     gitBranch: 'main',
     message: { role: 'user', content }
   })
