@@ -1,3 +1,4 @@
+import { accessSync, constants as fsConstants } from 'node:fs'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
@@ -11,11 +12,14 @@ import type { TerminalHostTombstones } from './terminal-host-tombstones'
 import type { TerminalSessionTeardown } from './terminal-session-teardown'
 import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
 import { TerminalAttachCanceledError } from './daemon-errors'
+import { rejectOnAbort } from './terminal-attach-cancellation'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
 
 type TerminalHostSessionCreateDependencies = {
   sessions: Map<string, Session>
+  /** Re-checks the host's shutdown fence and this request's cancellation after any await. */
+  assertCreateAllowed: () => void
   sessionTeardown: TerminalSessionTeardown
   killedTombstones: TerminalHostTombstones
   spawnSubprocess: TerminalHostOptions['spawnSubprocess']
@@ -30,12 +34,29 @@ export async function createOrAttachTerminalSession(
   deps: TerminalHostSessionCreateDependencies
 ): Promise<CreateOrAttachResult> {
   opts.onSessionResolved?.(opts.sessionId)
-  const existing = deps.sessions.get(opts.sessionId)
+  let existing = deps.sessions.get(opts.sessionId)
 
   // Why: descendant capture must finish before attach or recreation, or the
   // caller could receive a doomed session while teardown owns its process.
   if (deps.sessionTeardown.get(opts.sessionId) || existing?.isTerminating) {
-    throw new SessionNotFoundError(opts.sessionId)
+    // An attach must not adopt a doomed session; its caller retires the pane and respawns.
+    if (opts.attachOnly) {
+      throw new SessionNotFoundError(opts.sessionId)
+    }
+    // A create can wait teardown out instead, and must: a pane respawning onto its own stable id
+    // reaches this a beat after the attach that retired it, and refusing surfaced the raw
+    // SessionNotFoundError to the user. Windows makes it the common case, where the plain-shell
+    // sweep holds the claim across an OS identity probe and taskkill (#18046).
+    await Promise.race([
+      deps.sessionTeardown.settle(opts.sessionId),
+      rejectOnAbort(opts.cancelSignal, opts.sessionId)
+    ])
+    deps.assertCreateAllowed()
+    existing = deps.sessions.get(opts.sessionId)
+    // Unkillable child, or a fresh teardown claimed it while we waited: still nobody's to recreate.
+    if (existing?.isAlive && existing.isTerminating) {
+      throw new SessionNotFoundError(opts.sessionId)
+    }
   }
 
   // Why no ownership settle here: attach is synchronous by contract. A viewer
@@ -88,6 +109,8 @@ async function spawnAndPublishSession(
   ctx: { size: { cols: number; rows: number }; wslDistro: string | undefined }
 ): Promise<CreateOrAttachResult> {
   const { size, wslDistro } = ctx
+  // Why before the fork: the shell's own cwd may already have fallen back, so probe the requested path.
+  const cwdReadableByDaemon = opts.cwd && !wslDistro ? isCwdReadableByThisProcess(opts.cwd) : null
   const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -150,7 +173,23 @@ async function spawnAndPublishSession(
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   const token = session.attachClient(opts.streamClient)
 
-  if (opts.command && !subprocess.startupCommandDeliveredInShellArgs) {
+  const startupCommandWritten =
+    Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
+  // Why: without this, a missing command and a lost one log identically.
+  // Length, never the text -- launches can carry credentials.
+  try {
+    deps.reportReadinessEvent?.('startup-command-delivery', {
+      sessionId: opts.sessionId,
+      written: startupCommandWritten,
+      hasCommand: Boolean(opts.command),
+      commandLength: opts.command?.length ?? 0,
+      viaShellArgs: subprocess.startupCommandDeliveredInShellArgs === true,
+      queuedByShellReadyBarrier: shellReadySupported
+    })
+  } catch {
+    // Diagnostics must never turn a live PTY into a failed create.
+  }
+  if (startupCommandWritten && opts.command) {
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.write(
@@ -168,6 +207,20 @@ async function spawnAndPublishSession(
     shellState: session.shellState,
     incarnationId: session.incarnationId,
     ...getDaemonSessionResultMetadata(session),
+    ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
+  }
+}
+
+// Why R_OK|X_OK: listing a directory needs read, and entering it needs search — both are what
+// TCC withholds. A non-permission failure (ENOENT, ENOTDIR) reads as readable so it can never
+// masquerade as a permission denial.
+function isCwdReadableByThisProcess(cwd: string): boolean {
+  try {
+    accessSync(cwd, fsConstants.R_OK | fsConstants.X_OK)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return code !== 'EACCES' && code !== 'EPERM'
   }
 }

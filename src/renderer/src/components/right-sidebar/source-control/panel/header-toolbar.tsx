@@ -26,6 +26,8 @@ type SourceControlHeaderToolbarProps = {
   isCreatingPr: boolean
   onCreatePrHeaderClick: () => void
   onOpenHostedReviewInChecks: () => void
+  suppressedGitHubPRNumber: number | null
+  onRelinkSuppressedGitHubPR: () => void
   sourceControlViewMode: SourceControlViewMode
   viewModeToggleDisabled: boolean
   onToggleViewMode: () => void
@@ -105,6 +107,26 @@ function CreatePrHeaderButton({
   )
 }
 
+function SuppressedGitHubPRToolbar({
+  number,
+  onRelink
+}: {
+  number: number
+  onRelink: () => void
+}): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate text-[11.5px] text-muted-foreground">
+        {translate('sourceControl.unlinkedPr.status', 'PR #{{number}} unlinked', { number })}
+      </span>
+      <Button type="button" variant="outline" size="xs" onClick={onRelink} className="shrink-0">
+        <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
+        {translate('checksPanel.unlinked.relink', 'Link PR #{{number}}', { number })}
+      </Button>
+    </div>
+  )
+}
+
 function renderOverflowMenu(
   props: Pick<
     SourceControlHeaderToolbarProps,
@@ -132,6 +154,8 @@ export function SourceControlHeaderToolbar({
   isCreatingPr,
   onCreatePrHeaderClick,
   onOpenHostedReviewInChecks,
+  suppressedGitHubPRNumber,
+  onRelinkSuppressedGitHubPR,
   sourceControlViewMode,
   viewModeToggleDisabled,
   onToggleViewMode,
@@ -200,6 +224,11 @@ export function SourceControlHeaderToolbar({
                 review={hostedReview}
                 onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
               />
+            ) : suppressedGitHubPRNumber !== null ? (
+              <SuppressedGitHubPRToolbar
+                number={suppressedGitHubPRNumber}
+                onRelink={onRelinkSuppressedGitHubPR}
+              />
             ) : visibleCreatePrHeaderAction ? (
               <CreatePrHeaderButton
                 action={visibleCreatePrHeaderAction}
@@ -210,7 +239,7 @@ export function SourceControlHeaderToolbar({
             ) : (
               <span className="min-w-0 flex-1" aria-hidden="true" />
             )}
-            {visibleCreatePrHeaderAction && !hostedReview ? (
+            {(visibleCreatePrHeaderAction || suppressedGitHubPRNumber !== null) && !hostedReview ? (
               // Why: keep filter/overflow pinned right without stretching Create PR.
               <span className="min-w-0 flex-1" aria-hidden="true" />
             ) : null}

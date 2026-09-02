@@ -269,6 +269,8 @@ export type RuntimeTerminalSplit = {
   handle: string
   tabId: string
   paneRuntimeId: number
+  // Why: paired callers need the host-created leaf identity to focus the exact pane.
+  leafId?: string
 }
 
 export type RuntimeTerminalResolvePane = {

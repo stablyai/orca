@@ -262,7 +262,8 @@ async function createServer(options: ServerOptions = {}): Promise<{
   const nextRequest = new Promise<unknown>((resolve) => {
     resolveRequest = resolve
   })
-  const wss = new WebSocketServer({ port: 0 })
+  // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+  const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
   wss.on('connection', (ws) => {
     let sharedKey: Uint8Array | null = null

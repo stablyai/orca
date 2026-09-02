@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { redactKagiSessionToken } from '../../../../../shared/browser-url'
 import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session-browser-history'
 import { resolveBrowserAddressBarSubmission } from '../navigate/browser-address-bar-navigation'
+import { routeWorkspaceDocAddressSubmission } from '../navigate/workspace-doc-address-submission'
 import { deferBrowserPageNavigation } from '../navigate/browser-page-deferred-navigation'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import type {
@@ -222,6 +223,20 @@ export function useRemoteBrowserPageNavigation({
   }, [isActive, keybindings, runRemoteNavigation])
 
   const submitAddressBar = (): void => {
+    // A typed workspace path converts this page to its client-local document preview instead of
+    // navigating the remote guest — a runtime-owned tab is where a paired reader actually types.
+    const consumedAsWorkspaceDoc = routeWorkspaceDocAddressSubmission({
+      worktreeId: browserTab.worktreeId,
+      pageId: browserTab.id,
+      value: addressBarValue,
+      onLoadError: (loadError) => {
+        setPaneNotice({ kind: 'direct', text: loadError.description })
+        onUpdatePageState(browserTab.id, { loadError })
+      }
+    })
+    if (consumedAsWorkspaceDoc) {
+      return
+    }
     const submission = resolveBrowserAddressBarSubmission(addressBarValue, { allowFileUrls: false })
     if (submission.status === 'invalid') {
       // 'direct': the only response to what the user just typed. With an empty address bar no

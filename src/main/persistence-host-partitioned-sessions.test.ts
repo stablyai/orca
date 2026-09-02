@@ -123,6 +123,9 @@ describe('Store host-partitioned workspace sessions', () => {
     }
   })
 
+  // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+  const makeRepos = (...repoIds: string[]) => repoIds.map((id) => makeRepo({ id, path: `/${id}` }))
+
   it('migrates a legacy workspaceSession blob into the local partition', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -194,6 +197,7 @@ describe('Store host-partitioned workspace sessions', () => {
     writeDataFile({
       schemaVersion: 1,
       workspaceSession: makeHostSession('local-repo'),
+      repos: makeRepos('repo-ssh'),
       workspaceSessionsByHostId: {
         'ssh:ssh-1': makeLegacyPaneHostSession('repo-ssh', 'remote-pty')
       },
@@ -224,6 +228,7 @@ describe('Store host-partitioned workspace sessions', () => {
     writeDataFile({
       schemaVersion: 1,
       workspaceSession: makeHostSession('local-repo'),
+      repos: makeRepos('repo-a', 'repo-b'),
       workspaceSessionsByHostId: {
         'ssh:host-a': makeLegacyPaneHostSession('repo-a', 'pty-a'),
         'ssh:host-b': makeLegacyPaneHostSession('repo-b', 'pty-b')
@@ -488,6 +493,7 @@ describe('Store host-partitioned workspace sessions', () => {
 
   it('removes one orphaned worktree with a host-scoped topology fence', async () => {
     const store = await createStore()
+    store.addRepo(makeRepo({ id: 'repo-gone', path: '/repo-gone' }))
     const worktreeId = 'repo-gone::/workspace/stale'
     const session = {
       ...makeHostSession('repo-gone'),
@@ -728,6 +734,7 @@ describe('Store host-partitioned workspace sessions', () => {
     const worktreeId = 'repo-1::/worktree'
     writeDataFile({
       schemaVersion: 1,
+      repos: makeRepos('repo-1'),
       workspaceSessionsByHostId: {
         'runtime:good': makeHostSession('good-repo'),
         // activeRepoId must be string|null; a number fails the zod parse.
@@ -753,6 +760,7 @@ describe('Store host-partitioned workspace sessions', () => {
     const worktreeId = 'repo-1::/worktree'
     writeDataFile({
       schemaVersion: 1,
+      repos: makeRepos('repo-1'),
       workspaceSession: {
         ...makeHostSession('local-repo'),
         // A projected/truncated write can leave a top-level field the wrong type;
@@ -813,6 +821,7 @@ describe('Store host-partitioned workspace sessions', () => {
     const worktreeId = 'repo-1::/worktree'
     const profile = await canonicalize({
       schemaVersion: 1,
+      repos: makeRepos('repo-1'),
       workspaceSession: {
         ...makeHostSession('local-repo'),
         tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId })] }
@@ -845,6 +854,7 @@ describe('Store host-partitioned workspace sessions', () => {
     const worktreeId = 'repo-1::/worktree'
     const profile = await canonicalize({
       schemaVersion: 1,
+      repos: makeRepos('repo-1'),
       workspaceSessionsByHostId: {
         'runtime:env-a': {
           ...makeHostSession('runtime-repo'),

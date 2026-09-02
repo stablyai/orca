@@ -19,6 +19,7 @@ import {
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { isGitHubPRSuppressed } from '../../../shared/worktree/github-pr-suppression'
 import { resolvePaletteRepoForWorktree } from './palette-repo-resolution'
 
 export const WORKTREE_PALETTE_NAME_FIELD_ID = 'name'
@@ -71,7 +72,11 @@ function resolveReviewSource(
     repo && sources.prCache && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
       ? sources.prCache[`${repo.path}::${branch}`]?.data
       : null
-  if (cached) {
+  if (
+    cached &&
+    (worktree.linkedPR === null || cached.number === worktree.linkedPR) &&
+    !isGitHubPRSuppressed(worktree, cached.number)
+  ) {
     return { provider: 'github', number: cached.number, title: cached.title }
   }
   if (worktree.linkedPR != null) {

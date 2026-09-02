@@ -8,6 +8,7 @@ import type { FolderWorkspace } from './folder-workspace-types'
 import type { ProjectGroup } from './project-group-types'
 import type { Repo } from './repo-types'
 import {
+  findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHostState
 } from './folder-workspace-execution-host'
@@ -171,5 +172,26 @@ describe('folder workspace execution host', () => {
   it('separates a workspace that is gone from one that resolves to local', () => {
     expect(resolveFolderWorkspaceHost(state(), 'fw-missing')).toEqual({ kind: 'missing' })
     expect(resolveFolderWorkspaceHost(state({ repos: [] }), 'fw-1')).toEqual({ kind: 'local' })
+  })
+
+  it('reads each repository membership once while collecting candidates', () => {
+    let membershipReads = 0
+    const repos = Array.from({ length: 32 }, (_, index) => {
+      const candidate = repo({
+        id: ['repo', index].join('-'),
+        path: ['/elsewhere', index].join('/')
+      })
+      Object.defineProperty(candidate, 'projectGroupId', {
+        configurable: true,
+        get: () => {
+          membershipReads += 1
+          return undefined
+        }
+      })
+      return candidate
+    })
+
+    expect(findFolderWorkspaceCandidateRepos(state({ repos }), 'fw-1')).toEqual([])
+    expect(membershipReads).toBe(repos.length)
   })
 })

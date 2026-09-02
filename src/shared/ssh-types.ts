@@ -266,3 +266,13 @@ export type EnrichedDetectedPort = DetectedPort & {
   advertisedUrl?: string
   advertisedProtocol?: 'http' | 'https'
 }
+
+/** Outcome of `ssh:terminateSessions`. Uses the fixed verdict vocabulary from
+ *  docs/reference/ssh-execution-boundary.md: a host we could not reach yields `unverifiable`,
+ *  never `exited`, so an offline sweep can never be read as a successful remote kill (issue #12661). */
+export type SshTerminateSessionsResult = {
+  /** Remote PTYs the host acknowledged stopping. */
+  terminated: number
+  /** Leases whose remote shells were never reached because the relay was offline. */
+  unverifiable: number
+}

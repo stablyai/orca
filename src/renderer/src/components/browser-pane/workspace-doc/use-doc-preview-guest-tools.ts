@@ -50,7 +50,7 @@ export function useDocPreviewGuestTools({
 
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const grab = useGrabMode(toolTargetId)
-  const markup = useBrowserPageMarkupCapture(webviewRef, containerRef)
+  const markup = useBrowserPageMarkupCapture(webviewRef)
   const annotationSend = useBrowserPageAnnotationSend({ browserTabId: previewId, worktreeId })
   const grabAnnotations = useBrowserPageGrabAnnotations({
     browserTabId: previewId,

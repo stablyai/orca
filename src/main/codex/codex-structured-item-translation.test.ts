@@ -3,8 +3,11 @@ import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key
 import {
   codexItemBody,
   codexItemIdentity,
+  codexJournalItem,
   codexMessageBlocks,
   CodexTurnOrdinals,
+  MAX_CODEX_TURN_ORDINAL_BYTES,
+  MAX_CODEX_TURN_ORDINAL_ENTRIES,
   isCodexMessageItemType,
   readCodexThreadItem,
   type CodexThreadItem
@@ -54,6 +57,22 @@ function keysFor(items: CodexThreadItem[]): string[] {
 }
 
 describe('codex turn ordinals', () => {
+  it('bounds forgotten turn tombstones while retaining the recent window', () => {
+    const ordinals = new CodexTurnOrdinals()
+    const total = MAX_CODEX_TURN_ORDINAL_ENTRIES + 12
+    for (let index = 0; index < total; index += 1) {
+      const turnId = `turn-${index}`
+      expect(ordinals.ordinalFor('thread-many', turnId, 'item-0')).toBe(0)
+      ordinals.forgetTurn('thread-many', turnId)
+    }
+
+    expect(ordinals.forgottenTurnCount).toBe(MAX_CODEX_TURN_ORDINAL_ENTRIES)
+    // The newest completed turn still keeps its counter for a late frame.
+    expect(ordinals.ordinalFor('thread-many', `turn-${total - 1}`, 'item-late')).toBe(1)
+    // The oldest turn was deterministically evicted and starts a fresh key.
+    expect(ordinals.ordinalFor('thread-many', 'turn-0', 'item-late')).toBe(0)
+  })
+
   it('releases a forgotten turn without ever reusing an ordinal it assigned', () => {
     const ordinals = new CodexTurnOrdinals()
     expect(ordinals.ordinalFor('thread-1', 'turn-1', 'item-1')).toBe(0)
@@ -67,6 +86,15 @@ describe('codex turn ordinals', () => {
     expect(ordinals.ordinalFor('thread-1', 'turn-1', 'item-3')).toBe(3)
     // Other turns are untouched.
     expect(ordinals.ordinalFor('thread-1', 'turn-2', 'item-1')).toBe(0)
+  })
+
+  it('bounds aggregate provider identifier bytes retained by one active turn', () => {
+    const ordinals = new CodexTurnOrdinals()
+    for (let index = 0; index < 3_000; index += 1) {
+      ordinals.ordinalFor('thread', 'turn', `${index}:${'x'.repeat(512)}`)
+    }
+
+    expect(ordinals.bytes).toBeLessThanOrEqual(MAX_CODEX_TURN_ORDINAL_BYTES)
   })
 })
 
@@ -165,6 +193,69 @@ describe('codex item bodies', () => {
       state: 'completed',
       output: { head: 'a\nb\n', byteLength: 4, truncated: false, digest: expect.any(String) }
     })
+  })
+
+  it('accepts snake-case command completion output and preserves blob evidence', () => {
+    const output = 'x'.repeat(1_100_000)
+    const translated = codexJournalItem({
+      type: 'commandExecution',
+      id: 'item-large',
+      command: 'python big.py',
+      status: 'completed',
+      exitCode: 0,
+      aggregated_output: output
+    })
+    const body = translated.body
+
+    expect(body).toMatchObject({
+      kind: 'tool-call',
+      state: 'completed',
+      output: {
+        byteLength: 1_100_000,
+        truncated: true,
+        digest: expect.any(String)
+      }
+    })
+    if (body?.kind !== 'tool-call' || !body.output) {
+      throw new Error('expected bounded command output')
+    }
+    expect(body.output.head.length).toBeLessThan(20_000)
+    expect(translated.blobs).toEqual([
+      {
+        digest: body.output.digest,
+        payload: output
+      }
+    ])
+  })
+
+  it('continues to accept camel-case command completion output', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-camel',
+        command: 'printf ok',
+        status: 'completed',
+        aggregatedOutput: 'ok'
+      })
+    ).toMatchObject({
+      kind: 'tool-call',
+      output: { head: 'ok', byteLength: 2, truncated: false }
+    })
+  })
+
+  it('aggregates assistant content parts before bounding the message body', () => {
+    const body = codexItemBody({
+      type: 'agentMessage',
+      id: 'assistant-parts',
+      content: Array.from({ length: 200 }, () => ({ type: 'text', text: 'a'.repeat(10_000) }))
+    })
+    const text =
+      body?.kind === 'message' && body.blocks[0]?.type === 'text' ? body.blocks[0].text : ''
+
+    expect(body).toMatchObject({ kind: 'message', role: 'assistant' })
+    expect(body?.kind === 'message' ? body.blocks : []).toHaveLength(1)
+    expect(text).toContain('output truncated')
+    expect(Buffer.byteLength(JSON.stringify(body), 'utf8')).toBeLessThan(20 * 1024)
   })
 
   it('calls a nonzero exit a failure even though codex calls the status completed', () => {

@@ -18,6 +18,7 @@ export type ConnectCallbacks = {
   ) => void
   onReplayData?: (data: string, meta?: { clearBeforeReplay?: boolean }) => void
   onError?: (msg: string) => void
+  onErrorCleared?: (msg: string) => void
   onWriteUnavailable?: () => void
   onOutputPauseChanged?: (paused: boolean, supported: boolean) => void
 }

@@ -1,5 +1,7 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
+import { openGitHubPRLinkModal } from '../github-pr-link-modal'
 import type { ChecksPanelCheckAndReviewActionsInput } from './check-and-review-action-dependencies'
+import { useUnlinkGitHubPullRequest } from './use-unlink-github-pull-request'
 
 type RefreshLinkedGitHubPullRequest = (linkedPRNumber: number) => Promise<void>
 
@@ -20,6 +22,7 @@ export function useChecksPanelReviewLinkActions(
     repo,
     repoConnectionId,
     runtimeEnvironmentId,
+    suppressedGitHubPR,
     updateWorktreeMeta
   } = model
   const reviewLinkScopeKey = JSON.stringify([
@@ -40,30 +43,82 @@ export function useChecksPanelReviewLinkActions(
     reviewLinkScopeKeyRef.current = reviewLinkScopeKey
   }, [reviewLinkScopeKey])
 
+  const unlinkGitHubPullRequest = useUnlinkGitHubPullRequest({
+    activeReview,
+    activeWorktree,
+    activeWorktreeId,
+    linkedPR,
+    updateWorktreeMeta
+  })
+
   const handleUnlinkReview = useCallback(() => {
     if (!activeWorktreeId || !activeWorktree || !activeReview) {
       return
     }
-    const updates =
-      activeReview.provider === 'gitlab'
-        ? linkedGitLabMR === null
-          ? null
-          : { linkedGitLabMR: null }
-        : linkedPR === null
-          ? null
-          : { linkedPR: null }
-    if (!updates) {
+    reviewLinkActionGenerationRef.current += 1
+    if (activeReview.provider === 'github') {
+      void unlinkGitHubPullRequest()
       return
     }
-    reviewLinkActionGenerationRef.current += 1
-    void updateWorktreeMeta(activeWorktreeId, updates, { executionHostId: activeWorktree.hostId })
-  }, [activeReview, activeWorktree, activeWorktreeId, linkedGitLabMR, linkedPR, updateWorktreeMeta])
+    if (linkedGitLabMR === null) {
+      return
+    }
+    void updateWorktreeMeta(
+      activeWorktreeId,
+      { linkedGitLabMR: null },
+      { executionHostId: activeWorktree.hostId }
+    )
+  }, [
+    activeReview,
+    activeWorktree,
+    activeWorktreeId,
+    linkedGitLabMR,
+    unlinkGitHubPullRequest,
+    updateWorktreeMeta
+  ])
+
+  const openLinkPullRequestModal = useCallback(
+    (currentPR: number) => {
+      if (!activeWorktreeId || !activeWorktree) {
+        return
+      }
+      const openedScopeKey = reviewLinkScopeKey
+      openGitHubPRLinkModal({
+        openModal,
+        worktree: activeWorktree,
+        worktreeId: activeWorktreeId,
+        currentPR,
+        suppressHostedReviewRefresh: true,
+        afterLinked: async (linkedPRNumber) => {
+          const actionGeneration = reviewLinkActionGenerationRef.current + 1
+          reviewLinkActionGenerationRef.current = actionGeneration
+          if (
+            reviewLinkScopeKeyRef.current !== openedScopeKey ||
+            reviewLinkActionGenerationRef.current !== actionGeneration
+          ) {
+            return
+          }
+          await refreshLinkedGitHubPullRequest(linkedPRNumber)
+        }
+      })
+    },
+    [
+      activeWorktree,
+      activeWorktreeId,
+      openModal,
+      refreshLinkedGitHubPullRequest,
+      reviewLinkScopeKey
+    ]
+  )
 
   const handleLinkAnotherReview = useCallback(() => {
     if (!activeWorktreeId || !activeWorktree || !activeReview || !repo || !branch) {
       return
     }
-    const provider = activeReview.provider
+    if (activeReview.provider === 'github') {
+      openLinkPullRequestModal(activeWorktree.linkedPR ?? activeReview.number)
+      return
+    }
     const openedScopeKey = reviewLinkScopeKey
     openModal('edit-meta', {
       worktreeId: activeWorktreeId,
@@ -72,11 +127,8 @@ export function useChecksPanelReviewLinkActions(
       executionHostId: activeWorktree.hostId,
       currentDisplayName: activeWorktree.displayName,
       currentIssue: activeWorktree.linkedIssue,
-      reviewProvider: provider,
-      currentReview:
-        provider === 'gitlab'
-          ? (activeWorktree.linkedGitLabMR ?? activeReview.number)
-          : (activeWorktree.linkedPR ?? activeReview.number),
+      reviewProvider: 'gitlab',
+      currentReview: activeWorktree.linkedGitLabMR ?? activeReview.number,
       currentComment: activeWorktree.comment,
       focus: 'pr',
       suppressHostedReviewRefresh: true,
@@ -91,12 +143,6 @@ export function useChecksPanelReviewLinkActions(
           reviewLinkScopeKeyRef.current === openedScopeKey &&
           reviewLinkActionGenerationRef.current === actionGeneration
         if (!isActionCurrent()) {
-          return
-        }
-        if (provider === 'github') {
-          if (typeof updates?.linkedPR === 'number') {
-            await refreshLinkedGitHubPullRequest(updates.linkedPR)
-          }
           return
         }
         const nextMR = updates?.linkedGitLabMR
@@ -121,10 +167,17 @@ export function useChecksPanelReviewLinkActions(
     branch,
     fetchHostedReviewForBranch,
     openModal,
-    refreshLinkedGitHubPullRequest,
+    openLinkPullRequestModal,
     repo,
     reviewLinkScopeKey
   ])
 
-  return { handleUnlinkReview, handleLinkAnotherReview }
+  const handleLinkSuppressedPullRequest = useCallback(() => {
+    if (linkedPR !== null || typeof suppressedGitHubPR !== 'number') {
+      return
+    }
+    openLinkPullRequestModal(suppressedGitHubPR)
+  }, [linkedPR, openLinkPullRequestModal, suppressedGitHubPR])
+
+  return { handleUnlinkReview, handleLinkAnotherReview, handleLinkSuppressedPullRequest }
 }

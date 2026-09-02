@@ -22,6 +22,7 @@ import {
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft-edit-generations'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
@@ -54,6 +55,7 @@ export function useMobileNativeChatDrafts(args: {
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
+  getComposerEditGeneration: () => number
   pending: MobileNativeChatPendingMessage[]
   /** Phone-local previews rebound to the transcript message that replaced the
    *  optimistic echo, keyed by authoritative message id. */
@@ -100,6 +102,7 @@ export function useMobileNativeChatDrafts(args: {
     Record<string, Record<string, string[]>>
   >({})
   const pendingCounterRef = useRef(0)
+  const draftEditGenerationsRef = useRef(new MobileNativeChatDraftEditGenerations())
   const messagesRef = useRef(messages)
   messagesRef.current = messages
   const activeDraftKeyRef = useRef(draftKey)
@@ -123,6 +126,7 @@ export function useMobileNativeChatDrafts(args: {
       if (!draftKey) {
         return
       }
+      draftEditGenerationsRef.current.advance(draftKey)
       setDrafts((previous) => {
         const current = previous[draftKey] ?? ''
         const next = typeof value === 'function' ? value(current) : value
@@ -131,7 +135,6 @@ export function useMobileNativeChatDrafts(args: {
     },
     [draftKey]
   )
-
   const captureSendOrigin = useCallback(
     (text: string) => {
       if (!draftKey) {
@@ -140,6 +143,7 @@ export function useMobileNativeChatDrafts(args: {
       const normalizedText = normalizeReconcileText(text)
       return {
         draftKey,
+        draftEditGeneration: draftEditGenerationsRef.current.readDraft(draftKey),
         pendingKey,
         normalizedText,
         baselineOccurrences: countUserTextOccurrences(messagesRef.current, normalizedText),
@@ -158,7 +162,8 @@ export function useMobileNativeChatDrafts(args: {
   // send". Clear at send time; a definite rejection restores the text below.
   const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
     setDrafts((previous) =>
-      (previous[origin.draftKey] ?? '').trim() === text.trim()
+      draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
+      (previous[origin.draftKey] ?? '') === text
         ? { ...previous, [origin.draftKey]: '' }
         : previous
     )
@@ -167,7 +172,10 @@ export function useMobileNativeChatDrafts(args: {
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
     // Why: never clobber text the user typed while the rejection was in flight.
     setDrafts((previous) =>
-      (previous[origin.draftKey] ?? '') === '' ? { ...previous, [origin.draftKey]: text } : previous
+      draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
+      (previous[origin.draftKey] ?? '') === ''
+        ? { ...previous, [origin.draftKey]: text }
+        : previous
     )
   }, [])
 
@@ -269,9 +277,7 @@ export function useMobileNativeChatDrafts(args: {
       return
     }
     const movedIds = new Set(waitingForSession.map((item) => item.id))
-    setPendingBySession((previous) =>
-      mergeWaitingSessionPending(previous, pendingKey, waitingForSession)
-    )
+    setPendingBySession((state) => mergeWaitingSessionPending(state, pendingKey, waitingForSession))
     setPendingWaitingForSession((previous) =>
       removeWaitingSessionPending(previous, draftKey, movedIds)
     )
@@ -330,6 +336,7 @@ export function useMobileNativeChatDrafts(args: {
   return {
     composerText: draftKey ? (drafts[draftKey] ?? '') : '',
     setComposerText,
+    getComposerEditGeneration: draftEditGenerationsRef.current.readComposer,
     pending,
     imagePreviewsByMessageId: pendingKey
       ? (imagePreviewsBySession[pendingKey] ?? NO_IMAGE_PREVIEWS)

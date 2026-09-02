@@ -16,7 +16,7 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { AddRepoPathRouteOptions } from './repo-state'
+import type { AddRepoPathOptions } from './repo-state'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
 
 export function repoWithFetchedOwner(
@@ -60,7 +60,7 @@ export function settingsForRepoOwner(
 }
 
 export function getAddRepoPathRouteSettings(
-  options: AddRepoPathRouteOptions | undefined,
+  options: AddRepoPathOptions | undefined,
   fallbackSettings: GlobalSettings | null
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
   return options && 'runtimeEnvironmentId' in options

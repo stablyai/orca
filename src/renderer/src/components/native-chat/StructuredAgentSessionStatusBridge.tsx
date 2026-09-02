@@ -17,6 +17,36 @@ import { useStructuredAgentSessionReadObservation } from './use-structured-agent
 
 type StructuredTab = Tab & { contentType: 'agent-session' }
 
+function isStructuredTab(tab: Tab): tab is StructuredTab {
+  return tab.contentType === 'agent-session' && isAgentSessionHandleProvider(tab.agentSessionAgent)
+}
+
+const structuredTabsByUnifiedTabsSnapshot = new WeakMap<
+  Record<string, Tab[]>,
+  readonly StructuredTab[]
+>()
+
+/** Project structured-session tabs once per immutable tab-map snapshot. */
+export function getStructuredAgentSessionTabs(
+  unifiedTabsByWorktree: Record<string, Tab[]>
+): readonly StructuredTab[] {
+  const cached = structuredTabsByUnifiedTabsSnapshot.get(unifiedTabsByWorktree)
+  if (cached) {
+    return cached
+  }
+
+  const tabs: StructuredTab[] = []
+  for (const worktreeTabs of Object.values(unifiedTabsByWorktree)) {
+    for (const tab of worktreeTabs) {
+      if (isStructuredTab(tab)) {
+        tabs.push(tab)
+      }
+    }
+  }
+  structuredTabsByUnifiedTabsSnapshot.set(unifiedTabsByWorktree, tabs)
+  return tabs
+}
+
 function latestPrompt(state: StructuredAgentSessionState): string {
   for (let index = state.items.length - 1; index >= 0; index -= 1) {
     const body = state.items[index]?.body
@@ -99,15 +129,7 @@ function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab })
 
 export function StructuredAgentSessionStatusBridge(): React.JSX.Element {
   const tabs = useAppStore(
-    useShallow((state) =>
-      Object.values(state.unifiedTabsByWorktree)
-        .flat()
-        .filter(
-          (tab): tab is StructuredTab =>
-            tab.contentType === 'agent-session' &&
-            isAgentSessionHandleProvider(tab.agentSessionAgent)
-        )
-    )
+    useShallow((state) => getStructuredAgentSessionTabs(state.unifiedTabsByWorktree))
   )
   return (
     <>

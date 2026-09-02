@@ -35,14 +35,17 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { MAX_RELAY_PTY_SESSIONS, PtyHandler } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import { MAX_RELAY_PTY_SESSIONS, type PtyHandler } from './pty-handler'
 import {
   beginPtyHandlerTest,
   createMockDispatcher,
+  createTestPtyHandler,
+  testPtyId,
   endPtyHandlerTest
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
+
+const PTY_1 = testPtyId(1)
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -72,12 +75,12 @@ describe('PtyHandler', () => {
         ORCA_WORKTREE_ID: 'wt-5'
       }
     })
-    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
 
     await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
-    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    handler = createTestPtyHandler(dispatcher)
     handler.addEnvAugmenter(() => ({
       ORCA_AGENT_HOOK_PORT: '12345',
       ORCA_AGENT_HOOK_TOKEN: 'abc-uuid'
@@ -200,13 +203,13 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {
       command: 'claude'
     })
-    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
     expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(true)
 
     handler.dispose()
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
-    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    handler = createTestPtyHandler(dispatcher)
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
       await dispatcher.callRequest('pty.revive', { state })
@@ -270,7 +273,7 @@ describe('PtyHandler', () => {
     expect(initialEnv.name).toBe('xterm-256color')
     expect(initialEnv.env.TERM).toBe('xterm-256color')
 
-    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
     const [serialized] = JSON.parse(state) as {
       explicitTerm?: string
       envToDelete?: string[]
@@ -281,7 +284,7 @@ describe('PtyHandler', () => {
     await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
-    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    handler = createTestPtyHandler(dispatcher)
     handler.addEnvAugmenter(() => ({
       ORCA_STALE_TEST_ENV: '/tmp/revived-stale'
     }))
@@ -347,14 +350,14 @@ describe('PtyHandler', () => {
       env: { TERM: 'screen-256color' },
       envToDelete: ['ORCA_STALE_TEST_ENV']
     })
-    let state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    let state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
 
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
       await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
       dispatcher = createMockDispatcher()
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler = createTestPtyHandler(dispatcher)
       handler.addEnvAugmenter(() => ({
         ORCA_STALE_TEST_ENV: '/tmp/first-revive'
       }))
@@ -367,7 +370,7 @@ describe('PtyHandler', () => {
       expect(firstRevivedEnv.name).toBe('screen-256color')
       expect(firstRevivedEnv.env.TERM).toBe('screen-256color')
       expect(firstRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
-      state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
       expect(JSON.parse(state)).toMatchObject([
         {
           explicitTerm: 'screen-256color',
@@ -378,7 +381,7 @@ describe('PtyHandler', () => {
       await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
       dispatcher = createMockDispatcher()
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler = createTestPtyHandler(dispatcher)
       handler.addEnvAugmenter(() => ({
         ORCA_STALE_TEST_ENV: '/tmp/second-revive'
       }))
@@ -447,12 +450,12 @@ describe('PtyHandler', () => {
         process.env.ORCA_TAB_ID = oldTabId
       }
     }
-    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
 
     await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
-    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    handler = createTestPtyHandler(dispatcher)
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     delete process.env.ORCA_PANE_KEY
     delete process.env.ORCA_TAB_ID
@@ -478,11 +481,11 @@ describe('PtyHandler', () => {
 
     await expect(
       dispatcher.callRequest('pty.attach', {
-        id: 'pty-1',
+        id: PTY_1,
         expectedPaneKey: 'tab-other:leaf',
         expectedTabId: 'tab-other'
       })
-    ).rejects.toThrow('PTY "pty-1" not found')
+    ).rejects.toThrow(`PTY "${PTY_1}" not found`)
   })
 
   describe('a Windows relay reviving a WSL pane', () => {
@@ -517,13 +520,13 @@ describe('PtyHandler', () => {
         worktreeId,
         historyIsolationEnabled: true
       })
-      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
 
       await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
       rmSync(historyFile, { force: true })
       dispatcher = createMockDispatcher()
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler = createTestPtyHandler(dispatcher)
 
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
       try {
@@ -559,7 +562,7 @@ describe('PtyHandler', () => {
     it('keeps the override across a second serialize/revive round trip', async () => {
       await reviveWslPane()
 
-      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
 
       expect(JSON.parse(state)[0]).toMatchObject({
         shellOverride: 'wsl.exe',

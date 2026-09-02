@@ -5,10 +5,8 @@ import type {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { loadJournal } from '../agent-session-journal/journal-open'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import {
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
   attachFingerprintFields,
   journalIdentityFor,
@@ -21,6 +19,7 @@ export type RestoredStructuredAgentSessionRead = {
   params: AgentSessionAttachParams
   fence: number
   hasProviderChild: false
+  acquisitionGeneration: null
 }
 
 export async function restoreStructuredAgentSessionRead(
@@ -50,7 +49,13 @@ export async function restoreStructuredAgentSessionRead(
     loaded
   })
   // Read restore opens the journal and nothing else: no adapter call, so no provider child.
-  return { journal, params, fence: record.lease.runtimeFence, hasProviderChild: false }
+  return {
+    journal,
+    params,
+    fence: record.lease.runtimeFence,
+    hasProviderChild: false,
+    acquisitionGeneration: null
+  }
 }
 
 export function attachParamsForRecord(

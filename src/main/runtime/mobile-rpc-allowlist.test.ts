@@ -95,7 +95,10 @@ function mobileRpcMethods(): string[] {
 }
 
 function mobileRpcAllowlist(): Set<string> {
-  const source = readFileSync(join(process.cwd(), 'src/main/runtime/runtime-rpc.ts'), 'utf8')
+  const source = readFileSync(
+    join(process.cwd(), 'src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist.ts'),
+    'utf8'
+  )
   const allowlist = source.match(/const MOBILE_RPC_METHOD_ALLOWLIST = new Set\(\[([\s\S]*?)\]\)/)
   if (!allowlist) {
     throw new Error('MOBILE_RPC_METHOD_ALLOWLIST not found')

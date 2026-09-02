@@ -331,18 +331,37 @@ describe('folder workspaces sharing one directory', () => {
   })
 
   it('does not serialize a sibling instance behind this instance held terminal mutation', async () => {
-    const internals = createRuntimeInternals()
+    const internals = createRuntimeInternals({ processLists: [[], []] })
     const releaseA = await internals.acquireWorktreeTerminalSpawn(WORKSPACE_A)
 
     const spawnB = internals.acquireWorktreeTerminalSpawn(WORKSPACE_B)
-    const spawnSecondA = internals.acquireWorktreeTerminalSpawn(WORKSPACE_A)
-
     expect(await raceAgainstMicrotaskDrain(spawnB)).toBe('acquired')
-    // Control: same-instance mutations must still queue, so 'acquired' above is not a free pass.
-    expect(await raceAgainstMicrotaskDrain(spawnSecondA)).toBe('blocked')
+
+    // Control: spawns intentionally share the per-worktree lock (only sleep
+    // excludes), so a second A spawn can no longer prove the lock blocks.
+    // A's own sleep still must, which keeps 'acquired' above from being a
+    // free pass on a lock that never blocks anything.
+    const sleepA = internals.sleepTerminalsForWorktree(`id:${WORKSPACE_A}`)
+    expect(await raceAgainstMicrotaskDrain(sleepA)).toBe('blocked')
 
     releaseA()
     ;(await spawnB)()
-    ;(await spawnSecondA)()
+    await sleepA
+  })
+
+  it('grants concurrent spawns for one instance while still excluding its sleep', async () => {
+    const internals = createRuntimeInternals({ processLists: [[], []] })
+    const releaseFirst = await internals.acquireWorktreeTerminalSpawn(WORKSPACE_A)
+    // Why: a multi-tab worktree activates every tab at once; queueing them
+    // behind each other was the activation latency staircase.
+    const second = internals.acquireWorktreeTerminalSpawn(WORKSPACE_A)
+    expect(await raceAgainstMicrotaskDrain(second)).toBe('acquired')
+
+    const sleepA = internals.sleepTerminalsForWorktree(`id:${WORKSPACE_A}`)
+    expect(await raceAgainstMicrotaskDrain(sleepA)).toBe('blocked')
+
+    releaseFirst()
+    ;(await second)()
+    await sleepA
   })
 })

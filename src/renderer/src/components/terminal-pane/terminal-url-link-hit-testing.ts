@@ -277,7 +277,7 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   const sourceOwner = deps.sourceOwner ?? { kind: 'local' }
   if (deps.forceDestination) {
     openHttpLink(url, {
-      allowRuntimeInApp: true,
+      allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
@@ -289,7 +289,7 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
     // Why: the modifier states a destination outright, so it also skips the
     // one-time routing prompt; openHttpLink resolves which destination it means.
     openHttpLink(url, {
-      allowRuntimeInApp: true,
+      allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
       modifierHeld: true,
       sourceOwner
@@ -301,7 +301,7 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   const preferenceDecision =
     sourceOwner.kind === 'local' ? deps.requestOpenLinksInAppPreference?.(url) : null
   if (preferenceDecision === null || preferenceDecision === undefined) {
-    openHttpLink(url, { allowRuntimeInApp: true, worktreeId: deps.worktreeId, sourceOwner })
+    openHttpLink(url, { allowRemoteInApp: true, worktreeId: deps.worktreeId, sourceOwner })
     return
   }
 
@@ -311,7 +311,7 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   void Promise.resolve(preferenceDecision)
     .then((openInOrca) => {
       openHttpLink(url, {
-        allowRuntimeInApp: true,
+        allowRemoteInApp: true,
         worktreeId: deps.worktreeId,
         forceSystemBrowser: !openInOrca,
         sourceOwner
@@ -319,7 +319,7 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
     })
     .catch(() => {
       openHttpLink(url, {
-        allowRuntimeInApp: true,
+        allowRemoteInApp: true,
         worktreeId: deps.worktreeId,
         forceSystemBrowser: true,
         sourceOwner

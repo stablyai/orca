@@ -1,3 +1,4 @@
+import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type {
@@ -32,6 +33,8 @@ import type {
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
 
+export type CloseActiveTabPayload = { sourceId: string }
+
 export type UiCommandEventApi = {
   get: () => Promise<PersistedUIState>
   set: (args: Partial<PersistedUIState>) => Promise<void>
@@ -46,6 +49,10 @@ export type UiCommandEventApi = {
   consumePendingOpenSettings: () => Promise<boolean>
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
+  /** OS "Open With" markdown paths pushed while a renderer is already listening. */
+  onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void) => () => void
+  /** Drains the "Open With" paths queued before this renderer's listener attached. */
+  consumePendingMarkdownFileOpens: () => Promise<MarkdownDocument[]>
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void
   onOpenCrashReport: (callback: () => void) => () => void
@@ -104,8 +111,11 @@ export type UiCommandEventApi = {
   onReloadBrowserPage: (callback: () => void) => () => void
   onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
   onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
+  onScrollBrowserPage?: (
+    callback: (event: { browserPageId: string; deltaX: number; deltaY: number }) => void
+  ) => () => void
   onHardReloadBrowserPage: (callback: () => void) => () => void
-  onCloseActiveTab: (callback: () => void) => () => void
+  onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
   onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
@@ -167,7 +177,10 @@ export type UiCommandEventApi = {
       paneRuntimeId: number
       direction: 'horizontal' | 'vertical'
       command?: string
+      worktreeId?: string
+      sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
+      newLeafId?: string
     }) => void
   ) => () => void
   onRenameTerminal: (

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import type {
   AgentStatusOrchestrationContext,
@@ -10,7 +10,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { Button } from '@/components/ui/button'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
-import { NativeChatComposer } from './NativeChatComposer'
+import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
@@ -21,6 +21,7 @@ import { useNativeChatFileLinkContext } from './use-native-chat-file-link-contex
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { translate } from '@/i18n/i18n'
 import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
+import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
@@ -45,6 +46,9 @@ export function NativeChatStructuredSession(props: {
     () => structuredAgentSessionPaneKey(props.tabId, props.sessionId),
     [props.sessionId, props.tabId]
   )
+  const rootRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<NativeChatComposerHandle>(null)
+  useNativeChatPasteBridge({ rootRef, composerRef })
   const session = useMemo<NativeChatLiveSession>(
     () => ({
       messages: controller.messages,
@@ -117,6 +121,7 @@ export function NativeChatStructuredSession(props: {
 
   return (
     <div
+      ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
       tabIndex={-1}
@@ -136,6 +141,8 @@ export function NativeChatStructuredSession(props: {
             isWorking={controller.isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
+            workingStartedAt={null}
+            showTurnStatus={props.agent === 'codex'}
             onLinkClick={fileLinkClick}
             allowFileUriLinks={fileLinkClick !== undefined}
           />
@@ -220,6 +227,7 @@ export function NativeChatStructuredSession(props: {
       ) : null}
       {prompt ? null : (
         <NativeChatComposer
+          ref={composerRef}
           terminalTabId={props.tabId}
           paneKey={paneKey}
           targetPtyId={null}

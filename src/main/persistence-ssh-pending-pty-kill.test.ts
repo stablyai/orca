@@ -171,6 +171,9 @@ describe('Store SSH pending PTY kills', () => {
       .getSshRemotePtyLeases('ssh-1')
       .filter((lease) => lease.pendingKill !== undefined)
     expect(persisted).toHaveLength(MAX_SSH_PENDING_PTY_KILLS_PER_TARGET)
+    expect(reloaded.getSshRemotePtyLeases('ssh-1')).toHaveLength(
+      MAX_SSH_PENDING_PTY_KILLS_PER_TARGET
+    )
     // Newest kept: the oldest orders are the ones least likely to still name a live process.
     expect(persisted.some((lease) => lease.ptyId === `pty-${total - 1}`)).toBe(true)
     expect(persisted.some((lease) => lease.ptyId === 'pty-0')).toBe(false)
@@ -195,6 +198,40 @@ describe('Store SSH pending PTY kills', () => {
       incarnationId: 'inc-a',
       attempts: 1
     })
+  })
+
+  it('starts a fresh TTL and attempt count when a relay id names a new incarnation', async () => {
+    const store = await createStore()
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW,
+      incarnationId: 'inc-a',
+      attempts: 0
+    })
+    store.noteSshRemotePtyKillReplayAttempt('ssh-1', 'pty-1')
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW + 5000,
+      incarnationId: 'inc-b',
+      attempts: 0
+    })
+
+    expect(store.getSshRemotePtyKillIntents('ssh-1', NOW)[0]?.intent).toEqual({
+      requestedAt: NOW + 5000,
+      incarnationId: 'inc-b',
+      attempts: 0
+    })
+  })
+
+  it('removes a synthetic lease when its only pending intent expires', async () => {
+    const store = await createStore()
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW,
+      incarnationId: 'inc-a',
+      attempts: 0
+    })
+
+    store.pruneExpiredSshRemotePtyKillIntents('ssh-1', NOW + SSH_PENDING_PTY_KILL_TTL_MS + 1)
+
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
   })
 
   it('scopes intents to their own target', async () => {

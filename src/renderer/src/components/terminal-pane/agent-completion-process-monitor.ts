@@ -146,6 +146,7 @@ export function createAgentCompletionProcessMonitor({
     const pendingTitleIdAtRequest = priority === 'pending-title' ? pendingTitle.get()?.id : null
     enqueueAgentProcessInspection({
       priority,
+      canRun: () => !state.disposed,
       run: async () => {
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
@@ -199,7 +200,11 @@ export function createAgentCompletionProcessMonitor({
     return (
       state.hasAgentRunEvidence ||
       state.lastForegroundAgent !== null ||
-      options.shouldPollProcessCadence?.() !== false
+      (options.shouldPollProcessCadence?.() !== false &&
+        options.shouldPollNoEvidenceProcessCadence?.() !== false) ||
+      (options.shouldPollProcessCadence?.() !== false &&
+        state.lastPaneActivityAt !== null &&
+        Date.now() - state.lastPaneActivityAt < NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
     )
   }
 
@@ -215,7 +220,7 @@ export function createAgentCompletionProcessMonitor({
     }
     if (
       options.isProcessInspectionCostly?.() === true &&
-      (state.lastPaneActivityAt === 0 ||
+      (state.lastPaneActivityAt === null ||
         Date.now() - state.lastPaneActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
     ) {
       return 'no-evidence'

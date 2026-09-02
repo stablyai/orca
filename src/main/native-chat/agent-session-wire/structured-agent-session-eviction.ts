@@ -56,7 +56,15 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         }
       }
     },
-    { name: 'drain-published', run: (context) => context.eventSink.drained() },
+    {
+      name: 'drain-published',
+      run: async (context) => {
+        const barrier = await context.eventSink.drained()
+        if (!barrier.ok) {
+          throw barrier.error
+        }
+      }
+    },
     { name: 'stop-publishing', run: (context) => context.eventSink.unbind() },
     { name: 'close-sink', run: (context) => context.eventSink.close() },
     // Why: the runtime caches one sink per session id and hands the SAME instance to the next

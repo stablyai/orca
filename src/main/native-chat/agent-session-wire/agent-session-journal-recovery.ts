@@ -16,10 +16,8 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import { importLegacyTranscriptIntoJournal } from '../agent-session-journal/journal-legacy-import'
 import { loadJournal } from '../agent-session-journal/journal-open'
-import {
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 
 export type AgentSessionJournalRecovery = {
   trigger: 'journal_corrupt' | 'schema_unreadable'

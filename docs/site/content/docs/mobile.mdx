@@ -1,0 +1,120 @@
+---
+title: Mobile companion
+description: Pair the Orca mobile app to your desktop to monitor agents and unstick worktrees from your phone.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+The Orca mobile companion is an iOS/Android app that pairs with your desktop Orca and gives you a read-mostly view of running agents — agent status, recent terminal scrollback, and the controls you actually want from a phone (replying to a prompt, sleeping a worktree, reviewing source control, switching agent accounts). Pairing is one-time and the desktop is always the source of truth.
+
+<Callout title="Beta">
+  The mobile companion is in beta. Install iOS from the [App
+  Store](https://apps.apple.com/us/app/orca-ide/id6766130217), join the [TestFlight preview
+  channel](https://testflight.apple.com/join/YjeGMQBA), or install Android from the [current APK
+  0.0.46](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.46/app-release.apk).
+</Callout>
+
+## What you can do from mobile
+
+- See every worktree, its agent, and its current status (working / done / waiting on input). Mobile lists worktrees from every host you're connected to (local desktops and remote Orca servers) in a single view, so switching between them doesn't need a device change.
+- Browse the workspace's full file tree from mobile — including deeply nested paths — so you can jump into any file without waiting for the desktop.
+- Open supported agent sessions in **Chat UI** (a chat-style transcript) or the raw terminal. Set the device default under Settings → Chat UI, or long-press a session tab to switch that tab only.
+- Hydrate recent terminal scrollback so you can read what an agent did or asked. Markdown in chat-style views can render **Mermaid** diagrams when the message includes them.
+- Select, copy, and paste text from the mobile terminal view — long-press to select, share-sheet to paste back into a reply.
+- Use the terminal accessory row for keys that are awkward on a phone keyboard, including `Tab` and `Shift+Tab`, or switch to **Live** when each typed character should go straight to the active terminal.
+- Send a short reply (`continue`, `yes`, free-text) when an agent is waiting on input, attach a photo or file, or tap the microphone to dictate a response. In **Live** mode, dictated text is inserted into the active terminal without pressing Return for you. In Chat UI, attached images show as thumbnails on your message and can be sent with or without text.
+- Run **Quick Commands** from the session tab strip — saved terminal commands or agent prompts that sync with the desktop list.
+- Long-press a session tab for bulk close actions (**Close Other Tabs**, **Close Tabs to the Left**, **Close Tabs to the Right**). Unsaved markdown tabs and pinned tabs are skipped.
+- Open a browser session in **Web** or **Mobile** view when you need to check a responsive page from your phone.
+- Open Source Control for a worktree to review changed files, stage or unstage, and commit from your phone.
+- Switch your active agent account and see usage / rate-limit state on the go. When Codex has earned reset credits, spend one from the accounts screen.
+- Create a workspace from mobile with the same Smart source modes as desktop: Smart, GitHub, Linear, GitLab, Branch, and Name. With **multiple connected desktops**, **New Workspace** asks which host should create it first (one connected host skips the picker).
+- Open a host card's **⋯** menu for **Edit**, **Connect**, **Remove**, and related actions (long-press still works as a shortcut).
+- Edit a saved host's display name or connection address without re-pairing (for example when the desktop moves between home LAN and Tailscale).
+- Get push notifications when an agent finishes, mirroring [desktop notifications](/docs/notifications).
+
+The mobile app is intentionally not a full editor — it's a remote control for the desktop you already have running.
+
+## Pairing
+
+1. On desktop, open Orca's pairing flow from the account / status menu. Orca shows a one-time pairing code.
+1. On mobile, open the Orca companion app and choose **Pair**, then paste the code. (You can also follow a deep link from the desktop directly into the mobile pairing screen.)
+1. Prefer **Orca Relay** for pairing when it is available — sign-in is required for Relay only. The local network address picker is optional on Relay (expand it when you want a LAN fast path); LAN pairing still needs an address.
+1. The pairing exchange establishes a device token for that phone; keep desktop reachable on the path you chose.
+
+Closing the desktop app drops a direct/LAN session until you reopen it. Relay-backed pairing follows the desktop Relay connection — reopen desktop if the host goes offline.
+
+## Chat UI
+
+For chat-capable agents (Claude, Codex, and others Orca recognizes), mobile can open the session in **Chat UI** instead of the raw terminal — the same idea as desktop's [Chat UI](/docs/agents/native-chat): a readable transcript, composer, permissions/questions, and image attachments.
+
+- **Device default** — on first launch, mobile asks how sessions should open on this phone. Change it later under **Settings → Chat UI → Open sessions in Chat UI**. The default is terminal until you choose Chat UI.
+- **Per-session** — long-press a session tab and choose **Switch to chat view** or **Switch to terminal view**. That override sticks for that tab without changing the device default.
+- **Composer** — type a reply, `@` mention workspace files, use agent-aware `/` slash commands from the shared catalog (Claude vs Codex sets, with descriptions), attach a photo, or dictate. Attached images appear as removable thumbnails and ride along on send (including image-only sends and multi-image attachments).
+- **Model and session options** — the composer shows a pill row for the current model and session options. Tap it to pick a model or option (including direct Codex model selection) without dropping into the raw terminal.
+- **Desktop still owns the agent** — Chat UI is a view over the paired desktop session, not a separate cloud agent.
+
+## Quick Commands
+
+From a worktree session, open **Quick Commands** from the session tab strip (next to new terminal). Commands are the same saved list as desktop and sync both ways.
+
+- **Terminal Command** — paste or run a shell command in a new tab (optionally without pressing Enter so you can edit first).
+- **Agent Prompt** — open a chosen agent with a saved prompt body.
+- Copy a command body to the clipboard from the row's copy control (disabled when the body is empty).
+- Scope commands globally or to the current project. Add, edit, and delete from the sheet; the desktop host enforces the shared list cap.
+
+If the paired desktop is too old, the launcher is disabled until you update desktop.
+
+## Session tabs
+
+Long-press a tab in the session strip for tab actions, including **Close**, **Close Other Tabs**, **Close Tabs to the Left**, and **Close Tabs to the Right**. Bulk close skips dirty markdown tabs (mobile has no save prompt on close) and pinned tabs. For chat-capable agent tabs, the same long-press sheet can switch Chat UI ↔ terminal.
+
+## Account switcher
+
+The mobile app exposes the same account switcher as the desktop status bar, including inline usage for inactive accounts. The accounts screen shows reset countdowns when a provider reports reset timestamps for its session or weekly window. Switching here switches on the paired desktop.
+
+When the active Codex account has earned **rate-limit reset** credits, the accounts screen shows how many are available (and when the next one expires) and a **Use reset** action. Confirming spends one credit for the current Codex target (host or WSL distro) and refreshes eligible rate-limit windows. The phone journals the attempt so a retry after a flaky connection does not double-spend. Outcomes include success, nothing eligible to reset, no credit left, or that a reset was already applied. See also [Usage & rate-limit tracking](/docs/agents/usage-tracking).
+
+## Create a workspace
+
+From the mobile home screen, open **Create Workspace** / **New Workspace** and choose a source mode. **Smart** searches across supported task providers and branches; the provider-specific modes narrow creation to GitHub, Linear, GitLab, a branch, or a plain workspace name. After selecting a source, use **Advanced** for naming and branch controls before creating the workspace on the paired desktop. If more than one desktop is connected, pick the host first (the picker shows each endpoint so similar names stay distinguishable). With no connected desktops, the action stays disabled.
+
+## Edit a paired host
+
+On the hosts list, tap the host card's **⋯** button (or long-press the card) and choose **Edit host**.
+
+- **Name** — display name on this phone only.
+- **Address** — IP, `host:port`, or `ws://` / `wss://`. Missing port keeps the current port (or defaults to `6768`). Address edits only change where this phone connects; they do **not** re-pair. Use this when the same desktop is reachable at a different path (for example home LAN vs Tailscale).
+
+Saving an address change reconnects to the new endpoint. Pairing token stays the same.
+
+## Source control on mobile
+
+From a worktree session, tap the branch icon to open Source Control. Use it for small follow-ups: check the branch state, inspect changed paths, stage or unstage files, and commit once the staged set is ready. If the branch already has a GitHub pull request, use **Link an existing PR** from the empty PR state to attach it instead of creating a new one.
+
+## Browser view on mobile
+
+The mobile browser pane has a **Web / Mobile** switch. Use **Web** to see the normal page and **Mobile** to ask the paired desktop browser for a phone-sized responsive viewport.
+
+## Terminal settings
+
+The mobile terminal has a dedicated **Terminal settings** screen (Settings → Terminal):
+
+- **Text size** — a 50%–200% baseline zoom the WebView applies on top of fit-to-width. Pinch-to-zoom in the terminal snaps to the same presets and persists. The setting is per-device and doesn't change the desktop terminal.
+- **Autocomplete & autocorrect** — off by default so the OS never rewrites commands, flags, or paths in the command bar. Turn it on for phone-style typing; the live keyboard-capture input still streams raw keystrokes either way.
+
+## Troubleshooting
+
+- **Stuck spinner on a worktree** — the phone tracks a heartbeat from the desktop agent process. If the desktop says idle but the phone shows working, force-refresh the worktree row to sync state.
+- **Pairing fails** — make sure your desktop and phone are signed into the same Orca account. Pairing codes expire after a few minutes; generate a fresh one if it's been sitting on the screen.
+- **Authentication failed / pairing invalid** — the desktop no longer accepts this device token (for example after desktop cleared paired devices). Try **Retry** on the banner first (transient rejections can recover without re-pairing). If it keeps failing, use **Re-pair** from desktop, or **Remove** the host and pair again.
+- **Update Orca Mobile / Update Orca on your computer** — the phone and desktop speak a versioned mobile protocol. If either side is too old, mobile blocks that host and points you at the App Store (iOS), [GitHub Releases](https://github.com/stablyai/orca/releases) (Android APK or desktop), then back to hosts. After updating, refresh the connection; if the message stays, remove the host and pair again.
+- **Quick Commands unavailable** — update the paired desktop so it advertises the quick-commands capability.
+- **Can't reach desktop** — phone and desktop must share a network path (LAN, Tailscale, or the pairing path you used). Closing the desktop app drops the connection; reopen desktop and the phone reconnects automatically.
+
+<Callout title="Next steps">
+  Pair mobile notifications with [desktop notifications](/docs/notifications) so agent-finished
+  alerts reach the right device. For headless machines, use [Remote Orca
+  Server](/docs/remote-servers) mobile pairing. Track provider usage on desktop and mobile under
+  [Usage & rate-limit tracking](/docs/agents/usage-tracking).
+</Callout>

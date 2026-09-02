@@ -53,6 +53,7 @@ type RawListedModel = {
   supportsEffort?: unknown
   supportedEffortLevels?: unknown
   supportsFastMode?: unknown
+  disabled?: unknown
 }
 
 function toListedModel(value: unknown): ClaudeListedModel | null {
@@ -61,7 +62,10 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
   }
   const raw = value as RawListedModel
   const id = typeof raw.value === 'string' ? raw.value.trim() : ''
-  if (!id) {
+  // Why: the CLI advertises models it cannot run yet as disabled placeholder
+  // rows ("Fable 5.1 (disabled)", value `cc-update-required-1`); selecting one
+  // sends that sentinel straight to `--model`.
+  if (!id || raw.disabled === true) {
     return null
   }
   const label = typeof raw.displayName === 'string' && raw.displayName.trim() ? raw.displayName : id

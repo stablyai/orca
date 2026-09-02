@@ -65,6 +65,8 @@ const storeState = {
   deleteBrowserPageAnnotation: () => undefined,
   clearBrowserPageAnnotations: () => undefined,
   recordFeatureInteraction: () => undefined,
+  recordWorkspaceDocVisit: () => undefined,
+  workspaceDocHistory: [],
   openFile: () => 'file-1'
 }
 

@@ -78,6 +78,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         submitLinkedPR,
         workspaceName,
         nameWasGenerated,
+        nameIsAutoManaged,
         submitBaseBranch,
         submitCompareBaseRef,
         submitPushTarget,
@@ -155,6 +156,9 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           nameWasGenerated,
+          ...(createDisplayName
+            ? { displayNameKind: nameIsAutoManaged ? ('generated' as const) : ('user' as const) }
+            : {}),
           ...(!backendStartup && startupPlan?.draftPrompt
             ? { startupDraft: startupPlan.draftPrompt }
             : {}),

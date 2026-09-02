@@ -85,6 +85,8 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
     status: 'ready',
     streaming: null,
     onSend: vi.fn().mockResolvedValue(true),
+    sendSurfaceId: 'tab-a',
+    getSendCompletionGeneration: () => 0,
     pending: [],
     composerText: '',
     onComposerTextChange: vi.fn(),

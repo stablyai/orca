@@ -4,7 +4,10 @@ import type {
   CreateWorktreeResult,
   AdoptProvisionedRootArgs
 } from '../../../../shared/worktree/create-types'
-import { withWorktreeSpan } from '../../../observability/instrumentation'
+import {
+  addWorktreeCreatePhaseAttributes,
+  withWorktreeSpan
+} from '../../../observability/instrumentation'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import type { WorkspaceSource } from '../../../../shared/telemetry-events'
 import {
@@ -36,7 +39,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
       // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
-      return withWorktreeSpan({ stage: 'create' }, async () => {
+      return withWorktreeSpan({ stage: 'create' }, async (span) => {
         const repo = store.getRepo(args.repoId)
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
@@ -74,6 +77,9 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           throw error
         }
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+        if (result.timing) {
+          addWorktreeCreatePhaseAttributes(span, result.timing)
+        }
 
         // Why: reaching here means create succeeded (helpers throw); skip a separate workspace_initialized (telemetry-plan.md§Deferred); never send the branch name.
         track('workspace_created', {

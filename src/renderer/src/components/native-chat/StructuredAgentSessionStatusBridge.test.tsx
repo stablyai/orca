@@ -78,7 +78,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
-import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
+import {
+  getStructuredAgentSessionTabs,
+  StructuredAgentSessionStatusBridge
+} from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 
@@ -161,6 +164,34 @@ describe('StructuredAgentSessionStatusBridge', () => {
   afterEach(() => {
     cleanup()
     resetStructuredAgentSessionReadOwnersForTests()
+  })
+
+  it('reuses the structured-tab projection for an unchanged tab map', () => {
+    const secondStructuredTab = {
+      ...structuredTab,
+      id: 'structured-tab-2',
+      entityId: 'session-2'
+    }
+    const tabsByWorktree: Record<string, Tab[]> = {
+      'wt-1': [structuredTab],
+      'wt-2': [secondStructuredTab]
+    }
+
+    const first = getStructuredAgentSessionTabs(tabsByWorktree)
+    const second = getStructuredAgentSessionTabs(tabsByWorktree)
+
+    expect(second).toBe(first)
+    expect(second).toEqual([structuredTab, secondStructuredTab])
+
+    const nextTabsByWorktree = {
+      ...tabsByWorktree,
+      'wt-3': [{ ...structuredTab, id: 'structured-tab-3', entityId: 'session-3' }]
+    }
+    expect(getStructuredAgentSessionTabs(nextTabsByWorktree)).toEqual([
+      structuredTab,
+      secondStructuredTab,
+      nextTabsByWorktree['wt-3'][0]
+    ])
   })
 
   it('keeps restored inactive tabs transport-neutral', async () => {

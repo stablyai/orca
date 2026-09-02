@@ -20,6 +20,7 @@
 
 import { rebuild } from '@electron/rebuild'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { stageWindowsProcessTreeNodeAddonApiHeaders } from './windows-process-tree-gyp-rebuild.mjs'
 import {
   copyFileSync,
   existsSync,
@@ -27,7 +28,6 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
   writeFileSync
 } from 'node:fs'
 import { platform as osPlatform } from 'node:os'
@@ -43,6 +43,15 @@ try {
 }
 const rebuildPlatform = cliOptions.platform ?? osPlatform()
 const rebuildArch = cliOptions.arch ?? process.arch
+// Why: resolve the Electron download target once so the child installer and the
+// usability check can never disagree about which binary should be on disk.
+const electronInstallPlatform =
+  cliOptions.platform ||
+  process.env.ELECTRON_INSTALL_PLATFORM ||
+  process.env.npm_config_platform ||
+  rebuildPlatform
+const electronInstallArch =
+  cliOptions.arch || process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || rebuildArch
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
 const electronVersion = JSON.parse(
   readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
@@ -132,6 +141,14 @@ if (!ignoreModules.includes('cpu-features')) {
   }
 }
 
+if (
+  rebuildPlatform === 'win32' &&
+  modulesToRebuild.includes('@vscode/windows-process-tree') &&
+  existsSync(join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json'))
+) {
+  stageWindowsProcessTreeNodeAddonApiHeaders()
+}
+
 try {
   await rebuild({
     buildPath: projectDir,
@@ -199,6 +216,7 @@ function restoreNodePtyWindowsConptyRuntime() {
 }
 
 function ensureElectronPackageInstalled() {
+  repairElectronPathFile()
   if (electronPackageIsUsable()) {
     return
   }
@@ -207,7 +225,6 @@ function ensureElectronPackageInstalled() {
   // writing path.txt. Electron 42's lazy require() would run install.js here,
   // so inspect dist/ directly and keep using our strict partial-extract checks.
   console.log('[rebuild] Electron package binary is missing; installing Electron package binary.')
-  resetPartialElectronInstall()
   try {
     runElectronPackageBinaryInstall()
   } catch (/** @type {any} */ err) {
@@ -219,37 +236,46 @@ function ensureElectronPackageInstalled() {
     process.exit(1)
   }
 
+  repairElectronPathFile()
   if (!electronPackageIsUsable()) {
-    const repaired = repairElectronPathFile()
-    if (!repaired || !electronPackageIsUsable()) {
-      logElectronInstallDiagnostics()
-      if (continuePostinstallWithoutElectron()) {
-        process.exit(0)
-      }
-      console.error('[rebuild] Electron package is still unavailable after retry.')
-      process.exit(1)
+    logElectronInstallDiagnostics()
+    if (continuePostinstallWithoutElectron()) {
+      process.exit(0)
     }
+    console.error('[rebuild] Electron package is still unavailable after retry.')
+    process.exit(1)
   }
 }
 
 function electronPackageIsUsable() {
   try {
-    const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
-      .trim()
-      .replace(/^v/, '')
     const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
     return (
-      installedVersion === electronVersion &&
-      installedPlatformPath === getElectronPlatformPath() &&
-      existsSync(getElectronExecutablePath())
+      electronDistMatchesPackage(getElectronExecutablePath()) &&
+      installedPlatformPath === getElectronPlatformPath()
     )
   } catch {
     return false
   }
 }
 
+function electronDistMatchesPackage(electronExecutable) {
+  try {
+    const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
+      .trim()
+      .replace(/^v/, '')
+    return installedVersion === electronVersion && existsSync(electronExecutable)
+  } catch {
+    return false
+  }
+}
+
 function runElectronPackageBinaryInstall() {
-  const env = { ...process.env }
+  const env = {
+    ...process.env,
+    ELECTRON_INSTALL_PLATFORM: electronInstallPlatform,
+    ELECTRON_INSTALL_ARCH: electronInstallArch
+  }
   delete env.ELECTRON_SKIP_BINARY_DOWNLOAD
   delete env.npm_config_electron_skip_binary_download
 
@@ -273,13 +299,6 @@ function runElectronPackageBinaryInstall() {
   }
 }
 
-function resetPartialElectronInstall() {
-  // Why: Electron's installer can leave a partial dist/ tree behind after
-  // skipped or interrupted postinstall runs; retry from a clean target.
-  rmSync(resolve(electronPackageDir, 'dist'), { recursive: true, force: true })
-  rmSync(resolve(electronPackageDir, 'path.txt'), { force: true })
-}
-
 function continuePostinstallWithoutElectron() {
   if (!isPostinstall() || process.env.ORCA_STRICT_ELECTRON_INSTALL === '1') {
     return false
@@ -294,16 +313,22 @@ function continuePostinstallWithoutElectron() {
 
 function repairElectronPathFile() {
   const platformPath = getElectronPlatformPath()
-  if (!existsSync(getElectronExecutablePath())) {
-    return false
+  const electronExecutable = resolve(electronPackageDir, 'dist', platformPath)
+  if (!electronDistMatchesPackage(electronExecutable)) {
+    return
   }
 
-  // Why: Electron's install script has exited successfully in CI after
-  // extraction without leaving path.txt. The package main only needs this file
-  // to point at the already-extracted executable.
-  writeFileSync(resolve(electronPackageDir, 'path.txt'), platformPath)
-  console.log(`[rebuild] Repaired Electron path.txt -> ${platformPath}`)
-  return true
+  const pathFile = resolve(electronPackageDir, 'path.txt')
+  let currentPath = ''
+  try {
+    currentPath = readFileSync(pathFile, 'utf8')
+  } catch {
+    // Missing path.txt is the common CI failure this script repairs.
+  }
+  if (currentPath !== platformPath) {
+    writeFileSync(pathFile, platformPath)
+    console.log(`[rebuild] Repaired Electron path.txt -> ${platformPath}`)
+  }
 }
 
 function logElectronInstallDiagnostics() {
@@ -327,9 +352,7 @@ function safeReaddir(targetPath) {
 }
 
 function getElectronPlatformPath() {
-  const targetPlatform =
-    process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || rebuildPlatform
-  switch (targetPlatform) {
+  switch (electronInstallPlatform) {
     case 'mas':
     case 'darwin':
       return 'Electron.app/Contents/MacOS/Electron'
@@ -340,7 +363,7 @@ function getElectronPlatformPath() {
     case 'win32':
       return 'electron.exe'
     default:
-      throw new Error(`Electron builds are not available on platform: ${targetPlatform}`)
+      throw new Error(`Electron builds are not available on platform: ${electronInstallPlatform}`)
   }
 }
 

@@ -18,8 +18,13 @@ const STRUCTURED_TUI_PROCESS_POLL_MS = 50
 
 function descendants(rows: ProcessRow[], rootPid: number): (ProcessRow & { depth: number })[] {
   const children = new Map<number, ProcessRow[]>()
+  const rowByPid = new Map<number, ProcessRow>()
   for (const row of rows) {
     children.set(row.ppid, [...(children.get(row.ppid) ?? []), row])
+    // Array#find below was first-match-wins for duplicate PIDs; retain that contract in the index.
+    if (!rowByPid.has(row.pid)) {
+      rowByPid.set(row.pid, row)
+    }
   }
   const found: (ProcessRow & { depth: number })[] = []
   const pending = [{ pid: rootPid, depth: 0 }]
@@ -30,7 +35,7 @@ function descendants(rows: ProcessRow[], rootPid: number): (ProcessRow & { depth
       continue
     }
     seen.add(current.pid)
-    const row = rows.find((candidate) => candidate.pid === current.pid)
+    const row = rowByPid.get(current.pid)
     if (row) {
       found.push({ ...row, depth: current.depth })
     }

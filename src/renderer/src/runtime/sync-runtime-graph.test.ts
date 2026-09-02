@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
+  buildRuntimeMobileAgentStatusProjectionForTests,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
@@ -42,6 +43,20 @@ function makeSharedOverrides(): Partial<AppState> {
 }
 
 describe('getRuntimeMobileSessionSyncKey', () => {
+  it('includes assistant preview provenance in the mobile status projection', () => {
+    const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+    const base = makeAgentStatusEntry({ paneKey, lastAssistantMessage: 'tool output' })
+    const flagged = makeAgentStatusEntry({
+      paneKey,
+      lastAssistantMessage: 'tool output',
+      lastAssistantMessageIsToolOutput: true
+    })
+
+    expect(buildRuntimeMobileAgentStatusProjectionForTests({ [paneKey]: base })).not.toBe(
+      buildRuntimeMobileAgentStatusProjectionForTests({ [paneKey]: flagged })
+    )
+  })
+
   it('changes when mobile markdown tab state changes', () => {
     const base = makeState({
       openFiles: [

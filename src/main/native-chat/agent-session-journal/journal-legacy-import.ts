@@ -11,6 +11,7 @@
 // writing; a later structured resume rolls the epoch again and rebuilds.
 
 import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentJournalCursor,
@@ -27,12 +28,12 @@ import {
   decodeOmpTranscriptLine
 } from '../transcript-line-decoders'
 import { decodeTranscriptStream } from '../transcript-stream-lines'
-import { putJournalBlob } from './journal-blob-store'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import {
   boundInlineText,
   boundPayload,
+  boundToolInput,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from './journal-payload-bounds'
@@ -44,6 +45,8 @@ export type LegacyImportOptions = ResolveSessionFileOptions & {
   limits?: JournalPayloadLimits
   decodedMessageIdentities?: true
 }
+
+const MAX_LEGACY_IMPORT_SOURCE_BYTES = 16 * 1024 * 1024
 
 export type LegacyImportResult =
   | { ok: true; epoch: string; cursor: AgentJournalCursor; imported: number }
@@ -59,10 +62,7 @@ export async function appendLegacyTranscriptMessages(input: {
   let appended = 0
   for (const message of input.messages) {
     const mapped = legacyItemBody(message, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-    for (const blob of mapped.blobs) {
-      await putJournalBlob(input.journal.directory, blob.digest, blob.payload)
-    }
-    await input.journal.appendItem(
+    await input.journal.appendItemWithBlobs(
       {
         provider: 'legacy',
         agent: input.agent,
@@ -70,6 +70,7 @@ export async function appendLegacyTranscriptMessages(input: {
         recordId: message.id
       },
       mapped.body,
+      mapped.blobs,
       { fence: input.fence, observedAt: message.timestamp ?? undefined }
     )
     appended += 1
@@ -96,6 +97,21 @@ export async function importLegacyTranscriptIntoJournal(input: {
     return { ok: false, error: `No transcript found for ${input.agent} session ${input.sessionId}` }
   }
 
+  // Refuse an oversized source before decoding any prefix. Importing a prefix
+  // would make the restored timeline look complete while silently omitting
+  // later records; callers can retry after reducing the source or quota.
+  try {
+    const sourceBytes = (await stat(filePath)).size
+    if (sourceBytes > MAX_LEGACY_IMPORT_SOURCE_BYTES) {
+      return {
+        ok: false,
+        error: `Legacy transcript exceeds the ${MAX_LEGACY_IMPORT_SOURCE_BYTES}-byte import bound`
+      }
+    }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+
   let decoded: { messages: NativeChatMessage[]; identities: AgentJournalItemIdentity[] }
   try {
     decoded = await decodeWithIdentities({
@@ -109,6 +125,9 @@ export async function importLegacyTranscriptIntoJournal(input: {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 
+  if (decoded.identities.length !== decoded.messages.length) {
+    return { ok: false, error: 'Legacy transcript identity coverage is incomplete' }
+  }
   const replacement: JournalReplacementItem[] = []
   for (const [index, message] of decoded.messages.entries()) {
     const identity = decoded.identities[index]
@@ -116,12 +135,10 @@ export async function importLegacyTranscriptIntoJournal(input: {
       continue
     }
     const mapped = legacyItemBody(message, limits)
-    for (const blob of mapped.blobs) {
-      await putJournalBlob(input.journal.directory, blob.digest, blob.payload)
-    }
     replacement.push({
       identity,
       body: mapped.body,
+      blobs: mapped.blobs,
       observedAt: message.timestamp ?? undefined
     })
   }
@@ -199,7 +216,15 @@ function legacyItemBody(
   const only = message.blocks.length === 1 ? message.blocks[0] : undefined
   if (only?.type === 'tool-call') {
     return {
-      body: { kind: 'tool-call', name: only.name, input: only.input, state: 'completed' },
+      // Legacy transcripts are untrusted and can contain arbitrarily large
+      // tool arguments. Keep them on the same bounded path as live events
+      // before the replacement epoch is staged or published.
+      body: {
+        kind: 'tool-call',
+        name: only.name,
+        input: boundToolInput(only.input, limits),
+        state: 'completed'
+      },
       blobs: []
     }
   }

@@ -55,6 +55,7 @@ vi.mock('lucide-react', () => ({
   ArrowRight: () => null,
   ArrowUp: () => null,
   Columns2: () => null,
+  Copy: () => null,
   ListX: () => null,
   MessageSquare: () => null,
   PanelBottomClose: () => null,
@@ -70,6 +71,8 @@ vi.mock('lucide-react', () => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
@@ -288,5 +291,61 @@ describe('SortableTabContextMenu', () => {
 
     expect(container.textContent).not.toContain('Move Tab to Split')
     expect(container.textContent).toContain('Split terminal right')
+  })
+
+  describe('copy session id', () => {
+    const LEAF = '11111111-1111-4111-8111-111111111111'
+
+    function withLiveAgent(sessionId: string | null): void {
+      storeMock.state = {
+        ...storeMock.state,
+        terminalLayoutsByTabId: {
+          'term-1': { root: { type: 'leaf', leafId: LEAF }, activeLeafId: LEAF }
+        },
+        agentStatusByPaneKey: {
+          [`term-1:${LEAF}`]: {
+            state: 'done',
+            prompt: '',
+            updatedAt: 1,
+            stateStartedAt: 1,
+            paneKey: `term-1:${LEAF}`,
+            agentType: 'claude',
+            stateHistory: [],
+            ...(sessionId ? { providerSession: { key: 'session_id', id: sessionId } } : {})
+          }
+        },
+        paneForegroundAgentByPaneKey: {}
+      }
+    }
+
+    it('omits the item for a tab with no agent', () => {
+      const { container } = renderMenu()
+
+      expect(container.textContent).not.toContain('Copy Session ID')
+    })
+
+    it('omits the item until the active agent reports a session id', () => {
+      withLiveAgent(null)
+      const { container } = renderMenu()
+
+      expect(container.textContent).not.toContain('Copy Session ID')
+    })
+
+    it('copies the active pane session id', async () => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      Object.assign(window, { api: { ui: { writeClipboardText } } })
+      withLiveAgent('session-abc')
+      const { container } = renderMenu()
+
+      act(() => getButton(container, 'Copy Session ID').click())
+      await vi.waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith('session-abc'))
+    })
+
+    it('does not resolve a session id while the menu is closed', () => {
+      withLiveAgent('session-abc')
+      const { container } = renderMenu({ open: false })
+
+      expect(container.textContent).not.toContain('Copy Session ID')
+    })
   })
 })

@@ -75,7 +75,7 @@ export function compareWorktreeSortLabel(
  * Smart mode requires `attentionByWorktree` — a per-worktree class +
  * timestamp map built once before sorting (see `buildAttentionByWorktree`).
  * Why non-optional: a forgotten caller would silently regress every worktree
- * to Class 4 (idle) and degrade the comparator to recent-activity ordering;
+ * to Class 5 (idle) and degrade the comparator to recent-activity ordering;
  * making the param required surfaces the omission as a typecheck error.
  */
 export function buildWorktreeComparator(
@@ -92,7 +92,7 @@ export function buildWorktreeComparator(
         const aw = attentionByWorktree.get(a.id) ?? IDLE
         const bw = attentionByWorktree.get(b.id) ?? IDLE
         return (
-          // Why: 1 < 2 < 3 < 4 — lower class outranks higher.
+          // Why: 1 < 2 < 3 < 4 < 5 — lower class outranks higher.
           aw.cls - bw.cls ||
           // Why: within a class, the more recent attention event ranks first.
           bw.attentionTimestamp - aw.attentionTimestamp ||
@@ -148,7 +148,7 @@ export function buildWorktreeComparator(
  * `agentStatusByPaneKey` carries the primary signal; `runtimePaneTitlesByTabId`
  * and `ptyIdsByTabId` enable the title-heuristic fallback for hookless agents
  * (Edge case 9 in the design doc). Why all three are non-optional: a forgotten
- * caller would silently regress every worktree to Class 4 or quietly disable
+ * caller would silently regress every worktree to Class 5 or quietly disable
  * the hookless-fallback path.
  */
 export function sortWorktreesSmart(

@@ -58,7 +58,8 @@ export function useChecksPanelConflictRefresh(model: ChecksPanelConflictRefreshI
       repoId: repo.id,
       worktreeId: activeWorktreeId ?? undefined,
       linkedPRNumber: linkedPR,
-      fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number
+      fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number,
+      reason: 'active'
     }).finally(() => {
       // Why: fetchPRForBranch can rerun this effect; only the current key clears the spinner so stale requests don't race newer branches.
       if (conflictSummaryRefreshKeyRef.current === refreshKey) {

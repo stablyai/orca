@@ -44,14 +44,18 @@ function getFolderScopeCandidateRepos(args: {
   repos: readonly Repo[]
 }): Repo[] {
   const groupIds = getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
-  const groupRepos = args.repos.filter(
-    (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
-  )
-  const pathRepos = args.repos.filter(
-    (repo) =>
-      !(typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
-      isPathInsideOrEqual(args.folderPath, repo.path)
-  )
+  // Classify each repo once. The previous pair of filters read every
+  // projectGroupId twice before applying the same path predicate.
+  const groupRepos: Repo[] = []
+  const pathRepos: Repo[] = []
+  for (const repo of args.repos) {
+    const projectGroupId = repo.projectGroupId
+    if (typeof projectGroupId === 'string' && groupIds.has(projectGroupId)) {
+      groupRepos.push(repo)
+    } else if (isPathInsideOrEqual(args.folderPath, repo.path)) {
+      pathRepos.push(repo)
+    }
+  }
   if (args.connectionId) {
     return [
       ...groupRepos,

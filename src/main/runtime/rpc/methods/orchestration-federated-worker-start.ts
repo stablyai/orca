@@ -160,6 +160,7 @@ export async function startFederatedWorker(args: {
           repo: params.repo,
           baseBranch: params.baseBranch,
           displayName: params.displayName,
+          ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
           comment: params.comment,
           setup: createsWorktree ? (params.setup ?? 'run') : undefined,
           setupSource: createsWorktree

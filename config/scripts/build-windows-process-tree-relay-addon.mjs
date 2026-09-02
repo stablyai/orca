@@ -29,11 +29,11 @@ import {
   readSync,
   writeFileSync
 } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
 import {
   nodeGypRebuildInvocation,
+  stageWindowsProcessTreeNodeAddonApiHeaders,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
 
@@ -96,10 +96,6 @@ function assertPatchApplied() {
 function applyWindowsProcessTreeBuildFixes() {
   const bindingPath = join(PACKAGE_DIR, 'binding.gyp')
   const processPath = join(PACKAGE_DIR, 'src', 'process.cc')
-  const nodeAddonApiDir = dirname(
-    createRequire(join(PACKAGE_DIR, 'package.json')).resolve('node-addon-api/package.json')
-  )
-  const stagedHeaderDir = join(PACKAGE_DIR, 'deps', 'node-addon-api')
   let bindingGyp = readFileSync(bindingPath, 'utf8')
   let processCc = readFileSync(processPath, 'utf8')
   const originalBinding = bindingGyp
@@ -134,10 +130,7 @@ function applyWindowsProcessTreeBuildFixes() {
   if (processCc !== originalProcess) {
     writeFileSync(processPath, processCc)
   }
-  mkdirSync(stagedHeaderDir, { recursive: true })
-  for (const header of ['napi.h', 'napi-inl.h', 'napi-inl.deprecated.h']) {
-    copyFileSync(join(nodeAddonApiDir, header), join(stagedHeaderDir, header))
-  }
+  stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)
   if (bindingGyp !== originalBinding || processCc !== originalProcess) {
     console.warn('[windows-process-tree] Repaired un-applied pnpm patch hunks before build.')
   }
