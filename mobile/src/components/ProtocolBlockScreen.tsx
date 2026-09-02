@@ -1,5 +1,10 @@
+import { useEffect, useState } from 'react'
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
+import {
+  ANDROID_RELEASES_PAGE_URL,
+  fetchLatestAndroidRelease
+} from '../mobile-release/android-update-check'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { CompatVerdict } from '../transport/protocol-compat'
 
@@ -12,11 +17,34 @@ type Props = {
 
 export function ProtocolBlockScreen({ verdict }: Props) {
   const isMobileTooOld = verdict.reason === 'mobile-too-old'
+  const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (Platform.OS === 'ios' || !isMobileTooOld) {
+      return
+    }
+    let active = true
+    fetchLatestAndroidRelease()
+      .then((release) => {
+        if (active && release) {
+          setAndroidApkUrl(release.apkUrl)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [isMobileTooOld])
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
     Platform.OS === 'ios'
       ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
-      : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
+      : androidApkUrl
+        ? { label: 'Download APK', url: androidApkUrl, storeName: 'GitHub Releases' }
+        : {
+            label: 'Open GitHub Releases',
+            url: ANDROID_RELEASES_PAGE_URL,
+            storeName: 'GitHub Releases'
+          }
   const primaryAction = isMobileTooOld
     ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
     : { label: 'Open GitHub Releases', url: RELEASES_URL }

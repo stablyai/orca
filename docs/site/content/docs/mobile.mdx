@@ -12,6 +12,8 @@ The Orca mobile companion is an iOS/Android app that pairs with your desktop Orc
   Store](https://apps.apple.com/us/app/orca-ide/id6766130217), join the [TestFlight preview
   channel](https://testflight.apple.com/join/YjeGMQBA), or install Android from the [current APK
   0.0.46](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.46/app-release.apk).
+  On Android, the app checks GitHub Releases once a day and shows a banner on the home screen
+  when a newer APK is available; tap it to download, or dismiss it to skip that version.
 </Callout>
 
 ## What you can do from mobile
@@ -108,7 +110,7 @@ The mobile terminal has a dedicated **Terminal settings** screen (Settings → T
 - **Stuck spinner on a worktree** — the phone tracks a heartbeat from the desktop agent process. If the desktop says idle but the phone shows working, force-refresh the worktree row to sync state.
 - **Pairing fails** — make sure your desktop and phone are signed into the same Orca account. Pairing codes expire after a few minutes; generate a fresh one if it's been sitting on the screen.
 - **Authentication failed / pairing invalid** — the desktop no longer accepts this device token (for example after desktop cleared paired devices). Try **Retry** on the banner first (transient rejections can recover without re-pairing). If it keeps failing, use **Re-pair** from desktop, or **Remove** the host and pair again.
-- **Update Orca Mobile / Update Orca on your computer** — the phone and desktop speak a versioned mobile protocol. If either side is too old, mobile blocks that host and points you at the App Store (iOS), [GitHub Releases](https://github.com/stablyai/orca/releases) (Android APK or desktop), then back to hosts. After updating, refresh the connection; if the message stays, remove the host and pair again.
+- **Update Orca Mobile / Update Orca on your computer** — the phone and desktop speak a versioned mobile protocol. If either side is too old, mobile blocks that host and points you at the App Store (iOS), the latest Android APK, or [GitHub Releases](https://github.com/stablyai/orca/releases) (desktop), then back to hosts. After updating, refresh the connection; if the message stays, remove the host and pair again.
 - **Quick Commands unavailable** — update the paired desktop so it advertises the quick-commands capability.
 - **Can't reach desktop** — phone and desktop must share a network path (LAN, Tailscale, or the pairing path you used). Closing the desktop app drops the connection; reopen desktop and the phone reconnects automatically.
 
