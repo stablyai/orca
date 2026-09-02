@@ -12,6 +12,10 @@ import {
   tokenizeCommandLine
 } from './agent-command-line-entrypoint'
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
+import {
+  isNodePackageScriptPath,
+  NODE_PACKAGE_SCRIPT_ENTRYPOINTS
+} from './node-package-script-entrypoints'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -106,7 +110,7 @@ function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | 
   if (!markers) {
     return null
   }
-  if (!markers.some((marker) => path.includes(marker))) {
+  if (!isNodePackageScriptPath(path, markers)) {
     return null
   }
   return recognizedAgentForProcess(normalized)
