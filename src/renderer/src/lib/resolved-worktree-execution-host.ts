@@ -1,6 +1,7 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
@@ -15,6 +16,18 @@ import {
   findIndexedWorktreeOwnerForHost
 } from './worktree-runtime-owner-index'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+
+/**
+ * Host for a workspace that names no owner of its own. Why: a workspace on a
+ * remote `orca serve` machine carries no connectionId — it is local *to that
+ * server*, not to this client — so defaulting to LOCAL routes its operations to
+ * the client's own daemon, which cannot see the path. When a runtime is active
+ * it owns anything unclaimed; without one, LOCAL is still the only host there is.
+ */
+function getUnownedWorkspaceHost(state: WorktreeRuntimeOwnerState): ExecutionHostId {
+  const activeRuntimeId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  return activeRuntimeId ? toRuntimeExecutionHostId(activeRuntimeId) : LOCAL_EXECUTION_HOST_ID
+}
 
 function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,
@@ -46,7 +59,9 @@ function getResolvedFolderHost(
   if (restoredHost?.kind === 'runtime') {
     return restoredHost.id
   }
-  return folder && (group || preferredHostId) ? (preferredHostId ?? LOCAL_EXECUTION_HOST_ID) : null
+  return folder && (group || preferredHostId)
+    ? (preferredHostId ?? getUnownedWorkspaceHost(state))
+    : null
 }
 
 /**
@@ -93,5 +108,5 @@ export function getResolvedExecutionHostIdForWorktree(
   }
   return repo.connectionId?.trim()
     ? toSshExecutionHostId(repo.connectionId)
-    : LOCAL_EXECUTION_HOST_ID
+    : getUnownedWorkspaceHost(state)
 }
