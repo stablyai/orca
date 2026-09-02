@@ -3,6 +3,7 @@ import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { resolveTitleDerivedAgentType } from './worktree-title-derived-agent-rows'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
@@ -42,6 +43,13 @@ function makeSingleLayout(leafId: string): TerminalLayoutSnapshot {
     expandedLeafId: null
   }
 }
+
+describe('resolveTitleDerivedAgentType', () => {
+  it('maps getAgentLabel product casing OpenZoo back to the openzoo id', () => {
+    expect(resolveTitleDerivedAgentType('openzoo claude', 'OpenZoo')).toBe('openzoo')
+    expect(resolveTitleDerivedAgentType('openzoo claude', 'openzoo')).toBe('unknown')
+  })
+})
 
 describe('buildTitleDerivedAgentRows', () => {
   it('adds title-derived rows for live agent panes that have no hook status yet', () => {
@@ -366,6 +374,24 @@ describe('buildTitleDerivedAgentRows', () => {
     // No owner to defend the pane: naming Claude stays the only available identity.
     expect(rowsFor('⠋ use Claude Sonnet').map((row) => row.agentType)).toEqual(['claude'])
     expect(rowsFor('zsh', 'opencode')).toHaveLength(0)
+  })
+
+  it('maps the OpenZoo display label back to the openzoo agent id', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'openzoo' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        // Why: getAgentLabel yields `OpenZoo`; TITLE_AGENT_LABEL_TO_TYPE must key that
+        // product casing, not the lowercase id, or the sidebar drops the type.
+        'tab-1': { 1: 'openzoo claude' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-openzoo'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.entry.prompt])).toEqual([['openzoo', 'OpenZoo']])
   })
 
   it('does not brand a split pane with the tab-scoped launch agent', () => {

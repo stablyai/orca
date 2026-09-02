@@ -35,7 +35,7 @@ const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined>
 const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
-  openzoo: 'openzoo',
+  OpenZoo: 'openzoo',
   Codex: 'codex',
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
