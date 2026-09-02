@@ -114,6 +114,7 @@ export function connectPanePty(
   session.cleanupHiddenOutputRestoreFloodRepaint = (): void => {}
   session.resetRendererOrderedSeqForPtyExit = () => {}
   session.cleanupStartupDraftPasteTimers = (): void => {}
+  session.cancelStartupDraftPasteDelivery = (): void => {}
   session.unregisterE2ePtyDataInjection = (): void => {}
   session.startupInjectTimer = null
   session.agentTaskCompleteNotificationGraceTimer = null

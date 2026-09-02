@@ -27,6 +27,7 @@ import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
+  const agentResumeDeclined = ctx.result.agentResumeUnavailable === true
   const { rendererPreSignaled, rendererAlreadyRegistered } = await persistPtyIpcSpawnCommit(ctx)
 
   // Why: seed the headless emulator before registerPty so concurrent live PTY data lands on top of the seed, not replacing it (mobile keeps the daemon-restored scrollback).
@@ -76,15 +77,17 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     args.worktreeId.length > 0 &&
     args.worktreeId.length <= 512
   ) {
-    const agentLaunchAuthority = admitRendererAgentLaunchAuthority({
-      launchToken: args.launchToken,
-      spawnEnv: ctx.spawnEnv,
-      launchAgent: args.launchAgent,
-      launchConfig: ctx.effectiveLaunchConfig,
-      isReattach: ctx.result.isReattach === true,
-      hasStablePaneOwner: ctx.stablePaneOwner !== null,
-      incarnationId: ctx.result.incarnationId
-    })
+    const agentLaunchAuthority = agentResumeDeclined
+      ? null
+      : admitRendererAgentLaunchAuthority({
+          launchToken: args.launchToken,
+          spawnEnv: ctx.spawnEnv,
+          launchAgent: args.launchAgent,
+          launchConfig: ctx.effectiveLaunchConfig,
+          isReattach: ctx.result.isReattach === true,
+          hasStablePaneOwner: ctx.stablePaneOwner !== null,
+          incarnationId: ctx.result.incarnationId
+        })
     const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity({
       isReattach: ctx.result.isReattach === true,
       launchAgent: ctx.result.launchAgent,
@@ -125,13 +128,13 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
   // seed but the list/read records still live main-side.
   seedTerminalRestoreRecordsFromSpawnResult(ctx.deps.runtime, ctx.result)
   // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.
-  if (!ctx.stablePaneOwner) {
+  if (!ctx.stablePaneOwner && !agentResumeDeclined) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(
       ctx.result.id,
       typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
   }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner && !agentResumeDeclined) {
     markClaudePtySpawned(ctx.result.id)
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
@@ -139,7 +142,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
   const rememberedPaneKey = ctx.validatedPaneKey
     ? rememberPaneKeyForPty(ctx.result.id, ctx.validatedPaneKey)
     : null
-  if (ctx.legacySpawnPaneKey && ctx.migrationUnsupportedPaneKey) {
+  if (!agentResumeDeclined && ctx.legacySpawnPaneKey && ctx.migrationUnsupportedPaneKey) {
     agentHookServer.registerPaneKeyAlias(
       ctx.legacySpawnPaneKey.paneKey,
       ctx.migrationUnsupportedPaneKey,
@@ -157,7 +160,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       Date.now(),
       { authorityVerified: true }
     )
-  } else if (ctx.validatedPaneKey) {
+  } else if (!agentResumeDeclined && ctx.validatedPaneKey) {
     if (!ctx.result.isReattach) {
       clearMigrationUnsupportedPtysForPaneKey(ctx.validatedPaneKey)
     }
@@ -189,7 +192,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     })
   }
   // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
-  if (args.telemetry && !ctx.stablePaneOwner) {
+  if (args.telemetry && !ctx.stablePaneOwner && !agentResumeDeclined) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
     const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
     const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
@@ -211,7 +214,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     ctx.snapshotKittyFlagsCoverReconciledSeq
       ? { snapshotSeq: ctx.reconciledSnapshotSeq }
       : { snapshotKittyKeyboardFlags: undefined }),
-    ...(!ctx.result.isReattach && ctx.effectiveLaunchConfig
+    ...(!ctx.result.isReattach && !agentResumeDeclined && ctx.effectiveLaunchConfig
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),
     // Why: a daemon-retry race can surface isReattach even for a minted session id, and a reattach must never claim its cwd was remapped.
@@ -226,7 +229,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
   }
   // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
   ctx.deps.sendPtySpawnedToRenderer(ctx.result.id)
-  if (!args.connectionId) {
+  if (!args.connectionId && !agentResumeDeclined) {
     ctx.deps.options?.onCodexHomePtySpawned?.({
       id: ctx.result.id,
       codexHomePath: ctx.selectedCodexHomePath,

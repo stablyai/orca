@@ -85,6 +85,7 @@ export type RuntimePtyController = {
     wslDistro?: string
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
+    agentResumeUnavailable?: true
   }>
   write(ptyId: string, data: string): boolean
   writeAgentSessionProof?(

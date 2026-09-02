@@ -7,6 +7,8 @@ import type { TerminalOwner } from '../../shared/terminal-owner'
 
 export type PtySpawnResult = {
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
+  /** Main declined an agent resume owned by a different relay incarnation. */
+  agentResumeUnavailable?: true
   /** App-facing PTY id. Remote providers must return globally routable ids,
    *  not relay-local handles, because renderer/runtime IPC routes by this key. */
   id: string

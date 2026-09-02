@@ -260,6 +260,7 @@ export type RuntimeTerminalCreate = {
   surface?: 'background' | 'visible'
   warning?: string
   agentSessionDisposition?: 'created' | 'adopted'
+  agentResumeUnavailable?: true
   isReattach?: true
   /** Spawn process identity for host-internal ownership proof. */
   processId?: number

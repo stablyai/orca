@@ -15,6 +15,7 @@ import type {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { resolveTerminalTabId } from './terminal-tab-id'
+import { cancelDeclinedAgentResume } from './declined-agent-resume'
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
@@ -209,7 +210,15 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           }
           return accepted ? resolvedPtyId : null
         }
-        if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
+        const agentResumeUnavailable = Boolean(
+          spawnedPtyId &&
+          typeof spawnedPtyId === 'object' &&
+          'id' in spawnedPtyId &&
+          spawnedPtyId.agentResumeUnavailable
+        )
+        if (agentResumeUnavailable) {
+          cancelDeclinedAgentResume(session)
+        } else if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
           session.registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
             ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
             ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {})
@@ -225,11 +234,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
               foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
             })
           }
-          if (
-            spawnedPtyId &&
-            typeof spawnedPtyId === 'object' &&
-            spawnedPtyId.agentResumeUnavailable
-          ) {
+          if (spawnedPtyId && typeof spawnedPtyId === 'object' && agentResumeUnavailable) {
             // Why: main dropped the resume argv, so this pane is a NEW session —
             // the plain restored banner would claim the old one came back.
             session.showSessionRestoredBanner('resume-unavailable')
@@ -281,7 +286,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             void window.api.pty.settlePaneSerializer(session.cacheKey, gen).catch(() => {})
           }
         }
-        if (resolvedPtyId && session.connectionId) {
+        if (resolvedPtyId && session.connectionId && !agentResumeUnavailable) {
           if (
             session.shouldUseProviderSshStartupDelivery &&
             (startupOverride?.command || session.paneStartup?.command)

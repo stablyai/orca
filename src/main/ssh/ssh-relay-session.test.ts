@@ -6,6 +6,7 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD
 } from '../../shared/agent-hook-relay'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
+import { takeRetiredRelayEpochOwner } from '../ipc/pty/pane/relay-pty-mint-epoch'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
 const { acceptOutputDataMock, muxRequestMock, openConsumerSessionMock, pauseAdapterMock } =
@@ -679,26 +680,45 @@ describe('SshRelaySession', () => {
     mockDeploySuccess()
 
     const { getSshPtyProvider } = await import('../ipc/pty')
+    const stalePtyId = 'pty2:previous-epoch:7'
+    const staleLeafId = '55555555-5555-4555-8555-555555555555'
+    const stalePaneKey = `tab-stale:${staleLeafId}`
     const mockAttach = vi
       .fn()
-      .mockRejectedValueOnce(new Error('PTY "pty-stale" not found'))
-      .mockResolvedValueOnce(undefined)
+      .mockImplementation((ptyId: string) =>
+        ptyId === stalePtyId
+          ? Promise.reject(new Error(`PTY "${stalePtyId}" not found`))
+          : Promise.resolve(undefined)
+      )
     vi.mocked(getSshPtyProvider).mockReturnValue({
       attachForReconnect: mockAttach,
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
-    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-stale', 'pty-live'])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-live'])
+    vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
+      {
+        targetId: 'target-1',
+        ptyId: stalePtyId,
+        state: 'detached',
+        tabId: 'tab-stale',
+        leafId: staleLeafId
+      }
+    ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
 
     await session.reconnect(mockConn)
 
-    expect(mockAttach).toHaveBeenCalledWith('pty-stale')
+    expect(mockAttach).toHaveBeenCalledWith(stalePtyId, {
+      paneKey: stalePaneKey,
+      tabId: 'tab-stale'
+    })
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
-    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
-    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
+    expect(clearProviderPtyState).toHaveBeenCalledWith(`ssh:target-1@@${stalePtyId}`)
+    expect(deletePtyOwnership).toHaveBeenCalledWith(`ssh:target-1@@${stalePtyId}`)
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
-      id: 'ssh:target-1@@pty-stale',
+      id: `ssh:target-1@@${stalePtyId}`,
       code: -1
     })
+    expect(takeRetiredRelayEpochOwner('target-1', stalePaneKey)).toBe(`ssh:target-1@@${stalePtyId}`)
   })
 
   it('retries transient reattach failure without tearing down provider registration', async () => {

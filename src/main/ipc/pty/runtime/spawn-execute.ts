@@ -136,6 +136,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
             owner: stablePaneOwnerCandidate,
             worktreeId: args.worktreeId,
             connectionId: args.connectionId,
+            paneKey: ctx.spawnIdentityPaneKey,
             resolveOwner: () =>
               resolveStablePaneOwner(
                 ctx.deps.runtime,

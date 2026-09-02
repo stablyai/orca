@@ -1,0 +1,2 @@
+timestamp=2026-08-29T00:54:28Z marker=sta5698-agent-diag-task01 pid=3046047 ppid=3046028 argv= --dangerously-skip-permissions
+timestamp=2026-08-29T00:58:55Z marker=sta5698-agent-diag-task01 pid=3050884 ppid=3050868 argv= --dangerously-skip-permissions --resume sta5698-session-diag-task01

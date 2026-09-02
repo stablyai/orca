@@ -496,6 +496,10 @@ export class PtyHandler {
       this.dispatcher.onLegacyPtyCapacity?.(() => this.handleLegacyCapacity()) ?? null
   }
 
+  get mintEpoch(): string {
+    return this.ptyIdMintEpoch
+  }
+
   setConsumerDeliveryPaused(id: string, paused: boolean): void {
     if (paused) {
       this.consumerPausedOutputPtys.add(id)

@@ -59,6 +59,7 @@ import {
   installSshPtySourceAckPublisher,
   installSshPtySourceCancellationPublisher
 } from '../ipc/ssh-pty-output-intake-registry'
+import { rememberRetiredRelayEpochOwner } from '../ipc/pty/pane/relay-pty-mint-epoch'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider,
@@ -187,6 +188,7 @@ type PendingPtyReattach = {
   recoveryWaiters: Set<() => void>
   livePassthrough: boolean
   activated: boolean
+  paneKey?: string
 }
 
 type RemoteCliBridgeEnv = {
@@ -2423,6 +2425,7 @@ export class SshRelaySession {
       targetedDeliveryRecovery
     } = args
     const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+    const expectedIdentity = expectedIdentityByPtyId.get(ptyId)
     const pendingReattach: PendingPtyReattach = {
       mux,
       providerGeneration,
@@ -2433,7 +2436,8 @@ export class SshRelaySession {
       liveData: [],
       recoveryWaiters: new Set(),
       livePassthrough: false,
-      activated: false
+      activated: false,
+      ...(expectedIdentity?.paneKey ? { paneKey: expectedIdentity.paneKey } : {})
     }
     this.pendingPtyReattaches.set(appPtyId, pendingReattach)
     let sourceActivationLease: SshPtyAttachResult['sourceActivationLease']
@@ -2446,7 +2450,7 @@ export class SshRelaySession {
       const attachResult = await this.attachPtyWithRetry(
         ptyProvider,
         ptyId,
-        expectedIdentityByPtyId.get(ptyId),
+        expectedIdentity,
         recoveryRequest,
         shouldContinue
       )
@@ -2892,6 +2896,11 @@ export class SshRelaySession {
         error instanceof Error ? error.message : String(error)
       }`
     )
+    rememberRetiredRelayEpochOwner({
+      connectionId: this.targetId,
+      paneKey: pending.paneKey,
+      ownerPtyId: appPtyId
+    })
     clearProviderPtyState(appPtyId)
     deletePtyOwnership(appPtyId)
     this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')

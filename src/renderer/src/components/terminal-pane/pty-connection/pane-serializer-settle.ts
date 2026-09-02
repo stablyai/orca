@@ -88,6 +88,11 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     }
   }
   session.cleanupStartupDraftPasteTimers = clearStartupDraftPasteTimers
+  session.cancelStartupDraftPasteDelivery = (): void => {
+    startupDraftPasteSettled = true
+    clearStartupDraftPasteTimers()
+    session.releaseUnattemptedStartupDraftPasteDelivery()
+  }
   const getStartupDraftPtyId = (): string | null => {
     const ptyId = session.transport.getPtyId()
     if (

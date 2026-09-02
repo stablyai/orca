@@ -457,6 +457,9 @@ describe('connectPanePty', () => {
 
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'resume-unavailable')
+    expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.clearPaneForegroundAgent).toHaveBeenCalledWith(paneKey)
+    expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
   it('resumes from an unambiguous legacy sleeping record when cold-restoring a preserved pane', async () => {

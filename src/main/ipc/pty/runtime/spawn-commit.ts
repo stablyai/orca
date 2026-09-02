@@ -38,6 +38,7 @@ import type { RuntimePtySpawnState } from './spawn-state'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
+  const agentResumeDeclined = ctx.result.agentResumeUnavailable === true
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
   try {
     ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
@@ -138,16 +139,18 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
     ptySizes.delete(ctx.effectiveSessionAppId)
   }
-  recordCodexPaneAccountForSpawn({
-    ptyId: ctx.result.id,
-    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
-    isReattach: ctx.result.isReattach === true,
-    pinnedByResume: ctx.codexResumeHomeSelected,
-    launchCodexHomePath: ctx.selectedCodexHomePath,
-    launchEnv: args.env,
-    target: ctx.codexSelectionTarget,
-    settings: ctx.deps.getSettings?.()
-  })
+  if (!agentResumeDeclined) {
+    recordCodexPaneAccountForSpawn({
+      ptyId: ctx.result.id,
+      isDaemonHostSpawn: ctx.isDaemonHostSpawn,
+      isReattach: ctx.result.isReattach === true,
+      pinnedByResume: ctx.codexResumeHomeSelected,
+      launchCodexHomePath: ctx.selectedCodexHomePath,
+      launchEnv: args.env,
+      target: ctx.codexSelectionTarget,
+      settings: ctx.deps.getSettings?.()
+    })
+  }
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {
       const binding = {
@@ -223,13 +226,13 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   // Why: runtime-controller creates (headless serve, CLI, splits) adopt surviving daemon sessions too; without this seed their records stay blank.
   seedTerminalRestoreRecordsFromSpawnResult(ctx.deps.runtime, ctx.result)
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
-  if (!ctx.stablePaneOwner) {
+  if (!ctx.stablePaneOwner && !agentResumeDeclined) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
   }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner && !agentResumeDeclined) {
     markClaudePtySpawned(ctx.result.id)
   }
-  if (args.telemetry && !ctx.stablePaneOwner) {
+  if (args.telemetry && !ctx.stablePaneOwner && !agentResumeDeclined) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
     const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
     const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
@@ -267,7 +270,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   }
   // Why: runtime-owned/background spawns bypass mounted-pane state, so inventory consumers need an explicit signal.
   ctx.deps.sendPtySpawnedToRenderer(ctx.result.id)
-  if (!args.connectionId) {
+  if (!args.connectionId && !agentResumeDeclined) {
     ctx.deps.options?.onCodexHomePtySpawned?.({
       id: ctx.result.id,
       codexHomePath: ctx.selectedCodexHomePath,
@@ -286,8 +289,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     })
   }
   const response = {
-    id: ctx.result.id,
-    ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+    ...ctx.result,
     ...(ctx.stablePaneOwner && (ctx.stablePaneOwner.handle || args.preAllocatedHandle)
       ? {
           stablePaneOwner: {
@@ -296,8 +298,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
             leafId: ctx.stablePaneOwner.leafId
           }
         }
-      : {}),
-    ...(ctx.result.agentSessionEnsure ? { agentSessionEnsure: ctx.result.agentSessionEnsure } : {})
+      : {})
   }
   resolvePaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, {
     ...ctx.result,

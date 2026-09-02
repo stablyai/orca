@@ -7,6 +7,11 @@ export type ConnectPanePtySession = {
   pane: ManagedPane
   manager: PaneManager
   deps: PtyConnectionDeps
+  cacheKey: string
+  pendingStartupCommand: { command: string } | null
+  startupInjectTimer: ReturnType<typeof setTimeout> | null
+  cancelStartupDraftPasteDelivery: () => void
+  clearRegisteredStartupLaunchConfig: () => void
   // oxlint-disable-next-line typescript/no-explicit-any -- session bag for mechanical extract
   [key: string]: any
 }

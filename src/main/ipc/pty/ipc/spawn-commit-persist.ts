@@ -41,16 +41,18 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
     daemon: ctx.isDaemonHostSpawn,
     reattach: ctx.result.isReattach ?? false
   })
-  recordCodexPaneAccountForSpawn({
-    ptyId: ctx.result.id,
-    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
-    isReattach: ctx.result.isReattach === true,
-    pinnedByResume: ctx.codexResumeHomeSelected,
-    launchCodexHomePath: ctx.selectedCodexHomePath,
-    launchEnv: ctx.baseEnv,
-    target: ctx.codexSelectionTarget,
-    settings: ctx.deps.getSettings?.()
-  })
+  if (!ctx.result.agentResumeUnavailable) {
+    recordCodexPaneAccountForSpawn({
+      ptyId: ctx.result.id,
+      isDaemonHostSpawn: ctx.isDaemonHostSpawn,
+      isReattach: ctx.result.isReattach === true,
+      pinnedByResume: ctx.codexResumeHomeSelected,
+      launchCodexHomePath: ctx.selectedCodexHomePath,
+      launchEnv: ctx.baseEnv,
+      target: ctx.codexSelectionTarget,
+      settings: ctx.deps.getSettings?.()
+    })
+  }
   ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)

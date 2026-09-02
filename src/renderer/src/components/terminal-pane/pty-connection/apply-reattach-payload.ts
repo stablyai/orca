@@ -19,6 +19,7 @@ import { resolveSshReconnectModelPaint } from './resolve-ssh-reconnect-model-pai
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
+import { cancelDeclinedAgentResume } from './declined-agent-resume'
 
 export function createReattachPayloadHandlers(
   session: ReattachPayloadSession,
@@ -279,6 +280,7 @@ export function createReattachPayloadHandlers(
       const didPrepareResume = session.applyColdRestoreAgentResumeStartup(preparedStartup)
       if (didPrepareResume) {
         if (ctx.connectResult.agentResumeUnavailable) {
+          cancelDeclinedAgentResume(session)
           // Why: main dropped the resume argv, so this pane is a NEW session —
           // the plain restored banner would claim the old one came back.
           session.showSessionRestoredBanner('resume-unavailable')
@@ -297,7 +299,11 @@ export function createReattachPayloadHandlers(
       if (!isRemoteRuntimePtyId(ctx.ptyId)) {
         window.api.pty.ackColdRestore(ctx.ptyId)
       }
-      if (didPrepareResume && !ctx.coldRestoreStartup) {
+      if (
+        didPrepareResume &&
+        !ctx.coldRestoreStartup &&
+        !ctx.connectResult.agentResumeUnavailable
+      ) {
         session.schedulePendingStartupCommandDelivery()
       }
     }

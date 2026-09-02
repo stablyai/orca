@@ -77,6 +77,9 @@ export async function buildPtyIpcSpawnOptions(
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
   }
+  if (args.resumeProviderSession !== undefined) {
+    ctx.spawnOptions.resumeProviderSession = args.resumeProviderSession
+  }
   if (args.worktreeId !== undefined) {
     ctx.spawnOptions.worktreeId = args.worktreeId
   }

@@ -12,6 +12,7 @@ import type {
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -57,6 +58,8 @@ export type PtySpawnOptions = {
   startupCommandDelivery?: StartupCommandDelivery
   /** Minimal allowlisted launch ownership preserved by daemon reattach. */
   launchAgent?: TuiAgent
+  /** Main-only resume intent retained until stable-pane recovery chooses the answering relay. */
+  resumeProviderSession?: AgentProviderSessionMetadata
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
