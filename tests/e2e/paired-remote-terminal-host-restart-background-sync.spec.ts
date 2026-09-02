@@ -408,6 +408,15 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
       .toBe(true)
     await expectTerminalInteractive(client, target, 'x')
     target.handle = await findTerminalHandle(client, worktreeId, target.parentTabId)
+    const restored = await callRuntime<{ terminal: { ptyId: string | null } }>(
+      client.page,
+      client.environmentId,
+      'terminal.show',
+      { terminal: target.handle }
+    )
+    expect(restored.terminal.ptyId, 'host inventory must preserve the daemon PTY identity').toBe(
+      target.ptyId
+    )
 
     const reconnectControl = await createHostTerminal(client, worktreeId, 'reconnect-control')
     terminals.push(reconnectControl)

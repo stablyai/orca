@@ -92,7 +92,8 @@ export function createReattachPayloadHandlers(
         session.reattachReplayResetSequence(
           daemonSnapshotReplay,
           Boolean(ctx.connectResult.coldRestore),
-          ctx.connectResult.isAlternateScreen
+          ctx.connectResult.isAlternateScreen,
+          ctx.connectResult.snapshotTerminalOwner
         )
       )
       if (ctx.connectResult.pendingEscapeTailAnsi) {
@@ -184,7 +185,8 @@ export function createReattachPayloadHandlers(
           session.reattachReplayResetSequence(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
-            modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen
+            modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
+            modelSnapshot.terminalOwner
           )
         )
         if (modelSnapshot.pendingEscapeTailAnsi) {

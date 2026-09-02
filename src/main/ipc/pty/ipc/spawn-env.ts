@@ -3,6 +3,8 @@ import {
   makePaneKey,
   parseLegacyNumericPaneKey
 } from '../../../../shared/stable-pane-id'
+import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
+import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
 import { hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
@@ -52,6 +54,11 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       ? makePaneKey(args.tabId, ctx.metadataLeafId)
       : null
   ctx.legacySpawnPaneKey = verifiedPaneKey ? null : parseLegacyNumericPaneKey(spawnPaneKey)
+  const normalizedSpawnPaneKey = spawnPaneKey?.trim() ?? ''
+  ctx.opaqueRemintedSpawnPaneKey =
+    verifiedPaneKey || !isOpaqueRemintedPaneKey(normalizedSpawnPaneKey)
+      ? null
+      : normalizedSpawnPaneKey
   ctx.migrationUnsupportedPaneKey =
     ctx.legacySpawnPaneKey &&
     typeof args.tabId === 'string' &&
@@ -60,7 +67,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     isTerminalLeafId(args.leafId)
       ? makePaneKey(args.tabId, args.leafId)
       : null
-  ctx.stablePaneKey = verifiedPaneKey ?? ctx.migrationUnsupportedPaneKey
+  ctx.stablePaneKey = verifiedPaneKey ?? ctx.migrationUnsupportedPaneKey ?? ctx.metadataPaneKey
   ctx.baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
   const shouldRefreshAgentTeamsEnv =
     !ctx.preAdoptedStablePane &&
@@ -108,7 +115,8 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     ? ctx.baseEnv[resolvePathEnvKey(ctx.baseEnv, process.platform)]
     : undefined
   ctx.agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv ? ['TERM_PROGRAM'] : undefined
-  if (ctx.baseEnv && ctx.stablePaneKey) {
+  const canForwardPaneEnv = !args.connectionId || isRemoteAgentHooksEnabled()
+  if (ctx.baseEnv && ctx.stablePaneKey && canForwardPaneEnv) {
     ctx.baseEnv.ORCA_PANE_KEY = ctx.stablePaneKey
     if (typeof args.tabId === 'string') {
       ctx.baseEnv.ORCA_TAB_ID = args.tabId
@@ -131,5 +139,6 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
   ctx.reservationPaneKey = ctx.metadataPaneKey ?? ctx.validatedPaneKey
   ctx.validatedLeafId = ctx.verifiedLeafId ?? ctx.metadataLeafId
+  ctx.spawnTiming.mark('pane_env')
   await assemblePtyIpcSpawnCodexEnv(ctx)
 }

@@ -57,18 +57,33 @@ vi.mock('@/components/ui/command', async () => {
   return {
     Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    CommandDialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
-      open ? <div data-command-dialog="true">{children}</div> : null,
-    CommandInput: ({
-      value,
-      onValueChange
+    CommandDialog: ({
+      children,
+      open,
+      commandProps
     }: {
-      value?: string
-      onValueChange?: (next: string) => void
-    }) => {
+      children: React.ReactNode
+      open?: boolean
+      commandProps?: { value?: string }
+    }) =>
+      open ? (
+        <div data-command-dialog="true" data-command-value={commandProps?.value ?? ''}>
+          {children}
+        </div>
+      ) : null,
+    CommandInput: React.forwardRef(function CommandInput(
+      {
+        value,
+        onValueChange
+      }: {
+        value?: string
+        onValueChange?: (next: string) => void
+      },
+      ref: React.ForwardedRef<HTMLInputElement>
+    ) {
       setCommandQuery = onValueChange ?? null
-      return <input data-command-input="true" value={value} onChange={() => {}} />
-    },
+      return <input ref={ref} data-command-input="true" value={value} onChange={() => {}} />
+    }),
     CommandList: React.forwardRef(function CommandList(
       { children }: { children: React.ReactNode },
       ref: React.ForwardedRef<HTMLDivElement>
@@ -82,8 +97,22 @@ vi.mock('@/components/ui/command', async () => {
     CommandEmpty: ({ children }: { children: React.ReactNode }) => (
       <div data-command-empty="true">{children}</div>
     ),
-    CommandItem: ({ children, value }: { children: React.ReactNode; value?: string }) => (
-      <button data-command-item={value ?? ''} type="button">
+    CommandItem: ({
+      children,
+      value,
+      onSelect
+    }: {
+      children: React.ReactNode
+      value?: string
+      onSelect?: () => void
+    }) => (
+      <button
+        cmdk-item=""
+        data-value={value ?? ''}
+        data-command-item={value ?? ''}
+        type="button"
+        onClick={onSelect}
+      >
         {children}
       </button>
     )
@@ -401,6 +430,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const title = row?.querySelector('[data-slot="palette-open-tab-title"]')
     const worktree = row?.querySelector('[data-slot="palette-open-tab-worktree"]')
     expect(title?.textContent).toBe(longTitle)
+    expect(title?.classList.contains('flex-1')).toBe(true)
     expect(worktree?.textContent).toBe('user-support')
     expect(worktree?.compareDocumentPosition(title ?? document.createElement('span'))).toBe(
       Node.DOCUMENT_POSITION_PRECEDING
@@ -456,7 +486,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     expect(testContainer.textContent).toContain('10 more')
   })
 
-  it('leaves the soft preview hint non-actionable when no rows are hidden', async () => {
+  it('expands soft preview when clicking See more even when all rows fit within the hard cap', async () => {
     await renderPalette(perfTabsPaletteProps(30))
 
     await act(async () => {
@@ -464,12 +494,33 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     })
     await flushEffects()
 
-    // All 30 tabs render (6 preview + 24 remainder), so expanding would only reorder rows.
+    // 6 preview tabs, 24 more follow below the worktrees section
     expect(testContainer.textContent).toContain('24 more')
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
-    expect(seeMoreBtn).toBeUndefined()
+    expect(seeMoreBtn).toBeDefined()
+
+    // Click See more: preview expands to 6 + 20 = 26 tabs, leaving 4 more
+    await act(async () => {
+      seeMoreBtn?.click()
+    })
+    await flushEffects()
+
+    expect(testContainer.textContent).toContain('4 more')
+
+    const seeMoreBtn2 = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('See more')
+    )
+    expect(seeMoreBtn2).toBeDefined()
+
+    // Click See more again: preview expands to 26 + 20 = 46 tabs (fits all 30), hint disappears
+    await act(async () => {
+      seeMoreBtn2?.click()
+    })
+    await flushEffects()
+
+    expect(testContainer.textContent).not.toContain('more')
   })
 
   it('resets expanded section caps when query changes', async () => {
@@ -512,6 +563,13 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
       btn.textContent?.includes('See more')
     )
     expect(seeMoreBtn).toBeDefined()
+    const initialItemIds = Array.from(testContainer.querySelectorAll('[cmdk-item]')).map((item) =>
+      item.getAttribute('data-value')
+    )
+    const seeMoreIndex = initialItemIds.indexOf('__hint_worktree_overflow__')
+    expect(seeMoreIndex).toBeGreaterThan(0)
+    const input = testContainer.querySelector<HTMLInputElement>('[data-command-input="true"]')
+    input?.focus()
 
     await act(async () => {
       seeMoreBtn?.click()
@@ -519,9 +577,20 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await flushEffects()
 
     // After expanding by 20: 30 worktrees are rendered, 5 more
-    const renderedItems = testContainer.querySelectorAll('[data-command-item]')
+    const renderedItems = testContainer.querySelectorAll('[data-command-item^="worktree:"]')
     expect(renderedItems).toHaveLength(30)
     expect(testContainer.textContent).toContain('5 more')
+    const firstRevealedItemId = Array.from(testContainer.querySelectorAll('[cmdk-item]'))[
+      seeMoreIndex
+    ]?.getAttribute('data-value')
+    expect(firstRevealedItemId).toMatch(/^worktree:/)
+    expect(firstRevealedItemId).not.toBe(initialItemIds[0])
+    expect(
+      testContainer
+        .querySelector('[data-command-dialog="true"]')
+        ?.getAttribute('data-command-value')
+    ).toBe(firstRevealedItemId)
+    expect(document.activeElement).toBe(input)
 
     // Click again: 30 + 20 = 50 (all 35 fit), hint disappears
     const seeMoreBtn2 = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
@@ -532,7 +601,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     })
     await flushEffects()
 
-    const renderedItemsAll = testContainer.querySelectorAll('[data-command-item]')
+    const renderedItemsAll = testContainer.querySelectorAll('[data-command-item^="worktree:"]')
     expect(renderedItemsAll).toHaveLength(35)
     expect(testContainer.textContent).not.toContain('more')
   })

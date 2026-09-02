@@ -2,8 +2,24 @@ import React from 'react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
-import { AgentStateDot, type AgentDotState } from './AgentStateDot'
+import { describe, expect, it, vi } from 'vitest'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from './AgentStateDot'
+
+vi.mock('@/components/StateIndicatorTooltip', async () => {
+  const { createElement } = await import('react')
+  return {
+    StateIndicatorTooltip: ({
+      label,
+      children
+    }: {
+      label: string | null
+      children: React.ReactElement
+    }) =>
+      label === null
+        ? children
+        : createElement('span', { 'data-state-indicator-tooltip': label }, children)
+  }
+})
 
 function renderMarkup(state: AgentDotState): string {
   return renderToStaticMarkup(React.createElement(AgentStateDot, { state }))
@@ -42,11 +58,11 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('motion-reduce:border-t-yellow-500')
   })
 
-  it('renders monitoring as a static yellow radio glyph', () => {
+  it('renders monitoring as a static yellow heartbeat glyph', () => {
     const markup = renderMarkup('monitoring')
 
     expect(markup).toContain('aria-label="Monitoring background tasks"')
-    expect(markup).toContain('lucide-radio')
+    expect(markup).toContain('lucide-activity')
     expect(markup).toContain('text-yellow-500')
     expect(markup).not.toContain('data-agent-spinner')
   })
@@ -86,4 +102,51 @@ describe('AgentStateDot', () => {
       expect(classNames).not.toContain('bg-amber-500')
     }
   )
+
+  const ALL_STATES = [
+    'working',
+    'monitoring',
+    'blocked',
+    'waiting',
+    'interrupted',
+    'failed',
+    'done',
+    'idle',
+    'permission'
+  ] satisfies AgentDotState[]
+
+  it.each(ALL_STATES)('labels %s with the shared hover tooltip', (state) => {
+    const markup = renderMarkup(state)
+
+    expect(markup).toContain(`data-state-indicator-tooltip="${agentStateLabel(state)}"`)
+    expect(markup).not.toContain(' title=')
+  })
+
+  // Typecheck-time guard: a new AgentDotState member that ALL_STATES omits
+  // fails `pnpm tc`, so the tooltip case above can never silently skip a state.
+  type UncoveredState = Exclude<AgentDotState, (typeof ALL_STATES)[number]>
+  const _allStatesAreCovered: UncoveredState extends never ? true : never = true
+  void _allStatesAreCovered
+
+  it('lets a caller override the tooltip', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(AgentStateDot, { state: 'done', title: 'Finished 2m ago' })
+    )
+
+    expect(markup).toContain('data-state-indicator-tooltip="Finished 2m ago"')
+    expect(markup).not.toContain(' title=')
+    expect(markup).toContain('aria-label="Done"')
+  })
+
+  it('lets a caller with an existing tooltip suppress the shared tooltip', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(AgentStateDot, { state: 'interrupted', title: null })
+    )
+
+    expect(markup).not.toContain('data-state-indicator-tooltip')
+    expect(markup).toContain('aria-label="Interrupted"')
+    expect(renderMarkup('interrupted')).toContain(
+      `data-state-indicator-tooltip="${agentStateLabel('interrupted')}"`
+    )
+  })
 })

@@ -17,6 +17,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { formatCreditAmount, formatWindowAmounts } from './usage-roster-formatting'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
@@ -96,10 +97,6 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
-  }
-  if (provider === 'nous') {
-    // Why: the Hermes agent is the Nous Portal client — reuse its bundled favicon.
-    return <AgentIcon agent="hermes" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -213,7 +210,8 @@ function ProviderRateLimitWindowSection({
   textClass,
   mutedClass,
   emptyBarClass,
-  usagePercentageDisplay
+  usagePercentageDisplay,
+  now
 }: {
   window: RateLimitWindow | null
   label: string
@@ -221,13 +219,14 @@ function ProviderRateLimitWindowSection({
   mutedClass: string
   emptyBarClass: string
   usagePercentageDisplay: UsagePercentageDisplay
+  now: number
 }): React.JSX.Element | null {
   if (!window) {
     return null
   }
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - Date.now()) : null
+  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
   const amounts = formatWindowAmounts(window)
 
   return (
@@ -302,6 +301,8 @@ export function ProviderPanel({
   showResetCredits?: boolean
   usagePercentageDisplay?: UsagePercentageDisplay
 }): React.JSX.Element {
+  const windowSections = p ? getWindowSections(p) : []
+  const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
@@ -387,7 +388,7 @@ export function ProviderPanel({
 
       <div className={`border-t ${dividerClass}`} />
 
-      {getWindowSections(p).map((s) => (
+      {windowSections.map((s) => (
         <ProviderRateLimitWindowSection
           key={s.label}
           window={s.window}
@@ -396,6 +397,7 @@ export function ProviderPanel({
           mutedClass={mutedClass}
           emptyBarClass={emptyBarClass}
           usagePercentageDisplay={usagePercentageDisplay}
+          now={now}
         />
       ))}
 

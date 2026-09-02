@@ -77,15 +77,30 @@ export type WorkspaceSessionWrite = {
   patch: WorkspaceSessionPatch
 }
 
+/**
+ * Why the two are one unit and not two optional callbacks: a gate can reopen on a wall clock (the
+ * direct-SSH apply's suppression tail) with no store update behind it. A caller that supplies the
+ * gate but no wake-up would strand every write deferred in that window until some unrelated
+ * mutation happened along — the failure this deferral exists to prevent. Pairing them in the type
+ * makes that combination unwriteable rather than merely discouraged.
+ */
+type SessionWritePersistGate =
+  | { shouldSchedulePersist?: undefined; subscribeToPersistGateOpen?: undefined }
+  | {
+      /** False defers the write; it never drops it. */
+      shouldSchedulePersist: () => boolean
+      /** Called when the gate may have reopened. Returns an unsubscribe. */
+      subscribeToPersistGateOpen: (onGateOpen: () => void) => () => void
+    }
+
 export type SessionWriteSubscriberDeps = {
   store: {
     subscribe: (listener: (state: AppState) => void) => () => void
     getState: () => AppState
   }
   persist: (payload: WorkspaceSessionWrite) => void
-  shouldSchedulePersist?: () => boolean
   debounceMs?: number
-}
+} & SessionWritePersistGate
 
 /**
  * Why: factored out so a vitest can drive the real Zustand store and assert
@@ -97,6 +112,7 @@ export function createSessionWriteSubscriber({
   store,
   persist,
   shouldSchedulePersist,
+  subscribeToPersistGateOpen,
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -108,9 +124,49 @@ export function createSessionWriteSubscriber({
   // reuse the prior identity while a real session change keeps fresh tabs for
   // the eventual getState() patch build. `null` makes the first fire proceed.
   let prev: Record<string, unknown> | null = null
+  // Why: this set is the only record that a mutation still owes a write — `prev` has already
+  // advanced past it, and change detection is identity-based, so a field dropped from here can
+  // never be re-detected. It is retired only by a flush that reached `persist` (or found nothing
+  // left to write), and by unsubscribe. A closed gate never retires it.
   const pendingChangedFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
+
+  const flushPendingWrite = (): void => {
+    timer = null
+    // Why: rebuild from the freshest store state rather than the snapshot
+    // captured when this timer was scheduled. Today this is equivalent
+    // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
+    // (the same fields gating the timer reset), so the captured `state` is
+    // already current for those fields. Calling getState() guards against a
+    // future refactor that adds a non-relevant field read to the payload
+    // builder — without this, such a change would silently start emitting
+    // stale values for that field.
+    const fresh = store.getState()
+    // Why: a closed gate defers, it never discards. Returning with the pending set intact leaves
+    // the write owed; the next store update or gate-open wake-up re-arms it. Nothing re-arms from
+    // here, so a gate that never reopens costs no timer.
+    if (!shouldPersistWorkspaceSession(fresh)) {
+      return
+    }
+    if (shouldSchedulePersist && !shouldSchedulePersist()) {
+      return
+    }
+    const changed = new Set(pendingChangedFields)
+    pendingChangedFields.clear()
+    const patch = buildWorkspaceSessionPatch(fresh, changed)
+    if (Object.keys(patch).length === 0) {
+      return
+    }
+    persist({ patch })
+  }
+
+  const armFlushTimer = (): void => {
+    if (timer !== null) {
+      clearTimeout(timer)
+    }
+    timer = setTimeout(flushPendingWrite, debounceMs)
+  }
 
   const unsub = store.subscribe((state) => {
     if (!shouldPersistWorkspaceSession(state)) {
@@ -130,7 +186,7 @@ export function createSessionWriteSubscriber({
       prev === null
         ? [...SESSION_RELEVANT_FIELDS]
         : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
-    if (changedFields.length === 0) {
+    if (changedFields.length === 0 && pendingChangedFields.size === 0) {
       return
     }
     prev = next
@@ -138,47 +194,26 @@ export function createSessionWriteSubscriber({
       pendingChangedFields.add(field)
     }
     if (shouldSchedulePersist && !shouldSchedulePersist()) {
-      if (timer !== null) {
-        clearTimeout(timer)
-        timer = null
-      }
-      pendingChangedFields.clear()
       return
     }
-    if (timer !== null) {
-      clearTimeout(timer)
+    // Why: an unrelated update may wake a deferred write but must never reset an armed debounce —
+    // that reset storm is exactly what the changed-field gate above exists to prevent.
+    if (timer !== null && changedFields.length === 0) {
+      return
     }
-    timer = setTimeout(() => {
-      timer = null
-      // Why: rebuild from the freshest store state rather than the snapshot
-      // captured when this timer was scheduled. Today this is equivalent
-      // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
-      // (the same fields gating the timer reset), so the captured `state` is
-      // already current for those fields. Calling getState() guards against a
-      // future refactor that adds a non-relevant field read to the payload
-      // builder — without this, such a change would silently start emitting
-      // stale values for that field.
-      const fresh = store.getState()
-      if (!shouldPersistWorkspaceSession(fresh)) {
-        pendingChangedFields.clear()
-        return
-      }
-      if (shouldSchedulePersist && !shouldSchedulePersist()) {
-        pendingChangedFields.clear()
-        return
-      }
-      const changed = new Set(pendingChangedFields)
-      pendingChangedFields.clear()
-      const patch = buildWorkspaceSessionPatch(fresh, changed)
-      if (Object.keys(patch).length === 0) {
-        return
-      }
-      persist({ patch })
-    }, debounceMs)
+    armFlushTimer()
+  })
+
+  const unsubGateOpen = subscribeToPersistGateOpen?.(() => {
+    if (pendingChangedFields.size === 0 || timer !== null) {
+      return
+    }
+    armFlushTimer()
   })
 
   return () => {
     unsub()
+    unsubGateOpen?.()
     if (timer !== null) {
       clearTimeout(timer)
     }

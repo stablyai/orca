@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
 import type * as ReactModule from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
@@ -488,7 +489,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('Fable')
     expect(markup).toContain('Resets in 6d 17h')
@@ -508,7 +509,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     // Why: bars show consumption (% used), matching harness meters (#7551).
     expect(markup).toContain('35%')
@@ -530,7 +531,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('100%')
     expect(markup).toContain('% used')
@@ -550,7 +551,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('100%')
     expect(markup).toContain('width:100%')
@@ -569,7 +570,9 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
+    const markup = renderToStaticMarkup(
+      createElement(ProviderPanel, { p, usagePercentageDisplay: 'remaining' })
+    )
 
     expect(markup).toContain('75% left')
     expect(markup).toContain('width:75%')
@@ -593,7 +596,7 @@ describe('ProviderPanel reset rendering', () => {
       nousCredits: { subscriptionRemaining: 580, topUpRemaining: 42.5, totalUsable: 622.5 }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('Subscription')
     expect(markup).toContain('Top-up')
@@ -619,7 +622,7 @@ describe('ProviderPanel reset rendering', () => {
       nousCredits: null
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('Subscription')
     expect(markup).not.toContain('Top-up')

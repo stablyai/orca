@@ -4,7 +4,8 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
   getMobileSessionTabTitle,
-  resolveMobileTerminalTabAgentId
+  resolveMobileTerminalTabAgentId,
+  resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
 
 function agentStatus(agentType: string | undefined): AgentStatusEntry {
@@ -72,6 +73,15 @@ describe('resolveMobileTerminalTabAgentId', () => {
     expect(
       resolveMobileTerminalTabAgentId(terminalTab('Codex ready', { agentType: 'unknown' }))
     ).toBe('codex')
+  })
+})
+
+describe('resolveMobileTerminalTabOwnedAgentId', () => {
+  it('excludes display-only terminal titles from behavioral authority', () => {
+    expect(resolveMobileTerminalTabOwnedAgentId(terminalTab('✦ Gemini CLI'))).toBeNull()
+    expect(
+      resolveMobileTerminalTabOwnedAgentId(terminalTab('Terminal', { launchAgent: 'gemini' }))
+    ).toBe('gemini')
   })
 })
 

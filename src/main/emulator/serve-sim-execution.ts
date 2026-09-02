@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { app } from 'electron'
 import { platform, tmpdir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
@@ -95,15 +95,22 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
     (process.platform === 'darwin'
       ? join(app.getPath('exe'), '..', '..', 'Resources')
       : join(app.getPath('exe'), '..', 'resources'))
-  const bundled = join(bundledResourcesPath, 'serve-sim', 'dist', 'serve-sim.js')
-  if (existsSync(bundled)) {
+  // macOS releases used to copy serve-sim to Resources/serve-sim explicitly.
+  // The runtime closure now owns a single copy under Resources/node_modules;
+  // keep the root path first so already-installed bundles continue to work.
+  for (const bundledPackageDir of [
+    join(bundledResourcesPath, 'serve-sim'),
+    join(bundledResourcesPath, 'node_modules', 'serve-sim')
+  ]) {
+    const bundledEntry = join(bundledPackageDir, 'dist', 'serve-sim.js')
+    if (!existsSync(bundledEntry)) {
+      continue
+    }
     if (process.platform === 'darwin') {
       // Why: the bundled camera dylib is signed but has no Gatekeeper ticket
       // (iOS-simulator arch), so injecting it from the quarantined app bundle
       // can trip syspolicyd; run serve-sim from an unquarantined copy instead.
-      const materializedDir = resolveMaterializedServeSimPackageDir(
-        join(bundledResourcesPath, 'serve-sim')
-      )
+      const materializedDir = resolveMaterializedServeSimPackageDir(bundledPackageDir)
       if (materializedDir) {
         return {
           command: process.execPath,
@@ -112,18 +119,13 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
         }
       }
     }
-    return { command: process.execPath, baseArgs: [bundled], usesElectronAsNode: true }
+    return { command: process.execPath, baseArgs: [bundledEntry], usesElectronAsNode: true }
   }
 
-  const nodeModulesEntry = join(
-    app.getAppPath(),
-    'node_modules',
-    'serve-sim',
-    'dist',
-    'serve-sim.js'
-  )
+  const nodeModulesPackageDir = join(app.getAppPath(), 'node_modules', 'serve-sim')
+  const nodeModulesEntry = join(nodeModulesPackageDir, 'dist', 'serve-sim.js')
   if (existsSync(nodeModulesEntry)) {
-    const helperBin = join(dirname(nodeModulesEntry), '..', 'bin', 'serve-sim-bin')
+    const helperBin = join(nodeModulesPackageDir, 'bin', 'serve-sim-bin')
     if (existsSync(helperBin) && process.platform !== 'win32') {
       try {
         accessSync(helperBin, constants.X_OK)

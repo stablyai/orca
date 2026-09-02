@@ -1,13 +1,30 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { resolveDefaultHermesHome } from '../skills/skill-provider-runtime-roots'
 
 // Why: Hermes stores the Nous Portal OAuth session in ~/.hermes/auth.json
 // (HERMES_HOME overrides the root, mirroring hermes_cli/auth.py). Orca is
-// read-only here — the Hermes CLI owns the login lifecycle.
-export function getHermesHome(): string {
-  const override = process.env.HERMES_HOME?.trim()
-  return override ? override : join(homedir(), '.hermes')
+// read-only here — the Hermes CLI owns the login lifecycle. The unset-HERMES_HOME
+// default is shared with the skill provider so Windows installs resolve to
+// %LOCALAPPDATA%\hermes instead of a dotfolder that never exists there.
+export function getHermesHome(input?: {
+  env?: NodeJS.ProcessEnv
+  platform?: NodeJS.Platform
+  homeDir?: string
+  directoryExists?: (candidate: string) => boolean
+}): string {
+  const env = input?.env ?? process.env
+  const override = env.HERMES_HOME?.trim()
+  if (override) {
+    return override
+  }
+  return resolveDefaultHermesHome({
+    homeDir: input?.homeDir ?? homedir(),
+    env,
+    platform: input?.platform,
+    directoryExists: input?.directoryExists
+  })
 }
 
 export function getNousAuthPath(): string {
@@ -30,6 +47,26 @@ export type NousAuthReadResult =
 
 export const DEFAULT_NOUS_PORTAL_BASE_URL = 'https://portal.nousresearch.com'
 export const DEFAULT_NOUS_CLIENT_ID = 'hermes-cli'
+
+// Why: portal_base_url arrives from the local auth file, so it must be treated
+// as untrusted — a tampered file must never redirect OAuth credentials to an
+// arbitrary host. Only the canonical https origin (no userinfo, port, or path)
+// is acceptable; anything else fails closed (the fetcher never fetches).
+export function isTrustedNousPortalBaseUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'portal.nousresearch.com' &&
+      url.port === '' &&
+      url.username === '' &&
+      url.password === '' &&
+      (url.pathname === '' || url.pathname === '/')
+    )
+  } catch {
+    return false
+  }
+}
 
 function parseExpiresAtMs(value: unknown): number | null {
   if (typeof value !== 'string' || !value.trim()) {
@@ -76,13 +113,20 @@ export function readNousAuthSession(): NousAuthReadResult {
       return { status: 'missing' }
     }
     const state = providerState as Record<string, unknown>
+    const portalBaseUrl =
+      asOptionalString(state.portal_base_url) ?? DEFAULT_NOUS_PORTAL_BASE_URL
+    // Why: fail closed on a tampered portal_base_url so the credentialed
+    // requests below can never be redirected to an arbitrary host.
+    if (!isTrustedNousPortalBaseUrl(portalBaseUrl)) {
+      return { status: 'error', error: 'Hermes auth file has an untrusted portal URL' }
+    }
     return {
       status: 'ok',
       session: {
         accessToken,
         refreshToken: asOptionalString(state.refresh_token),
         clientId: asOptionalString(state.client_id) ?? DEFAULT_NOUS_CLIENT_ID,
-        portalBaseUrl: asOptionalString(state.portal_base_url) ?? DEFAULT_NOUS_PORTAL_BASE_URL,
+        portalBaseUrl,
         expiresAtMs: parseExpiresAtMs(state.expires_at)
       }
     }

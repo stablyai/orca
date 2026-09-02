@@ -49,9 +49,9 @@ export function createRecoveringPairingRelayCandidate(args: {
     const random = args.random ?? Math.random
     const sleep =
       args.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)))
-    const backOff = async (attempt: number): Promise<void> => {
+    const backOff = async (attempt: number, floorMs = 0): Promise<void> => {
       const capMs = Math.min(2_000, 100 * 2 ** attempt)
-      const delayMs = Math.floor(random() * (capMs + 1))
+      const delayMs = Math.max(floorMs, Math.floor(random() * (capMs + 1)))
       if (delayMs > 0) {
         log('info', `Relay: backing off ${delayMs}ms`)
       }
@@ -89,14 +89,20 @@ export function createRecoveringPairingRelayCandidate(args: {
         return await client.sendRequest(method, params)
       } catch (error) {
         lastError = error
-        if (isCurrentAssignmentMove(error, relay)) {
+        if (error instanceof RelayDirectorMoveNotNewerError) {
+          // Why: the director has no "assignment unchanged" verb — a non-newer
+          // move IS that answer. The stored assignment stays authoritative (the
+          // move is never adopted or persisted), so the only correct action is
+          // to re-dial it with a real pause, not to abandon the relay path.
           log(
             'info',
-            'Relay: director kept current assignment',
+            directorEchoedCurrentAssignment(error, relay)
+              ? 'Relay: director kept current assignment'
+              : 'Relay: director has no newer assignment',
             redactSocketEndpoint(relay.cellUrl)
           )
           client.close()
-          await backOff(attempt)
+          await backOff(attempt, NOT_NEWER_RETRY_FLOOR_MS)
           if (closed) {
             throw new Error('relay pairing client closed')
           }
@@ -130,7 +136,11 @@ export function createRecoveringPairingRelayCandidate(args: {
   }
 }
 
-function isCurrentAssignmentMove(error: unknown, relay: PairingRelay): boolean {
+// Redialing the assignment the director just confirmed needs a real pause, not
+// the near-zero full jitter that would hammer the cell that refused the dial.
+const NOT_NEWER_RETRY_FLOOR_MS = 250
+
+function directorEchoedCurrentAssignment(error: unknown, relay: PairingRelay): boolean {
   return (
     error instanceof RelayDirectorMoveNotNewerError &&
     error.assignmentEpoch === relay.assignmentEpoch &&
@@ -151,5 +161,10 @@ function isDirectorRecoverable(error: unknown): boolean {
   if (!(error instanceof RelayOuterError)) {
     return true
   }
+  // 4429 stays out: the cell rejects it after reserving the invite credential,
+  // so each retry burns an attempt toward cooldown/invalidation — and a
+  // director hop cannot relieve cell load anyway. The retained codes are
+  // rejected before reservation (4409/4503) or never reach the cell (1006),
+  // so their re-dials burn nothing.
   return error.code === 4409 || error.code === 4503 || error.code === 1006
 }

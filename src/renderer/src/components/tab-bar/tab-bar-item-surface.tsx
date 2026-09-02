@@ -1,8 +1,9 @@
 import React from 'react'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import type { OpenFile } from '../../store/slices/editor'
-import { canToggleNativeChat } from '../native-chat/native-chat-availability'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
 import BrowserTab from './BrowserTab'
@@ -49,22 +50,13 @@ export function renderTabBarItems({
     onActivateFile,
     onCloseFile,
     onActivateBrowserTab,
+    onActivateAgentSession,
     onCloseBrowserTab,
     onDuplicateBrowserTab,
     onCloseAllFiles,
     onMakePreviewFilePermanent
   } = props
-  const {
-    resolvedGroupId,
-    generatedTabTitlesEnabled,
-    unifiedTabByVisibleId,
-    nativeChatEnabled,
-    tabAgentTypesByTabId,
-    nativeChatTabWideFallbackUnsafeTabsById,
-    nativeChatTranscriptIsLocalReadable,
-    toggleTabViewMode,
-    statusByRelativePath
-  } = runtime
+  const { resolvedGroupId, generatedTabTitlesEnabled, statusByRelativePath } = runtime
 
   // A selected client-hosted row covers the pane, so the tab it covers must stop looking active —
   // the group's own activeTabId never moves for it, and two underlines would show at once.
@@ -97,25 +89,6 @@ export function renderTabBarItems({
         ...item.data,
         title: resolveTerminalTabTitle(item.data, generatedTabTitlesEnabled, item.data.title)
       }
-      const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
-      // Carry the agent *identity* (not just "an agent exists") so the native-chat gate can reject agents like Grok.
-      const resolvedAgent =
-        resolveCommittedTitleAgentType(unifiedTabForItem?.label ?? '') ??
-        resolveCommittedTitleAgentType(terminalTab.title)
-      // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
-      const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
-      const tabWideFallbackSafe = nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
-      const canToggleViewMode =
-        unifiedTabForItem !== undefined &&
-        canToggleNativeChat({
-          experimentalNativeChatEnabled: nativeChatEnabled,
-          contentType: 'terminal',
-          launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
-          detectedAgent,
-          resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
-          nativeChatTranscriptIsLocalReadable,
-          isChatViewMode: unifiedTabForItem.viewMode === 'chat'
-        })
       return (
         <SortableTab
           key={item.id}
@@ -123,11 +96,6 @@ export function renderTabBarItems({
           unifiedTabId={item.unifiedTabId}
           groupId={resolvedGroupId}
           tabCount={items.length}
-          canToggleViewMode={canToggleViewMode}
-          isChatView={nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'}
-          onToggleViewMode={
-            unifiedTabForItem ? () => toggleTabViewMode(unifiedTabForItem.id) : undefined
-          }
           hasTabsToRight={index < items.length - 1}
           hasTabsToLeft={index > 0}
           isActive={
@@ -218,6 +186,51 @@ export function renderTabBarItems({
           onCloseAll={() => onCloseAllFiles?.()}
           onMakePermanent={() => {}}
           onTogglePin={() => togglePinned(item)}
+          dragData={dragData}
+          dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+          includeTopTabBorder={includeTopTabBorder}
+        />
+      )
+    }
+    if (item.type === 'agent-session') {
+      const structuredTab: TerminalTab = {
+        id: item.id,
+        ptyId: null,
+        worktreeId,
+        title: item.data.label,
+        customTitle: item.data.customLabel,
+        color: item.data.color,
+        sortOrder: item.data.sortOrder,
+        createdAt: item.data.createdAt,
+        ...(isAgentSessionHandleProvider(item.data.agentSessionAgent)
+          ? { launchAgent: item.data.agentSessionAgent as TuiAgent }
+          : {})
+      }
+      return (
+        <SortableTab
+          key={item.id}
+          tab={structuredTab}
+          unifiedTabId={item.unifiedTabId}
+          groupId={resolvedGroupId}
+          tabCount={items.length}
+          hasTabsToRight={index < items.length - 1}
+          hasTabsToLeft={index > 0}
+          isActive={
+            !clientHostedRowOwnsActiveState &&
+            activeTabType === 'agent-session' &&
+            item.id === activeTabId
+          }
+          isPinned={item.isPinned}
+          isExpanded={false}
+          onActivate={() => activateRealTab(onActivateAgentSession)(item.id)}
+          onClose={() => onClose(item.id)}
+          onCloseOthers={() => onCloseOthers(item.id)}
+          onCloseToRight={() => onCloseToRight(item.id)}
+          onCloseToLeft={() => onCloseToLeft(item.id)}
+          onSetCustomTitle={onSetCustomTitle}
+          onSetTabColor={onSetTabColor}
+          onTogglePin={() => togglePinned(item)}
+          onToggleExpand={() => {}}
           dragData={dragData}
           dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
           includeTopTabBorder={includeTopTabBorder}

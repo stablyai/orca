@@ -3,8 +3,12 @@ import { dirname } from 'node:path'
 export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): string[] {
   // Launch through package.json so app version and resource paths match a packaged app.
   const appPath = dirname(dirname(dirname(mainPath)))
+  // Isolated macOS profiles must not invoke the system keychain UI. Without
+  // these Chromium switches startup can block before the first renderer target.
+  const keychainArgs =
+    process.platform === 'darwin' ? ['--password-store=basic', '--use-mock-keychain'] : []
   if (headful || process.platform !== 'linux') {
-    return [appPath]
+    return [...keychainArgs, appPath]
   }
 
   // Why: Ubuntu CI cannot run Electron's setuid chrome-sandbox (not root-owned
@@ -20,6 +24,7 @@ export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): s
     '--disable-gpu-sandbox',
     '--disable-dev-shm-usage',
     '--in-process-gpu',
+    ...keychainArgs,
     appPath
   ]
 }

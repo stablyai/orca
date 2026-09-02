@@ -12,6 +12,7 @@ export type FullCreationExecutionInput = Pick<
   | 'normalizedSparseDirectories'
   | 'note'
   | 'onCreated'
+  | 'parentWorktreeId'
   | 'persistDraft'
   | 'persistSetupAgentStartupPolicy'
   | 'prepareFullSubmit'
@@ -47,6 +48,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
     normalizedSparseDirectories,
     note,
     onCreated,
+    parentWorktreeId,
     persistDraft,
     persistSetupAgentStartupPolicy,
     prepareFullSubmit,
@@ -76,6 +78,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         submitLinkedPR,
         workspaceName,
         nameWasGenerated,
+        nameIsAutoManaged,
         submitBaseBranch,
         submitCompareBaseRef,
         submitPushTarget,
@@ -153,9 +156,13 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           nameWasGenerated,
+          ...(createDisplayName
+            ? { displayNameKind: nameIsAutoManaged ? ('generated' as const) : ('user' as const) }
+            : {}),
           ...(!backendStartup && startupPlan?.draftPrompt
             ? { startupDraft: startupPlan.draftPrompt }
-            : {})
+            : {}),
+          ...(parentWorktreeId ? { parentWorktreeId } : {})
         }
       )
 
@@ -251,6 +258,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       normalizedSparseDirectories,
       note,
       onCreated,
+      parentWorktreeId,
       persistDraft,
       persistSetupAgentStartupPolicy,
       prepareFullSubmit,

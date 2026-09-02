@@ -1,6 +1,9 @@
 name: Terminal IME E2E
 
 on:
+  # Why workflow_call and not pull_request: pr.yml owns the path filter that decides when an IME
+  # change is worth a real ibus session. A pull_request trigger here would run it on every PR.
+  workflow_call:
   workflow_dispatch:
   schedule:
     - cron: '30 9 * * *'
@@ -41,9 +44,9 @@ jobs:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       - name: Use external node-gyp to avoid pnpm bundled copy
         run: |
@@ -65,6 +68,10 @@ jobs:
           --workers=1
 
       - name: Run native IBus Hangul exact-byte tests
+        # Why not the default success(): the synthetic step above runs first, so its failure used
+        # to skip this one entirely — the real-IME half reported nothing on exactly the PRs that
+        # broke IME code. The two signals are independent and both belong in the log.
+        if: '!cancelled()'
         env:
           SKIP_BUILD: '1'
         run: pnpm run test:e2e:terminal-ime-native

@@ -58,6 +58,12 @@ type Props = {
   loadingEarlier?: boolean
   onLoadEarlier?: () => void
   onSend: (text: string) => Promise<boolean>
+  /** Route identity used to fence accepted sends that settle after a tab/view switch. */
+  sendSurfaceId: string
+  /** Reads the retained route's focus generation for accepted-send fencing. */
+  getSendCompletionGeneration: () => number
+  /** Reads user draft mutations from the route-owned controller. */
+  getComposerEditGeneration: () => number
   /** Accepted user echoes awaiting transcript replacement, including image previews. */
   pending: MobileNativeChatPendingItem[]
   /** Local photo URIs retained when the authoritative transcript replaces an
@@ -126,6 +132,9 @@ export function MobileNativeChatView({
   loadingEarlier,
   onLoadEarlier,
   onSend,
+  sendSurfaceId,
+  getSendCompletionGeneration,
+  getComposerEditGeneration,
   pending,
   imagePreviewsByMessageId,
   composerText,
@@ -181,12 +190,13 @@ export function MobileNativeChatView({
   const { data } = useMemo(
     () =>
       buildMobileNativeChatTransientData({
+        messages,
         folded,
         streaming,
         pending,
         imagePreviewsByMessageId
       }),
-    [folded, streaming, pending, imagePreviewsByMessageId]
+    [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
 
   // Follow the tail as the conversation grows and keep the newest message above
@@ -430,6 +440,8 @@ export function MobileNativeChatView({
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}
+        sendSurfaceId={sendSurfaceId}
+        {...{ getSendCompletionGeneration, getComposerEditGeneration }}
         agent={agent}
         sessionOptions={sessionOptions}
         onAttachImage={onAttachImage}

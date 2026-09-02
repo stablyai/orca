@@ -111,7 +111,7 @@ describe('browser session profile IPC', () => {
     expect(detectBrowsersMock).not.toHaveBeenCalled()
   })
 
-  it('forwards the user-agent mode from a trusted renderer', () => {
+  it('forwards the user-agent mode from a trusted renderer', async () => {
     const profile = {
       id: 'profile-google',
       scope: 'isolated',
@@ -135,9 +135,9 @@ describe('browser session profile IPC', () => {
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
 
-    expect(
+    await expect(
       createHandler({ sender }, { scope: 'isolated', label: 'Google', userAgentMode: 'native' })
-    ).toEqual(profile)
+    ).resolves.toEqual(profile)
     expect(createProfileMock).toHaveBeenCalledWith('isolated', 'Google', {
       userAgentMode: 'native'
     })

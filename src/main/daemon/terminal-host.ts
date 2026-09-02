@@ -21,24 +21,10 @@ import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { isShellProcess } from '../../shared/agent-detection'
 import { TerminalAttachCanceledError } from './daemon-errors'
+import { rejectOnAbort } from './terminal-attach-cancellation'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
-/** Never resolves; only rejects, so it can bound a wait without settling it. */
-function rejectOnAbort(signal: AbortSignal | undefined, sessionId: string): Promise<never> {
-  if (!signal) {
-    return new Promise<never>(() => {})
-  }
-  return new Promise<never>((_resolve, reject) => {
-    if (signal.aborted) {
-      reject(new TerminalAttachCanceledError(sessionId))
-      return
-    }
-    signal.addEventListener('abort', () => reject(new TerminalAttachCanceledError(sessionId)), {
-      once: true
-    })
-  })
-}
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
@@ -106,6 +92,7 @@ export class TerminalHost {
           }
           return await createOrAttachTerminalSession(options, {
             sessions: this.sessions,
+            assertCreateAllowed: () => this.assertCreateOrAttachAllowed(options),
             sessionTeardown: this.sessionTeardown,
             killedTombstones: this.killedTombstones,
             spawnSubprocess: this.spawnSubprocess,
@@ -233,6 +220,17 @@ export class TerminalHost {
     return session.confirmForegroundProcess()
   }
 
+  async confirmShellForeground(sessionId: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId)
+    if (session?.isAlive !== true) {
+      return false
+    }
+    const confirmed = await session.confirmShellForeground()
+    // Why the recheck: proof for a session that exited or was replaced during
+    // the await is stale; the caller would bind it to the successor's stream.
+    return confirmed && this.sessions.get(sessionId) === session && session.isAlive
+  }
+
   clearScrollback(sessionId: string): void {
     this.getAliveSession(sessionId).clearScrollback()
   }
@@ -243,6 +241,21 @@ export class TerminalHost {
     if (!session || !session.isAlive) {
       return null
     }
+    return session.getSnapshot(opts)
+  }
+
+  async getSettledSnapshot(
+    sessionId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<TerminalSnapshot | null> {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    await session.settleShellOwnershipConfirmation()
+    // Why no liveness recheck: the sync path returned the pre-exit snapshot when
+    // a session died a beat after the call; a disposal during the settle yields
+    // null naturally from the plane's own guard.
     return session.getSnapshot(opts)
   }
 

@@ -76,6 +76,8 @@ export function installMultiplexFlowControl(
           seq: serialized.seq,
           source: serialized.source,
           kittyKeyboardFlags: serialized.kittyKeyboardFlags,
+          alternateScreen: serialized.alternateScreen,
+          terminalOwner: serialized.terminalOwner,
           truncatedByByteBudget: serialized.truncatedByByteBudget,
           data: serialized.data
         }
@@ -138,7 +140,7 @@ export function installMultiplexFlowControl(
         stream.streamId,
         error instanceof Error ? error.message : 'Remote terminal recovery snapshot failed.'
       )
-      state.detachStream(stream.streamId, true)
+      state.detachStream(stream.streamId, 'unverifiable')
     } finally {
       if (streams.get(stream.streamId) === stream) {
         stream.ackRecoverySnapshotInFlight = false

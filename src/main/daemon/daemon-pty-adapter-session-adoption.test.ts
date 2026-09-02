@@ -5,6 +5,7 @@ import { rmSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
+import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import type { HistoryReader } from './history-reader'
 import type { DaemonFileLog } from './daemon-file-log'
 import { serializeDaemonPidFile } from './daemon-spawner'
@@ -315,6 +316,34 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapter2.dispose()
     })
 
+    it('refuses an attach whose exit event beats the control reply', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
+      const exits: string[] = []
+      adapter2.onExit(({ id: exitedId }) => exits.push(exitedId))
+      const client = (
+        adapter2 as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const request = client.request.bind(client)
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        const result = await request(type, payload)
+        if (type === 'createOrAttach') {
+          lastSubprocess._simulateExit(0)
+          await waitFor(() => exits.includes(id))
+        }
+        return result
+      })
+
+      try {
+        await expect(adapter2.attach(id)).rejects.toThrow(`Session not found: ${id}`)
+        expect(adapter2.getActiveSessionIds()).toEqual([])
+      } finally {
+        adapter2.dispose()
+      }
+    })
+
     it('keeps legacy attach behavior when no output sequence is available', async () => {
       const ensureConnected = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
@@ -354,6 +383,41 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapter2.dispose()
     })
 
+    it('retires a fresh session returned by a current daemon for attach-only', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 100, rows: 30 } } as never)
+            : type === 'createOrAttach'
+              ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
+              : ({} as never)
+        )
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath })
+      try {
+        await expect(current.attach('raced-current-session')).rejects.toThrow(
+          'Session not found: raced-current-session'
+        )
+
+        expect(requestSpy).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({ cols: 100, rows: 30, attachOnly: true })
+        )
+        expect(requestSpy).toHaveBeenCalledWith('kill', {
+          sessionId: 'raced-current-session',
+          immediate: true
+        })
+        expect(current.getActiveSessionIds()).toEqual([])
+      } finally {
+        current.dispose()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
     it('retires the accidental spawn of a pre-v31 daemon that ignores attachOnly', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
@@ -375,8 +439,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
         expect(requestSpy).toHaveBeenCalledWith(
           'createOrAttach',
-          expect.objectContaining({ cols: 100, rows: 30, attachOnly: true })
+          expect.objectContaining({ cols: 100, rows: 30 })
         )
+        const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
+        expect(createPayload).not.toHaveProperty('attachOnly')
         expect(requestSpy).toHaveBeenCalledWith('kill', {
           sessionId: 'raced-legacy-session',
           immediate: true
@@ -388,7 +454,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('surfaces a failed retire of the accidental legacy spawn instead of swallowing it', async () => {
+    it('keeps a failed retire of the accidental legacy spawn unverifiable', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
@@ -406,13 +472,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
       try {
-        await expect(legacy.attach('orphaned-legacy-session')).rejects.toThrow(
-          'Session not found: orphaned-legacy-session'
+        await expect(legacy.attach('orphaned-legacy-session')).rejects.toBeInstanceOf(
+          TerminalSessionOwnerUnverifiedError
         )
 
-        // The orphaned replacement is at least diagnosable.
         expect(warnSpy).toHaveBeenCalledWith(
-          '[daemon] attach-only retire of accidental legacy spawn failed',
+          '[daemon] attach-only retire of unexpected spawn failed',
           expect.objectContaining({ sessionId: 'orphaned-legacy-session' })
         )
       } finally {

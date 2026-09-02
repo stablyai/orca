@@ -112,6 +112,25 @@ describe('fetchNousRateLimits', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  // Why: the portal base URL is read from the local auth file, so it is
+  // untrusted input; a tampered value must never direct credentialed requests
+  // to an arbitrary host (Melostack security review, 2026-08-31).
+  it.each([
+    ['https://evil.example'],
+    ['http://portal.nousresearch.com'],
+    ['https://user:pass@portal.nousresearch.com'],
+    ['https://portal.nousresearch.com:8443'],
+    ['https://portal.nousresearch.com.evil.example'],
+    ['not a url']
+  ])('never fetches against an untrusted portal base URL (%s)', async (portalBaseUrl) => {
+    const result = await fetchNousRateLimits({
+      authReadResult: { status: 'ok', session: makeSession({ portalBaseUrl }) }
+    })
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('not trusted')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('fetches the subscription and account breakdown with a fresh stored token', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse(makeSubscriptionPayload()))
     const result = await fetchNousRateLimits({

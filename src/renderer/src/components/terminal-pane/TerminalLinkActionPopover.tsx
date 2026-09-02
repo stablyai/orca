@@ -38,7 +38,9 @@ function ActionRow({
     >
       {action.external === true ? <ExternalLink className="size-3.5" /> : null}
       {action.external === false ? <Globe className="size-3.5" /> : null}
-      <span className="min-w-0 flex-1 text-left">{action.label}</span>
+      <span className="min-w-0 flex-1 truncate text-left" title={action.label}>
+        {action.label}
+      </span>
       <ShortcutKeyCombo keys={keys} keyCapClassName="min-w-5 px-1 py-0 text-[11px]" />
     </Button>
   )
@@ -125,7 +127,7 @@ export function TerminalLinkActionPopover({
           side="top"
           sideOffset={6}
           collisionPadding={8}
-          className="w-max min-w-52 max-w-[min(17rem,calc(100vw-1rem))] p-1"
+          className="w-max min-w-52 max-w-[min(21rem,calc(100vw-1rem))] p-1"
           data-terminal-link-action-popover
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}

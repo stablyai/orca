@@ -52,10 +52,45 @@ export type BrowserViewportOverride = {
   mobile: boolean
 }
 
+export type BrowserViewportScrollState = {
+  scrollLeft: number
+  scrollTop: number
+  maxScrollLeft: number
+  maxScrollTop: number
+}
+
+/**
+ * A page that shows a workspace document rather than a URL. The document is the identity: the grant
+ * and the `orca-preview://` URL it is served over are minted when the page mounts and replaced on a
+ * hard reload, so neither may be stored, persisted or published — this is what is, and `url` stays
+ * the blank URL for the whole life of such a page.
+ */
+export type BrowserPageDocLocation = {
+  kind: 'workspace-doc'
+  worktreeId: string
+  filePath: string
+}
+
+/**
+ * Where a converted page came from — one level deep, so Back can cross the conversion boundary.
+ * A `workspace-doc` origin carries the document identity only; a `url` origin carries the page's
+ * last stored (already-fenced) url, so no grant URL can ride provenance into persistence.
+ */
+export type BrowserPageConversionOrigin =
+  | { kind: 'workspace-doc'; docLocation: BrowserPageDocLocation }
+  | {
+      kind: 'url'
+      url: string
+      /** The origin page's runtime ownership, so Back cannot silently move browsing onto this
+       *  desktop: absent = worktree-inferred, null = client-local, string = that runtime. */
+      browserRuntimeEnvironmentId?: string | null
+    }
+
 export type BrowserPage = {
   id: string
   workspaceId: string
   worktreeId: string
+  /** Blank for a page whose `docLocation` is set; a live grant URL is never written here. */
   url: string
   title: string
   loading: boolean
@@ -74,6 +109,12 @@ export type BrowserPage = {
   remoteBrowserPageClientHosted?: boolean
   /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
   viewportPresetId?: BrowserViewportPresetId | null
+  /** Set on a page that shows a workspace document; absent on every page that shows a URL. */
+  docLocation?: BrowserPageDocLocation | null
+  /** Set on a page the address bar converted from the other kind; absent everywhere else. */
+  convertedFrom?: BrowserPageConversionOrigin | null
+  /** Set on a page Back returned across a conversion to; Forward re-crosses it. */
+  convertedTo?: BrowserPageConversionOrigin | null
 }
 
 export type BrowserWorkspace = {
@@ -106,6 +147,8 @@ export type BrowserWorkspace = {
   canGoForward: boolean
   loadError: BrowserLoadError | null
   createdAt: number
+  /** Mirrored from the active page, like the fields above it. */
+  docLocation?: BrowserPageDocLocation | null
 }
 
 export type BrowserTab = BrowserWorkspace

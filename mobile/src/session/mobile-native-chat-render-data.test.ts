@@ -65,6 +65,7 @@ function build(
   pending: Parameters<typeof buildMobileNativeChatTransientData>[0]['pending']
 ): NativeChatMessage[] {
   return buildMobileNativeChatTransientData({
+    messages,
     folded: foldMobileNativeChatMessages(messages),
     streaming,
     pending
@@ -143,6 +144,7 @@ describe('buildMobileNativeChatTransientData', () => {
       user('prompt', '[Image #1] look at this')
     ])
     const result = buildMobileNativeChatTransientData({
+      messages: folded,
       folded,
       streaming: null,
       pending: [],
@@ -158,6 +160,7 @@ describe('buildMobileNativeChatTransientData', () => {
 
   it('restores the local preview onto a marker-only transcript turn', () => {
     const result = buildMobileNativeChatTransientData({
+      messages: [user('prompt', '[Image #1]')],
       folded: foldMobileNativeChatMessages([user('prompt', '[Image #1]')]),
       streaming: null,
       pending: [],
@@ -178,5 +181,252 @@ describe('buildMobileNativeChatTransientData', () => {
   it('omits the bubble when the gate withheld the streaming text', () => {
     const data = build([assistant('a1', 'done answer')], null, [])
     expect(data.some((message) => message.id === 'streaming')).toBe(false)
+  })
+})
+
+describe('foldMobileNativeChatMessages', () => {
+  function toolCall(id: string): NativeChatMessage {
+    return {
+      id,
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'command -v orca-ide' } }],
+      timestamp: 0,
+      source: 'transcript'
+    }
+  }
+
+  function toolResult(id: string, output: string): NativeChatMessage {
+    return {
+      id,
+      role: 'tool',
+      blocks: [{ type: 'tool-result', output }],
+      timestamp: 0,
+      source: 'transcript'
+    }
+  }
+
+  // The chat reads a 40-message tail, so the window regularly opens on a result
+  // whose `tool_use` is older than the window. It used to render as its own
+  // bubble of raw shell output with no owning call.
+  it('drops a leading tool result whose call is older than the read window', () => {
+    const folded = foldMobileNativeChatMessages([
+      toolResult('orphan', 'Exit code 1\norca-ide not found'),
+      assistant('a1', 'Falling back to the installed binary.')
+    ])
+
+    expect(folded.map((message) => message.id)).toEqual(['a1'])
+  })
+
+  it('still folds a result whose call is inside the window', () => {
+    const folded = foldMobileNativeChatMessages([
+      assistant('a1', 'Checking which binary is on PATH.'),
+      toolCall('c1'),
+      toolResult('r1', 'orca-ide not found')
+    ])
+
+    expect(folded).toHaveLength(1)
+    expect(folded[0]?.blocks.map((block) => block.type)).toEqual([
+      'text',
+      'tool-call',
+      'tool-result'
+    ])
+  })
+
+  it('keeps a mixed Claude tool result with a harness sidecar paired', () => {
+    const folded = foldMobileNativeChatMessages([
+      toolCall('c1'),
+      {
+        id: 'mixed',
+        role: 'user',
+        blocks: [
+          { type: 'tool-result', output: 'important output' },
+          { type: 'text', text: '<system-reminder>continue</system-reminder>' }
+        ],
+        timestamp: 0,
+        source: 'transcript'
+      }
+    ])
+
+    expect(folded[0]?.blocks).toEqual([
+      { type: 'tool-call', name: 'Bash', input: { command: 'command -v orca-ide' } },
+      { type: 'tool-result', output: 'important output' }
+    ])
+  })
+
+  it('keeps a hidden interruption from authorizing a later result', () => {
+    const folded = foldMobileNativeChatMessages([
+      toolCall('c1'),
+      {
+        id: 'interrupt',
+        role: 'user',
+        blocks: [{ type: 'text', text: '[Request interrupted by user]' }],
+        timestamp: 1,
+        source: 'transcript'
+      },
+      toolResult('orphan', 'stale output')
+    ])
+
+    expect(folded.map((message) => message.id)).toEqual(['c1'])
+    expect(folded[0]?.blocks).toEqual([
+      { type: 'tool-call', name: 'Bash', input: { command: 'command -v orca-ide' } }
+    ])
+  })
+})
+
+// Claude consumes a mid-turn send through a `queued_command` attachment and writes
+// no `type:"user"` record for it, so that echo has no row to match - ever. What
+// made the conversation read as scrambled was not the unmatched echo itself but
+// where it rendered: appended after every turn, so it re-read below each new one.
+describe('buildMobileNativeChatTransientData anchoring', () => {
+  function row(id: string, role: 'user' | 'assistant', text: string): NativeChatMessage {
+    return { id, role, blocks: [{ type: 'text', text }], timestamp: 1, source: 'transcript' }
+  }
+
+  it('keeps an unmatched echo where it was sent instead of below later turns', () => {
+    const folded = [row('m1', 'user', 'earlier'), row('m2', 'assistant', 'on it')]
+    const { data } = buildMobileNativeChatTransientData({
+      messages: folded,
+      folded,
+      streaming: null,
+      pending: [{ id: 'p1', text: 'a mid-turn send', baselineTailMessageId: 'm2' }]
+    })
+    expect(data.map((m) => m.id)).toEqual(['m1', 'm2', 'p1'])
+
+    // The agent keeps working. The echo must NOT drift below the new turns.
+    const later = [
+      ...folded,
+      row('m3', 'assistant', 'still working'),
+      row('m4', 'assistant', 'done')
+    ]
+    const { data: after } = buildMobileNativeChatTransientData({
+      messages: later,
+      folded: later,
+      streaming: null,
+      pending: [{ id: 'p1', text: 'a mid-turn send', baselineTailMessageId: 'm2' }]
+    })
+    expect(after.map((m) => m.id)).toEqual(['m1', 'm2', 'p1', 'm3', 'm4'])
+  })
+
+  it('reproduces the reported replay: stale echoes stay in place, not stacked at the tail', () => {
+    const folded = [
+      row('m1', 'user', 'first question'),
+      row('m2', 'assistant', 'answering'),
+      row('m3', 'assistant', 'newest turn')
+    ]
+    const { data } = buildMobileNativeChatTransientData({
+      messages: folded,
+      folded,
+      streaming: null,
+      pending: [
+        { id: 'p1', text: 'sent against m1', baselineTailMessageId: 'm1' },
+        { id: 'p2', text: 'sent against m2', baselineTailMessageId: 'm2' }
+      ]
+    })
+    expect(data.map((m) => m.id)).toEqual(['m1', 'p1', 'm2', 'p2', 'm3'])
+  })
+
+  it('keeps send order among echoes sharing one anchor', () => {
+    const { data } = buildMobileNativeChatTransientData({
+      messages: [row('m1', 'assistant', 'ready')],
+      folded: [row('m1', 'assistant', 'ready')],
+      streaming: null,
+      pending: [
+        { id: 'p1', text: 'first', baselineTailMessageId: 'm1' },
+        { id: 'p2', text: 'second', baselineTailMessageId: 'm1' }
+      ]
+    })
+    expect(data.map((m) => m.id)).toEqual(['m1', 'p1', 'p2'])
+  })
+
+  it('falls back to the tail when the send captured no baseline', () => {
+    const { data } = buildMobileNativeChatTransientData({
+      messages: [row('m1', 'assistant', 'ready')],
+      folded: [row('m1', 'assistant', 'ready')],
+      streaming: null,
+      pending: [{ id: 'p1', text: 'no baseline yet', baselineTailMessageId: null }]
+    })
+    expect(data.map((m) => m.id)).toEqual(['m1', 'p1'])
+  })
+
+  it('falls back to the tail when the captured row left the raw window', () => {
+    const { data } = buildMobileNativeChatTransientData({
+      messages: [row('m1', 'assistant', 'ready')],
+      folded: [row('m1', 'assistant', 'ready')],
+      streaming: null,
+      pending: [{ id: 'p1', text: 'anchored to a folded-away row', baselineTailMessageId: 'gone' }]
+    })
+    expect(data.map((m) => m.id)).toEqual(['m1', 'p1'])
+  })
+
+  it('keeps an echo before later turns when its folded baseline leads the raw window', () => {
+    const messages = [
+      row('noise', 'user', '<system-reminder>hidden boundary'),
+      row('a1', 'assistant', 'arrived later')
+    ]
+    const folded = foldMobileNativeChatMessages(messages)
+    expect(folded.map((message) => message.id)).toEqual(['a1'])
+
+    const { data } = buildMobileNativeChatTransientData({
+      messages,
+      folded,
+      streaming: null,
+      pending: [
+        { id: 'p1', text: 'sent after the hidden boundary', baselineTailMessageId: 'noise' }
+      ]
+    })
+    expect(data.map((message) => message.id)).toEqual(['p1', 'a1'])
+  })
+
+  it('still puts the streaming bubble after the transcript', () => {
+    const { data } = buildMobileNativeChatTransientData({
+      messages: [row('m1', 'user', 'hi')],
+      folded: [row('m1', 'user', 'hi')],
+      streaming: 'thinking',
+      pending: [{ id: 'p1', text: 'echo', baselineTailMessageId: 'm1' }]
+    })
+    expect(data.map((m) => m.id)).toEqual(['m1', 'p1', 'streaming'])
+  })
+
+  it('anchors a send captured against a tool row to its folded assistant', () => {
+    const messages: NativeChatMessage[] = [
+      row('a1', 'assistant', 'working'),
+      {
+        id: 'tool',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' } }],
+        timestamp: 2,
+        source: 'transcript'
+      },
+      row('a2', 'assistant', 'done')
+    ]
+    const folded = foldMobileNativeChatMessages(messages)
+    expect(folded.map((message) => message.id)).toEqual(['a1', 'a2'])
+
+    const { data } = buildMobileNativeChatTransientData({
+      messages,
+      folded,
+      streaming: null,
+      pending: [{ id: 'p1', text: 'sent during the tool', baselineTailMessageId: 'tool' }]
+    })
+    expect(data.map((message) => message.id)).toEqual(['a1', 'p1', 'a2'])
+  })
+
+  it('anchors after the prompt that absorbed an earlier image-source row', () => {
+    const messages = [
+      row('a1', 'assistant', 'ready'),
+      user('source', '[Image: source: /tmp/earlier.png]'),
+      user('prompt', '[Image #1] earlier image'),
+      row('a2', 'assistant', 'done')
+    ]
+    const folded = foldMobileNativeChatMessages(messages)
+    expect(folded.map((message) => message.id)).toEqual(['a1', 'prompt', 'a2'])
+
+    const { data } = buildMobileNativeChatTransientData({
+      messages,
+      folded,
+      streaming: null,
+      pending: [{ id: 'p1', text: 'sent after the image source', baselineTailMessageId: 'source' }]
+    })
+    expect(data.map((message) => message.id)).toEqual(['a1', 'prompt', 'p1', 'a2'])
   })
 })

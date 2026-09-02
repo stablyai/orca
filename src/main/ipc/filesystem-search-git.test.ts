@@ -1,15 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn()
+const { gitSpawnMock } = vi.hoisted(() => ({
+  gitSpawnMock: vi.fn()
 }))
 
-vi.mock('child_process', () => ({
-  spawn: spawnMock,
-  // runner.ts imports these from child_process; stubs prevent
-  // "missing export" errors when the mock is resolved transitively.
-  execFile: vi.fn(),
-  execFileSync: vi.fn()
+vi.mock('../git/runner', () => ({
+  gitSpawnAfterWindowsEnvironmentReady: gitSpawnMock
 }))
 
 import { searchWithGitGrep } from './filesystem-search-git'
@@ -36,7 +32,7 @@ describe('filesystem-search-git', () => {
 
   it('parses git grep output and finds matches', async () => {
     const proc = createMockProcess()
-    spawnMock.mockReturnValue(proc)
+    gitSpawnMock.mockReturnValue(proc)
 
     const promise = searchWithGitGrep('/mock/root', { query: 'hello', rootPath: '/mock/root' }, 100)
 
@@ -74,7 +70,7 @@ describe('filesystem-search-git', () => {
 
   it('finds multiple matches per line', async () => {
     const proc = createMockProcess()
-    spawnMock.mockReturnValue(proc)
+    gitSpawnMock.mockReturnValue(proc)
 
     const promise = searchWithGitGrep('/mock/root', { query: 'ab', rootPath: '/mock/root' }, 100)
 
@@ -97,7 +93,7 @@ describe('filesystem-search-git', () => {
 
   it('respects maxResults and sets truncated', async () => {
     const proc = createMockProcess()
-    spawnMock.mockReturnValue(proc)
+    gitSpawnMock.mockReturnValue(proc)
 
     const promise = searchWithGitGrep('/mock/root', { query: 'x', rootPath: '/mock/root' }, 2)
 
@@ -118,26 +114,30 @@ describe('filesystem-search-git', () => {
 
   it('passes correct flags for case-insensitive fixed-string search', async () => {
     const proc = createMockProcess()
-    spawnMock.mockReturnValue(proc)
+    gitSpawnMock.mockReturnValue(proc)
 
     const promise = searchWithGitGrep(
       '/mock/root',
       { query: 'test', rootPath: '/mock/root', caseSensitive: false, useRegex: false },
-      100
+      100,
+      { wslDistro: 'Ubuntu' }
     )
 
     setTimeout(() => proc.emit('close'), 10)
     await promise
 
-    const gitArgs = spawnMock.mock.calls[0][1] as string[]
+    const gitArgs = gitSpawnMock.mock.calls[0][0] as string[]
     expect(gitArgs).toContain('-i')
     expect(gitArgs).toContain('--fixed-strings')
     expect(gitArgs).not.toContain('--extended-regexp')
+    expect(gitSpawnMock.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ admissionTier: 'interactive', wslDistro: 'Ubuntu' })
+    )
   })
 
   it('passes correct flags for regex whole-word search', async () => {
     const proc = createMockProcess()
-    spawnMock.mockReturnValue(proc)
+    gitSpawnMock.mockReturnValue(proc)
 
     const promise = searchWithGitGrep(
       '/mock/root',
@@ -154,7 +154,7 @@ describe('filesystem-search-git', () => {
     setTimeout(() => proc.emit('close'), 10)
     await promise
 
-    const gitArgs = spawnMock.mock.calls[0][1] as string[]
+    const gitArgs = gitSpawnMock.mock.calls[0][0] as string[]
     expect(gitArgs).toContain('-w')
     expect(gitArgs).toContain('--extended-regexp')
     expect(gitArgs).not.toContain('-i')
@@ -163,7 +163,7 @@ describe('filesystem-search-git', () => {
 
   it('returns empty result when git grep spawn fails', async () => {
     const proc = createMockProcess()
-    spawnMock.mockReturnValue(proc)
+    gitSpawnMock.mockReturnValue(proc)
 
     const promise = searchWithGitGrep('/mock/root', { query: 'test', rootPath: '/mock/root' }, 100)
 
@@ -180,7 +180,7 @@ describe('filesystem-search-git', () => {
 
     try {
       const proc = createMockProcess()
-      spawnMock.mockReturnValue(proc)
+      gitSpawnMock.mockReturnValue(proc)
 
       const promise = searchWithGitGrep('/mock/root', { query: 'ok', rootPath: '/mock/root' }, 100)
 
@@ -207,7 +207,7 @@ describe('filesystem-search-git', () => {
 
   it('skips lines without null separator', async () => {
     const proc = createMockProcess()
-    spawnMock.mockReturnValue(proc)
+    gitSpawnMock.mockReturnValue(proc)
 
     const promise = searchWithGitGrep('/mock/root', { query: 'ok', rootPath: '/mock/root' }, 100)
 

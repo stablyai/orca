@@ -71,6 +71,12 @@ export function disableUnsupportedChromiumFeatures(): void {
   appendDisabledChromiumFeatures([...DISABLED_CHROMIUM_FEATURES])
 }
 
+// Why: Chromium clamps hidden-page timers to 1/min after 5min on every desktop platform,
+// delaying agent-done/bell notifications ~60s. Call site is unconditional (see index.ts).
+export function optOutOfHiddenPageWakeUpThrottling(): void {
+  appendDisabledChromiumFeatures(['IntensiveWakeUpThrottling'])
+}
+
 function appendDisabledChromiumFeatures(features: string[]): void {
   const existingFeatures = app.commandLine
     .getSwitchValue('disable-features')
@@ -314,8 +320,4 @@ export function enableMainProcessGpuFeatures(): void {
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
   }
-
-  // Why: IntensiveWakeUpThrottling clamps hidden-page timers to 1/min after 5min, delaying agent-done/bell notifications ~60s.
-  // This opt-out is skipped under GPU fallback (win32-only today); if throttling ever reaches Windows it must move out of this path.
-  appendDisabledChromiumFeatures(['IntensiveWakeUpThrottling'])
 }

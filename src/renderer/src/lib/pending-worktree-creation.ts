@@ -66,6 +66,7 @@ export type WorktreeCreationRequest = {
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayName?: string
+  displayNameKind?: 'generated' | 'user'
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
@@ -79,6 +80,8 @@ export type WorktreeCreationRequest = {
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
   branchNameOverride?: string
+  /** Parent picked in the composer's Advanced drawer. Sidebar nesting only, no git effect. */
+  parentWorktreeId?: string
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number
   linkedGitLabIssue?: number

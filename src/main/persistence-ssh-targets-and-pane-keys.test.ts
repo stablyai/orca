@@ -346,7 +346,7 @@ describe('Store', () => {
     const acknowledgedAt = 1_700_000_000_000
     writeDataFile({
       schemaVersion: 1,
-      repos: [makeRepo()],
+      repos: [makeRepo({ id: 'repo1', path: '/repo1' })],
       worktreeMeta: {},
       settings: {},
       ui: {
@@ -408,7 +408,7 @@ describe('Store', () => {
 
     writeDataFile({
       schemaVersion: 1,
-      repos: [makeRepo()],
+      repos: [makeRepo({ id: 'repo1', path: '/repo1' })],
       worktreeMeta: {},
       settings: {},
       ui: {

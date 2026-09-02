@@ -17,6 +17,7 @@ import type Database from '../sqlite/sync-database'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { acknowledgeRemoteOrcaCliPostOutput } from './ssh-remote-orchestration-post-output'
+import { createRootDispatch } from '../runtime/orchestration/db/root-dispatch-test-fixture'
 
 const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
   execPath: '/host/electron',
@@ -57,7 +58,7 @@ function createLegacyRuntime() {
     runId: run.id,
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
-  const dispatch = db.createDispatchContext(task.id, WORKER_HANDLE, WORKER_PANE)
+  const dispatch = createRootDispatch(db, task.id, WORKER_HANDLE, WORKER_PANE)
   const sqlite = (db as unknown as { db: Database.Database }).db
   sqlite
     .prepare(

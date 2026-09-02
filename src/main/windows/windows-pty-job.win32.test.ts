@@ -28,8 +28,9 @@ function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    // An inaccessible process is still alive; only a missing pid proves exit.
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
   }
 }
 
@@ -71,7 +72,7 @@ describeOnWindows('ConPTY job ownership', () => {
     const script = [
       "const{spawn}=require('child_process');",
       "const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],",
-      "{detached:true,stdio:'ignore'});",
+      "{detached:true,windowsHide:true,stdio:'ignore'});",
       "c.unref();console.log('ORCA_GC='+c.pid);"
     ].join('')
     proc.write(`node -e "${script}"\r`)

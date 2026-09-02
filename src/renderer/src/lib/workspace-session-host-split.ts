@@ -49,7 +49,9 @@ export type HostIdByWorktreeId = (worktreeId: string) => ExecutionHostId
  *  - browserWorkspaceKeyed: Record keyed by browser-workspace id; follows the
  *    page record's own worktreeId.
  *  - fileKeyed: Record keyed by editor file id; follows the open file's worktree.
- *  - sleepingAgentKeyed: Record keyed by pane key; follows the record's worktreeId. */
+ *  - sleepingAgentKeyed: Record keyed by pane key; follows the record's worktreeId.
+ *  - surfaceTombstoneKeyed: Record under an opaque key whose value names its own worktreeId --
+ *    the only routing available once the tab or pane it describes is gone. */
 type SplitContext = {
   hostIdByWorktreeId: HostIdByWorktreeId
   worktreeIdByTabId: Map<string, string>
@@ -287,6 +289,15 @@ export function splitWorkspaceSessionByHost(
   }
 
   return slices
+}
+
+/** Every defined non-'local' partition; 'local' is handled by its own dedicated write. */
+export function nonLocalHostSessionEntries(
+  slices: HostSessionSlices
+): [ExecutionHostId, WorkspaceSessionState][] {
+  return (Object.entries(slices) as [ExecutionHostId, WorkspaceSessionState][]).filter(
+    ([hostId, slice]) => hostId !== LOCAL_EXECUTION_HOST_ID && slice !== undefined
+  )
 }
 
 /** Inverse of split: combine per-host slices into one unified session. Global

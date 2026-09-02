@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WslModule from '../wsl'
+import type * as WslRunningPathFilterModule from '../wsl-running-path-filter'
 
 const MANAGED_HOME = '/tmp/orca-user-data/codex-runtime-home/home'
 
@@ -11,9 +13,13 @@ vi.mock('../codex/codex-home-paths', () => ({
 }))
 
 // Keeps the WSL fallback tier inert so this stays a host-roots test on any platform.
-vi.mock('../wsl', () => ({
-  listWslDistrosAsync: vi.fn(async () => []),
-  getWslHomeAsync: vi.fn(async () => null)
+vi.mock('../wsl', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslModule>()),
+  listRunningWslHomeDirsAsync: vi.fn(async () => [])
+}))
+vi.mock('../wsl-running-path-filter', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslRunningPathFilterModule>()),
+  filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
 
 const scanned = vi.hoisted(() => ({ dirs: [] as string[] }))

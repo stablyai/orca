@@ -85,6 +85,14 @@ describe('resolvePaneAgentIdentity', () => {
   })
 
   describe('mixed-version peers', () => {
+    it('keeps a run-key-less completed row from hijacking launch evidence', () => {
+      const result = resolve([
+        { source: 'completed-hook', agent: 'claude' },
+        { source: 'launch', agent: 'codex' }
+      ])
+      expect(result).toMatchObject({ agent: 'codex', source: 'launch' })
+    })
+
     it('treats evidence with no run id as eligible', () => {
       // An old host publishes no run ids. Treating unknown as stale would blank every row.
       const result = resolvePaneAgentIdentity({

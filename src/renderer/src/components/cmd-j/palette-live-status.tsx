@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { FilledBellIcon } from '@/components/sidebar/WorktreeCardHelpers'
 import {
@@ -35,6 +36,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { useNow } from '@/hooks/use-now'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
@@ -47,6 +49,7 @@ type PaletteLiveStatus = {
   unreadAgentCompletionPanes: Record<string, true>
   /** Bumped with the maps so consumers re-resolve `now`-sensitive freshness on the same tick. */
   statusEpoch: number
+  now: number
 }
 
 const PaletteLiveStatusContext = createContext<PaletteLiveStatus | null>(null)
@@ -59,6 +62,7 @@ export function PaletteLiveStatusProvider({
   active: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  const now = useNow(30_000, active)
   const {
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
@@ -91,7 +95,6 @@ export function PaletteLiveStatusProvider({
   const value = useMemo<PaletteLiveStatus>(() => {
     // Why: `now` decides freshness, so both derivations must read it on the same tick — otherwise a
     // "done" dot can outlive its window while the worktree row beside it has already decayed.
-    const now = Date.now()
     const entriesByTabId = buildExplicitEntriesByTabId(
       agentStatusByPaneKey,
       migrationUnsupportedByPtyId
@@ -113,7 +116,8 @@ export function PaletteLiveStatusProvider({
       browserTabsByWorktree,
       unreadTerminalTabs,
       unreadAgentCompletionPanes,
-      statusEpoch
+      statusEpoch,
+      now
     }
   }, [
     agentStatusByPaneKey,
@@ -125,7 +129,8 @@ export function PaletteLiveStatusProvider({
     tabsByWorktree,
     terminalLayoutsByTabId,
     unreadAgentCompletionPanes,
-    unreadTerminalTabs
+    unreadTerminalTabs,
+    now
   ])
 
   return (
@@ -221,7 +226,7 @@ export function PaletteRecentTabStatusDot({
   const terminalTabId = row?.terminalTab?.id
   const status: WorktreeStatus | null =
     live && row?.terminalTab
-      ? resolveRecentWorkspaceTabStatus(row, live.paneSources, Date.now())
+      ? resolveRecentWorkspaceTabStatus(row, live.paneSources, live.now)
       : null
   const hasUnread =
     live != null &&
@@ -244,30 +249,28 @@ export function PaletteRecentTabStatusDot({
           'Unread agent completion'
         )
       : getWorktreeStatusLabel(badge)
-  // Why: title on the outer hit target (not the pointer-events-none pip) so hover still reveals
-  // status — matches StatusIndicator's tooltip placement.
+  // Why: the outer hit target owns the tooltip because the overlaid pip ignores pointer events.
   return (
-    <span
-      className="relative inline-flex size-3.5 shrink-0 items-center justify-center"
-      title={statusLabel}
-    >
-      {fallback}
-      <span
-        className={cn(
-          // Why popover, not background: the dialog surface is --popover (#171717 in dark), while
-          // --background is the app canvas (#0a0a0a) — using it punched a dark halo through every
-          // dark-mode row. Selected rows use --jump-palette-selection-surface so the cutout tracks
-          // the stronger keyboard highlight from main.css.
-          'pointer-events-none absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full',
-          'bg-popover ring-2 ring-popover',
-          'group-data-[selected=true]:bg-[var(--jump-palette-selection-surface)] group-data-[selected=true]:ring-[var(--jump-palette-selection-surface)]'
-        )}
-        aria-hidden="true"
-      >
-        <RecentTabAttentionBadgeGlyph badge={badge} />
+    <StateIndicatorTooltip label={statusLabel}>
+      <span className="relative inline-flex size-3.5 shrink-0 items-center justify-center">
+        {fallback}
+        <span
+          className={cn(
+            // Why popover, not background: the dialog surface is --popover (#171717 in dark), while
+            // --background is the app canvas (#0a0a0a) — using it punched a dark halo through every
+            // dark-mode row. Selected rows use --jump-palette-selection-surface so the cutout tracks
+            // the stronger keyboard highlight from main.css.
+            'pointer-events-none absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full',
+            'bg-popover ring-2 ring-popover',
+            'group-data-[selected=true]:bg-[var(--jump-palette-selection-surface)] group-data-[selected=true]:ring-[var(--jump-palette-selection-surface)]'
+          )}
+          aria-hidden="true"
+        >
+          <RecentTabAttentionBadgeGlyph badge={badge} />
+        </span>
+        <span className="sr-only">{statusLabel}</span>
       </span>
-      <span className="sr-only">{statusLabel}</span>
-    </span>
+    </StateIndicatorTooltip>
   )
 }
 
@@ -281,5 +284,5 @@ function RecentTabAttentionBadgeGlyph({
     return <FilledBellIcon className="size-2.5 text-amber-500 drop-shadow-sm" />
   }
   // Why: AgentStateDot owns working/permission/done glyphs app-wide (spinner / ? / check).
-  return <AgentStateDot state={badge} size="sm" />
+  return <AgentStateDot state={badge} size="sm" title={null} />
 }

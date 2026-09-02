@@ -61,7 +61,7 @@ type Props = {
   onDismiss: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
   onActivate: (tabId: string, paneKey: string) => void
-  /** Why: injected from a parent so one shared tick re-renders every row's "Xm ago" (see useNow.ts), not a per-row interval. */
+  /** Why: injected from a parent so one shared tick re-renders every row's "Xm ago" (see hooks/use-now.ts), not a per-row interval. */
   now: number
   /** Why: bold prompt rides on the card's unvisited signal (shared with the workspace name), not per-agent state. */
   isUnvisited?: boolean
@@ -253,7 +253,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               className="inline-flex shrink-0 items-center justify-center"
               aria-label={dotTooltipLabel}
             >
-              <AgentStateDot state={dotState} size={stateDotSize} />
+              <AgentStateDot state={dotState} size={stateDotSize} title={null} />
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

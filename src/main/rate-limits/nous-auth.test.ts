@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readNousAuthSession } from './nous-auth'
+import { getHermesHome, readNousAuthSession } from './nous-auth'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -91,7 +91,7 @@ describe('readNousAuthSession', () => {
         nous: {
           access_token: 'at',
           client_id: 'hermes-cli',
-          portal_base_url: 'https://preview.nousresearch.com/'
+          portal_base_url: 'https://portal.nousresearch.com/'
         }
       }
     })
@@ -99,9 +99,67 @@ describe('readNousAuthSession', () => {
       const result = readNousAuthSession()
       expect(result.status).toBe('ok')
       if (result.status === 'ok') {
-        expect(result.session.portalBaseUrl).toBe('https://preview.nousresearch.com/')
+        expect(result.session.portalBaseUrl).toBe('https://portal.nousresearch.com/')
       }
     })
     rmSync(home, { recursive: true, force: true })
+  })
+
+  it.each([
+    ['https://evil.example'],
+    ['http://portal.nousresearch.com'],
+    ['https://user:pass@portal.nousresearch.com'],
+    ['https://portal.nousresearch.com:8443'],
+    ['https://portal.nousresearch.com.evil.example'],
+    ['not a url']
+  ])('fails closed on an untrusted portal base URL (%s)', (portalBaseUrl) => {
+    const home = mkdtempSync(join(tmpdir(), 'nous-auth-test-'))
+    writeAuthFile(home, {
+      providers: {
+        nous: {
+          access_token: 'at',
+          refresh_token: 'rt',
+          portal_base_url: portalBaseUrl
+        }
+      }
+    })
+    withHermesHome(home, () => {
+      const result = readNousAuthSession()
+      expect(result.status).toBe('error')
+    })
+    rmSync(home, { recursive: true, force: true })
+  })
+})
+
+describe('getHermesHome', () => {
+  it('honors a HERMES_HOME override on any platform', () => {
+    expect(
+      getHermesHome({
+        env: { HERMES_HOME: join('/srv', 'hermes') },
+        platform: 'win32',
+        homeDir: join('/users', 'alice')
+      })
+    ).toBe(join('/srv', 'hermes'))
+  })
+
+  it('defaults to %LOCALAPPDATA%\\hermes on Windows', () => {
+    expect(
+      getHermesHome({
+        env: { LOCALAPPDATA: join('/local') },
+        platform: 'win32',
+        homeDir: join('/users', 'alice'),
+        directoryExists: (candidate) => candidate === join('/local', 'hermes')
+      })
+    ).toBe(join('/local', 'hermes'))
+  })
+
+  it('defaults to ~/.hermes on POSIX', () => {
+    expect(
+      getHermesHome({
+        env: {},
+        platform: 'linux',
+        homeDir: join('/users', 'alice')
+      })
+    ).toBe(join('/users', 'alice', '.hermes'))
   })
 })

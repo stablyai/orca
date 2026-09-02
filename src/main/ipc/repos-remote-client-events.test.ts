@@ -48,7 +48,7 @@ const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
 async function registerHandlersWithoutNotifier(): Promise<typeof ReposChangedNotificationModule> {
   vi.resetModules()
   const repos = await import('./repos')
-  repos.registerRepoHandlers(mainWindow as never, mockStore as never)
+  repos.registerRepoHandlers(mainWindow as never, mockStore as never, {} as never)
   return import('./repos/repos-changed-notification')
 }
 

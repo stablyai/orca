@@ -74,12 +74,24 @@ export function readBenchmarkArtifact(path) {
 }
 
 export function normalizeBenchmarkArtifact(path, artifact = readBenchmarkArtifact(path)) {
+  if (artifact?.valid === false || artifact?.status === 'failed') {
+    throw new Error(`${path}: benchmark artifact is marked invalid`)
+  }
   if (artifact?.summaryMedianMs != null) {
     return normalizeNumericObject(path, artifact, 'startup', artifact.summaryMedianMs, () => 'ms')
   }
   if (artifact?.summaryMedian != null) {
     return normalizeNumericObject(path, artifact, 'daemon', artifact.summaryMedian, (key) =>
       key.endsWith('Count') || key.endsWith('After') ? 'count' : 'ms'
+    )
+  }
+  if (artifact?.headlineMs != null) {
+    return normalizeNumericObject(
+      path,
+      artifact,
+      'terminal-split-activation',
+      artifact.headlineMs,
+      () => 'ms'
     )
   }
   if (artifact?.suites != null) {
@@ -89,7 +101,7 @@ export function normalizeBenchmarkArtifact(path, artifact = readBenchmarkArtifac
     return normalizeSummaryArtifact(path, artifact)
   }
   throw new Error(
-    `${path}: unsupported benchmark artifact; expected summaryMedianMs, summaryMedian, Playwright suites, or top-level summary`
+    `${path}: unsupported benchmark artifact; expected summaryMedianMs, summaryMedian, headlineMs, Playwright suites, or top-level summary`
   )
 }
 

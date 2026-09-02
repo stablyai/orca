@@ -72,6 +72,17 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     }
   }
 
+  async confirmShellForeground(id: string): Promise<boolean> {
+    try {
+      const result = await this.client.request<{ confirmed: boolean }>('confirmShellForeground', {
+        sessionId: id
+      })
+      return result.confirmed === true
+    } catch {
+      return false
+    }
+  }
+
   async serialize(ids: string[]): Promise<string> {
     const sessions: Record<string, { initialCwd?: string }> = {}
     for (const id of ids) {

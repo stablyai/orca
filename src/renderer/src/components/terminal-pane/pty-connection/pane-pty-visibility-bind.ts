@@ -12,6 +12,7 @@ import {
   isAgentTaskCompleteTrackingEnabled
 } from './agent-task-complete-settings'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -34,8 +35,47 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       replacePtyId?: string
       sampleVisibleForegroundAgent?: boolean
     } = {}
-  ): void => {
-    session.bindProcessExitState(ptyId, options.replacePtyId)
+  ): boolean => {
+    // A disposed pane can still receive an already-queued transport callback; it no longer owns state.
+    if (session.disposed) {
+      return false
+    }
+    const state = useAppStore.getState()
+    const leafId = session.pane.leafId
+    const existingPtyId = leafId
+      ? state.terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[leafId]
+      : undefined
+    const tabPtyId = Object.values(state.tabsByWorktree)
+      .flat()
+      .find((tab) => tab.id === session.deps.tabId)?.ptyId
+    // A remounted mirrored pane can report a fresh spawn while its tab still
+    // carries the previous host handle. Treat that as an in-place replacement
+    // so the old identity cannot remain beside the new one in the tab PTY map.
+    const inferredReplacementPtyId =
+      existingPtyId && existingPtyId !== ptyId && tabPtyId === existingPtyId
+        ? existingPtyId
+        : undefined
+    const replacementPtyId = options.replacePtyId ?? inferredReplacementPtyId
+    if (!options.replacePtyId) {
+      const activePtyId = session.activePanePtyBinding
+      const isCurrentPaneTransport =
+        session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+      const isStaleTransportBinding =
+        !isCurrentPaneTransport || (activePtyId !== null && session.transport.getPtyId() !== ptyId)
+      const isInitialCurrentTransportBinding = isCurrentPaneTransport && activePtyId === null
+      if (
+        isStaleTransportBinding ||
+        (shouldIgnoreStalePanePtyLayoutBinding({
+          existingPtyId,
+          nextPtyId: ptyId,
+          tabPtyId
+        }) &&
+          !isInitialCurrentTransportBinding)
+      ) {
+        return false
+      }
+    }
+    session.bindProcessExitState(ptyId, replacementPtyId)
     if (session.activePanePtyBinding && session.activePanePtyBinding !== ptyId) {
       session.reportPanePtyVisibility(session.activePanePtyBinding, false)
     }
@@ -47,7 +87,6 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     session.activePanePtyBindingBoundAt = performance.now()
     session.registerSideEffectFactConsumerForPty(ptyId)
     session.syncHiddenRendererPtyDelivery()
-    session.deps.syncPanePtyLayoutBinding(session.pane.id, ptyId)
     // A live bind proves this pane is current again after detach/reattach.
     useAppStore.getState().restoreAgentPaneAuthority?.(session.cacheKey)
     notifyCodexPaneBoundForStaleSweep(ptyId)
@@ -56,23 +95,43 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       session.capturedDirectSshRetryPtyAccepted && session.directSshRetryAttempt
         ? session.directSshRetryAttempt.attemptId
         : undefined
-    if (
-      directSshRetryAttemptId ||
-      options.updateTabPtyId !== 'if-missing' ||
-      !tabPtyIds.includes(ptyId)
-    ) {
+    const updateTabPtyBinding = (): void => {
       if (directSshRetryAttemptId) {
         session.deps.updateTabPtyId(
           session.deps.tabId,
           ptyId,
-          options.replacePtyId,
+          replacementPtyId,
           directSshRetryAttemptId
         )
-      } else if (options.replacePtyId) {
-        session.deps.updateTabPtyId(session.deps.tabId, ptyId, options.replacePtyId)
+      } else if (replacementPtyId) {
+        session.deps.updateTabPtyId(session.deps.tabId, ptyId, replacementPtyId)
       } else {
         session.deps.updateTabPtyId(session.deps.tabId, ptyId)
       }
+    }
+    const shouldUpdateTabPtyId =
+      directSshRetryAttemptId ||
+      options.updateTabPtyId !== 'if-missing' ||
+      !tabPtyIds.includes(ptyId)
+    if (replacementPtyId) {
+      // Replacement updates the tab and pane ownership in one store commit;
+      // this follow-up is a no-op in production but keeps non-store test deps
+      // and pane-local bookkeeping in sync.
+      if (shouldUpdateTabPtyId) {
+        updateTabPtyBinding()
+      }
+      session.syncPanePtyLayoutBinding(ptyId)
+    } else {
+      if (shouldUpdateTabPtyId) {
+        updateTabPtyBinding()
+      }
+      // Publish the tab identity first so a late layout callback cannot leave a tab and pane split.
+      session.syncPanePtyLayoutBinding(ptyId)
+    }
+    if (session.paneStartup && !session.startupPtyBound) {
+      // Settles the captured one-shot startup only after this pane owns a concrete PTY.
+      session.startupPtyBound = true
+      session.deps.onStartupBound?.()
     }
     if (options.seedInitialAgentStatus) {
       session.applyInitialAgentStatus()
@@ -101,6 +160,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         session.paneForegroundAgentTracker.onCommandStarted(freshSpawnLaunchAgent)
       }
     }
+    return true
   }
 
   session.onPtySpawn = (ptyId: string): void => {
@@ -120,7 +180,12 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     session.spawnedFreshPtyId = ptyId
     // Why: Command Code has no prompt-start hook. Seed the visible working row
     // once the PTY exists, then let real hook events refine or complete it.
-    session.bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
+    const bound = session.bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
+    if (!bound) {
+      // A stale transport may report a spawn after a successor claimed this
+      // pane slot. Its one-shot startup belongs to the successor, not here.
+      return
+    }
     // Spend queued startup only after this pane owns a concrete PTY.
     try {
       session.deps.onQueuedStartupSpawned?.()
@@ -129,6 +194,9 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     }
   }
   session.onPtyRebind = (ptyId: string, replacedPtyId: string): void => {
+    if (session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport) {
+      return
+    }
     if (!session.canAdoptCapturedDirectSshRetryPty(ptyId)) {
       return
     }

@@ -1,6 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
-import { createMockMux, type MockMultiplexer } from './ssh-git-provider-test-harness'
+import {
+  createMockMux,
+  waitForRequestCount,
+  type MockMultiplexer
+} from './ssh-git-provider-test-harness'
+
+function methodNotFound(method: string): Error & { code: number } {
+  return Object.assign(new Error(`Method not found: ${method}`), { code: -32601 })
+}
+
+const CLEAN_STATUS = { entries: [], conflictOperation: 'unknown' }
 
 describe('SshGitProvider', () => {
   let mux: MockMultiplexer
@@ -67,6 +77,40 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(cleanResult)
   })
 
+  it('keeps supported clean checks on the preferred relay RPC', async () => {
+    let resolveProbe!: (result: { clean: boolean }) => void
+    let resolveRemaining!: (result: { clean: boolean }) => void
+    const probe = new Promise<{ clean: boolean }>((resolve) => {
+      resolveProbe = resolve
+    })
+    const remaining = new Promise<{ clean: boolean }>((resolve) => {
+      resolveRemaining = resolve
+    })
+    let preferredRequestCount = 0
+    mux.request.mockImplementation((method) => {
+      expect(method).toBe('git.worktreeIsClean')
+      preferredRequestCount += 1
+      return preferredRequestCount === 1 ? probe : remaining
+    })
+    const checks = Array.from({ length: 10 }, (_, index) =>
+      provider.worktreeIsClean(`/repo/worktree-${index}`)
+    )
+
+    await waitForRequestCount(mux.request, 1)
+    expect(mux.request).toHaveBeenCalledOnce()
+    resolveProbe({ clean: true })
+    await waitForRequestCount(mux.request, 10)
+    expect(mux.request).toHaveBeenCalledTimes(10)
+    resolveRemaining({ clean: true })
+    await expect(Promise.all(checks)).resolves.toEqual(
+      Array.from({ length: 10 }, () => ({ clean: true }))
+    )
+    expect(
+      mux.request.mock.calls.filter(([method]) => method === 'git.worktreeIsClean')
+    ).toHaveLength(10)
+    expect(mux.request.mock.calls.some(([method]) => method === 'git.status')).toBe(false)
+  })
+
   it('worktreeIsClean can ignore untracked files', async () => {
     const cleanResult = { clean: true }
     mux.request.mockResolvedValue(cleanResult)
@@ -113,10 +157,7 @@ describe('SshGitProvider', () => {
   })
 
   it('worktreeIsClean falls back to git.status for old relays', async () => {
-    const methodNotFound = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
-      code: -32601
-    })
-    mux.request.mockRejectedValueOnce(methodNotFound).mockResolvedValueOnce({
+    mux.request.mockRejectedValueOnce(methodNotFound('git.worktreeIsClean')).mockResolvedValueOnce({
       entries: [{ path: 'scratch.txt', status: 'untracked', area: 'untracked' }],
       conflictOperation: 'unknown'
     })
@@ -140,26 +181,180 @@ describe('SshGitProvider', () => {
     }
   })
 
-  it('worktreeIsClean filters untracked entries in old-relay fallback', async () => {
-    const methodNotFound = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
-      code: -32601
+  it('probes an old relay once across sequential clean checks', async () => {
+    mux.request.mockImplementation(async (method) => {
+      if (method === 'git.worktreeIsClean') {
+        throw methodNotFound(method)
+      }
+      return CLEAN_STATUS
     })
-    mux.request.mockRejectedValueOnce(methodNotFound).mockResolvedValueOnce({
-      entries: [{ path: 'scratch.txt', status: 'untracked', area: 'untracked' }],
-      conflictOperation: 'unknown'
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const worktreePaths = Array.from({ length: 10 }, (_, index) => `/repo/worktree-${index}`)
+
+    try {
+      for (const worktreePath of worktreePaths) {
+        await expect(provider.worktreeIsClean(worktreePath)).resolves.toEqual({ clean: true })
+      }
+
+      expect(
+        mux.request.mock.calls.filter(([method]) => method === 'git.worktreeIsClean')
+      ).toHaveLength(1)
+      expect(mux.request.mock.calls.filter(([method]) => method === 'git.status')).toHaveLength(10)
+      expect(mux.request).toHaveBeenCalledTimes(11)
+      expect(warnSpy).toHaveBeenCalledOnce()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('shares one old-relay probe across concurrent clean checks', async () => {
+    let rejectProbe!: (error: Error) => void
+    const probe = new Promise((_resolve, reject) => {
+      rejectProbe = reject
+    })
+    mux.request.mockImplementation((method) => {
+      if (method === 'git.worktreeIsClean') {
+        return probe
+      }
+      return Promise.resolve(CLEAN_STATUS)
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const checks = Array.from({ length: 10 }, (_, index) =>
+      provider.worktreeIsClean(`/repo/worktree-${index}`)
+    )
+
+    try {
+      await waitForRequestCount(mux.request, 1)
+      rejectProbe(methodNotFound('git.worktreeIsClean'))
+      await expect(Promise.all(checks)).resolves.toEqual(
+        Array.from({ length: 10 }, () => ({ clean: true }))
+      )
+
+      expect(
+        mux.request.mock.calls.filter(([method]) => method === 'git.worktreeIsClean')
+      ).toHaveLength(1)
+      expect(mux.request.mock.calls.filter(([method]) => method === 'git.status')).toHaveLength(10)
+      expect(mux.request).toHaveBeenCalledTimes(11)
+      expect(warnSpy).toHaveBeenCalledOnce()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('retries the preferred clean RPC after a transport failure', async () => {
+    const transportError = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
+      code: -32602
+    })
+    mux.request.mockRejectedValueOnce(transportError).mockResolvedValueOnce({ clean: true })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await expect(provider.worktreeIsClean('/repo/first')).rejects.toBe(transportError)
+      await expect(provider.worktreeIsClean('/repo/second')).resolves.toEqual({ clean: true })
+      expect(mux.request.mock.calls.map(([method]) => method)).toEqual([
+        'git.worktreeIsClean',
+        'git.worktreeIsClean'
+      ])
+      expect(warnSpy).not.toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('lets concurrent waiters retry after a transient probe failure', async () => {
+    const transportError = new Error('connection closed')
+    let rejectProbe!: (error: Error) => void
+    let resolveRetries!: (result: { clean: boolean }) => void
+    const probe = new Promise((_resolve, reject) => {
+      rejectProbe = reject
+    })
+    const retries = new Promise<{ clean: boolean }>((resolve) => {
+      resolveRetries = resolve
+    })
+    let preferredRequestCount = 0
+    mux.request.mockImplementation((method) => {
+      expect(method).toBe('git.worktreeIsClean')
+      preferredRequestCount += 1
+      return preferredRequestCount === 1 ? probe : retries
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const checks = Array.from({ length: 3 }, (_, index) =>
+      provider.worktreeIsClean(`/repo/worktree-${index}`)
+    )
+    const settledChecks = Promise.allSettled(checks)
+
+    try {
+      await waitForRequestCount(mux.request, 1)
+      rejectProbe(transportError)
+      await waitForRequestCount(mux.request, 3)
+      resolveRetries({ clean: true })
+
+      const results = await settledChecks
+      expect(results[0]).toEqual({ status: 'rejected', reason: transportError })
+      expect(results.slice(1)).toEqual([
+        { status: 'fulfilled', value: { clean: true } },
+        { status: 'fulfilled', value: { clean: true } }
+      ])
+      await expect(provider.worktreeIsClean('/repo/later')).resolves.toEqual({ clean: true })
+      expect(mux.request).toHaveBeenCalledTimes(4)
+      expect(warnSpy).not.toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('re-probes clean support after the provider is replaced', async () => {
+    mux.request.mockImplementation(async (method) => {
+      if (method === 'git.worktreeIsClean') {
+        throw methodNotFound(method)
+      }
+      return CLEAN_STATUS
     })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
+      await expect(provider.worktreeIsClean('/repo/first')).resolves.toEqual({ clean: true })
+      const replacement = new SshGitProvider('conn-1', mux as never)
+      await expect(replacement.worktreeIsClean('/repo/second')).resolves.toEqual({ clean: true })
+
+      expect(
+        mux.request.mock.calls.filter(([method]) => method === 'git.worktreeIsClean')
+      ).toHaveLength(2)
+      expect(warnSpy).toHaveBeenCalledTimes(2)
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('worktreeIsClean filters untracked entries in old-relay fallback', async () => {
+    mux.request.mockImplementation(async (method) => {
+      if (method === 'git.worktreeIsClean') {
+        throw methodNotFound(method)
+      }
+      return {
+        entries: [{ path: 'scratch.txt', status: 'untracked', area: 'untracked' }],
+        conflictOperation: 'unknown'
+      }
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await expect(provider.worktreeIsClean('/home/user/feat')).resolves.toEqual({
+        clean: false,
+        stdout: 'untracked untracked: scratch.txt'
+      })
       await expect(
         provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
       ).resolves.toEqual({ clean: true })
       expect(mux.request).toHaveBeenNthCalledWith(
-        2,
+        3,
         'git.status',
         { worktreePath: '/home/user/feat' },
         { signal: expect.any(AbortSignal) }
       )
+      expect(
+        mux.request.mock.calls.filter(([method]) => method === 'git.worktreeIsClean')
+      ).toHaveLength(1)
     } finally {
       warnSpy.mockRestore()
     }
@@ -183,11 +378,7 @@ describe('SshGitProvider', () => {
   })
 
   it('forceDeletePreservedBranch maps old relays to the reconnect message', async () => {
-    const methodNotFound = Object.assign(
-      new Error('Method not found: git.forceDeletePreservedBranch'),
-      { code: -32601 }
-    )
-    mux.request.mockRejectedValueOnce(methodNotFound)
+    mux.request.mockRejectedValueOnce(methodNotFound('git.forceDeletePreservedBranch'))
 
     await expect(
       provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')

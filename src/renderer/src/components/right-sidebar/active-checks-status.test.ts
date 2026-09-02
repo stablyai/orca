@@ -101,4 +101,27 @@ describe('getActiveChecksStatus', () => {
 
     expect(getActiveChecksStatus(state)).toBeNull()
   })
+
+  it('hides the matching suppressed GitHub PR status', () => {
+    const state = {
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            branch: 'refs/heads/feature/test',
+            linkedPR: null,
+            suppressedGitHubPR: 12
+          }
+        ]
+      },
+      prCache: {
+        'repo-1::feature/test': { data: makePR('failure'), fetchedAt: 2 }
+      }
+    } as unknown as Pick<AppState, 'activeWorktreeId' | 'repos' | 'worktreesByRepo' | 'prCache'>
+
+    expect(getActiveChecksStatus(state)).toBeNull()
+  })
 })

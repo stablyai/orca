@@ -1,5 +1,5 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
-import { readNousAuthSession, type NousAuthReadResult } from './nous-auth'
+import { isTrustedNousPortalBaseUrl, readNousAuthSession, type NousAuthReadResult } from './nous-auth'
 import { asFiniteNumber, resolveAccessToken, withEndpointDeadline } from './nous-oauth'
 
 // Why: the portal subscription runs on a calendar-month cycle (cycleEndsAt).
@@ -154,6 +154,11 @@ export async function fetchNousRateLimits(
         ? authReadResult.error
         : 'Nous Portal login not found — run `hermes portal` to sign in.'
     )
+  }
+  // Why: an injected session (tests) or future callers must not bypass the
+  // auth-file trust boundary — never fetch against a non-canonical portal host.
+  if (!isTrustedNousPortalBaseUrl(authReadResult.session.portalBaseUrl)) {
+    return makeError('Nous Portal base URL is not trusted.', 'stale-token')
   }
   const resolved = await resolveAccessToken(authReadResult.session, options.signal)
   if ('error' in resolved) {

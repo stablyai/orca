@@ -28,6 +28,7 @@ import {
 } from './orchestration-mailbox-notification-test-harness'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
+import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -470,25 +471,54 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('does not submit or duplicate a pointer after the agent becomes working', async () => {
-    vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-working-before-enter-')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Working-before-Enter Run')
-    const message = insertDirectRunMessage(db, run.id, 'Actionable status')
+  it.each([
+    ['Codex', '\x1b]0;Codex working\x07', '\x1b]0;Codex done\x07'],
+    ['Claude', '\x1b]0;\u280b Claude working\x07', '\x1b]0;\u2733 Claude Code\x07']
+  ])(
+    'submits a staged pointer after %s becomes working without duplicating it',
+    async (_provider, workingTitle, idleTitle) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-mailbox-working-before-enter-')
+      const harness = createRuntime(db)
+      const run = createBoundRun(db, 'Working-before-Enter Run')
+      const message = insertDirectRunMessage(db, run.id, 'Actionable status')
 
-    await driveToLiveIdle(harness.runtime)
-    expect(pointerCount(harness.write)).toBe(1)
-    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 3)
-    await vi.advanceTimersByTimeAsync(500)
+      await driveToLiveIdle(harness.runtime)
+      expect(pointerCount(harness.write)).toBe(1)
+      harness.runtime.onPtyData(PTY_ID, workingTitle, 3)
+      await vi.advanceTimersByTimeAsync(500)
 
-    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
-    expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
-    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 4)
-    await Promise.resolve()
-    expect(pointerCount(harness.write)).toBe(1)
-    db.close()
-  })
+      expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(1)
+      expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
+      harness.runtime.onPtyData(PTY_ID, idleTitle, 4)
+      await Promise.resolve()
+      expect(pointerCount(harness.write)).toBe(1)
+      db.close()
+    }
+  )
+
+  it.each([
+    ['Codex', '\x1b]0;Codex permission\x07'],
+    ['Claude', '\x1b]0;Claude waiting for permission\x07']
+  ])(
+    'does not submit a staged pointer after %s enters a permission state',
+    async (_provider, permissionTitle) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-mailbox-permission-before-enter-')
+      const harness = createRuntime(db)
+      const run = createBoundRun(db, 'Permission-before-Enter Run')
+      const message = insertDirectRunMessage(db, run.id, 'Actionable status')
+
+      await driveToLiveIdle(harness.runtime)
+      expect(pointerCount(harness.write)).toBe(1)
+      harness.runtime.onPtyData(PTY_ID, permissionTitle, 3)
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
+      expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
+      db.close()
+    }
+  )
 
   it('releases staged pointer state when an explicit check owns the batch', async () => {
     vi.useFakeTimers()
@@ -750,7 +780,7 @@ describe('orchestration notification mailbox consistency', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const task = db.createTask({ spec: 'Worker task', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, TERMINAL_HANDLE, PANE_KEY)
+    const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
     for (let index = 0; index < 50; index += 1) {
       insertDirectRunMessage(db, run.id, `Worker status ${index}`)
     }

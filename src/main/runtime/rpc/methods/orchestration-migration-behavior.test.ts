@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
+import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration migration behavior', () => {
   const databases: OrchestrationDb[] = []
@@ -124,7 +127,7 @@ describe('orchestration migration behavior', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'legacy worker', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 
     const response = await dispatcher.dispatch({
@@ -244,5 +247,84 @@ describe('orchestration migration behavior', () => {
     ).rejects.toMatchObject({ code: 'capability_unsupported' })
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
+  })
+
+  it('runs one real contract preflight before federated attach', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'federated worker',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:tab'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
+    databases.push(db)
+
+    const calls: { method: string; params: unknown }[] = []
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      orchestrationEnvironmentTransport: {
+        resolve: () => ({
+          environmentId: 'environment_windows',
+          name: 'windows',
+          peerFingerprint: 'windows_peer'
+        }),
+        call: async (_selector, method, params) => {
+          calls.push({ method, params })
+          if (method === 'status.get') {
+            return {
+              id: 'status',
+              ok: true,
+              result: {
+                ...runtime.getStatus(),
+                capabilities: [
+                  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+                  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+                ]
+              },
+              _meta: { runtimeId: runtime.getRuntimeId() }
+            } satisfies RuntimeRpcResponse<unknown>
+          }
+          return {
+            id: 'attach',
+            ok: true,
+            result: {
+              dispatchId: (params as { dispatchId: string }).dispatchId,
+              state: 'outcome_unknown',
+              runtimeEpoch: 'worker-runtime'
+            },
+            _meta: { runtimeId: runtime.getRuntimeId() }
+          } satisfies RuntimeRpcResponse<unknown>
+        }
+      } satisfies OrchestrationEnvironmentTransport
+    })
+    runtime.setOrchestrationDb(db)
+
+    const result = await startFederatedWorker({
+      params: {
+        task: task.id,
+        from: 'term_coord',
+        on: 'windows',
+        worktree: 'new-top-level',
+        repo: 'id:windows-repo',
+        name: 'remote-work',
+        agent: 'codex'
+      },
+      runtime,
+      db,
+      runId: run.id,
+      task,
+      orchestrationMutation: {
+        callerFingerprint: 'caller',
+        requestId: 'remote_start',
+        method: 'orchestration.workerStart',
+        payloadHash: 'payload'
+      }
+    })
+
+    expect(result).toMatchObject({ state: 'outcome_unknown' })
+    expect(calls.map(({ method }) => method)).toEqual([
+      'status.get',
+      'orchestration.federationAttachStart'
+    ])
+    expect(calls.filter(({ method }) => method === 'status.get')).toHaveLength(1)
   })
 })

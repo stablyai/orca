@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
-import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedules'
+import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
 import { useTranslation } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 

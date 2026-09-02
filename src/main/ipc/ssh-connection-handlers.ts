@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { SshTarget, SshTerminateSessionsResult } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
@@ -98,6 +98,9 @@ export function registerSshConnectionHandlers(): void {
 
   ipcMain.handle('ssh:terminateSessions', async (_event, args: { targetId: string }) => {
     invalidateConnectAttempt(args.targetId)
+    // Why (#12661): an offline sweep tears down local transport only. The caller must be able to tell
+    // "the host stopped these" from "nobody asked the host", so carry the verdict out of the lifecycle queue.
+    let outcome: SshTerminateSessionsResult = { terminated: 0, unverifiable: 0 }
     await runTargetLifecycle(args.targetId, async () => {
       const provider = getSshPtyProvider(args.targetId)
       const leases = persistedStore!.getSshRemotePtyLeases(args.targetId)
@@ -142,6 +145,10 @@ export function registerSshConnectionHandlers(): void {
             )
           )
         : []
+      if (!provider) {
+        // Nothing observed these remote shells, so their state is unknown — not "nothing to do".
+        outcome = { terminated: 0, unverifiable: ptyIds.length }
+      }
       const shutdownFailures: string[] = []
       for (const [index, result] of shutdownResults.entries()) {
         const { appPtyId, relayPtyId } = ptyIds[index]
@@ -154,6 +161,7 @@ export function registerSshConnectionHandlers(): void {
         clearProviderPtyState(appPtyId)
         deletePtyOwnership(appPtyId)
         persistedStore!.markSshRemotePtyLease(args.targetId, relayPtyId, 'terminated')
+        outcome = { ...outcome, terminated: outcome.terminated + 1 }
       }
       if (shutdownFailures.length > 0) {
         // Why: a failed relay shutdown can leave the remote process alive in the grace window; keep the lease/session so the user can retry.
@@ -161,6 +169,7 @@ export function registerSshConnectionHandlers(): void {
       }
       await teardownSshTargetTransport(args.targetId, (session) => session.disposeAndPersist())
     })
+    return outcome
   })
 
   ipcMain.handle('ssh:resetRelay', (_event, args: { targetId: string }) => {

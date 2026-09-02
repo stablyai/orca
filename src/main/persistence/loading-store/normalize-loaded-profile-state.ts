@@ -21,7 +21,8 @@ import { normalizeLoadedUiState } from './normalize-loaded-ui-state'
 import {
   normalizeLoadedAutomationRuns,
   normalizeLoadedHostSessions,
-  normalizeLoadedLocalSession
+  normalizeLoadedLocalSession,
+  normalizeLoadedProjectCatalog
 } from './normalize-loaded-state-collections'
 import { normalizeRetiredNameRegistryMap } from './retired-name-registry-normalization'
 
@@ -33,6 +34,7 @@ export function normalizeLoadedProfileState(
 ): PersistedState {
   const { defaults, migratedExternalVisibility, osc52ClipboardNoticePending } = terminal
   const { normalizedOnboarding, normalizedProjectGroups, loadedCompactWorktreeCards } = profile
+  const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
 
   return {
     ...defaults,
@@ -42,6 +44,9 @@ export function normalizeLoadedProfileState(
     ),
     projectGroups: normalizedProjectGroups,
     repos: migratedExternalVisibility.repos,
+    // Why: persisted catalog rows are untrusted JSON; consumers call string methods on fields the type says are strings.
+    projects: projectCatalog.projects,
+    projectHostSetups: projectCatalog.projectHostSetups,
     folderWorkspaces: normalizeFolderWorkspaces(parsed.folderWorkspaces, normalizedProjectGroups),
     folderWorkspaceDiffComments: normalizeFolderWorkspaceDiffComments(
       parsed.folderWorkspaceDiffComments

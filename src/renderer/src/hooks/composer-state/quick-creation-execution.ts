@@ -12,6 +12,7 @@ type QuickCreationExecutionInput = Pick<
   | 'linkedGitLabMR'
   | 'normalizedSparseDirectories'
   | 'onCreated'
+  | 'parentWorktreeId'
   | 'persistDraft'
   | 'persistSetupAgentStartupPolicy'
   | 'prepareQuickSubmit'
@@ -58,6 +59,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
     linkedGitLabMR,
     normalizedSparseDirectories,
     onCreated,
+    parentWorktreeId,
     persistDraft,
     persistSetupAgentStartupPolicy,
     prepareQuickSubmit,
@@ -103,6 +105,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         submitLinkedPR,
         workspaceName,
         nameWasGenerated,
+        nameIsAutoManaged,
         submitCompareBaseRef,
         submitPushTarget,
         effectiveSetupDecision,
@@ -202,6 +205,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         workspaceName,
         nameWasGenerated,
         displayName: createDisplayName,
+        displayNameKind: createDisplayName ? (nameIsAutoManaged ? 'generated' : 'user') : undefined,
         selectedRepoIsGit,
         baseBranch: submitBaseBranch,
         compareBaseRef: submitCompareBaseRef,
@@ -217,6 +221,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
         branchNameOverride: effectiveBranchNameOverride,
+        parentWorktreeId,
         workspaceStatus: resolvedInitialWorkspaceStatus,
         linkedGitLabMR,
         linkedGitLabIssue,
@@ -259,6 +264,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       linkedGitLabMR,
       normalizedSparseDirectories,
       onCreated,
+      parentWorktreeId,
       persistDraft,
       persistSetupAgentStartupPolicy,
       prepareQuickSubmit,

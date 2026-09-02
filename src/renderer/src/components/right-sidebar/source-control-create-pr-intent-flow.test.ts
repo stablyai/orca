@@ -345,12 +345,6 @@ describe('source-control Create PR intent flow helpers', () => {
     expect(
       resolveCreatePrIntentGeneratedReviewFields(current, {
         success: true,
-        fields: { ...current, title: 'Generated title', body: '   ' }
-      })
-    ).toEqual({ ok: false, error: null })
-    expect(
-      resolveCreatePrIntentGeneratedReviewFields(current, {
-        success: true,
         fields: {
           base: 'other-base',
           title: 'Generated title',
@@ -366,6 +360,33 @@ describe('source-control Create PR intent flow helpers', () => {
         body: '## Problem\n\nDetails',
         draft: true
       }
+    })
+  })
+
+  it('accepts generated review fields with an empty description', () => {
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(
+        { base: 'main', title: 'Feature branch', body: '', draft: false },
+        {
+          success: true,
+          fields: { base: 'main', title: 'chore: add new app config', body: '', draft: false }
+        }
+      )
+    ).toEqual({
+      ok: true,
+      fields: { base: 'main', title: 'chore: add new app config', body: '', draft: false }
+    })
+  })
+
+  it('falls back to the current title when the generated title is blank and the body is empty', () => {
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(
+        { base: 'main', title: 'Feature branch', body: '', draft: false },
+        { success: true, fields: { base: 'main', title: '  ', body: '   ', draft: true } }
+      )
+    ).toEqual({
+      ok: true,
+      fields: { base: 'main', title: 'Feature branch', body: '   ', draft: true }
     })
   })
 

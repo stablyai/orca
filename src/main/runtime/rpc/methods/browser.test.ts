@@ -48,6 +48,26 @@ describe('browser RPC methods', () => {
     })
   })
 
+  it('routes host browser-open requests through the dedicated client opener', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserOpenUrlOnClient: vi.fn().mockResolvedValue({ browserPageId: 'page-local' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('browser.openUrl', {
+        url: 'https://example.com/login',
+        worktree: 'id:wt-1'
+      })
+    )
+
+    expect(runtime.browserOpenUrlOnClient).toHaveBeenCalledWith({
+      url: 'https://example.com/login',
+      worktree: 'id:wt-1'
+    })
+  })
+
   it('validates profile user-agent modes', () => {
     expect(
       ProfileCreate.safeParse({ label: 'Google', scope: 'isolated', userAgentMode: 'native' })

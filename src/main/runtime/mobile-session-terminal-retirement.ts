@@ -1,4 +1,5 @@
 import type {
+  RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot,
@@ -9,6 +10,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../shared/terminal-tab-types'
+import { appendRetiredTerminalSurfaceProofs } from './mobile-session-terminal-retirement-proof'
 
 export type RetiredTerminalSurface = {
   worktreeId: string
@@ -193,6 +195,7 @@ export function retireTerminalSurfacesFromSnapshot(args: {
   ptyId: string
   exactSurfaces?: readonly Pick<RetiredTerminalSurface, 'parentTabId' | 'leafId'>[]
   exactOnly?: boolean
+  retirementProofs?: readonly RuntimeMobileSessionRetiredTerminalSurface[]
 }): { snapshot: RuntimeMobileSessionTabsSnapshot; retired: RetiredTerminalSurface[] } | null {
   const exactSurfaceKeys = new Set(
     (args.exactSurfaces ?? []).map((surface) => `${surface.parentTabId}\0${surface.leafId}`)
@@ -258,6 +261,12 @@ export function retireTerminalSurfacesFromSnapshot(args: {
     null
   const retainedGroupIds = new Set(tabGroups?.map((group) => group.id) ?? [])
 
+  const retired = retiredTabs.map((tab) => ({
+    worktreeId: args.snapshot.worktree,
+    parentTabId: tab.parentTabId,
+    leafId: tab.leafId,
+    ptyId: args.ptyId
+  }))
   return {
     snapshot: {
       ...args.snapshot,
@@ -274,13 +283,16 @@ export function retireTerminalSurfacesFromSnapshot(args: {
             )
           }
         : {}),
+      ...(args.retirementProofs && args.retirementProofs.length > 0
+        ? {
+            retiredTerminalSurfaces: appendRetiredTerminalSurfaceProofs(
+              args.snapshot.retiredTerminalSurfaces,
+              args.retirementProofs
+            )
+          }
+        : {}),
       tabs
     },
-    retired: retiredTabs.map((tab) => ({
-      worktreeId: args.snapshot.worktree,
-      parentTabId: tab.parentTabId,
-      leafId: tab.leafId,
-      ptyId: args.ptyId
-    }))
+    retired
   }
 }

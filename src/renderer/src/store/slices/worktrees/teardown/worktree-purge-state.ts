@@ -79,6 +79,7 @@ export function buildWorktreePurgeState(
     lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
     // Why: liveness-authoritative reconnect maps (orphan sweep reads them); drop purged tabs' entries here too so a re-materialized id can't inherit phantom liveness.
     pendingReconnectPtyIdByTabId: omitByTabId(s.pendingReconnectPtyIdByTabId),
+    unverifiedPtyLossTabIds: omitByTabId(s.unverifiedPtyLossTabIds),
     deferredSshSessionIdsByTabId: omitByTabId(s.deferredSshSessionIdsByTabId),
     pendingInitialCwdByTabId: omitByTabId(s.pendingInitialCwdByTabId),
     pendingIssueCommandSplitByTabId: omitByTabId(s.pendingIssueCommandSplitByTabId),
@@ -169,6 +170,7 @@ export function buildWorktreePurgeState(
     // Per-file editor state for removed files
     editorDrafts: omitByFileId(s.editorDrafts),
     markdownViewMode: omitByFileId(s.markdownViewMode),
+    markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),
     markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
     // Why: keyed by fileId; the bulk reconcile path previously kept these, leaking a cursor-line / view-mode entry per removed file.
     editorCursorLine: omitByFileId(s.editorCursorLine),

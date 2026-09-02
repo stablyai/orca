@@ -18,6 +18,7 @@ export type QuickCreationRequestInput = {
   workspaceName: string
   nameWasGenerated: boolean
   displayName: string | undefined
+  displayNameKind?: 'generated' | 'user'
   selectedRepoIsGit: boolean
   baseBranch: string | undefined
   compareBaseRef: string | undefined
@@ -33,6 +34,7 @@ export type QuickCreationRequestInput = {
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
   branchNameOverride: string | undefined
+  parentWorktreeId: string | null
   workspaceStatus: WorktreeCreationRequest['workspaceStatus']
   linkedGitLabMR: number | null
   linkedGitLabIssue: number | null
@@ -62,6 +64,7 @@ export function buildQuickCreationRequest(
     name: input.workspaceName,
     ...(input.nameWasGenerated ? { nameWasGenerated: true } : {}),
     ...(input.displayName ? { displayName: input.displayName } : {}),
+    ...(input.displayNameKind ? { displayNameKind: input.displayNameKind } : {}),
     ...(input.selectedRepoIsGit && input.baseBranch ? { baseBranch: input.baseBranch } : {}),
     ...(input.selectedRepoIsGit && input.compareBaseRef
       ? { compareBaseRef: input.compareBaseRef }
@@ -88,6 +91,7 @@ export function buildQuickCreationRequest(
       ? { linkedLinearIssueOrganizationUrlKey: input.linkedLinearIssueOrganizationUrlKey }
       : {}),
     ...(input.branchNameOverride ? { branchNameOverride: input.branchNameOverride } : {}),
+    ...(input.parentWorktreeId ? { parentWorktreeId: input.parentWorktreeId } : {}),
     ...(input.workspaceStatus ? { workspaceStatus: input.workspaceStatus } : {}),
     ...(input.includeGitLabLinks && input.linkedGitLabMR != null
       ? { linkedGitLabMR: input.linkedGitLabMR }

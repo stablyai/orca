@@ -81,6 +81,11 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
     if (!encoded) {
       return null
     }
+    // `|` must stay out of a host id: composeWorktreeHostIdentity uses it as its delimiter and
+    // splits at the first one, so an unencoded pipe would rebind an alias to a different host.
+    if (encoded.includes('|')) {
+      return null
+    }
     try {
       const targetId = decodeURIComponent(encoded)
       return targetId ? { kind: 'ssh', id: `ssh:${encoded}`, targetId } : null
@@ -91,6 +96,9 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
   if (normalized.startsWith('runtime:')) {
     const encoded = normalized.slice('runtime:'.length)
     if (!encoded) {
+      return null
+    }
+    if (encoded.includes('|')) {
       return null
     }
     try {

@@ -33,6 +33,14 @@ export function canRevalidateCachedAgentWithoutScan(
 }
 
 export type WindowsCachedAgentJobVerdict =
+  /**
+   * This build's node-pty has no job exports, so there is no job evidence to
+   * weigh -- and every shipped Windows release is still such a build (#16059).
+   * Distinct from 'unavailable': that means "we could have asked and could not",
+   * which must never retire. This means "there is nothing to ask", so the
+   * authoritative scan decides alone, exactly as it does off Windows.
+   */
+  | 'unsupported'
   /** Anchor pid alive in the job, recently confirmed: identity stands, no scan. */
   | 'confirmed'
   /** Anchor pid alive but past the age bound: scan for drift; a silent scan keeps it. */
@@ -64,12 +72,13 @@ export type WindowsCachedAgentJobVerdict =
  */
 export function judgeCachedAgentJobEvidence(args: {
   jobProcessIds: ReadonlySet<number> | null
+  jobSupported?: boolean
   shellPid: number
   anchorProcessId: number | null
   identityAgeMs: number
 }): WindowsCachedAgentJobVerdict {
   if (args.jobProcessIds === null) {
-    return 'unavailable'
+    return args.jobSupported === false ? 'unsupported' : 'unavailable'
   }
   const withinAgeBound = args.identityAgeMs <= WINDOWS_DETACHED_DESCENDANT_IDENTITY_MAX_AGE_MS
   // A shell-pid "anchor" proves nothing about a child; treat it as unanchored.

@@ -290,3 +290,37 @@ describe('buildDispatchPreamble', () => {
     expect(result).toMatchSnapshot()
   })
 })
+
+describe('sub-dispatch section', () => {
+  const base = {
+    taskId: 'task_1',
+    dispatchId: 'ctx_1',
+    taskSpec: 'do the thing',
+    coordinatorHandle: 'term_coord',
+    workerHandle: 'term_worker'
+  }
+
+  it('is omitted when the worker has no nesting budget', () => {
+    const preamble = buildDispatchPreamble(base)
+    expect(preamble).not.toContain('=== SUB-DISPATCH ===')
+    expect(preamble).not.toContain('worker-start')
+  })
+
+  it('is omitted explicitly when nesting is disallowed', () => {
+    expect(buildDispatchPreamble({ ...base, canDispatchSubWorkers: false })).not.toContain(
+      '=== SUB-DISPATCH ==='
+    )
+  })
+
+  it('appears with the run-create sequence when budget remains', () => {
+    const preamble = buildDispatchPreamble({ ...base, canDispatchSubWorkers: true })
+    expect(preamble).toContain('=== SUB-DISPATCH ===')
+    expect(preamble).toContain('orchestration run-create')
+    expect(preamble).toContain('orchestration worker-start')
+  })
+
+  it('keeps the task block last so the spec is not buried', () => {
+    const preamble = buildDispatchPreamble({ ...base, canDispatchSubWorkers: true })
+    expect(preamble.indexOf('=== SUB-DISPATCH ===')).toBeLessThan(preamble.indexOf('=== TASK ==='))
+  })
+})

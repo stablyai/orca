@@ -1,0 +1,28 @@
+---
+title: Browser-use profiles
+---
+
+Browser-use profiles let you run the Orca browser with a specific identity — a logged-in user, a particular cookie jar, a custom user-agent. Useful when an agent needs to log in, reproduce a session-specific bug, or emulate multiple users.
+
+## Create a profile
+
+1. Open [Settings → Browser → Profiles](/docs/settings).
+1. Click **Add profile**, give it a name.
+1. Optionally seed it with cookies, a user-agent, and a viewport size.
+1. For sites that reject Orca's default Chrome-shaped UA (some Google sign-in flows), create a profile that keeps the **native Electron user agent** instead of spoofing. Default profiles still use the cleaned Chrome UA for broader Cloudflare compatibility.
+
+You can also create a no-spoof profile from the CLI with `orca tab profile create --no-ua-spoof` when you script browser setup.
+
+## Cookie import and Google sign-in
+
+Import cookies from Chrome or Edge (or from a cookie file) into a profile from Settings or the browser toolbar. Orca replaces existing cookies only for domains included in the import, so sign-ins for unrelated sites in the same profile stay intact. Google cookies are excluded — import menus show **Google logins aren't imported** and tell you to **Sign in to Google directly in Orca.** After an import that skipped Google cookies, a separate warning names the host that ran the import: open a browser in Orca on that host with the same profile, then sign in.
+
+When a site requests a discoverable passkey from a USB security key and the key offers multiple accounts, Orca opens an account picker instead of silently canceling the sign-in. Choose the account you want or cancel the request. Platform passkeys stored by the operating system are not available in Orca yet; this flow is for external FIDO security keys.
+
+## Use a profile
+
+Pick the profile from the browser toolbar. All tabs in that pane use it until you switch. Agent-driven browser commands inherit the active profile.
+
+## Isolation
+
+Each profile has its own storage partition — cookies, local storage, cache. Profiles don't leak into each other.

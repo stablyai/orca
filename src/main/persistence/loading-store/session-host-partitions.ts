@@ -21,6 +21,11 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
+import {
+  preserveMissingWorkspaceSessionTerminalBindings,
+  sshTargetIdForWorkspaceSessionHost
+} from './workspace-session-terminal-binding-replay'
+import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -31,6 +36,7 @@ const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperat
 type SessionHostPartitionOperationsContext = {
   runtime: SessionHostPartitionOperationsRuntime
   scheduling: WriteSchedulingOperations
+  bindingRecovery: TerminalBindingRecoveryOperations
 }
 
 export class SessionHostPartitionOperations {
@@ -38,9 +44,10 @@ export class SessionHostPartitionOperations {
 
   constructor(
     runtime: SessionHostPartitionOperationsRuntime,
-    scheduling: WriteSchedulingOperations
+    scheduling: WriteSchedulingOperations,
+    bindingRecovery: TerminalBindingRecoveryOperations
   ) {
-    this[sessionHostPartitionOperationsContext] = { runtime, scheduling }
+    this[sessionHostPartitionOperationsContext] = { runtime, scheduling, bindingRecovery }
   }
 
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
@@ -163,16 +170,21 @@ export function setHostWorkspaceSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState
 ): void {
+  const prior =
+    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload
   // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
-  session = preserveRuntimeAuthoredWorkspaceSessionFields(
-    session,
-    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
-  )
+  session = preserveRuntimeAuthoredWorkspaceSessionFields(session, prior)
   // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
-  session = sanitizeWorkspaceSessionTerminalRetirements(
+  session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+  session = preserveMissingWorkspaceSessionTerminalBindings(
     session,
-    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+    prior,
+    owner[sessionHostPartitionOperationsContext].bindingRecovery,
+    {
+      targetIdForWorktree: sshTargetIdForWorkspaceSessionHost(hostId),
+      executionHostId: hostId
+    }
   )
   const pruned = pruneWorkspaceSessionBrowserHistory(
     pruneLocalTerminalScrollbackBuffers(
