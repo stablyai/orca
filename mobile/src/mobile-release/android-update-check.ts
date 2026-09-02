@@ -10,6 +10,7 @@ export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 // Why: desktop releases dominate the feed (roughly daily), so the newest Android release can
 // sit past page one. 5 × 100 releases covers about a year of desktop cadence.
 export const MAX_RELEASE_PAGES = 5
+export const REQUEST_TIMEOUT_MS = 15_000
 
 const STATE_KEY = 'orca:androidUpdate'
 const TAG_PREFIX = 'mobile-android-v'
@@ -63,20 +64,31 @@ function nextPageUrl(response: Response): string | null {
 export async function fetchLatestAndroidRelease(
   fetchFn: typeof fetch = fetch
 ): Promise<AndroidUpdate | null> {
-  let url: string | null = ANDROID_RELEASES_API_URL
-  for (let page = 0; page < MAX_RELEASE_PAGES && url; page++) {
-    const response = await fetchFn(url, { headers: { Accept: 'application/vnd.github+json' } })
-    if (!response.ok) {
-      throw new Error(`GitHub releases request failed: ${response.status}`)
+  // Why: React Native fetch has no default deadline; one budget covers every page so a stall
+  // cannot pin the shared request until the app restarts.
+  const controller = new AbortController()
+  const deadline = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    let url: string | null = ANDROID_RELEASES_API_URL
+    for (let page = 0; page < MAX_RELEASE_PAGES && url; page++) {
+      const response = await fetchFn(url, {
+        headers: { Accept: 'application/vnd.github+json' },
+        signal: controller.signal
+      })
+      if (!response.ok) {
+        throw new Error(`GitHub releases request failed: ${response.status}`)
+      }
+      // Why: releases are newest-first, so the first page holding any Android release holds the newest.
+      const latest = findLatestAndroidRelease(await response.json())
+      if (latest) {
+        return latest
+      }
+      url = nextPageUrl(response)
     }
-    // Why: releases are newest-first, so the first page holding any Android release holds the newest.
-    const latest = findLatestAndroidRelease(await response.json())
-    if (latest) {
-      return latest
-    }
-    url = nextPageUrl(response)
+    return null
+  } finally {
+    clearTimeout(deadline)
   }
-  return null
 }
 
 async function loadState(): Promise<StoredState | null> {
@@ -105,7 +117,6 @@ function withStateLock<T>(task: () => Promise<T>): Promise<T> {
 }
 
 // Why: a mount check and an AppState "active" check can overlap; they must not each walk the pages.
-// A stalled request delays the next check until it settles.
 let inFlightRelease: Promise<AndroidUpdate | null | undefined> | null = null
 function fetchLatestAndroidReleaseShared(fetchFn?: typeof fetch) {
   inFlightRelease ??= fetchLatestAndroidRelease(fetchFn)

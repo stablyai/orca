@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CHECK_INTERVAL_MS,
   MAX_RELEASE_PAGES,
+  REQUEST_TIMEOUT_MS,
   checkForAndroidUpdate,
   fetchLatestAndroidRelease,
   findLatestAndroidRelease,
@@ -244,6 +245,30 @@ describe('checkForAndroidUpdate', () => {
     expect(
       await checkForAndroidUpdate({ currentVersion: '0.0.47', now: 2, fetchFn: fetchReturning([]) })
     ).toBeNull()
+  })
+
+  it('aborts a stalled request at the deadline so a later check can retry', async () => {
+    vi.useFakeTimers()
+    try {
+      const stalled = vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+          })
+      ) as unknown as typeof fetch
+      const checking = checkForAndroidUpdate({ currentVersion: '0.0.47', now: 1, fetchFn: stalled })
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+      expect(await checking).toBeNull()
+      expect(
+        await checkForAndroidUpdate({
+          currentVersion: '0.0.47',
+          now: 2,
+          fetchFn: fetchReturning([release('mobile-android-v0.0.48')])
+        })
+      ).toEqual(expect.objectContaining({ version: '0.0.48' }))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('treats a non-2xx response as a failed check', async () => {
