@@ -16,6 +16,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   'claude-agent-teams': 'claude-code',
   // Why: Orca states OpenClaude reads Claude-owned roots (native-chat-agent-profiles).
   openclaude: 'claude-code',
+  // Why: openzoo launches the real Claude Code CLI, which reads the same Claude-owned roots.
+  openzoo: 'claude-code',
   codex: 'codex',
   autohand: 'autohand-code',
   opencode: 'opencode',

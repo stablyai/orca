@@ -8,6 +8,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 const AGENT_NAME_GROUPS = [
   'claude',
   'openclaude',
+  'openzoo',
   'codex',
   'opencode',
   'mimo',
@@ -27,6 +28,7 @@ export function isGroupAddress(to: string): boolean {
 const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
   claude: 'claude',
   openclaude: 'openclaude',
+  openzoo: 'openzoo',
   codex: 'codex',
   opencode: 'opencode',
   mimo: 'mimo-code',

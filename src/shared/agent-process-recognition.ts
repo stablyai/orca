@@ -3,6 +3,7 @@ import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identi
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
+import { lacksWrapperSubcommand } from './agent-wrapper-subcommand'
 import { getFirstCommandToken } from './command-token-scanner'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
@@ -51,7 +52,8 @@ const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
 const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
 const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   codex: ['node_modules/@openai/codex/'],
-  gemini: ['node_modules/@google/gemini-cli/']
+  gemini: ['node_modules/@google/gemini-cli/'],
+  openzoo: ['node_modules/openzoo/']
 }
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
@@ -290,8 +292,8 @@ export function recognizeAgentProcessFromCommandLine(
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizeAgentProcess(tokens[0])
-  // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
-  if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
+  // Why: `orca status` / bare `openzoo` are the wrapper's other modes, not the hosted agent.
+  if (lacksWrapperSubcommand(direct?.agent, tokens[1])) {
     direct = null
   }
   const directRecognition = keep ? direct : filterHeadlessOneShotAgentCommand(direct, tokens)
@@ -305,10 +307,7 @@ export function recognizeAgentProcessFromCommandLine(
   const viaEntrypoint = isPythonProcessName(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
     : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
-  if (
-    viaEntrypoint?.agent === 'claude-agent-teams' &&
-    tokens[tokens.indexOf(entrypoint, 1) + 1]?.toLowerCase() !== 'claude-teams'
-  ) {
+  if (lacksWrapperSubcommand(viaEntrypoint?.agent, tokens[tokens.indexOf(entrypoint, 1) + 1])) {
     return null
   }
   return keep ? viaEntrypoint : filterHeadlessOneShotAgentCommand(viaEntrypoint, tokens)

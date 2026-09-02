@@ -69,7 +69,8 @@ export function createAgentStatusEventApplicator(args: {
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId,
-      titleUsesTabTitle
+      titleUsesTabTitle,
+      launchAgent
     } = resolvePaneKeyFromRoutingIndex(routingIndex, paneKey)
     const projectedTitles =
       titleUsesTabTitle && ownerTabId
@@ -171,7 +172,11 @@ export function createAgentStatusEventApplicator(args: {
       )
       return 'applied'
     }
-    const resolvedPayload = resolveHookPayloadAgentType(payload, identityTitle ?? title)
+    const resolvedPayload = resolveHookPayloadAgentType(
+      payload,
+      identityTitle ?? title,
+      launchAgent
+    )
     const statusPayload = data.orchestration
       ? { ...resolvedPayload, orchestration: data.orchestration }
       : resolvedPayload

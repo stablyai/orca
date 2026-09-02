@@ -2,6 +2,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import type { AppState } from '../../store/types'
 import { titleHasAgentName } from '../../../../shared/agent-detection'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
@@ -92,6 +93,7 @@ export function resolvePaneKey(
   repoConnectionResolved: boolean
   owningWorktreeId: string | undefined
   titleUsesTabTitle: boolean
+  launchAgent: TuiAgent | undefined
 } {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
@@ -102,7 +104,8 @@ export function resolvePaneKey(
       repoConnectionId: null,
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      launchAgent: undefined
     }
   }
   const { tabId, leafId } = parsed
@@ -111,12 +114,14 @@ export function resolvePaneKey(
   let tabTitle: string | undefined
   let unifiedTabLabel: string | undefined
   let owningWorktreeId: string | undefined
+  let launchAgent: TuiAgent | undefined
   for (const [worktreeId, tabs] of Object.entries(store.tabsByWorktree)) {
     for (const tab of tabs) {
       if (tab.id === tabId) {
         exists = true
         tabTitle = tab.title
         owningWorktreeId = worktreeId
+        launchAgent = tab.launchAgent
         const visibleTab = (store.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
           (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
         )
@@ -149,7 +154,8 @@ export function resolvePaneKey(
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      launchAgent: undefined
     }
   }
   // Why: an empty layout snapshot from a worktree switch (tab/PTY still live) counts as missing metadata; a non-empty layout lacking the leaf still means closed.
@@ -162,7 +168,8 @@ export function resolvePaneKey(
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId,
-      titleUsesTabTitle: false
+      titleUsesTabTitle: false,
+      launchAgent: undefined
     }
   }
   // Why: inactive worktrees can have a durable tab and live PTY while the layout is unmounted; hook state must still land there.
@@ -177,7 +184,8 @@ export function resolvePaneKey(
     repoConnectionId,
     repoConnectionResolved,
     owningWorktreeId,
-    titleUsesTabTitle: paneTitle === undefined
+    titleUsesTabTitle: paneTitle === undefined,
+    launchAgent
   }
 }
 
@@ -203,13 +211,19 @@ export function resolveWorktreeConnection(
 
 export function resolveHookPayloadAgentType(
   payload: ParsedAgentStatusPayload,
-  terminalTitle: string | undefined
+  terminalTitle: string | undefined,
+  launchAgent?: TuiAgent | null
 ): ParsedAgentStatusPayload {
-  if (
-    payload.agentType !== 'claude' ||
-    !terminalTitle ||
-    !titleHasAgentName(terminalTitle, 'openclaude')
-  ) {
+  if (payload.agentType !== 'claude') {
+    return payload
+  }
+  // Why: openzoo runs the real Claude Code CLI, whose managed ~/.claude hooks post as
+  // `claude` and whose titles are Claude's own — the tab's launch intent is the only
+  // signal that keeps the pane attributed to openzoo instead of Claude-only status paths.
+  if (launchAgent === 'openzoo') {
+    return { ...payload, agentType: 'openzoo' }
+  }
+  if (!terminalTitle || !titleHasAgentName(terminalTitle, 'openclaude')) {
     return payload
   }
   // Why: OpenClaude emits Claude-compatible hooks; the title is the last renderer signal to keep it out of Claude-only status paths.

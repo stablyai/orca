@@ -15,6 +15,7 @@ import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 const EXPECTED_SUPPORTED_AGENTS = [
   'claude',
   'openclaude',
+  'openzoo',
   'codex',
   'grok',
   'omp'

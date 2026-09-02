@@ -317,6 +317,25 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('launches openzoo through its claude subcommand and expects the Claude process', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'openzoo',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    // Why: `openzoo claude` forwards argv to the real Claude Code CLI, so the prompt rides
+    // Claude's positional-argv contract and the hosted foreground process is `claude`.
+    expect(plan).toEqual({
+      agent: 'openzoo',
+      launchCommand: "openzoo claude 'fix it'",
+      expectedProcess: 'claude',
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'openzoo claude', agentArgs: '', agentEnv: {} }
+    })
+  })
+
   it('launches Mistral Vibe through the installed vibe executable', () => {
     const plan = buildAgentStartupPlan({
       agent: 'mistral-vibe',

@@ -4,6 +4,7 @@ export type TuiAgent =
   | 'claude' // Claude Code
   | 'claude-agent-teams' // Claude Code Agent Teams via Orca native panes
   | 'openclaude' // OpenClaude
+  | 'openzoo' // openzoo (Claude Code paid per call over x402, no API key)
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode

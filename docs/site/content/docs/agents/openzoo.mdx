@@ -1,0 +1,32 @@
+---
+title: openzoo in Orca
+description: Run Claude Code with no API key or account — every turn is paid on chain over x402 from a local burner wallet.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+[openzoo](https://github.com/staccDOTsol/openzoo) is a local x402 pay-per-call proxy. `openzoo claude` launches the **real Claude Code CLI** with `ANTHROPIC_BASE_URL` pointed at that local proxy and forwards every argument untouched to `claude`, so the session Orca hosts is ordinary Claude Code — same `--prefill`, same `--dangerously-skip-permissions`, same `-p` headless mode, same hooks, status line, and `~/.claude` session files. The difference is what pays for it: no API key, no account, no signup wall; each turn is settled on chain from a burner wallet on your machine.
+
+## Setup
+
+1. Install Claude Code (`npm i -g @anthropic-ai/claude-code` or follow Anthropic's docs). You do **not** need to log in.
+1. Install openzoo: `npm i -g openzoo`.
+1. Run `openzoo` once from any terminal. First run generates a burner wallet at `~/.openzoo/wallet.json` and prints the address to fund.
+1. Orca lists **openzoo** in the agent picker once both `openzoo` and `claude` are on PATH — like Claude Agent Teams, the wrapper is only offered when the CLI it hosts is installed.
+
+<Callout title="It spends real money">
+  Every turn pays the zoo from the local wallet. Fund it with what you are willing to spend, and
+  treat `~/.openzoo/wallet.json` like a credential.
+</Callout>
+
+## Launching
+
+In any worktree, open a terminal and pick **openzoo** from the agent combobox. Orca runs `openzoo claude` with the worktree as the working directory; openzoo starts the proxy if none is listening, then hands off to `claude`. Draft prompts use Claude's native `--prefill`, and the default launch passes `--dangerously-skip-permissions` like the Claude Code entry (see [Supported agents](/docs/agents/supported#permissions-default)).
+
+## Hooks & status
+
+Because the hosted process is Claude Code itself, the managed hooks Orca installs into `~/.claude/settings.json` for Claude Code fire for openzoo sessions too. Orca attributes those hook events to the openzoo tab, so state dots, the agent list, and completion notifications work without any openzoo-specific setup. Native chat, session history, and skills all read the same `~/.claude` roots Claude Code uses.
+
+## What does not apply
+
+Orca's Claude account features — usage and rate-limit tracking, account hot-swap — read Anthropic account state. openzoo sessions never talk to an Anthropic account, so those surfaces stay empty for openzoo; spend shows up as the per-call receipts openzoo prints in its proxy log instead.
