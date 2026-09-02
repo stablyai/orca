@@ -27,6 +27,7 @@ import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from '../sidebar/worktree-card-status-inputs'
+import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import {
   resolveDashboardCardContext,
   type DashboardCardContextState
@@ -228,6 +229,12 @@ export function buildDashboardSnapshot(
         dotState,
         ...(workingMode ? { workingMode } : {}),
         task: isTitleDerived ? '' : rowTask(row),
+        // Why: the same one-line tool preview the agent list shows, so the two
+        // surfaces name the running command identically. Title-derived rows
+        // have no hook behind them, so they have no tool to report.
+        activity: isTitleDerived
+          ? undefined
+          : boundedLabelOrUndefined(nonEmpty(formatAgentToolPreview(row.entry, row.state))),
         repoId: workspace.projectId,
         worktreeId,
         tabId,

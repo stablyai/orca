@@ -165,6 +165,20 @@ describe('AgentKanbanCard', () => {
     expect(onOpenTerminal).toHaveBeenCalledTimes(1)
   })
 
+  it('names the command the agent is running', () => {
+    renderCard({ card: card({ activity: 'Bash: pnpm test' }), now: 2_000 })
+
+    expect(screen.getByText('Bash: pnpm test')).toBeInTheDocument()
+  })
+
+  it('reserves the activity row even with nothing to say, so cards do not jump', () => {
+    // A row that appears and disappears resizes every card as its agent moves
+    // between tools, and the whole board shifts under the pointer.
+    const { container } = renderCard({ card: card({ activity: undefined }), now: 2_000 })
+
+    expect(container.querySelector('.h-4')).toBeInTheDocument()
+  })
+
   it('labels one subagent accessibly and never renders a workspace-status dot', () => {
     renderCard({
       card: card({

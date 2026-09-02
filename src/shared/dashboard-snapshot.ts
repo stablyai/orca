@@ -92,6 +92,10 @@ export type DashboardCard = {
   workingMode?: AgentWorkingMode
   /** One-line task/prompt text shown on the card. */
   task: string
+  /** What the agent is running right now: "Bash: pnpm test", "Edit: src/app.ts".
+   *  Comes from the agent's own hook, so no terminal has to be read for it.
+   *  Absent whenever a running tool is not the truth (done, idle, monitoring). */
+  activity?: string
   /** The most recent message the user sent this agent (its current prompt). */
   lastUserMessage?: string
   /** The most recent message the agent sent back. */

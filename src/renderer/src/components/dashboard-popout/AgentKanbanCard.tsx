@@ -89,6 +89,7 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.dotState === b.dotState &&
     a.workingMode === b.workingMode &&
     a.task === b.task &&
+    a.activity === b.activity &&
     a.lastUserMessage === b.lastUserMessage &&
     a.lastAgentMessage === b.lastAgentMessage &&
     a.repoId === b.repoId &&
@@ -243,8 +244,11 @@ export const AgentKanbanCard = memo(
             </span>
             <span
               className={cn(
-                'truncate text-[12.5px]',
-                card.unseen ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
+                // Why: the heading is what you scan a column by, so it leads
+                // the card outright. Unseen is carried by colour alone now —
+                // the weight is already at the top of the scale.
+                'truncate text-[15px] leading-tight font-bold tracking-tight',
+                card.unseen ? 'text-foreground' : 'text-muted-foreground'
               )}
             >
               {heading}
@@ -276,6 +280,17 @@ export const AgentKanbanCard = memo(
               {card.task}
             </div>
           ) : null}
+
+          {/* Why: the row is always present, filled or not. Sizing it to its
+            content makes every card grow and shrink as its agent moves between
+            tools, and a board of those jumps under the pointer. */}
+          <div className="flex h-4 w-full items-center">
+            {card.activity ? (
+              <span className="truncate font-mono text-[10.5px] leading-none text-muted-foreground">
+                {card.activity}
+              </span>
+            ) : null}
+          </div>
 
           {card.askSummary ? (
             <div className="flex w-full items-start gap-1 rounded-md bg-agent-question/15 px-1.5 py-1 text-[11px] text-agent-question-text ring-1 ring-inset ring-agent-question/25">

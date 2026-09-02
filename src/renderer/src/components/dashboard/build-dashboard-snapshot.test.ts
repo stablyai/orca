@@ -176,6 +176,33 @@ describe('buildDashboardSnapshot', () => {
     })
   })
 
+  it('reports the command a working agent is running', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ state: 'working', toolName: 'Bash', toolInput: 'pnpm test' })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0].activity).toBe('Bash: pnpm test')
+  })
+
+  it('reports no command once the tool is no longer running', () => {
+    // A leftover tool line on a finished agent reads as still-running.
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ state: 'done', toolName: 'Bash', toolInput: 'pnpm test' })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0].activity).toBeUndefined()
+  })
+
   it('maps a live working agent to the working bucket with a resolved ptyId', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
