@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
@@ -233,5 +233,181 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     await vi.waitFor(() => {
       expect(events.flat()).toContainEqual({ type: 'delete', path: newEntry })
     })
+  })
+})
+
+const POLL_MS = 25
+
+// Regression coverage for a bug where `shouldSweep` gated the ENTIRE tick body,
+// including a forced (visibility-resume / requestEarlyTick) call — silently
+// dropping the leaf re-read that callers of a forced tick depend on. `tick`'s
+// `forceFullScan ||` short-circuit fixes this; this test pins that guarantee
+// directly against startGitCommonPolling, independent of any current caller.
+describe('git-common polling: forced ticks always sweep', () => {
+  const cleanups: (() => Promise<void>)[] = []
+
+  afterEach(async () => {
+    await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
+  })
+
+  async function makeForcedTickCommonDir(): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), 'orca-git-common-polling-'))
+    cleanups.push(() => rm(root, { recursive: true, force: true }))
+    return realpath(root)
+  }
+
+  it('a visibility-resume forced tick sweeps even when shouldSweep says skip', async () => {
+    vi.useFakeTimers()
+    try {
+      const commonDir = await makeForcedTickCommonDir()
+      const worktreesDir = join(commonDir, 'worktrees')
+      await mkdir(worktreesDir)
+      await mkdir(join(worktreesDir, 'wt-1'))
+      await writeFile(join(worktreesDir, 'wt-1', 'HEAD'), 'ref: refs/heads/main')
+
+      let visible = true
+      // Why: a plain `let` reassigned from inside this closure and read
+      // outside it narrows to `never` under TS's control-flow analysis; a
+      // holder object sidesteps that.
+      const visibilityListener: { current: (() => void) | null } = { current: null }
+      const visibility: WorktreePollerWindowVisibility = {
+        isWindowVisible: () => visible,
+        onWindowBecameVisible: (listener) => {
+          visibilityListener.current = listener
+          return () => {
+            visibilityListener.current = null
+          }
+        }
+      }
+      const onFullScan = vi.fn()
+
+      const subscription = await startGitCommonPolling(
+        commonDir,
+        () => {},
+        POLL_MS,
+        visibility,
+        onFullScan,
+        false,
+        () => [],
+        { shouldSweep: () => false }
+      )
+      cleanups.push(() => subscription.unsubscribe())
+      onFullScan.mockClear()
+
+      // Park the poller while hidden, then resume: the resume path calls
+      // tick(true) specifically to force a leaf re-read of what happened
+      // while parked, despite shouldSweep saying skip on every other tick.
+      visible = false
+      await vi.advanceTimersByTimeAsync(POLL_MS)
+      visible = true
+      visibilityListener.current?.()
+
+      await vi.waitFor(
+        () => {
+          expect(onFullScan).toHaveBeenCalled()
+        },
+        { timeout: 1_000 }
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+// Coverage for requestEarlyTick itself: the primitive notifyLossSignal calls
+// to react to a watcher loss signal sooner than the regular cadence, without
+// letting a burst of signals drive the fan-out as fast as the burst arrives.
+describe('git-common polling: requestEarlyTick', () => {
+  const cleanups: (() => Promise<void>)[] = []
+
+  afterEach(async () => {
+    await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
+  })
+
+  async function makeEarlyTickCommonDir(): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), 'orca-git-common-early-tick-'))
+    cleanups.push(() => rm(root, { recursive: true, force: true }))
+    const commonDir = await realpath(root)
+    await mkdir(join(commonDir, 'worktrees'))
+    return commonDir
+  }
+
+  const alwaysVisibleForEarlyTick: WorktreePollerWindowVisibility = {
+    isWindowVisible: () => true,
+    onWindowBecameVisible: () => () => {}
+  }
+
+  it('fires well before the next regular tick, bounded by earlyTickMinIntervalMs', async () => {
+    vi.useFakeTimers()
+    try {
+      const commonDir = await makeEarlyTickCommonDir()
+      const onFullScan = vi.fn()
+      const EARLY_FLOOR_MS = 50
+      const REGULAR_CADENCE_MS = 1_000
+      const subscription = await startGitCommonPolling(
+        commonDir,
+        () => {},
+        REGULAR_CADENCE_MS,
+        alwaysVisibleForEarlyTick,
+        onFullScan,
+        false,
+        () => [],
+        { forceFullScanEveryTick: true, earlyTickMinIntervalMs: EARLY_FLOOR_MS }
+      )
+      cleanups.push(() => subscription.unsubscribe())
+
+      // Let the first regular tick land so lastTickStartedAt reflects a real,
+      // recent tick rather than construction time.
+      await vi.waitFor(() => expect(onFullScan).toHaveBeenCalledTimes(1), { timeout: 2_000 })
+      onFullScan.mockClear()
+
+      subscription.requestEarlyTick()
+      // Well under REGULAR_CADENCE_MS: if this only landed at the next
+      // scheduled tick, the "early" tick isn't actually accelerating anything.
+      await vi.waitFor(() => expect(onFullScan).toHaveBeenCalledTimes(1), { timeout: 500 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds a storm of requestEarlyTick calls to a handful of ticks, not one per call', async () => {
+    vi.useFakeTimers()
+    try {
+      const commonDir = await makeEarlyTickCommonDir()
+      const onFullScan = vi.fn()
+      const EARLY_FLOOR_MS = 50
+      const subscription = await startGitCommonPolling(
+        commonDir,
+        () => {},
+        10_000, // long regular cadence: it must not fire on its own during this test
+        alwaysVisibleForEarlyTick,
+        onFullScan,
+        false,
+        () => [],
+        { forceFullScanEveryTick: true, earlyTickMinIntervalMs: EARLY_FLOOR_MS }
+      )
+      cleanups.push(() => subscription.unsubscribe())
+
+      // A wedged watcher child emitting overflow continuously, faster than
+      // the early-tick floor: 50 calls, 5ms apart (250ms of storm).
+      const STORM_CALLS = 50
+      const STORM_INTERVAL_MS = 5
+      for (let i = 0; i < STORM_CALLS; i++) {
+        subscription.requestEarlyTick()
+        await vi.advanceTimersByTimeAsync(STORM_INTERVAL_MS)
+      }
+      // Let any trailing coalesced early tick actually settle.
+      await vi.waitFor(() => expect(onFullScan.mock.calls.length).toBeGreaterThan(0), {
+        timeout: 500
+      })
+
+      const stormDurationMs = STORM_CALLS * STORM_INTERVAL_MS
+      // ⌈stormDuration / floor⌉, plus a little slack for the boundary/trailing tick.
+      const maxExpectedTicks = Math.ceil(stormDurationMs / EARLY_FLOOR_MS) + 2
+      expect(onFullScan.mock.calls.length).toBeLessThanOrEqual(maxExpectedTicks)
+      expect(onFullScan.mock.calls.length).toBeLessThan(STORM_CALLS)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
