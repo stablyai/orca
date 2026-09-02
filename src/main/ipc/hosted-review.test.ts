@@ -17,7 +17,7 @@ const {
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   resolveRegisteredWorktreePathMock,
-  listRepoWorktreesMock
+  listRepoWorktreeGraphMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
@@ -25,7 +25,7 @@ const {
   getHostedReviewCreationEligibilityMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
-  listRepoWorktreesMock: vi.fn()
+  listRepoWorktreeGraphMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -52,7 +52,7 @@ vi.mock('./registered-worktree-roots-cache', () => ({
 }))
 
 vi.mock('../repo-worktrees', () => ({
-  listRepoWorktrees: listRepoWorktreesMock
+  listRepoWorktreeGraph: listRepoWorktreeGraphMock
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
@@ -97,7 +97,7 @@ describe('registerHostedReviewHandlers', () => {
     getHostedReviewCreationEligibilityMock.mockReset()
     getHostedReviewForBranchMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
-    listRepoWorktreesMock.mockReset()
+    listRepoWorktreeGraphMock.mockReset()
     store.getRepo.mockReset()
     store.getRepos.mockReset()
     store.getProjects.mockReset()
@@ -114,7 +114,7 @@ describe('registerHostedReviewHandlers', () => {
     store.getRepos.mockReturnValue([repo])
     store.getProjects.mockReturnValue([])
     store.getSettings.mockReturnValue({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
-    listRepoWorktreesMock.mockResolvedValue([{ path: worktreePath }])
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: worktreePath }])
   })
 
   it('routes local WSL project review creation through main-process runtime options', async () => {
@@ -143,7 +143,7 @@ describe('registerHostedReviewHandlers', () => {
     ])
     const resolvedWorktreePath = resolve('/workspace/feature')
     resolveRegisteredWorktreePathMock.mockResolvedValue(resolvedWorktreePath)
-    listRepoWorktreesMock.mockResolvedValue([{ path: resolvedWorktreePath }])
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: resolvedWorktreePath }])
     createHostedReviewMock.mockResolvedValueOnce({
       ok: true,
       number: 42,
@@ -162,7 +162,7 @@ describe('registerHostedReviewHandlers', () => {
       title: 'Feature PR'
     })
 
-    expect(listRepoWorktreesMock).toHaveBeenCalledWith(localRepo, { wslDistro: 'Ubuntu' })
+    expect(listRepoWorktreeGraphMock).toHaveBeenCalledWith(localRepo, { wslDistro: 'Ubuntu' })
     expect(createHostedReviewMock).toHaveBeenCalledWith(
       resolvedWorktreePath,
       expect.objectContaining({
@@ -193,7 +193,7 @@ describe('registerHostedReviewHandlers', () => {
     store.getRepos.mockReturnValue([localRepo])
     const resolvedWorktreePath = resolve('/workspace/feature')
     resolveRegisteredWorktreePathMock.mockResolvedValue(resolvedWorktreePath)
-    listRepoWorktreesMock.mockResolvedValue([{ path: resolvedWorktreePath }])
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: resolvedWorktreePath }])
     createHostedReviewMock.mockResolvedValueOnce({ ok: true, number: 42, url: 'https://x/1' })
 
     registerHostedReviewHandlers(store as never, stats as never)

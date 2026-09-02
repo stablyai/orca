@@ -16,7 +16,7 @@ import {
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { listRepoWorktreeGraph } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
@@ -68,7 +68,7 @@ async function resolveHostedReviewWorktreePath(
   }
   if (repo.connectionId) {
     const remoteWorktreePath = normalizeRemoteHostedReviewPath(worktreePath)
-    const repoWorktrees = await listRepoWorktrees(repo)
+    const repoWorktrees = await listRepoWorktreeGraph(repo)
     if (
       !repoWorktrees.some(
         (worktree) => normalizeRemoteHostedReviewPath(worktree.path) === remoteWorktreePath
@@ -82,8 +82,8 @@ async function resolveHostedReviewWorktreePath(
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const repoWorktrees =
     Object.keys(localGitOptions).length > 0
-      ? await listRepoWorktrees(repo, localGitOptions)
-      : await listRepoWorktrees(repo)
+      ? await listRepoWorktreeGraph(repo, localGitOptions)
+      : await listRepoWorktreeGraph(repo)
   if (!repoWorktrees.some((worktree) => resolve(worktree.path) === resolvedWorktreePath)) {
     throw new Error('Access denied: worktree does not belong to repository')
   }
