@@ -99,14 +99,15 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
 export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.accounts.search.d819755b02',
-      'Use Gemini CLI credentials'
+      'auto.components.settings.accounts.search.useAntigravityCredentials',
+      'Use Antigravity credentials'
     ),
     description: translate(
-      'auto.components.settings.accounts.search.bada4a3218',
-      'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.'
+      'auto.components.settings.accounts.search.useAntigravityCredentialsDescription',
+      'Extracts OAuth credentials from your local Antigravity installation to authenticate with Google.'
     ),
     keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.antigravity', 'antigravity'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.e8e1ff3887', 'gemini'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.8630464352', 'cli'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.933deaf732', 'oauth'),

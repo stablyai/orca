@@ -6494,7 +6494,13 @@
           "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
           "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
           "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
-          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
+          "antigravityTitle": "Antigravity",
+          "antigravityDescription": "Configure Antigravity provider settings.",
+          "useAntigravityCredentials": "Use Antigravity credentials",
+          "useAntigravityCredentialsDescription": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google. This uses credentials issued to the Antigravity app, not Orca. May break if Google updates Antigravity. Use at your own risk.",
+          "useAntigravityCredentialsExp": "Use Antigravity credentials (experimental)",
+          "useAntigravityCredentialsWithRuntime": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google for {{value0}}. This uses credentials issued to the Antigravity app, not Orca. May break if Google updates Antigravity. Use at your own risk."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -8872,7 +8878,10 @@
             "b2c4e7f1a8": "endpoint",
             "3a9b6d2c4e": "api key",
             "5d8f1a3b7c": "china",
-            "7e2a4b8c1d": "overseas"
+            "7e2a4b8c1d": "overseas",
+            "useAntigravityCredentials": "Use Antigravity credentials",
+            "useAntigravityCredentialsDescription": "Extracts OAuth credentials from your local Antigravity installation to authenticate with Google.",
+            "antigravity": "antigravity"
           }
         },
         "advanced": {
