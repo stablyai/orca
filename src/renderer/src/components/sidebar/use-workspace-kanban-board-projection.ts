@@ -12,8 +12,13 @@ import {
 } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { useRepoMap } from '@/store/selectors'
+
+function isFolderWorkspaceEntry(worktree: Worktree): boolean {
+  return parseWorkspaceKey(worktree.id)?.type === 'folder'
+}
 
 export function useWorkspaceKanbanBoardProjection(args: {
   activeWorktreeId: string | null
@@ -24,10 +29,26 @@ export function useWorkspaceKanbanBoardProjection(args: {
   sortBy: ReturnType<typeof useAppStore.getState>['sortBy']
   workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
 }) {
-  const visibleWorktreeIds = useVisibleWorkspaceKanbanWorktreeIds({
-    allWorktrees: args.allWorktrees,
+  // Why: the visibility filters (default branch, detached HEAD, other devices…)
+  // describe git checkouts. A folder workspace entry has no branch or repo, so
+  // it is on the board whenever it is in the list — archiving is the only
+  // thing that removes it, and the list builder already honours that.
+  const gitWorktrees = useMemo(
+    () => args.allWorktrees.filter((worktree) => !isFolderWorkspaceEntry(worktree)),
+    [args.allWorktrees]
+  )
+  const visibleGitWorktreeIds = useVisibleWorkspaceKanbanWorktreeIds({
+    allWorktrees: gitWorktrees,
     repoMap: args.repoMap
   })
+  const visibleWorktreeIds = useMemo(
+    () =>
+      new Set([
+        ...visibleGitWorktreeIds,
+        ...args.allWorktrees.filter(isFolderWorkspaceEntry).map(getWorktreeHostIdentity)
+      ]),
+    [args.allWorktrees, visibleGitWorktreeIds]
+  )
   const worktreesByStatus = useMemo(
     () =>
       groupWorkspaceKanbanWorktrees({

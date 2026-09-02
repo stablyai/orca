@@ -10,6 +10,8 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMetaBatchUpdate } from '../../store/slices/worktree-helpers'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
 
@@ -252,7 +254,9 @@ beforeEach(() => {
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta,
     getKnownWorktreeById: (id: string) => allWorktrees.find((item) => item.id === id),
-    recordFeatureInteraction: vi.fn()
+    recordFeatureInteraction: vi.fn(),
+    folderWorkspaces: [],
+    workspaceLineageByChildKey: {}
   })
 })
 
@@ -276,6 +280,44 @@ describe('WorkspaceKanbanDrawer search', () => {
     expect(gridState.current?.laneViews.get('todo')?.totalCount).toBe(4)
     expect(gridState.current?.laneViews.get('in-review')?.totalCount).toBe(1)
     expect(headerState.current).toMatchObject({ matchCount: 1, totalCount: 5 })
+  })
+
+  it('lays out folder workspaces as cards and folds their attached worktrees into them', () => {
+    useAppStore.setState({
+      folderWorkspaces: [
+        {
+          id: 'fw-1',
+          projectGroupId: 'group-1',
+          name: 'API-123 : Fix checkout',
+          folderPath: '/tickets/API-123',
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          workspaceStatus: 'in-review'
+        }
+      ],
+      workspaceLineageByChildKey: {
+        [worktreeWorkspaceKey(delta.id)]: {
+          childWorkspaceKey: worktreeWorkspaceKey(delta.id),
+          parentWorkspaceKey: folderWorkspaceKey('fw-1'),
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 1
+        } satisfies WorkspaceLineage
+      }
+    })
+    renderDrawer()
+
+    // Lanes sort by manual order descending; the folder card sorts by its own order.
+    expect(laneIds('in-review')).toEqual([omega.id, 'folder:fw-1'])
+    expect(laneIds('todo')).toEqual([gamma.id, beta.id, alpha.id])
+    expect(headerState.current?.totalCount).toBe(5)
   })
 
   it('restores every lane when the query is cleared', () => {
