@@ -248,10 +248,13 @@ export function buildTabStripLayoutKey(
   items: readonly TabBarItem[],
   generatedTitlesEnabled: boolean,
   expandedPaneByTabId: Record<string, boolean>,
-  statusByRelativePath: Map<string, string>
+  statusByRelativePath: Map<string, string>,
+  // Why: collapsing pinned tabs to their icon resizes the strip, so the measured layout must re-key on it.
+  pinnedTabsIconOnly: boolean
 ): string {
-  return items
-    .map((item) =>
+  return [
+    String(pinnedTabsIconOnly),
+    ...items.map((item) =>
       getTabLayoutSignature(item, {
         generatedTitlesEnabled,
         isExpanded: expandedPaneByTabId[item.id] === true,
@@ -261,5 +264,5 @@ export function buildTabStripLayoutKey(
             : null
       })
     )
-    .join('\u001f')
+  ].join('\u001f')
 }

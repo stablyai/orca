@@ -50,6 +50,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     unifiedTabs: runtime.unifiedTabs,
     unifiedTabByVisibleId: runtime.unifiedTabByVisibleId,
     generatedTabTitlesEnabled: runtime.generatedTabTitlesEnabled,
+    pinnedTabsIconOnly: runtime.pinnedTabsIconOnly,
     statusByRelativePath: runtime.statusByRelativePath
   })
   const togglePinned = (item: TabBarItem): void => {
