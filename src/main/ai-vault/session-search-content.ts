@@ -1,3 +1,4 @@
+import { redactSessionSearchText } from '../ai-vault-search/session-search-redaction'
 import {
   captureSessionSearchMessage,
   isSessionSearchCaptureActive,
@@ -168,7 +169,11 @@ export function captureIndexableText(
     return
   }
   const limit = indexed === 'tool' ? SESSION_SEARCH_TOOL_OUTPUT_CAP : SESSION_SEARCH_TEXT_CAP
-  const cleaned = cap(stripHiddenBlocks(cap(text, limit * 4)), limit).trim()
+  // Redact before the final cap so a credential straddling it cannot survive in halves.
+  const cleaned = cap(
+    redactSessionSearchText(stripHiddenBlocks(cap(text, limit * 4))),
+    limit
+  ).trim()
   if (!cleaned) {
     return
   }

@@ -14,7 +14,7 @@ const LABELED_KV =
   /\b(?:api[-_]?key|token|secret|password|bearer|authorization)\b\s*[:=]\s*(?:Bearer\s+\S+|Token\s+\S+|\S+)/gi
 
 // Tagged tokens let triage see what was redacted without the key. Order is most-specific-first: `sk-ant-` before `sk-`, or the Anthropic tag is lost.
-const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
+export const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'anthropic-key', re: /sk-ant-[a-zA-Z0-9_-]{40,}/g },
   { tag: 'openai-key', re: /sk-(?:proj-)?[a-zA-Z0-9_-]{32,}/g },
   { tag: 'github-token', re: /gh[pousr]_[A-Za-z0-9]{36,}/g },
