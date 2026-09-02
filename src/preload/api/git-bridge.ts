@@ -3,6 +3,7 @@ import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../share
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { PreloadApi } from '../api-types'
 
 export const gitApi = {
   status: (args: {
@@ -13,7 +14,7 @@ export const gitApi = {
     reuseLineStats?: boolean
     branchLineTotalMergeBase?: string
     requestToken?: string
-  }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
+  }) => ipcRenderer.invoke('git:status', args),
   cancelStatus: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('git:cancelStatus', args),
   setStatusUpstreamRefWatch: (args: {
@@ -29,7 +30,7 @@ export const gitApi = {
     submodulePath: string
     connectionId?: string
     area?: GitStagingArea
-  }): Promise<unknown> => ipcRenderer.invoke('git:submoduleStatus', args),
+  }) => ipcRenderer.invoke('git:submoduleStatus', args),
   checkIgnored: (args: {
     worktreePath: string
     paths: string[]
@@ -42,7 +43,7 @@ export const gitApi = {
   history: (
     args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
   ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
-  conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
+  conflictOperation: (args: { worktreePath: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:conflictOperation', args),
   abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('git:abortMerge', args),
@@ -54,17 +55,11 @@ export const gitApi = {
     staged: boolean
     compareAgainstHead?: boolean
     connectionId?: string
-  }): Promise<unknown> => ipcRenderer.invoke('git:diff', args),
-  branchCompare: (args: {
-    worktreePath: string
-    baseRef: string
-    connectionId?: string
-  }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
-  commitCompare: (args: {
-    worktreePath: string
-    commitId: string
-    connectionId?: string
-  }): Promise<unknown> => ipcRenderer.invoke('git:commitCompare', args),
+  }) => ipcRenderer.invoke('git:diff', args),
+  branchCompare: (args: { worktreePath: string; baseRef: string; connectionId?: string }) =>
+    ipcRenderer.invoke('git:branchCompare', args),
+  commitCompare: (args: { worktreePath: string; commitId: string; connectionId?: string }) =>
+    ipcRenderer.invoke('git:commitCompare', args),
   upstreamStatus: (args: {
     worktreePath: string
     connectionId?: string
@@ -108,7 +103,7 @@ export const gitApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
-  }): Promise<unknown> => ipcRenderer.invoke('git:branchDiff', args),
+  }) => ipcRenderer.invoke('git:branchDiff', args),
   commitDiff: (args: {
     worktreePath: string
     commitOid: string
@@ -116,7 +111,7 @@ export const gitApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
-  }): Promise<unknown> => ipcRenderer.invoke('git:commitDiff', args),
+  }) => ipcRenderer.invoke('git:commitDiff', args),
   commit: (args: {
     worktreePath: string
     message: string
@@ -130,12 +125,12 @@ export const gitApi = {
     sourceControlAiResolvedParams?: unknown
     sourceControlAi?: unknown
     agentCmdOverrides?: Record<string, string>
-  }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
+  }) => ipcRenderer.invoke('git:generateCommitMessage', args),
   discoverCommitMessageModels: (args: {
     agentId: string
     worktreePath?: string
     connectionId?: string
-  }): Promise<unknown> => ipcRenderer.invoke('git:discoverCommitMessageModels', args),
+  }) => ipcRenderer.invoke('git:discoverCommitMessageModels', args),
   cancelGenerateCommitMessage: (args: {
     worktreePath: string
     connectionId?: string
@@ -154,7 +149,7 @@ export const gitApi = {
     sourceControlAiResolvedParams?: unknown
     sourceControlAi?: unknown
     agentCmdOverrides?: Record<string, string>
-  }): Promise<unknown> => ipcRenderer.invoke('git:generatePullRequestFields', args),
+  }) => ipcRenderer.invoke('git:generatePullRequestFields', args),
   cancelGeneratePullRequestFields: (args: {
     worktreePath: string
     connectionId?: string
@@ -197,4 +192,4 @@ export const gitApi = {
     sha: string
     connectionId?: string
   }): Promise<string | null> => ipcRenderer.invoke('git:remoteCommitUrl', args)
-}
+} satisfies PreloadApi['git']

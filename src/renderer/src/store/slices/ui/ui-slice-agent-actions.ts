@@ -7,11 +7,17 @@ import {
 import { translate } from '@/i18n/i18n'
 import {
   collectAcknowledgedAgentNotificationId,
-  createAgentSendTargetModeInstanceId,
   latestAgentTurnTimestamp,
   resolvePaneKeyWorktreeIdFromTabs,
   usableTimestamp
-} from './ui-slice-agent-helpers'
+} from './ui-slice-agent-notification-acknowledgement'
+
+let agentSendTargetModeInstanceCounter = 0
+
+function createAgentSendTargetModeInstanceId(): string {
+  agentSendTargetModeInstanceCounter += 1
+  return `${Date.now()}:${agentSendTargetModeInstanceCounter}`
+}
 
 export function createUiAgentActions(
   set: UISliceSet,
@@ -143,9 +149,11 @@ export function createUiAgentActions(
         worktreeId: mode.worktreeId,
         prompt: mode.prompt,
         noteTarget: { tabId: target.tabId, leafId: target.leafId }
-      }).catch((error) => {
-        console.error('Failed to send notes to sidebar agent target:', error)
-        return { status: 'no-active-terminal' as const }
+      }).catch(() => {
+        console.error('Failed to send notes to sidebar agent target:', {
+          code: 'runtime-unverifiable'
+        })
+        return { status: 'status-unavailable' as const, code: 'runtime-unverifiable' as const }
       })
 
       const stillCurrent = (): boolean => {
@@ -154,7 +162,10 @@ export function createUiAgentActions(
       }
 
       if (result.status !== 'sent') {
-        const message = activeAgentNotesSendFailureMessage(result.status, { explicitTarget: true })
+        const message = activeAgentNotesSendFailureMessage(result.status, {
+          explicitTarget: true,
+          code: result.code
+        })
         set((s) =>
           s.agentSendPopoverTargetMode?.id === mode.id &&
           s.agentSendPopoverTargetMode.instanceId === mode.instanceId
@@ -211,7 +222,16 @@ export function createUiAgentActions(
         const migrationUnsupported = Object.values(s.migrationUnsupportedByPtyId ?? {})
         // Why: only reallocate if an ack advances; compare prev<stamp not !== — the stamp ticks every ms and !== would rewrite the map every call.
         let next: Record<string, number> | null = null
+        // Why: one ack, two records — leaving the completion marker set keeps the tab dot,
+        // the ⌘J row and the floating-workspace dot lit with nothing left to read.
+        let nextUnreadCompletions: Record<string, true> | null = null
         for (const key of paneKeys) {
+          if (s.unreadAgentCompletionPanes[key]) {
+            if (nextUnreadCompletions === null) {
+              nextUnreadCompletions = { ...s.unreadAgentCompletionPanes }
+            }
+            delete nextUnreadCompletions[key]
+          }
           const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
           // Why not plain Date.now(): a remote/SSH execution host can stamp a turn ahead of this clock,
           // and every unread rule is `ackAt < turnTimestamp`. A behind-the-turn ack can never clear the
@@ -252,7 +272,13 @@ export function createUiAgentActions(
             next[key] = stamp
           }
         }
-        return next ? { acknowledgedAgentsByPaneKey: next } : s
+        if (!next && !nextUnreadCompletions) {
+          return s
+        }
+        return {
+          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
+          ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {})
+        }
       })
       const notificationIds = [...notificationIdsToDismiss]
       if (notificationIds.length > 0 && typeof window !== 'undefined') {

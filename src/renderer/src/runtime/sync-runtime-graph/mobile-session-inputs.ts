@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import { parsePaneKey, makePaneKey } from '../../../../shared/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
+import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
 import {
   EMPTY_NARROWED_BY_KEY,
   EMPTY_WORKTREE_BROWSER_WORKSPACES,
@@ -21,7 +22,7 @@ import { captureMountedTerminalSurfaces, narrowRecordByKeys } from './mobile-ses
 import {
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId
-} from './mobile-session-tab-helpers'
+} from './mobile-session-surfaces'
 
 export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
   if (graphState.cachedOpenFileIndexesSource === openFiles && graphState.cachedOpenFileIndexes) {
@@ -104,6 +105,14 @@ export function buildMobileSessionAgentStatusByWorktree(
   return byWorktreeId
 }
 
+// Why: a bare id can name one workspace per host (STA-4343); with two owners no
+// single identity is correct, so publish without one and let main fall back to
+// its generation fence rather than blank the mobile session.
+function resolveWorktreeInstanceId(state: AppState, worktreeId: string): string | undefined {
+  const rows = getIndexedWorktreesById(state.worktreesByRepo ?? {}, worktreeId)
+  return rows.length === 1 ? rows[0]?.instanceId : undefined
+}
+
 export function buildMobileSessionWorktreeInputs(
   state: AppState,
   worktreeId: string,
@@ -146,6 +155,7 @@ export function buildMobileSessionWorktreeInputs(
   const activeTabId = state.activeTabId
   return {
     worktreeId,
+    worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,
     unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_UNIFIED_TABS,

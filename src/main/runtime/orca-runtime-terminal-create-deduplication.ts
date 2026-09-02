@@ -40,7 +40,14 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       clientMutationId,
       async () => {
         if (reconcileExisting) {
-          const adopted = await this.reconcileRemoteTerminalCreate(workspace.id, preAllocatedHandle)
+          const adopted = await this.reconcileRemoteTerminalCreate(
+            workspace.id,
+            preAllocatedHandle,
+            // Why: an unreachable SSH host vanishes from the aggregate listing, which would read
+            // as absence and respawn over live remote work. Local/folder workspaces have no
+            // connection and keep the aggregate listing.
+            workspace.connectionId ?? null
+          )
           if (adopted) {
             return adopted
           }
@@ -52,13 +59,16 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
 
   protected async reconcileRemoteTerminalCreate(
     worktreeId: string,
-    terminalHandle: string
+    terminalHandle: string,
+    // Why: an aggregate listing drops a non-answering SSH host silently, which would read as
+    // absence. Scoping to the owning host makes an unreachable relay throw instead.
+    connectionId?: string | null
   ): Promise<RuntimeTerminalCreate | null> {
     if (!this.ptyController?.listProcesses) {
       throw new Error('runtime_unavailable')
     }
     const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(),
+      this.ptyController.listProcesses(connectionId),
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
     if (!listed.ok) {

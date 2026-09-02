@@ -77,6 +77,38 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 
+  // A force-stop that threw observed nothing about the remote shells, so expiring their leases
+  // would record a verdict Orca never obtained (docs/reference/ssh-execution-boundary.md).
+  it('ssh:resetRelay keeps leases alive when the force-stop never reported a result', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty-1', state: 'detached' },
+      { targetId: 'ssh-1', ptyId: 'pty-2', state: 'attached' }
+    ])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    mockForceStopRelayForTarget.mockRejectedValueOnce(new Error('channel closed'))
+
+    await expect(handlers.get('ssh:resetRelay')!(null, { targetId: 'ssh-1' })).rejects.toThrow(
+      'channel closed'
+    )
+
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalled()
+    // The local handles are still stale — only the host-side verdict is withheld.
+    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:ssh-1@@pty-1')
+    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:ssh-1@@pty-2')
+    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
   it('ssh:resetRelay clears scoped live PTYs while expiring raw leases', async () => {
     const target: SshTarget = {
       id: 'ssh-1',

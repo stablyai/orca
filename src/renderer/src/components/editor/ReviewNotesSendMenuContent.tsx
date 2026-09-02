@@ -124,17 +124,18 @@ export function ReviewNotesSendMenuContent({
 
           toast.message(
             activeAgentNotesSendFailureMessage(result.status, {
-              explicitTarget: options.explicitTarget
+              explicitTarget: options.explicitTarget,
+              code: result.code
             })
           )
         })
-        .catch((error) => {
-          console.error('Failed to send notes:', error)
+        .catch(() => {
+          console.error('Failed to send notes:', { code: 'runtime-unverifiable' })
           toast.error(
-            translate(
-              'auto.components.editor.ReviewNotesSendMenuContent.f5096c6e4e',
-              'Could not send notes.'
-            )
+            activeAgentNotesSendFailureMessage('status-unavailable', {
+              explicitTarget: options.explicitTarget,
+              code: 'runtime-unverifiable'
+            })
           )
         })
         .finally(() => {

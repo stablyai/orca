@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import { isRelayEndpointHeldError } from './ssh-relay-endpoint-incumbent'
 import { replayPendingSshPtyKills } from './ssh-pending-pty-kill-replay'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
@@ -629,7 +630,13 @@ export class SshRelaySession {
       }
       // Why: terminal on first connect — a deployed binary against a still-running legacy daemon, or a
       // claim another connection holds. Notify the callback but still rethrow.
-      if (isRelayVersionMismatchError(err) || isSshOwnerAdmissionBlockedError(err)) {
+      // RelayEndpointHeldError is terminal for the same reason: a live incumbent owns the
+      // socket path, and backoff cannot make it hand it over. The user resolves it.
+      if (
+        isRelayVersionMismatchError(err) ||
+        isRelayEndpointHeldError(err) ||
+        isSshOwnerAdmissionBlockedError(err)
+      ) {
         console.warn(
           `[ssh-relay-session] Terminal relay error on initial connect for ${this.targetId}: ${err.message}`
         )
@@ -783,7 +790,13 @@ export class SshRelaySession {
       }
       // Why terminal: neither a version mismatch nor a blocked owner claim is reconcilable by backoff
       // retry, so fire the typed callback and drop out of 'reconnecting'.
-      if (isRelayVersionMismatchError(err) || isSshOwnerAdmissionBlockedError(err)) {
+      // RelayEndpointHeldError is terminal for the same reason: a live incumbent owns the
+      // socket path, and backoff cannot make it hand it over. The user resolves it.
+      if (
+        isRelayVersionMismatchError(err) ||
+        isRelayEndpointHeldError(err) ||
+        isSshOwnerAdmissionBlockedError(err)
+      ) {
         console.warn(
           `[ssh-relay-session] Terminal relay error for ${this.targetId}: ${err.message}`
         )

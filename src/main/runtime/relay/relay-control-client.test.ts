@@ -99,7 +99,8 @@ describe('RelayControlClient', () => {
   })
 
   it('rejects a control handshake that never receives a proof response', async () => {
-    const server = new WebSocketServer({ port: 0, perMessageDeflate: false })
+    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()
@@ -129,7 +130,7 @@ describe('RelayControlClient', () => {
   })
 
   it('settles an opening control immediately when ownership closes', async () => {
-    const server = new WebSocketServer({ port: 0, perMessageDeflate: false })
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()
@@ -165,7 +166,7 @@ describe('RelayControlClient', () => {
   })
 
   it('proves the host key and drives control/data commands without URL credentials', async () => {
-    const server = new WebSocketServer({ port: 0, perMessageDeflate: false })
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()

@@ -117,6 +117,11 @@ export class AgentAwakeService {
     }
   }
 
+  /** Agents this runtime has seen working recently, independent of the awake setting. */
+  getWorkingAgentCount(): number {
+    return this.getEligibleRunningStatusCount()
+  }
+
   subscribe(listener: (status: ComputerAwakeStatus) => void): () => void {
     this.statusListeners.add(listener)
     return () => this.statusListeners.delete(listener)

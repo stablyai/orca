@@ -107,6 +107,7 @@ export type MountedTerminalSurfaceCapture = {
  */
 export type MobileSessionWorktreeInputs = {
   worktreeId: string
+  worktreeInstanceId: string | undefined
   terminalTabs: AppState['tabsByWorktree'][string]
   browserWorkspaces: AppState['browserTabsByWorktree'][string]
   unifiedTabs: AppState['unifiedTabsByWorktree'][string]

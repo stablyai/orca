@@ -6,6 +6,7 @@ import type {
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
+import type { PreloadApi } from '../api-types'
 
 export const agentStatusApi = {
   /** Listen for agent status updates forwarded from native hook receivers. */
@@ -85,4 +86,4 @@ export const agentStatusApi = {
   }): void => {
     ipcRenderer.send('agentStatus:transferPaneAuthority', args)
   }
-}
+} satisfies PreloadApi['agentStatus']

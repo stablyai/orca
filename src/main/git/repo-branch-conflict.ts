@@ -4,8 +4,10 @@ import { gitExecFileAsync } from './runner'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import {
   probeAnyExactRef,
+  probeAnyExactRefBatched,
   type ExactRefProbeExec,
-  type ExactRefProbeExecOptions
+  type ExactRefProbeExecOptions,
+  type ExactRefProbeStdinExec
 } from './exact-ref-probe'
 
 export type BranchConflictKind = 'local' | 'remote'
@@ -79,12 +81,31 @@ function buildRemoteBranchConflictRefs(
   return [...refs]
 }
 
+/** One batched child answers for every remote; the per-ref probes only run when the host cannot
+ *  feed stdin, or when the batch came back undecided. */
+async function probeAnyRemoteConflictRef(
+  exec: ExactRefProbeExec,
+  batchedExec: ExactRefProbeStdinExec | undefined,
+  candidateRefs: readonly string[],
+  probeOptions: ExactRefProbeExecOptions
+): Promise<{ found: boolean }> {
+  if (batchedExec) {
+    // A present ref is always decisive, so `found` never survives with `unknown` set.
+    const batched = await probeAnyExactRefBatched(batchedExec, candidateRefs, probeOptions)
+    if (!batched.unknown) {
+      return { found: batched.found }
+    }
+  }
+  return probeAnyExactRef(exec, candidateRefs, probeOptions)
+}
+
 /** Run branch-conflict policy through the host that owns Git execution. */
 export async function getBranchConflictKindViaExec(
   exec: ExactRefProbeExec,
   branchName: string,
   allowedBaseRef?: string,
-  options: ExactRefProbeExecOptions = {}
+  options: ExactRefProbeExecOptions = {},
+  batchedExec?: ExactRefProbeStdinExec
 ): Promise<BranchConflictKind | null> {
   if (!canQueryRemoteBranchName(branchName)) {
     return null
@@ -104,7 +125,12 @@ export async function getBranchConflictKindViaExec(
       return null
     }
 
-    const { found: hasRemoteConflict } = await probeAnyExactRef(exec, candidateRefs, probeOptions)
+    const { found: hasRemoteConflict } = await probeAnyRemoteConflictRef(
+      exec,
+      batchedExec,
+      candidateRefs,
+      probeOptions
+    )
 
     return hasRemoteConflict ? 'remote' : null
   } catch {
@@ -119,15 +145,22 @@ export function getBranchConflictKind(
   options: LocalGitExecOptions = {}
 ): Promise<BranchConflictKind | null> {
   const execOptions = gitExecOptions(path, options)
+  const runLocalGit = (
+    argv: string[],
+    commandOptions?: ExactRefProbeExecOptions & { stdin?: string }
+  ): Promise<{ stdout: string }> =>
+    gitExecFileAsync(argv, {
+      ...execOptions,
+      ...(commandOptions?.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
+      ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs }),
+      ...(commandOptions?.stdin === undefined ? {} : { stdin: commandOptions.stdin })
+    })
   return getBranchConflictKindViaExec(
-    (argv, commandOptions) =>
-      gitExecFileAsync(argv, {
-        ...execOptions,
-        ...(commandOptions?.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
-        ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs })
-      }),
+    runLocalGit,
     branchName,
-    allowedBaseRef
+    allowedBaseRef,
+    {},
+    (argv, commandOptions) => runLocalGit(argv, commandOptions)
   )
 }
 

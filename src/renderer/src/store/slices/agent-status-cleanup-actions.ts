@@ -1,9 +1,7 @@
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import {
-  collectWorktreeIdsForConnection,
-  pruneMigrationUnsupportedEntries
-} from './agent-status-map-helpers'
+import { collectWorktreeIdsForConnection } from './agent-status-connection-worktree-scope'
+import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 
 /** Actions for removing transient rows and migration-era cache entries. */
 export function createAgentStatusCleanupActions(

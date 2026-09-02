@@ -56,6 +56,10 @@ const RETENTION_HELPER_SYMBOLS = [
 // Every place that decides whether a browser guest keeps painting, and the helper it must use.
 const RETENTION_SITES = new Map<string, readonly string[]>([
   ['components/TerminalWorkbenchContainer.tsx', ['useAnyBrowserGuestNeedsPaint']],
+  // The two outermost workbench wrappers: strict ancestors of every guest, so the per-worktree
+  // surface hatch below cannot rescue a guest either one parked with `hidden`.
+  ['components/TerminalSurface.tsx', ['useAnyBrowserGuestNeedsPaint']],
+  ['components/TerminalSplitWorkspaceSurfaces.tsx', ['useAnyBrowserGuestNeedsPaint']],
   ['components/TerminalWorktreeSplitSurface.tsx', ['useBrowserGuestPaintRetention']],
   [
     'components/browser-pane/assemble-chrome/BrowserPaneOverlayLayer.tsx',

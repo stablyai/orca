@@ -1,4 +1,8 @@
-import { ptyApiPart1 } from './pty-bridge-part-1'
-import { ptyApiPart2 } from './pty-bridge-part-2'
+import type { PreloadApi } from '../api-types'
+import { ptySessionControlApi } from './pty-bridge-session-control'
+import { ptyStreamAndSerializationApi } from './pty-bridge-stream-and-serialization'
 
-export const ptyApi = { ...ptyApiPart1, ...ptyApiPart2 }
+export const ptyApi = {
+  ...ptySessionControlApi,
+  ...ptyStreamAndSerializationApi
+} satisfies PreloadApi['pty']

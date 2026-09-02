@@ -1,3 +1,5 @@
+// Ordered slices of one registry: `definitions.ts` concatenates core-1..4 in order and that order
+// is the palette order, so the boundaries follow line count, not theme — do not regroup thematically.
 import type { KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
 

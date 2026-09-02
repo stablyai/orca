@@ -36,6 +36,7 @@ import type { ServeOptions } from './main-process-serve'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import { SkillShareDeepLinkState } from './skill-share-deep-link-state'
+import { OsOpenedMarkdownFileState } from './os-opened-markdown-files'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
@@ -70,6 +71,8 @@ export const mainProcessState = {
   headlessBrowserDisplayAvailable: false,
   starNag: null as StarNagService | null,
   agentAwakeService: null as AgentAwakeService | null,
+  uninstallRepoMaintenanceIdleGate: null as (() => Promise<void>) | null,
+  repoMaintenanceShutdown: Promise.resolve() as Promise<void>,
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
   publishProviderSessionChanges: null as
@@ -90,6 +93,12 @@ export const mainProcessState = {
   // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
   pendingOpenSettings: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
+  // Why: a Finder/Explorer "Open With" can land before any window exists; the renderer pulls this buffer on mount.
+  osOpenedMarkdownFiles: new OsOpenedMarkdownFileState(),
+  // Why a latch and not just "a window exists": a window can be up while its renderer has not
+  // attached the ui:openMarkdownFiles listener yet, and a push into that gap is dropped by
+  // Electron with no error. Only the renderer's own pull proves the listener is live.
+  markdownFileOpenListenerReady: false,
   firstWindowStartupServicesReady: Promise.resolve(),
   managedWslCliReconciliationReady: Promise.resolve(),
   managedWslCliStartupBarrierReady: Promise.resolve(),

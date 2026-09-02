@@ -19,7 +19,10 @@ type RecheckState = {
 
 type RuntimeStatusStore = {
   runtimeEnvironments: readonly { id: string }[]
-  setRuntimeEnvironmentStatus: (environmentId: string, status: RuntimeEnvironmentStatus) => void
+  setRuntimeEnvironmentStatus: (
+    environmentId: string,
+    status: RuntimeEnvironmentStatus
+  ) => void
 }
 
 const rechecks = new Map<string, RecheckState>()

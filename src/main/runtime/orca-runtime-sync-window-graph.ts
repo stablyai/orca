@@ -79,7 +79,8 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     const changedMobileWorktrees = this.syncMobileSessionTabs(
       graph.mobileSessionTabs,
       graph.unchangedMobileSessionWorktrees,
-      mobileSessionResyncWorktrees
+      mobileSessionResyncWorktrees,
+      rendererGeneration
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const graphSyncedAt = this.nextTitleObservationSequence()

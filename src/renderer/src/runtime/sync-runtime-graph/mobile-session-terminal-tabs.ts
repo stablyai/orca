@@ -16,7 +16,7 @@ import {
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId,
   isUnifiedTabActiveInActiveGroup
-} from './mobile-session-tab-helpers'
+} from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 
