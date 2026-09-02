@@ -9,6 +9,7 @@ import {
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
 import { directoryNode, fileNode } from './file-explorer-tree-node-test-fixtures'
+import { isFileExplorerRevealBlocked } from './file-explorer-row-reveal'
 import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
 
 const { downloadRuntimeFileMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
@@ -44,6 +45,85 @@ beforeEach(() => {
   toastErrorMock.mockReset()
   toastSuccessMock.mockReset()
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+})
+
+describe('FileExplorerRow reveal in file manager', () => {
+  it('does not block a local worktree while a remote runtime is globally active', () => {
+    expect(
+      isFileExplorerRevealBlocked(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          repos: [{ id: 'local-repo', connectionId: null, executionHostId: 'local' }],
+          worktreesByRepo: {
+            'local-repo': [{ id: 'local-repo::wt-a', repoId: 'local-repo', hostId: 'local' }]
+          }
+        },
+        'local-repo::wt-a'
+      )
+    ).toBe(false)
+  })
+
+  it('blocks a remote-owned worktree even when the global runtime is local', () => {
+    expect(
+      isFileExplorerRevealBlocked(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          repos: [{ id: 'runtime-repo', connectionId: null, executionHostId: 'runtime:env-1' }],
+          worktreesByRepo: {
+            'runtime-repo': [
+              { id: 'runtime-repo::wt-b', repoId: 'runtime-repo', hostId: 'runtime:env-1' }
+            ]
+          }
+        },
+        'runtime-repo::wt-b'
+      )
+    ).toBe(true)
+  })
+
+  it('blocks SSH-backed worktrees', () => {
+    expect(
+      isFileExplorerRevealBlocked(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          repos: [{ id: 'ssh-repo', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }],
+          worktreesByRepo: {
+            'ssh-repo': [{ id: 'ssh-repo::wt', repoId: 'ssh-repo', hostId: 'ssh:ssh-1' }]
+          }
+        },
+        'ssh-repo::wt'
+      )
+    ).toBe(true)
+  })
+
+  it('blocks a detected SSH worktree that is absent from worktreesByRepo', () => {
+    expect(
+      isFileExplorerRevealBlocked(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          repos: [{ id: 'ssh-repo', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }],
+          worktreesByRepo: {},
+          folderWorkspaces: [],
+          projectGroups: []
+        },
+        'ssh-repo::/home/neil/repo-feature'
+      )
+    ).toBe(true)
+  })
+
+  it('blocks reveal when the worktree owner cannot be resolved', () => {
+    expect(
+      isFileExplorerRevealBlocked(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          repos: [],
+          worktreesByRepo: {},
+          folderWorkspaces: [],
+          projectGroups: []
+        },
+        'missing-repo::/home/neil/repo-feature'
+      )
+    ).toBe(true)
+  })
 })
 
 describe('FileExplorerRow collapse folder action', () => {

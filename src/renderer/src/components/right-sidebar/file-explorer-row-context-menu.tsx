@@ -26,7 +26,8 @@ import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
 import { openFileInBrowserTab } from '@/lib/file-preview'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { isFileExplorerRevealBlocked } from './file-explorer-row-reveal'
 import { translate } from '@/i18n/i18n'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
@@ -272,17 +273,7 @@ export function FileExplorerRowContextMenu({
       <ContextMenuItem
         onSelect={() => {
           const state = useAppStore.getState()
-          const activeWorktree = Object.values(state.worktreesByRepo)
-            .flat()
-            .find((worktree) => worktree.id === activeWorktreeId)
-          const activeRepo = activeWorktree
-            ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
-            : null
-          if (
-            isLocalPathOpenBlocked(state.settings, {
-              connectionId: activeRepo?.connectionId ?? null
-            })
-          ) {
+          if (isFileExplorerRevealBlocked(state, activeWorktreeId)) {
             showLocalPathOpenBlockedToast()
             return
           }

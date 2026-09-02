@@ -137,13 +137,29 @@ describe('WorktreeOpenInMenu', () => {
     expect(stopPropagation).toHaveBeenCalled()
   })
 
-  it('uses the blocked-path toast without calling main IPC', async () => {
+  it('opens a local worktree in the file manager even while a remote runtime is globally active', async () => {
     mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
 
     await openWorktreePath({
       target: 'file-manager',
       worktreePath: '/tmp/workspace',
-      connectionId: null
+      connectionId: null,
+      runtimeEnvironmentId: null
+    })
+
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(openInFileManagerMock).toHaveBeenCalledWith('/tmp/workspace')
+    expect(openInExternalEditorMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks file-manager open for a remote-owned worktree', async () => {
+    mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
+
+    await openWorktreePath({
+      target: 'file-manager',
+      worktreePath: '/tmp/workspace',
+      connectionId: null,
+      runtimeEnvironmentId: 'runtime-1'
     })
 
     expect(toastErrorMock).toHaveBeenCalledWith(
@@ -151,6 +167,22 @@ describe('WorktreeOpenInMenu', () => {
     )
     expect(openInFileManagerMock).not.toHaveBeenCalled()
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks file-manager open for SSH-backed worktrees', async () => {
+    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
+
+    await openWorktreePath({
+      target: 'file-manager',
+      worktreePath: '/home/ada/project',
+      connectionId: 'ssh-1',
+      runtimeEnvironmentId: null
+    })
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Opening remote paths in the local OS is not available.'
+    )
+    expect(openInFileManagerMock).not.toHaveBeenCalled()
   })
 
   it('shows an actionable toast when the host launcher fails', async () => {
@@ -252,6 +284,15 @@ describe('WorktreeOpenInMenu', () => {
     expect(getOpenInEntryAvailability(entries[3], mockState.settings, 'ssh-1')).toEqual({
       disabled: true,
       metadata: 'Local only'
+    })
+  })
+
+  it('keeps the file manager available for a local worktree while a remote runtime is globally active', () => {
+    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
+    const entries = getWorktreeOpenInEntries([], 'Finder')
+
+    expect(getOpenInEntryAvailability(entries[0], mockState.settings, null, null)).toEqual({
+      disabled: false
     })
   })
 
