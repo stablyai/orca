@@ -27,9 +27,11 @@ const folderRepo: Repo = {
 const mocks = vi.hoisted(() => ({
   state: {
     repos: [] as Repo[],
+    filterRepoIds: [] as string[],
     addNonGitFolder: vi.fn(),
     closeModal: vi.fn(),
-    openModal: vi.fn()
+    openModal: vi.fn(),
+    setFilterRepoIds: vi.fn()
   }
 }))
 
@@ -96,6 +98,7 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.repos = []
+    mocks.state.filterRepoIds = []
     mocks.state.addNonGitFolder.mockResolvedValue(folderRepo)
   })
 
@@ -245,5 +248,31 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
       executionHostId: 'ssh:ssh-builder'
     })
     expect(onGitRepoReady).not.toHaveBeenCalled()
+  })
+
+  it('widens an active sidebar filter to include every repo imported via separate mode', async () => {
+    const importedA: Repo = { ...folderRepo, id: 'repo-a', path: '/workspace/platform/a' }
+    const importedB: Repo = { ...folderRepo, id: 'repo-b', path: '/workspace/platform/b' }
+    const importNestedRepos = vi.fn().mockResolvedValue({
+      projects: [
+        { path: importedA.path, projectId: importedA.id, status: 'imported' as const },
+        { path: importedB.path, projectId: importedB.id, status: 'imported' as const }
+      ],
+      importedCount: 2,
+      alreadyKnownCount: 0,
+      failedCount: 0
+    })
+    mocks.state.repos = [importedA, importedB]
+    mocks.state.filterRepoIds = ['repo-other']
+    const { handleImportNestedRepos } = useTestAddRepoNestedImportFlow({
+      nestedSelectedPaths: new Set([importedA.path, importedB.path]),
+      importNestedRepos,
+      fetchWorktrees: vi.fn(),
+      onGitRepoReady: vi.fn()
+    })
+
+    await handleImportNestedRepos('separate')
+
+    expect(mocks.state.setFilterRepoIds).toHaveBeenCalledWith(['repo-other', 'repo-a', 'repo-b'])
   })
 })

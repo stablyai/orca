@@ -8,3 +8,15 @@ export function retainValidFilterRepoIds(
     ? filterRepoIds
     : filterRepoIds.filter((repoId) => validRepoIds.has(repoId))
 }
+
+// Why: reveal/import must make the target visible without dropping the user's project selection, so widen the filter instead of clearing it.
+export function widenFilterRepoIds(
+  filterRepoIds: readonly string[],
+  repoIds: readonly string[]
+): string[] | null {
+  if (filterRepoIds.length === 0) {
+    return null
+  }
+  const missing = repoIds.filter((id) => !filterRepoIds.includes(id))
+  return missing.length > 0 ? [...filterRepoIds, ...missing] : null
+}
