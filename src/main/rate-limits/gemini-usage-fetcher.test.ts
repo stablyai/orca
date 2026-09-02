@@ -27,6 +27,9 @@ vi.mock('node:fs/promises', () => ({
   rename: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
+vi.mock('./antigravity-local-usage-fetcher', () => ({
+  fetchAntigravityLocalRateLimits: vi.fn().mockResolvedValue(null)
+}))
 
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 

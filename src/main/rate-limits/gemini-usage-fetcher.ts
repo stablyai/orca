@@ -14,6 +14,7 @@ import {
   deduplicateBuckets,
   deriveSessionSummary
 } from './gemini-bucket-formatting'
+import { fetchAntigravityLocalRateLimits } from './antigravity-local-usage-fetcher'
 
 const API_TIMEOUT_MS = 10_000
 const RETRIEVE_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota'
@@ -217,6 +218,11 @@ export async function fetchGeminiRateLimits(
   }
 
   try {
+    const localResult = await fetchAntigravityLocalRateLimits().catch(() => null)
+    if (localResult && localResult.status === 'ok') {
+      return localResult
+    }
+
     const authJson = await readAuthJson()
     const result =
       authJson?.google?.type === 'oauth'
