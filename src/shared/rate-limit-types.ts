@@ -85,6 +85,15 @@ export type ProviderRateLimits = {
   } | null
   /** Subscription plan tier for the active account (Codex `plan_type`, e.g. "plus"). */
   planType?: string | null
+  /** Nous Portal credit breakdown (subscription vs prepaid top-up), if reported. */
+  nousCredits?: {
+    /** Credits remaining from the active monthly subscription. */
+    subscriptionRemaining: number | null
+    /** Prepaid top-up credits remaining, if the account holds any. */
+    topUpRemaining: number | null
+    /** Total usable credits (subscription + top-up), if reported. */
+    totalUsable: number | null
+  } | null
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number
   /** Human-readable error message, null when status is 'ok'. */

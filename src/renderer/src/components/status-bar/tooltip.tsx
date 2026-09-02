@@ -17,7 +17,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
-import { formatWindowAmounts } from './usage-roster-formatting'
+import { formatCreditAmount, formatWindowAmounts } from './usage-roster-formatting'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -174,7 +174,12 @@ export function getWindowSections(
   }
   if (p.monthly !== undefined && p.monthly !== null) {
     sections.push({
-      label: translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
+      // Why: for Nous the monthly window IS the active subscription plan, so
+      // name it that way once top-up credits are shown alongside it.
+      label:
+        p.provider === 'nous'
+          ? translate('auto.components.status.bar.tooltip.nousSubscription', 'Subscription')
+          : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
       window: p.monthly
     })
   }
@@ -243,6 +248,43 @@ function ProviderRateLimitWindowSection({
         </span>
         {resetLabel && <span>{resetLabel}</span>}
       </div>
+    </div>
+  )
+}
+
+// Why: Nous reports subscription and prepaid top-up credits as separate
+// balances; the window section above carries the subscription gauge, this
+// renders the remaining top-up and the combined total below it.
+function NousCreditBreakdown({
+  credits,
+  textClass,
+  mutedClass
+}: {
+  credits: NonNullable<ProviderRateLimits['nousCredits']>
+  textClass: string
+  mutedClass: string
+}): React.JSX.Element {
+  const topUp = formatCreditAmount(credits.topUpRemaining)
+  const total = formatCreditAmount(credits.totalUsable)
+  return (
+    <div className="space-y-1">
+      <div className={`font-medium ${textClass}`}>
+        {translate('auto.components.status.bar.tooltip.nousCreditBalance', 'Credit balance')}
+      </div>
+      {topUp ? (
+        <div className={`flex justify-between ${mutedClass}`}>
+          <span>{translate('auto.components.status.bar.tooltip.nousTopUp', 'Top-up')}</span>
+          <span className="tabular-nums">{topUp}</span>
+        </div>
+      ) : null}
+      {total ? (
+        <div className={`flex justify-between ${mutedClass}`}>
+          <span>
+            {translate('auto.components.status.bar.tooltip.nousTotalUsable', 'Total usable')}
+          </span>
+          <span className="tabular-nums">{total}</span>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -356,6 +398,14 @@ export function ProviderPanel({
           usagePercentageDisplay={usagePercentageDisplay}
         />
       ))}
+
+      {p.provider === 'nous' && p.nousCredits ? (
+        <NousCreditBreakdown
+          credits={p.nousCredits}
+          textClass={textClass}
+          mutedClass={mutedClass}
+        />
+      ) : null}
 
       {p.error ? (
         <ErrorMessage

@@ -104,7 +104,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
-import { formatWindowAmountsCompact } from './usage-roster-formatting'
+import { formatCreditAmount, formatWindowAmountsCompact } from './usage-roster-formatting'
 import {
   normalizeStatusBarUsageMode,
   type StatusBarUsageMode
@@ -1251,6 +1251,17 @@ function VerboseProviderUsage({
           <WindowLabel w={window.window} label={window.label} display={display} />
         </React.Fragment>
       ))}
+      {/* Why: Nous bills top-up credits separately from the subscription — surface
+          the balance right on the pill next to the subscription gauge. */}
+      {p.provider === 'nous' && p.nousCredits?.topUpRemaining != null ? (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <span className="tabular-nums">
+            {translate('auto.components.status.bar.tooltip.nousTopUp', 'Top-up')}{' '}
+            {formatCreditAmount(p.nousCredits.topUpRemaining)}
+          </span>
+        </>
+      ) : null}
     </>
   )
 }

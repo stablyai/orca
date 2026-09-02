@@ -445,6 +445,31 @@ describe('getWindowSections', () => {
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')
   })
+
+  it('labels the Nous monthly window as Subscription', () => {
+    const p: ProviderRateLimits = {
+      provider: 'nous',
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: 42,
+        windowMinutes: 43_200,
+        resetsAt: null,
+        resetDescription: null,
+        usedAmount: 420,
+        remainingAmount: 580
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    const sections = getWindowSections(p)
+    // Session/Weekly slots are always present (null windows render as nothing);
+    // the Nous monthly window is the only data-bearing section and reads
+    // "Subscription" so it stays distinct from top-up credits.
+    expect(sections.map((s) => s.label)).toEqual(['Session', 'Weekly', 'Subscription'])
+    expect(sections.filter((s) => s.window !== null).map((s) => s.label)).toEqual(['Subscription'])
+  })
 })
 
 describe('ProviderPanel reset rendering', () => {
@@ -549,6 +574,56 @@ describe('ProviderPanel reset rendering', () => {
     expect(markup).toContain('75% left')
     expect(markup).toContain('width:75%')
     expect(markup).not.toContain('width:25%')
+  })
+
+  it('renders top-up and total usable alongside the Nous subscription gauge', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'nous',
+      status: 'ok',
+      monthly: {
+        usedPercent: 42,
+        windowMinutes: 43_200,
+        resetsAt: Date.now() + 3 * 24 * 60 * 60_000,
+        resetDescription: null,
+        usedAmount: 420,
+        remainingAmount: 580
+      },
+      nousCredits: { subscriptionRemaining: 580, topUpRemaining: 42.5, totalUsable: 622.5 }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('Subscription')
+    expect(markup).toContain('Top-up')
+    expect(markup).toContain('$42.5')
+    expect(markup).toContain('Total usable')
+    expect(markup).toContain('$622.5')
+  })
+
+  it('omits the credit breakdown when the account breakdown is absent', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'nous',
+      status: 'ok',
+      monthly: {
+        usedPercent: 42,
+        windowMinutes: 43_200,
+        resetsAt: null,
+        resetDescription: null,
+        usedAmount: 420,
+        remainingAmount: 580
+      },
+      nousCredits: null
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('Subscription')
+    expect(markup).not.toContain('Top-up')
+    expect(markup).not.toContain('Total usable')
   })
 })
 

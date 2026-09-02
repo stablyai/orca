@@ -14,6 +14,7 @@ import {
 import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
 import {
+  formatCreditAmount,
   formatPlanLabel,
   formatWindowAmounts,
   usageTextColorClass
@@ -187,6 +188,16 @@ export function UsageRow({
               display={display}
             />
           ))}
+          {p.provider === 'nous' && p.nousCredits?.topUpRemaining != null ? (
+            <span data-usage-window="nous-top-up" className="flex shrink-0 items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground">
+                {translate('auto.components.status.bar.tooltip.nousTopUp', 'Top-up')}
+              </span>
+              <span className="tabular-nums text-[10px] text-muted-foreground">
+                {formatCreditAmount(p.nousCredits.topUpRemaining)}
+              </span>
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>

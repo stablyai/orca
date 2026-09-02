@@ -47,6 +47,32 @@ function makeSubscriptionPayload(overrides: Record<string, unknown> = {}): unkno
   }
 }
 
+// Why: top-up credits arrive on /api/oauth/account, not the subscription
+// payload — mirror the Hermes CLI /usage credits fields (snake_case).
+function makeAccountPayload(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    user: { email: 'user@example.com' },
+    organisation: { id: 'org_acme', slug: 'acme', name: 'Acme Inc' },
+    subscription: {
+      plan: 'Plus',
+      tier: 1,
+      monthly_credits: '1000',
+      current_period_end: '2026-08-31T23:59:59Z',
+      credits_remaining: '580',
+      rollover_credits: '0'
+    },
+    paid_service_access: {
+      allowed: true,
+      paid_access: true,
+      has_active_subscription: true,
+      subscription_credits_remaining: '580',
+      purchased_credits_remaining: '0',
+      total_usable_credits: '580'
+    },
+    ...overrides
+  }
+}
+
 describe('fetchNousRateLimits', () => {
   // Why: persistNousRefresh writes under HERMES_HOME; point it at a temp dir so
   // the refresh path can never touch the developer's real ~/.hermes/auth.json.
@@ -56,6 +82,10 @@ describe('fetchNousRateLimits', () => {
     hermesHome = mkdtempSync(join(tmpdir(), 'nous-fetcher-test-'))
     process.env.HERMES_HOME = hermesHome
     fetchMock.mockReset()
+    // Why: the top-up breakdown fetch is best-effort and runs alongside the
+    // subscription; default it to an empty account payload so tests that only
+    // exercise the subscription lane stay deterministic.
+    fetchMock.mockResolvedValue(makeResponse({ paid_service_access: null }))
   })
 
   afterEach(() => {
@@ -82,18 +112,21 @@ describe('fetchNousRateLimits', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('fetches the subscription with a fresh stored token', async () => {
+  it('fetches the subscription and account breakdown with a fresh stored token', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse(makeSubscriptionPayload()))
     const result = await fetchNousRateLimits({
       authReadResult: { status: 'ok', session: makeSession() }
     })
     expect(result.status).toBe('ok')
     expect(result.provider).toBe('nous')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe(`${PORTAL}/api/billing/subscription`)
     expect(init.method).toBeUndefined()
     expect(init.headers.Authorization).toBe('Bearer access-token')
+    const [accountUrl, accountInit] = fetchMock.mock.calls[1]
+    expect(accountUrl).toBe(`${PORTAL}/api/oauth/account`)
+    expect(accountInit.headers.Authorization).toBe('Bearer access-token')
   })
 
   it('maps monthly credits to a window with amounts and the plan tier', async () => {
@@ -127,7 +160,7 @@ describe('fetchNousRateLimits', () => {
       .mockResolvedValueOnce(makeResponse(makeSubscriptionPayload()))
     const result = await fetchNousRateLimits({ authReadResult: { status: 'ok', session } })
     expect(result.status).toBe('ok')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
     const [tokenUrl, tokenInit] = fetchMock.mock.calls[0]
     expect(tokenUrl).toBe(`${PORTAL}/api/oauth/token`)
     expect(tokenInit.method).toBe('POST')
@@ -136,12 +169,14 @@ describe('fetchNousRateLimits', () => {
     expect(tokenInit.body.toString()).toContain('client_id=hermes-cli')
     const [, subscriptionInit] = fetchMock.mock.calls[1]
     expect(subscriptionInit.headers.Authorization).toBe('Bearer fresh-token')
+    const [, accountInit] = fetchMock.mock.calls[2]
+    expect(accountInit.headers.Authorization).toBe('Bearer fresh-token')
   })
 
   it('uses the stored token without refreshing when it is fresh', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse(makeSubscriptionPayload()))
     await fetchNousRateLimits({ authReadResult: { status: 'ok', session: makeSession() } })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     const [, init] = fetchMock.mock.calls[0]
     expect(init.headers.Authorization).toBe('Bearer access-token')
   })
@@ -251,6 +286,56 @@ describe('fetchNousRateLimits', () => {
     expect(result.monthly?.usedPercent).toBe(100)
     expect(result.monthly?.usedAmount).toBe(142.1)
     expect(result.monthly?.remainingAmount).toBe(0.4)
+  })
+
+  it('maps the account breakdown into nousCredits (top-up + total usable)', async () => {
+    fetchMock.mockResolvedValueOnce(makeResponse(makeSubscriptionPayload())).mockResolvedValueOnce(
+      makeResponse(
+        makeAccountPayload({
+          paid_service_access: {
+            allowed: true,
+            paid_access: true,
+            subscription_credits_remaining: '580',
+            purchased_credits_remaining: '42.5',
+            total_usable_credits: '622.5'
+          }
+        })
+      )
+    )
+    const result = await fetchNousRateLimits({
+      authReadResult: { status: 'ok', session: makeSession() }
+    })
+    expect(result.status).toBe('ok')
+    expect(result.nousCredits).toEqual({
+      subscriptionRemaining: 580,
+      topUpRemaining: 42.5,
+      totalUsable: 622.5
+    })
+  })
+
+  it('keeps the subscription snapshot when the account breakdown is unavailable', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(makeSubscriptionPayload()))
+      .mockResolvedValueOnce(makeResponse({}, 500))
+    const result = await fetchNousRateLimits({
+      authReadResult: { status: 'ok', session: makeSession() }
+    })
+    expect(result.status).toBe('ok')
+    expect(result.nousCredits).toBeNull()
+    expect(result.monthly?.remainingAmount).toBe(580)
+    expect(result.planType).toBe('Plus')
+  })
+
+  it('omits nousCredits when the account payload has no usable fields', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(makeSubscriptionPayload()))
+      .mockResolvedValueOnce(makeResponse(makeAccountPayload({ paid_service_access: null })))
+    const result = await fetchNousRateLimits({
+      authReadResult: { status: 'ok', session: makeSession() }
+    })
+    expect(result.status).toBe('ok')
+    expect(result.nousCredits).toBeNull()
+    expect(result.monthly).not.toBeNull()
   })
 
   it('classifies network failures as network', async () => {
