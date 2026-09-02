@@ -46,4 +46,22 @@ describe('tui agent detection commands', () => {
     expect(getTuiAgentDetectionProbeCommands(commands, 'wsl')).toEqual([])
     expect(resolveDetectedTuiAgentIds(commands, new Set(['orca-ide', 'claude']), 'wsl')).toEqual([])
   })
+
+  it('requires Claude before reporting openzoo on every runtime', () => {
+    // Why: `openzoo claude` hosts the real Claude Code CLI, so a bare `openzoo` binary
+    // (the payment proxy) must not surface a launchable agent that would fail on start.
+    const commands = KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter(
+      (command) => command.id === 'openzoo'
+    )
+
+    expect(commands).toEqual([{ id: 'openzoo', cmd: 'openzoo', requiredCommands: ['claude'] }])
+    for (const runtime of ['linux', 'darwin', 'win32', 'wsl'] as const) {
+      expect(getTuiAgentDetectionProbeCommands(commands, runtime)).toEqual(['openzoo', 'claude'])
+      expect(resolveDetectedTuiAgentIds(commands, new Set(['openzoo']), runtime)).toEqual([])
+      expect(resolveDetectedTuiAgentIds(commands, new Set(['claude']), runtime)).toEqual([])
+      expect(resolveDetectedTuiAgentIds(commands, new Set(['openzoo', 'claude']), runtime)).toEqual(
+        ['openzoo']
+      )
+    }
+  })
 })

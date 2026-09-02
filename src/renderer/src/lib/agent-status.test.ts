@@ -500,6 +500,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
     expect(getAgentLabel('claude.exe')).toBe('Claude Code')
     expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
+    expect(getAgentLabel('openzoo claude')).toBe('openzoo')
     expect(getAgentLabel('⠋ Codex')).toBe('Codex')
     expect(getAgentLabel('Aider idle')).toBe('Aider')
     expect(getAgentLabel('Devin working')).toBe('Devin')
@@ -834,6 +835,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('openclaude')).toBe('OpenClaude')
   })
 
+  it("keeps 'openzoo' lowercase, as the project spells it", () => {
+    expect(formatAgentTypeLabel('openzoo')).toBe('openzoo')
+  })
+
   it("maps 'codex' to 'Codex'", () => {
     expect(formatAgentTypeLabel('codex')).toBe('Codex')
   })
@@ -891,6 +896,7 @@ describe('agentTypeToIconAgent', () => {
   it("round-trips iconable agent types like 'claude'", () => {
     expect(agentTypeToIconAgent('claude')).toBe('claude')
     expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
+    expect(agentTypeToIconAgent('openzoo')).toBe('openzoo')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
     expect(agentTypeToIconAgent('ante')).toBe('ante')

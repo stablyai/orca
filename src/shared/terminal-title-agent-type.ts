@@ -175,6 +175,11 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'openclaude')) {
     return 'OpenClaude'
   }
+  // Why: the shell shows `openzoo claude` as its title until Claude Code takes over; the
+  // wrapper name is the identity, the trailing `claude` is its subcommand.
+  if (titleHasAgentName(title, 'openzoo')) {
+    return 'openzoo'
+  }
   if (titleHasAgentName(title, 'copilot')) {
     return 'GitHub Copilot'
   }
@@ -225,6 +230,7 @@ export const getAgentLabel: (title: string) => string | null =
 const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
+  openzoo: 'openzoo',
   Codex: 'codex',
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',

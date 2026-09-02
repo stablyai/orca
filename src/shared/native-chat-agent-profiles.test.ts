@@ -17,6 +17,7 @@ describe('native chat agent picker profiles', () => {
       skillSourceOwner: 'claude'
     })
     expect(getNativeChatAgentProfile('openclaude')).toMatchObject({ skillSourceOwner: 'claude' })
+    expect(getNativeChatAgentProfile('openzoo')).toMatchObject({ skillSourceOwner: 'claude' })
     expect(getNativeChatAgentProfile('grok')).toMatchObject({
       skillPrefix: '/',
       groupedSlash: true,

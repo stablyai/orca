@@ -2,6 +2,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AppState } from '../../store/types'
 
 type AgentStatusPaneResolution = {
@@ -13,6 +14,7 @@ type AgentStatusPaneResolution = {
   owningWorktreeId: string | undefined
   titleUsesTabTitle: boolean
   tabTitle: string | undefined
+  launchAgent: TuiAgent | undefined
 }
 
 type AgentStatusWorktreeConnectionResolution = {
@@ -24,6 +26,7 @@ type AgentStatusWorktreeConnectionResolution = {
 type IndexedAgentStatusTab = {
   title: string | undefined
   owningWorktreeId: string
+  launchAgent: TuiAgent | undefined
 }
 
 export type AgentStatusPaneRoutingIndex = {
@@ -92,7 +95,11 @@ function getIndexedTabs(
       const tabId = tab.id
       // First wins: the standalone resolver stops at the first worktree owning this tab id.
       if (!tabsById.has(tabId)) {
-        tabsById.set(tabId, { title: tab.title, owningWorktreeId: worktreeId })
+        tabsById.set(tabId, {
+          title: tab.title,
+          owningWorktreeId: worktreeId,
+          launchAgent: tab.launchAgent
+        })
       }
     }
   }
@@ -188,7 +195,8 @@ export function resolvePaneKeyFromRoutingIndex(
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
       titleUsesTabTitle: false,
-      tabTitle: undefined
+      tabTitle: undefined,
+      launchAgent: undefined
     }
   }
   const { tabId, leafId } = parsed
@@ -202,7 +210,8 @@ export function resolvePaneKeyFromRoutingIndex(
       repoConnectionResolved: false,
       owningWorktreeId: undefined,
       titleUsesTabTitle: false,
-      tabTitle: undefined
+      tabTitle: undefined,
+      launchAgent: undefined
     }
   }
   const connection = resolveWorktreeConnectionFromRoutingIndex(index, tab.owningWorktreeId)
@@ -223,7 +232,8 @@ export function resolvePaneKeyFromRoutingIndex(
         repoConnectionResolved: connection.repoConnectionResolved,
         owningWorktreeId: tab.owningWorktreeId,
         titleUsesTabTitle: false,
-        tabTitle: undefined
+        tabTitle: undefined,
+        launchAgent: undefined
       }
     }
   }
@@ -238,6 +248,7 @@ export function resolvePaneKeyFromRoutingIndex(
     repoConnectionResolved: connection.repoConnectionResolved,
     owningWorktreeId: tab.owningWorktreeId,
     titleUsesTabTitle: paneTitle === undefined,
-    tabTitle: tab.title
+    tabTitle: tab.title,
+    launchAgent: tab.launchAgent
   }
 }

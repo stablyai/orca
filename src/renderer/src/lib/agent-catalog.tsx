@@ -306,6 +306,15 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'openzoo',
+    label: translate('auto.lib.agent.catalog.3dc60c7687', 'openzoo'),
+    // Why: matches TUI_AGENT_CONFIG.openzoo.launchCmd — `openzoo claude` runs the real
+    // Claude Code CLI against openzoo's local x402 proxy; the bare binary only runs the proxy.
+    cmd: 'openzoo claude',
+    faviconDomain: 'openzoo.fun',
+    homepageUrl: 'https://github.com/staccDOTsol/openzoo'
   }
 ])
 

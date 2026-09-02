@@ -110,6 +110,8 @@ describe('skills CLI agent keys', () => {
     // Why: src/shared/native-chat-agent-profiles.ts states OpenClaude reads
     // Claude-owned roots, so it is not unmappable.
     expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.openclaude).toBe('claude-code')
+    // Why: openzoo launches the real Claude Code CLI, which reads Claude-owned roots.
+    expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.openzoo).toBe('claude-code')
     // Why: Orca detects trae via `traecli`, which tui-agent-config calls an alias
     // only TRAE CN ships, so the CN directory is the right target.
     expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.trae).toBe('trae-cn')

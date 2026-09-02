@@ -7,6 +7,7 @@ export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp'
 export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'claude',
   'openclaude',
+  'openzoo',
   'codex',
   'grok',
   'omp'
@@ -43,8 +44,9 @@ export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
   // Why: OpenClaude writes the Claude transcript format and layout even though
-  // Orca preserves its distinct agent identity for launch and UI behavior.
-  if (agent === 'claude' || agent === 'openclaude') {
+  // Orca preserves its distinct agent identity for launch and UI behavior;
+  // openzoo IS the Claude Code CLI (behind a local proxy), so it shares ~/.claude.
+  if (agent === 'claude' || agent === 'openclaude' || agent === 'openzoo') {
     return 'claude'
   }
   if (agent === 'codex' || agent === 'grok' || agent === 'omp') {

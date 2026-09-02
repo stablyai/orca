@@ -5,6 +5,7 @@
     "supported",
     "claude-code",
     "glm-agent",
+    "openzoo",
     "codex",
     "cursor-cli",
     "codex-hot-swap",
