@@ -39,6 +39,8 @@ export type UsageRateLimitMetadata = {
   failureKind?: UsageRateLimitFailureKind
   credentialSource?: string
   authProvenance?: string
+  /** Stable provider account identity used to scope cached auth-bound state. */
+  authAccountId?: string
   deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
   /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */

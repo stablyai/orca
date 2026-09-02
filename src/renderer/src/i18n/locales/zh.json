@@ -3479,19 +3479,6 @@
             "f90b3d7a16": "运行 Kimi 以刷新",
             "a37e8c15d4": "在运行 Orca 的电脑上的终端中运行 kimi，等待其启动，然后重试用量检查。"
           },
-          "GrokResetMenu": {
-            "1d0a238e8b": "无法使用 SuperGrok 重置。请重试。",
-            "5083fdb684": "打开 Grok 详情和使用限额重置",
-            "febaa254bf": "重置 Grok 限额？",
-            "2fd82006e3": "这会为已登录的账户使用一个 SuperGrok 使用限额重置令牌，并立即清除当前的每周限额。",
-            "3fc8633cbf": "不再询问",
-            "d2801b1ae1": "取消",
-            "de40a51f9b": "正在使用重置…",
-            "3ca4f108f6": "立即重置",
-            "5b42bad652": "1 次速率限制重置可用",
-            "d101726b6a": "{{value0}} 次速率限制重置可用",
-            "58b2e3f032": "管理账户…"
-          },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
           },
@@ -3865,7 +3852,6 @@
           "cfe2282ffa": "未知"
         },
         "GrokUsagePane": {
-          "9c68bb8686": "使用限额重置",
           "g8h9i0j1k2": "Grok 使用量",
           "b2d3e4f5c6": "来自 Grok CLI OAuth（~/.grok/auth.json）的每周订阅额度。与状态栏使用同一来源。",
           "c3e4f5a6b7": "在账户中设置",
@@ -9845,11 +9831,6 @@
           }
         },
         "GrokAccountsSection": {
-          "bd0e82282e": "使用限额重置",
-          "5447d40963": "与 grok.com 的“设置 → 使用情况”中相同的 SuperGrok 重置令牌。可从状态栏的 Grok 使用情况菜单中兑换。",
-          "56ff2eca20": "1 个重置可用",
-          "c98d7e49ed": "{{value0}} 个重置可用",
-          "08661af78b": "打开 grok.com 使用情况",
           "a1b2c3d4e5": "Grok (xAI)",
           "f6e5d4c3b2": "显示来自 Grok CLI 登录的每周额度使用量（会话文件 ~/.grok/auth.json）。",
           "0d8e77bc40": "Grok CLI 文档",
@@ -14685,6 +14666,36 @@
     }
   },
   "components": {
+    "grokAccounts": {
+      "resetCredits": {
+        "title": "使用限额重置",
+        "description": "与 grok.com 的“设置 → 使用情况”中相同的 SuperGrok 重置令牌。可从状态栏的 Grok 使用情况菜单中兑换。",
+        "availableOne": "1 个重置可用",
+        "availableMany": "{{value0}} 个重置可用",
+        "openUsage": "打开 grok.com 使用情况"
+      }
+    },
+    "grokUsage": { "resetCredits": { "label": "使用限额重置" } },
+    "grokResetMenu": {
+      "failure": "无法使用 SuperGrok 重置。请重试。",
+      "openDetails": "打开 Grok 详情和使用限额重置",
+      "confirmTitle": "重置 Grok 限额？",
+      "confirmDescription": "这会为已登录的账户使用一个 SuperGrok 使用限额重置令牌，并立即清除当前的每周限额。",
+      "skipFutureConfirmation": "不再询问",
+      "cancel": "取消",
+      "redeeming": "正在使用重置…",
+      "redeemNow": "立即重置",
+      "availableOne": "1 次速率限制重置可用",
+      "availableMany": "{{value0}} 次速率限制重置可用",
+      "manageAccounts": "管理账户…"
+    },
+    "resetCreditExpiry": {
+      "nextNow": "下一个现在过期",
+      "singleNow": "现在过期",
+      "nextIn": "下一个将在 {{value0}} 后过期",
+      "singleIn": "将在 {{value0}} 后过期"
+    },
+    "usageRoster": { "openDetails": "查看使用详情" },
     "native-chat": {
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",

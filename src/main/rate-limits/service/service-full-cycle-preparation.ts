@@ -129,7 +129,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult,
-      previousRateLimitResetCredits: previousState.grok?.rateLimitResetCredits ?? undefined
+      previousRateLimitResetCredits: previousState.grok?.rateLimitResetCredits ?? undefined,
+      previousAuthAccountId: previousState.grok?.usageMetadata?.authAccountId
     }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const

@@ -12,13 +12,29 @@ describe('parseGrokResetCreditAttemptLedger', () => {
         attempts: [
           { idempotencyKey: '11111111-1111-4111-8111-111111111111', state: 'providerPending' },
           {
+            idempotencyKey: '33333333-3333-4333-8333-333333333333',
+            state: 'providerPending',
+            preOperationWeekly: {
+              usedPercent: 80,
+              windowMinutes: 10_080,
+              resetsAt: null,
+              resetDescription: null
+            }
+          },
+          {
             idempotencyKey: '22222222-2222-4222-8222-222222222222',
             state: 'settled',
             outcome: 'reset'
           }
         ]
       })
-    ).toMatchObject({ attempts: [{ state: 'providerPending' }, { state: 'settled' }] })
+    ).toMatchObject({
+      attempts: [
+        { state: 'providerPending' },
+        { state: 'providerPending', preOperationWeekly: { usedPercent: 80 } },
+        { state: 'settled' }
+      ]
+    })
   })
 
   it('defaults missing persisted state and rejects duplicate keys', () => {

@@ -108,11 +108,27 @@ describe('fetchGrokRateLimits reset-token inventory', () => {
       .mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
       .mockResolvedValueOnce(grpcWebResponse(new Uint8Array(), '13'))
 
-    const result = await fetchGrokRateLimits({ previousRateLimitResetCredits })
+    const result = await fetchGrokRateLimits({
+      previousRateLimitResetCredits,
+      previousAuthAccountId: 'user-1'
+    })
 
     expect(result).toMatchObject({
       status: 'ok',
       rateLimitResetCredits: previousRateLimitResetCredits
     })
+  })
+
+  it("does not retain another account's inventory after a switch", async () => {
+    netFetchMock
+      .mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
+      .mockResolvedValueOnce(grpcWebResponse(new Uint8Array(), '13'))
+
+    const result = await fetchGrokRateLimits({
+      previousRateLimitResetCredits: { availableCount: 2, nextExpiresAt: 123 },
+      previousAuthAccountId: 'user-2'
+    })
+
+    expect(result.rateLimitResetCredits).toBeUndefined()
   })
 })

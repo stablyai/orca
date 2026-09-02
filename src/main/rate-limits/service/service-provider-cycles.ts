@@ -161,7 +161,8 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     const grok = await fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult,
-      previousRateLimitResetCredits: previousState.grok?.rateLimitResetCredits ?? undefined
+      previousRateLimitResetCredits: previousState.grok?.rateLimitResetCredits ?? undefined,
+      previousAuthAccountId: previousState.grok?.usageMetadata?.authAccountId
     }).catch((err): ProviderRateLimits => ({
       provider: 'grok',
       session: null,

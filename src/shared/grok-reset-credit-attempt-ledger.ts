@@ -1,13 +1,23 @@
 import { z } from 'zod'
-import type { CodexRateLimitResetOutcome } from './rate-limit-types'
+import type { CodexRateLimitResetOutcome, RateLimitWindow } from './rate-limit-types'
 
 export const MAX_SETTLED_GROK_RESET_CREDIT_ATTEMPTS = 100
+
+const GrokResetPreOperationWeeklySnapshotSchema = z
+  .object({
+    usedPercent: z.number(),
+    windowMinutes: z.number(),
+    resetsAt: z.number().nullable(),
+    resetDescription: z.string().nullable()
+  })
+  .strict()
 
 const DurableGrokResetCreditAttemptSchema = z.discriminatedUnion('state', [
   z
     .object({
       idempotencyKey: z.uuid(),
-      state: z.literal('providerPending')
+      state: z.literal('providerPending'),
+      preOperationWeekly: GrokResetPreOperationWeeklySnapshotSchema.nullable().optional()
     })
     .strict(),
   z
@@ -40,7 +50,11 @@ const GrokResetCreditAttemptLedgerSchema = z
   })
 
 export type DurableGrokResetCreditAttempt =
-  | { idempotencyKey: string; state: 'providerPending' }
+  | {
+      idempotencyKey: string
+      state: 'providerPending'
+      preOperationWeekly?: RateLimitWindow | null
+    }
   | {
       idempotencyKey: string
       state: 'settled'

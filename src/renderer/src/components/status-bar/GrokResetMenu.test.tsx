@@ -156,6 +156,19 @@ describe('GrokResetMenu', () => {
     expect(consumeReset).not.toHaveBeenCalled()
   })
 
+  it('disables redemption when weekly usage is 0%', () => {
+    render(
+      <GrokResetMenu
+        grok={{ ...grok, weekly: { ...grok.weekly!, usedPercent: 0 } }}
+        compact={false}
+        iconOnly={false}
+      />
+    )
+
+    expect(screen.getByRole('menuitem', { name: 'Reset now' })).toBeDisabled()
+    expect(consumeReset).not.toHaveBeenCalled()
+  })
+
   it('shows a localized failure toast when redemption fails', async () => {
     consumeReset.mockRejectedValueOnce(new Error('provider failed'))
     renderMenu()

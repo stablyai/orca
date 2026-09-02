@@ -14,11 +14,17 @@ describe('GrokResetCreditLedger', () => {
     }
     const ledger = new GrokResetCreditLedger(store as never)
     const pendingKey = '00000000-0000-4000-8000-000000000000'
-    ledger.markProviderPending(pendingKey)
+    const preOperationWeekly = {
+      usedPercent: 80,
+      windowMinutes: 10_080,
+      resetsAt: null,
+      resetDescription: null
+    }
+    ledger.markProviderPending(pendingKey, preOperationWeekly)
 
     for (let index = 1; index <= MAX_SETTLED_GROK_RESET_CREDIT_ATTEMPTS + 2; index += 1) {
       const key = `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
-      ledger.markProviderPending(key)
+      ledger.markProviderPending(key, preOperationWeekly)
       ledger.markSettled(key, 'reset')
     }
 
@@ -27,7 +33,8 @@ describe('GrokResetCreditLedger', () => {
     )
     expect(durable.attempts).toContainEqual({
       idempotencyKey: pendingKey,
-      state: 'providerPending'
+      state: 'providerPending',
+      preOperationWeekly
     })
     expect(
       durable.attempts.some((attempt) => attempt.idempotencyKey.endsWith('000000000001'))

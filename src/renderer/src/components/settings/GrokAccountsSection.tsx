@@ -8,7 +8,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import type { GrokAccountStatus } from '../../../../shared/rate-limit-types'
 import { SearchableSetting } from './SearchableSetting'
-import { formatResetCreditExpiry } from '../status-bar/tooltip'
+import { formatResetCreditExpiry } from '../status-bar/reset-credit-expiry'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 const GROK_USAGE_URL = 'https://grok.com/?_s=usage'
 
@@ -226,12 +226,9 @@ export function GrokAccountsSection(): React.JSX.Element {
 
       {resetCreditCount !== null ? (
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.GrokAccountsSection.bd0e82282e',
-            'Usage-limit resets'
-          )}
+          title={translate('components.grokAccounts.resetCredits.title', 'Usage-limit resets')}
           description={translate(
-            'auto.components.settings.GrokAccountsSection.5447d40963',
+            'components.grokAccounts.resetCredits.description',
             'Same SuperGrok reset tokens as Settings → Usage on grok.com. Redeem from the Grok usage menu in the status bar.'
           )}
           keywords={['grok', 'xai', 'reset', 'credits', 'usage']}
@@ -240,11 +237,11 @@ export function GrokAccountsSection(): React.JSX.Element {
             <Badge variant="secondary" className="tabular-nums">
               {resetCreditCount === 1
                 ? translate(
-                    'auto.components.settings.GrokAccountsSection.56ff2eca20',
+                    'components.grokAccounts.resetCredits.availableOne',
                     '1 reset available'
                   )
                 : translate(
-                    'auto.components.settings.GrokAccountsSection.c98d7e49ed',
+                    'components.grokAccounts.resetCredits.availableMany',
                     '{{value0}} resets available',
                     { value0: String(resetCreditCount) }
                   )}
@@ -258,10 +255,7 @@ export function GrokAccountsSection(): React.JSX.Element {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
             >
-              {translate(
-                'auto.components.settings.GrokAccountsSection.08661af78b',
-                'Open grok.com Usage'
-              )}
+              {translate('components.grokAccounts.resetCredits.openUsage', 'Open grok.com Usage')}
               <ExternalLink className="size-3" />
             </a>
           </div>

@@ -121,6 +121,7 @@ export async function fetchGrokRateLimits(
     signal?: AbortSignal
     authReadResult?: GrokAuthReadResult
     previousRateLimitResetCredits?: RateLimitResetCredits
+    previousAuthAccountId?: string
   } = {}
 ): Promise<ProviderRateLimits> {
   const readResult = options.authReadResult ?? readGrokAuthSession()
@@ -161,7 +162,8 @@ export async function fetchGrokRateLimits(
         session,
         {
           signal: options.signal,
-          previousRateLimitResetCredits: options.previousRateLimitResetCredits
+          previousRateLimitResetCredits: options.previousRateLimitResetCredits,
+          previousAuthAccountId: options.previousAuthAccountId
         }
       )
     }
@@ -177,7 +179,8 @@ export async function fetchGrokRateLimits(
         session,
         {
           signal: options.signal,
-          previousRateLimitResetCredits: options.previousRateLimitResetCredits
+          previousRateLimitResetCredits: options.previousRateLimitResetCredits,
+          previousAuthAccountId: options.previousAuthAccountId
         }
       )
     }

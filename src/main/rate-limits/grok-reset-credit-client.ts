@@ -133,6 +133,7 @@ export async function supplementGrokRateLimitResetCredits(
     signal?: AbortSignal
     request?: GrokRpcRequest
     previousRateLimitResetCredits?: RateLimitResetCredits
+    previousAuthAccountId?: string
   } = {}
 ): Promise<ProviderRateLimits> {
   if (options.signal?.aborted || limits.provider !== 'grok' || limits.status !== 'ok') {
@@ -142,7 +143,8 @@ export async function supplementGrokRateLimitResetCredits(
   if (rateLimitResetCredits) {
     return { ...limits, rateLimitResetCredits }
   }
-  return options.previousRateLimitResetCredits
+  return options.previousRateLimitResetCredits &&
+    limits.usageMetadata?.authAccountId === options.previousAuthAccountId
     ? { ...limits, rateLimitResetCredits: options.previousRateLimitResetCredits }
     : limits
 }

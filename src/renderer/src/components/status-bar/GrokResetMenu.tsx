@@ -54,7 +54,11 @@ export function GrokResetMenu({
       : null
   // Why: desktop redemption uses this machine's Grok CLI login, not a remote host's.
   const canRedeemReset =
-    !hasActiveRuntimeEnvironment && resetCreditCount !== null && resetCreditCount > 0
+    !hasActiveRuntimeEnvironment &&
+    resetCreditCount !== null &&
+    resetCreditCount > 0 &&
+    typeof grok.weekly?.usedPercent === 'number' &&
+    grok.weekly.usedPercent > 0
 
   useEffect(() => {
     mountedRef.current = true
@@ -74,7 +78,7 @@ export function GrokResetMenu({
       console.error('Failed to redeem Grok usage-limit reset from status bar:', error)
       toast.error(
         translate(
-          'auto.components.status.bar.GrokResetMenu.1d0a238e8b',
+          'components.grokResetMenu.failure',
           'Could not use the SuperGrok reset. Try again.'
         )
       )
@@ -121,7 +125,7 @@ export function GrokResetMenu({
       triggerContent={triggerContent}
       hidePanelResetCredits
       ariaLabel={translate(
-        'auto.components.status.bar.GrokResetMenu.5083fdb684',
+        'components.grokResetMenu.openDetails',
         'Open Grok details and usage-limit reset'
       )}
       open={open}
@@ -131,14 +135,11 @@ export function GrokResetMenu({
         <DialogContent className="sm:max-w-[420px]" {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}>
           <DialogHeader>
             <DialogTitle>
-              {translate(
-                'auto.components.status.bar.GrokResetMenu.febaa254bf',
-                'Reset Grok limits?'
-              )}
+              {translate('components.grokResetMenu.confirmTitle', 'Reset Grok limits?')}
             </DialogTitle>
             <DialogDescription>
               {translate(
-                'auto.components.status.bar.GrokResetMenu.2fd82006e3',
+                'components.grokResetMenu.confirmDescription',
                 'This uses one SuperGrok usage-limit reset token for the signed-in account and clears the current weekly pool immediately.'
               )}
             </DialogDescription>
@@ -149,12 +150,12 @@ export function GrokResetMenu({
               onCheckedChange={(checked) => setSkipFutureResetConfirm(checked === true)}
             />
             <span>
-              {translate('auto.components.status.bar.GrokResetMenu.3fc8633cbf', "Don't ask again")}
+              {translate('components.grokResetMenu.skipFutureConfirmation', "Don't ask again")}
             </span>
           </label>
           <DialogFooter>
             <Button variant="outline" onClick={() => setResetConfirmOpen(false)}>
-              {translate('auto.components.status.bar.GrokResetMenu.d2801b1ae1', 'Cancel')}
+              {translate('components.grokResetMenu.cancel', 'Cancel')}
             </Button>
             <Button onClick={() => void confirmReset()} disabled={isRedeemingReset}>
               {isRedeemingReset ? (
@@ -163,8 +164,8 @@ export function GrokResetMenu({
                 <RotateCcw className="size-4" />
               )}
               {isRedeemingReset
-                ? translate('auto.components.status.bar.GrokResetMenu.de40a51f9b', 'Using reset…')
-                : translate('auto.components.status.bar.GrokResetMenu.3ca4f108f6', 'Reset now')}
+                ? translate('components.grokResetMenu.redeeming', 'Using reset…')
+                : translate('components.grokResetMenu.redeemNow', 'Reset now')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -174,12 +175,9 @@ export function GrokResetMenu({
           <DropdownMenuLabel className="space-y-0.5">
             <div>
               {resetCreditCount === 1
-                ? translate(
-                    'auto.components.status.bar.GrokResetMenu.5b42bad652',
-                    '1 rate-limit reset available'
-                  )
+                ? translate('components.grokResetMenu.availableOne', '1 rate-limit reset available')
                 : translate(
-                    'auto.components.status.bar.GrokResetMenu.d101726b6a',
+                    'components.grokResetMenu.availableMany',
                     '{{value0}} rate-limit resets available',
                     { value0: resetCreditCount }
                   )}
@@ -204,8 +202,8 @@ export function GrokResetMenu({
                 <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
               ) : null}
               {isRedeemingReset
-                ? translate('auto.components.status.bar.GrokResetMenu.de40a51f9b', 'Using reset…')
-                : translate('auto.components.status.bar.GrokResetMenu.3ca4f108f6', 'Reset now')}
+                ? translate('components.grokResetMenu.redeeming', 'Using reset…')
+                : translate('components.grokResetMenu.redeemNow', 'Reset now')}
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
@@ -217,7 +215,7 @@ export function GrokResetMenu({
           openSettingsPage()
         }}
       >
-        {translate('auto.components.status.bar.GrokResetMenu.58b2e3f032', 'Manage Accounts…')}
+        {translate('components.grokResetMenu.manageAccounts', 'Manage Accounts…')}
       </DropdownMenuItem>
     </ProviderDetailsMenu>
   )

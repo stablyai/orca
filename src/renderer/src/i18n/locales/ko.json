@@ -3469,19 +3469,6 @@
             "f90b3d7a16": "Run Kimi to refresh",
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
-          "GrokResetMenu": {
-            "1d0a238e8b": "SuperGrok 재설정을 사용할 수 없습니다. 다시 시도하세요.",
-            "5083fdb684": "Grok 세부 정보 및 사용 한도 재설정 열기",
-            "febaa254bf": "Grok 한도를 재설정할까요?",
-            "2fd82006e3": "로그인한 계정의 SuperGrok 사용 한도 재설정 토큰 1개를 사용해 현재 주간 한도를 즉시 초기화합니다.",
-            "3fc8633cbf": "다시 묻지 않기",
-            "d2801b1ae1": "취소",
-            "de40a51f9b": "재설정 사용 중…",
-            "3ca4f108f6": "지금 재설정",
-            "5b42bad652": "rate-limit 재설정 1회 사용 가능",
-            "d101726b6a": "rate-limit 재설정 {{value0}}회 사용 가능",
-            "58b2e3f032": "계정 관리…"
-          },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
           },
@@ -3855,7 +3842,6 @@
           "cfe2282ffa": "알 수 없음"
         },
         "GrokUsagePane": {
-          "9c68bb8686": "사용 한도 재설정",
           "g8h9i0j1k2": "Grok 사용량",
           "b2d3e4f5c6": "Grok CLI OAuth(~/.grok/auth.json)의 주간 구독 크레딧입니다. 상태 표시줄과 같은 출처입니다.",
           "c3e4f5a6b7": "계정에서 설정",
@@ -9780,11 +9766,6 @@
           }
         },
         "GrokAccountsSection": {
-          "bd0e82282e": "사용 한도 재설정",
-          "5447d40963": "grok.com의 설정 → 사용량에 표시되는 것과 동일한 SuperGrok 재설정 토큰입니다. 상태 표시줄의 Grok 사용량 메뉴에서 사용할 수 있습니다.",
-          "56ff2eca20": "재설정 1개 사용 가능",
-          "c98d7e49ed": "재설정 {{value0}}개 사용 가능",
-          "08661af78b": "grok.com 사용량 열기",
           "a1b2c3d4e5": "Grok (xAI)",
           "f6e5d4c3b2": "Grok CLI 로그인에서 주간 크레딧 사용량을 표시합니다(세션 파일 ~/.grok/auth.json).",
           "0d8e77bc40": "Grok CLI 문서",
@@ -14720,6 +14701,36 @@
         }
       }
     },
+    "grokAccounts": {
+      "resetCredits": {
+        "title": "사용 한도 재설정",
+        "description": "grok.com의 설정 → 사용량에 표시되는 것과 동일한 SuperGrok 재설정 토큰입니다. 상태 표시줄의 Grok 사용량 메뉴에서 사용할 수 있습니다.",
+        "availableOne": "재설정 1개 사용 가능",
+        "availableMany": "재설정 {{value0}}개 사용 가능",
+        "openUsage": "grok.com 사용량 열기"
+      }
+    },
+    "grokUsage": { "resetCredits": { "label": "사용 한도 재설정" } },
+    "grokResetMenu": {
+      "failure": "SuperGrok 재설정을 사용할 수 없습니다. 다시 시도하세요.",
+      "openDetails": "Grok 세부 정보 및 사용 한도 재설정 열기",
+      "confirmTitle": "Grok 한도를 재설정할까요?",
+      "confirmDescription": "로그인한 계정의 SuperGrok 사용 한도 재설정 토큰 1개를 사용해 현재 주간 한도를 즉시 초기화합니다.",
+      "skipFutureConfirmation": "다시 묻지 않기",
+      "cancel": "취소",
+      "redeeming": "재설정 사용 중…",
+      "redeemNow": "지금 재설정",
+      "availableOne": "rate-limit 재설정 1회 사용 가능",
+      "availableMany": "rate-limit 재설정 {{value0}}회 사용 가능",
+      "manageAccounts": "계정 관리…"
+    },
+    "resetCreditExpiry": {
+      "nextNow": "다음 항목이 지금 만료됨",
+      "singleNow": "지금 만료됨",
+      "nextIn": "다음 항목이 {{value0}} 후 만료됨",
+      "singleIn": "{{value0}} 후 만료됨"
+    },
+    "usageRoster": { "openDetails": "사용량 세부 정보 열기" },
     "native-chat": {
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",

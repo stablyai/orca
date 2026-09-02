@@ -124,9 +124,10 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
 
   async consumeGrokRateLimitResetCredit(): Promise<CodexRateLimitResetResult> {
     await this.fetchGrokOnly({ force: true })
-    const weekly = this.state.grok?.weekly
+    const grok = this.state.grok
+    const weekly = grok?.weekly
     // Why: a one-time token at 0% would be spent without changing the weekly window.
-    if (!weekly || weekly.usedPercent <= 0) {
+    if (grok?.status !== 'ok' || !weekly || weekly.usedPercent <= 0) {
       return { outcome: 'nothingToReset', state: this.getState() }
     }
     try {

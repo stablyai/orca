@@ -29,7 +29,7 @@ const mockStoreState = {
       },
       rateLimitResetCredits: {
         availableCount: 2,
-        nextExpiresAt: null
+        nextExpiresAt: null as number | null
       },
       updatedAt: 1,
       error: null,
@@ -74,9 +74,11 @@ import { GrokUsagePane } from './GrokUsagePane'
 describe('GrokUsagePane', () => {
   beforeEach(() => {
     storeMocks.refreshGrokRateLimits.mockResolvedValue(undefined)
+    mockStoreState.rateLimits.grok.rateLimitResetCredits.nextExpiresAt = null
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     cleanup()
     vi.clearAllMocks()
   })
@@ -97,5 +99,16 @@ describe('GrokUsagePane', () => {
     await user.click(screen.getByRole('button', { name: 'Refresh Grok usage' }))
 
     expect(storeMocks.refreshGrokRateLimits).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the soonest reset-token expiry beside the available count', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-02T12:00:00Z'))
+    mockStoreState.rateLimits.grok.rateLimitResetCredits.nextExpiresAt =
+      Date.now() + 2 * 60 * 60_000
+
+    render(<GrokUsagePane />)
+
+    expect(screen.getByText('2 · Next expires in 2h')).toBeInTheDocument()
   })
 })

@@ -178,7 +178,8 @@ export function billingUsageResult(
     status: 'ok',
     usageMetadata: {
       source: 'oauth',
-      authProvenance: provenance
+      authProvenance: provenance,
+      authAccountId: session.userId?.trim() || session.email?.trim().toLowerCase() || undefined
     }
   }
 }

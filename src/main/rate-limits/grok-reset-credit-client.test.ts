@@ -85,6 +85,27 @@ describe('Grok remaining-reset protobuf', () => {
   it('frames an empty GetRemainingResets request as a data-only grpc-web frame', () => {
     expect(Buffer.from(encodeGrpcWebRequest(new Uint8Array())).toString('hex')).toBe('0000000000')
   })
+
+  it.each([
+    ['fixed64', Uint8Array.of(0x09, 0, 0, 0)],
+    ['fixed32', Uint8Array.of(0x0d, 0, 0, 0)]
+  ])('rejects a truncated %s protobuf field', (_wireType, payload) => {
+    expect(() => decodeRemainingResetTokens(payload)).toThrow(/Truncated fixed/)
+  })
+
+  it.each([
+    ['header', Uint8Array.of(0, 0)],
+    ['payload', Uint8Array.of(0, 0, 0, 0, 1)],
+    ['high-bit length', Uint8Array.of(0, 0x80, 0, 0, 0)]
+  ])('rejects a truncated gRPC-Web %s', (_part, payload) => {
+    expect(() => parseGrpcWebResponse(payload)).toThrow(/Truncated gRPC-Web/)
+  })
+
+  it('rejects a response without grpc-status', () => {
+    expect(() => parseGrpcWebResponse(encodeGrpcWebRequest(new Uint8Array()))).toThrow(
+      'Missing grpc-status'
+    )
+  })
 })
 
 describe('fetchGrokRateLimitResetCredits', () => {
@@ -156,15 +177,43 @@ describe('supplementGrokRateLimitResetCredits', () => {
       weekly: null,
       updatedAt: 2,
       error: null,
-      status: 'ok'
+      status: 'ok',
+      usageMetadata: {
+        authProvenance: 'dev@example.com (SuperGrok)',
+        authAccountId: 'user-1'
+      }
     }
     const previousRateLimitResetCredits = { availableCount: 2, nextExpiresAt: 123 }
 
     await expect(
       supplementGrokRateLimitResetCredits(limits, session, {
         previousRateLimitResetCredits,
+        previousAuthAccountId: 'user-1',
         request: async () => grpcResponse(new Uint8Array(), '13')
       })
     ).resolves.toEqual({ ...limits, rateLimitResetCredits: previousRateLimitResetCredits })
+  })
+
+  it('discards the previous inventory after an account switch', async () => {
+    const limits: ProviderRateLimits = {
+      provider: 'grok',
+      session: null,
+      weekly: null,
+      updatedAt: 2,
+      error: null,
+      status: 'ok',
+      usageMetadata: {
+        authProvenance: 'dev@example.com (SuperGrok)',
+        authAccountId: 'user-1'
+      }
+    }
+
+    await expect(
+      supplementGrokRateLimitResetCredits(limits, session, {
+        previousRateLimitResetCredits: { availableCount: 2, nextExpiresAt: 123 },
+        previousAuthAccountId: 'user-2',
+        request: async () => grpcResponse(new Uint8Array(), '13')
+      })
+    ).resolves.toEqual(limits)
   })
 })

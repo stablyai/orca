@@ -1,4 +1,4 @@
-import type { CodexRateLimitResetOutcome } from '../../shared/rate-limit-types'
+import type { CodexRateLimitResetOutcome, RateLimitWindow } from '../../shared/rate-limit-types'
 import {
   MAX_SETTLED_GROK_RESET_CREDIT_ATTEMPTS,
   type DurableGrokResetCreditAttempt,
@@ -23,8 +23,8 @@ export class GrokResetCreditLedger {
     return this.attemptsByKey.get(idempotencyKey)
   }
 
-  markProviderPending(idempotencyKey: string): void {
-    const attempt = { idempotencyKey, state: 'providerPending' } as const
+  markProviderPending(idempotencyKey: string, preOperationWeekly: RateLimitWindow | null): void {
+    const attempt = { idempotencyKey, state: 'providerPending', preOperationWeekly } as const
     this.persist(attempt)
     this.attemptsByKey.set(idempotencyKey, attempt)
   }

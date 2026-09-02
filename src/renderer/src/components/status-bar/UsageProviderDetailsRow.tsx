@@ -58,10 +58,7 @@ export function UsageProviderDetailsRow({
       iconOnly={false}
       asSubmenu
       triggerContent={row}
-      ariaLabel={translate(
-        'auto.components.status.bar.UsageRosterPanel.openDetails',
-        'Open usage details'
-      )}
+      ariaLabel={translate('components.usageRoster.openDetails', 'Open usage details')}
     />
   )
 }

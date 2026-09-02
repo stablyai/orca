@@ -90,6 +90,25 @@ describe('RateLimitService Grok reset redemption', () => {
     expect(consumeGrokRateLimitResetCredit).not.toHaveBeenCalled()
   })
 
+  it('refuses redemption when a failed fetch retains stale nonzero usage', async () => {
+    vi.mocked(fetchGrokRateLimits)
+      .mockResolvedValueOnce(grokLimits(80))
+      .mockResolvedValueOnce({
+        ...grokLimits(80),
+        weekly: null,
+        status: 'error',
+        error: 'provider failed'
+      })
+    const service = new RateLimitService()
+    await service.refreshGrok()
+
+    await expect(service.consumeGrokRateLimitResetCredit()).resolves.toMatchObject({
+      outcome: 'nothingToReset',
+      state: { grok: { status: 'error', weekly: { usedPercent: 80 } } }
+    })
+    expect(consumeGrokRateLimitResetCredit).not.toHaveBeenCalled()
+  })
+
   it('updates state after a successful redemption', async () => {
     vi.mocked(fetchGrokRateLimits)
       .mockResolvedValueOnce(grokLimits(80))

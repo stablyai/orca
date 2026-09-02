@@ -3912,19 +3912,6 @@
               }
             }
           },
-          "GrokResetMenu": {
-            "1d0a238e8b": "Could not use the SuperGrok reset. Try again.",
-            "5083fdb684": "Open Grok details and usage-limit reset",
-            "febaa254bf": "Reset Grok limits?",
-            "2fd82006e3": "This uses one SuperGrok usage-limit reset token for the signed-in account and clears the current weekly pool immediately.",
-            "3fc8633cbf": "Don't ask again",
-            "d2801b1ae1": "Cancel",
-            "de40a51f9b": "Using reset…",
-            "3ca4f108f6": "Reset now",
-            "5b42bad652": "1 rate-limit reset available",
-            "d101726b6a": "{{value0}} rate-limit resets available",
-            "58b2e3f032": "Manage Accounts…"
-          },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
           },
@@ -4309,7 +4296,6 @@
           "cfe2282ffa": "Unknown"
         },
         "GrokUsagePane": {
-          "9c68bb8686": "Usage-limit resets",
           "g8h9i0j1k2": "Grok usage",
           "b2d3e4f5c6": "Weekly subscription credits from Grok CLI OAuth (~/.grok/auth.json). Same source as the status bar.",
           "c3e4f5a6b7": "Set up in Accounts",
@@ -11057,11 +11043,6 @@
           }
         },
         "GrokAccountsSection": {
-          "bd0e82282e": "Usage-limit resets",
-          "5447d40963": "Same SuperGrok reset tokens as Settings → Usage on grok.com. Redeem from the Grok usage menu in the status bar.",
-          "56ff2eca20": "1 reset available",
-          "c98d7e49ed": "{{value0}} resets available",
-          "08661af78b": "Open grok.com Usage",
           "a1b2c3d4e5": "Grok (xAI)",
           "f6e5d4c3b2": "Shows weekly credit usage from your Grok CLI sign-in (session file ~/.grok/auth.json).",
           "0d8e77bc40": "Grok CLI docs",
@@ -16980,6 +16961,36 @@
         }
       }
     },
+    "grokAccounts": {
+      "resetCredits": {
+        "title": "Usage-limit resets",
+        "description": "Same SuperGrok reset tokens as Settings → Usage on grok.com. Redeem from the Grok usage menu in the status bar.",
+        "availableOne": "1 reset available",
+        "availableMany": "{{value0}} resets available",
+        "openUsage": "Open grok.com Usage"
+      }
+    },
+    "grokUsage": { "resetCredits": { "label": "Usage-limit resets" } },
+    "grokResetMenu": {
+      "failure": "Could not use the SuperGrok reset. Try again.",
+      "openDetails": "Open Grok details and usage-limit reset",
+      "confirmTitle": "Reset Grok limits?",
+      "confirmDescription": "This uses one SuperGrok usage-limit reset token for the signed-in account and clears the current weekly pool immediately.",
+      "skipFutureConfirmation": "Don't ask again",
+      "cancel": "Cancel",
+      "redeeming": "Using reset…",
+      "redeemNow": "Reset now",
+      "availableOne": "1 rate-limit reset available",
+      "availableMany": "{{value0}} rate-limit resets available",
+      "manageAccounts": "Manage Accounts…"
+    },
+    "resetCreditExpiry": {
+      "nextNow": "Next expires now",
+      "singleNow": "Expires now",
+      "nextIn": "Next expires in {{value0}}",
+      "singleIn": "Expires in {{value0}}"
+    },
+    "usageRoster": { "openDetails": "Open usage details" },
     "jiraUserPicker": {
       "select": "Select {{value0}}",
       "search": "Search users",

@@ -8,7 +8,6 @@ export type GrokRemainingResetToken = {
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
-
 function concatBytes(parts: readonly Uint8Array<ArrayBufferLike>[]): Uint8Array<ArrayBuffer> {
   const total = parts.reduce((sum, part) => sum + part.byteLength, 0)
   const out = new Uint8Array(total)
@@ -19,7 +18,6 @@ function concatBytes(parts: readonly Uint8Array<ArrayBufferLike>[]): Uint8Array<
   }
   return out
 }
-
 function encodeVarint(value: number): Uint8Array<ArrayBuffer> {
   if (!Number.isFinite(value) || value < 0) {
     throw new Error('Varint must be a non-negative finite number')
@@ -157,14 +155,20 @@ function decodeFields(buf: Uint8Array<ArrayBufferLike>): ProtoField[] {
       continue
     }
     if (wireType === 1) {
+      if (i + 8 > buf.byteLength) {
+        throw new Error('Truncated fixed64 field')
+      }
       i += 8
       continue
     }
     if (wireType === 5) {
+      if (i + 4 > buf.byteLength) {
+        throw new Error('Truncated fixed32 field')
+      }
       i += 4
       continue
     }
-    break
+    throw new Error(`Unsupported protobuf wire type ${wireType}`)
   }
   return fields
 }
@@ -261,13 +265,16 @@ export function parseGrpcWebResponse(
   let trailerStatus: string | null = null
   let trailerMessage: string | null = null
   let i = 0
-  while (i + 5 <= raw.byteLength) {
+  while (i < raw.byteLength) {
+    if (raw.byteLength - i < 5) {
+      throw new Error('Truncated gRPC-Web frame header')
+    }
     const flags = raw[i]
-    const length = (raw[i + 1] << 24) | (raw[i + 2] << 16) | (raw[i + 3] << 8) | raw[i + 4]
+    const length = raw[i + 1] * 0x1000000 + raw[i + 2] * 0x10000 + raw[i + 3] * 0x100 + raw[i + 4]
     i += 5
     const end = i + length
     if (end > raw.byteLength) {
-      break
+      throw new Error('Truncated gRPC-Web frame payload')
     }
     const chunk = raw.subarray(i, end)
     i = end
@@ -279,9 +286,13 @@ export function parseGrpcWebResponse(
     }
     payload = chunk
   }
+  const grpcStatus = trailerStatus ?? headerStatus
+  if (grpcStatus == null) {
+    throw new Error('Missing grpc-status')
+  }
   return {
     payload,
-    grpcStatus: trailerStatus ?? headerStatus ?? '0',
+    grpcStatus,
     grpcMessage: trailerMessage ?? headerMessage ?? null
   }
 }

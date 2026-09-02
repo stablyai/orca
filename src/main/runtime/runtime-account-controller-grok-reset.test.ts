@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GrokResetCreditAttemptLedger } from '../../shared/grok-reset-credit-attempt-ledger'
 import { RuntimeAccountController } from './runtime-account-controller'
 
-function createLedgerStore() {
-  let ledger: GrokResetCreditAttemptLedger = { version: 1, attempts: [] }
+function createLedgerStore(initial: GrokResetCreditAttemptLedger = { version: 1, attempts: [] }) {
+  let ledger: GrokResetCreditAttemptLedger = structuredClone(initial)
   return {
     store: {
       getGrokResetCreditAttemptLedger: vi.fn(() => structuredClone(ledger)),
@@ -17,7 +17,13 @@ function createLedgerStore() {
 
 function accountServices(
   consumeGrokRateLimitResetCredit: ReturnType<typeof vi.fn>,
-  rateLimits: { grok: { provider: 'grok'; weekly: { usedPercent: number } | null } }
+  rateLimits: {
+    grok: {
+      provider: 'grok'
+      weekly: { usedPercent: number } | null
+      status?: 'ok' | 'error'
+    }
+  }
 ) {
   return {
     claudeAccounts: { listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null })) },
@@ -92,5 +98,68 @@ describe('RuntimeAccountController Grok reset replay', () => {
       { outcome: 'reset' }
     ])
     expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledOnce()
+  })
+
+  it('settles a recovered pending attempt when weekly usage was reset', async () => {
+    const key = '66666666-6666-4666-8666-666666666666'
+    const ledger = createLedgerStore({
+      version: 1,
+      attempts: [
+        {
+          idempotencyKey: key,
+          state: 'providerPending',
+          preOperationWeekly: {
+            usedPercent: 80,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          }
+        }
+      ]
+    })
+    const rateLimits = {
+      grok: { provider: 'grok' as const, weekly: { usedPercent: 0 }, status: 'ok' as const }
+    }
+    const consumeGrokRateLimitResetCredit = vi.fn()
+    const controller = new RuntimeAccountController(() => ledger.store as never)
+    controller.setServices(accountServices(consumeGrokRateLimitResetCredit, rateLimits) as never)
+
+    await expect(controller.consumeGrokResetCredit(key)).resolves.toMatchObject({
+      outcome: 'reset'
+    })
+    expect(consumeGrokRateLimitResetCredit).not.toHaveBeenCalled()
+    expect(ledger.read().attempts).toContainEqual({
+      idempotencyKey: key,
+      state: 'settled',
+      outcome: 'reset'
+    })
+  })
+
+  it('keeps a recovered pending attempt unknown when weekly usage is unchanged', async () => {
+    const key = '77777777-7777-4777-8777-777777777777'
+    const preOperationWeekly = {
+      usedPercent: 80,
+      windowMinutes: 10_080,
+      resetsAt: null,
+      resetDescription: null
+    }
+    const ledger = createLedgerStore({
+      version: 1,
+      attempts: [{ idempotencyKey: key, state: 'providerPending', preOperationWeekly }]
+    })
+    const rateLimits = {
+      grok: { provider: 'grok' as const, weekly: { usedPercent: 80 }, status: 'ok' as const }
+    }
+    const consumeGrokRateLimitResetCredit = vi.fn()
+    const controller = new RuntimeAccountController(() => ledger.store as never)
+    controller.setServices(accountServices(consumeGrokRateLimitResetCredit, rateLimits) as never)
+
+    await expect(controller.consumeGrokResetCredit(key)).rejects.toThrow(/unknown outcome/)
+    expect(consumeGrokRateLimitResetCredit).not.toHaveBeenCalled()
+    expect(ledger.read().attempts).toContainEqual({
+      idempotencyKey: key,
+      state: 'providerPending',
+      preOperationWeekly
+    })
   })
 })
