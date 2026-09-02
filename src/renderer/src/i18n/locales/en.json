@@ -3916,7 +3916,14 @@
                 "apiKey": "MiniMax API key expired. Replace it in Settings.",
                 "cookie": "MiniMax session cookie expired. Replace it in Settings."
               }
-            }
+            },
+            "justNow": "just now",
+            "minutesAgo": "{{value0}}m ago",
+            "hoursAgo": "{{value0}}h ago",
+            "updatedTimeAgo": "Updated {{value0}}",
+            "notYetUpdated": "Not yet updated",
+            "resetsNow": "Resets now",
+            "resetsIn": "Resets in {{value0}}"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
