@@ -8,7 +8,7 @@ export const ANDROID_RELEASES_PAGE_URL =
   'https://github.com/stablyai/orca/releases?q=mobile-android-v'
 export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 // Why: desktop releases dominate the feed (roughly daily), so the newest Android release can
-// sit past page one. ponytail: 500 releases ≈ a year of desktop cadence; raise if Android gaps grow.
+// sit past page one. 5 × 100 releases covers about a year of desktop cadence.
 export const MAX_RELEASE_PAGES = 5
 
 const STATE_KEY = 'orca:androidUpdate'
@@ -105,7 +105,7 @@ function withStateLock<T>(task: () => Promise<T>): Promise<T> {
 }
 
 // Why: a mount check and an AppState "active" check can overlap; they must not each walk the pages.
-// ponytail: a stalled request delays the next check until it settles; add an AbortController deadline if that bites.
+// A stalled request delays the next check until it settles.
 let inFlightRelease: Promise<AndroidUpdate | null | undefined> | null = null
 function fetchLatestAndroidReleaseShared(fetchFn?: typeof fetch) {
   inFlightRelease ??= fetchLatestAndroidRelease(fetchFn)

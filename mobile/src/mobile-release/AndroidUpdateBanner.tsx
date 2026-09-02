@@ -58,7 +58,6 @@ export function AndroidUpdateBanner() {
         accessibilityRole="button"
         accessibilityLabel={`Download Orca Mobile ${update.version}`}
         style={({ pressed }) => [styles.action, pressed && styles.pressed]}
-        // ponytail: browser download + manual tap on the APK; in-app download + install intent if one-tap matters
         onPress={() => void Linking.openURL(update.apkUrl).catch(() => {})}
       >
         <Text style={styles.text}>Orca Mobile {update.version} is available</Text>
