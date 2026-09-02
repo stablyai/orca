@@ -243,7 +243,9 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/ipc/pty-codex-account-attribution.test.ts',
   'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
-  'src/relay/windows-port-scan.win32.test.ts'
+  'src/relay/windows-port-scan.win32.test.ts',
+  'src/main/ai-vault-search/session-search-fts5-contract.test.ts',
+  'src/main/ai-vault-search/session-search-schema.test.ts'
 ]
 
 const DESKTOP_IRRELEVANT_PREFIXES = [
