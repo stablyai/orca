@@ -292,6 +292,8 @@ export function buildWslRelaySpawnEnv(
   // Why: the relay derives its own guest endpoint path; a /p-translated
   // Windows endpoint here would only add WSLENV noise.
   delete env.ORCA_AGENT_HOOK_ENDPOINT
-  addOrcaWslInteropEnv(env as Record<string, string>)
+  // The relay is a non-interactive helper, not a nested terminal. Inherited
+  // feature values (including overlay) must not change its wrapper behavior.
+  addOrcaWslInteropEnv(env as Record<string, string>, { shellPath: 'bash', overlay: false })
   return env
 }

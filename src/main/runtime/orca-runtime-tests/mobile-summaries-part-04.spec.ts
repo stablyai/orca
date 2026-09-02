@@ -9,6 +9,31 @@ import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import { makeWorktreeMeta, store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  it('does not read guest inventories on idle worktree poll ticks', async () => {
+    const guestInventoryReads = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => {
+        guestInventoryReads()
+        return []
+      }
+    })
+
+    await runtime.getWorktreePs()
+    await runtime.getWorktreePs()
+    await runtime.getWorktreePs()
+    expect(guestInventoryReads).not.toHaveBeenCalled()
+
+    runtime.notifyBranchRenamed('repo-1')
+    await runtime.getWorktreePs()
+    expect(guestInventoryReads).toHaveBeenCalledOnce()
+    await runtime.getWorktreePs()
+    expect(guestInventoryReads).toHaveBeenCalledOnce()
+  })
+
   it('keeps pinned and unread worktrees when active rows fill the mobile summary limit', async () => {
     setPlatform('win32')
     const remoteRepo = {

@@ -228,7 +228,7 @@ export type IPtyProvider = {
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
-  listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]>
+  listProcesses(opts?: { deadlineMs?: number; signal?: AbortSignal }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: PtyDataEvent) => void): () => void

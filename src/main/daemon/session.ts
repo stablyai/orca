@@ -11,23 +11,21 @@ import {
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
-import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import { SessionCheckpointAccess } from './session-checkpoint-access'
+import { SessionWslShellAnchorTracker } from './session-wsl-shell-anchor-tracker'
+import { SessionStartupQueryAuthority } from './session-startup-query-authority'
 
-import type {
-  SessionState,
-  ShellReadyState,
-  TakePendingOutputResult,
-  TerminalSnapshot
-} from './types'
+import type { SessionState, ShellReadyState, TakePendingOutputResult } from './types'
+import type { TerminalSnapshot } from './terminal-snapshot'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
-export class Session {
+export class Session extends SessionStartupQueryAuthority {
   readonly sessionId: string
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
-  readonly launchAgent: TuiAgent | null
+  readonly launchAgent: NonNullable<SessionOptions['launchAgent']> | null
   readonly wslDistro: string | null
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
@@ -38,10 +36,13 @@ export class Session {
   private readonly producerPause: SessionProducerPause
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
-  private readonly startupIngress: PtyStartupIngress
+  protected readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  private readonly checkpoint: SessionCheckpointAccess
+  private readonly wslShellAnchorTracker: SessionWslShellAnchorTracker
 
   constructor(opts: SessionOptions) {
+    super()
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
     this.launchAgent = opts.launchAgent ?? null
@@ -86,9 +87,18 @@ export class Session {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
+    this.checkpoint = new SessionCheckpointAccess({
+      output: this.output,
+      shellReady: this.shellReady,
+      startupIngress: this.startupIngress,
+      recoveryBarrier: this.recoveryBarrier,
+      isDisposed: () => this._disposed
+    })
+    this.wslShellAnchorTracker = new SessionWslShellAnchorTracker(this.wslDistro)
     this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => {
       if (!this._disposed) {
+        data = this.wslShellAnchorTracker.scan(data)
         this.shellReady.ingestSubprocessData(data)
       }
     })
@@ -132,6 +142,10 @@ export class Session {
 
   get pid(): number {
     return this.subprocess.pid
+  }
+
+  getWslShellAnchor() {
+    return this.wslShellAnchorTracker.anchor
   }
 
   /** Terminate this session's pty job object. `unavailable` is not proof of death. */
@@ -222,30 +236,22 @@ export class Session {
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
-    this.startupIngress.snapshotBarrier()
-    return this.output.getSnapshot(opts)
+    return this.checkpoint.getSnapshot(opts)
   }
 
   getPartialEscapeTailAnsi(): string {
-    return this.output.getPartialEscapeTailAnsi()
+    return this.checkpoint.getPartialEscapeTailAnsi()
   }
 
   getAppliedSize(): { cols: number; rows: number } | null {
-    return this.output.getAppliedSize()
+    return this.checkpoint.getAppliedSize()
   }
 
   takePendingOutput(
     includeSnapshot: boolean,
     opts: { teardownSnapshot?: boolean } = {}
   ): TakePendingOutputResult | null {
-    if (this._disposed) {
-      return null
-    }
-    const releasedHeldBytes =
-      includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
-    return this.output.takePendingOutput(includeSnapshot, releasedHeldBytes, () =>
-      this.getSnapshot()
-    )
+    return this.checkpoint.takePendingOutput(includeSnapshot, opts)
   }
 
   getCwd(): string | null {
@@ -275,12 +281,7 @@ export class Session {
   }
 
   prepareForFinalSnapshot(): string {
-    const held = this.shellReady.releaseHeldBytes()
-    this.startupIngress.snapshotBarrier()
-    // Why last: snapshotBarrier can emit held spans into the barrier, and a
-    // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
-    this.recoveryBarrier.flushPending()
-    return held
+    return this.checkpoint.prepareForFinalSnapshot()
   }
 
   dispose(): void {
@@ -291,6 +292,7 @@ export class Session {
     // Why: `wasTerminating` below must be read BEFORE the `_state = 'exited'` flip — it guards the
     // "dispose while kill() in flight" case and the invariant needs the pre-flip `_state`; do NOT move it down.
     this.shellReady.releaseDeviceAttributes()
+    this.wslShellAnchorTracker.drainInto((data) => this.shellReady.ingestSubprocessData(data))
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
     // Why after drainAndClose (and before clearClients below): a dispose
@@ -362,6 +364,7 @@ export class Session {
 
     this.shellReady.releaseDeviceAttributes()
     this.shellReady.disposePromptReadinessProbe()
+    this.wslShellAnchorTracker.drainInto((data) => this.shellReady.ingestSubprocessData(data))
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
     // Why after drainAndClose: drained ingress bytes re-enter the barrier and can
@@ -387,9 +390,5 @@ export class Session {
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
     this.onSessionExit?.(code)
-  }
-
-  closeStartupQueryAuthority(): number {
-    return this.startupIngress.closeQueryAuthority()
   }
 }

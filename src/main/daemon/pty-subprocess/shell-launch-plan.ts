@@ -178,7 +178,18 @@ export function createPtyShellLaunchPlan(
       delete env.ORCA_CODEX_HOME
     }
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
-      addOrcaWslInteropEnv(env)
+      const waitsForShellReady =
+        Boolean(opts.command) &&
+        (!isCodexStartupCommand ||
+          shouldUseShellReadyStartupDelivery({
+            command: opts.command as string,
+            startupCommandDelivery: opts.startupCommandDelivery
+          }))
+      addOrcaWslInteropEnv(env, {
+        hasStartupCommand: Boolean(opts.command),
+        waitsForShellReady,
+        emitsStartupIdentity: waitsForShellReady
+      })
     }
   } else {
     rescrubDaemonPtyEnvironment(env, opts)

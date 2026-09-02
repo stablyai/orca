@@ -287,7 +287,7 @@ describePosix('local PTY shell-ready launch config', () => {
 
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     expect(zshenv).toContain('builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"')
-    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+    expect(zshenv).toContain('orca-shell-start:v2:')
     // The handback is what makes a nested Orca unable to inherit this dir, and
     // what stops /etc/zshrc deriving HISTFILE from it.
     expect(zshenv).toContain('builtin unset ORCA_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR')

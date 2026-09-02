@@ -14,9 +14,20 @@ import { parsePtySessionId } from './pty-session-id'
 import type { ListSessionsResult, SessionInfo } from './types'
 import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
 import type { PtyProcessInfo } from '../providers/types'
+import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
+import {
+  createWslGuestProcessIndexes,
+  readWslGuestProcessInventory,
+  resolveWslGuestForegroundProcess,
+  WSL_GUEST_INVENTORY_MAX_CONCURRENCY,
+  type WslGuestProcessInventoryRead
+} from '../providers/wsl-guest-process-inventory'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
-  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: {
+    deadlineMs?: number
+    signal?: AbortSignal
+  }): Promise<PtyProcessInfo[]> {
     // Why: snapshotted before the request so ids spawned mid-flight can never
     // be reconciled away below.
     const preRequestActiveIds = new Set(this.activeSessionIds)
@@ -45,12 +56,80 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       const admission = new PtyProcessListAdmission()
       const processes: PtyProcessInfo[] = []
       const aliveSessionIds = new Set<string>()
+      const evidenceEpoch = Date.now()
+      const wslByDistro = new Map<string, WslGuestProcessInventoryRead>()
+      if (process.platform === 'win32') {
+        const distros = new Set(
+          result.sessions
+            .filter((session) => session.isAlive && session.wslDistro)
+            .filter((session) => session.wslShellAnchor)
+            .map((session) => session.wslDistro as string)
+        )
+        const distroList = [...distros]
+        let nextDistroIndex = 0
+        const readNextDistro = async (): Promise<void> => {
+          while (nextDistroIndex < distroList.length) {
+            const distro = distroList[nextDistroIndex++]!
+            wslByDistro.set(
+              distro,
+              await readWslGuestProcessInventory(distro, {
+                deadlineMs: opts?.deadlineMs,
+                signal: opts?.signal
+              })
+            )
+          }
+        }
+        await Promise.all(
+          Array.from(
+            { length: Math.min(WSL_GUEST_INVENTORY_MAX_CONCURRENCY, distroList.length) },
+            () => readNextDistro()
+          )
+        )
+      }
+      const indexesByDistro = new Map<string, ReturnType<typeof createWslGuestProcessIndexes>>()
+      for (const [distro, inventory] of wslByDistro) {
+        if (inventory.status === 'ok') {
+          indexesByDistro.set(distro, createWslGuestProcessIndexes(inventory.inventory))
+        }
+      }
       for (const session of result.sessions) {
         if (!session.isAlive) {
           continue
         }
         aliveSessionIds.add(session.sessionId)
         const { worktreeId } = parsePtySessionId(session.sessionId)
+        const inventory = session.wslDistro ? wslByDistro.get(session.wslDistro) : undefined
+        const resolution =
+          session.wslDistro && session.wslShellAnchor && inventory?.status === 'ok'
+            ? resolveWslGuestForegroundProcess(
+                inventory.inventory,
+                session.wslShellAnchor,
+                indexesByDistro.get(session.wslDistro) ??
+                  createWslGuestProcessIndexes(inventory.inventory)
+              )
+            : null
+        const foregroundProcessEvidence: ForegroundProcessEvidence | undefined = session.wslDistro
+          ? resolution?.status === 'live'
+            ? {
+                verdict: 'live',
+                processName: resolution.processName,
+                authorityGeneration: session.incarnationId ?? 'daemon-wsl',
+                observationEpoch: evidenceEpoch,
+                capturedAgeMs: 0
+              }
+            : {
+                verdict: 'unverifiable',
+                reason:
+                  resolution?.status === 'unverifiable'
+                    ? resolution.reason
+                    : inventory?.status === 'unverifiable'
+                      ? inventory.reason
+                      : 'anchor_missing',
+                authorityGeneration: session.incarnationId ?? 'daemon-wsl',
+                observationEpoch: evidenceEpoch,
+                capturedAgeMs: 0
+              }
+          : undefined
         processes.push(
           admission.admit({
             id: session.sessionId,
@@ -58,10 +137,14 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
             ...(session.pid ? { rootProcessId: session.pid } : {}),
             // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
             cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
-            title: 'shell',
+            title:
+              resolution?.status === 'live' && resolution.processName
+                ? resolution.processName
+                : 'shell',
             ...(worktreeId ? { worktreeId } : {}),
             ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
             ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+            ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
             ...this.validatedAgentSessionOwners(session.agentSessionOwners)
           })
         )

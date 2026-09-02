@@ -8,8 +8,14 @@ import {
   ptyAgentForegroundContextPaths,
   ptyLastRecognizedForeground,
   ptyProcesses,
-  ptyShellName
+  ptyShellName,
+  ptyWslDistroById,
+  ptyWslShellAnchors
 } from './local-pty-provider-state'
+import {
+  readWslGuestProcessInventory,
+  resolveWslGuestForegroundProcess
+} from './wsl-guest-process-inventory'
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import {
   canRevalidateCachedAgentWithoutScan,
@@ -45,6 +51,34 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     proc.process || null,
     ptyShellName.get(id)
   )
+  const wslDistro = ptyWslDistroById.get(id)
+  if (process.platform === 'win32' && wslDistro) {
+    const anchor = ptyWslShellAnchors.get(id)
+    if (!anchor) {
+      return null
+    }
+    const read = await readWslGuestProcessInventory(wslDistro)
+    if (ptyProcesses.get(id) !== proc || read.status !== 'ok') {
+      return null
+    }
+    const resolution = resolveWslGuestForegroundProcess(read.inventory, anchor)
+    if (ptyProcesses.get(id) !== proc) {
+      return null
+    }
+    if (resolution.status === 'unverifiable') {
+      return null
+    }
+    ptyWslShellAnchors.set(id, resolution.anchor)
+    if (resolution.processName) {
+      ptyLastRecognizedForeground.set(id, {
+        name: resolution.processName,
+        pid: resolution.anchor.shellPid,
+        at: Date.now()
+      })
+      return resolution.processName
+    }
+    return null
+  }
   const cachedEntry = ptyLastRecognizedForeground.get(id)
   const cachedAgent = cachedEntry?.name ?? null
   let paneMembershipUnavailable = false
@@ -155,6 +189,23 @@ export async function confirmLocalPtyForegroundProcess(id: string): Promise<stri
   const proc = ptyProcesses.get(id)
   if (!proc) {
     return null
+  }
+  const wslDistro = ptyWslDistroById.get(id)
+  if (process.platform === 'win32' && wslDistro) {
+    const anchor = ptyWslShellAnchors.get(id)
+    if (!anchor) {
+      return null
+    }
+    const read = await readWslGuestProcessInventory(wslDistro)
+    if (ptyProcesses.get(id) !== proc || read.status !== 'ok') {
+      return null
+    }
+    const resolution = resolveWslGuestForegroundProcess(read.inventory, anchor)
+    if (ptyProcesses.get(id) !== proc || resolution.status !== 'live') {
+      return null
+    }
+    ptyWslShellAnchors.set(id, resolution.anchor)
+    return resolution.processName
   }
   try {
     const resolution = await resolveAgentForegroundProcessWithAvailability(

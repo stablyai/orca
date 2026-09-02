@@ -9,6 +9,11 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
+import {
+  selectShellStartupFeatures,
+  SHELL_STARTUP_FEATURES,
+  type ShellStartupFeature
+} from '../shell-startup-features'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -52,12 +57,59 @@ function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): st
   ]
 }
 
-export function addOrcaWslInteropEnv(env: Record<string, string>): void {
+export type WslShellLaunchIntent = {
+  /** Guest shell family used only for intent-derived history selection. */
+  shellPath?: string
+  hasStartupCommand?: boolean
+  waitsForShellReady?: boolean
+  emitsStartupIdentity?: boolean
+  /** Override overlay detection for non-shell WSL launches (for example relay startup). */
+  overlay?: boolean
+}
+
+export function addOrcaWslInteropEnv(
+  env: Record<string, string>,
+  intent: WslShellLaunchIntent = {}
+): void {
   // Why set here: every WSL spawn path funnels through this helper, and the
   // in-guest login script needs the resolved wrapper root. Windows/WSL wrappers
   // are always the local file set -- windows-shell-args.ts is shared by the
   // in-process provider and the daemon spawner, so both resolve the same tree.
   env.ORCA_SHELL_READY_ROOT = getShellReadyWrapperRoot()
+  // WSL's host-side process is always wsl.exe. Ask the guest wrapper to emit
+  // its shell identity marker so process evidence can anchor to the guest PID.
+  // The feature selection crosses through WSLENV, never the wsl.exe argv.
+  // A WSL pane can inherit this channel from an Orca shell launched earlier;
+  // never use that value as launch intent. Derive features from this spawn's
+  // environment and explicit startup intent, while retaining the WSL-required
+  // markers and identity channels.
+  const overlayKeys = [
+    'ORCA_OPENCODE_CONFIG_DIR',
+    'ORCA_MIMOCODE_HOME',
+    'ORCA_OMP_STATUS_EXTENSION',
+    'ORCA_CODEX_HOME',
+    'ORCA_AGENT_TEAMS_SHIM_DIR',
+    'ORCA_REMOTE_CLI_BIN_DIR'
+  ] as const
+  const launchEnv = { ...env }
+  if (intent.overlay === false) {
+    for (const key of overlayKeys) {
+      delete launchEnv[key]
+    }
+  }
+  const launchFeatures = selectShellStartupFeatures({
+    // WSL resolves the guest's login shell at runtime; callers provide the
+    // effective family when they need shell-specific history intent.
+    shellPath: intent.shellPath ?? 'zsh',
+    env: launchEnv,
+    hasStartupCommand: intent.hasStartupCommand === true,
+    waitsForShellReady: intent.waitsForShellReady === true,
+    emitsStartupIdentity: intent.emitsStartupIdentity !== false
+  })
+  const selectedFeatures = new Set<ShellStartupFeature>([...launchFeatures, 'markers', 'identity'])
+  env.ORCA_SHELL_FEATURES = SHELL_STARTUP_FEATURES.filter((feature) =>
+    selectedFeatures.has(feature)
+  ).join(',')
   // Why: the endpoint is a Windows path (/p-translated so the guest reads it
   // via /mnt/c) until the WSL hook relay reports the guest home — then it is
   // already a guest-side POSIX path and must cross untranslated.
@@ -76,6 +128,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     // Why /p: the guest reads the content-addressed wrapper tree through /mnt/c,
     // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.
     'ORCA_SHELL_READY_ROOT/p',
+    'ORCA_SHELL_FEATURES/u',
     'ORCA_CLI_COMMAND/u',
     'ORCA_CODEX_LAUNCH_PREFLIGHT/p',
     'ORCA_PANE_KEY/u',

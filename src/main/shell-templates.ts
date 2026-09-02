@@ -39,7 +39,36 @@ __orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }`
 
 // Why one line usable by both languages: __orca_has_feature is defined with the
 // same name and semantics in the zsh and bash channel blocks above.
-export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `__orca_has_feature identity && printf "\\033]777;orca-shell-start:%s\\007" "$$"`
+/** Emits a fenced WSL shell identity. The marker is output-only; no identity
+ * value is put in wsl.exe argv where another Windows process could read it. */
+export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `if __orca_has_feature identity; then
+  if [ -n "\${WSL_DISTRO_NAME:-}" ]; then
+    __orca_emit_shell_identity() {
+      local _orca_boot _orca_stat _orca_tail _orca_start _orca_tty _orca_distro
+      local IFS=' '
+      _orca_boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null) || return 0
+      _orca_stat=$(cat /proc/$$/stat 2>/dev/null) || return 0
+      _orca_tail=\${_orca_stat##*) }
+      # zsh does not perform implicit word splitting for unquoted parameters;
+      # read the proc-stat fields explicitly so field 22 (starttime) is parsed
+      # correctly in both zsh and bash.
+      builtin read -r _orca_state _orca_f2 _orca_f3 _orca_f4 _orca_f5 _orca_f6 _orca_f7 _orca_f8 _orca_f9 _orca_f10 _orca_f11 _orca_f12 _orca_f13 _orca_f14 _orca_f15 _orca_f16 _orca_f17 _orca_f18 _orca_f19 _orca_start _orca_rest <<EOF
+$_orca_tail
+EOF
+      _orca_tty=$(tty 2>/dev/null) || return 0
+      _orca_distro=\${WSL_DISTRO_NAME:-}
+      case "$_orca_boot" in *[!A-Fa-f0-9-]*|"") return 0 ;; esac
+      case "$_orca_distro" in ""|*[!A-Za-z0-9._-]*) return 0 ;; esac
+      case "$_orca_start" in ""|*[!0-9]*) return 0 ;; esac
+      case "$_orca_tty" in /dev/pts/[0-9]*) ;; *) return 0 ;; esac
+      printf "\\033]777;orca-shell-start:v2:%s:%s:%s:%s:%s\\007" "$_orca_distro" "$_orca_boot" "$$" "$_orca_start" "$_orca_tty"
+    }
+    __orca_emit_shell_identity
+    unset -f __orca_emit_shell_identity
+  else
+    printf "\\033]777;orca-shell-start:%s\\007" "$$"
+  fi
+fi`
 
 /**
  * The first executable lines of the wrapper: give ZDOTDIR back to the user.

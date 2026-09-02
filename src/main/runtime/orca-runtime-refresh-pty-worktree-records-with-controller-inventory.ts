@@ -36,7 +36,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     targetWorktreeId: string | null = null,
     deadline?: number,
     connectionId?: string | null,
-    retryStale = false
+    retryStale = false,
+    signal?: AbortSignal
   ): Promise<PtyControllerInventory | null> {
     if (targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       const targetedLiveness = this.refreshFloatingWorkspacePtyLiveness()
@@ -69,7 +70,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     // never answers still leaves the aggregate time to return the providers that did
     // — expiring at the same instant would discard the whole inventory instead.
     const providerListOpts = {
-      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS)
+      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS),
+      ...(signal ? { signal } : {})
     }
     const processInventory =
       connectionId === undefined && this.ptyController.listProcessesWithHostScope
@@ -105,7 +107,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           targetWorktreeId,
           deadline,
           connectionId,
-          true
+          true,
+          signal
         )
       }
       return null

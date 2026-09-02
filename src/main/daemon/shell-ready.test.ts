@@ -436,6 +436,9 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshenv).toContain('builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"')
     expect(zshenv).toContain('builtin unset ORCA_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR')
     expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+    expect(zshenv).toContain(
+      'printf "\\033]777;orca-shell-start:v2:%s:%s:%s:%s:%s\\007" "$_orca_distro" "$_orca_boot" "$$" "$_orca_start" "$_orca_tty"'
+    )
     expect(zshenv.indexOf('builtin export ZDOTDIR=')).toBeLessThan(
       zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
     )

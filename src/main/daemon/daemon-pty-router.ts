@@ -197,7 +197,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.current.revive(state)
   }
 
-  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: {
+    deadlineMs?: number
+    signal?: AbortSignal
+  }): Promise<PtyProcessInfo[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
     const results = await Promise.all(

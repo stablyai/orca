@@ -320,4 +320,16 @@ export class OrcaRuntimeWithRuntimeId {
   >()
 
   protected ptyLivenessObservationSequence = 0
+
+  // Catalog polls reuse the last controller census until a PTY lifecycle or
+  // output event invalidates it; this keeps idle mobile polls read-free.
+  protected ptyLivenessRefreshRequired = false
+
+  protected ptyLivenessRefreshInProgress = 0
+
+  protected invalidatePtyLivenessSnapshot(): void {
+    if (this.ptyLivenessRefreshInProgress === 0) {
+      this.ptyLivenessRefreshRequired = true
+    }
+  }
 }

@@ -24,11 +24,7 @@ import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
 import { spawnWithTerminalRuntimeRepair, type TerminalRepairHook } from './ssh-pty-spawn-repair'
-
-// Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
-function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
-  return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
-}
+import { relayTimeoutOptions } from './ssh-pty-provider-timeout'
 
 /** Remote PTY provider that proxies IPtyProvider operations through the relay. */
 export class SshPtyProvider implements IPtyProvider {
@@ -298,11 +294,14 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: {
+    deadlineMs?: number
+    signal?: AbortSignal
+  }): Promise<PtyProcessInfo[]> {
     const result = await this.mux.request(
       'pty.listProcesses',
       undefined,
-      relayTimeoutOptions(opts?.deadlineMs)
+      relayTimeoutOptions(opts?.deadlineMs, opts?.signal)
     )
     const processes = mapSshPtyProcessList(result as PtyProcessInfo[], (id) => this.toAppPtyId(id))
     for (const process of processes) {

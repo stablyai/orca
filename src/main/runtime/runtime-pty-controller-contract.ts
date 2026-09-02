@@ -118,9 +118,9 @@ export type RuntimePtyController = {
   hasPty?(ptyId: string): boolean | null
   listProcesses?(
     connectionId?: string | null,
-    opts?: { deadlineMs?: number }
+    opts?: { deadlineMs?: number; signal?: AbortSignal }
   ): Promise<PtyProcessInfo[]>
-  listProcessesWithHostScope?(opts?: { deadlineMs?: number }): Promise<{
+  listProcessesWithHostScope?(opts?: { deadlineMs?: number; signal?: AbortSignal }): Promise<{
     processes: PtyProcessInfo[]
     hostIds: ExecutionHostId[]
   }>

@@ -7,13 +7,25 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController extends Orca
   protected async refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId: string | null = null,
-    deadline?: number
+    deadline?: number,
+    signal?: AbortSignal
   ): Promise<Set<string> | null> {
-    const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
-      resolvedWorktrees,
-      targetWorktreeId,
-      deadline
-    )
-    return inventory ? new Set(inventory.livePtyIds) : null
+    this.ptyLivenessRefreshInProgress += 1
+    try {
+      const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
+        resolvedWorktrees,
+        targetWorktreeId,
+        deadline,
+        undefined,
+        false,
+        signal
+      )
+      if (inventory) {
+        this.ptyLivenessRefreshRequired = false
+      }
+      return inventory ? new Set(inventory.livePtyIds) : null
+    } finally {
+      this.ptyLivenessRefreshInProgress -= 1
+    }
   }
 }

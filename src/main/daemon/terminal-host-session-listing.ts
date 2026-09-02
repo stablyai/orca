@@ -25,7 +25,8 @@ export function listLiveTerminalHostSessions(
       cols: size?.cols ?? 0,
       rows: size?.rows ?? 0,
       createdAt: 0,
-      agentSessionOwners: agentSessionOwners.listForPty(session.sessionId)
+      agentSessionOwners: agentSessionOwners.listForPty(session.sessionId),
+      ...(session.getWslShellAnchor() ? { wslShellAnchor: session.getWslShellAnchor()! } : {})
     })
   }
   return result

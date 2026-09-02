@@ -25,6 +25,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     captureModelReceipt?: (completion: Promise<void>) => void,
     sourceRanges?: readonly TerminalOutputSourceRange[]
   ): number {
+    this.invalidatePtyLivenessSnapshot()
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
