@@ -32,6 +32,7 @@ import type {
 } from './agent-status-bridge-types'
 import { normalizeAgentStatusEvent } from './normalize-agent-status-event'
 
+/** Apply one agent-status IPC payload (or enqueue it until the pane/store is ready). */
 export function createAgentStatusEventApplicator(args: {
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
   transientClearWatermarkByConnectionId: Map<string, number>

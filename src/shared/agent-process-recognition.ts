@@ -278,6 +278,7 @@ export function recognizeAgentProcess(
   return recognizedAgentForProcess(normalized)
 }
 
+/** Recognize a TUI agent from a full command line, including wrapper-subcommand and node-shim forms. */
 export function recognizeAgentProcessFromCommandLine(
   commandLine: string | null | undefined,
   // Why: TUI consumers (status hooks, shell shadows) filter out headless

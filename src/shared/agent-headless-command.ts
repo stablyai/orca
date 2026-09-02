@@ -16,12 +16,14 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   ante: isAnteHeadlessOneShotCommand
 }
 
+/** True when `tokens` are a one-shot print/prompt command that should not own a TUI pane. */
 export function isHeadlessOneShotAgentCommand(agent: TuiAgent, tokens: readonly string[]): boolean {
   return HEADLESS_ONE_SHOT_MATCHERS[agent]?.(tokens) ?? false
 }
 
 type AgentCommandRecognition = { agent: TuiAgent } | null
 
+/** Drop a process recognition when the command line is a headless one-shot. */
 export function filterHeadlessOneShotAgentCommand<T extends AgentCommandRecognition>(
   recognition: T,
   tokens: readonly string[]

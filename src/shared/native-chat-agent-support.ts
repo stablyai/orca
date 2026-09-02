@@ -40,6 +40,7 @@ export function shouldStepNativeChatAskAnswer(agent: string | null | undefined):
   return transcriptAgent === 'claude' || transcriptAgent === 'codex'
 }
 
+/** Map a catalog agent to the transcript format native chat knows how to parse. */
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
