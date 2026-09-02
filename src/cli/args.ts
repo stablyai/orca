@@ -228,6 +228,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'diagnostics',
         'linear',
         'skills',
+        'supervisor',
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||

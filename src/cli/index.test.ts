@@ -42,7 +42,7 @@ vi.mock('child_process', async () => {
 
 import { COMMAND_SPECS, main } from './index'
 import { formatFlagHelp } from './help'
-import { GLOBAL_FLAGS, specPaths } from './args'
+import { GLOBAL_FLAGS, isCommandGroup, specPaths } from './args'
 import { okFixture, queueFixtures } from './test-fixtures'
 
 describe('COMMAND_SPECS collision check', () => {
@@ -56,6 +56,19 @@ describe('COMMAND_SPECS collision check', () => {
         seen.add(key)
       }
     }
+  })
+
+  // Why: `orca <group> --help` falls through printHelp to "Unknown command: <group>" plus
+  // the whole root help, and exits 1, when the prefix is missing from isCommandGroup — while
+  // each subcommand's own --help keeps working, so nothing about the specs reveals the gap.
+  // Registration is exhaustive over the live tree; this keeps the next group from shipping
+  // without it.
+  it('registers every multi-segment command prefix as a command group', () => {
+    const ungrouped = [
+      ...new Set(COMMAND_SPECS.filter((spec) => spec.path.length > 1).map((spec) => spec.path[0]))
+    ].filter((prefix) => !isCommandGroup([prefix]))
+
+    expect(ungrouped).toEqual([])
   })
 
   it('allows every flag documented in command usage strings', () => {
@@ -302,6 +315,33 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
       'account list              List managed Claude and Codex accounts on this Orca host'
     )
+    logSpy.mockRestore()
+  })
+
+  it('lists the supervisor commands and answers `orca supervisor --help` as a group', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['--help'], '/tmp/repo')
+
+    expect(String(logSpy.mock.calls[0][0])).toContain(
+      'supervisor print          Print a service definition for running orcad on this machine'
+    )
+
+    logSpy.mockClear()
+    process.exitCode = 0
+    await main(['supervisor', '--help'], '/tmp/repo')
+
+    // Why the exit code is asserted: an unregistered group still prints something — the whole
+    // root help, behind "Unknown command: supervisor" — and only the 1 says it went wrong.
+    const groupHelp = String(logSpy.mock.calls[0][0])
+    expect(groupHelp).toContain('orca supervisor <command>')
+    expect(groupHelp).toContain('Print a supervisor service definition')
+    expect(groupHelp).toContain('Check an installed orcad service')
+    expect(groupHelp).not.toContain('Unknown command')
+    expect(process.exitCode).toBe(0)
+
+    process.exitCode = priorExitCode
     logSpy.mockRestore()
   })
 

@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import {
   constants,
   copyFileSync,
@@ -8,8 +8,15 @@ import {
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { join } from 'node:path'
-import { PROTOCOL_VERSION } from './types'
+// Imported and re-exported rather than moved-and-rewritten: these are the same names every
+// caller already imports from here, and they now have a single definition in the leaf module.
+import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-runtime-paths'
+export {
+  getDaemonPidPath,
+  getDaemonRuntimeDirPath,
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from './daemon-runtime-paths'
 import { DaemonCrashLoopError, DaemonRespawnThrottle } from './daemon-respawn-throttle'
 
 export type DaemonConnectionInfo = {
@@ -117,28 +124,6 @@ export class DaemonSpawner {
     this.handle = null
     await handle.shutdown()
   }
-}
-
-export function getDaemonSocketPath(
-  runtimeDir: string,
-  protocolVersion = PROTOCOL_VERSION
-): string {
-  // Why: Windows IPC servers use named pipes rather than filesystem socket
-  // files. Include the protocol version in the endpoint name so a daemon from
-  // an older build is never reused after a breaking protocol change.
-  if (process.platform === 'win32') {
-    const suffix = createHash('sha256').update(runtimeDir).digest('hex').slice(0, 12)
-    return `\\\\?\\pipe\\orca-terminal-host-v${protocolVersion}-${suffix}`
-  }
-  return join(runtimeDir, `daemon-v${protocolVersion}.sock`)
-}
-
-export function getDaemonTokenPath(runtimeDir: string, protocolVersion = PROTOCOL_VERSION): string {
-  return join(runtimeDir, `daemon-v${protocolVersion}.token`)
-}
-
-export function getDaemonPidPath(runtimeDir: string, protocolVersion = PROTOCOL_VERSION): string {
-  return join(runtimeDir, `daemon-v${protocolVersion}.pid`)
 }
 
 export function serializeDaemonPidFile(pidFile: DaemonPidFile): string {

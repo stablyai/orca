@@ -38,6 +38,22 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('value')).toBe('')
   })
 
+  // Why this is not in BOOLEAN_FLAGS: that set exists for switches a following token could
+  // be mistaken for a value, and `supervisor doctor` takes no positionals — so every shape
+  // it can be written in already parses as a switch. Pinned because reading the set alone
+  // suggests otherwise.
+  it('reads --no-probe as a switch in every shape supervisor doctor accepts', () => {
+    expect(parseArgs(['supervisor', 'doctor', '--no-probe']).flags.get('no-probe')).toBe(true)
+    expect(parseArgs(['supervisor', 'doctor', '--no-probe', '--json']).flags.get('no-probe')).toBe(
+      true
+    )
+
+    const withPath = parseArgs(['supervisor', 'doctor', '--no-probe', '--service-path', '/etc/x'])
+
+    expect(withPath.flags.get('no-probe')).toBe(true)
+    expect(withPath.flags.get('service-path')).toBe('/etc/x')
+  })
+
   it('still parses boolean flags and space-separated values', () => {
     const parsed = parseArgs(['tab', 'create', '--json', '--url', 'https://example.com'])
 

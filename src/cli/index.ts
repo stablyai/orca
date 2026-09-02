@@ -31,6 +31,10 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
     commandPath[0] === 'serve' ||
+    // Why local-only: supervisor inspects THIS machine's service files, which is normally
+    // not the host a paired CLI targets. Remote selection would silently answer about the
+    // wrong machine.
+    commandPath[0] === 'supervisor' ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context'
