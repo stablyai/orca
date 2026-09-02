@@ -56,7 +56,8 @@ describe('configured worktree path probe concurrency', () => {
 
     const result = await resolveWorktreeSharedDirectories('/repo')
 
-    expect(result).toEqual([...configuredPaths].sort())
+    expect(result.paths).toEqual([...configuredPaths].sort())
+    expect(result.skipped).toEqual([])
     expect(checkIgnoredPathsMock).toHaveBeenCalledWith('/repo', configuredPaths, {})
     expect(concurrency.max).toBeGreaterThan(1)
     expect(concurrency.max).toBeLessThanOrEqual(8)
@@ -75,7 +76,8 @@ describe('configured worktree path probe concurrency', () => {
 
     const result = await resolveWorktreeIncludePaths('/repo')
 
-    expect(result).toEqual([...configuredPaths].sort())
+    expect(result.paths).toEqual([...configuredPaths].sort())
+    expect(result.skipped).toEqual([])
     expect(checkIgnoredPathsMock).toHaveBeenCalledWith('/repo', configuredPaths, {})
     expect(concurrency.max).toBeGreaterThan(1)
     expect(concurrency.max).toBeLessThanOrEqual(8)

@@ -157,6 +157,20 @@ export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
   expectedRefHead?: string
 }
 
+export type WorktreeShareSkipWarningCode = 'WORKTREE_SHARE_SKIPPED' | 'WORKTREE_INCLUDE_SKIPPED'
+
+export type WorktreeShareSkipWarning = {
+  code: WorktreeShareSkipWarningCode
+  message: string
+  details?: {
+    path: string
+    reason: string
+    budgetReason?: string
+  }
+}
+
+export type WorktreeCreateWarning = WorktreeLineageWarning | WorktreeShareSkipWarning
+
 export type CreateWorktreeResult = {
   /** The catalog this create produced; additive, older hosts omit it. */
   catalogVersion?: WorktreeCatalogVersion
@@ -169,7 +183,7 @@ export type CreateWorktreeResult = {
   }
   lineage?: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
-  warnings?: WorktreeLineageWarning[]
+  warnings?: WorktreeCreateWarning[]
   setup?: WorktreeSetupLaunch
   setupReceipt?: {
     requested: 'run' | 'skip' | 'inherit'

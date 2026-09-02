@@ -28,6 +28,10 @@ export function printLineageSummary(
     return
   }
   for (const warning of result.warnings ?? []) {
+    // Share/include skips also live on `warning` and would otherwise print twice.
+    if (!warning.code.startsWith('LINEAGE_')) {
+      continue
+    }
     console.error(`warning: ${warning.message}`)
   }
   if (result.workspaceLineage) {
