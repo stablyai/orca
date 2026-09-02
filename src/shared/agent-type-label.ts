@@ -5,7 +5,7 @@ import type { AgentType } from './agent-status-types'
 const WELL_KNOWN_LABELS: Record<string, string> = {
   claude: 'Claude',
   openclaude: 'OpenClaude',
-  openzoo: 'openzoo',
+  openzoo: 'OpenZoo',
   codex: 'Codex',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
