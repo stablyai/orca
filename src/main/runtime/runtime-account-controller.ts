@@ -148,19 +148,20 @@ export class RuntimeAccountController {
     if (tracked) {
       return tracked
     }
+    let promise: Promise<GrokRateLimitResetRpcResult>
     if (existing?.state === 'providerPending') {
-      return this.reconcilePendingGrokReset(idempotencyKey, ledger)
+      promise = this.reconcilePendingGrokReset(idempotencyKey, ledger)
+    } else {
+      ledger.markProviderPending(
+        idempotencyKey,
+        this.requireServices().rateLimits.getState().grok?.weekly ?? null
+      )
+      const operation = this.grokResetInFlight ?? this.startGrokResetOperation()
+      promise = operation.then((result) => {
+        ledger.markSettled(idempotencyKey, result.outcome)
+        return result
+      })
     }
-
-    ledger.markProviderPending(
-      idempotencyKey,
-      this.requireServices().rateLimits.getState().grok?.weekly ?? null
-    )
-    const operation = this.grokResetInFlight ?? this.startGrokResetOperation()
-    const promise = operation.then((result) => {
-      ledger.markSettled(idempotencyKey, result.outcome)
-      return result
-    })
     this.grokResetPromiseByKey.set(idempotencyKey, promise)
     const clearTrackedPromise = (): void => {
       if (this.grokResetPromiseByKey.get(idempotencyKey) === promise) {
@@ -205,13 +206,17 @@ export class RuntimeAccountController {
       preOperationWeekly.usedPercent > 0 &&
       grok.weekly != null &&
       grok.weekly.usedPercent <= 0
-    if (!resetCompleted) {
-      throw new Error(
-        'A previous Grok reset attempt has an unknown outcome; Orca will not spend another token.'
-      )
+    if (resetCompleted) {
+      ledger.markSettled(idempotencyKey, 'reset')
+      return this.grokResetResult('reset')
     }
-    ledger.markSettled(idempotencyKey, 'reset')
-    return this.grokResetResult('reset')
+    const operation = this.grokResetInFlight ?? this.startGrokResetOperation()
+    const result = await operation
+    if (result.outcome === 'nothingToReset' && result.snapshot.rateLimits.grok?.status !== 'ok') {
+      throw new Error('The Grok reset outcome is unknown; retry the same request.')
+    }
+    ledger.markSettled(idempotencyKey, result.outcome)
+    return result
   }
 
   private grokResetResult(outcome: CodexRateLimitResetOutcome): GrokRateLimitResetRpcResult {

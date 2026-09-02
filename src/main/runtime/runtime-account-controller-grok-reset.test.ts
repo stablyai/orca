@@ -135,8 +135,60 @@ describe('RuntimeAccountController Grok reset replay', () => {
     })
   })
 
-  it('keeps a recovered pending attempt unknown when weekly usage is unchanged', async () => {
+  it('retries a transient failure with the same key and settles the provider result', async () => {
     const key = '77777777-7777-4777-8777-777777777777'
+    const ledger = createLedgerStore()
+    const rateLimits = {
+      grok: { provider: 'grok' as const, weekly: { usedPercent: 80 }, status: 'ok' as const }
+    }
+    const consumeGrokRateLimitResetCredit = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('provider unavailable'))
+      .mockResolvedValueOnce({ outcome: 'reset', state: rateLimits })
+    const controller = new RuntimeAccountController(() => ledger.store as never)
+    controller.setServices(accountServices(consumeGrokRateLimitResetCredit, rateLimits) as never)
+
+    await expect(controller.consumeGrokResetCredit(key)).rejects.toThrow('provider unavailable')
+    await expect(controller.consumeGrokResetCredit(key)).resolves.toMatchObject({
+      outcome: 'reset'
+    })
+    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledTimes(2)
+    expect(ledger.read().attempts).toContainEqual({
+      idempotencyKey: key,
+      state: 'settled',
+      outcome: 'reset'
+    })
+  })
+
+  it('settles alreadyRedeemed when a recovered provider call consumed before the crash', async () => {
+    const key = '88888888-8888-4888-8888-888888888888'
+    const ledger = createLedgerStore({
+      version: 1,
+      attempts: [{ idempotencyKey: key, state: 'providerPending' }]
+    })
+    const rateLimits = {
+      grok: { provider: 'grok' as const, weekly: { usedPercent: 80 }, status: 'ok' as const }
+    }
+    const consumeGrokRateLimitResetCredit = vi.fn().mockResolvedValue({
+      outcome: 'alreadyRedeemed',
+      state: rateLimits
+    })
+    const controller = new RuntimeAccountController(() => ledger.store as never)
+    controller.setServices(accountServices(consumeGrokRateLimitResetCredit, rateLimits) as never)
+
+    await expect(controller.consumeGrokResetCredit(key)).resolves.toMatchObject({
+      outcome: 'alreadyRedeemed'
+    })
+    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledOnce()
+    expect(ledger.read().attempts).toContainEqual({
+      idempotencyKey: key,
+      state: 'settled',
+      outcome: 'alreadyRedeemed'
+    })
+  })
+
+  it('keeps a recovered attempt retryable while the provider remains unavailable', async () => {
+    const key = '99999999-9999-4999-8999-999999999999'
     const preOperationWeekly = {
       usedPercent: 80,
       windowMinutes: 10_080,
@@ -148,14 +200,18 @@ describe('RuntimeAccountController Grok reset replay', () => {
       attempts: [{ idempotencyKey: key, state: 'providerPending', preOperationWeekly }]
     })
     const rateLimits = {
-      grok: { provider: 'grok' as const, weekly: { usedPercent: 80 }, status: 'ok' as const }
+      grok: { provider: 'grok' as const, weekly: { usedPercent: 80 }, status: 'error' as const }
     }
-    const consumeGrokRateLimitResetCredit = vi.fn()
+    const consumeGrokRateLimitResetCredit = vi.fn().mockResolvedValue({
+      outcome: 'nothingToReset',
+      state: rateLimits
+    })
     const controller = new RuntimeAccountController(() => ledger.store as never)
     controller.setServices(accountServices(consumeGrokRateLimitResetCredit, rateLimits) as never)
 
-    await expect(controller.consumeGrokResetCredit(key)).rejects.toThrow(/unknown outcome/)
-    expect(consumeGrokRateLimitResetCredit).not.toHaveBeenCalled()
+    await expect(controller.consumeGrokResetCredit(key)).rejects.toThrow(/outcome is unknown/)
+    await expect(controller.consumeGrokResetCredit(key)).rejects.toThrow(/outcome is unknown/)
+    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledTimes(2)
     expect(ledger.read().attempts).toContainEqual({
       idempotencyKey: key,
       state: 'providerPending',
