@@ -6,7 +6,10 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { lstat, mkdir, writeFile } from 'node:fs/promises'
-import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import {
+  assertMutableRemotePath,
+  resolveAuthorizedMutablePath
+} from './repository-admin-path-authorization'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { dirname } from 'node:path'
 import {
@@ -23,7 +26,7 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    const target = await this.resolveFileExplorerMutationPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
       target.connectionId,
       expectedExecutionHostId,
@@ -35,11 +38,17 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
+      await assertMutableRemotePath(provider, target.path, target.worktree.path, {
+        followsLink: true
+      })
       await provider.writeFile(target.path, content)
       return { ok: true }
     }
 
-    const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+    // Why followsLink: writeFile truncates the inode the name points at, hard links included.
+    const filePath = await resolveAuthorizedMutablePath(target.path, this.host.requireStore(), {
+      followsLink: true
+    })
     try {
       const fileStats = await lstat(filePath)
       if (fileStats.isDirectory()) {
@@ -62,7 +71,7 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    const target = await this.resolveFileExplorerMutationPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
       target.connectionId,
       expectedExecutionHostId,
@@ -75,11 +84,14 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
+      await assertMutableRemotePath(provider, target.path, target.worktree.path, {
+        followsLink: false
+      })
       await provider.writeFileBase64(target.path, contentBase64)
       return { ok: true }
     }
 
-    const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+    const filePath = await resolveAuthorizedMutablePath(target.path, this.host.requireStore())
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, content, { flag: 'wx' })
     return { ok: true }
@@ -94,7 +106,7 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    const target = await this.resolveFileExplorerMutationPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
       target.connectionId,
       expectedExecutionHostId,
@@ -107,11 +119,16 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
+      await assertMutableRemotePath(provider, target.path, target.worktree.path, {
+        followsLink: append
+      })
       await provider.writeFileBase64Chunk(target.path, contentBase64, append)
       return { ok: true }
     }
 
-    const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+    const filePath = await resolveAuthorizedMutablePath(target.path, this.host.requireStore(), {
+      followsLink: append
+    })
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, content, { flag: append ? 'a' : 'wx' })
     return { ok: true }
@@ -124,7 +141,7 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    const target = await this.resolveFileExplorerMutationPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
       target.connectionId,
       expectedExecutionHostId,
@@ -136,11 +153,14 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
+      await assertMutableRemotePath(provider, target.path, target.worktree.path, {
+        followsLink: false
+      })
       await provider.createFile(target.path)
       return { ok: true }
     }
 
-    const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+    const filePath = await resolveAuthorizedMutablePath(target.path, this.host.requireStore())
     await mkdir(dirname(filePath), { recursive: true })
     try {
       await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
@@ -157,7 +177,7 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    const target = await this.resolveFileExplorerMutationPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
       target.connectionId,
       expectedExecutionHostId,
@@ -169,11 +189,14 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
+      await assertMutableRemotePath(provider, target.path, target.worktree.path, {
+        followsLink: false
+      })
       await provider.createDir(target.path)
       return { ok: true }
     }
 
-    const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+    const dirPath = await resolveAuthorizedMutablePath(target.path, this.host.requireStore())
     await assertRuntimePathDoesNotExist(dirPath)
     await mkdir(dirPath, { recursive: false })
     return { ok: true }

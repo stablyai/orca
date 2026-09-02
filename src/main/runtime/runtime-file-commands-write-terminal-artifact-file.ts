@@ -13,6 +13,7 @@ import {
   terminalFileStatIdentity
 } from './runtime-file-commands-terminal-artifact-access'
 import { openLocalTerminalArtifactGrant } from './runtime-file-commands-terminal-file-paths'
+import { assertMutableHostPath } from './repository-admin-path-authorization'
 import { chmod, constants, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -39,6 +40,9 @@ export class RuntimeFileCommandsWithWriteTerminalArtifactFile extends RuntimeFil
     if (grant.readOnly) {
       throw new Error('terminal_file_grant_read_only')
     }
+    // Why: grants name absolute artifact paths under the temp roots, and any repository checked out
+    // there carries its own `.git` inside one — this write follows the grant, not a worktree path.
+    assertMutableHostPath(grant.absolutePath)
     if (isMobileBinaryPath(grant.absolutePath)) {
       throw new Error('binary_file')
     }

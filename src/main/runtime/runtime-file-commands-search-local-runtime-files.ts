@@ -2,6 +2,7 @@
 import { RuntimeFileCommandsWithSearchRuntimeFiles } from './runtime-file-commands-search-runtime-files'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { assertMutableRuntimeRelativePath } from './repository-admin-path-authorization'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import {
   DEFAULT_SEARCH_MAX_RESULTS,
@@ -194,6 +195,26 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
       ),
       connectionId: target.connectionId
     }))
+  }
+
+  protected async resolveFileExplorerMutationPath(
+    worktreeSelector: string,
+    relativePath: string
+  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }> {
+    const [target] = await this.resolveFileExplorerMutationPaths(worktreeSelector, [relativePath])
+    return target
+  }
+
+  // Separate from the read funnel so refusing `.git` never blocks listing or previewing it.
+  protected async resolveFileExplorerMutationPaths(
+    worktreeSelector: string,
+    relativePaths: readonly string[]
+  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }[]> {
+    const targets = await this.resolveFileExplorerPaths(worktreeSelector, relativePaths)
+    targets.forEach((target, index) => {
+      assertMutableRuntimeRelativePath(relativePaths[index], target.worktree.path)
+    })
+    return targets
   }
 
   protected async listRemoteMobileFiles(
