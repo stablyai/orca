@@ -96,7 +96,7 @@ async function saveState(state: StoredState): Promise<void> {
   }
 }
 
-// Why: a skip landing while a check is mid-fetch must not be overwritten by the check's write.
+// Why: read-modify-write sections are serialized so a skip and a check result cannot clobber each other.
 let stateQueue: Promise<unknown> = Promise.resolve()
 function withStateLock<T>(task: () => Promise<T>): Promise<T> {
   const run = stateQueue.then(task)
@@ -112,30 +112,29 @@ function isCheckDue(state: StoredState | null, now: number): boolean {
   return now < state.checkedAt || now - state.checkedAt >= CHECK_INTERVAL_MS
 }
 
-export function checkForAndroidUpdate(opts: {
+export async function checkForAndroidUpdate(opts: {
   currentVersion: string
   now?: number
   fetchFn?: typeof fetch
 }): Promise<AndroidUpdate | null> {
-  return withStateLock(async () => {
-    const now = opts.now ?? Date.now()
-    const stored = await loadState()
-    let state = stored
-    if (isCheckDue(stored, now)) {
-      try {
-        const latest = await fetchLatestAndroidRelease(opts.fetchFn)
-        state = { checkedAt: now, latest, skippedVersion: stored?.skippedVersion ?? null }
-        await saveState(state)
-      } catch {
-        // Why: keep the stale checkedAt so the next foreground retries instead of waiting a day.
-      }
+  const now = opts.now ?? Date.now()
+  if (isCheckDue(await loadState(), now)) {
+    // Why: the request has no deadline, so it runs outside the lock; a skip must not wait on it.
+    // A failed request leaves checkedAt stale so the next foreground retries instead of waiting a day.
+    const latest = await fetchLatestAndroidRelease(opts.fetchFn).catch(() => undefined)
+    if (latest !== undefined) {
+      await withStateLock(async () => {
+        const fresh = await loadState()
+        await saveState({ checkedAt: now, latest, skippedVersion: fresh?.skippedVersion ?? null })
+      })
     }
-    const latest = state?.latest
-    if (!latest || compareAppVersions(latest.version, opts.currentVersion) <= 0) {
-      return null
-    }
-    return latest.version === state?.skippedVersion ? null : latest
-  })
+  }
+  const state = await loadState()
+  const latest = state?.latest
+  if (!latest || compareAppVersions(latest.version, opts.currentVersion) <= 0) {
+    return null
+  }
+  return latest.version === state.skippedVersion ? null : latest
 }
 
 export function skipAndroidUpdate(version: string): Promise<void> {

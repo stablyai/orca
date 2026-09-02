@@ -231,6 +231,19 @@ describe('checkForAndroidUpdate', () => {
     ).toBeNull()
   })
 
+  it('persists a skip immediately even while the release request is still pending', async () => {
+    const never = vi.fn(() => new Promise(() => {})) as unknown as typeof fetch
+    void checkForAndroidUpdate({ currentVersion: '0.0.47', now: 1, fetchFn: never })
+    await skipAndroidUpdate('0.0.48')
+    expect(
+      await checkForAndroidUpdate({
+        currentVersion: '0.0.47',
+        now: 2,
+        fetchFn: fetchReturning([release('mobile-android-v0.0.48')])
+      })
+    ).toBeNull()
+  })
+
   it('treats a non-2xx response as a failed check', async () => {
     const rateLimited = fetchReturning({ message: 'API rate limit exceeded' }, false)
     expect(
