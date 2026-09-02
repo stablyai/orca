@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs'
+import { cpus, loadavg } from 'node:os'
 import { dirname } from 'node:path'
 import type {
   AiVaultSearchArgs,
@@ -29,6 +30,16 @@ const BACKFILL_YIELD_MS = 5
 // no list scan has run; re-reading the newest few files per provider is a
 // readdir + stat plus the appended bytes, well under the query budget.
 const REFRESH_RECENT_PER_AGENT = 12
+// Why: the backfill is the one CPU-heavy thing this feature does, and it runs
+// unasked. When the host is already saturated it backs off in coarse steps
+// instead of competing; the per-file cursor makes every pause free.
+const BACKFILL_LOAD_PER_CPU_CEILING = 1.5
+const BACKFILL_LOAD_PAUSE_MS = 15_000
+
+function backfillPauseMs(): number {
+  const perCpu = loadavg()[0] / Math.max(1, cpus().length)
+  return perCpu > BACKFILL_LOAD_PER_CPU_CEILING ? BACKFILL_LOAD_PAUSE_MS : BACKFILL_YIELD_MS
+}
 
 export type SessionSearchServiceOptions = {
   databasePath: string
@@ -151,7 +162,7 @@ export class SessionSearchService {
         sinceYield += 1
         if (sinceYield >= BACKFILL_YIELD_EVERY_FILES) {
           sinceYield = 0
-          await new Promise((resolve) => setTimeout(resolve, BACKFILL_YIELD_MS))
+          await new Promise((resolve) => setTimeout(resolve, backfillPauseMs()))
         }
       }
     })
