@@ -4,9 +4,11 @@ import type {
   OpenCodeSqliteListRequest,
   OpenCodeSqliteListValue,
   OpenCodeSqliteParseRequest,
+  OpenCodeSqliteParseValue,
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
+import { captureSessionSearchMessage, isSessionSearchCaptureActive } from './session-search-capture'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 
@@ -129,12 +131,23 @@ export class OpenCodeSqliteWorkerClient {
     sessionId: string
     platform: NodeJS.Platform
   }): Promise<AiVaultSession | null> {
+    const capture = isSessionSearchCaptureActive()
     try {
-      const value = await this.dispatch(
-        { kind: 'parse', dbPath: args.dbPath, sessionId: args.sessionId, platform: args.platform },
+      const value = (await this.dispatch(
+        {
+          kind: 'parse',
+          dbPath: args.dbPath,
+          sessionId: args.sessionId,
+          platform: args.platform,
+          capture
+        },
         PARSE_TIMEOUT_MS
-      )
-      return value as AiVaultSession | null
+      )) as OpenCodeSqliteParseValue | null
+      // Replay on this thread: the capture scope the index reads lives here.
+      for (const message of value?.messages ?? []) {
+        captureSessionSearchMessage(message)
+      }
+      return value?.session ?? null
     } catch (err) {
       if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
         throw new Error('OpenCode SQLite background scanner could not start.')

@@ -1,4 +1,5 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import type { SessionSearchCapturedMessage } from './session-search-capture'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 // Why: request/response shapes shared by the worker entry and the main-thread
@@ -18,6 +19,9 @@ export type OpenCodeSqliteParseRequest = {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  // Set when the caller parses inside a search-capture scope: AsyncLocalStorage
+  // does not cross threads, so the worker has to collect the rows and ship them.
+  capture?: boolean
 }
 
 export type OpenCodeSqliteWorkerRequest = OpenCodeSqliteListRequest | OpenCodeSqliteParseRequest
@@ -28,6 +32,13 @@ export type OpenCodeSqliteWorkerRequest = OpenCodeSqliteListRequest | OpenCodeSq
 export type OpenCodeSqliteListValue = {
   candidates: SessionFileCandidate[]
   issues: AiVaultScanIssue[]
+}
+
+// The parse leg returns the session plus the index rows captured while parsing
+// it; `messages` is empty unless the request asked for capture.
+export type OpenCodeSqliteParseValue = {
+  session: AiVaultSession | null
+  messages: SessionSearchCapturedMessage[]
 }
 
 export type OpenCodeSqliteWorkerResponse =
