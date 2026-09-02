@@ -12,7 +12,8 @@ import {
   getOpenInEntryAvailability,
   openOpenInAppsSettings,
   openWorktreePath,
-  WorktreeOpenInMenuItems
+  WorktreeOpenInMenuItems,
+  type OpenInMenuEntry
 } from '@/components/sidebar/WorktreeOpenInMenu'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
@@ -32,18 +33,29 @@ type TabBarOpenInAppsButtonProps = {
   worktreeId: string
 }
 
+function toOpenInEntry(application: OpenInApplication): OpenInMenuEntry {
+  return {
+    id: application.id,
+    label: application.label,
+    target: 'external-editor',
+    command: application.command
+  }
+}
+
 /** Split-button primary: the most recently launched app, else the first configured one (mirrors the quick-commands button). */
 export function resolvePrimaryOpenInApplication(
   applications: readonly OpenInApplication[],
-  recentId: string | null
+  recentId: string | null,
+  isAvailable: (application: OpenInApplication) => boolean = () => true
 ): OpenInApplication | null {
-  if (recentId) {
-    const match = applications.find((application) => application.id === recentId)
-    if (match) {
-      return match
-    }
+  const recent = recentId
+    ? applications.find((application) => application.id === recentId)
+    : undefined
+  if (recent && isAvailable(recent)) {
+    return recent
   }
-  return applications[0] ?? null
+  // Why: on an SSH workspace the last-used app may be local-only, so prefer one that can open here.
+  return applications.find(isAvailable) ?? recent ?? applications[0] ?? null
 }
 
 export function TabBarOpenInAppsButton({
@@ -71,25 +83,23 @@ export function TabBarOpenInAppsButton({
       worktree ? (repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null) : null,
     [repos, worktree]
   )
+  const availabilityOf = useCallback(
+    (application: OpenInApplication) =>
+      getOpenInEntryAvailability(toOpenInEntry(application), settings, connectionId),
+    [connectionId, settings]
+  )
   const primary = useMemo(
-    () => resolvePrimaryOpenInApplication(openInApplications, recentId),
-    [openInApplications, recentId]
+    () =>
+      resolvePrimaryOpenInApplication(
+        openInApplications,
+        recentId,
+        (application) => !availabilityOf(application).disabled
+      ),
+    [availabilityOf, openInApplications, recentId]
   )
   const primaryAvailability = useMemo(
-    () =>
-      primary
-        ? getOpenInEntryAvailability(
-            {
-              id: primary.id,
-              label: primary.label,
-              target: 'external-editor',
-              command: primary.command
-            },
-            settings,
-            connectionId
-          )
-        : { disabled: true },
-    [connectionId, primary, settings]
+    () => (primary ? availabilityOf(primary) : { disabled: true }),
+    [availabilityOf, primary]
   )
 
   const handleOpenChange = useCallback((next: boolean): void => {

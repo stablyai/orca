@@ -185,6 +185,19 @@ describe('WorktreeOpenInMenu', () => {
     ).toEqual(['VS Code', 'Cursor', 'Zed', 'File Manager'])
   })
 
+  it('omits the file manager entry when a caller lists only configured apps', () => {
+    expect(
+      getWorktreeOpenInEntries(
+        [
+          { id: 'vscode', label: 'VS Code', command: 'code' },
+          { id: 'cursor', label: 'Cursor', command: 'cursor' }
+        ],
+        'File Manager',
+        { includeFileManager: false }
+      ).map((entry) => entry.label)
+    ).toEqual(['VS Code', 'Cursor'])
+  })
+
   it('opens settings at the Open In Apps section', () => {
     openOpenInAppsSettings()
 

@@ -8,6 +8,12 @@ import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
 import { resolvePrimaryOpenInApplication, TabBarOpenInAppsButton } from './TabBarOpenInAppsButton'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+// Why: Radix popper measures the trigger with ResizeObserver, which happy-dom lacks.
+globalThis.ResizeObserver ??= class {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
 
 const {
   mockState,
@@ -111,6 +117,14 @@ describe('resolvePrimaryOpenInApplication', () => {
     expect(resolvePrimaryOpenInApplication([vscode, cursor], null)).toBe(vscode)
     expect(resolvePrimaryOpenInApplication([], 'vscode')).toBeNull()
   })
+
+  it('skips an unavailable recent app for the first available one, else keeps it', () => {
+    const onlyCursor = (application: OpenInApplication): boolean => application.id === 'cursor'
+    expect(resolvePrimaryOpenInApplication([vscode, cursor], 'vscode', onlyCursor)).toBe(cursor)
+    expect(resolvePrimaryOpenInApplication([vscode, cursor], null, onlyCursor)).toBe(cursor)
+    expect(resolvePrimaryOpenInApplication([vscode, cursor], 'vscode', () => false)).toBe(vscode)
+    expect(resolvePrimaryOpenInApplication([vscode, cursor], null, () => false)).toBe(vscode)
+  })
 })
 
 describe('TabBarOpenInAppsButton', () => {
@@ -145,12 +159,53 @@ describe('TabBarOpenInAppsButton', () => {
     expect(primaryButton().textContent).toBe('Cursor')
   })
 
-  it('disables the primary action when the app cannot open the workspace here', () => {
+  it('prefers an app that can open an SSH workspace over a local-only recent one', () => {
     mockState.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
     mockState.recentOpenInApplicationId = 'cursor'
     render()
     // Why: only VS Code supports SSH workspaces, so Cursor is "Local only" on a remote repo.
+    expect(primaryButton().textContent).toBe('VS Code')
+    expect(primaryButton().disabled).toBe(false)
+  })
+
+  it('disables the primary action when no configured app can open the workspace here', () => {
+    mockState.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
+    mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [cursor] }
+    render()
+    expect(primaryButton().textContent).toBe('Cursor')
     expect(primaryButton().disabled).toBe(true)
+  })
+
+  it('lists every configured app in the dropdown and remembers the one launched from it', async () => {
+    render()
+    const chevron = container.querySelector('button[aria-label="More apps"]')
+    if (!(chevron instanceof HTMLButtonElement)) {
+      throw new Error('chevron not found')
+    }
+
+    await act(async () => {
+      chevron.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await Promise.resolve()
+    })
+
+    const items = Array.from(document.querySelectorAll('[data-slot="dropdown-menu-item"]'))
+    expect(items.map((item) => item.textContent)).toEqual([
+      'VS Code',
+      'Cursor',
+      'Customize apps...'
+    ])
+
+    await act(async () => {
+      ;(items[1] as HTMLElement).click()
+      await Promise.resolve()
+    })
+
+    expect(setRecentOpenInApplicationIdMock).toHaveBeenCalledWith('cursor')
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/tmp/ws',
+      command: 'cursor',
+      connectionId: null
+    })
   })
 
   it('falls back to a settings shortcut when no apps are configured', () => {
