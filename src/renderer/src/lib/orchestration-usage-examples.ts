@@ -14,8 +14,8 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
     ),
     prompt: translate(
       'auto.lib.orchestration.usage.examples.handoffPrompt',
-      'Use {{value0}} to hand this billing settings task to the idle Claude agent. Include the goal, current context, and what they should finish next.',
-      { value0: ORCHESTRATION_SLASH_COMMAND }
+      'Use {{orchestrationCommand}} to hand this billing settings task to the idle Claude agent. Include the goal, current context, and what they should finish next.',
+      { orchestrationCommand: ORCHESTRATION_SLASH_COMMAND }
     )
   },
   {
@@ -30,8 +30,8 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
     ),
     prompt: translate(
       'auto.lib.orchestration.usage.examples.worktreeHandoffPrompt',
-      'Use {{value0}} to hand this settings cleanup to the agent in the settings-polish worktree. Send the goal, relevant files, and expected result.',
-      { value0: ORCHESTRATION_SLASH_COMMAND }
+      'Use {{orchestrationCommand}} to hand this settings cleanup to the agent in the settings-polish worktree. Send the goal, relevant files, and expected result.',
+      { orchestrationCommand: ORCHESTRATION_SLASH_COMMAND }
     )
   },
   {
@@ -43,8 +43,8 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
     ),
     prompt: translate(
       'auto.lib.orchestration.usage.examples.childSequencePrompt',
-      'Use {{value0}} to run this auth refactor in phases: plan, backend, UI, then tests. Start each child agent after the previous phase is done.',
-      { value0: ORCHESTRATION_SLASH_COMMAND }
+      'Use {{orchestrationCommand}} to run this auth refactor in phases: plan, backend, UI, then tests. Start each child agent after the previous phase is done.',
+      { orchestrationCommand: ORCHESTRATION_SLASH_COMMAND }
     )
   },
   {
@@ -59,8 +59,8 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
     ),
     prompt: translate(
       'auto.lib.orchestration.usage.examples.childParallelPrompt',
-      'Use {{value0}} to split this auth refactor across parallel child agents: API contract, backend call sites, UI flow, and test gaps.',
-      { value0: ORCHESTRATION_SLASH_COMMAND }
+      'Use {{orchestrationCommand}} to split this auth refactor across parallel child agents: API contract, backend call sites, UI flow, and test gaps.',
+      { orchestrationCommand: ORCHESTRATION_SLASH_COMMAND }
     )
   },
   {
@@ -75,8 +75,8 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
     ),
     prompt: translate(
       'auto.lib.orchestration.usage.examples.prSplitPrompt',
-      'Use {{value0}} to split this onboarding update into smaller PRs, each in its own child worktree: setup state, settings UI, copy, and tests.',
-      { value0: ORCHESTRATION_SLASH_COMMAND }
+      'Use {{orchestrationCommand}} to split this onboarding update into smaller PRs, each in its own child worktree: setup state, settings UI, copy, and tests.',
+      { orchestrationCommand: ORCHESTRATION_SLASH_COMMAND }
     )
   }
 ])

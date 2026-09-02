@@ -147,8 +147,33 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
 
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
   const targetPath = lastActiveCredsPath || OAUTH_CREDS_PATH
+  let contentToWrite = JSON.stringify(creds, null, 2)
+  try {
+    const raw = await readFile(targetPath, 'utf-8')
+    const parsed = JSON.parse(raw)
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      if (parsed.google && typeof parsed.google === 'object') {
+        parsed.google.access_token = creds.access_token
+        if (creds.refresh_token) parsed.google.refresh_token = creds.refresh_token
+        if (creds.expiry_date) parsed.google.expiry_date = creds.expiry_date
+        contentToWrite = JSON.stringify(parsed, null, 2)
+      } else if (parsed.oauth && typeof parsed.oauth === 'object') {
+        parsed.oauth.access_token = creds.access_token
+        if (creds.refresh_token) parsed.oauth.refresh_token = creds.refresh_token
+        if (creds.expiry_date) parsed.oauth.expiry_date = creds.expiry_date
+        contentToWrite = JSON.stringify(parsed, null, 2)
+      } else if (parsed.credentials && typeof parsed.credentials === 'object') {
+        parsed.credentials.access_token = creds.access_token
+        if (creds.refresh_token) parsed.credentials.refresh_token = creds.refresh_token
+        if (creds.expiry_date) parsed.credentials.expiry_date = creds.expiry_date
+        contentToWrite = JSON.stringify(parsed, null, 2)
+      } else {
+        contentToWrite = JSON.stringify({ ...parsed, ...creds }, null, 2)
+      }
+    }
+  } catch {}
   const tmpPath = `${targetPath}.${process.pid}.tmp`
-  await writeFile(tmpPath, JSON.stringify(creds, null, 2), 'utf-8')
+  await writeFile(tmpPath, contentToWrite, 'utf-8')
   await rename(tmpPath, targetPath)
 }
 

@@ -116,10 +116,6 @@ export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
         'credentials'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.b7c2cee442',
-        'experimental'
-      ),
-      ...translateSearchKeyword(
         'auto.components.settings.accounts.search.e949b08ffb',
         'rate limit'
       ),

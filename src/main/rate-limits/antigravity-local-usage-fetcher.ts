@@ -43,13 +43,29 @@ type UserStatusPayload = {
   }
 }
 
-async function requestRpcJson<T>(
+const MAX_RPC_RESPONSE_BYTES = 5 * 1024 * 1024 // 5MB limit to prevent memory exhaustion
+
+function requestRpcJson<T>(
   port: number,
   isHttps: boolean,
   path: string,
   csrfToken?: string
 ): Promise<{ ok: boolean; status?: number; data?: T; error?: string }> {
   return new Promise((resolve) => {
+    let isSettled = false
+    const settle = (res: { ok: boolean; status?: number; data?: T; error?: string }): void => {
+      if (!isSettled) {
+        isSettled = true
+        clearTimeout(timer)
+        resolve(res)
+      }
+    }
+
+    const timer = setTimeout(() => {
+      req.destroy()
+      settle({ ok: false, error: 'timeout' })
+    }, CONNECT_RPC_TIMEOUT_MS)
+
     const mod = isHttps ? https : http
     const body = JSON.stringify({
       metadata: {
@@ -75,33 +91,45 @@ async function requestRpcJson<T>(
         port,
         path,
         method: 'POST',
+        // Why: local Antigravity Language Server on 127.0.0.1 uses a self-signed TLS cert.
         rejectUnauthorized: false,
         headers,
         timeout: CONNECT_RPC_TIMEOUT_MS
       },
       (res) => {
         let data = ''
-        res.on('data', (chunk) => {
+        let bytesReceived = 0
+
+        res.on('data', (chunk: Buffer | string) => {
+          bytesReceived += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length
+          if (bytesReceived > MAX_RPC_RESPONSE_BYTES) {
+            req.destroy()
+            settle({ ok: false, error: 'response too large' })
+            return
+          }
           data += chunk
         })
+
+        res.on('error', (err) => settle({ ok: false, error: err.message }))
+
         res.on('end', () => {
           if (res.statusCode === 200) {
             try {
-              resolve({ ok: true, status: res.statusCode, data: JSON.parse(data) as T })
+              settle({ ok: true, status: res.statusCode, data: JSON.parse(data) as T })
             } catch {
-              resolve({ ok: false, status: res.statusCode, error: 'invalid json' })
+              settle({ ok: false, status: res.statusCode, error: 'invalid json' })
             }
           } else {
-            resolve({ ok: false, status: res.statusCode, error: `HTTP ${res.statusCode}` })
+            settle({ ok: false, status: res.statusCode, error: `HTTP ${res.statusCode}` })
           }
         })
       }
     )
 
-    req.on('error', (err) => resolve({ ok: false, error: err.message }))
+    req.on('error', (err) => settle({ ok: false, error: err.message }))
     req.on('timeout', () => {
       req.destroy()
-      resolve({ ok: false, error: 'timeout' })
+      settle({ ok: false, error: 'timeout' })
     })
     req.write(body)
     req.end()
@@ -194,6 +222,10 @@ async function probeEndpoint(ep: AntigravityEndpoint): Promise<ProviderRateLimit
   const weeklyWindow = isThirdPartyActive
     ? (thirdPartyWeekly ?? geminiWeekly)
     : (geminiWeekly ?? thirdPartyWeekly)
+
+  if (!sessionWindow && !weeklyWindow) {
+    return null
+  }
 
   return {
     provider: 'gemini',

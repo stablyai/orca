@@ -140,12 +140,23 @@ n127.0.0.1:8080
           command: `agy.exe --server_port=${serverPort}`
         }
       ])
-      runProcessMock.mockResolvedValue({
-        code: 1,
-        stdout: '',
-        stderr: '',
-        signal: null,
-        timedOut: false
+      runProcessMock.mockImplementation(async ({ program }) => {
+        if (program === 'ps') {
+          return {
+            code: 0,
+            stdout: `1234 /usr/local/bin/agy --server_port=${serverPort}\n`,
+            stderr: '',
+            signal: null,
+            timedOut: false
+          }
+        }
+        return {
+          code: 1,
+          stdout: '',
+          stderr: '',
+          signal: null,
+          timedOut: false
+        }
       })
 
       const result = await fetchAntigravityLocalRateLimits()
