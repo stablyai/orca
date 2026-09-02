@@ -29,8 +29,10 @@ import {
   checkForRemoteServerUpdate,
   downloadRemoteServerUpdate,
   installRemoteServerUpdate,
-  isQuittingForUpdate
+  isQuittingForUpdate,
+  reportRecoveredMacUpdateInstallFailure
 } from '../updater'
+import { resolveMacUpdateInstallStartup } from '../mac-update-install-attempt'
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup-diagnostics'
@@ -176,6 +178,26 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
   // changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
   initDataPath()
+  // Why here: before the single-instance lock and any startup writes, so a racing old-version
+  // launch exits before it can count against ShipIt's running-application check. Serve launches
+  // are exempt — a supervised headless restart must never be silently swallowed, and a serve
+  // process must not consume or report desktop install-recovery state.
+  if (!state.isServeMode) {
+    const macUpdateInstallStartup = resolveMacUpdateInstallStartup({
+      appDataPath: app.getPath('appData'),
+      appVersion: app.getVersion(),
+      executablePath: process.execPath,
+      isPackaged: app.isPackaged
+    })
+    if (macUpdateInstallStartup.action === 'block') {
+      console.info('[updater] Deferring old-version launch while macOS applies the update')
+      app.exit(0)
+      return false
+    }
+    if (macUpdateInstallStartup.action === 'allow-with-failure') {
+      reportRecoveredMacUpdateInstallFailure(macUpdateInstallStartup.failureReason)
+    }
+  }
   state.startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
   if (state.startupDiagnosticsEnabled) {
     logStartupDiagnostic('before-single-instance-lock', {

@@ -11,6 +11,8 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }
+    // Why: an explicit user check ends the recovered-install feedback hold.
+    this.macUpdateInstallAutoCheckBlockedUntilMs = 0
     if (options?.localBuild) {
       void this.checkForLocalBuildFromMenu()
       return

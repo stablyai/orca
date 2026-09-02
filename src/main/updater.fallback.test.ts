@@ -68,6 +68,16 @@ describe('statusesEqual', () => {
     expect(statusesEqual(withoutRecovery, withRecovery)).toBe(false)
   })
 
+  it('does not dedupe a macOS install failure into a generic error with the same message', () => {
+    const macInstallFailure: UpdateStatus = {
+      state: 'error',
+      message: 'install failed',
+      failureKind: 'macos-install'
+    }
+    expect(statusesEqual(macInstallFailure, withoutRecovery)).toBe(false)
+    expect(statusesEqual(withoutRecovery, macInstallFailure)).toBe(false)
+  })
+
   it('separates recovery statuses that differ only in package type, reason, or version', () => {
     expect(
       statusesEqual(withRecovery, {

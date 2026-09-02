@@ -2303,7 +2303,9 @@
         "a4650b0dc4": "Could Not Use Local Build",
         "b1e390250d": "Could not complete the local build switch.",
         "d29740d175": "The selected build could not be used.",
-        "37d45c9ec1": "Choose Another Build"
+        "37d45c9ec1": "Choose Another Build",
+        "macosInstallFailureTitle": "Update Wasn't Installed",
+        "macosInstallFailureDescription": "macOS stopped the installer before Orca was replaced. Check for updates and try again, then leave Orca closed until it relaunches."
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Move",

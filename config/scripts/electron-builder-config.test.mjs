@@ -235,6 +235,12 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('unpacks the macOS update install monitor entry', () => {
+    expect(electronBuilderConfig.asarUnpack).toContain(
+      'out/main/mac-update-install-monitor-entry.js'
+    )
+  })
+
   it('unpacks the replaceable WSL transcript filesystem process entry', async () => {
     const entryFilename = 'wsl-transcript-fs-process-entry.js'
     expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)

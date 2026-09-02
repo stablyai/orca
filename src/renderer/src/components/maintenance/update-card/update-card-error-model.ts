@@ -47,6 +47,23 @@ export function buildUpdateCardErrorModel({
         }
       : null
   }
+  if (status.failureKind === 'macos-install') {
+    return {
+      title: translate(
+        'auto.components.UpdateCard.macosInstallFailureTitle',
+        "Update Wasn't Installed"
+      ),
+      summary: translate(
+        'auto.components.UpdateCard.macosInstallFailureDescription',
+        'macOS stopped the installer before Orca was replaced. Check for updates and try again, then leave Orca closed until it relaunches.'
+      ),
+      releaseUrl: getReleaseNotesUrlForVersion(null),
+      primaryAction: {
+        label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
+        onClick: onRecheck
+      }
+    }
+  }
   if (isLocalBuild) {
     return {
       title: cachedVersion

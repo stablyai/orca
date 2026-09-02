@@ -45,6 +45,10 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected runBackgroundUpdateCheck(
     nudgeId: string | null = this.getPersistedPendingUpdateNudgeId()
   ): boolean {
+    // Why: a recovered macOS install failure keeps its card until the user acts or the window lapses.
+    if (Date.now() < this.macUpdateInstallAutoCheckBlockedUntilMs) {
+      return false
+    }
     // Why: a pinned dev jump owns the feed until it settles; a background check would repoint it mid-flight and download the wrong build.
     if (
       this.activeUpdateSource !== 'release' ||

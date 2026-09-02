@@ -8,6 +8,12 @@ import { getTrackedLinuxPackageArtifact } from '../linux-package-update-recovery
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { disarmUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { resetMacInstallState } from '../updater-mac-install'
+import {
+  armMacUpdateInstallAttempt,
+  clearMacUpdateInstallAttempt,
+  getMacUpdateInstallAttemptPath,
+  type MacUpdateInstallAttempt
+} from '../mac-update-install-attempt'
 import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../shared/update-status-types'
 import { compareVersions } from '../updater-fallback'
 import { PRE_QUIT_CLEANUP_TIMEOUT_MS } from './updater-state'
@@ -65,7 +71,60 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     return `${userInitiated ? 'user' : 'auto'}:${message}`
   }
 
+  /**
+   * Arming the durable install fence must never abort an install that would otherwise succeed:
+   * any failure here logs and returns null so the native handoff proceeds unfenced (pre-fence
+   * behavior). Supervised headless serve is excluded — its supervisor owns restart/recovery, and
+   * the monitor's recovery launch would open the GUI on a headless host.
+   */
+  protected armMacUpdateInstallAttemptSafely(
+    pendingVersion: string
+  ): MacUpdateInstallAttempt | null {
+    if (
+      process.platform !== 'darwin' ||
+      !app.isPackaged ||
+      this.updateInstallMode !== 'interactive' ||
+      typeof app.getPath !== 'function' ||
+      typeof process.resourcesPath !== 'string'
+    ) {
+      return null
+    }
+    try {
+      return armMacUpdateInstallAttempt({
+        appDataPath: app.getPath('appData'),
+        executablePath: process.execPath,
+        isPackaged: true,
+        resourcesPath: process.resourcesPath,
+        sourceVersion: app.getVersion(),
+        targetVersion: pendingVersion
+      })
+    } catch (error) {
+      recordUpdaterLifecycle(
+        'macos_install_fence_arm_failed',
+        { message: error instanceof Error ? error.message : String(error) },
+        { level: 'warn', message: 'Proceeding with the macOS install without the relaunch fence' }
+      )
+      // Why unconditional: arming can throw after the record reached disk (e.g. a directory
+      // fsync failure), leaving a live fence nothing in this process would ever clear — which
+      // would silently block every relaunch until the age cap. Clearing also cancels the
+      // just-spawned monitor within one poll.
+      try {
+        clearMacUpdateInstallAttempt(getMacUpdateInstallAttemptPath(app.getPath('appData')))
+      } catch {
+        // The stale attempt self-expires via the age cap; never let cleanup mask the install.
+      }
+      return null
+    }
+  }
+
   protected resetQuitForUpdateState(): void {
+    if (this.macUpdateInstallAttempt) {
+      clearMacUpdateInstallAttempt(
+        getMacUpdateInstallAttemptPath(app.getPath('appData')),
+        this.macUpdateInstallAttempt.attemptId
+      )
+      this.macUpdateInstallAttempt = null
+    }
     this.quitAndInstallInProgress = false
     this.quittingForUpdate = false
     this.updateInstallCommitted = false

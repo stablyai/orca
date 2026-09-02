@@ -9,6 +9,7 @@ const {
   recordUpdaterLifecycleMock,
   requestServeUpdateHandoffMock,
   failServeUpdateHandoffMock,
+  armMacUpdateInstallAttemptMock,
   resetHandlers
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -59,6 +60,7 @@ const {
     recordUpdaterLifecycleMock: vi.fn(),
     requestServeUpdateHandoffMock: vi.fn(() => true),
     failServeUpdateHandoffMock: vi.fn(),
+    armMacUpdateInstallAttemptMock: vi.fn(() => null),
     resetHandlers: () => {
       appHandlers.clear()
       updaterHandlers.clear()
@@ -98,6 +100,12 @@ vi.mock('./update-install-exit-watchdog', () => ({
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
 }))
+vi.mock('./mac-update-install-attempt', () => ({
+  armMacUpdateInstallAttempt: armMacUpdateInstallAttemptMock,
+  clearMacUpdateInstallAttempt: vi.fn(),
+  getMacUpdateInstallAttemptPath: vi.fn(() => '/tmp/orca-update-install-attempt.json')
+}))
+
 vi.mock('./serve-update-handoff', () => ({
   failServeUpdateHandoff: failServeUpdateHandoffMock,
   getServeUpdateHandoffFailure: vi.fn(() => null),
@@ -125,6 +133,7 @@ describe('headless serve update install handoff', () => {
     recordUpdaterLifecycleMock.mockReset()
     requestServeUpdateHandoffMock.mockReset().mockReturnValue(true)
     failServeUpdateHandoffMock.mockReset()
+    armMacUpdateInstallAttemptMock.mockReset().mockReturnValue(null)
     resetHandlers()
   })
 
@@ -314,6 +323,8 @@ describe('headless serve update install handoff', () => {
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledOnce()
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(true, false)
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
+    // Why: a supervised headless install must never arm the GUI recovery monitor.
+    expect(armMacUpdateInstallAttemptMock).not.toHaveBeenCalled()
     expect(daemonSession).toEqual({ alive: true })
     expect(lifecycle).toEqual([
       'pre-quit-checkpoint',

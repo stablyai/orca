@@ -3,6 +3,28 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('startup ordering', () => {
+  it('gates a racing old-version launch before the single-instance lock and startup writes', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
+      'utf8'
+    )
+    const userDataConfig = source.indexOf('configureOrcaUserDataPathEnv()')
+    const updateGate = source.indexOf('resolveMacUpdateInstallStartup({', userDataConfig)
+    const startupDiagnostics = source.indexOf('isStartupDiagnosticsEnabled()', updateGate)
+    const singleInstanceLock = source.indexOf('acquireSingleInstanceLock(', updateGate)
+
+    expect(userDataConfig).toBeGreaterThanOrEqual(0)
+    expect(updateGate).toBeGreaterThan(userDataConfig)
+    expect(startupDiagnostics).toBeGreaterThan(updateGate)
+    expect(singleInstanceLock).toBeGreaterThan(updateGate)
+    // Why: a blocked launch must stop executing — app.exit does not halt synchronous code.
+    const gateBlock = source.slice(updateGate, singleInstanceLock)
+    expect(gateBlock).toContain('return false')
+    // Why: a supervised headless serve restart must never be swallowed by the desktop gate.
+    const guardStart = source.lastIndexOf('if (!state.isServeMode) {', updateGate)
+    expect(guardStart).toBeGreaterThan(userDataConfig)
+  })
+
   it('passes the startup barrier into PTY handlers without blocking window creation', () => {
     const attachSource = readFileSync(
       join(process.cwd(), 'src/main/window/attach-main-window-services.ts'),

@@ -79,6 +79,7 @@ export type UpdateStatus = (
       message: string
       userInitiated?: boolean
       activeNudgeId?: string
+      failureKind?: 'macos-install'
       recovery?: LinuxPackageInstallRecovery
     }
 ) & { source?: UpdateSource }

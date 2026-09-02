@@ -21,6 +21,7 @@ type OutputChunk = Rollup.OutputChunk
 // agent-hooks entry. require("electron") throws MODULE_NOT_FOUND in all of them.
 const PLAIN_NODE_ENTRY_NAMES = [
   'daemon-entry',
+  'mac-update-install-monitor-entry',
   'parcel-watcher-process-entry',
   'computer-sidecar',
   'wsl-transcript-fs-process-entry',

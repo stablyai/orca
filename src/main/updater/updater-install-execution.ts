@@ -96,6 +96,7 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
         if (!this.quitAndInstallInProgress) {
           return
         }
+        this.macUpdateInstallAttempt = this.armMacUpdateInstallAttemptSafely(pendingVersion)
         // Why: mark before the call so a sync 'error' during quitAndInstall can recover; pre-native errors must not look like install failure.
         this.quitAndInstallNativeInvoked = true
         // Why: invoke before killAllPty/removing close listeners so a sync 'error' (the "no filepath" path) can recover while windows and PTYs are intact.

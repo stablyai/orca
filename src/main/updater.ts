@@ -12,6 +12,7 @@ import type {
 import type { ReleaseBuild, ReleaseChannel } from '../shared/release-channel'
 import { UpdaterSetup, type UpdaterSetupOptions } from './updater/updater-setup'
 import type { UpdateInstallMode } from './updater/updater-state'
+import type { MacUpdateInstallRecoveryReason } from './mac-update-install-attempt-store'
 
 // Keep one service instance so all public API calls share updater state and event listeners.
 const updater = new UpdaterSetup()
@@ -67,6 +68,12 @@ export function quitAndInstall(): void {
 
 export function isQuittingForUpdate(): boolean {
   return updater.isQuittingForUpdate()
+}
+
+export function reportRecoveredMacUpdateInstallFailure(
+  reason: MacUpdateInstallRecoveryReason
+): void {
+  updater.reportRecoveredMacUpdateInstallFailure(reason)
 }
 
 export async function getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {

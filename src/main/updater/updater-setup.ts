@@ -17,7 +17,11 @@ import { createUpdaterDiagnosticLogger } from '../linux-package-install-diagnost
 import { registerAutoUpdaterHandlers } from '../updater-events'
 import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
-import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
+import {
+  AUTO_UPDATE_CHECK_INTERVAL_MS,
+  MAC_UPDATE_INSTALL_RECOVERY_FEEDBACK_MS
+} from './updater-state'
+import type { MacUpdateInstallRecoveryReason } from '../mac-update-install-attempt-store'
 import { UpdaterDownloadInstall } from './updater-download-install'
 import type { UpdateInstallMode } from './updater-state'
 
@@ -106,6 +110,25 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.dismissAvailableUpdate()
   }
 
+  /**
+   * Records a macOS install failure recovered from the durable attempt fence at startup. The
+   * status is held until setupAutoUpdater can announce it, and automatic checks are blocked so
+   * the feedback is not immediately replaced by a background check result.
+   */
+  reportRecoveredMacUpdateInstallFailure(reason: MacUpdateInstallRecoveryReason): void {
+    this.recoveredMacUpdateInstallFailurePending = true
+    this.recoveredMacUpdateInstallFailureReason = reason
+    this.macUpdateInstallAutoCheckBlockedUntilMs =
+      Date.now() + MAC_UPDATE_INSTALL_RECOVERY_FEEDBACK_MS
+    this.currentStatus = {
+      state: 'error',
+      message:
+        'macOS stopped the installer before Orca was replaced. Check for updates and try again, then leave Orca closed until it relaunches.',
+      userInitiated: true,
+      failureKind: 'macos-install'
+    }
+  }
+
   setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
     this.mainWindowRef = mainWindow
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
@@ -118,6 +141,17 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this.getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
     this.updateInstallMode = opts?.installMode ?? 'interactive'
     this.lastInstallDeferralVersion = { download: null, install: null }
+
+    if (this.recoveredMacUpdateInstallFailurePending) {
+      this.recoveredMacUpdateInstallFailurePending = false
+      recordUpdaterLifecycle(
+        'macos_install_recovered_after_failure',
+        { reason: this.recoveredMacUpdateInstallFailureReason },
+        { level: 'warn', message: 'macOS update failed after desktop exit; recovery relaunched' }
+      )
+      this.recoveredMacUpdateInstallFailureReason = null
+      this.sendStatus(this.currentStatus, { force: true })
+    }
 
     const serveHandoffFailure = getServeUpdateHandoffFailure()
     if (serveHandoffFailure) {
@@ -228,6 +262,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       ) {
         return
       }
+      if (Date.now() < this.macUpdateInstallAutoCheckBlockedUntilMs) {
+        return
+      }
       const lastCheck = this._getLastUpdateCheckAt?.() ?? null
       const msSince = lastCheck === null ? Number.POSITIVE_INFINITY : Date.now() - lastCheck
       if (msSince >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
@@ -241,7 +278,13 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     const lastUpdateCheckAt = opts?.getLastUpdateCheckAt?.() ?? null
     const msSinceLastCheck =
       lastUpdateCheckAt === null ? Number.POSITIVE_INFINITY : Date.now() - lastUpdateCheckAt
-    if (msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
+    const recoveryFeedbackRemainingMs = Math.max(
+      0,
+      this.macUpdateInstallAutoCheckBlockedUntilMs - Date.now()
+    )
+    if (recoveryFeedbackRemainingMs > 0) {
+      this.scheduleAutomaticUpdateCheck(recoveryFeedbackRemainingMs)
+    } else if (msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
       this.runBackgroundUpdateCheck()
       this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
     } else {

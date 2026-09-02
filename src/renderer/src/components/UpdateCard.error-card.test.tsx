@@ -142,6 +142,32 @@ describe('UpdateCard Windows signature failures', () => {
   })
 })
 
+describe('UpdateCard macOS install recovery', () => {
+  it('shows the recovery action without hiding it behind generic check-failure details', () => {
+    useAppStore.setState({
+      updateStatus: {
+        state: 'error',
+        message:
+          'macOS stopped the installer before Orca was replaced. Check for updates and try again, then leave Orca closed until it relaunches.',
+        userInitiated: true,
+        failureKind: 'macos-install'
+      },
+      updateChangelog: null,
+      dismissedUpdateVersion: null,
+      updateCardCollapsed: false
+    })
+    render(<UpdateCard />)
+
+    expect(screen.getByText("Update Wasn't Installed")).toBeTruthy()
+    expect(screen.getByText(/leave Orca closed until it relaunches/)).toBeTruthy()
+    expect(screen.queryByText('Update Check Failed')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Re-check' }))
+    expect(check).toHaveBeenCalledWith({ includePrerelease: false })
+    expect(quitAndInstall).not.toHaveBeenCalled()
+  })
+})
+
 describe('UpdateCard hourly builds', () => {
   it('links a pinned hourly build to its own repo instead of a 404 main-repo tag', () => {
     useAppStore.setState({

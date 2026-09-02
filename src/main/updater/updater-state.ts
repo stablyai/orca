@@ -5,6 +5,10 @@ import type { LocalBuildFeed } from '../local-builds/local-build-feed-server'
 import type { UpdateSource, UpdateStatus } from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 import type { PrimaryEventSuppression, UpdateCheckVariant } from './updater-types'
+import type {
+  MacUpdateInstallAttempt,
+  MacUpdateInstallRecoveryReason
+} from '../mac-update-install-attempt-store'
 
 export const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -15,6 +19,7 @@ export const NUDGE_ACTIVATION_COOLDOWN_MS = 5 * 60 * 1000
 export const QUIT_AND_INSTALL_DELAY_MS = 100
 export const PRE_QUIT_CLEANUP_TIMEOUT_MS = 2_500
 export const UPDATE_CHECK_SILENT_SETTLE_DELAY_MS = 1_000
+export const MAC_UPDATE_INSTALL_RECOVERY_FEEDBACK_MS = 10 * 60_000
 export const UPDATE_CHECK_STALL_TIMEOUT_MS = 45_000
 
 export type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
@@ -54,6 +59,12 @@ export abstract class UpdaterState {
   protected nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
   protected pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
   protected quitAndInstallInProgress = false
+  // Durable macOS install fence: survives this process so racing old-version relaunches can be gated.
+  protected macUpdateInstallAttempt: MacUpdateInstallAttempt | null = null
+  protected recoveredMacUpdateInstallFailurePending = false
+  protected recoveredMacUpdateInstallFailureReason: MacUpdateInstallRecoveryReason | null = null
+  // Why: after a recovered install failure the card must stay visible; a background check would immediately replace it.
+  protected macUpdateInstallAutoCheckBlockedUntilMs = 0
   // Why: the pre-install digest re-proof streams the whole package, so a second install request can
   // arrive while it runs — after the quit timer was cleared but before the handoff owns the process.
   protected linuxPackageRevalidationInFlight = false
