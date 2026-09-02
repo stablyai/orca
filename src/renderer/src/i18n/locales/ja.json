@@ -14648,8 +14648,8 @@
       "manageAccounts": "アカウントを管理…"
     },
     "resetCreditExpiry": {
-      "nextNow": "次は今期限切れ",
-      "singleNow": "今期限切れ",
+      "nextNow": "次のリセットはまもなく失効します",
+      "singleNow": "まもなく失効します",
       "nextIn": "次は {{duration}} 後に期限切れ",
       "singleIn": "{{duration}} 後に期限切れ"
     },
