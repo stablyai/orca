@@ -167,7 +167,7 @@ export const gitApi = {
     repoSlug?: string | null
     availableLabels?: string[]
     connectionId?: string
-  }): Promise<unknown> => ipcRenderer.invoke('git:generateIssueFields', args),
+  }) => ipcRenderer.invoke('git:generateIssueFields', args),
   cancelGenerateIssueFields: (args: {
     worktreePath: string
     connectionId?: string
