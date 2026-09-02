@@ -54,6 +54,10 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // writes must pass the dedicated reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  // Workspace trust decisions are main-owned authority state. Renderer writes
+  // must pass the dedicated id-only workspaceTrust:* channels, never generic settings.
+  delete sanitizedArgs.workspaceTrustEntries
+  delete sanitizedArgs.workspaceTrustMigratedExistingWorkspaces
   return sanitizedArgs
 }
 

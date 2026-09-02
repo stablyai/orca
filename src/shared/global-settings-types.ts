@@ -14,6 +14,7 @@ import type { PersistedNativeChatSessionOptions } from './native-chat-session-op
 import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
+import type { WorkspaceTrustEntry } from './workspace-trust-types'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,
@@ -491,6 +492,10 @@ export type GlobalSettings = {
   tabSwitchKeybindingSeed?: 'pending' | 'done'
   /** Local voice/dictation config. Optional for pre-voice profiles; getDefaultSettings() hydrates defaults via the persistence merge. */
   voice?: VoiceSettings
+  /** Path-based trust decisions (grants and remembered declines). Main-owned; renderer writes only through the dedicated id-only channels, never generic settings:set. */
+  workspaceTrustEntries?: WorkspaceTrustEntry[]
+  /** One-shot marker: existing local repos/folder workspaces are grandfathered as trusted once. */
+  workspaceTrustMigratedExistingWorkspaces?: boolean
 }
 
 export type OrcaWorkspaceLayout = {
