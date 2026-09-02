@@ -32,7 +32,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        nousResult
       ],
       grokResultPromise
     } = prepared
@@ -125,6 +126,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const nous =
+      nousResult.status === 'fulfilled'
+        ? nousResult.value
+        : ({
+            provider: 'nous',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: nousResult.reason instanceof Error ? nousResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -164,6 +177,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
+    this.trackActiveFailureStreak('nous', nous)
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
     this.updateState({
@@ -188,7 +202,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      nous: this.applyStalePolicy(nous, previousState.nous)
     })
 
     const grokResult = await grokResultPromise

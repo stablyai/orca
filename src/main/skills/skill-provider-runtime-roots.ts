@@ -59,7 +59,7 @@ function isExistingDirectory(candidate: string): boolean {
  * Windows when it exists and the LOCALAPPDATA tree does not, which is the
  * pre-LOCALAPPDATA install Hermes itself keeps honouring rather than orphaning.
  */
-export function resolveDefaultHermesSkillsRoot(input: {
+export function resolveDefaultHermesHome(input: {
   homeDir: string
   env?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
@@ -67,17 +67,26 @@ export function resolveDefaultHermesSkillsRoot(input: {
 }): string {
   const dotfolderHome = join(input.homeDir, '.hermes')
   if ((input.platform ?? process.platform) !== 'win32') {
-    return join(dotfolderHome, 'skills')
+    return dotfolderHome
   }
   const localAppData = normalizedRoot((input.env ?? process.env).LOCALAPPDATA)
   if (!localAppData) {
-    return join(dotfolderHome, 'skills')
+    return dotfolderHome
   }
   const localAppDataHome = join(localAppData, 'hermes')
   const directoryExists = input.directoryExists ?? isExistingDirectory
   return !directoryExists(localAppDataHome) && directoryExists(dotfolderHome)
-    ? join(dotfolderHome, 'skills')
-    : join(localAppDataHome, 'skills')
+    ? dotfolderHome
+    : localAppDataHome
+}
+
+export function resolveDefaultHermesSkillsRoot(input: {
+  homeDir: string
+  env?: NodeJS.ProcessEnv
+  platform?: NodeJS.Platform
+  directoryExists?: (candidate: string) => boolean
+}): string {
+  return join(resolveDefaultHermesHome(input), 'skills')
 }
 
 export function withClaudeSkillProviderRoot(

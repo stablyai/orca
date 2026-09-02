@@ -10,6 +10,7 @@ import { ProviderIcon, clampUsedPercent, getProviderUsageStatusLabel } from './t
 import { getTightestUsageSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatCreditAmount } from './usage-roster-formatting'
 import { translate } from '@/i18n/i18n'
 
 function MiniBar({
@@ -84,6 +85,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'R'
     case 'codex':
       return 'X'
+    case 'nous':
+      return 'N'
   }
 }
 
@@ -246,6 +249,17 @@ export function ProviderSegment({
           display={display}
           showLabel={!compact}
         />
+      ) : null}
+      {/* Why: Nous bills top-up credits separately from the subscription — surface
+          the balance right on the pill next to the subscription gauge. */}
+      {p.provider === 'nous' && p.nousCredits?.topUpRemaining != null ? (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <span className="tabular-nums">
+            {translate('auto.components.status.bar.tooltip.nousTopUp', 'Top-up')}{' '}
+            {formatCreditAmount(p.nousCredits.topUpRemaining)}
+          </span>
+        </>
       ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>

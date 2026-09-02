@@ -31,7 +31,6 @@ import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-us
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
 import { isReleaseChannel } from '../../../../../shared/release-channel'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
@@ -53,18 +52,13 @@ import {
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   hydratedUIPartialMatchesState,
-  migrateStatusBarItems,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
 import { sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import { resolveStatusBarDefaultMigration } from './ui-slice-status-bar-defaults'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
-const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
-const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
-const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
-const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
@@ -84,43 +78,20 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const petId = ui.petId ?? ui.sidekickId
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
-        const migratedStatusBarItems = migrateStatusBarItems(ui.statusBarItems)
-        const statusBarItemsWithPorts: StatusBarItem[] =
-          ui._portsStatusBarDefaultAdded || migratedStatusBarItems.includes('ports')
-            ? migratedStatusBarItems
-            : [...migratedStatusBarItems, DEFAULT_ON_PORTS_STATUS_BAR_ITEM]
-        const statusBarItems: StatusBarItem[] =
-          ui._kimiStatusBarDefaultAdded || statusBarItemsWithPorts.includes('kimi')
-            ? statusBarItemsWithPorts
-            : [...statusBarItemsWithPorts, DEFAULT_ON_KIMI_STATUS_BAR_ITEM]
-        const statusBarItemsWithMiniMax: StatusBarItem[] =
-          ui._minimaxStatusBarDefaultAdded || statusBarItems.includes('minimax')
-            ? statusBarItems
-            : [...statusBarItems, DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM]
-        const statusBarItemsWithAntigravity: StatusBarItem[] =
-          ui._antigravityStatusBarDefaultAdded || statusBarItemsWithMiniMax.includes('antigravity')
-            ? statusBarItemsWithMiniMax
-            : [...statusBarItemsWithMiniMax, DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM]
-        const statusBarItemsWithGrok: StatusBarItem[] =
-          ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
-            ? statusBarItemsWithAntigravity
-            : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
-        if (
-          (!ui._portsStatusBarDefaultAdded ||
-            !ui._kimiStatusBarDefaultAdded ||
-            !ui._minimaxStatusBarDefaultAdded ||
-            !ui._antigravityStatusBarDefaultAdded ||
-            !ui._grokStatusBarDefaultAdded) &&
-          typeof window !== 'undefined'
-        ) {
+        // Why: one-shot default-on migrations (ports/kimi/minimax/antigravity/grok/nous)
+        // live in a dedicated module so hydration stays under the max-lines budget.
+        const { items: statusBarItemsWithNous, needsPersist: statusBarDefaultsNeedPersist } =
+          resolveStatusBarDefaultMigration(ui)
+        if (statusBarDefaultsNeedPersist && typeof window !== 'undefined') {
           window.api.ui
             .set({
-              statusBarItems: statusBarItemsWithGrok,
+              statusBarItems: statusBarItemsWithNous,
               _portsStatusBarDefaultAdded: true,
               _kimiStatusBarDefaultAdded: true,
               _minimaxStatusBarDefaultAdded: true,
               _antigravityStatusBarDefaultAdded: true,
-              _grokStatusBarDefaultAdded: true
+              _grokStatusBarDefaultAdded: true,
+              _nousStatusBarDefaultAdded: true
             })
             .catch(console.error)
         }
@@ -193,7 +164,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
           workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
           syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
-          statusBarItems: statusBarItemsWithGrok,
+          statusBarItems: statusBarItemsWithNous,
           statusBarVisible: ui.statusBarVisible ?? true,
           usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
           statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
